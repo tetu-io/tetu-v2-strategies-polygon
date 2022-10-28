@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "sourceMap": true,
+    "target": "es2019",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "outDir": "dist",
+    "resolveJsonModule": true
+  },
+  "include": [
+    "./scripts",
+    "./test",
+    "./typechain",
+    "./tmp"
+  ],
+  "files": [
+    "./hardhat.config.ts",
+    "./addresses.ts"
+  ]
+}
