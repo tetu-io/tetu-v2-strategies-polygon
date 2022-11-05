@@ -5,7 +5,8 @@ import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-web3";
 import "@nomiclabs/hardhat-solhint";
 // import '@openzeppelin/hardhat-upgrades';
-// import "hardhat-docgen";
+// import "hardhat-docgen";\
+import "@typechain/hardhat";
 import "hardhat-contract-sizer";
 import "hardhat-gas-reporter";
 import "hardhat-tracer";
@@ -63,13 +64,13 @@ export default {
         path: "m/44'/60'/0'/0",
         accountsBalance: "100000000000000000000000000000"
       },
-      // loggingEnabled: true,
+      loggingEnabled: true,
     },
     matic: {
       url: argv.maticRpcUrl,
       timeout: 99999,
       chainId: 137,
-      // gas: 12_000_000,
+      gas: 12_000_000,
       // gasPrice: 50_000_000_000,
       // gasMultiplier: 1.3,
       accounts: [argv.privateKey],
