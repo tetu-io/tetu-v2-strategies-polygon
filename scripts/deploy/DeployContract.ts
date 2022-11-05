@@ -114,5 +114,3 @@ async function verifyWithArgs(hre: any, address: string, args: any[]) {
     log.info('error verify ' + e);
   }
 }
-
-

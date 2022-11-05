@@ -18,7 +18,8 @@ export class RunHelper {
       Misc.printDuration('runAndWait completed', start);
       return;
     }
-    const r0 = await tr.wait(WAIT_BLOCKS_BETWEEN_DEPLOY);
+    // const r0 = await tr.wait(WAIT_BLOCKS_BETWEEN_DEPLOY); // hardhat stucks on runAndWait()
+    const r0 = await tr.wait(); // TODO why (and when) WAIT_BLOCKS_BETWEEN_DEPLOY needed?
 
     log.info('tx sent', tr.hash, 'gas used:', r0.gasUsed.toString());
 
