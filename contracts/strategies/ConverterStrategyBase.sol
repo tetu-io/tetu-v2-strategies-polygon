@@ -200,9 +200,12 @@ abstract contract ConverterStrategyBase is DepositorBase, ITetuConverterCallback
     require(tokens.length == amounts.length, "SB: Arrays mismatch");
 
     ITetuLiquidator _tetuLiquidator = ITetuLiquidator(IController(controller()).liquidator());
+    IForwarder _forwarder = IForwarder(IController(controller()).forwarder());
+
     address _asset = asset;
     uint len = tokens.length;
     uint _compoundRatio = compoundRatio;
+    uint[] memory amountsToForward = new uint[](len);
 
     for (uint i = 0; i < len; ++i) {
       address token = tokens[i];
@@ -215,11 +218,14 @@ abstract contract ConverterStrategyBase is DepositorBase, ITetuConverterCallback
         }
 
         uint amountToForward = amount - amountToCompound;
-        if (amountToForward > 0) {
-          _sendToForwarder(token, amount);
-        }
+        amountsToForward[i] = amountToForward;
+        _approveIfNeeded(token, amountToForward, address(_forwarder));
       }
     }
+
+    // TODO optimization: do not distribute here, distribute when cheap gas
+    _forwarder.registerIncome(tokens, amountsToForward, ISplitter(splitter).vault(), true);
+
   }
 
   /// @dev Claim all possible rewards.
