@@ -7,7 +7,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "../interfaces/ITetuConverter.sol";
 import "../interfaces/ITetuConverterCallback.sol";
-import "./DepositorBase.sol";
+import "./depositors/DepositorBase.sol";
 
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
@@ -83,13 +83,13 @@ abstract contract ConverterStrategyBase is DepositorBase, ITetuConverterCallback
   //                     OPERATORS
   // *************************************************************
 
-  function setThreshold(address token, uint amount) public {
+  function setThreshold(address token, uint amount) external {
     _onlyOperators();
     thresholds[token] = amount;
     emit ThresholdChanged(token, amount);
   }
 
-  function setThresholds(address[] memory tokens, uint[] memory amounts) public {
+  function setThresholds(address[] memory tokens, uint[] memory amounts) external {
     _onlyOperators();
     _setThresholds(tokens, amounts);
   }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.4;
 
-import "../strategies/DepositorBase.sol";
+import "../strategies/depositors/DepositorBase.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/test/IMockToken.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 

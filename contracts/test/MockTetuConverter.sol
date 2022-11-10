@@ -45,7 +45,7 @@ contract MockTetuConverter is ITetuConverter {
   }
 
   /// @dev See {IERC165-supportsInterface}.
-  function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+  function supportsInterface(bytes4 interfaceId) external view virtual returns (bool) {
     return interfaceId == InterfaceIds.I_TETU_CONVERTER;// || super.supportsInterface(interfaceId);
   }
 
