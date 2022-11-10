@@ -327,9 +327,9 @@ abstract contract ConverterStrategyBase is DepositorBase, ITetuConverterCallback
 
   function requireAmountBack (
     address collateralAsset_,
+    uint requiredAmountCollateralAsset_,
     address /*borrowAsset_*/,
-    uint /*requiredAmountBorrowAsset_*/,
-    uint requiredAmountCollateralAsset_
+    uint /*requiredAmountBorrowAsset_*/
   ) external override returns (
     uint amountOut,
     bool isCollateral

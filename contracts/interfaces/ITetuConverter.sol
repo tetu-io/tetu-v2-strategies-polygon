@@ -8,8 +8,8 @@ interface ITetuConverter {
   /// @notice Allow to select conversion kind (swap, borrowing) automatically or manually
   enum ConversionMode {
     AUTO_0,
-    SWAP_1,
-    BORROW_2
+    // SWAP_1, // Use TetuLiquidator directly to make pure swapping
+    BORROW_1
   }
 
   /// @notice Find best conversion strategy (swap or borrow) and provide "cost of money" as interest for the period
@@ -19,7 +19,7 @@ interface ITetuConverter {
   /// @return converter Result contract that should be used for conversion; it supports IConverter
   ///                   This address should be passed to borrow-function during conversion.
   /// @return maxTargetAmount Max available amount of target tokens that we can get after conversion
-  /// @return aprForPeriod36 Interest on the use of {outMaxTargetAmount} during the given period, decimals 36
+  /// @return apr18 Interest on the use of {outMaxTargetAmount} during the given period, decimals 18
   function findConversionStrategy(
     address sourceToken_,
     uint sourceAmount_,
@@ -29,14 +29,15 @@ interface ITetuConverter {
   ) external view returns (
     address converter,
     uint maxTargetAmount,
-    int aprForPeriod36
+    int apr18
   );
 
   /// @notice Convert {collateralAmount_} to {amountToBorrow_} using {converter_}
   ///         Target amount will be transferred to {receiver_}. No re-balancing here.
   /// @dev Transferring of {collateralAmount_} by TetuConverter-contract must be approved by the caller before the call
   /// @param converter_ A converter received from findBestConversionStrategy.
-  /// @param collateralAmount_ Amount of {collateralAsset_}. This amount must be approved for TetuConverter.
+  /// @param collateralAmount_ Amount of {collateralAsset_}.
+  ///                          This amount must be transferred to TetuConverter before the call.
   /// @param amountToBorrow_ Amount of {borrowAsset_} to be borrowed and sent to {receiver_}
   /// @param receiver_ A receiver of borrowed amount
   /// @return borrowedAmountOut Exact borrowed amount transferred to {receiver_}
@@ -61,6 +62,7 @@ interface ITetuConverter {
   /// @param receiver_ A receiver of the collateral that will be withdrawn after the repay
   ///                  The remained amount of borrow asset will be returned to the {receiver_} too
   /// @return collateralAmountOut Exact collateral amount transferred to {collateralReceiver_}
+  ///         If TetuConverter is not able to make the swap, it reverts
   /// @return returnedBorrowAmountOut A part of amount-to-repay that wasn't converted to collateral asset
   ///                                 because of any reasons (i.e. there is no available conversion strategy)
   ///                                 This amount is returned back to the collateralReceiver_
@@ -76,20 +78,26 @@ interface ITetuConverter {
 
   /// @notice Update status in all opened positions
   ///         and calculate exact total amount of borrowed and collateral assets
-  function getStatusCurrent(
+  function getDebtAmountCurrent(
     address collateralAsset_,
     address borrowAsset_
-  ) external returns (uint totalDebtAmountOut, uint totalCollateralAmountOut);
+  ) external returns (
+    uint totalDebtAmountOut,
+    uint totalCollateralAmountOut
+  );
 
   /// @notice Total amount of borrow tokens that should be repaid to close the borrow completely.
   /// @dev Actual debt amount can be a little LESS then the amount returned by this function.
   ///      I.e. AAVE's pool adapter returns (amount of debt + tiny addon ~ 1 cent)
   ///      The addon is required to workaround dust-tokens problem.
   ///      After repaying the remaining amount is transferred back on the balance of the caller strategy.
-  function getDebtAmount(
+  function getDebtAmountStored(
     address collateralAsset_,
     address borrowAsset_
-  ) external view returns (uint totalDebtAmountOut, uint totalCollateralAmountOut);
+  ) external view returns (
+    uint totalDebtAmountOut,
+    uint totalCollateralAmountOut
+  );
 
   /// @notice User needs to redeem some collateral amount. Calculate an amount of borrow token that should be repaid
   /// @param collateralAmountRequired_ Amount of collateral required by the user
@@ -108,14 +116,14 @@ interface ITetuConverter {
   );
 
   /// @notice Transfer all reward tokens to {receiver_}
-  /// @return rewardTokens What tokens were transferred. Same reward token can appear in the array several times
-  /// @return amounts Amounts of transferred rewards, the array is synced with {rewardTokens}
+  /// @return rewardTokensOut What tokens were transferred. Same reward token can appear in the array several times
+  /// @return amountsOut Amounts of transferred rewards, the array is synced with {rewardTokens}
   function claimRewards(address receiver_) external returns (
-    address[] memory rewardTokens,
-    uint[] memory amounts
+    address[] memory rewardTokensOut,
+    uint[] memory amountsOut
   );
 
-
+  //TODO: salvage
 
   //////////////////////////////////////////////////////////////////////////////
   /// Additional functions, remove somewhere?

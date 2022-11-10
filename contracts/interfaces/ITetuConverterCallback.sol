@@ -6,17 +6,17 @@ interface ITetuConverterCallback {
   /// @notice TetuConverter calls this function health factor is unhealthy and TetuConverter need more tokens to fix it.
   ///         The borrow must send either required collateral-asset amount OR required borrow-asset amount.
   /// @param collateralAsset_ Collateral asset of the borrow to identify the borrow on the borrower's side
+  /// @param requiredAmountCollateralAsset_ What amount of collateral asset the Borrower should send to TetuConverter
   /// @param borrowAsset_ Borrow asset of the borrow to identify the borrow on the borrower's side
   /// @param requiredAmountBorrowAsset_ What amount of borrow asset the Borrower should send back to TetuConverter
-  /// @param requiredAmountCollateralAsset_ What amount of collateral asset the Borrower should send to TetuConverter
   /// @return amountOut Exact amount that borrower has sent to balance of TetuConverter
   ///                   It should be equal to either to requiredAmountBorrowAsset_ or to requiredAmountCollateralAsset_
   /// @return isCollateral What is amountOut: true - collateral asset, false - borrow asset
   function requireAmountBack (
     address collateralAsset_,
+    uint requiredAmountCollateralAsset_,
     address borrowAsset_,
-    uint requiredAmountBorrowAsset_,
-    uint requiredAmountCollateralAsset_
+    uint requiredAmountBorrowAsset_
   ) external returns (
     uint amountOut,
     bool isCollateral
