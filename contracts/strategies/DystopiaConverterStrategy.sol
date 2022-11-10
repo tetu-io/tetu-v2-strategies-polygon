@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity 0.8.4;
+
+import "./ConverterStrategyBase.sol";
+import "./depositors/DystopiaDepositor.sol";
+
+/// @title Converter Strategy with Dystopia Depositor
+/// @author bogdoslav
+contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
+
+  string public constant override NAME = "Dystopia Converter Strategy";
+  string public constant override PLATFORM = "test";
+  string public constant override STRATEGY_VERSION = "1.0.0";
+
+  function init(
+    address controller_,
+    address splitter_,
+    address converter_,
+    address router_,
+    address tokenA_,
+    address tokenB_,
+    bool stable_
+  ) external initializer {
+
+    __DystopiaDepositor_init(router_, tokenA_, tokenB_, stable_);
+
+    address[] memory thresholdTokens;
+    uint[] memory thresholdAmounts;
+
+    __ConverterStrategyBase_init(
+      controller_,
+      splitter_,
+      converter_,
+      thresholdTokens,
+      thresholdAmounts
+    );
+  }
+
+}

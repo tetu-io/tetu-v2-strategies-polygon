@@ -12,7 +12,7 @@ import "./depositors/DepositorBase.sol";
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
 /// @author bogdoslav
-abstract contract ConverterStrategyBase is DepositorBase, ITetuConverterCallback, StrategyBaseV2 {
+abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV2 {
   using SafeERC20 for IERC20;
 
   // *************************************************************
