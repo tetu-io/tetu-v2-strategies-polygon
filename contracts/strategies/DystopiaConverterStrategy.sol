@@ -13,7 +13,7 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
   string public constant override PLATFORM = "test";
   string public constant override STRATEGY_VERSION = "1.0.0";
 
-  function init(
+  function initializeStrategy(
     address controller_,
     address splitter_,
     address converter_,
@@ -21,7 +21,7 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
     address tokenA_,
     address tokenB_,
     bool stable_
-  ) external initializer {
+  ) internal onlyInitializing {
 
     __DystopiaDepositor_init(router_, tokenA_, tokenB_, stable_);
 

@@ -19,18 +19,16 @@ contract StrategyDystopiaConverter is DystopiaConverterStrategy {
     bool stable_
   ) external initializer {
 
-    __DystopiaDepositor_init(_DYSTOPIA_ROUTER, tokenA_, tokenB_, stable_);
-
-    address[] memory thresholdTokens;
-    uint[] memory thresholdAmounts;
-
-    __ConverterStrategyBase_init(
+    initializeStrategy(
       controller_,
       splitter_,
       converter_,
-      thresholdTokens,
-      thresholdAmounts
+      _DYSTOPIA_ROUTER,
+      tokenA_,
+      tokenB_,
+      stable_
     );
+
   }
 
 }
