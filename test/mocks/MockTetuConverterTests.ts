@@ -2,7 +2,7 @@ import {ethers} from "hardhat";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 import {MockTetuConverter, MockToken} from "../../typechain";
-import {TimeUtils} from "../TimeUtils";
+import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {expect} from "chai";
 import {constants} from "ethers";

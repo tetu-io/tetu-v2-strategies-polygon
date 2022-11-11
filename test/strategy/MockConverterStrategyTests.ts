@@ -2,12 +2,12 @@ import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
-import {TimeUtils} from "../TimeUtils";
+import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 import {
   ControllerMinimal, MockConverterStrategy, MockConverterStrategy__factory,
   MockGauge,
-  MockSplitter, MockStrategy__factory, MockTetuConverter,
+  MockSplitter, MockTetuConverter,
   MockToken,
   ProxyControlled, StrategySplitterV2,
   TetuVaultV2,

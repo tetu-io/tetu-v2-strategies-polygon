@@ -1,6 +1,6 @@
 import {ethers} from "hardhat";
-import {Misc} from "../scripts/utils/Misc";
-import {Multicall} from "../typechain";
+import {Misc} from "./Misc";
+import {Multicall} from "../../typechain";
 
 export class TimeUtils {
 

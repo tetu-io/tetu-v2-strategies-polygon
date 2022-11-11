@@ -16,6 +16,10 @@ import "@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/vault/VaultInsurance.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2.sol";
 
+// for TokenUtils
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+
+
 contract ___typechain___ {
 
 }
