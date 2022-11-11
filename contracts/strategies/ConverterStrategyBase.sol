@@ -367,17 +367,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //                        HELPERS
   // *************************************************************
 
-  function _balance(address token) internal view returns (uint) {
-    return IERC20(token).balanceOf(address(this));
-  }
-
-  function _approveIfNeeded(address token, uint amount, address spender) internal {
-    if (IERC20(token).allowance(address(this), spender) < amount) {
-      IERC20(token).safeApprove(spender, 0);
-      IERC20(token).safeApprove(spender, type(uint).max);
-    }
-  }
-
   function _openPosition(
     address collateralAsset,
     uint collateralAmount,

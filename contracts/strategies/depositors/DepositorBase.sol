@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.4;
 
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
+import "../../tools/ERC20Helpers.sol";
+
 /// @title Abstract base Depositor contract.
 /// @notice Converter strategies should inherit xDepositor.
 /// @notice All communication with external pools should be done at inherited contract
 /// @author bogdoslav
-abstract contract DepositorBase {
+abstract contract DepositorBase is ERC20Helpers {
+  using SafeERC20 for IERC20;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant DEPOSITOR_BASE_VERSION = "1.0.0";

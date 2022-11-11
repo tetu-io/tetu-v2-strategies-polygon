@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.4;
 
-import "./DepositorBase.sol";
-import "../../third_party/dystopia/IRouter.sol";
-import "../../third_party/dystopia/IPair.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "../../third_party/dystopia/IRouter.sol";
+import "../../third_party/dystopia/IPair.sol";
+import "./DepositorBase.sol";
 
 /// @title Dystopia Depositor for ConverterStrategies
 /// @author bogdoslav
@@ -55,23 +55,29 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   /// @dev Deposit given amount to the pool.
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual
   returns (uint[] memory amountsConsumed, uint liquidity) {
-    uint amountA;
-    uint amountB;
-    (amountA, amountB, liquidity) = IRouter(depositorRouter).addLiquidity(
-      depositorTokenA,
-      depositorTokenB,
+
+    address tokenA = depositorTokenA;
+    address tokenB = depositorTokenB;
+    address router = depositorRouter;
+    uint amount0 = amountsDesired_[0];
+    uint amount1 = amountsDesired_[1];
+
+    _safeApprove(tokenA, amount0, router);
+    _safeApprove(tokenB, amount1, router);
+
+    amountsConsumed = new uint[](2);
+    (amountsConsumed[0], amountsConsumed[1], liquidity) = IRouter(router).addLiquidity(
+      tokenA,
+      tokenB,
       depositorStable,
-      amountsDesired_[0],
-      amountsDesired_[1],
+      amount0,
+      amount1,
       0,
       0,
       address(this),
       block.timestamp
     );
 
-    amountsConsumed = new uint[](2);
-    amountsConsumed[0] = amountA;
-    amountsConsumed[1] = amountB;
   }
 
   /// @dev Withdraw given lp amount from the pool.
@@ -81,7 +87,12 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     uint totalLiquidity = _depositorLiquidity();
     if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
 
-    (uint amountA, uint amountB) = IRouter(depositorRouter).removeLiquidity(
+    address router = depositorRouter;
+
+    _safeApprove(depositorPair, liquidityAmount, router);
+
+    amountsOut = new uint[](2);
+    (amountsOut[0], amountsOut[1]) = IRouter(router).removeLiquidity(
       depositorTokenA,
       depositorTokenB,
       depositorStable,
@@ -92,15 +103,11 @@ contract DystopiaDepositor is DepositorBase, Initializable {
       block.timestamp
     );
 
-    amountsOut = new uint[](2);
-    amountsOut[0] = amountA;
-    amountsOut[1] = amountB;
   }
 
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual
   returns (address[] memory rewardTokens, uint[] memory rewardAmounts) {
-    // TODO
     rewardTokens = _depositorPoolAssets();
     (uint a, uint b) = IPair(depositorPair).claimFees();
     rewardAmounts = new uint[](2);
