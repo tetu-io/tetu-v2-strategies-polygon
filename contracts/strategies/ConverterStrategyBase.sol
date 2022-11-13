@@ -60,7 +60,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory thresholdAmounts_
   ) internal onlyInitializing {
     __StrategyBase_init(controller_, splitter_);
-    _requireInterface(converter_, InterfaceIds.I_TETU_CONVERTER);
+  //  _requireInterface(converter_, InterfaceIds.I_TETU_CONVERTER);
     tetuConverter = ITetuConverter(converter_);
 
     _setThresholds(thresholdTokens_, thresholdAmounts_);

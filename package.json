@@ -7,7 +7,6 @@
     "test": "test"
   },
   "scripts": {
-    "update-tetu-contracts-v2": "npm update @tetu_io/tetu-contracts-v2",
     "build": "npm run clean && npm run compile",
     "clean": "npx hardhat clean",
     "compile": "npx hardhat compile",
@@ -16,6 +15,7 @@
     "slither": "npm run build && slither .",
     "lint": "tslint -p tsconfig.json",
     "lint-fix": "tslint --fix -p tsconfig.json",
+    "update-tetu-contracts-v2": "npm update @tetu_io/tetu-contracts-v2",
     "update-block": "ts-node scripts/utils/UpdateBlock.ts"
   },
   "keywords": [

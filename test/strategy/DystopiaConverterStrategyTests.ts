@@ -5,7 +5,6 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 import {
-  ControllerMinimal,
   MockConverterStrategy,
   MockConverterStrategy__factory,
   MockGauge,
@@ -18,17 +17,20 @@ import {
   VaultInsurance,
   VaultInsurance__factory,
   IERC20,
-  ControllerMinimal__factory,
   IGauge__factory,
   IGauge,
   ITetuConverter__factory,
-  ITetuConverter
+  ITetuConverter,
+  IController__factory,
+  IController,
+  StrategySplitterV2__factory, VaultFactory__factory
 } from "../../typechain";
 import {Misc} from "../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
 import {MaticAddresses} from "../../scripts/MaticAddresses";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
+import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 
 
 const {expect} = chai;
@@ -40,7 +42,8 @@ describe("Dystopia Converter Strategy tests", function () {
   let signer: SignerWithAddress;
   let signer1: SignerWithAddress;
   let signer2: SignerWithAddress;
-  let controller: ControllerMinimal;
+  let gov: SignerWithAddress;
+  let controller: IController;
   let usdc: IERC20;
   let usdp: IERC20;
   let tetu: IERC20;
@@ -54,28 +57,24 @@ describe("Dystopia Converter Strategy tests", function () {
     [signer, signer1, signer2] = await ethers.getSigners()
     snapshotBefore = await TimeUtils.snapshot();
 
-    controller =  ControllerMinimal__factory.connect(PolygonAddresses.CORE_ADDRESSES.controller, signer);
+    controller =  IController__factory.connect(PolygonAddresses.CORE_ADDRESSES.controller, signer);
     usdc = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
     usdp = IERC20__factory.connect(PolygonAddresses.USDPlus_TOKEN, signer);
     tetu = IERC20__factory.connect(PolygonAddresses.TETU_TOKEN, signer);
 
-    await TokenUtils.getToken(usdc.address, signer2.address, parseUnits('10000', 6))
+    const govAddress = await controller.governance();
+    gov = await DeployerUtilsLocal.impersonate(govAddress);
+    gauge = IGauge__factory.connect(PolygonAddresses.CORE_ADDRESSES.gauge, gov);
 
-    gauge = IGauge__factory.connect(PolygonAddresses.CORE_ADDRESSES.gauge, signer);
+    // CREATE VAULT
+    const vaultFactory = VaultFactory__factory.connect(PolygonAddresses.CORE_ADDRESSES.vaultFactory, gov);
+    await vaultFactory.createVault(usdc.address, 'USDC', 'USDC', gauge.address, 10);
+    const vaultAddress = await vaultFactory.deployedVaults((await vaultFactory.deployedVaultsLength()).sub(1));
+    vault = TetuVaultV2__factory.connect(vaultAddress, gov);
+    const splitterAddress = await vault.splitter();
+    splitter = StrategySplitterV2__factory.connect(splitterAddress, gov);
 
-    vault = await DeployerUtils.deployTetuVaultV2(
-      signer,
-      controller.address,
-      usdc.address,
-      'USDC',
-      'USDC',
-      gauge.address,
-      10
-    );
-
-    splitter = await DeployerUtils.deployContract(signer, 'StrategySplitterV2') as StrategySplitterV2;
-    await splitter.init(controller.address, usdc.address, vault.address);
-    await vault.setSplitter(splitter.address)
+    await gauge.addStakingToken(vault.address);
 
     converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
 
@@ -88,6 +87,12 @@ describe("Dystopia Converter Strategy tests", function () {
       depositorTokens, depositorRewardTokens, depositorRewardAmounts);
 
     await splitter.addStrategies([strategy.address], [0]);
+
+    // GET TOKENS & APPROVE
+
+    await TokenUtils.getToken(usdc.address, signer.address, parseUnits('10000', 6))
+    await TokenUtils.getToken(usdc.address, signer1.address, parseUnits('10000', 6))
+    await TokenUtils.getToken(usdc.address, signer2.address, parseUnits('10000', 6))
 
     await usdc.connect(signer2).approve(vault.address, Misc.MAX_UINT);
     await usdc.connect(signer1).approve(vault.address, Misc.MAX_UINT);
@@ -390,13 +395,13 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("check buffer complex test", async () => {
-    await vault.setBuffer(100_000);
+    await vault.connect(gov).setBuffer(100_000);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(1_000_000);
-    await vault.setBuffer(10_000);
+    await vault.connect(gov).setBuffer(10_000);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(200_000);
-    await vault.setBuffer(100_000);
+    await vault.connect(gov).setBuffer(100_000);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(1200_000);
     await vault.withdraw(parseUnits('1', 6), signer.address, signer.address)
