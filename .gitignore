@@ -2,6 +2,7 @@ node_modules
 yarn.lock
 
 #Hardhat files
+dist
 cache
 artifacts
 deployments

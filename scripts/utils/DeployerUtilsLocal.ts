@@ -152,7 +152,7 @@ export class DeployerUtilsLocal {
   public static async getGovernance() {
     const net = await ethers.provider.getNetwork();
     if (net.chainId === 137) {
-      return MaticAddresses.GOV_V2_ADDRESS;
+      return MaticAddresses.GOV_ADDRESS;
     } else {
       throw Error('No config for ' + net.chainId);
     }

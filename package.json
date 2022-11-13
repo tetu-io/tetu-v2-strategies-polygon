@@ -7,6 +7,7 @@
     "test": "test"
   },
   "scripts": {
+    "update-tetu-contracts-v2": "npm update @tetu_io/tetu-contracts-v2",
     "build": "npm run clean && npm run compile",
     "clean": "npx hardhat clean",
     "compile": "npx hardhat compile",
@@ -36,7 +37,7 @@
     "@nomiclabs/hardhat-waffle": "^2.0.2",
     "@nomiclabs/hardhat-web3": "^2.0.0",
     "@tenderly/hardhat-tenderly": "^1.0.12",
-    "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git",
+    "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git#module",
     "@typechain/ethers-v5": "^7.2.0",
     "@typechain/hardhat": "^4.0.0",
     "@types/chai": "^4.2.22",
@@ -67,7 +68,9 @@
     "tslint": "^6.1.3",
     "tslog": "^3.2.2",
     "typechain": "^7.0.0",
-    "typescript": "^4.5.5"
+    "typescript": "^4.5.5",
+    "web3": "^1.8.1",
+    "yargs": "^17.2.1"
   },
   "engines": {
     "node": "^14.18.1"
