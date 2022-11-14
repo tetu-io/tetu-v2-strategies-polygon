@@ -10,7 +10,7 @@ import "./depositors/DystopiaDepositor.sol";
 contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
 
   string public constant override NAME = "Dystopia Converter Strategy";
-  string public constant override PLATFORM = "test";
+  string public constant override PLATFORM = "Dystopia";
   string public constant override STRATEGY_VERSION = "1.0.0";
 
   function initializeStrategy(

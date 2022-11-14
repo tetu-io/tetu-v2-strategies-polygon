@@ -5,8 +5,6 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 import {
-  MockConverterStrategy,
-  MockConverterStrategy__factory,
   MockGauge,
   IERC20__factory,
   MockSplitter,
@@ -23,7 +21,9 @@ import {
   ITetuConverter,
   IController__factory,
   IController,
-  StrategySplitterV2__factory, VaultFactory__factory
+  StrategySplitterV2__factory,
+  VaultFactory__factory,
+  StrategyDystopiaConverter__factory, StrategyDystopiaConverter
 } from "../../typechain";
 import {Misc} from "../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
@@ -50,7 +50,7 @@ describe("Dystopia Converter Strategy tests", function () {
   let vault: TetuVaultV2;
   let splitter: StrategySplitterV2;
   let converter: ITetuConverter;
-  let strategy: MockConverterStrategy;
+  let strategy: StrategyDystopiaConverter;
   let gauge: IGauge;
 
   before(async function () {
@@ -70,7 +70,7 @@ describe("Dystopia Converter Strategy tests", function () {
     const vaultFactory = VaultFactory__factory.connect(PolygonAddresses.CORE_ADDRESSES.vaultFactory, gov);
     await vaultFactory.createVault(usdc.address, 'USDC', 'USDC', gauge.address, 10);
     const vaultAddress = await vaultFactory.deployedVaults((await vaultFactory.deployedVaultsLength()).sub(1));
-    vault = TetuVaultV2__factory.connect(vaultAddress, gov);
+    vault = TetuVaultV2__factory.connect(vaultAddress, signer);
     const splitterAddress = await vault.splitter();
     splitter = StrategySplitterV2__factory.connect(splitterAddress, gov);
 
@@ -78,13 +78,10 @@ describe("Dystopia Converter Strategy tests", function () {
 
     converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
 
-    strategy = MockConverterStrategy__factory.connect(
-      (await DeployerUtils.deployProxy(signer, 'MockConverterStrategy')), signer);
-    const depositorTokens: string[] = [usdc.address, usdp.address];
-    const depositorRewardTokens: string[] = [];
-    const depositorRewardAmounts: string[] = [];
-    await strategy.init(controller.address, splitter.address, converter.address,
-      depositorTokens, depositorRewardTokens, depositorRewardAmounts);
+    strategy = StrategyDystopiaConverter__factory.connect(
+      await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
+    await strategy.initialize(controller.address, splitter.address, converter.address,
+      usdc.address, usdp.address, true);
 
     await splitter.addStrategies([strategy.address], [0]);
 
@@ -197,7 +194,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("deposit with fee test", async () => {
-    await vault.setFees(1_000, 1_000);
+    await vault.connect(gov).setFees(1_000, 1_000);
 
     const bal1 = await usdc.balanceOf(signer.address);
     await vault.deposit(parseUnits('1', 6), signer1.address);
@@ -215,7 +212,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("mint with fee test", async () => {
-    await vault.setFees(1_000, 1_000);
+    await vault.connect(gov).setFees(1_000, 1_000);
 
     const bal1 = await usdc.balanceOf(signer.address);
     await vault.mint(990_000, signer1.address);
@@ -233,7 +230,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("withdraw with fee test", async () => {
-    await vault.setFees(1_000, 1_000);
+    await vault.connect(gov).setFees(1_000, 1_000);
 
     await vault.deposit(parseUnits('1', 6), signer1.address);
     await vault.deposit(parseUnits('1', 6), signer.address);
@@ -257,7 +254,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("redeem with fee test", async () => {
-    await vault.setFees(1_000, 1_000);
+    await vault.connect(gov).setFees(1_000, 1_000);
 
     await vault.deposit(parseUnits('1', 6), signer1.address);
     await vault.deposit(parseUnits('1', 6), signer.address);
@@ -328,7 +325,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("set too high buffer revert", async () => {
-    await expect(vault.setBuffer(1000_000)).revertedWith("BUFFER");
+    await expect(vault.connect(gov).setBuffer(1000_000)).revertedWith("BUFFER");
   });
 
   it("set buffer from 3d party revert", async () => {
@@ -336,7 +333,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("set buffer test", async () => {
-    await vault.setBuffer(1_000);
+    await vault.connect(gov).setBuffer(1_000);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(10_000);
     await vault.deposit(100, signer.address)
@@ -352,13 +349,13 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("set max deposit test", async () => {
-    await vault.setMaxDeposit(10, 10);
+    await vault.connect(gov).setMaxDeposit(10, 10);
     await expect(vault.deposit(11, signer.address)).revertedWith("MAX");
     await expect(vault.mint(11, signer.address)).revertedWith("MAX");
   });
 
   it("set buffer test", async () => {
-    await vault.setMaxWithdraw(10, 10);
+    await vault.connect(gov).setMaxWithdraw(10, 10);
     await vault.deposit(parseUnits('1', 6), signer.address)
     await expect(vault.withdraw(11, signer.address, signer.address)).revertedWith("MAX");
     await expect(vault.redeem(11, signer.address, signer.address)).revertedWith("MAX");
@@ -371,7 +368,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("set fees too high revert", async () => {
-    await expect(vault.setFees(10_000, 1)).revertedWith("TOO_HIGH");
+    await expect(vault.connect(gov).setFees(10_000, 1)).revertedWith("TOO_HIGH");
   });
 
   it("set DoHardWorkOnInvest from 3d party revert", async () => {
@@ -389,7 +386,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("set DoHardWorkOnInvest test", async () => {
-    await vault.setDoHardWorkOnInvest(false);
+    await vault.connect(gov).setDoHardWorkOnInvest(false);
     expect(await vault.doHardWorkOnInvest()).eq(false);
     await vault.deposit(parseUnits('1', 6), signer.address)
   });
@@ -411,16 +408,16 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   it("not invest on deposit", async () => {
-    await vault.setBuffer(10_000);
+    await vault.connect(gov).setBuffer(10_000);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(100_000);
-    await vault.setBuffer(20_000);
+    await vault.connect(gov).setBuffer(20_000);
     await vault.deposit(parseUnits('0.01', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(110_000);
   });
 
 /*  it("withdraw when splitter have not enough balance", async () => {
-    await vault.setBuffer(10_000);
+    await vault.connect(gov).setBuffer(10_000);
     const bal = await usdc.balanceOf(signer.address);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(100_000);
@@ -432,7 +429,7 @@ describe("Dystopia Converter Strategy tests", function () {
   });*/
 
 /*  it("withdraw with slippage should be fair for all users", async () => {
-    await vault.setBuffer(0);
+    await vault.connect(gov).setBuffer(0);
     const bal = await usdc.balanceOf(signer.address);
     const bal1 = await usdc.balanceOf(signer2.address);
     await vault.deposit(parseUnits('1', 6), signer.address)
@@ -441,7 +438,7 @@ describe("Dystopia Converter Strategy tests", function () {
     await splitter.setSlippage(10_0);
     await expect(vault.withdrawAll()).revertedWith('SLIPPAGE');
 
-    await vault.setFees(0, 1_000);
+    await vault.connect(gov).setFees(0, 1_000);
     await splitter.setSlippage(1_0);
     await vault.withdrawAll();
 
@@ -460,7 +457,7 @@ describe("Dystopia Converter Strategy tests", function () {
 
 /*  it("cover loss test", async () => {
     const bal = await usdc.balanceOf(signer.address);
-    await vault.setFees(1_000, 0);
+    await vault.connect(gov).setFees(1_000, 0);
     await vault.deposit(parseUnits('1', 6), signer.address);
     await splitter.coverLoss(10_000);
     await vault.withdrawAll();
