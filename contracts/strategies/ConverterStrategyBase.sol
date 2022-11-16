@@ -9,6 +9,8 @@ import "../interfaces/ITetuConverter.sol";
 import "../interfaces/ITetuConverterCallback.sol";
 import "./depositors/DepositorBase.sol";
 
+import "hardhat/console.sol";
+
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
 /// @author bogdoslav
@@ -211,14 +213,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       address token = tokens[i];
       uint amount = amounts[i];
 
-      if (amount > thresholds[token]) {
+      console.log('token, amount', token, amount);
+      if (amount != 0 && amount > thresholds[token]) {
         uint amountToCompound = amount * _compoundRatio / COMPOUND_DENOMINATOR;
         if (amountToCompound > 0) {
           _liquidate(_tetuLiquidator, token, _asset, amountToCompound, LIQUIDATION_SLIPPAGE);
         }
 
         uint amountToForward = amount - amountToCompound;
+        console.log('amountToCompound', amountToCompound);
         amountsToForward[i] = amountToForward;
+        console.log('amountToForward ', amountToForward);
+
         _approveIfNeeded(token, amountToForward, address(_forwarder));
       }
     }
@@ -230,19 +236,51 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Claim all possible rewards.
   function _claim() override internal virtual {
-    address[] memory tokens1;
-    uint[] memory amounts1;
-    (tokens1, amounts1) = _depositorClaimRewards();
-
-    address[] memory tokens2;
-    uint[] memory amounts2;
-    (tokens2, amounts2) = tetuConverter.claimRewards(address(this));
-
     address[] memory tokens;
     uint[] memory amounts;
-    (tokens, amounts) = _uniteTokensAmounts(tokens1, amounts1, tokens2, amounts2);
-    _recycle(tokens, amounts);
 
+    (tokens, amounts) = _depositorClaimRewards();
+    address[] memory tokens1;
+    uint[] memory amounts1;
+    (tokens1, amounts1) = _filterZeroTokenAmounts(tokens, amounts);
+
+    (tokens, amounts) = tetuConverter.claimRewards(address(this));
+    address[] memory tokens2;
+    uint[] memory amounts2;
+    (tokens2, amounts2) = _filterZeroTokenAmounts(tokens, amounts);
+
+    (tokens, amounts) = _uniteTokensAmounts(tokens1, amounts1, tokens2, amounts2);
+    if (tokens.length > 0) {
+      _recycle(tokens, amounts);
+    }
+
+  }
+
+  function _filterZeroTokenAmounts(
+    address[] memory tokens,
+    uint[] memory amounts
+  ) internal pure returns (
+    address[] memory t,
+    uint[] memory a
+  ) {
+    uint len2 = 0;
+    uint len = tokens.length;
+    for (uint i = 0; i < len; i++) {
+      if (amounts[i] != 0) len2++;
+    }
+
+    t = new address[](len2);
+    a = new uint[](len2);
+
+    uint j = 0;
+    for (uint i = 0; i < len; i++) {
+      uint amount = amounts[i];
+      if (amount != 0) {
+        t[j] = tokens[i];
+        a[j] = amount;
+        j++;
+      }
+    }
   }
 
   /// @dev unites tokens2 and amounts2 in to tokens & amounts

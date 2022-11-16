@@ -21,6 +21,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 
 //
 import "@tetu_io/tetu-contracts-v2/contracts/vault/VaultFactory.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/ForwarderV3.sol";
 
 
 contract ___typechain___ {

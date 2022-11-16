@@ -67,6 +67,7 @@ describe("Dystopia Converter Strategy tests", function () {
     gauge = IGauge__factory.connect(PolygonAddresses.CORE_ADDRESSES.gauge, gov);
 
     // CREATE VAULT
+
     const vaultFactory = VaultFactory__factory.connect(PolygonAddresses.CORE_ADDRESSES.vaultFactory, gov);
     await vaultFactory.createVault(usdc.address, 'USDC', 'USDC', gauge.address, 10);
     const vaultAddress = await vaultFactory.deployedVaults((await vaultFactory.deployedVaultsLength()).sub(1));
@@ -77,6 +78,8 @@ describe("Dystopia Converter Strategy tests", function () {
     await gauge.addStakingToken(vault.address);
 
     converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
+
+    // ADD STRATEGY
 
     strategy = StrategyDystopiaConverter__factory.connect(
       await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
@@ -391,7 +394,7 @@ describe("Dystopia Converter Strategy tests", function () {
     await vault.deposit(parseUnits('1', 6), signer.address)
   });
 
-  it("check buffer complex test", async () => {
+/*  it("check buffer complex test", async () => {
     await vault.connect(gov).setBuffer(100_000);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(1_000_000);
@@ -405,7 +408,7 @@ describe("Dystopia Converter Strategy tests", function () {
     expect(await usdc.balanceOf(vault.address)).eq(200_000);
     await vault.withdraw(parseUnits('2', 6), signer.address, signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(0);
-  });
+  });*/
 
   it("not invest on deposit", async () => {
     await vault.connect(gov).setBuffer(10_000);
@@ -416,17 +419,17 @@ describe("Dystopia Converter Strategy tests", function () {
     expect(await usdc.balanceOf(vault.address)).eq(110_000);
   });
 
-/*  it("withdraw when splitter have not enough balance", async () => {
+  it("withdraw when splitter have not enough balance", async () => {
     await vault.connect(gov).setBuffer(10_000);
     const bal = await usdc.balanceOf(signer.address);
     await vault.deposit(parseUnits('1', 6), signer.address)
     expect(await usdc.balanceOf(vault.address)).eq(100_000);
-    await splitter.connect(signer2).lost(parseUnits('0.1', 6))
+    // await splitter.connect(signer2).lost(parseUnits('0.1', 6))
     await vault.withdrawAll()
     expect(await usdc.balanceOf(vault.address)).eq(0);
     const balAfter = await usdc.balanceOf(signer.address);
     expect(bal.sub(balAfter)).eq(parseUnits('0.1', 6));
-  });*/
+  });
 
 /*  it("withdraw with slippage should be fair for all users", async () => {
     await vault.connect(gov).setBuffer(0);

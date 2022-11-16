@@ -37,7 +37,7 @@
     "@nomiclabs/hardhat-waffle": "^2.0.2",
     "@nomiclabs/hardhat-web3": "^2.0.0",
     "@tenderly/hardhat-tenderly": "^1.0.12",
-    "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git#module",
+    "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git",
     "@typechain/ethers-v5": "^7.2.0",
     "@typechain/hardhat": "^4.0.0",
     "@types/chai": "^4.2.22",
