@@ -6,8 +6,25 @@ import logSettings from "../../log_settings";
 import {Logger} from "tslog";
 import {MaticAddresses} from "../MaticAddresses";
 import {
-  ProxyControlled__factory
+  IBribe, IBribe__factory,
+  IController,
+  IController__factory,
+  IERC20__factory,
+  IForwarder, IForwarder__factory,
+  IGauge, IGauge__factory,
+  IPlatformVoter, IPlatformVoter__factory,
+  IVeDistributor,
+  IVeDistributor__factory,
+  IVeTetu,
+  IVeTetu__factory,
+  IVoter, IVoter__factory,
+  ProxyControlled__factory,
+  VaultFactory,
+  VaultFactory__factory
 } from "../../typechain";
+import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
+import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
+import {ICoreContractsWrapper} from "../../test/CoreContractsWrapper";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
@@ -148,6 +165,73 @@ export class DeployerUtilsLocal {
   }
 
 
+  public static async getCoreAddresses(): Promise<CoreAddresses> {
+    const net = await ethers.provider.getNetwork();
+    log.info('network ' + net.chainId);
+    const core = Addresses.CORE.get(net.chainId);
+    if (!core) {
+      throw Error('No config for ' + net.chainId);
+    }
+    return core;
+  }
+
+  public static async getCoreAddressesWrapper(signer: SignerWithAddress): Promise<ICoreContractsWrapper> {
+    const net = await ethers.provider.getNetwork();
+    log.info('network ' + net.chainId);
+    const core = Addresses.CORE.get(net.chainId);
+    if (!core) {
+      throw Error('No config for ' + net.chainId);
+    }
+
+    return {
+      tetu: IERC20__factory.connect(core.tetu, signer),
+      controller: IController__factory.connect(core.controller, signer),
+      ve: IVeTetu__factory.connect(core.ve, signer),
+      veDist: IVeDistributor__factory.connect(core.veDist, signer),
+      gauge: IGauge__factory.connect(core.gauge, signer),
+      bribe: IBribe__factory.connect(core.bribe, signer),
+      tetuVoter: IVoter__factory.connect(core.tetuVoter, signer),
+      platformVoter: IPlatformVoter__factory.connect(core.platformVoter, signer),
+      forwarder: IForwarder__factory.connect(core.forwarder, signer),
+      vaultFactory: VaultFactory__factory.connect(core.vaultFactory, signer),
+    };
+
+  }
+  /*
+
+  public static async getToolsAddressesWrapper(signer: SignerWithAddress): Promise<ToolsContractsWrapper> {
+    const net = await ethers.provider.getNetwork();
+    log.info('network ' + net.chainId);
+    const tools = Addresses.TOOLS.get(net.chainId + '');
+    if (!tools) {
+      throw Error('No config for ' + net.chainId);
+    }
+    return new ToolsContractsWrapper(
+      IPriceCalculator__factory.connect(tools.calculator, signer),
+    );
+
+  }
+
+  public static async getToolsAddresses(): Promise<ToolsAddresses> {
+    const net = await ethers.provider.getNetwork();
+    log.info('network ' + net.chainId);
+    const tools = Addresses.TOOLS.get(net.chainId + '');
+    if (!tools) {
+      throw Error('No config for ' + net.chainId);
+    }
+    return tools;
+  }
+
+  public static async getTokenAddresses(): Promise<Map<string, string>> {
+    const net = await ethers.provider.getNetwork();
+    log.info('network ' + net.chainId);
+    const mocks = Addresses.TOKENS.get(net.chainId + '');
+    if (!mocks) {
+      throw Error('No config for ' + net.chainId);
+    }
+    return mocks;
+  }
+ */
 
   public static async getGovernance() {
     const net = await ethers.provider.getNetwork();
