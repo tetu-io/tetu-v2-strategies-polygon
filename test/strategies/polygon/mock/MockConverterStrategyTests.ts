@@ -2,8 +2,8 @@ import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
-import {TimeUtils} from "../../scripts/utils/TimeUtils";
-import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
+import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {
   ControllerMinimal, MockConverterStrategy, MockConverterStrategy__factory,
   MockGauge,
@@ -14,8 +14,8 @@ import {
   TetuVaultV2__factory,
   VaultInsurance,
   VaultInsurance__factory
-} from "../../typechain";
-import {Misc} from "../../scripts/utils/Misc";
+} from "../../../../typechain";
+import {Misc} from "../../../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
 
 
