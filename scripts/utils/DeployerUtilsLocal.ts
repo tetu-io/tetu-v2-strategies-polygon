@@ -25,6 +25,7 @@ import {
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {ICoreContractsWrapper} from "../../test/CoreContractsWrapper";
+import {IToolsAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
@@ -197,9 +198,8 @@ export class DeployerUtilsLocal {
     };
 
   }
-  /*
 
-  public static async getToolsAddressesWrapper(signer: SignerWithAddress): Promise<ToolsContractsWrapper> {
+/*  public static async getToolsAddressesWrapper(signer: SignerWithAddress): Promise<ToolsContractsWrapper> {
     const net = await ethers.provider.getNetwork();
     log.info('network ' + net.chainId);
     const tools = Addresses.TOOLS.get(net.chainId + '');
@@ -210,28 +210,29 @@ export class DeployerUtilsLocal {
       IPriceCalculator__factory.connect(tools.calculator, signer),
     );
 
-  }
+  }*/
 
-  public static async getToolsAddresses(): Promise<ToolsAddresses> {
+  public static async getToolsAddresses(): Promise<IToolsAddresses> {
     const net = await ethers.provider.getNetwork();
     log.info('network ' + net.chainId);
-    const tools = Addresses.TOOLS.get(net.chainId + '');
+    const tools = Addresses.TOOLS.get(net.chainId);
     if (!tools) {
       throw Error('No config for ' + net.chainId);
     }
     return tools;
   }
 
+  /*
   public static async getTokenAddresses(): Promise<Map<string, string>> {
-    const net = await ethers.provider.getNetwork();
-    log.info('network ' + net.chainId);
-    const mocks = Addresses.TOKENS.get(net.chainId + '');
-    if (!mocks) {
-      throw Error('No config for ' + net.chainId);
-    }
-    return mocks;
+  const net = await ethers.provider.getNetwork();
+  log.info('network ' + net.chainId);
+  const mocks = Addresses.TOKENS.get(net.chainId + '');
+  if (!mocks) {
+    throw Error('No config for ' + net.chainId);
   }
- */
+  return mocks;
+}
+*/
 
   public static async getGovernance() {
     const net = await ethers.provider.getNetwork();

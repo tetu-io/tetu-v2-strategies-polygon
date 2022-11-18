@@ -1,18 +1,16 @@
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-import {DeployerUtilsLocal} from "../../scripts/deploy/DeployerUtilsLocal";
 import {StrategyTestUtils} from "./StrategyTestUtils";
-import {IStrategy, ISmartVault} from "../../typechain";
+import {IStrategyV2, ITetuVaultV2} from "../../typechain";
 import {SpecificStrategyTest} from "./SpecificStrategyTest";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {CoreContractsWrapper} from "../CoreContractsWrapper";
-import {ToolsContractsWrapper} from "../ToolsContractsWrapper";
+import {ICoreContractsWrapper} from "../CoreContractsWrapper";
+import {IToolsContractsWrapper} from "../ToolsContractsWrapper";
 import {universalStrategyTest} from "./UniversalStrategyTest";
 import {DeployInfo} from "./DeployInfo";
 import {DoHardWorkLoopBase} from "./DoHardWorkLoopBase";
+import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
 
-
-const {expect} = chai;
 chai.use(chaiAsPromised);
 
 async function startDefaultSingleTokenStrategyTest(
@@ -20,7 +18,7 @@ async function startDefaultSingleTokenStrategyTest(
   underlying: string,
   tokenName: string,
   deployInfo: DeployInfo,
-  deployer: ((signer: SignerWithAddress) => Promise<[ISmartVault, IStrategy, string]>) | null = null
+  deployer: ((signer: SignerWithAddress) => Promise<[ITetuVaultV2, IStrategyV2, string]>) | null = null
 ) {
   // **********************************************
   // ************** CONFIG*************************
@@ -47,7 +45,7 @@ async function startDefaultSingleTokenStrategyTest(
 
   if(deployer === null) {
     deployer = (signer: SignerWithAddress) => {
-      const core = deployInfo.core as CoreContractsWrapper;
+      const core = deployInfo.core as ICoreContractsWrapper;
       return StrategyTestUtils.deploy(
         signer,
         core,
@@ -58,11 +56,11 @@ async function startDefaultSingleTokenStrategyTest(
             vaultAddress,
             underlying,
           ];
-          return DeployerUtilsLocal.deployContract(
+          return DeployerUtils.deployContract(
             signer,
             strategyContractName,
             ...strategyArgs
-          ) as Promise<IStrategy>;
+          ) as Promise<IStrategyV2>;
         },
         underlying
       );
@@ -71,11 +69,11 @@ async function startDefaultSingleTokenStrategyTest(
   const hwInitiator = (
     _signer: SignerWithAddress,
     _user: SignerWithAddress,
-    _core: CoreContractsWrapper,
-    _tools: ToolsContractsWrapper,
+    _core: ICoreContractsWrapper,
+    _tools: IToolsContractsWrapper,
     _underlying: string,
-    _vault: ISmartVault,
-    _strategy: IStrategy,
+    _vault: ITetuVaultV2,
+    _strategy: IStrategyV2,
     _balanceTolerance: number
   ) => {
     return new DoHardWorkLoopBase(
@@ -94,7 +92,7 @@ async function startDefaultSingleTokenStrategyTest(
   await universalStrategyTest(
     strategyName + vaultName,
     deployInfo,
-    deployer as (signer: SignerWithAddress) => Promise<[ISmartVault, IStrategy, string]>,
+    deployer as (signer: SignerWithAddress) => Promise<[ITetuVaultV2, IStrategyV2, string]>,
     hwInitiator,
     forwarderConfigurator,
     ppfsDecreaseAllowed,

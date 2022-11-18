@@ -1,23 +1,26 @@
 import {BigNumber, utils} from "ethers";
-import {TokenUtils} from "./TokenUtils";
+import {TokenUtils} from "../scripts/utils/TokenUtils";
 import {expect} from "chai";
 import {ethers} from "hardhat";
 import {Logger} from "tslog";
 import logSettings from "../log_settings";
-import {DeployerUtilsLocal} from "../scripts/deploy/DeployerUtilsLocal";
-import {IPriceCalculator, IPriceCalculator__factory} from "../typechain";
+import {IController__factory, ITetuLiquidator, ITetuLiquidator__factory} from "../typechain";
 import {parseUnits} from "ethers/lib/utils";
+import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
+import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 
 const log: Logger = new Logger(logSettings);
 
 export class PriceCalculatorUtils {
 
   public static async getFormattedPrice(
-    calculator: IPriceCalculator,
+    calculator: ITetuLiquidator,
     token: string,
     outputToken: string
   ): Promise<number> {
-    const price = +utils.formatUnits(await calculator.getPrice(token, outputToken));
+    const decimals = await TokenUtils.decimals(token);
+    const one = parseUnits('1', decimals.toString());
+    const price = +utils.formatUnits(await calculator.getPrice(token, outputToken, one));
     const name = await TokenUtils.tokenName(token);
     const outputName = await TokenUtils.tokenName(outputToken);
     console.log('price', name, 'against', outputName, price);
@@ -26,24 +29,13 @@ export class PriceCalculatorUtils {
   }
 
   // keep this method for possible implement caches
-  public static async getPriceCached(token: string, calculator: IPriceCalculator | null = null): Promise<BigNumber> {
+  public static async getPriceCached(token: string, calculator: ITetuLiquidator | null = null): Promise<BigNumber> {
     console.log('get price for', token);
-    // todo remove
-    if (token.toLowerCase() === '0xdcb8f34a3ceb48782c9f3f98df6c12119c8d168a'.toLowerCase()) {
-      return parseUnits('1');
-    }
-    // todo remove
-    if (token.toLowerCase() === '0xcf40352253de7a0155d700a937Dc797D681c9867'.toLowerCase()) {
-      return parseUnits('1');
-    }
+
     const net = await ethers.provider.getNetwork();
     let network = ''
     if (net.chainId === 137) {
       network = 'MATIC';
-    } else if (net.chainId === 250) {
-      network = 'FANTOM';
-    } else if (net.chainId === 1) {
-      network = '';
     } else {
       throw Error('Wrong network ' + net.chainId);
     }
@@ -55,11 +47,15 @@ export class PriceCalculatorUtils {
     //   }
     // }
     if (calculator == null) {
-      const tools = await DeployerUtilsLocal.getToolsAddresses();
-      calculator = IPriceCalculator__factory.connect(tools.calculator, ethers.provider);
+      const controller = IController__factory.connect(Addresses.getCore().controller, (await ethers.getSigners())[0]);
+      const liquidatorAddress = await controller.liquidator();
+      calculator = ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
     }
-    if (net.chainId === 137 || net.chainId === 250 || net.chainId === 1) {
-      return calculator.getPriceWithDefaultOutput(token);
+    if (net.chainId === 137) {
+      const decimals = await TokenUtils.decimals(token);
+      const one = parseUnits('1', decimals.toString());
+      const defaultToken = PolygonAddresses.USDC_TOKEN;
+      return calculator.getPrice(token, defaultToken, one);
     } else {
       throw Error('No config for ' + net.chainId);
     }

@@ -7,11 +7,11 @@ import {
 } from "../typechain";
 import {expect} from "chai";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {TokenUtils} from "./TokenUtils";
+import {TokenUtils} from "../scripts/utils/TokenUtils";
 import {BigNumber, ContractTransaction, utils} from "ethers";
 import axios from "axios";
 import {MaticAddresses} from "../scripts/MaticAddresses";
-import {MintHelperUtils} from "./MintHelperUtils";
+// import {MintHelperUtils} from "./MintHelperUtils";
 import {Misc} from "../scripts/utils/Misc";
 import {ethers} from "hardhat";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
@@ -84,19 +84,19 @@ export class VaultUtils {
     period = 60 * 60 * 24 * 2
   ) {
     const start = Date.now();
-    const net = await ethers.provider.getNetwork();
+    // const net = await ethers.provider.getNetwork();
 
     console.log("Add TETU as reward to vault: ", amount.toString())
-    const tetuTokenAddress = MaticAddresses.TETU_TOKEN;
+    const rewardTokenAddress = MaticAddresses.TETU_TOKEN;
     const amountWei = utils.parseUnits(amount + '');
-    // if (core.tetu.address.toLowerCase() !== tetuTokenAddress) {
-    await TokenUtils.getToken(tetuTokenAddress, signer.address, amountWei);
+    // if (core.tetu.address.toLowerCase() !== rewardTokenAddress) {
+    await TokenUtils.getToken(rewardTokenAddress, signer.address, amountWei);
     // } else {
     //   await MintHelperUtils.mint(core.controller, core.announcer, amount * 2 + '', signer.address, false, period)
     // }
     const gauge = IGauge__factory.connect(await vault.gauge(), signer);
-    await TokenUtils.approve(tetuTokenAddress, signer, vault.address, amountWei.toString());
-    await gauge.notifyRewardAmount(vault.address, tetuTokenAddress, amountWei);
+    await TokenUtils.approve(rewardTokenAddress, signer, vault.address, amountWei.toString());
+    await gauge.notifyRewardAmount(vault.address, rewardTokenAddress, amountWei);
     Misc.printDuration('Tetu reward token added to vault', start);
   }
 
@@ -140,7 +140,7 @@ export class VaultUtils {
     console.log('- Vault first RT change:', rtBalAfter - rtBal);
     console.log('- PS ratio:', psRatio);
     console.log('--------------------------');
-    // TODO check Gauges, Bribes, Invest fund
+    // TODO !!! check Gauges, Bribes, Invest fund?
 
     if (positiveCheck) {
       // if (bbRatio > 1000) {
