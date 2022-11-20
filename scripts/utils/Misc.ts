@@ -2,6 +2,9 @@ import hre, {ethers} from "hardhat";
 import {Logger} from "tslog";
 import Common from "ethereumjs-common";
 import logSettings from "../../log_settings";
+import {DeployerUtils} from "./DeployerUtils";
+import {DeployerUtilsLocal} from "./DeployerUtilsLocal";
+import {Multicall} from "../../typechain";
 
 const log: Logger = new Logger(logSettings);
 
@@ -34,13 +37,14 @@ export class Misc {
     log.info('>>>' + text, ((Date.now() - start) / 1000).toFixed(1), 'sec');
   }
 
-  // public static async getBlockTsFromChain(): Promise<number> {
-  //   const signer = (await ethers.getSigners())[0];
-  //   const tools = await DeployerUtils.getToolsAddresses();
-  //   const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
-  //   const ts = await ctr.getCurrentBlockTimestamp();
-  //   return ts.toNumber();
-  // }
+  public static async getBlockTsFromChain(): Promise<number> {
+    const signer = (await ethers.getSigners())[0];
+    const tools = await DeployerUtilsLocal.getToolsAddresses();
+    const ctr = await DeployerUtils.connectInterface(signer, 'Multicall', tools.multicall) as Multicall;
+    // const ctr = await ethers.getContractAt('Multicall', tools.multicall, signer) as Multicall;
+    const ts = await ctr.getCurrentBlockTimestamp();
+    return ts.toNumber();
+  }
 
   public static async getChainConfig() {
     const net = await ethers.provider.getNetwork();

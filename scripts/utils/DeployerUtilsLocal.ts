@@ -12,13 +12,14 @@ import {
   IERC20__factory,
   IForwarder, IForwarder__factory,
   IGauge, IGauge__factory,
-  IPlatformVoter, IPlatformVoter__factory,
+  IPlatformVoter, IPlatformVoter__factory, IStrategyV2, ITetuConverter,
+  ITetuConverter__factory, ITetuLiquidator, ITetuLiquidator__factory,
   IVeDistributor,
   IVeDistributor__factory,
   IVeTetu,
   IVeTetu__factory,
-  IVoter, IVoter__factory,
-  ProxyControlled__factory,
+  IVoter, IVoter__factory, Multicall, Multicall__factory,
+  ProxyControlled__factory, TetuVaultV2,
   VaultFactory,
   VaultFactory__factory
 } from "../../typechain";
@@ -26,6 +27,7 @@ import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addre
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {ICoreContractsWrapper} from "../../test/CoreContractsWrapper";
 import {IToolsAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses";
+import {IToolsContractsWrapper} from "../../test/ToolsContractsWrapper";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
@@ -199,18 +201,20 @@ export class DeployerUtilsLocal {
 
   }
 
-/*  public static async getToolsAddressesWrapper(signer: SignerWithAddress): Promise<ToolsContractsWrapper> {
+  public static async getToolsAddressesWrapper(signer: SignerWithAddress): Promise<IToolsContractsWrapper> {
     const net = await ethers.provider.getNetwork();
     log.info('network ' + net.chainId);
-    const tools = Addresses.TOOLS.get(net.chainId + '');
+    const tools = Addresses.TOOLS.get(net.chainId);
     if (!tools) {
       throw Error('No config for ' + net.chainId);
     }
-    return new ToolsContractsWrapper(
-      IPriceCalculator__factory.connect(tools.calculator, signer),
-    );
+    return {
+      liquidator: ITetuLiquidator__factory.connect(tools.liquidator, signer),
+      converter: ITetuConverter__factory.connect(tools.converter, signer),
+      multicall: Multicall__factory.connect(tools.multicall, signer),
+    };
 
-  }*/
+  }
 
   public static async getToolsAddresses(): Promise<IToolsAddresses> {
     const net = await ethers.provider.getNetwork();
@@ -354,6 +358,23 @@ export class DeployerUtilsLocal {
         break;
       }
     }
+  }
+
+  public static async deployAndInitVaultAndStrategy<T>(
+    underlying: string,
+    vaultName: string,
+    strategyDeployer: (vaultAddress: string) => Promise<IStrategyV2>,
+    controller: IController,
+    // vaultController: IVaultController,
+    vaultRewardToken: string,
+    signer: SignerWithAddress,
+    rewardDuration: number = 60 * 60 * 24 * 28, // 4 weeks
+    depositFee = 0,
+    wait = false
+  )/*: Promise<[TetuVaultV2, TetuVaultV2, IStrategy]>*/ {
+    // TODO
+    console.error('deployAndInitVaultAndStrategy NOT IMPLEMENTED');
+    return false;
   }
 
 

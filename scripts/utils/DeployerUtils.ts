@@ -1,5 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {ContractFactory} from "ethers";
+import {Contract, ContractFactory} from "ethers";
 import logSettings from "../../log_settings";
 import {Logger} from "tslog";
 import {parseUnits} from "ethers/lib/utils";
@@ -10,6 +10,7 @@ import {
 } from "../../typechain";
 import {RunHelper} from "./RunHelper";
 import {deployContract} from "../deploy/DeployContract";
+import {ethers} from "hardhat";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
@@ -71,6 +72,14 @@ export class DeployerUtils {
     await insurance.init(vault.address, asset);
     await vault.initInsurance(insurance.address);
     return vault;
+  }
+
+  public static async connectInterface<T extends Contract>(
+    signer: SignerWithAddress,
+    name: string,
+    address: string
+  ) {
+    return ethers.getContractAt(name, address, signer);
   }
 
 

@@ -63,7 +63,7 @@ export class VaultUtils {
   }
 
 
-  public static async getVaultInfoFromServer() {
+  /*public static async getVaultInfoFromServer() {
     const net = await ethers.provider.getNetwork();
     let network;
     if (net.chainId === 137) {
@@ -74,7 +74,7 @@ export class VaultUtils {
       throw Error('unknown net ' + net.chainId);
     }
     return (await axios.get(`https://tetu-server-staging.herokuapp.com//api/v1/reader/vaultInfos?network=${network}`)).data;
-  }
+  }*/
 
   public static async addRewardsTetu(
     signer: SignerWithAddress,
@@ -143,7 +143,7 @@ export class VaultUtils {
     // TODO !!! check Gauges, Bribes, Invest fund?
 
     if (positiveCheck) {
-      // if (bbRatio > 1000) {
+      // if (cRatio > 1000) {
       //   expect(psPpfsAfter).is.greaterThan(psPpfs,
       //     'PS didnt have any income, it means that rewards was not liquidated and properly sent to PS.' +
       //     ' Check reward tokens list and liquidation paths');
@@ -152,7 +152,7 @@ export class VaultUtils {
         }
       // }
 
-      // if (bbRatio !== 10000 && !ppfsDecreaseAllowed) {
+      // if (cRatio !== 10000 && !ppfsDecreaseAllowed) {
       //   // it is a unique case where we send profit to vault instead of AC
       //   const strategyName = await strategyCtr.STRATEGY_NAME();
       //   if (!PPFS_NO_INCREASE.has(strategyName)) {

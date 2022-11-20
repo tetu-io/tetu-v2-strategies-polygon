@@ -29,7 +29,7 @@ export class PriceCalculatorUtils {
   }
 
   // keep this method for possible implement caches
-  public static async getPriceCached(token: string, calculator: ITetuLiquidator | null = null): Promise<BigNumber> {
+  public static async getPriceCached(token: string, liquidator: ITetuLiquidator | null = null): Promise<BigNumber> {
     console.log('get price for', token);
 
     const net = await ethers.provider.getNetwork();
@@ -46,19 +46,33 @@ export class PriceCalculatorUtils {
     //     return BigNumber.from(response?.data?.result);
     //   }
     // }
-    if (calculator == null) {
+    if (liquidator == null) {
       const controller = IController__factory.connect(Addresses.getCore().controller, (await ethers.getSigners())[0]);
       const liquidatorAddress = await controller.liquidator();
-      calculator = ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
+      liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
     }
     if (net.chainId === 137) {
       const decimals = await TokenUtils.decimals(token);
       const one = parseUnits('1', decimals.toString());
       const defaultToken = PolygonAddresses.USDC_TOKEN;
-      return calculator.getPrice(token, defaultToken, one);
+      return liquidator.getPrice(token, defaultToken, one);
     } else {
       throw Error('No config for ' + net.chainId);
     }
   }
+
+  public static async getPriceWithDefaultOutput(token: string, liquidator: ITetuLiquidator | null = null): Promise<BigNumber> {
+    if (liquidator == null) {
+      const controller = IController__factory.connect(Addresses.getCore().controller, (await ethers.getSigners())[0]);
+      const liquidatorAddress = await controller.liquidator();
+      liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
+    }
+
+    const decimals = await TokenUtils.decimals(token);
+    const one = parseUnits('1', decimals.toString());
+    const defaultToken = PolygonAddresses.USDC_TOKEN;
+    return liquidator.getPrice(token, defaultToken, one);
+  }
+
 
 }

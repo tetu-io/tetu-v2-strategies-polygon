@@ -1,41 +1,41 @@
 import {ethers} from "hardhat";
-import {ToolsContractsWrapper} from "../ToolsContractsWrapper";
-import {TimeUtils} from "../TimeUtils";
-import {DeployerUtilsLocal} from "../../scripts/deploy/DeployerUtilsLocal";
+import {IToolsContractsWrapper} from "../ToolsContractsWrapper";
 import {StrategyTestUtils} from "./StrategyTestUtils";
 import {
-  IFeeRewardForwarder,
-  IPriceCalculator,
-  ISmartVault,
-  ISmartVault__factory,
-  IStrategy
+  IForwarder,
+  ITetuLiquidator,
+  TetuVaultV2,
+  TetuVaultV2__factory,
+  IStrategyV2
 } from "../../typechain";
 import {VaultUtils} from "../VaultUtils";
-import {Misc} from "../../scripts/utils/tools/Misc";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {CoreContractsWrapper} from "../CoreContractsWrapper";
+import {ICoreContractsWrapper} from "../CoreContractsWrapper";
 import {DoHardWorkLoopBase} from "./DoHardWorkLoopBase";
 import {DeployInfo} from "./DeployInfo";
 import {SpecificStrategyTest} from "./SpecificStrategyTest";
 import {BigNumber} from "ethers";
-import {UniswapUtils} from "../UniswapUtils";
-import {TokenUtils} from "../TokenUtils";
+import {TimeUtils} from "../../scripts/utils/TimeUtils";
+import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
+import {Misc} from "../../scripts/utils/Misc";
+import {TokenUtils} from "../../scripts/utils/TokenUtils";
+import {parseUnits} from "ethers/lib/utils";
 
 async function universalStrategyTest(
   name: string,
   deployInfo: DeployInfo,
-  deployer: (signer: SignerWithAddress) => Promise<[ISmartVault, IStrategy, string]>,
+  deployer: (signer: SignerWithAddress) => Promise<[TetuVaultV2, IStrategyV2, string]>,
   hardworkInitiator: (
     signer: SignerWithAddress,
     user: SignerWithAddress,
-    core: CoreContractsWrapper,
-    tools: ToolsContractsWrapper,
+    core: ICoreContractsWrapper,
+    tools: IToolsContractsWrapper,
     underlying: string,
-    vault: ISmartVault,
-    strategy: IStrategy,
+    vault: TetuVaultV2,
+    strategy: IStrategyV2,
     balanceTolerance: number
   ) => DoHardWorkLoopBase,
-  forwarderConfigurator: ((forwarder: IFeeRewardForwarder) => Promise<void>) | null = null,
+  forwarderConfigurator: ((forwarder: IForwarder) => Promise<void>) | null = null,
   ppfsDecreaseAllowed = false,
   balanceTolerance = 0,
   deposit = 100_000,
@@ -51,8 +51,8 @@ async function universalStrategyTest(
     let signer: SignerWithAddress;
     let user: SignerWithAddress;
     let underlying: string;
-    let vault: ISmartVault;
-    let strategy: IStrategy;
+    let vault: TetuVaultV2;
+    let strategy: IStrategyV2;
     let userBalance: BigNumber;
 
     before(async function () {
@@ -60,23 +60,23 @@ async function universalStrategyTest(
       snapshotBefore = await TimeUtils.snapshot();
       signer = await DeployerUtilsLocal.impersonate();
       user = (await ethers.getSigners())[1];
-      const core = deployInfo.core as CoreContractsWrapper;
+      const core = deployInfo.core as ICoreContractsWrapper;
 
       const data = await deployer(signer);
       vault = data[0];
       strategy = data[1];
-      underlying = await vault.underlying();
+      underlying = await vault.asset();
 
       if (forwarderConfigurator !== null) {
-        await forwarderConfigurator(core.feeRewardForwarder);
+        await forwarderConfigurator(core.forwarder);
       }
       if (ppfsDecreaseAllowed) {
-        await core.vaultController.changePpfsDecreasePermissions([vault.address], true);
+        // await core.vaultController.changePpfsDecreasePermissions([vault.address], true);
       }
-      const firstRt = (await vault.rewardTokens())[0];
-      if (firstRt.toLowerCase() === core.psVault.address.toLowerCase()) {
-        await VaultUtils.addRewardsXTetu(signer, vault, core, 1);
-      }
+      const firstRt = core.tetu; // (await vault.rewardTokens())[0];
+      // if (firstRt.toLowerCase() === core.psVault.address.toLowerCase()) {
+      //   await VaultUtils.addRewardsXTetu(signer, vault, core, 1);
+      // }
 
       // set class variables for keep objects links
       deployInfo.signer = signer;
@@ -88,13 +88,13 @@ async function universalStrategyTest(
       // get underlying
       if (await core.controller.isValidVault(underlying)) {
         console.log('underlying is a vault, need to wrap into xToken');
-        const svUnd = ISmartVault__factory.connect(underlying, signer);
-        const svUndToken = await svUnd.underlying();
+        const svUnd = TetuVaultV2__factory.connect(underlying, signer);
+        const svUndToken = await svUnd.asset();
         const svUndTokenBal = await StrategyTestUtils.getUnderlying(
           svUndToken,
           deposit,
           user,
-          deployInfo?.tools?.calculator as IPriceCalculator,
+          deployInfo?.tools?.liquidator as ITetuLiquidator,
           [signer.address],
         );
         console.log('svUndTokenBal', svUndTokenBal.toString());
@@ -106,11 +106,11 @@ async function universalStrategyTest(
           underlying,
           deposit,
           user,
-          deployInfo?.tools?.calculator as IPriceCalculator,
+          deployInfo?.tools?.liquidator as ITetuLiquidator,
           [signer.address],
         );
       }
-      await UniswapUtils.wrapNetworkToken(signer);
+      await TokenUtils.wrapNetworkToken(signer, parseUnits('10000000').toString());
       Misc.printDuration('Test Preparations completed', start);
     });
 
@@ -127,8 +127,8 @@ async function universalStrategyTest(
     });
 
     it("doHardWork loop", async function () {
-      const core = deployInfo.core as CoreContractsWrapper;
-      const tools = deployInfo.tools as ToolsContractsWrapper;
+      const core = deployInfo.core as ICoreContractsWrapper;
+      const tools = deployInfo.tools as IToolsContractsWrapper;
       await hardworkInitiator(
         signer,
         user,

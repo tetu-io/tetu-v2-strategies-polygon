@@ -1,25 +1,23 @@
-import {DeployerUtilsLocal} from "../../scripts/deploy/DeployerUtilsLocal";
-import {UniswapUtils} from "../UniswapUtils";
-import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
-import {CoreContractsWrapper} from "../CoreContractsWrapper";
+import {ICoreContractsWrapper} from "../CoreContractsWrapper";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
-  IFeeRewardForwarder,
-  IPriceCalculator,
-  ISmartVault,
-  IStrategy,
-  IUniswapV2Pair, IUniswapV2Pair__factory
+  IForwarder,
+  ITetuLiquidator,
+  TetuVaultV2,
+  IStrategyV2,
 } from "../../typechain";
-import {TokenUtils} from "../TokenUtils";
 import {BigNumber, utils} from "ethers";
 import {expect} from "chai";
 import {ethers} from "hardhat";
 import {readFileSync} from "fs";
-import {Misc} from "../../scripts/utils/tools/Misc";
+import {Misc} from "../../scripts/utils/Misc";
 import {DeployInfo} from "./DeployInfo";
 import logSettings from "../../log_settings";
 import {Logger} from "tslog";
 import {PriceCalculatorUtils} from "../PriceCalculatorUtils";
+import {TokenUtils} from "../../scripts/utils/TokenUtils";
+import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
+import {MaticAddresses} from "../../scripts/MaticAddresses";
 
 const log: Logger = new Logger(logSettings);
 
@@ -27,16 +25,16 @@ export class StrategyTestUtils {
 
   public static async deploy(
     signer: SignerWithAddress,
-    core: CoreContractsWrapper,
+    core: ICoreContractsWrapper,
     vaultName: string,
-    strategyDeployer: (vaultAddress: string) => Promise<IStrategy>,
+    strategyDeployer: (vaultAddress: string) => Promise<IStrategyV2>,
     underlying: string,
     depositFee = 0,
-    addXTetuReward = true
-  ): Promise<[ISmartVault, IStrategy, string]> {
+    addTetuReward = true
+  ): Promise<[TetuVaultV2, IStrategyV2, string]> {
     let reward = Misc.ZERO_ADDRESS;
-    if(addXTetuReward) {
-      reward = core.psVault.address;
+    if(addTetuReward) {
+      reward = core.tetu.address;
     }
     const start = Date.now();
     log.info("Starting deploy")
@@ -45,35 +43,36 @@ export class StrategyTestUtils {
       vaultName,
       strategyDeployer,
       core.controller,
-      core.vaultController,
+      // core.vaultController,
       reward,
       signer,
       60 * 60 * 24 * 28,
       depositFee
     );
     log.info("Vault deployed")
-    const vault = data[1] as ISmartVault;
-    const strategy = data[2] as IStrategy;
+    const vault = data[1] as TetuVaultV2;
+    const strategy = data[2] as IStrategyV2;
 
-    const rewardTokenLp = await UniswapUtils.createTetuUsdc(
-      signer, core, "1000000"
-    );
-    log.info("LP created");
+    const rewardTokenLp = ''; // TODO
+    // const rewardTokenLp = await UniswapUtils.createTetuUsdc(
+    //   signer, core, "1000000"
+    // );
+    // log.info("LP created");
 
-    await core.feeRewardForwarder.addLargestLps([core.rewardToken.address], [rewardTokenLp]);
-    log.info("Path setup completed");
+    // await core.feeRewardForwarder.addLargestLps([core.rewardToken.address], [rewardTokenLp]);
+    // log.info("Path setup completed");
 
-    expect((await strategy.underlying()).toLowerCase()).is.eq(underlying.toLowerCase());
-    expect((await vault.underlying()).toLowerCase()).is.eq(underlying.toLowerCase());
+    expect((await strategy.asset()).toLowerCase()).is.eq(underlying.toLowerCase());
+    expect((await vault.asset()).toLowerCase()).is.eq(underlying.toLowerCase());
 
     Misc.printDuration('Vault and strategy deployed and initialized', start);
     return [vault, strategy, rewardTokenLp];
   }
 
-  public static async checkStrategyRewardsBalance(strategy: IStrategy, balances: string[]) {
-    const tokens = await strategy.rewardTokens();
-    const bbRatio = await strategy.buyBackRatio();
-    if (bbRatio.toNumber() < 1000) {
+  public static async checkStrategyRewardsBalance(strategy: IStrategyV2, balances: string[]) {
+    const tokens:string[] = []; // await strategy.rewardTokens(); // TODO
+    const cRatio = await strategy.compoundRatio();
+    if (cRatio.toNumber() >= 1000) {
       return;
     }
     for (let i = 0; i < tokens.length; i++) {
@@ -86,7 +85,7 @@ export class StrategyTestUtils {
 
   public static async deposit(
     user: SignerWithAddress,
-    vault: ISmartVault,
+    vault: TetuVaultV2,
     underlying: string,
     deposit: string
   ) {
@@ -98,11 +97,11 @@ export class StrategyTestUtils {
     const vaultForUser = vault.connect(user);
     await TokenUtils.approve(underlying, user, vault.address, deposit);
     log.info('deposit', BigNumber.from(deposit).toString())
-    await vaultForUser.depositAndInvest(BigNumber.from(deposit));
+    await vaultForUser.deposit(BigNumber.from(deposit), user.address);
   }
 
-  public static async saveStrategyRtBalances(strategy: IStrategy): Promise<BigNumber[]> {
-    const rts = await strategy.rewardTokens();
+  public static async saveStrategyRtBalances(strategy: IStrategyV2): Promise<BigNumber[]> {
+    const rts: string[] = []; // await strategy.rewardTokens(); // TODO
     const balances: BigNumber[] = [];
     for (const rt of rts) {
       const b = await TokenUtils.balanceOf(rt, strategy.address);
@@ -112,30 +111,32 @@ export class StrategyTestUtils {
     return balances;
   }
 
-  public static async commonTests(strategy: IStrategy, underlying: string) {
-    expect(await strategy.unsalvageableTokens(underlying)).is.eq(true);
-    expect(await strategy.unsalvageableTokens(MaticAddresses.ZERO_ADDRESS)).is.eq(false);
-    expect((await strategy.buyBackRatio()).toNumber()).is.lessThanOrEqual(100_00)
-    expect(await strategy.platform()).is.not.eq(0);
-    expect((await strategy.assets()).length).is.not.eq(0);
-    expect(!!(await strategy.poolTotalAmount())).is.eq(true);
-    await strategy.emergencyExit();
-    expect(await strategy.pausedInvesting()).is.eq(true);
-    await strategy.continueInvesting();
-    expect(await strategy.pausedInvesting()).is.eq(false);
+  public static async commonTests(strategy: IStrategyV2, underlying: string) {
+    // TODO
+    // expect(await strategy.unsalvageableTokens(underlying)).is.eq(true);
+    // expect(await strategy.unsalvageableTokens(MaticAddresses.ZERO_ADDRESS)).is.eq(false);
+    expect((await strategy.compoundRatio()).toNumber()).is.lessThanOrEqual(100_000)
+    expect(await strategy.PLATFORM()).is.not.eq('');
+    // expect((await strategy.assets()).length).is.not.eq(0);
+    expect(!!(await strategy.totalAssets())).is.eq(true);
+    // await strategy.emergencyExit();
+    // expect(await strategy.pausedInvesting()).is.eq(true);
+    // await strategy.continueInvesting();
+    // expect(await strategy.pausedInvesting()).is.eq(false);
   }
 
-  public static async initForwarder(forwarder: IFeeRewardForwarder) {
+  public static async initForwarder(forwarder: IForwarder) {
     const start = Date.now();
-    await forwarder.setLiquidityNumerator(30);
-    await forwarder.setLiquidityRouter(await DeployerUtilsLocal.getRouterByFactory(await DeployerUtilsLocal.getDefaultNetworkFactory()));
+    // await forwarder.setLiquidityNumerator(30);
+    // await forwarder.setLiquidityRouter(await DeployerUtilsLocal.getRouterByFactory(await DeployerUtilsLocal.getDefaultNetworkFactory()));
     // please set liquidation path for each test individually
     await StrategyTestUtils.setConversionPaths(forwarder);
     Misc.printDuration('Forwarder initialized', start);
   }
 
-  public static async setConversionPaths(forwarder: IFeeRewardForwarder) {
-    const net = (await ethers.provider.getNetwork()).chainId;
+  public static async setConversionPaths(forwarder: IForwarder) {
+    // TODO? Looks like we do not need to init Forwarder
+    /*const net = (await ethers.provider.getNetwork()).chainId;
     const bc: string[] = JSON.parse(readFileSync(`./test/strategies/data/${net}/bc.json`, 'utf8'));
 
     const batch = 20;
@@ -154,7 +155,7 @@ export class StrategyTestUtils {
       // log.info('l', l)
       log.info('addLargestLps', t.length);
       await forwarder.addLargestLps(t, l);
-    }
+    }*/
   }
 
   public static async deployCoreAndInit(deployInfo: DeployInfo, deploy: boolean) {
@@ -167,7 +168,7 @@ export class StrategyTestUtils {
     underlying: string,
     amountN: number,
     signer: SignerWithAddress,
-    calculator: IPriceCalculator,
+    calculator: ITetuLiquidator,
     recipients: string[],
   ) {
     log.info('get underlying', amountN, recipients.length, underlying);
@@ -185,25 +186,7 @@ export class StrategyTestUtils {
     // const amountAdjustedN2 = amountAdjustedN * (recipients.length + 1);
     const amountAdjusted2 = amountAdjusted.mul(recipients.length + 1);
 
-    let isLp = false;
-    try {
-      await IUniswapV2Pair__factory.connect(underlying, signer).getReserves();
-      isLp = true;
-    } catch (e) {
-    }
-
-    let balance = amountAdjusted2;
-    if (isLp) {
-      await UniswapUtils.getTokensAndAddLiq(
-        signer,
-        underlying,
-        amountN,
-        calculator
-      );
-      balance = await TokenUtils.balanceOf(underlying, signer.address);
-    } else {
-      await TokenUtils.getToken(underlying, signer.address, amountAdjusted2);
-    }
+    const balance = amountAdjusted2;
 
     for (const recipient of recipients) {
       await TokenUtils.transfer(underlying, signer, recipient, balance.div(recipients.length + 1).toString())
