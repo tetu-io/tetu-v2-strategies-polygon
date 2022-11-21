@@ -16,7 +16,7 @@ import {DeployInfo} from "./DeployInfo";
 import {SpecificStrategyTest} from "./SpecificStrategyTest";
 import {BigNumber} from "ethers";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
-import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
+import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../scripts/utils/DeployerUtilsLocal";
 import {Misc} from "../../scripts/utils/Misc";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
@@ -24,7 +24,7 @@ import {parseUnits} from "ethers/lib/utils";
 async function universalStrategyTest(
   name: string,
   deployInfo: DeployInfo,
-  deployer: (signer: SignerWithAddress) => Promise<[TetuVaultV2, IStrategyV2, string]>,
+  deployer: (signer: SignerWithAddress) => Promise<IVaultStrategyInfo>,
   hardworkInitiator: (
     signer: SignerWithAddress,
     user: SignerWithAddress,
@@ -50,7 +50,7 @@ async function universalStrategyTest(
     let snapshot: string;
     let signer: SignerWithAddress;
     let user: SignerWithAddress;
-    let underlying: string;
+    let asset: string;
     let vault: TetuVaultV2;
     let strategy: IStrategyV2;
     let userBalance: BigNumber;
@@ -63,9 +63,9 @@ async function universalStrategyTest(
       const core = deployInfo.core as ICoreContractsWrapper;
 
       const data = await deployer(signer);
-      vault = data[0];
-      strategy = data[1];
-      underlying = await vault.asset();
+      vault = data.vault;
+      strategy = data.strategy;
+      asset = await vault.asset();
 
       if (forwarderConfigurator !== null) {
         await forwarderConfigurator(core.forwarder);
@@ -73,7 +73,7 @@ async function universalStrategyTest(
       if (ppfsDecreaseAllowed) {
         // await core.vaultController.changePpfsDecreasePermissions([vault.address], true);
       }
-      const firstRt = core.tetu; // (await vault.rewardTokens())[0];
+      // const firstRt = (await strategy.rewardTokens())[0];
       // if (firstRt.toLowerCase() === core.psVault.address.toLowerCase()) {
       //   await VaultUtils.addRewardsXTetu(signer, vault, core, 1);
       // }
@@ -81,14 +81,14 @@ async function universalStrategyTest(
       // set class variables for keep objects links
       deployInfo.signer = signer;
       deployInfo.user = user;
-      deployInfo.underlying = underlying;
+      deployInfo.asset = asset;
       deployInfo.vault = vault;
       deployInfo.strategy = strategy;
 
-      // get underlying
-      if (await core.controller.isValidVault(underlying)) {
-        console.log('underlying is a vault, need to wrap into xToken');
-        const svUnd = TetuVaultV2__factory.connect(underlying, signer);
+      // get asset
+      if (await core.controller.isValidVault(asset)) {
+        console.log('asset is a vault, need to wrap into xToken');
+        const svUnd = TetuVaultV2__factory.connect(asset, signer);
         const svUndToken = await svUnd.asset();
         const svUndTokenBal = await StrategyTestUtils.getUnderlying(
           svUndToken,
@@ -100,10 +100,10 @@ async function universalStrategyTest(
         console.log('svUndTokenBal', svUndTokenBal.toString());
         await VaultUtils.deposit(signer, svUnd, svUndTokenBal);
         await VaultUtils.deposit(user, svUnd, svUndTokenBal);
-        userBalance = await TokenUtils.balanceOf(underlying, signer.address);
+        userBalance = await TokenUtils.balanceOf(asset, signer.address);
       } else {
         userBalance = await StrategyTestUtils.getUnderlying(
-          underlying,
+          asset,
           deposit,
           user,
           deployInfo?.tools?.liquidator as ITetuLiquidator,
@@ -134,7 +134,7 @@ async function universalStrategyTest(
         user,
         core,
         tools,
-        underlying,
+        asset,
         vault,
         strategy,
         balanceTolerance,
@@ -142,7 +142,7 @@ async function universalStrategyTest(
     });
 
     it("common test should be ok", async () => {
-      await StrategyTestUtils.commonTests(strategy, underlying);
+      await StrategyTestUtils.commonTests(strategy, asset);
     });
 
     if (specificTests) {

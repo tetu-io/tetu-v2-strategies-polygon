@@ -1,7 +1,6 @@
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-import {StrategyTestUtils} from "./StrategyTestUtils";
-import {IStrategyV2, ITetuVaultV2} from "../../typechain";
+import {IStrategyV2, TetuVaultV2} from "../../typechain";
 import {SpecificStrategyTest} from "./SpecificStrategyTest";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../CoreContractsWrapper";
@@ -9,23 +8,22 @@ import {IToolsContractsWrapper} from "../ToolsContractsWrapper";
 import {universalStrategyTest} from "./UniversalStrategyTest";
 import {DeployInfo} from "./DeployInfo";
 import {DoHardWorkLoopBase} from "./DoHardWorkLoopBase";
-import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
+import {IVaultStrategyInfo} from "../../scripts/utils/DeployerUtilsLocal";
 
 chai.use(chaiAsPromised);
 
-async function startDefaultSingleTokenStrategyTest(
+async function startDefaultStrategyTest(
   strategyName: string,
-  underlying: string,
-  tokenName: string,
+  asset: string,
+  assetName: string,
   deployInfo: DeployInfo,
-  deployer: ((signer: SignerWithAddress) => Promise<[ITetuVaultV2, IStrategyV2, string]>) | null = null
+  deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>) | null = null
 ) {
   // **********************************************
   // ************** CONFIG*************************
   // **********************************************
-  const strategyContractName = strategyName;
-  const vaultName = tokenName;
-  // const underlying = token;
+  const vaultName = 'tetu' + assetName + '_test';
+  // const asset = token;
   // add custom liquidation path if necessary
   const forwarderConfigurator = null;
   // only for strategies where we expect PPFS fluctuations
@@ -43,36 +41,13 @@ async function startDefaultSingleTokenStrategyTest(
   const specificTests: SpecificStrategyTest[] = [];
   // **********************************************
 
-  if(deployer === null) {
-    deployer = (signer: SignerWithAddress) => {
-      const core = deployInfo.core as ICoreContractsWrapper;
-      return StrategyTestUtils.deploy(
-        signer,
-        core,
-        vaultName,
-        vaultAddress => {
-          const strategyArgs = [
-            core.controller.address,
-            vaultAddress,
-            underlying,
-          ];
-          return DeployerUtils.deployContract(
-            signer,
-            strategyContractName,
-            ...strategyArgs
-          ) as Promise<IStrategyV2>;
-        },
-        underlying
-      );
-    };
-  }
   const hwInitiator = (
     _signer: SignerWithAddress,
     _user: SignerWithAddress,
     _core: ICoreContractsWrapper,
     _tools: IToolsContractsWrapper,
     _underlying: string,
-    _vault: ITetuVaultV2,
+    _vault: TetuVaultV2,
     _strategy: IStrategyV2,
     _balanceTolerance: number
   ) => {
@@ -92,7 +67,7 @@ async function startDefaultSingleTokenStrategyTest(
   await universalStrategyTest(
     strategyName + vaultName,
     deployInfo,
-    deployer as (signer: SignerWithAddress) => Promise<[ITetuVaultV2, IStrategyV2, string]>,
+    deployer as (signer: SignerWithAddress) => Promise<IVaultStrategyInfo>,
     hwInitiator,
     forwarderConfigurator,
     ppfsDecreaseAllowed,
@@ -105,4 +80,4 @@ async function startDefaultSingleTokenStrategyTest(
   );
 }
 
-export {startDefaultSingleTokenStrategyTest};
+export {startDefaultStrategyTest};

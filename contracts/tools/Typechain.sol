@@ -25,6 +25,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IVeDistributor.sol";
 //
 import "@tetu_io/tetu-contracts-v2/contracts/vault/VaultFactory.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/ForwarderV3.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/ControllerV2.sol";
 
 
 contract ___typechain___ {

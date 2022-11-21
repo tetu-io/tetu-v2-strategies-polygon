@@ -6,20 +6,37 @@ import logSettings from "../../log_settings";
 import {Logger} from "tslog";
 import {MaticAddresses} from "../MaticAddresses";
 import {
-  IBribe, IBribe__factory,
+  ControllerV2__factory,
+  IBribe,
+  IBribe__factory,
   IController,
   IController__factory,
   IERC20__factory,
-  IForwarder, IForwarder__factory,
-  IGauge, IGauge__factory,
-  IPlatformVoter, IPlatformVoter__factory, IStrategyV2, ITetuConverter,
-  ITetuConverter__factory, ITetuLiquidator, ITetuLiquidator__factory,
+  IERC20Metadata__factory,
+  IForwarder,
+  IForwarder__factory,
+  IGauge,
+  IGauge__factory,
+  IPlatformVoter,
+  IPlatformVoter__factory,
+  IStrategyV2,
+  ITetuConverter,
+  ITetuConverter__factory,
+  ITetuLiquidator,
+  ITetuLiquidator__factory,
   IVeDistributor,
   IVeDistributor__factory,
   IVeTetu,
   IVeTetu__factory,
-  IVoter, IVoter__factory, Multicall, Multicall__factory,
-  ProxyControlled__factory, TetuVaultV2,
+  IVoter,
+  IVoter__factory,
+  Multicall,
+  Multicall__factory,
+  ProxyControlled__factory,
+  StrategyDystopiaConverter__factory,
+  StrategySplitterV2__factory,
+  TetuVaultV2,
+  TetuVaultV2__factory,
   VaultFactory,
   VaultFactory__factory
 } from "../../typechain";
@@ -28,6 +45,9 @@ import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/Core
 import {ICoreContractsWrapper} from "../../test/CoreContractsWrapper";
 import {IToolsAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses";
 import {IToolsContractsWrapper} from "../../test/ToolsContractsWrapper";
+import {RunHelper} from "./RunHelper";
+import {DeployerUtils} from "./DeployerUtils";
+import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
@@ -51,6 +71,11 @@ const argv = require('yargs/yargs')()
       default: "0xC4c776e6D2bbae93Ed5acac6cFF35a5980F81845"
     },
   }).argv;
+
+export interface IVaultStrategyInfo {
+  vault: TetuVaultV2,
+  strategy: IStrategyV2
+}
 
 export class DeployerUtilsLocal {
 
@@ -361,20 +386,95 @@ export class DeployerUtilsLocal {
   }
 
   public static async deployAndInitVaultAndStrategy<T>(
-    underlying: string,
+    asset: string,
     vaultName: string,
-    strategyDeployer: (vaultAddress: string) => Promise<IStrategyV2>,
+    strategyDeployer: (splitterAddress: string) => Promise<IStrategyV2>,
     controller: IController,
-    // vaultController: IVaultController,
-    vaultRewardToken: string,
     signer: SignerWithAddress,
-    rewardDuration: number = 60 * 60 * 24 * 28, // 4 weeks
+    buffer = 0,
     depositFee = 0,
+    withdrawFee = 0,
     wait = false
-  )/*: Promise<[TetuVaultV2, TetuVaultV2, IStrategy]>*/ {
-    // TODO
-    console.error('deployAndInitVaultAndStrategy NOT IMPLEMENTED');
-    return false;
+  ): Promise<IVaultStrategyInfo> {
+    console.log('deployAndInitVaultAndStrategy', vaultName);
+    const core = Addresses.getCore();
+    const vault = await DeployerUtilsLocal.deployAndInitVault(
+      asset, vaultName, controller, signer, buffer, depositFee, withdrawFee, wait);
+
+    const splitterAddress = await vault.splitter();
+    const splitter = StrategySplitterV2__factory.connect(splitterAddress, signer);
+
+    const gauge = IGauge__factory.connect(PolygonAddresses.CORE_ADDRESSES.gauge, signer);
+    await gauge.addStakingToken(vault.address);
+
+    const converter = ITetuConverter__factory.connect(Addresses.getTools().converter, signer);
+
+    // ADD STRATEGY
+    const strategy = await strategyDeployer(splitterAddress);
+/*
+
+    const strategy = StrategyDystopiaConverter__factory.connect(
+      await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
+    await strategy.initialize(
+    controller.address, splitter.address, converter.address,
+      usdc.address, usdp.address, true);
+*/
+
+
+    await splitter.addStrategies([strategy.address], [0]);
+
+    return {vault, strategy};
+  }
+
+  public static async deployAndInitVault<T>(
+    assetAddress: string,
+    vaultName: string,
+    controller: IController,
+    signer: SignerWithAddress,
+    buffer = 100,
+    depositFee = 300,
+    withdrawFee = 300,
+    wait = false
+  ): Promise<TetuVaultV2> {
+    console.log('deployAndInitVaultAndStrategy', vaultName);
+
+    const core = Addresses.getCore();
+
+    const asset = IERC20Metadata__factory.connect(assetAddress, signer);
+    const symbol = await asset.symbol();
+    console.log('vaultName', vaultName);
+
+    const factory = VaultFactory__factory.connect(core.vaultFactory, signer)
+
+    await RunHelper.runAndWait(() => factory.createVault(
+      assetAddress,
+      vaultName,
+      vaultName,
+      core.gauge,
+      buffer
+    ),true, wait);
+    const l = (await factory.deployedVaultsLength()).toNumber();
+    const vaultAddress = await factory.deployedVaults(l - 1);
+    console.log(l, 'VAULT: ', vaultAddress)
+    const vault = TetuVaultV2__factory.connect(vaultAddress, signer);
+
+    console.log('setFees', depositFee, withdrawFee);
+    await RunHelper.runAndWait(() =>
+      vault.setFees(depositFee, withdrawFee),
+      true, wait);
+
+    console.log('registerVault');
+    await RunHelper.runAndWait(() =>
+      ControllerV2__factory.connect(core.controller, signer).registerVault(vaultAddress),
+      true, wait);
+
+    console.log('addStakingToken');
+    await RunHelper.runAndWait(() =>
+      IGauge__factory.connect(core.gauge, signer).addStakingToken(vaultAddress),
+      true, wait);
+
+    console.log('+Vault Deployed');
+    return vault;
   }
 
 

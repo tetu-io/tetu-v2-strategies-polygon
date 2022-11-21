@@ -16,7 +16,7 @@ import logSettings from "../../log_settings";
 import {Logger} from "tslog";
 import {PriceCalculatorUtils} from "../PriceCalculatorUtils";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
-import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
+import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../scripts/MaticAddresses";
 
 const log: Logger = new Logger(logSettings);
@@ -26,47 +26,34 @@ export class StrategyTestUtils {
   public static async deploy(
     signer: SignerWithAddress,
     core: ICoreContractsWrapper,
+    asset: string,
     vaultName: string,
     strategyDeployer: (vaultAddress: string) => Promise<IStrategyV2>,
-    underlying: string,
+    buffer = 0,
     depositFee = 0,
-    addTetuReward = true
-  ): Promise<[TetuVaultV2, IStrategyV2, string]> {
-    let reward = Misc.ZERO_ADDRESS;
-    if(addTetuReward) {
-      reward = core.tetu.address;
-    }
+    withdrawFee = 0,
+  ): Promise<IVaultStrategyInfo> {
+
     const start = Date.now();
     log.info("Starting deploy")
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
-      underlying,
+      asset,
       vaultName,
       strategyDeployer,
       core.controller,
-      // core.vaultController,
-      reward,
       signer,
-      60 * 60 * 24 * 28,
-      depositFee
+      buffer,
+      depositFee,
+      withdrawFee
     );
-    log.info("Vault deployed")
-    const vault = data[1] as TetuVaultV2;
-    const strategy = data[2] as IStrategyV2;
+    const vault = data.vault;
+    const strategy = data.strategy;
 
-    const rewardTokenLp = ''; // TODO
-    // const rewardTokenLp = await UniswapUtils.createTetuUsdc(
-    //   signer, core, "1000000"
-    // );
-    // log.info("LP created");
-
-    // await core.feeRewardForwarder.addLargestLps([core.rewardToken.address], [rewardTokenLp]);
-    // log.info("Path setup completed");
-
-    expect((await strategy.asset()).toLowerCase()).is.eq(underlying.toLowerCase());
-    expect((await vault.asset()).toLowerCase()).is.eq(underlying.toLowerCase());
+    expect((await strategy.asset()).toLowerCase()).is.eq(asset.toLowerCase());
+    expect((await vault.asset()).toLowerCase()).is.eq(asset.toLowerCase());
 
     Misc.printDuration('Vault and strategy deployed and initialized', start);
-    return [vault, strategy, rewardTokenLp];
+    return {vault, strategy};
   }
 
   public static async checkStrategyRewardsBalance(strategy: IStrategyV2, balances: string[]) {
