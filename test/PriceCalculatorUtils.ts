@@ -1,7 +1,7 @@
 import {BigNumber, utils} from "ethers";
 import {TokenUtils} from "../scripts/utils/TokenUtils";
 import {expect} from "chai";
-import {ethers} from "hardhat";
+import hre, {ethers} from "hardhat";
 import {Logger} from "tslog";
 import logSettings from "../log_settings";
 import {IController__factory, ITetuLiquidator, ITetuLiquidator__factory} from "../typechain";
@@ -52,9 +52,11 @@ export class PriceCalculatorUtils {
       liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
     }
     if (net.chainId === 137) {
-      const decimals = await TokenUtils.decimals(token);
-      const one = parseUnits('1', decimals.toString());
       const defaultToken = PolygonAddresses.USDC_TOKEN;
+      // const decimals = await TokenUtils.decimals(token);
+      const one = parseUnits('1'/*, decimals.toString()*/);
+      if (token.toLowerCase() === defaultToken.toLowerCase()) return one;
+
       return liquidator.getPrice(token, defaultToken, one);
     } else {
       throw Error('No config for ' + net.chainId);

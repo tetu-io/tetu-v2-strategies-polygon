@@ -174,6 +174,7 @@ export class StrategyTestUtils {
     const amountAdjusted2 = amountAdjusted.mul(recipients.length + 1);
 
     const balance = amountAdjusted2;
+    await TokenUtils.getToken(underlying, signer.address, amountAdjusted2);
 
     for (const recipient of recipients) {
       await TokenUtils.transfer(underlying, signer, recipient, balance.div(recipients.length + 1).toString())

@@ -17,12 +17,12 @@ async function startDefaultStrategyTest(
   asset: string,
   assetName: string,
   deployInfo: DeployInfo,
-  deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>) | null = null
+  deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>)
 ) {
   // **********************************************
   // ************** CONFIG*************************
   // **********************************************
-  const vaultName = 'tetu' + assetName + '_test';
+  const vaultName = 'tetu' + assetName;
   // const asset = token;
   // add custom liquidation path if necessary
   const forwarderConfigurator = null;

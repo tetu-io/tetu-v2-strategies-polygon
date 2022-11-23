@@ -5,6 +5,11 @@ import {config as dotEnvConfig} from "dotenv";
 import {DeployInfo} from "../../DeployInfo";
 import {StrategyTestUtils} from "../../StrategyTestUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {IController__factory, IStrategyV2, StrategyDystopiaConverter__factory} from "../../../../typechain";
+import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
+import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -37,13 +42,47 @@ describe('Universal tests', async () => {
   const strategyName = 'StrategyDystopiaConverter';
   const assetName = 'USDC';
   const asset = MaticAddresses.USDC_TOKEN;
+  const vaultName = 'tetu' + assetName;
+  const core = Addresses.getCore();
+  const tools = Addresses.getTools();
+
+
+  const deployer = async (signer: SignerWithAddress) => {
+
+    const controller = DeployerUtilsLocal.getController(signer);
+    const strategyDeployer = async (splitterAddress: string) => {
+      const strategy = StrategyDystopiaConverter__factory.connect(
+        await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
+
+      await strategy.initialize(
+        core.controller,
+        splitterAddress,
+        tools.converter,
+        MaticAddresses.USDC_TOKEN,
+        MaticAddresses.USDPlus_TOKEN,
+        true
+      );
+
+      return strategy;
+    }
+
+    console.log('getControllerGovernance...');
+    const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+
+    console.log('deployAndInitVaultAndStrategy...');
+    return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+      asset, vaultName, strategyDeployer, controller, gov,
+      100, 300, 300, false
+    );
+  }
 
   /* tslint:disable:no-floating-promises */
   startDefaultStrategyTest(
     strategyName,
     asset,
     assetName,
-    deployInfo
+    deployInfo,
+    deployer
   );
 
 

@@ -23,7 +23,7 @@ import {
   IController,
   StrategySplitterV2__factory,
   VaultFactory__factory,
-  StrategyDystopiaConverter__factory, StrategyDystopiaConverter
+  StrategyDystopiaConverter__factory, StrategyDystopiaConverter, DystopiaConverterStrategy
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
@@ -31,6 +31,7 @@ import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 
 
 const {expect} = chai;
@@ -48,8 +49,8 @@ describe("Dystopia Converter Strategy tests", function () {
   let usdp: IERC20;
   let tetu: IERC20;
   let vault: TetuVaultV2;
-  let splitter: StrategySplitterV2;
-  let converter: ITetuConverter;
+  // let splitter: StrategySplitterV2;
+  // let converter: ITetuConverter;
   let strategy: StrategyDystopiaConverter;
   let gauge: IGauge;
 
@@ -57,36 +58,64 @@ describe("Dystopia Converter Strategy tests", function () {
     [signer, signer1, signer2] = await ethers.getSigners()
     snapshotBefore = await TimeUtils.snapshot();
 
-    controller =  IController__factory.connect(PolygonAddresses.CORE_ADDRESSES.controller, signer);
+    const core = Addresses.getCore();
+    const tools = Addresses.getTools();
+    controller =  DeployerUtilsLocal.getController(signer);
     usdc = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
     usdp = IERC20__factory.connect(PolygonAddresses.USDPlus_TOKEN, signer);
     tetu = IERC20__factory.connect(PolygonAddresses.TETU_TOKEN, signer);
 
-    const govAddress = await controller.governance();
-    gov = await DeployerUtilsLocal.impersonate(govAddress);
-    gauge = IGauge__factory.connect(PolygonAddresses.CORE_ADDRESSES.gauge, gov);
+    const vaultName = 'tetu' + 'USDC';
+    gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+    const coreContracts = await DeployerUtilsLocal.getCoreAddressesWrapper(gov);
+    gauge = coreContracts.gauge;
 
-    // CREATE VAULT
+    const strategyDeployer = async (splitterAddress: string) => {
+      const _strategy = StrategyDystopiaConverter__factory.connect(
+        await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
 
-    const vaultFactory = VaultFactory__factory.connect(PolygonAddresses.CORE_ADDRESSES.vaultFactory, gov);
-    await vaultFactory.createVault(usdc.address, 'USDC', 'USDC', gauge.address, 10);
-    const vaultAddress = await vaultFactory.deployedVaults((await vaultFactory.deployedVaultsLength()).sub(1));
-    vault = TetuVaultV2__factory.connect(vaultAddress, signer);
-    const splitterAddress = await vault.splitter();
-    splitter = StrategySplitterV2__factory.connect(splitterAddress, gov);
+      await _strategy.initialize(
+        core.controller,
+        splitterAddress,
+        tools.converter,
+        MaticAddresses.USDC_TOKEN,
+        MaticAddresses.USDPlus_TOKEN,
+        true
+      );
 
-    await gauge.addStakingToken(vault.address);
+      return _strategy;
+    }
 
-    converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
+    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+      usdc.address, vaultName, strategyDeployer, controller, signer,
+      100, 300, 300, false
+    );
+    vault = data.vault;
+    strategy = data.strategy as StrategyDystopiaConverter;
 
-    // ADD STRATEGY
-
-    strategy = StrategyDystopiaConverter__factory.connect(
-      await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
-    await strategy.initialize(controller.address, splitter.address, converter.address,
-      usdc.address, usdp.address, true);
-
-    await splitter.addStrategies([strategy.address], [0]);
+    // gauge = IGauge__factory.connect(PolygonAddresses.CORE_ADDRESSES.gauge, gov);
+    //
+    // // CREATE VAULT
+    //
+    // const vaultFactory = VaultFactory__factory.connect(PolygonAddresses.CORE_ADDRESSES.vaultFactory, gov);
+    // await vaultFactory.createVault(usdc.address, 'USDC', 'USDC', gauge.address, 10);
+    // const vaultAddress = await vaultFactory.deployedVaults((await vaultFactory.deployedVaultsLength()).sub(1));
+    // vault = TetuVaultV2__factory.connect(vaultAddress, signer);
+    // const splitterAddress = await vault.splitter();
+    // splitter = StrategySplitterV2__factory.connect(splitterAddress, gov);
+    //
+    // await gauge.addStakingToken(vault.address);
+    //
+    // converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
+    //
+    // // ADD STRATEGY
+    //
+    // strategy = StrategyDystopiaConverter__factory.connect(
+    //   await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
+    // await strategy.initialize(controller.address, splitter.address, converter.address,
+    //   usdc.address, usdp.address, true);
+    //
+    // await splitter.addStrategies([strategy.address], [0]);
 
     // GET TOKENS & APPROVE
 

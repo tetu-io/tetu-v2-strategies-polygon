@@ -86,31 +86,14 @@ async function universalStrategyTest(
       deployInfo.strategy = strategy;
 
       // get asset
-      if (await core.controller.isValidVault(asset)) {
-        console.log('asset is a vault, need to wrap into xToken');
-        const svUnd = TetuVaultV2__factory.connect(asset, signer);
-        const svUndToken = await svUnd.asset();
-        const svUndTokenBal = await StrategyTestUtils.getUnderlying(
-          svUndToken,
-          deposit,
-          user,
-          deployInfo?.tools?.liquidator as ITetuLiquidator,
-          [signer.address],
-        );
-        console.log('svUndTokenBal', svUndTokenBal.toString());
-        await VaultUtils.deposit(signer, svUnd, svUndTokenBal);
-        await VaultUtils.deposit(user, svUnd, svUndTokenBal);
-        userBalance = await TokenUtils.balanceOf(asset, signer.address);
-      } else {
-        userBalance = await StrategyTestUtils.getUnderlying(
-          asset,
-          deposit,
-          user,
-          deployInfo?.tools?.liquidator as ITetuLiquidator,
-          [signer.address],
-        );
-      }
-      await TokenUtils.wrapNetworkToken(signer, parseUnits('10000000').toString());
+      userBalance = await StrategyTestUtils.getUnderlying(
+        asset,
+        deposit,
+        user,
+        deployInfo?.tools?.liquidator as ITetuLiquidator,
+        [signer.address],
+      );
+      // await TokenUtils.wrapNetworkToken(signer, parseUnits('10000000').toString());
       Misc.printDuration('Test Preparations completed', start);
     });
 

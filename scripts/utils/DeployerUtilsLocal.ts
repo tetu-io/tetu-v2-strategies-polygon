@@ -203,6 +203,17 @@ export class DeployerUtilsLocal {
     return core;
   }
 
+  public static getController(signer: SignerWithAddress): IController {
+    const core = Addresses.getCore();
+    return IController__factory.connect(core.controller, signer);
+  }
+
+  public static async getControllerGovernance(signer: SignerWithAddress): Promise<SignerWithAddress> {
+    const controller = DeployerUtilsLocal.getController(signer);
+    const govAddress = await controller.governance();
+    return DeployerUtilsLocal.impersonate(govAddress);
+  }
+
   public static async getCoreAddressesWrapper(signer: SignerWithAddress): Promise<ICoreContractsWrapper> {
     const net = await ethers.provider.getNetwork();
     log.info('network ' + net.chainId);
@@ -404,22 +415,11 @@ export class DeployerUtilsLocal {
     const splitterAddress = await vault.splitter();
     const splitter = StrategySplitterV2__factory.connect(splitterAddress, signer);
 
-    const gauge = IGauge__factory.connect(PolygonAddresses.CORE_ADDRESSES.gauge, signer);
+    const gauge = IGauge__factory.connect(core.gauge, signer);
     await gauge.addStakingToken(vault.address);
-
-    const converter = ITetuConverter__factory.connect(Addresses.getTools().converter, signer);
 
     // ADD STRATEGY
     const strategy = await strategyDeployer(splitterAddress);
-/*
-
-    const strategy = StrategyDystopiaConverter__factory.connect(
-      await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
-    await strategy.initialize(
-    controller.address, splitter.address, converter.address,
-      usdc.address, usdp.address, true);
-*/
-
 
     await splitter.addStrategies([strategy.address], [0]);
 
