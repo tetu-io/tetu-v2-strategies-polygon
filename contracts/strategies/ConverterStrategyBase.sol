@@ -140,7 +140,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           tokenAmounts[i] = tokenBalance;
 
         } else { // we do not have enough tokens - borrow
-         _openPosition(_asset, assetAmountForToken - tokenBalance, token, ITetuConverter.ConversionMode.AUTO_0);
+         _openPosition(_asset, assetAmountForToken - tokenBalance, token, ITetuConverter.ConversionMode.BORROW_1);
           tokenAmounts[i] = _balance(token);
         }
       }
@@ -244,10 +244,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory amounts1;
     (tokens1, amounts1) = _filterZeroTokenAmounts(tokens, amounts);
 
-    (tokens, amounts) = tetuConverter.claimRewards(address(this));
+    // TODO Enable claim from Converter
+//    (tokens, amounts) = tetuConverter.claimRewards(address(this));
     address[] memory tokens2;
     uint[] memory amounts2;
-    (tokens2, amounts2) = _filterZeroTokenAmounts(tokens, amounts);
+//    (tokens2, amounts2) = _filterZeroTokenAmounts(tokens, amounts);
 
     (tokens, amounts) = _uniteTokensAmounts(tokens1, amounts1, tokens2, amounts2);
     if (tokens.length > 0) {
@@ -411,6 +412,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address borrowAsset,
     ITetuConverter.ConversionMode conversionMode
   ) internal returns (uint borrowedAmount) {
+    console.log('_openPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
      ITetuConverter _tetuConverter = tetuConverter;
     (
       address converter,
@@ -423,6 +425,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _LOAN_PERIOD_IN_BLOCKS,
         conversionMode
     );
+    console.log('converter, maxTargetAmount', converter, maxTargetAmount);
+    require(converter != address(0), 'CSB: Can not borrow asset');
 
     IERC20(collateralAsset).safeTransfer(address(_tetuConverter), collateralAmount);
 
@@ -443,12 +447,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   function _closePosition(address collateralAsset, address borrowAsset, uint amountToRepay)
   internal returns (uint returnedAssetAmount) {
+  console.log('_closePosition... collateralAsset, borrowAsset, amountToRepay', collateralAsset, borrowAsset, amountToRepay);
     IERC20(borrowAsset).safeTransfer(address(tetuConverter), amountToRepay);
-    uint unobtainableCollateralAssetAmount;
-    (returnedAssetAmount, unobtainableCollateralAssetAmount) = tetuConverter.repay(
+    uint returnedBorrowAmountOut;
+    (returnedAssetAmount, returnedBorrowAmountOut) = tetuConverter.repay(
       collateralAsset, borrowAsset, amountToRepay, address(this)
     );
-    require(unobtainableCollateralAssetAmount == 0, 'CSB: Can not convert back');
+    require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
 
   }
 

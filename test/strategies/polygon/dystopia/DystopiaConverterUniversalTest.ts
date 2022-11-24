@@ -59,7 +59,9 @@ describe('Universal tests', async () => {
         splitterAddress,
         tools.converter,
         MaticAddresses.USDC_TOKEN,
-        MaticAddresses.USDPlus_TOKEN,
+        // MaticAddresses.USDPlus_TOKEN,
+        // MaticAddresses.USDT_TOKEN,
+        MaticAddresses.DAI_TOKEN,
         true
       );
 

@@ -31,9 +31,9 @@ async function startDefaultStrategyTest(
   // only for strategies where we expect PPFS fluctuations
   const balanceTolerance = 0;
   const finalBalanceTolerance = 0;
-  const deposit = 100_000;
+  const deposit = 10_000; // TODO 100_000
   // at least 3
-  const loops = 3;
+  const loops = 1;
   // number of blocks or timestamp value
   const loopValue = 300;
   // use 'true' if farmable platform values depends on blocks, instead you can use timestamp

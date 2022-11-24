@@ -209,9 +209,23 @@ export class DeployerUtilsLocal {
   }
 
   public static async getControllerGovernance(signer: SignerWithAddress): Promise<SignerWithAddress> {
+    if (!signer) signer = (await ethers.getSigners())[0];
     const controller = DeployerUtilsLocal.getController(signer);
     const govAddress = await controller.governance();
     return DeployerUtilsLocal.impersonate(govAddress);
+  }
+
+  public static async getControllerLiquidator(signer?: SignerWithAddress): Promise<ITetuLiquidator> {
+    if (!signer) signer = (await ethers.getSigners())[0];
+    const controller = IController__factory.connect(Addresses.getCore().controller, signer);
+    const liquidatorAddress = await controller.liquidator();
+    return ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
+  }
+
+  public static async getLiquidator(signer?: SignerWithAddress): Promise<ITetuLiquidator> {
+    if (!signer) signer = (await ethers.getSigners())[0];
+    const liquidatorAddress = Addresses.getTools().liquidator;
+    return ITetuLiquidator__factory.connect(liquidatorAddress, signer);
   }
 
   public static async getCoreAddressesWrapper(signer: SignerWithAddress): Promise<ICoreContractsWrapper> {
@@ -436,7 +450,7 @@ export class DeployerUtilsLocal {
     withdrawFee = 300,
     wait = false
   ): Promise<TetuVaultV2> {
-    console.log('deployAndInitVaultAndStrategy', vaultName);
+    console.log('deployAndInitVault', vaultName);
 
     const core = Addresses.getCore();
 

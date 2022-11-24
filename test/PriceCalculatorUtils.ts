@@ -8,6 +8,7 @@ import {IController__factory, ITetuLiquidator, ITetuLiquidator__factory} from ".
 import {parseUnits} from "ethers/lib/utils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
+import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
 
 const log: Logger = new Logger(logSettings);
 
@@ -30,7 +31,7 @@ export class PriceCalculatorUtils {
 
   // keep this method for possible implement caches
   public static async getPriceCached(token: string, liquidator: ITetuLiquidator | null = null): Promise<BigNumber> {
-    console.log('get price for', token);
+    console.log('getPriceCached token', token);
 
     const net = await ethers.provider.getNetwork();
     let network = ''
@@ -63,16 +64,16 @@ export class PriceCalculatorUtils {
     }
   }
 
-  public static async getPriceWithDefaultOutput(token: string, liquidator: ITetuLiquidator | null = null): Promise<BigNumber> {
-    if (liquidator == null) {
-      const controller = IController__factory.connect(Addresses.getCore().controller, (await ethers.getSigners())[0]);
-      const liquidatorAddress = await controller.liquidator();
-      liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
-    }
+  public static async getPriceWithDefaultOutput(token: string, liquidator: ITetuLiquidator): Promise<BigNumber> {
+    console.log('getPriceWithDefaultOutput token', token, liquidator?.address);
+    // if (!liquidator) liquidator = await DeployerUtilsLocal.getControllerLiquidator();
+    if (!liquidator) liquidator = await DeployerUtilsLocal.getLiquidator();
+    console.log('liquidator address', liquidator.address);
 
     const decimals = await TokenUtils.decimals(token);
     const one = parseUnits('1', decimals.toString());
     const defaultToken = PolygonAddresses.USDC_TOKEN;
+    if (token.toLowerCase() === defaultToken.toLowerCase()) return one;
     return liquidator.getPrice(token, defaultToken, one);
   }
 

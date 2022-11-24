@@ -12,6 +12,8 @@ interface ITetuConverter {
     BORROW_1
   }
 
+  function controller() external view returns (address);
+
   /// @notice Find best conversion strategy (swap or borrow) and provide "cost of money" as interest for the period
   /// @param sourceAmount_ Amount to be converted
   /// @param periodInBlocks_ Estimated period to keep target amount. It's required to compute APR

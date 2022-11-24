@@ -45,6 +45,10 @@ export class DoHardWorkLoopBase {
   totalToClaimInTetuN = 0;
   toClaimCheckTolerance = 0.3;
 
+  feeDenominator = BigNumber.from(100_000);
+  depositFee = BigNumber.from(0);
+  withdrawFee = BigNumber.from(0);
+
   constructor(
     signer: SignerWithAddress,
     user: SignerWithAddress,
@@ -86,6 +90,9 @@ export class DoHardWorkLoopBase {
   protected async init() {
     this.undDec = await TokenUtils.decimals(this.underlying);
     // this.vaultRt = (await this.vault.rewardTokens())[0].toLowerCase()
+    this.feeDenominator = await this.vault.FEE_DENOMINATOR();
+    this.depositFee = await this.vault.depositFee();
+    this.withdrawFee = await this.vault.withdrawFee();
   }
 
   protected async initialCheckVault() {
@@ -161,7 +168,8 @@ export class DoHardWorkLoopBase {
     const userBalance = await TokenUtils.balanceOf(this.vault.address, this.user.address);
     // avoid rounding errors
     const userBalanceN = +utils.formatUnits(userBalance.add(1), this.undDec);
-    const userBalanceExpectedN = +utils.formatUnits(this.userDeposited.sub(this.userWithdrew), this.undDec);
+    const depositedWithFee = this.userDeposited.mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator);
+    const userBalanceExpectedN = +utils.formatUnits(depositedWithFee.sub(this.userWithdrew), this.undDec);
 
     console.log('User balance +-:', DoHardWorkLoopBase.toPercent(userBalanceN, userBalanceExpectedN));
     expect(userBalanceN).is.greaterThanOrEqual(userBalanceExpectedN - (userBalanceExpectedN * this.balanceTolerance),
@@ -174,7 +182,10 @@ export class DoHardWorkLoopBase {
   protected async userCheckBalance(expectedBalance: BigNumber) {
     const userUndBal = await TokenUtils.balanceOf(this.underlying, this.user.address);
     const userUndBalN = +utils.formatUnits(userUndBal, this.undDec);
-    const userBalanceExpectedN = +utils.formatUnits(expectedBalance, this.undDec);
+    const expectedBalanceWithFee = expectedBalance
+      .mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator) // deposit
+      .mul(this.feeDenominator.sub(this.withdrawFee)).div(this.feeDenominator) // withdraw
+    const userBalanceExpectedN = +utils.formatUnits(expectedBalanceWithFee, this.undDec);
     console.log('User balance +-:', DoHardWorkLoopBase.toPercent(userUndBalN, userBalanceExpectedN));
     expect(userUndBalN).is.greaterThanOrEqual(userBalanceExpectedN - (userBalanceExpectedN * this.balanceTolerance),
       'User has not enough balance');
@@ -277,7 +288,7 @@ export class DoHardWorkLoopBase {
     const isReadyToHardWork = await this.strategy.isReadyToHardWork();
     if (isReadyToHardWork) {
       const platform = await this.strategy.PLATFORM();
-      const tetuPriceN = +utils.formatUnits(await this.getPrice(this.core.tetu.address));
+      // const tetuPriceN = +utils.formatUnits(await this.getPrice(this.core.tetu.address));
       let rts;
       // if (platform === 24) {
       //   rts = await ISplitter__factory.connect(this.strategy.address, this.signer).strategyRewardTokens();
@@ -301,7 +312,6 @@ export class DoHardWorkLoopBase {
   }
 
   protected async loop(loops: number, loopValue: number, advanceBlocks: boolean) {
-    loops = 1; // we do not change setPSNumeratorDenominator at loopStartActions(), so only one loop
     for (let i = 0; i < loops; i++) {
       const start = Date.now();
       await this.loopStartActions(i);
@@ -323,6 +333,7 @@ export class DoHardWorkLoopBase {
   }
 
   protected async postLoopCheck() {
+    console.log('postLoopCheck...');
     // wait enough time for get rewards for liquidation
     // we need to have strategy without rewards tokens in the end
     await TimeUtils.advanceNBlocks(3000);

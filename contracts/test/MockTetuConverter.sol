@@ -15,6 +15,9 @@ contract MockTetuConverter is ITetuConverter {
   using SafeERC20 for IERC20;
   using FixedPointMathLib for uint;
 
+  address public override controller;
+
+
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant TETU_CONVERTER_MOCK_VERSION = "1.0.0";
 
