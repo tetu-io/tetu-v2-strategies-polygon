@@ -6,10 +6,11 @@ import {DeployInfo} from "../../DeployInfo";
 import {StrategyTestUtils} from "../../StrategyTestUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {IController__factory, IStrategyV2, StrategyDystopiaConverter__factory} from "../../../../typechain";
+import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {StrategyDystopiaConverter__factory} from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import {ConverterUtils} from "../../ConverterUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -34,6 +35,7 @@ describe('Universal tests', async () => {
     return;
   }
 
+
   const deployInfo: DeployInfo = new DeployInfo();
   before(async function () {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
@@ -42,10 +44,13 @@ describe('Universal tests', async () => {
   const strategyName = 'StrategyDystopiaConverter';
   const assetName = 'USDC';
   const asset = MaticAddresses.USDC_TOKEN;
+  const token1 = asset;
+  // const token2 = MaticAddresses.USDPlus_TOKEN;
+  // const token2 = MaticAddresses.USDT_TOKEN;
+  const token2 = MaticAddresses.DAI_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
   const tools = Addresses.getTools();
-
 
   const deployer = async (signer: SignerWithAddress) => {
 
@@ -58,12 +63,13 @@ describe('Universal tests', async () => {
         core.controller,
         splitterAddress,
         tools.converter,
-        MaticAddresses.USDC_TOKEN,
-        // MaticAddresses.USDPlus_TOKEN,
-        // MaticAddresses.USDT_TOKEN,
-        MaticAddresses.DAI_TOKEN,
+        token1,
+        token2,
         true
       );
+
+      // Disable DForce (as it reverts on repay after block advance)
+      await ConverterUtils.disableDForce(token1, token2, signer);
 
       return strategy;
     }
@@ -76,6 +82,7 @@ describe('Universal tests', async () => {
       asset, vaultName, strategyDeployer, controller, gov,
       100, 300, 300, false
     );
+
   }
 
   /* tslint:disable:no-floating-promises */

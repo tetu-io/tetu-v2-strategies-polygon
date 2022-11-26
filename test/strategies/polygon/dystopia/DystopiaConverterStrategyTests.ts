@@ -15,32 +15,26 @@ import {
   VaultInsurance,
   VaultInsurance__factory,
   IERC20,
-  IGauge__factory,
   IGauge,
-  ITetuConverter__factory,
-  ITetuConverter,
-  IController__factory,
   IController,
   StrategySplitterV2__factory,
-  VaultFactory__factory,
   StrategyDystopiaConverter__factory,
   StrategyDystopiaConverter,
-  DystopiaConverterStrategy,
-  IConverterController__factory, IBorrowManager__factory
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {RunHelper} from "../../../../scripts/utils/RunHelper";
 import {BigNumber} from "ethers";
+import {ConverterUtils} from "../../ConverterUtils";
 
 
 const {expect} = chai;
 chai.use(chaiAsPromised);
+
+const balanceOf = TokenUtils.balanceOf;
 
 describe("Dystopia Converter Strategy tests", function () {
   let snapshotBefore: string;
@@ -55,11 +49,17 @@ describe("Dystopia Converter Strategy tests", function () {
   let token2: IERC20;
   let tetu: IERC20;
   let vault: TetuVaultV2;
-  // let splitter: StrategySplitterV2;
+  let splitter: StrategySplitterV2;
+  let splitterAddress: string;
   // let converter: ITetuConverter;
   let strategy: StrategyDystopiaConverter;
   let gauge: IGauge;
+  let insuranceAddress: string;
   let _1: BigNumber;
+  let _100_000: BigNumber;
+  let feeDenominator: BigNumber;
+  const bufferRate = 1_000;
+  const bufferDenominator = 1_000;
 
   before(async function () {
     [signer, signer1, signer2] = await ethers.getSigners()
@@ -74,20 +74,22 @@ describe("Dystopia Converter Strategy tests", function () {
     token1 = asset;
     token2 = IERC20__factory.connect(PolygonAddresses.DAI_TOKEN, signer);
     tetu = IERC20__factory.connect(PolygonAddresses.TETU_TOKEN, signer);
+
     _1 = parseUnits('1', 6);
+    _100_000 = parseUnits('100000', 6);
 
     const vaultName = 'tetu' + 'USDC';
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
     const coreContracts = await DeployerUtilsLocal.getCoreAddressesWrapper(gov);
     gauge = coreContracts.gauge;
 
-    const strategyDeployer = async (splitterAddress: string) => {
+    const strategyDeployer = async (_splitterAddress: string) => {
       const _strategy = StrategyDystopiaConverter__factory.connect(
         await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), gov);
 
       await _strategy.initialize(
         core.controller,
-        splitterAddress,
+        _splitterAddress,
         tools.converter,
         token1.address,
         token2.address,
@@ -99,36 +101,29 @@ describe("Dystopia Converter Strategy tests", function () {
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset.address, vaultName, strategyDeployer, controller, gov,
-      100, 0, 0, false
+      bufferRate, 0, 0, false
     );
     vault = data.vault.connect(signer);
     strategy = data.strategy as StrategyDystopiaConverter;
 
+    insuranceAddress = await vault.insurance();
+    feeDenominator = await vault.FEE_DENOMINATOR();
+    splitterAddress = await vault.splitter();
+    splitter = StrategySplitterV2__factory.connect(splitterAddress, signer);
+
     // GET TOKENS & APPROVE
 
-    await TokenUtils.getToken(asset.address, signer.address, parseUnits('10000', 6))
-    await TokenUtils.getToken(asset.address, signer1.address, parseUnits('10000', 6))
-    await TokenUtils.getToken(asset.address, signer2.address, parseUnits('10000', 6))
+    await TokenUtils.getToken(asset.address, signer.address, _100_000)
+    await TokenUtils.getToken(asset.address, signer1.address, _100_000)
+    await TokenUtils.getToken(asset.address, signer2.address, _100_000)
 
     await asset.connect(signer1).approve(vault.address, Misc.MAX_UINT);
     await asset.connect(signer2).approve(vault.address, Misc.MAX_UINT);
     await asset.approve(vault.address, Misc.MAX_UINT);
 
     // Disable DForce at TetuConverter
-    {
-      const converter = ITetuConverter__factory.connect(tools.converter, signer);
-      const converterControllerAddr = await converter.controller();
-      const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
-      const converterGovAddr = await converterController.governance();
-      const converterGov = await DeployerUtilsLocal.impersonate(converterGovAddr);
-      const borrowManagerAddr = await converterController.borrowManager();
-      console.log('borrowManagerAddr', borrowManagerAddr);
-      const borrowManager = IBorrowManager__factory.connect(borrowManagerAddr, converterGov);
-      const DFORCE_POOL_ADAPTER = '0x782b232a8C98aa14c8D48144845ccdf1fD3eeCBA';
-      console.log('removeAssetPairs...');
-      await borrowManager.removeAssetPairs(DFORCE_POOL_ADAPTER, [asset.address], [token2.address]);
-      console.log('done...\n\n');
-    }
+    await ConverterUtils.disableDForce(asset.address, token2.address, signer);
+
   });
 
   after(async function () {
@@ -144,26 +139,37 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   describe("Tokens Movement", function () {
+    const DEPOSIT_FEE = 300;
+    const WITHDRAW_FEE = 300;
 
-/*
-    interface ISnapshotItem {
-      value?: BigNumber,
-      prev?: BigNumber,
-      delta?: BigNumber,
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+      console.log('setFees...');
+      await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
+    });
 
-    }
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
 
-    type
-
-    const makeValuesSnapshot = async function(s: ISnapshotItem[] )
-*/
-
-
+    it("fees check", async () => {
+      expect(await vault.depositFee()).eq(DEPOSIT_FEE);
+      expect(await vault.depositFee()).eq(WITHDRAW_FEE);
+    });
 
     it("deposit", async () => {
-      await vault.connect(gov).setFees(300, 300);
       console.log('deposit...');
-      await vault.deposit(_1, signer.address);
+      const deposit = _100_000;
+      await vault.deposit(deposit, signer.address);
+
+      const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
+      expect(await balanceOf(asset.address, insuranceAddress)).eq(depositFee);
+      // const depositWithFee = deposit.sub(depositFee);
+      // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
+      // expect(await balanceOf(asset.address, vault.address)).eq(buffer);
+      expect(await balanceOf(asset.address, splitter.address)).eq(0);
+      // expect(await balanceOf(asset.address, strategy.address)).eq(0);
+
       console.log('withdrawAll...');
       hre.tracer.enabled = true;
       await vault.withdrawAll();

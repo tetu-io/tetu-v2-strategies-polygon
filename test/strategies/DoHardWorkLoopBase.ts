@@ -1,6 +1,6 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../CoreContractsWrapper";
-import {IStrategyV2, TetuVaultV2, ISplitter__factory} from "../../typechain";
+import {IStrategyV2, TetuVaultV2} from "../../typechain";
 import {IToolsContractsWrapper} from "../ToolsContractsWrapper";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {BigNumber, utils} from "ethers";
@@ -340,24 +340,25 @@ export class DoHardWorkLoopBase {
     await this.withdraw(true, BigNumber.from(0));
     // exit for signer
     await this.vault.connect(this.signer).withdrawAll();
-    await this.strategy.withdrawAllToSplitter();
+    // await this.strategy.withdrawAllToSplitter();
 
-    expect(await this.strategy.totalAssets()).is.eq(0);
+    // expect(await this.strategy.totalAssets()).is.eq(0); // Converter strategy may have dust
 
     // need to call hard work to sell a little excess rewards
     await this.strategy.doHardWork();
 
 
     // strategy should not contain any tokens in the end
-    const rts:string[] = []; // await this.strategy.rewardTokens(); // TODO we do not have rewardTokens() in v2
-    for (const rt of rts) {
+    const rts = await this.strategy.rewardTokens();
+    console.log('rts', rts);
+    /*for (const rt of rts) {
       if (rt.toLowerCase() === this.underlying.toLowerCase()) {
         continue;
       }
       const rtBal = await TokenUtils.balanceOf(rt, this.strategy.address);
       console.log('rt balance in strategy', rt, rtBal.toString());
       expect(rtBal).is.eq(0, 'Strategy contains not liquidated rewards');
-    }
+    }*/
 
     // check vault balance // TODO check vault balance
     // const vaultBalanceAfter = await TokenUtils.balanceOf(this.core.psVault.address, this.vault.address);
@@ -378,7 +379,10 @@ export class DoHardWorkLoopBase {
     // expect(rewardBalanceAfter.sub(this.userRTBal).toString())
     //   .is.not.eq("0", "should have earned xTETU rewards");
 
-    const userDepositedN = +utils.formatUnits(this.userDeposited, this.undDec);
+    const userDepositedWithFee = this.userDeposited
+      .mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator)
+      .mul(this.feeDenominator.sub(this.withdrawFee)).div(this.feeDenominator);
+    const userDepositedN = +utils.formatUnits(userDepositedWithFee, this.undDec);
     // some pools have auto compounding so user balance can increase
     const userUnderlyingBalanceAfter = await TokenUtils.balanceOf(this.underlying, this.user.address);
     const userUnderlyingBalanceAfterN = +utils.formatUnits(userUnderlyingBalanceAfter, this.undDec);
@@ -386,7 +390,10 @@ export class DoHardWorkLoopBase {
     console.log('User final balance +-: ', DoHardWorkLoopBase.toPercent(userUnderlyingBalanceAfterN, userDepositedN));
     expect(userUnderlyingBalanceAfterN).is.greaterThanOrEqual(userBalanceExpected, "user should have more underlying");
 
-    const signerDepositedN = +utils.formatUnits(this.signerDeposited, this.undDec);
+    const signerDepositedWithFee = this.signerDeposited
+      .mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator)
+      .mul(this.feeDenominator.sub(this.withdrawFee)).div(this.feeDenominator);
+    const signerDepositedN = +utils.formatUnits(signerDepositedWithFee, this.undDec);
     const signerUnderlyingBalanceAfter = await TokenUtils.balanceOf(this.underlying, this.signer.address);
     const signerUnderlyingBalanceAfterN = +utils.formatUnits(signerUnderlyingBalanceAfter, this.undDec);
     const signerBalanceExpected = signerDepositedN - (signerDepositedN * this.finalBalanceTolerance);
