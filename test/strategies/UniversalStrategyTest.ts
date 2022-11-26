@@ -71,8 +71,10 @@ async function universalStrategyTest(
         await forwarderConfigurator(core.forwarder);
       }
       if (ppfsDecreaseAllowed) {
+        throw Error('ppfsDecreaseAllowed not supported');
         // await core.vaultController.changePpfsDecreasePermissions([vault.address], true);
       }
+      // TODO check own rewards?
       // const firstRt = (await strategy.rewardTokens())[0];
       // if (firstRt.toLowerCase() === core.psVault.address.toLowerCase()) {
       //   await VaultUtils.addRewardsXTetu(signer, vault, core, 1);

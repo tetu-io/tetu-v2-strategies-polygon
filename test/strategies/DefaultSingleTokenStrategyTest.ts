@@ -33,7 +33,7 @@ async function startDefaultStrategyTest(
   const finalBalanceTolerance = 0;
   const deposit = 100_000;
   // at least 3
-  const loops = 1; // TODO st lest 3
+  const loops = 3; // TODO at lest 3
   // number of blocks or timestamp value
   const loopValue = 300;
   // use 'true' if farmable platform values depends on blocks, instead you can use timestamp

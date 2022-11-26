@@ -120,7 +120,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     doHardWork();
     if (amount == 0) return;
 
-    address _asset = asset;
+/*    address _asset = asset;
     uint assetBalanceBefore = _balance(_asset);
 
     address[] memory tokens = _depositorPoolAssets();
@@ -147,7 +147,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
 
     _depositorEnter(tokenAmounts);
-    _investedAssets += (assetBalanceBefore - _balance(_asset));
+    _investedAssets += (assetBalanceBefore - _balance(_asset));*/
   }
 
   /// @dev Withdraw given amount from the pool.
@@ -156,7 +156,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     if (!emergency) doHardWork();
 
-    address _asset = asset;
+    /*address _asset = asset;
     uint assetBalanceBefore = _balance(_asset);
 
     if (emergency) {
@@ -179,7 +179,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     uint amountReceived = _balance(_asset) - assetBalanceBefore;
     _investedAssets -= amountReceived;
-
+*/
   }
 
   /// @dev Withdraw given amount from the pool.

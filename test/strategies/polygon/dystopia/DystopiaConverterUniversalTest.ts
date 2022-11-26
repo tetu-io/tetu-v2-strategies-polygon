@@ -47,7 +47,7 @@ describe('Universal tests', async () => {
   const token1 = asset;
   // const token2 = MaticAddresses.USDPlus_TOKEN;
   // const token2 = MaticAddresses.USDT_TOKEN;
-  const token2 = MaticAddresses.DAI_TOKEN;
+  const token2 = MaticAddresses.DAI_TOKEN; // MAYBE iterate
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
   const tools = Addresses.getTools();
@@ -80,7 +80,7 @@ describe('Universal tests', async () => {
     console.log('deployAndInitVaultAndStrategy...');
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset, vaultName, strategyDeployer, controller, gov,
-      100, 300, 300, false
+      100, 0, 0, false
     );
 
   }

@@ -49,6 +49,8 @@ export class DoHardWorkLoopBase {
   depositFee = BigNumber.from(0);
   withdrawFee = BigNumber.from(0);
 
+  initialDeposit = BigNumber.from(0);
+
   constructor(
     signer: SignerWithAddress,
     user: SignerWithAddress,
@@ -75,16 +77,31 @@ export class DoHardWorkLoopBase {
   }
 
   public async start(deposit: BigNumber, loops: number, loopValue: number, advanceBlocks: boolean) {
+    console.log('! this.initialDeposit', this.initialDeposit);
     const start = Date.now();
     this.loops = loops;
-    this.userDeposited = deposit;
     await this.init();
+    this.initialDeposit = this.subDepositFee(deposit); // call it after fees init()
     await this.initialCheckVault();
-    await this.enterToVault();
+    await this.enterToVault(deposit);
     await this.initialSnapshot();
     await this.loop(loops, loopValue, advanceBlocks);
     await this.postLoopCheck();
     Misc.printDuration('HardWork test finished', start);
+  }
+
+  protected calcDepositFee(amount: BigNumber): BigNumber {
+    return amount.mul(this.depositFee).div(this.feeDenominator);
+  }
+  protected subDepositFee(amount: BigNumber): BigNumber {
+    return amount.sub(this.calcDepositFee(amount));
+  }
+
+  protected calcWithdrawFee(amount: BigNumber): BigNumber {
+    return amount.mul(this.withdrawFee).div(this.feeDenominator);
+  }
+  protected subWithdrawFee(amount: BigNumber): BigNumber {
+    return amount.sub(this.calcWithdrawFee(amount));
   }
 
   protected async init() {
@@ -113,13 +130,15 @@ export class DoHardWorkLoopBase {
 
   // signer and user enter to the vault
   // we should have not zero balance if user exit the vault for properly check
-  protected async enterToVault() {
+  protected async enterToVault(deposit: BigNumber) {
     console.log('--- Enter to vault')
     // initial deposit from signer
-    await VaultUtils.deposit(this.signer, this.vault, this.userDeposited.div(2));
+    const signerDeposit = deposit.div(2)
+    await VaultUtils.deposit(this.signer, this.vault, signerDeposit);
     console.log('enterToVault: deposited for signer');
-    this.signerDeposited = this.userDeposited.div(2);
-    await VaultUtils.deposit(this.user, this.vault, this.userDeposited);
+    this.signerDeposited = this.subDepositFee(signerDeposit);
+    await VaultUtils.deposit(this.user, this.vault, deposit);
+    this.userDeposited = this.subDepositFee(deposit);
     console.log('enterToVault: deposited for user');
     await this.userCheckBalanceInVault();
 
@@ -132,6 +151,8 @@ export class DoHardWorkLoopBase {
     if (!excessBalSigner.isZero()) {
       await TokenUtils.transfer(this.underlying, this.signer, this.tools.liquidator.address, excessBalSigner.toString());
     }
+    await this.userCheckBalance();
+
     console.log('--- Enter to vault end')
   }
 
@@ -165,13 +186,13 @@ export class DoHardWorkLoopBase {
 
   protected async userCheckBalanceInVault() {
     // assume that at this point we deposited all expected amount except userWithdrew amount
-    const userBalance = await TokenUtils.balanceOf(this.vault.address, this.user.address);
+    const userShares = await TokenUtils.balanceOf(this.vault.address, this.user.address);
+    const userBalance = await this.vaultForUser.convertToAssets(userShares);
     // avoid rounding errors
     const userBalanceN = +utils.formatUnits(userBalance.add(1), this.undDec);
-    const depositedWithFee = this.userDeposited.mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator);
-    const userBalanceExpectedN = +utils.formatUnits(depositedWithFee.sub(this.userWithdrew), this.undDec);
+    const userBalanceExpectedN = +utils.formatUnits(this.userDeposited.sub(this.userWithdrew), this.undDec);
 
-    console.log('User balance +-:', DoHardWorkLoopBase.toPercent(userBalanceN, userBalanceExpectedN));
+    console.log('Vault User balance +-:', DoHardWorkLoopBase.toPercent(userBalanceN, userBalanceExpectedN));
     expect(userBalanceN).is.greaterThanOrEqual(userBalanceExpectedN - (userBalanceExpectedN * this.balanceTolerance),
       'User has wrong balance inside the vault.\n' +
       'If you expect not zero balance it means the vault has a nature of PPFS decreasing.\n' +
@@ -179,37 +200,42 @@ export class DoHardWorkLoopBase {
       'If you expect zero balance and it has something inside IT IS NOT GOOD!\n');
   }
 
-  protected async userCheckBalance(expectedBalance: BigNumber) {
+  protected async userCheckBalance() {
+    console.log('userCheckBalance userDeposited, userWithdrew',
+      this.userDeposited.toString(), this.userWithdrew.toString());
     const userUndBal = await TokenUtils.balanceOf(this.underlying, this.user.address);
     const userUndBalN = +utils.formatUnits(userUndBal, this.undDec);
-    const expectedBalanceWithFee = expectedBalance
-      .mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator) // deposit
-      .mul(this.feeDenominator.sub(this.withdrawFee)).div(this.feeDenominator) // withdraw
-    const userBalanceExpectedN = +utils.formatUnits(expectedBalanceWithFee, this.undDec);
-    console.log('User balance +-:', DoHardWorkLoopBase.toPercent(userUndBalN, userBalanceExpectedN));
+    const userBalanceExpected = this.initialDeposit.add(this.userWithdrew).sub(this.userDeposited);
+    const userBalanceExpectedN = +utils.formatUnits(userBalanceExpected, this.undDec);
+    console.log('Asset User balance +-:', DoHardWorkLoopBase.toPercent(userUndBalN, userBalanceExpectedN));
     expect(userUndBalN).is.greaterThanOrEqual(userBalanceExpectedN - (userBalanceExpectedN * this.balanceTolerance),
       'User has not enough balance');
   }
 
   protected async withdraw(exit: boolean, amount: BigNumber) {
+    console.log('WITHDRAW exit, amount', exit, amount.toString());
     // no actions if zero balance
     if ((await TokenUtils.balanceOf(this.vault.address, this.user.address)).isZero()) {
       return;
     }
     console.log('PPFS before withdraw', (await this.vault.sharePrice()).toString());
     await this.userCheckBalanceInVault();
+    await this.userCheckBalance();
+
     if (exit) {
       console.log('exit');
       await this.vaultForUser.withdrawAll();
-      await this.userCheckBalance(this.userDeposited);
+      await this.userCheckBalance();
       this.userWithdrew = this.userDeposited;
     } else {
       const userUndBal = await TokenUtils.balanceOf(this.underlying, this.user.address);
-      console.log('withdraw', amount.toString());
+      console.log('Withdraw', amount.toString());
       await this.vaultForUser.withdraw(amount, this.user.address, this.user.address);
-      await this.userCheckBalance(this.userWithdrew.add(amount));
       const userUndBalAfter = await TokenUtils.balanceOf(this.underlying, this.user.address);
-      this.userWithdrew = this.userWithdrew.add(userUndBalAfter.sub(userUndBal));
+      const withdrawn = userUndBalAfter.sub(userUndBal);
+      console.log('withdrawn', withdrawn.toString());
+      this.userWithdrew = this.userWithdrew.add(withdrawn);
+      await this.userCheckBalance();
     }
     console.log('userWithdrew', this.userWithdrew.toString());
     console.log('PPFS after withdraw', (await this.vault.sharePrice()).toString());
@@ -217,10 +243,10 @@ export class DoHardWorkLoopBase {
 
   // don't use for initial deposit
   protected async deposit(amount: BigNumber) {
+    console.log('DEPOSIT', amount.toString());
     console.log('PPFS before deposit', (await this.vault.sharePrice()).toString());
     await VaultUtils.deposit(this.user, this.vault, amount);
-    this.userWithdrew = this.userWithdrew.sub(amount);
-    console.log('userWithdrew', this.userWithdrew.toString());
+    this.userDeposited = this.userDeposited.add(this.subDepositFee(amount));
     await this.userCheckBalanceInVault();
     console.log('PPFS after deposit', (await this.vault.sharePrice()).toString());
   }
@@ -234,13 +260,15 @@ export class DoHardWorkLoopBase {
         await this.withdraw(true, BigNumber.from(0));
       } else {
         const userXTokenBal = await TokenUtils.balanceOf(this.vault.address, this.user.address);
-        const toWithdraw = BigNumber.from(userXTokenBal).mul(95).div(100);
+        const userAssetsBal = await this.vaultForUser.convertToAssets(userXTokenBal);
+        const toWithdraw = BigNumber.from(userAssetsBal).mul(95).div(100);
         await this.withdraw(false, toWithdraw);
       }
 
     } else if (!this.isUserDeposited && i % 2 !== 0) {
       this.isUserDeposited = true;
       const uBal = await TokenUtils.balanceOf(this.underlying, this.user.address);
+      console.log('.userDeposited, userWithdrew', this.userDeposited, this.userWithdrew);
       await this.deposit(BigNumber.from(uBal).div(3));
       await this.deposit(BigNumber.from(uBal).div(3));
     }
@@ -312,7 +340,9 @@ export class DoHardWorkLoopBase {
   }
 
   protected async loop(loops: number, loopValue: number, advanceBlocks: boolean) {
+    console.log('loop... loops, loopValue, advanceBlocks', loops, loopValue, advanceBlocks);
     for (let i = 0; i < loops; i++) {
+      console.log('\n=====================\nloop i', i);
       const start = Date.now();
       await this.loopStartActions(i);
       await this.loopStartSnapshot();
@@ -379,15 +409,18 @@ export class DoHardWorkLoopBase {
     // expect(rewardBalanceAfter.sub(this.userRTBal).toString())
     //   .is.not.eq("0", "should have earned xTETU rewards");
 
-    const userDepositedWithFee = this.userDeposited
-      .mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator)
-      .mul(this.feeDenominator.sub(this.withdrawFee)).div(this.feeDenominator);
-    const userDepositedN = +utils.formatUnits(userDepositedWithFee, this.undDec);
+    console.log('userCheckBalance userDeposited, userWithdrew',
+      this.userDeposited.toString(), this.userWithdrew.toString());
+    const userBalance = this.initialDeposit.sub(this.userDeposited).add(this.userWithdrew);
+      // .mul(this.feeDenominator.sub(this.depositFee)).div(this.feeDenominator)
+      // .mul(this.feeDenominator.sub(this.withdrawFee)).div(this.feeDenominator);
+    const userBalanceN = +utils.formatUnits(userBalance, this.undDec);
     // some pools have auto compounding so user balance can increase
     const userUnderlyingBalanceAfter = await TokenUtils.balanceOf(this.underlying, this.user.address);
     const userUnderlyingBalanceAfterN = +utils.formatUnits(userUnderlyingBalanceAfter, this.undDec);
-    const userBalanceExpected = userDepositedN - (userDepositedN * this.finalBalanceTolerance);
-    console.log('User final balance +-: ', DoHardWorkLoopBase.toPercent(userUnderlyingBalanceAfterN, userDepositedN));
+    console.log('userUnderlyingBalanceAfterN', userUnderlyingBalanceAfterN);
+    const userBalanceExpected = userBalanceN - (userBalanceN * this.finalBalanceTolerance);
+    console.log('User final balance +-: ', DoHardWorkLoopBase.toPercent(userUnderlyingBalanceAfterN, userBalanceN));
     expect(userUnderlyingBalanceAfterN).is.greaterThanOrEqual(userBalanceExpected, "user should have more underlying");
 
     const signerDepositedWithFee = this.signerDeposited
