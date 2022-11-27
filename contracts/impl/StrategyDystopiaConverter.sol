@@ -13,6 +13,7 @@ contract StrategyDystopiaConverter is DystopiaConverterStrategy {
   function initialize(
     address controller_,
     address splitter_,
+    address[] memory  rewardTokens_,
     address converter_,
     address tokenA_,
     address tokenB_,
@@ -22,6 +23,7 @@ contract StrategyDystopiaConverter is DystopiaConverterStrategy {
     initializeStrategy(
       controller_,
       splitter_,
+      rewardTokens_,
       converter_,
       _DYSTOPIA_ROUTER,
       tokenA_,

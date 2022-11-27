@@ -16,6 +16,7 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
   function initializeStrategy(
     address controller_,
     address splitter_,
+    address[] memory  rewardTokens_,
     address converter_,
     address router_,
     address tokenA_,
@@ -31,6 +32,7 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
     __ConverterStrategyBase_init(
       controller_,
       splitter_,
+      rewardTokens_,
       converter_,
       thresholdTokens,
       thresholdAmounts

@@ -57,11 +57,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function __ConverterStrategyBase_init(
     address controller_,
     address splitter_,
+    address[] memory rewardTokens_,
     address converter_,
     address[] memory thresholdTokens_,
     uint[] memory thresholdAmounts_
   ) internal onlyInitializing {
-    __StrategyBase_init(controller_, splitter_);
+    __StrategyBase_init(controller_, splitter_, rewardTokens_);
   //  _requireInterface(converter_, InterfaceIds.I_TETU_CONVERTER);
     tetuConverter = ITetuConverter(converter_);
 
