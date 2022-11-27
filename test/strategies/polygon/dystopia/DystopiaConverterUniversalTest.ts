@@ -80,7 +80,7 @@ describe('Universal tests', async () => {
     console.log('deployAndInitVaultAndStrategy...');
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset, vaultName, strategyDeployer, controller, gov,
-      100, 0, 0, false
+      100, 1000, 0, false
     );
 
   }
