@@ -59,17 +59,18 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     address tokenA = depositorTokenA;
     address tokenB = depositorTokenB;
     address router = depositorRouter;
+    bool stable = depositorStable;
     uint amount0 = amountsDesired_[0];
     uint amount1 = amountsDesired_[1];
 
-    _safeApprove(tokenA, amount0, router);
-    _safeApprove(tokenB, amount1, router);
+    _approveIfNeeded(tokenA, amount0, router);
+    _approveIfNeeded(tokenB, amount1, router);
 
     amountsConsumed = new uint[](2);
     (amountsConsumed[0], amountsConsumed[1], liquidity) = IRouter(router).addLiquidity(
       tokenA,
       tokenB,
-      depositorStable,
+        stable,
       amount0,
       amount1,
       0,
@@ -78,11 +79,16 @@ contract DystopiaDepositor is DepositorBase, Initializable {
       block.timestamp
     );
 
+    // TODO Stake to the Gauge
+    //address pool = IRouter(router).pairFor(tokenA, tokenB, stable);
+
+
   }
 
   /// @dev Withdraw given lp amount from the pool.
   /// @notice if requested liquidityAmount >= invested, then should make full exit
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+    // TODO unstake from gauge
 
     uint totalLiquidity = _depositorLiquidity();
     if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
