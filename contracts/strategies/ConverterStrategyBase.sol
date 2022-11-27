@@ -237,23 +237,35 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Claim all possible rewards.
   function _claim() override internal virtual {
-    address[] memory tokens;
-    uint[] memory amounts;
+    address[] memory tokens = _rewardTokens;
+    uint[] memory amounts = new uint[](tokens.length);
 
+    // Get reward tokens balances
+    for (uint i = 0;i < tokens.length; i++) {
+      amounts[i] = IERC20(tokens[i]).balanceOf(address(this));
+    }
+    address[] memory tokens0;
+    uint[] memory amounts0;
+    (tokens0, amounts0) = _filterZeroTokenAmounts(tokens, amounts);
+
+    // Rewards from the Depositor
     (tokens, amounts) = _depositorClaimRewards();
     address[] memory tokens1;
     uint[] memory amounts1;
     (tokens1, amounts1) = _filterZeroTokenAmounts(tokens, amounts);
 
-    // TODO Enable claim from Converter
-//    (tokens, amounts) = tetuConverter.claimRewards(address(this));
+    // Rewards from TetuConverter
+    (tokens, amounts) = tetuConverter.claimRewards(address(this));
     address[] memory tokens2;
     uint[] memory amounts2;
-//    (tokens2, amounts2) = _filterZeroTokenAmounts(tokens, amounts);
+    (tokens2, amounts2) = _filterZeroTokenAmounts(tokens, amounts);
 
+    // Join arrays and recycle tokens
     (tokens, amounts) = _uniteTokensAmounts(tokens1, amounts1, tokens2, amounts2);
-    if (tokens.length > 0) {
-      _recycle(tokens, amounts);
+    // reuse tokens1, amounts1 vars
+    (tokens1, amounts1) = _uniteTokensAmounts(tokens, amounts, tokens0, amounts0);
+    if (tokens1.length > 0) {
+      _recycle(tokens1, amounts1);
     }
 
   }
