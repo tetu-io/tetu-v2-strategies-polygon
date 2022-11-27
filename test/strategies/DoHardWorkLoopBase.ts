@@ -213,6 +213,7 @@ export class DoHardWorkLoopBase {
     const userUndBalN = +utils.formatUnits(userUndBal, this.undDec);
     const userBalanceExpected = this.initialDepositWithFee.add(this.userWithdrewWithFee).sub(this.userDeposited);
     const userBalanceExpectedN = +utils.formatUnits(userBalanceExpected, this.undDec);
+    console.log('userUndBalN, expected', userUndBalN, userBalanceExpectedN);
     console.log('Asset User balance +-:', DoHardWorkLoopBase.toPercent(userUndBalN, userBalanceExpectedN));
     expect(userUndBalN).is.greaterThanOrEqual(userBalanceExpectedN - (userBalanceExpectedN * this.balanceTolerance),
       'User has not enough balance');
