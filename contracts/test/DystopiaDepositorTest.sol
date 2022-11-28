@@ -8,7 +8,7 @@ import "./DepositorTestBase.sol";
 /// @title Dystopia Depositor Test contract.
 /// @author bogdoslav
 contract DystopiaDepositorTest is DepositorTestBase, DystopiaDepositor {
-  constructor(address router, address tokenA, address tokenB, bool stable) {
-    __DystopiaDepositor_init(router, tokenA, tokenB, stable);
+  constructor(address router, address tokenA, address tokenB, bool stable, address voter) {
+    __DystopiaDepositor_init(router, tokenA, tokenB, stable, voter);
   }
 }

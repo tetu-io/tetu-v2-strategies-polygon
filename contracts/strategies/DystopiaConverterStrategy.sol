@@ -21,10 +21,11 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
     address router_,
     address tokenA_,
     address tokenB_,
-    bool stable_
+    bool stable_,
+    address voter_
   ) internal onlyInitializing {
 
-    __DystopiaDepositor_init(router_, tokenA_, tokenB_, stable_);
+    __DystopiaDepositor_init(router_, tokenA_, tokenB_, stable_, voter_);
 
     address[] memory thresholdTokens;
     uint[] memory thresholdAmounts;

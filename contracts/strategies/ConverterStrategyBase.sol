@@ -8,6 +8,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "../interfaces/ITetuConverter.sol";
 import "../interfaces/ITetuConverterCallback.sol";
 import "./depositors/DepositorBase.sol";
+import "../tools/TokenAmountsLib.sol";
 
 import "hardhat/console.sol";
 
@@ -246,110 +247,25 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
     address[] memory tokens0;
     uint[] memory amounts0;
-    (tokens0, amounts0) = _filterZeroTokenAmounts(tokens, amounts);
+    (tokens0, amounts0) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
 
     // Rewards from the Depositor
     (tokens, amounts) = _depositorClaimRewards();
     address[] memory tokens1;
     uint[] memory amounts1;
-    (tokens1, amounts1) = _filterZeroTokenAmounts(tokens, amounts);
+    (tokens1, amounts1) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
 
     // Rewards from TetuConverter
     (tokens, amounts) = tetuConverter.claimRewards(address(this));
     address[] memory tokens2;
     uint[] memory amounts2;
-    (tokens2, amounts2) = _filterZeroTokenAmounts(tokens, amounts);
+    (tokens2, amounts2) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
 
     // Join arrays and recycle tokens
-    (tokens, amounts) = _uniteTokensAmounts(tokens1, amounts1, tokens2, amounts2);
-    // reuse tokens1, amounts1 vars
-    (tokens1, amounts1) = _uniteTokensAmounts(tokens, amounts, tokens0, amounts0);
-    if (tokens1.length > 0) {
-      _recycle(tokens1, amounts1);
-    }
-
-  }
-
-  function _filterZeroTokenAmounts(
-    address[] memory tokens,
-    uint[] memory amounts
-  ) internal pure returns (
-    address[] memory t,
-    uint[] memory a
-  ) {
-    uint len2 = 0;
-    uint len = tokens.length;
-    for (uint i = 0; i < len; i++) {
-      if (amounts[i] != 0) len2++;
-    }
-
-    t = new address[](len2);
-    a = new uint[](len2);
-
-    uint j = 0;
-    for (uint i = 0; i < len; i++) {
-      uint amount = amounts[i];
-      if (amount != 0) {
-        t[j] = tokens[i];
-        a[j] = amount;
-        j++;
-      }
-    }
-  }
-
-  /// @dev unites tokens2 and amounts2 in to tokens & amounts
-  function _uniteTokensAmounts(
-    address[] memory tokens1,
-    uint[] memory amounts1,
-    address[] memory tokens2,
-    uint[] memory amounts2
-  ) internal pure returns (
-    address[] memory allTokens,
-    uint[] memory allAmounts
-  ) {
-
-    require (tokens1.length == amounts1.length && tokens2.length == amounts2.length, 'Arrays mismatch');
-
-    uint tokensLength = tokens1.length + tokens2.length;
-    address[] memory tokens = new address[](tokensLength);
-    uint[] memory amounts = new uint[](tokensLength);
-
-    // copy tokens1 to tokens (& amounts)
-    for (uint i; i < tokens1.length; i++) {
-        tokens[i] = tokens1[i];
-        amounts[i] = amounts1[i];
-    }
-
-    // join tokens2
-    tokensLength = tokens1.length;
-    for (uint t2; t2 < tokens2.length; t2++) {
-
-      address token2 = tokens2[t2];
-      uint amount2 = amounts2[t2];
-      bool united = false;
-
-      for (uint i; i < tokensLength; i++) {
-        if (token2 == tokens1[i]) {
-          amounts[i] += amount2;
-          united = true;
-          break;
-        }
-      }
-
-      if (!united) {
-        tokens[tokensLength] = token2;
-        amounts[tokensLength] = amount2;
-        tokensLength++;
-      }
-
-    }
-
-    // copy united tokens to result array
-    allTokens = new address[](tokensLength);
-    allAmounts = new uint[](tokensLength);
-    for (uint i; i < tokensLength; i++) {
-      allTokens[i] = tokens[i];
-      allAmounts[i] = amounts[i];
+    (tokens, amounts) = TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
+    (tokens, amounts) = TokenAmountsLib.unite(tokens, amounts, tokens0, amounts0);
+    if (tokens.length > 0) {
+      _recycle(tokens, amounts);
     }
 
   }

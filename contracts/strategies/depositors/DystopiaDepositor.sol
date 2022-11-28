@@ -5,6 +5,9 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "../../third_party/dystopia/IRouter.sol";
 import "../../third_party/dystopia/IPair.sol";
+import "../../third_party/dystopia/IVoter.sol";
+import "../../third_party/dystopia/IGauge.sol";
+import "../../tools/TokenAmountsLib.sol";
 import "./DepositorBase.sol";
 
 /// @title Dystopia Depositor for ConverterStrategies
@@ -15,6 +18,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   string public constant DYSTOPIA_DEPOSITOR_VERSION = "1.0.0";
 
   address public depositorRouter;
+  address public depositorGauge;
   address public depositorPair;
   address public depositorTokenA;
   address public depositorTokenB;
@@ -22,13 +26,16 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   // @notice tokens must be MockTokens
   function __DystopiaDepositor_init(
-    address router, address tokenA, address tokenB, bool stable
+    address router, address tokenA, address tokenB, bool stable, address voter
   ) internal onlyInitializing {
     depositorRouter = router;
     depositorTokenA = tokenA;
     depositorTokenB = tokenB;
     depositorStable = stable;
-    depositorPair = IRouter(router).pairFor(tokenA, tokenB, stable);
+    address _depositorPair = IRouter(router).pairFor(tokenA, tokenB, stable);
+    depositorPair = _depositorPair;
+    depositorGauge = IVoter(voter).gauges(_depositorPair);
+    require(depositorGauge != address(0), 'DD: No Gauge');
   }
 
   /// @dev Returns pool assets
@@ -49,7 +56,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @dev Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override public virtual view returns (uint) {
-    return IERC20(depositorPair).balanceOf(address(this));
+    return IGauge(depositorGauge).balanceOf(address(this));
   }
 
   /// @dev Deposit given amount to the pool.
@@ -79,23 +86,25 @@ contract DystopiaDepositor is DepositorBase, Initializable {
       block.timestamp
     );
 
-    // TODO Stake to the Gauge
-    //address pool = IRouter(router).pairFor(tokenA, tokenB, stable);
-
+    // Stake to the Gauge
+    _approveIfNeeded(depositorPair, type(uint).max / 2, depositorGauge);
+    IGauge(depositorGauge).depositAll(0);
 
   }
 
   /// @dev Withdraw given lp amount from the pool.
   /// @notice if requested liquidityAmount >= invested, then should make full exit
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    // TODO unstake from gauge
-
     uint totalLiquidity = _depositorLiquidity();
     if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
 
+    // Unstake from the gauge
+    IGauge(depositorGauge).withdraw(liquidityAmount);
+
+    // Remove liquidity
     address router = depositorRouter;
 
-    _safeApprove(depositorPair, liquidityAmount, router);
+    _approveIfNeeded(depositorPair, liquidityAmount, router);
 
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = IRouter(router).removeLiquidity(
@@ -114,11 +123,30 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual
   returns (address[] memory rewardTokens, uint[] memory rewardAmounts) {
-    rewardTokens = _depositorPoolAssets();
-    (uint a, uint b) = IPair(depositorPair).claimFees();
-    rewardAmounts = new uint[](2);
-    rewardAmounts[0] = a;
-    rewardAmounts[1] = b;
+    address[] memory feeTokens = _depositorPoolAssets();
+    IGauge gauge = IGauge(depositorGauge);
+    (uint a0, uint b0) = IPair(depositorPair).claimFees();
+    (uint a1, uint b1) = gauge.claimFees();
+    uint[] memory feeAmounts = new uint[](2);
+    feeAmounts[0] = a0 + a1;
+    feeAmounts[1] = b0 + b1;
+
+    uint len = gauge.rewardTokensLength();
+    uint[] memory amounts = new uint[](len);
+    address[] memory tokens = new address[](len);
+    address[] memory tokenArray = new address[](1);
+    for (uint i = 0; i < len; i++) {
+      address token = gauge.rewardTokens(i);
+      tokens[i] = token;
+      tokenArray[0] = token;
+      uint balanceBefore = IERC20(token).balanceOf(address(this));
+      gauge.getReward(address(this), tokenArray);
+      amounts[i] = IERC20(token).balanceOf(address(this)) - balanceBefore;
+    }
+
+    (rewardTokens, rewardAmounts) = TokenAmountsLib.unite(feeTokens, feeAmounts, tokens, amounts);
+    (rewardTokens, rewardAmounts) = TokenAmountsLib.filterZeroAmounts(rewardTokens, rewardAmounts);
+
   }
 
   /**
