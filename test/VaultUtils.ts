@@ -1,6 +1,5 @@
 import {
-  IControllable__factory,
-  IController__factory, IERC20__factory,
+  IERC20__factory,
   TetuVaultV2,
   IStrategyV2__factory,
   IGauge__factory, StrategySplitterV2__factory
@@ -9,13 +8,13 @@ import {expect} from "chai";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TokenUtils} from "../scripts/utils/TokenUtils";
 import {BigNumber, ContractTransaction, utils} from "ethers";
-import axios from "axios";
-import {MaticAddresses} from "../scripts/MaticAddresses";
+// import axios from "axios";
 // import {MintHelperUtils} from "./MintHelperUtils";
 import {Misc} from "../scripts/utils/Misc";
-import {ethers} from "hardhat";
+// import {ethers} from "hardhat";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {ICoreContractsWrapper} from "./CoreContractsWrapper";
+import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 
 export const PPFS_NO_INCREASE = new Set<string>([
   'QiStakingStrategyBase',
@@ -81,13 +80,13 @@ export class VaultUtils {
     vault: TetuVaultV2,
     core: ICoreContractsWrapper,
     amount: number,
-    period = 60 * 60 * 24 * 2
+    // period = 60 * 60 * 24 * 2
   ) {
     const start = Date.now();
     // const net = await ethers.provider.getNetwork();
 
     console.log("Add TETU as reward to vault: ", amount.toString())
-    const rewardTokenAddress = MaticAddresses.TETU_TOKEN;
+    const rewardTokenAddress = PolygonAddresses.TETU_TOKEN;
     const amountWei = utils.parseUnits(amount + '');
     // if (core.tetu.address.toLowerCase() !== rewardTokenAddress) {
     await TokenUtils.getToken(rewardTokenAddress, signer.address, amountWei);
@@ -102,15 +101,15 @@ export class VaultUtils {
 
   public static async doHardWorkAndCheck(vault: TetuVaultV2, positiveCheck = true) {
     const start = Date.now();
-    const controller = await IControllable__factory.connect(vault.address, vault.signer).controller();
-    const controllerCtr = IController__factory.connect(controller, vault.signer);
+    // const controller = await IControllable__factory.connect(vault.address, vault.signer).controller();
+    // const controllerCtr = IController__factory.connect(controller, vault.signer);
 
     const und = await vault.asset();
     const undDec = await TokenUtils.decimals(und);
     // const gauge = IGauge__factory.connect(await vault.gauge(), vault.signer);
     const rt = Addresses.getCore().tetu; // TODO May we get reward tokens from the Gauge?
     const psRatio = 1;
-    const ppfsDecreaseAllowed = false; // await vault.ppfsDecreaseAllowed();
+    // const ppfsDecreaseAllowed = false; // await vault.ppfsDecreaseAllowed();
 
     const ppfs = +utils.formatUnits(await vault.sharePrice(), undDec);
     const undBal = +utils.formatUnits(await vault.totalAssets(), undDec);

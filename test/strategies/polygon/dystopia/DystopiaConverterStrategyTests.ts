@@ -18,8 +18,8 @@ import {
   IGauge,
   IController,
   StrategySplitterV2__factory,
-  StrategyDystopiaConverter__factory,
-  StrategyDystopiaConverter,
+  DystopiaConverterStrategy__factory,
+  DystopiaConverterStrategy,
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
@@ -52,14 +52,14 @@ describe("Dystopia Converter Strategy tests", function () {
   let splitter: StrategySplitterV2;
   let splitterAddress: string;
   // let converter: ITetuConverter;
-  let strategy: StrategyDystopiaConverter;
+  let strategy: DystopiaConverterStrategy;
   let gauge: IGauge;
   let insuranceAddress: string;
   let _1: BigNumber;
   let _100_000: BigNumber;
   let feeDenominator: BigNumber;
-  const bufferRate = 1_000;
-  const bufferDenominator = 1_000;
+  const bufferRate = 1_000; // n_%
+  // const bufferDenominator = 100_000;
 
   before(async function () {
     [signer, signer1, signer2] = await ethers.getSigners()
@@ -84,12 +84,13 @@ describe("Dystopia Converter Strategy tests", function () {
     gauge = coreContracts.gauge;
 
     const strategyDeployer = async (_splitterAddress: string) => {
-      const _strategy = StrategyDystopiaConverter__factory.connect(
-        await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), gov);
+      const _strategy = DystopiaConverterStrategy__factory.connect(
+        await DeployerUtils.deployProxy(signer, 'DystopiaConverterStrategy'), gov);
 
       await _strategy.initialize(
         core.controller,
         _splitterAddress,
+        [PolygonAddresses.TETU_TOKEN],
         tools.converter,
         token1.address,
         token2.address,
@@ -104,7 +105,7 @@ describe("Dystopia Converter Strategy tests", function () {
       bufferRate, 0, 0, false
     );
     vault = data.vault.connect(signer);
-    strategy = data.strategy as StrategyDystopiaConverter;
+    strategy = data.strategy as DystopiaConverterStrategy;
 
     insuranceAddress = await vault.insurance();
     feeDenominator = await vault.FEE_DENOMINATOR();

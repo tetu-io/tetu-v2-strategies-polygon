@@ -7,10 +7,11 @@ import {StrategyTestUtils} from "../../StrategyTestUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {StrategyDystopiaConverter__factory} from "../../../../typechain";
+import {DystopiaConverterStrategy__factory} from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../ConverterUtils";
+import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -47,7 +48,7 @@ describe('Universal tests', async () => {
   const token1 = asset;
   // const token2 = MaticAddresses.USDPlus_TOKEN;
   // const token2 = MaticAddresses.USDT_TOKEN;
-  const token2 = MaticAddresses.DAI_TOKEN; // MAYBE iterate
+  const token2 = MaticAddresses.DAI_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
   const tools = Addresses.getTools();
@@ -56,12 +57,13 @@ describe('Universal tests', async () => {
 
     const controller = DeployerUtilsLocal.getController(signer);
     const strategyDeployer = async (splitterAddress: string) => {
-      const strategy = StrategyDystopiaConverter__factory.connect(
-        await DeployerUtils.deployProxy(signer, 'StrategyDystopiaConverter'), signer);
+      const strategy = DystopiaConverterStrategy__factory.connect(
+        await DeployerUtils.deployProxy(signer, 'DystopiaConverterStrategy'), signer);
 
       await strategy.initialize(
         core.controller,
         splitterAddress,
+        [PolygonAddresses.TETU_TOKEN],
         tools.converter,
         token1,
         token2,
@@ -80,13 +82,13 @@ describe('Universal tests', async () => {
     console.log('deployAndInitVaultAndStrategy...');
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset, vaultName, strategyDeployer, controller, gov,
-      100, 1000, 500, false
+      100, 250, 500, false
     );
 
   }
 
   /* tslint:disable:no-floating-promises */
-  startDefaultStrategyTest(
+  await startDefaultStrategyTest(
     strategyName,
     asset,
     assetName,

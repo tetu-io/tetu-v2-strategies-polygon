@@ -209,6 +209,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address _asset = asset;
     uint len = tokens.length;
     uint _compoundRatio = compoundRatio;
+    console.log('_compoundRatio', _compoundRatio);
     uint[] memory amountsToForward = new uint[](len);
 
     for (uint i = 0; i < len; ++i) {
@@ -238,6 +239,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Claim all possible rewards.
   function _claim() override internal virtual {
+    console.log('_claim...');
     address[] memory tokens = _rewardTokens;
     uint[] memory amounts = new uint[](tokens.length);
 

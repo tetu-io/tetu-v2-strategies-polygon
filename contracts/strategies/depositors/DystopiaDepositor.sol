@@ -56,7 +56,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @dev Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override public virtual view returns (uint) {
-    return IGauge(depositorGauge).balanceOf(address(this));
+    return IERC20(depositorGauge).balanceOf(address(this));
   }
 
   /// @dev Deposit given amount to the pool.

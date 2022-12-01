@@ -7,37 +7,25 @@ import {Logger} from "tslog";
 import {MaticAddresses} from "../MaticAddresses";
 import {
   ControllerV2__factory,
-  IBribe,
   IBribe__factory,
   IController,
   IController__factory,
   IERC20__factory,
-  IERC20Metadata__factory,
-  IForwarder,
   IForwarder__factory,
-  IGauge,
   IGauge__factory,
-  IPlatformVoter,
   IPlatformVoter__factory,
   IStrategyV2,
-  ITetuConverter,
   ITetuConverter__factory,
   ITetuLiquidator,
   ITetuLiquidator__factory,
-  IVeDistributor,
   IVeDistributor__factory,
-  IVeTetu,
   IVeTetu__factory,
-  IVoter,
   IVoter__factory,
-  Multicall,
   Multicall__factory,
   ProxyControlled__factory,
-  StrategyDystopiaConverter__factory,
   StrategySplitterV2__factory,
   TetuVaultV2,
   TetuVaultV2__factory,
-  VaultFactory,
   VaultFactory__factory
 } from "../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
@@ -46,8 +34,6 @@ import {ICoreContractsWrapper} from "../../test/CoreContractsWrapper";
 import {IToolsAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses";
 import {IToolsContractsWrapper} from "../../test/ToolsContractsWrapper";
 import {RunHelper} from "./RunHelper";
-import {DeployerUtils} from "./DeployerUtils";
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
@@ -454,8 +440,8 @@ export class DeployerUtilsLocal {
 
     const core = Addresses.getCore();
 
-    const asset = IERC20Metadata__factory.connect(assetAddress, signer);
-    const symbol = await asset.symbol();
+    // const asset = IERC20Metadata__factory.connect(assetAddress, signer);
+    // const symbol = await asset.symbol();
     console.log('vaultName', vaultName);
 
     const factory = VaultFactory__factory.connect(core.vaultFactory, signer)
