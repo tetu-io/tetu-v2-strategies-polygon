@@ -11,6 +11,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/test/Multicall.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/test/ControllerMinimal.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/test/MockGauge.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/test/MockStrategy.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/test/MockStrategySimple.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/test/MockSplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/vault/VaultInsurance.sol";

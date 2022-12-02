@@ -6,10 +6,9 @@ import {DeployInfo} from "../../DeployInfo";
 import {StrategyTestUtils} from "../../StrategyTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {DystopiaConverterStrategy__factory} from "../../../../typechain";
+import {IStrategyV2, MockStrategySimple__factory} from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {ConverterUtils} from "../../ConverterUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 
 dotEnvConfig();
@@ -41,38 +40,26 @@ describe('Universal tests', async () => {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
   });
 
-  const strategyName = 'DystopiaConverterStrategy';
-  const assetName = 'USDC';
+  const strategyName = 'MockStrategySimple';
   const asset = PolygonAddresses.USDC_TOKEN;
-  const token1 = asset;
-  // const token2 = PolygonAddresses.USDPlus_TOKEN;
-  // const token2 = PolygonAddresses.USDT_TOKEN;
-  const token2 = PolygonAddresses.DAI_TOKEN;
-  const vaultName = 'tetu' + assetName;
+  const assetName = 'USDC';
+  const vaultName = 'mock' + assetName;
   const core = Addresses.getCore();
-  const tools = Addresses.getTools();
 
   const deployer = async (signer: SignerWithAddress) => {
 
     const controller = DeployerUtilsLocal.getController(signer);
     const strategyDeployer = async (splitterAddress: string) => {
-      const strategy = DystopiaConverterStrategy__factory.connect(
+      const strategy = MockStrategySimple__factory.connect(
         await DeployerUtils.deployProxy(signer, strategyName), signer);
 
       await strategy.init(
         core.controller,
         splitterAddress,
-        [PolygonAddresses.TETU_TOKEN],
-        tools.converter,
-        token1,
-        token2,
-        true
+        asset
       );
 
-      // Disable DForce (as it reverts on repay after block advance)
-      await ConverterUtils.disableDForce(token1, token2, signer);
-
-      return strategy;
+      return strategy as unknown as IStrategyV2;
     }
 
     console.log('getControllerGovernance...');
