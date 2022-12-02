@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT
 
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
+import "hardhat/console.sol";
+
 pragma solidity 0.8.4;
 
 /// @title Library for clearing / joining token addresses & amounts arrays
@@ -13,10 +16,11 @@ library TokenAmountsLib {
     function filterZeroAmounts(
         address[] memory tokens,
         uint[] memory amounts
-    ) internal pure returns (
+    ) external pure returns (
         address[] memory t,
         uint[] memory a
     ) {
+        require (tokens.length == amounts.length, 'TAL: Arrays mismatch');
         uint len2 = 0;
         uint len = tokens.length;
         for (uint i = 0; i < len; i++) {
@@ -43,12 +47,12 @@ library TokenAmountsLib {
         uint[] memory amounts1,
         address[] memory tokens2,
         uint[] memory amounts2
-    ) internal pure returns (
+    ) external pure returns (
         address[] memory allTokens,
         uint[] memory allAmounts
     ) {
 
-        require (tokens1.length == amounts1.length && tokens2.length == amounts2.length, 'Arrays mismatch');
+        require (tokens1.length == amounts1.length && tokens2.length == amounts2.length, 'TAL: Arrays mismatch');
 
         uint tokensLength = tokens1.length + tokens2.length;
         address[] memory tokens = new address[](tokensLength);
@@ -91,6 +95,25 @@ library TokenAmountsLib {
             allTokens[i] = tokens[i];
             allAmounts[i] = amounts[i];
         }
+
+    }
+
+    /// @dev prints tokens & amounts
+    function print(
+        address[] memory tokens,
+        uint[] memory amounts
+    ) external view {
+        require (tokens.length == amounts.length, 'TAL: Arrays mismatch');
+        uint len = tokens.length;
+        console.log('Symbol \t Amount');
+        console.log('---------------');
+
+        for (uint i = 0; i < len; i++) {
+            address token = tokens[i];
+            string memory symbol = IERC20Metadata(token).symbol();
+            console.log(symbol, '\t', amounts[i]);
+        }
+        console.log('---------------\n');
 
     }
 

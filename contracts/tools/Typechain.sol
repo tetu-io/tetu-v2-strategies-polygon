@@ -19,6 +19,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2.sol";
 
 // for TokenUtils / Tests
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IVeTetu.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IPlatformVoter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IVeDistributor.sol";
