@@ -13,3 +13,4 @@ ignore:
   - "contracts/openzeppelin"
   - "contracts/test"
   - "contracts/tools"
+  - "contracts/interfaces"

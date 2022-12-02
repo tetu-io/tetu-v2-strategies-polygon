@@ -1,3 +1,3 @@
 module.exports = {
-  skipFiles: ['third_party', 'test', 'tools', 'openzeppelin']
+  skipFiles: ['third_party', 'openzeppelin', 'interfaces']
 };

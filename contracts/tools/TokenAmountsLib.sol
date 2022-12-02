@@ -16,7 +16,7 @@ library TokenAmountsLib {
     function filterZeroAmounts(
         address[] memory tokens,
         uint[] memory amounts
-    ) external pure returns (
+    ) public pure returns (
         address[] memory t,
         uint[] memory a
     ) {
@@ -47,51 +47,67 @@ library TokenAmountsLib {
         uint[] memory amounts1,
         address[] memory tokens2,
         uint[] memory amounts2
-    ) external pure returns (
+    ) public pure returns (
         address[] memory allTokens,
         uint[] memory allAmounts
     ) {
+        uint tokens1Length = tokens1.length;
+        uint tokens2Length = tokens2.length;
 
-        require (tokens1.length == amounts1.length && tokens2.length == amounts2.length, 'TAL: Arrays mismatch');
+        require(tokens1Length == amounts1.length && tokens2Length == amounts2.length, 'TAL: Arrays mismatch');
 
-        uint tokensLength = tokens1.length + tokens2.length;
-        address[] memory tokens = new address[](tokensLength);
-        uint[] memory amounts = new uint[](tokensLength);
+        uint maxLength = tokens1Length + tokens2Length;
+        address[] memory tokens = new address[](maxLength);
+        uint[] memory amounts = new uint[](maxLength);
 
-        // copy tokens1 to tokens (& amounts)
-        for (uint i; i < tokens1.length; i++) {
-            tokens[i] = tokens1[i];
-            amounts[i] = amounts1[i];
+        uint unitedLength = 0;
+
+        // join tokens1
+        for (uint i1 = 0; i1 < tokens1Length; i1++) {
+
+            address token1 = tokens1[i1];
+            uint amount1 = amounts1[i1];
+            bool united = false;
+
+            for (uint i = 0; i < unitedLength; i++) {
+                if (token1 == tokens[i]) {
+                    amounts[i] += amount1;
+                    united = true;
+                    break;
+                }
+            }
+            if (!united) {
+                tokens[unitedLength] = token1;
+                amounts[unitedLength] = amount1;
+                unitedLength++;
+            }
         }
 
         // join tokens2
-        tokensLength = tokens1.length;
-        for (uint t2; t2 < tokens2.length; t2++) {
+        for (uint i2 = 0; i2 < tokens2Length; i2++) {
 
-            address token2 = tokens2[t2];
-            uint amount2 = amounts2[t2];
+            address token2 = tokens2[i2];
+            uint amount2 = amounts2[i2];
             bool united = false;
 
-            for (uint i; i < tokensLength; i++) {
-                if (token2 == tokens1[i]) {
+            for (uint i = 0; i < unitedLength; i++) {
+                if (token2 == tokens[i]) {
                     amounts[i] += amount2;
                     united = true;
                     break;
                 }
             }
-
             if (!united) {
-                tokens[tokensLength] = token2;
-                amounts[tokensLength] = amount2;
-                tokensLength++;
+                tokens[unitedLength] = token2;
+                amounts[unitedLength] = amount2;
+                unitedLength++;
             }
-
         }
 
         // copy united tokens to result array
-        allTokens = new address[](tokensLength);
-        allAmounts = new uint[](tokensLength);
-        for (uint i; i < tokensLength; i++) {
+        allTokens = new address[](unitedLength);
+        allAmounts = new uint[](unitedLength);
+        for (uint i; i < unitedLength; i++) {
             allTokens[i] = tokens[i];
             allAmounts[i] = amounts[i];
         }
@@ -102,7 +118,7 @@ library TokenAmountsLib {
     function print(
         address[] memory tokens,
         uint[] memory amounts
-    ) external view {
+    ) public view {
         require (tokens.length == amounts.length, 'TAL: Arrays mismatch');
         uint len = tokens.length;
         console.log('Symbol \t Amount');
@@ -110,8 +126,31 @@ library TokenAmountsLib {
 
         for (uint i = 0; i < len; i++) {
             address token = tokens[i];
-            string memory symbol = IERC20Metadata(token).symbol();
-            console.log(symbol, '\t', amounts[i]);
+            if (token == address(0)) {
+                console.log('addr(0)\t', amounts[i]);
+            } else {
+                uint size;
+                assembly {
+                    size := extcodesize(token)
+                }
+
+                if (size == 0) {
+                    console.log('!code\t', amounts[i], token);
+
+                } else {
+
+                    bool symbolFound = false;
+                    try IERC20Metadata(token).symbol() returns (string memory symbol) {
+                        console.log(symbol, '\t', amounts[i]);
+                        symbolFound = true;
+                    } catch {
+                    }
+                    if (!symbolFound) {
+                        console.log('!symbol\t', amounts[i], token);
+                    }
+                }
+
+            }
         }
         console.log('---------------\n');
 
