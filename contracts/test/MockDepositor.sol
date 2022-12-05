@@ -12,7 +12,7 @@ contract MockDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant DEPOSITOR_MOCK_VERSION = "1.0.0";
 
-  uint8[] private _depositorWeights;
+  uint[] private _depositorWeights;
 
   address[] private _depositorAssets;
   uint[] private _depositorAmounts;
@@ -51,9 +51,9 @@ contract MockDepositor is DepositorBase, Initializable {
     return _depositorAssets;
   }
 
-  /// @dev Returns pool weights in percents
+  /// @dev Returns pool proportions (reserves)
   function _depositorPoolWeights() override public virtual view
-  returns (uint8[] memory) {
+  returns (uint[] memory) {
     return _depositorWeights;
   }
 

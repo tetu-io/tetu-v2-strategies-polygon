@@ -23,6 +23,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   address public depositorTokenA;
   address public depositorTokenB;
   bool public depositorStable;
+  bool public depositorSwapTokens;
 
   // @notice tokens must be MockTokens
   function __DystopiaDepositor_init(
@@ -33,6 +34,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     depositorTokenB = tokenB;
     depositorStable = stable;
     address _depositorPair = IRouter(router).pairFor(tokenA, tokenB, stable);
+    depositorSwapTokens = tokenA == IPair(_depositorPair).token1();
     depositorPair = _depositorPair;
     depositorGauge = IVoter(voter).gauges(_depositorPair);
     require(depositorGauge != address(0), 'DD: No Gauge');
@@ -48,10 +50,13 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @dev Returns pool weights in percents
   function _depositorPoolWeights() override public virtual view
-  returns (uint8[] memory weights) {
-    weights = new uint8[](2);
-    weights[0] = 50;
-    weights[1] = 50;
+  returns (uint[] memory weights) {
+    weights = new uint[](2);
+    if (depositorSwapTokens) {
+      (weights[1], weights[0],) = IPair(depositorPair).getReserves();
+    } else {
+      (weights[0], weights[1],) = IPair(depositorPair).getReserves();
+    }
   }
 
   /// @dev Returns depositor's pool shares / lp token amount
@@ -77,7 +82,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     (amountsConsumed[0], amountsConsumed[1], liquidity) = IRouter(router).addLiquidity(
       tokenA,
       tokenB,
-        stable,
+      stable,
       amount0,
       amount1,
       0,
@@ -119,6 +124,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     );
 
   }
+
 
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual

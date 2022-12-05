@@ -87,7 +87,7 @@ describe("Dystopia Converter Strategy tests", function () {
       const _strategy = DystopiaConverterStrategy__factory.connect(
         await DeployerUtils.deployProxy(signer, 'DystopiaConverterStrategy'), gov);
 
-      await _strategy.initialize(
+      await _strategy.init(
         core.controller,
         _splitterAddress,
         [PolygonAddresses.TETU_TOKEN],

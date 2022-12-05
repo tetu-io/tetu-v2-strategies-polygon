@@ -4,7 +4,7 @@ import {SignerWithAddress} from '@nomiclabs/hardhat-ethers/signers';
 import {ethers} from 'hardhat';
 import {DeployerUtils} from '../../scripts/utils/DeployerUtils';
 import {
-  TokenAmountsLib,
+  TokenAmountsLibTest,
 } from '../../typechain';
 import {PolygonAddresses as PA} from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import {BigNumber, utils} from "ethers";
@@ -16,13 +16,13 @@ chai.use(chaiAsPromised);
 describe('TokenAmountsLib tests', function () {
   let signer: SignerWithAddress;
 
-  let lib: TokenAmountsLib;
+  let lib: TokenAmountsLibTest;
   const _addr = utils.getAddress;
 
   before(async function () {
     [signer] = await ethers.getSigners()
 
-    lib = await DeployerUtils.deployContract(signer, 'TokenAmountsLib') as TokenAmountsLib;
+    lib = await DeployerUtils.deployContract(signer, 'TokenAmountsLibTest') as TokenAmountsLibTest;
   });
 
   ////////////////////////// TESTS ///////////////////////////
@@ -265,6 +265,52 @@ describe('TokenAmountsLib tests', function () {
       const amounts2: BigNumber[] = [];
       await expect(lib.unite(tokens1, amounts1, tokens2, amounts2)).revertedWith('TAL: Arrays mismatch');
       await expect(lib.unite(tokens2, amounts2, tokens1, amounts1)).revertedWith('TAL: Arrays mismatch');
+    });
+
+    it('array1 with zero amounts + empty', async () => {
+      const tokens1 = [
+        PA.USDC_TOKEN,
+        PA.DAI_TOKEN,
+        PA.TETU_TOKEN,
+        PA.DAI_TOKEN,
+        PA.USDC_TOKEN,
+      ];
+      const amounts1 = [0, 20, 0, 40, 5];
+      const tokens2: string[] = [];
+      const amounts2: BigNumber[] = [];
+      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+      await lib.print(united[0], united[1]);
+
+      expect(united[0].length).eq(2);
+      expect(united[1].length).eq(2);
+      expect(united[0]).deep.equal([
+        _addr(PA.DAI_TOKEN),
+        _addr(PA.USDC_TOKEN),
+      ]);
+      expect(united[1][0]).eq(60);
+      expect(united[1][1]).eq(5);
+    });
+
+    it('empty + array1 with zero amounts', async () => {
+      const tokens1 = [
+        PA.USDC_TOKEN,
+        PA.DAI_TOKEN,
+        PA.TETU_TOKEN,
+        PA.DAI_TOKEN,
+        PA.USDC_TOKEN,
+      ];
+      const amounts1 = [0, 20, 0, 40, 0];
+      const tokens2: string[] = [];
+      const amounts2: BigNumber[] = [];
+      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+      await lib.print(united[0], united[1]);
+
+      expect(united[0].length).eq(1);
+      expect(united[1].length).eq(1);
+      expect(united[0]).deep.equal([
+        _addr(PA.DAI_TOKEN),
+      ]);
+      expect(united[1][0]).eq(60);
     });
   });
 

@@ -11,12 +11,12 @@ library TokenAmountsLib {
 
     /// @notice Version of the contract
     /// @dev Should be incremented when contract changed
-    string public constant TOKEN_AMOUNTS_LIB_VERSION = "1.0.0";
+    string internal constant TOKEN_AMOUNTS_LIB_VERSION = "1.0.0";
 
     function filterZeroAmounts(
         address[] memory tokens,
         uint[] memory amounts
-    ) public pure returns (
+    ) internal pure returns (
         address[] memory t,
         uint[] memory a
     ) {
@@ -42,12 +42,13 @@ library TokenAmountsLib {
     }
 
     /// @dev unites tokens2 and amounts2 in to tokens & amounts
+    /// @notice zero amount tokens will be filtered!
     function unite(
         address[] memory tokens1,
         uint[] memory amounts1,
         address[] memory tokens2,
         uint[] memory amounts2
-    ) public pure returns (
+    ) internal pure returns (
         address[] memory allTokens,
         uint[] memory allAmounts
     ) {
@@ -65,8 +66,9 @@ library TokenAmountsLib {
         // join tokens1
         for (uint i1 = 0; i1 < tokens1Length; i1++) {
 
-            address token1 = tokens1[i1];
             uint amount1 = amounts1[i1];
+            if (amount1 == 0) continue;
+            address token1 = tokens1[i1];
             bool united = false;
 
             for (uint i = 0; i < unitedLength; i++) {
@@ -86,8 +88,9 @@ library TokenAmountsLib {
         // join tokens2
         for (uint i2 = 0; i2 < tokens2Length; i2++) {
 
-            address token2 = tokens2[i2];
             uint amount2 = amounts2[i2];
+            if (amount2 == 0) continue;
+            address token2 = tokens2[i2];
             bool united = false;
 
             for (uint i = 0; i < unitedLength; i++) {
@@ -118,7 +121,7 @@ library TokenAmountsLib {
     function print(
         address[] memory tokens,
         uint[] memory amounts
-    ) public view {
+    ) internal view {
         require (tokens.length == amounts.length, 'TAL: Arrays mismatch');
         uint len = tokens.length;
         console.log('Symbol \t Amount');
