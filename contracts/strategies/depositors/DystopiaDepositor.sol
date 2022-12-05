@@ -125,33 +125,32 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   }
 
-
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual
-  returns (address[] memory rewardTokens, uint[] memory rewardAmounts) {
-    address[] memory feeTokens = _depositorPoolAssets();
+  returns (address[] memory tokens, uint[] memory amounts) {
     IGauge gauge = IGauge(depositorGauge);
-    (uint a0, uint b0) = IPair(depositorPair).claimFees();
-    (uint a1, uint b1) = gauge.claimFees();
-    uint[] memory feeAmounts = new uint[](2);
-    feeAmounts[0] = a0 + a1;
-    feeAmounts[1] = b0 + b1;
+    // gauge.claimFees(); // not sure, what it costly to call it
 
     uint len = gauge.rewardTokensLength();
-    uint[] memory amounts = new uint[](len);
-    address[] memory tokens = new address[](len);
-    address[] memory tokenArray = new address[](1);
+    amounts = new uint[](len);
+    tokens = new address[](len);
+
     for (uint i = 0; i < len; i++) {
       address token = gauge.rewardTokens(i);
       tokens[i] = token;
-      tokenArray[0] = token;
-      uint balanceBefore = IERC20(token).balanceOf(address(this));
-      gauge.getReward(address(this), tokenArray);
-      amounts[i] = IERC20(token).balanceOf(address(this)) - balanceBefore;
+      // temporary store current token balance
+      amounts[i] = IERC20(token).balanceOf(address(this));
     }
+    gauge.getReward(address(this), tokens);
 
-    (rewardTokens, rewardAmounts) = TokenAmountsLib.unite(feeTokens, feeAmounts, tokens, amounts);
-    (rewardTokens, rewardAmounts) = TokenAmountsLib.filterZeroAmounts(rewardTokens, rewardAmounts);
+    for (uint i = 0; i < len; i++) {
+      amounts[i] = IERC20(tokens[i]).balanceOf(address(this)) - amounts[i];
+    }
+    console.log('rewards:');
+    TokenAmountsLib.print(tokens, amounts);
+    (tokens, amounts) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
+    console.log('filtered:');
+    TokenAmountsLib.print(tokens, amounts);
 
   }
 
