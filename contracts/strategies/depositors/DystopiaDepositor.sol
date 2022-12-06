@@ -7,6 +7,7 @@ import "../../third_party/dystopia/IRouter.sol";
 import "../../third_party/dystopia/IPair.sol";
 import "../../third_party/dystopia/IVoter.sol";
 import "../../third_party/dystopia/IGauge.sol";
+import "../../third_party/dystopia/IBribe.sol";
 import "../../tools/TokenAmountsLib.sol";
 import "./DepositorBase.sol";
 
@@ -129,7 +130,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   function _depositorClaimRewards() override internal virtual
   returns (address[] memory tokens, uint[] memory amounts) {
     IGauge gauge = IGauge(depositorGauge);
-    // gauge.claimFees(); // not sure, what it costly to call it
+    gauge.claimFees(); // sends fees to bribe
+//    IBribe bribe = IBribe(gauge.bribe());
 
     uint len = gauge.rewardTokensLength();
     amounts = new uint[](len);
@@ -141,16 +143,15 @@ contract DystopiaDepositor is DepositorBase, Initializable {
       // temporary store current token balance
       amounts[i] = IERC20(token).balanceOf(address(this));
     }
+
     gauge.getReward(address(this), tokens);
 
     for (uint i = 0; i < len; i++) {
       amounts[i] = IERC20(tokens[i]).balanceOf(address(this)) - amounts[i];
     }
-    console.log('rewards:');
-    TokenAmountsLib.print(tokens, amounts);
+//    console.log('rewards:');
+//    TokenAmountsLib.print(tokens, amounts);
     (tokens, amounts) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
-    console.log('filtered:');
-    TokenAmountsLib.print(tokens, amounts);
 
   }
 

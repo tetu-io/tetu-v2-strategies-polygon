@@ -9,12 +9,12 @@ import {
   DystopiaDepositorTest,
   IGauge__factory,
   IERC20Extended__factory,
-  IERC20Extended, IPair__factory,
+  IERC20Extended, IPair__factory, IRouter__factory,
 } from "../../../../typechain";
 import {parseUnits} from "ethers/lib/utils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {BigNumber} from "ethers";
+import {BigNumber, constants} from "ethers";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 
 const {expect} = chai;
@@ -214,9 +214,7 @@ describe("Dystopia Depositor tests", function () {
     it("claim w/o deposit returns no rewards", async () => {
       await depositor.depositorClaimRewards();
       const tokens = await depositor.claimedRewardTokens();
-      console.log('tokens', tokens);
       const amounts = await depositor.claimedRewardAmounts();
-      console.log('amounts', amounts);
       expect(tokens.length).eq(0);
       expect(amounts.length).eq(0);
     });
@@ -236,16 +234,47 @@ describe("Dystopia Depositor tests", function () {
 
     it("claim after deposit & swaps should return pair fees", async () => {
       await depositor.depositorEnter([a100000, b100000]);
-      // await TimeUtils.advanceBlocksOnTs(10000);
-      // TODO make few swaps at pool to generate fees
-      await depositor.depositorClaimRewards();
-      const tokens = await depositor.claimedRewardTokens();
-      const amounts = await depositor.claimedRewardAmounts();
-      expect(tokens.length).eq(2);
-      expect(amounts.length).eq(2);
-      // expect(tokens[0]).eq(_addr(MaticAddresses.DYST_TOKEN));
-      expect(amounts[0]).gt(1);
-      expect(amounts[1]).gt(1);
+      await TimeUtils.advanceBlocksOnTs(100000);
+
+      const router = IRouter__factory.connect(routerAddress, signer);
+
+      await TokenUtils.approve(tokenAAddress, signer, routerAddress, constants.MaxUint256.toString());
+      await TokenUtils.approve(tokenBAddress, signer, routerAddress, constants.MaxUint256.toString());
+
+      {
+        await depositor.depositorClaimRewards();
+        const tokens = await depositor.claimedRewardTokens();
+        const amounts = await depositor.claimedRewardAmounts();
+        expect(tokens.length).eq(1);
+        expect(amounts.length).eq(1);
+        expect(tokens[0]).eq(_addr(MaticAddresses.DYST_TOKEN));
+        expect(amounts[0]).gt(1);
+        const dystBalance = await TokenUtils.balanceOf(MaticAddresses.DYST_TOKEN, depositor.address);
+        console.log('dystBalance', dystBalance.toString());
+      }
+
+
+      // make few swaps at pool to generate fee
+      const balanceA = await TokenUtils.balanceOf(tokenAAddress, signer.address);
+      console.log('balanceA     ', balanceA);
+      await router.swapExactTokensForTokensSimple(
+        balanceA.div(2), 1, tokenAAddress, tokenBAddress, true, signer.address, constants.MaxUint256.toString())
+      const balanceB = await TokenUtils.balanceOf(tokenBAddress, signer.address);
+      await router.swapExactTokensForTokensSimple(
+        balanceB, 1, tokenBAddress, tokenAAddress, true, signer.address, constants.MaxUint256.toString())
+      const balanceAAfter = await TokenUtils.balanceOf(tokenAAddress, signer.address);
+      console.log('balanceAAfter', balanceAAfter);
+      // await gauge.claimFees();
+
+      {
+        await depositor.depositorClaimRewards();
+        const tokens = await depositor.claimedRewardTokens();
+        const amounts = await depositor.claimedRewardAmounts();
+        expect(tokens.length).eq(1);
+        expect(amounts.length).eq(1);
+        // expect(tokens[0]).eq(_addr(MaticAddresses.DYST_TOKEN));
+        expect(amounts[0]).gt(1);
+      }
 
     });
 

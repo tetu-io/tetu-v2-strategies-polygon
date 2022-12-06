@@ -48,4 +48,7 @@ interface IGauge {
 
   function getReward(address account, address[] memory tokens) external;
 
+  function bribe() external view returns (address);
+
+
 }
