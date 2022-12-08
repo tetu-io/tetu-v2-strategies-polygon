@@ -18,8 +18,11 @@ abstract contract DepositorBase is ERC20Helpers {
   /// @dev Returns pool assets
   function _depositorPoolAssets() public virtual view returns (address[] memory assets);
 
-  /// @dev Returns pool token proportions (reserves)
-  function _depositorPoolWeights() public virtual view returns (uint[] memory weights);
+  /// @dev Returns pool token proportions
+  function _depositorPoolWeights() public virtual view returns (uint[] memory weights, uint total);
+
+  /// @dev Returns pool token reserves
+  function _depositorPoolReserves() public virtual view returns (uint[] memory reserves);
 
   /// @dev Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() public virtual view returns (uint);

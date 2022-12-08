@@ -12,6 +12,7 @@ contract MockDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant DEPOSITOR_MOCK_VERSION = "1.0.0";
 
+  uint[] private _depositorReserves;
   uint[] private _depositorWeights;
 
   address[] private _depositorAssets;
@@ -24,7 +25,9 @@ contract MockDepositor is DepositorBase, Initializable {
   function __MockDepositor_init(
     address[] memory tokens_,
     address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
+    uint[] memory rewardAmounts_,
+    uint[] memory depositorWeights_,
+    uint[] memory depositorReserves_
   ) internal onlyInitializing {
     require(rewardTokens_.length == rewardAmounts_.length);
     uint tokensLength = tokens_.length;
@@ -38,11 +41,8 @@ contract MockDepositor is DepositorBase, Initializable {
     }
 
     // proportional weights for now
-    _depositorWeights = new uint8[](tokensLength);
-    uint weight = 100 / tokensLength;
-    for (uint i = 0; i < tokensLength; ++i) {
-      _depositorWeights[i] = uint8(weight);
-    }
+    _depositorWeights = depositorWeights_;
+    _depositorReserves = depositorReserves_;
   }
 
   /// @dev Returns pool assets
@@ -51,11 +51,22 @@ contract MockDepositor is DepositorBase, Initializable {
     return _depositorAssets;
   }
 
-  /// @dev Returns pool proportions (reserves)
+  /// @dev Returns pool weights
   function _depositorPoolWeights() override public virtual view
-  returns (uint[] memory) {
-    return _depositorWeights;
+  returns (uint[] memory weights, uint totalWeight) {
+    weights = _depositorWeights;
+    uint len = weights.length;
+    totalWeight = 0;
+    for(uint i = 0; i < len; i++) {
+      totalWeight += weights[i];
+    }
   }
+
+  function _depositorPoolReserves()
+  override public virtual view returns (uint[] memory reserves) {
+    reserves = new uint[](_depositorWeights.length);
+  }
+
 
   /// @dev Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override public virtual view returns (uint) {

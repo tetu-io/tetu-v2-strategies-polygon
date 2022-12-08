@@ -49,14 +49,23 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     poolAssets[1] = depositorTokenB;
   }
 
-  /// @dev Returns pool weights in percents
+  /// @dev Returns pool weights in percents (50/50%)
   function _depositorPoolWeights() override public virtual view
-  returns (uint[] memory weights) {
+  returns (uint[] memory weights, uint totalWeight) {
     weights = new uint[](2);
+    weights[0] = 1; // 50%
+    weights[1] = 1; // 50%
+    totalWeight = 2; // 100%
+  }
+
+  /// @dev Returns pool weights in percents
+  function _depositorPoolReserves() override public virtual view
+  returns (uint[] memory reserves) {
+    reserves = new uint[](2);
     if (depositorSwapTokens) {
-      (weights[1], weights[0],) = IPair(depositorPair).getReserves();
+      (reserves[1], reserves[0],) = IPair(depositorPair).getReserves();
     } else {
-      (weights[0], weights[1],) = IPair(depositorPair).getReserves();
+      (reserves[0], reserves[1],) = IPair(depositorPair).getReserves();
     }
   }
 
@@ -131,7 +140,6 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   returns (address[] memory tokens, uint[] memory amounts) {
     IGauge gauge = IGauge(depositorGauge);
     gauge.claimFees(); // sends fees to bribe
-//    IBribe bribe = IBribe(gauge.bribe());
 
     uint len = gauge.rewardTokensLength();
     amounts = new uint[](len);
@@ -149,8 +157,6 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     for (uint i = 0; i < len; i++) {
       amounts[i] = IERC20(tokens[i]).balanceOf(address(this)) - amounts[i];
     }
-//    console.log('rewards:');
-//    TokenAmountsLib.print(tokens, amounts);
     (tokens, amounts) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
 
   }

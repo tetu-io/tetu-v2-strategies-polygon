@@ -112,9 +112,9 @@ describe("Dystopia Depositor tests", function () {
     it("deposit should consume both tokens proportionally", async () => {
       expect(await depositor._depositorLiquidity()).eq(0);
 
-      const weights = await depositor._depositorPoolWeights();
+      const reserves = await depositor._depositorPoolReserves();
       const amountA = a1000;
-      const amountB = weights[1].mul(amountA).div(weights[0]);
+      const amountB = reserves[1].mul(amountA).div(reserves[0]);
 
       await depositor.depositorEnter([amountA, amountB]);
       expect(await depositor._depositorLiquidity()).gt(1);
@@ -154,9 +154,9 @@ describe("Dystopia Depositor tests", function () {
     it("withdraw 50% should return 50%", async () => {
       expect(await depositor._depositorLiquidity()).eq(0);
 
-      const weights = await depositor._depositorPoolWeights();
+      const reserves = await depositor._depositorPoolReserves();
       const amountA = a1000;
-      const amountB = weights[1].mul(amountA).div(weights[0]);
+      const amountB = reserves[1].mul(amountA).div(reserves[0]);
 
       await depositor.depositorEnter([amountA, amountB]);
       const liquidity = await depositor._depositorLiquidity();
@@ -191,8 +191,8 @@ describe("Dystopia Depositor tests", function () {
       expect(liq).eq(gaugeBalance);
     });
 
-    it("_depositorPoolWeights", async () => {
-      const weights = await depositor._depositorPoolWeights();
+    it("_depositorPoolReserves", async () => {
+      const weights = await depositor._depositorPoolReserves();
       const pair = IPair__factory.connect(await depositor.depositorPair(), signer);
       const reserves = await pair.getReserves();
       const token1 = await pair.token1();
@@ -205,6 +205,16 @@ describe("Dystopia Depositor tests", function () {
         expect(weights[0]).eq(reserves[0]);
         expect(weights[1]).eq(reserves[1]);
       }
+    });
+
+    it("_depositorPoolWeights", async () => {
+      let weights;
+      let totalWeight;
+      [weights, totalWeight] = await depositor._depositorPoolWeights();
+      expect(weights.length).eq(2);
+      expect(weights[0]).eq(1);
+      expect(weights[1]).eq(1);
+      expect(totalWeight).eq(2);
     });
 
   });

@@ -124,16 +124,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     doHardWork();
     if (amount == 0) return;
 
-/*    address _asset = asset;
+    address _asset = asset;
     uint assetBalanceBefore = _balance(_asset);
 
     address[] memory tokens = _depositorPoolAssets();
-    uint8[] memory weights = _depositorPoolWeights();
+    (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
     uint len = tokens.length;
     uint[] memory tokenAmounts = new uint[](len);
 
     for (uint i = 0; i < len; ++i) {
-      uint assetAmountForToken = amount * weights[i] / 100;
+      uint assetAmountForToken = amount * weights[i] / totalWeight;
       address token = tokens[i];
       if (token == _asset) {
         tokenAmounts[i] = assetAmountForToken;
@@ -151,7 +151,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
 
     _depositorEnter(tokenAmounts);
-    _investedAssets += (assetBalanceBefore - _balance(_asset));*/
+    _investedAssets += (assetBalanceBefore - _balance(_asset));
   }
 
   /// @dev Withdraw given amount from the pool.
@@ -160,7 +160,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     if (!emergency) doHardWork();
 
-    /*address _asset = asset;
+    address _asset = asset;
     uint assetBalanceBefore = _balance(_asset);
 
     if (emergency) {
@@ -183,7 +183,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     uint amountReceived = _balance(_asset) - assetBalanceBefore;
     _investedAssets -= amountReceived;
-*/
   }
 
   /// @dev Withdraw given amount from the pool.
@@ -326,7 +325,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address /*borrowAsset_*/,
     uint /*amountBorrowAssetSentToBorrower_*/
   ) override pure external {
-    revert('CSB: Not implemented');
+    // noop; will deposit amount received at the next hardwork
   }
 
 
