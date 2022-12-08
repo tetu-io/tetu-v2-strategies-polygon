@@ -222,7 +222,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       if (amount != 0 && amount > thresholds[token]) {
         uint amountToCompound = amount * _compoundRatio / COMPOUND_DENOMINATOR;
         if (amountToCompound > 0) {
-          _liquidate(_tetuLiquidator, token, _asset, amountToCompound, LIQUIDATION_SLIPPAGE);
+          _liquidate(_tetuLiquidator, token, _asset, amountToCompound, _LIQUIDATION_SLIPPAGE);
         }
 
         uint amountToForward = amount - amountToCompound;
