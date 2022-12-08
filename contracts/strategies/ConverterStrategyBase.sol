@@ -28,7 +28,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   // approx one month for average block time 2 sec
   uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
 
-  uint private constant LIQUIDATION_SLIPPAGE = 5_000; // 5%
+  uint private constant _LIQUIDATION_SLIPPAGE = 5_000; // 5%
+
+  uint private constant _COLLATERAL_RATE = 2; // Collateral to debt target rate 200%
 
   // *************************************************************
   //                        VARIABLES
@@ -240,32 +242,27 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Claim all possible rewards.
   function _claim() override internal virtual {
     console.log('_claim...');
-    address[] memory tokens = _rewardTokens;
-    uint[] memory amounts = new uint[](tokens.length);
-
-    // Get reward tokens balances
-    for (uint i = 0;i < tokens.length; i++) {
-      amounts[i] = IERC20(tokens[i]).balanceOf(address(this));
-    }
-    address[] memory tokens0;
-    uint[] memory amounts0;
-    (tokens0, amounts0) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
 
     // Rewards from the Depositor
-    (tokens, amounts) = _depositorClaimRewards();
     address[] memory tokens1;
     uint[] memory amounts1;
-    (tokens1, amounts1) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
+    (tokens1, amounts1) = _depositorClaimRewards();
+    console.log('_depositorClaimRewards...');
+    TokenAmountsLib.print(tokens1, amounts1);
 
     // Rewards from TetuConverter
-    (tokens, amounts) = tetuConverter.claimRewards(address(this));
     address[] memory tokens2;
     uint[] memory amounts2;
-    (tokens2, amounts2) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
+    (tokens2, amounts2) =  tetuConverter.claimRewards(address(this));
+    console.log('tetuConverter.claimRewards...');
+    TokenAmountsLib.print(tokens2, amounts2);
 
+    address[] memory tokens;
+    uint[] memory amounts;
     // Join arrays and recycle tokens
     (tokens, amounts) = TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
-    (tokens, amounts) = TokenAmountsLib.unite(tokens, amounts, tokens0, amounts0);
+    console.log('TOTAL ...');
+    TokenAmountsLib.print(tokens, amounts);
     if (tokens.length > 0) {
       _recycle(tokens, amounts);
     }

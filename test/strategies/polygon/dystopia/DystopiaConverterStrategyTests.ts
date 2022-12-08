@@ -179,7 +179,7 @@ describe("Dystopia Converter Strategy tests", function () {
 
   });
 
-  describe.skip("Base Vault tests", function () {
+  describe("Base Vault tests", function () {
 
     it("decimals test", async () => {
       expect(await vault.decimals()).eq(6);
