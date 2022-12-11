@@ -344,7 +344,7 @@ export class DoHardWorkLoopBase {
       // if (platform === 24) {
       //   rts = await ISplitter__factory.connect(this.strategy.address, this.signer).strategyRewardTokens();
       // } else {
-      rts = []; // await this.strategy.rewardTokens(); // TODO we have no rewardTokens() at v2
+      // rts = []; // await this.strategy.rewardTokens(); // TODO we have no rewardTokens() at v2
       // }
       // for (let i = 0; i < rts.length; i++) {
       //   const rt = rts[i];
