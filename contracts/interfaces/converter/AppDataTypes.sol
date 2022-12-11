@@ -25,7 +25,7 @@ library AppDataTypes {
     /// @notice Template adapter contract that implements required strategy.
     address converter;
     /// @notice Current collateral factor [0..1e18], where 1e18 is corresponded to CF=1
-     uint liquidationThreshold18;
+    uint liquidationThreshold18;
 
     /// @notice Amount to borrow in terms of borrow asset
     uint amountToBorrow;
@@ -53,9 +53,9 @@ library AppDataTypes {
   /// @dev Workaround for - stack is too deep problem... - problem
   struct ParamsGetConversionPlan {
     address collateralAsset;
-    uint collateralAmount;
     address borrowAsset;
     uint16 healthFactor2;
+    uint collateralAmount;
     uint countBlocks;
   }
 }

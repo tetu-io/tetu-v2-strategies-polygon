@@ -43,7 +43,7 @@ describe("Dystopia Depositor tests", function () {
   let b1000: BigNumber;
   let b100000: BigNumber;
   let depositor: DystopiaDepositorTest;
-  let depositor2: DystopiaDepositorTest;
+  // let depositor2: DystopiaDepositorTest;
   let gauge: IGauge;
 
   before(async function () {
@@ -67,8 +67,8 @@ describe("Dystopia Depositor tests", function () {
       routerAddress, tokenA.address, tokenB.address, true, voterAddress) as DystopiaDepositorTest;
 
     // Second depositor with swapped tokens
-    depositor2 = await DeployerUtils.deployContract(signer, 'DystopiaDepositorTest',
-      routerAddress, tokenB.address, tokenA.address, true, voterAddress) as DystopiaDepositorTest;
+    // depositor2 = await DeployerUtils.deployContract(signer, 'DystopiaDepositorTest',
+    //   routerAddress, tokenB.address, tokenA.address, true, voterAddress) as DystopiaDepositorTest;
 
     gauge = IGauge__factory.connect(await depositor.depositorGauge(), signer);
 

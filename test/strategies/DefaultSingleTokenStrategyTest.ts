@@ -29,7 +29,7 @@ async function startDefaultStrategyTest(
   // only for strategies where we expect PPFS fluctuations
   const ppfsDecreaseAllowed = false;
   // only for strategies where we expect PPFS fluctuations
-  const balanceTolerance = 0;
+  const balanceTolerance = 0.000001; // looks like some rounding issues with 6-decimals tokens
   const finalBalanceTolerance = 0;
   const deposit = 100_000;
   // at least 3

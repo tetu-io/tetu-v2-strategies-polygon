@@ -5,30 +5,59 @@ pragma solidity 0.8.4;
 /// @notice Main contract of the TetuConverter application
 /// @dev Borrower (strategy) makes all operations via this contract only.
 interface ITetuConverter {
-  /// @notice Allow to select conversion kind (swap, borrowing) automatically or manually
-  enum ConversionMode {
-    AUTO_0,
-    // SWAP_1, // Use TetuLiquidator directly to make pure swapping
-    BORROW_1
-  }
-
   function controller() external view returns (address);
 
-  /// @notice Find best conversion strategy (swap or borrow) and provide "cost of money" as interest for the period
+  /// @notice Find best borrow strategy and provide "cost of money" as interest for the period
   /// @param sourceAmount_ Amount to be converted
   /// @param periodInBlocks_ Estimated period to keep target amount. It's required to compute APR
-  /// @param conversionMode Allow to select conversion kind (swap, borrowing) automatically or manually
   /// @return converter Result contract that should be used for conversion; it supports IConverter
   ///                   This address should be passed to borrow-function during conversion.
+  /// @return maxTargetAmount Max available amount of target tokens that we can get after conversion
+  /// @return apr18 Interest on the use of {outMaxTargetAmount} during the given period, decimals 18
+  function findBorrowStrategy(
+    address sourceToken_,
+    uint sourceAmount_,
+    address targetToken_,
+    uint periodInBlocks_
+  ) external view returns (
+    address converter,
+    uint maxTargetAmount,
+    int apr18
+  );
+
+  /// @notice Find best swap strategy and provide "cost of money" as interest for the period
+  /// @dev This is writable function with read-only behavior.
+  ///      It should be writable to be able to simulate real swap and get a real APR.
+  /// @param sourceAmount_ Amount to be converted
+  /// @return converter Result contract that should be used for conversion to be passed to borrow()
+  /// @return maxTargetAmount Max available amount of target tokens that we can get after conversion
+  /// @return apr18 Interest on the use of {outMaxTargetAmount} during the given period, decimals 18
+  function findSwapStrategy(
+    address sourceToken_,
+    uint sourceAmount_,
+    address targetToken_
+  ) external returns (
+    address converter,
+    uint maxTargetAmount,
+    int apr18
+  );
+
+  /// @notice Find best conversion strategy (swap or borrow) and provide "cost of money" as interest for the period.
+  ///         It calls both findBorrowStrategy and findSwapStrategy and selects a best strategy.
+  /// @dev This is writable function with read-only behavior.
+  ///      It should be writable to be able to simulate real swap and get a real APR for swapping.
+  /// @param sourceAmount_ Amount to be converted
+  ///        The amount must be approved to TetuConverter before calling this function.
+  /// @param periodInBlocks_ Estimated period to keep target amount. It's required to compute APR
+  /// @return converter Result contract that should be used for conversion to be passed to borrow().
   /// @return maxTargetAmount Max available amount of target tokens that we can get after conversion
   /// @return apr18 Interest on the use of {outMaxTargetAmount} during the given period, decimals 18
   function findConversionStrategy(
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_,
-    uint periodInBlocks_,
-    ConversionMode conversionMode
-  ) external view returns (
+    uint periodInBlocks_
+  ) external returns (
     address converter,
     uint maxTargetAmount,
     int apr18
@@ -126,17 +155,4 @@ interface ITetuConverter {
   );
 
   //TODO: salvage
-
-  //////////////////////////////////////////////////////////////////////////////
-  /// Additional functions, remove somewhere?
-  //////////////////////////////////////////////////////////////////////////////
-
-  /// @notice Get active borrow positions for the given collateral/borrowToken
-  /// @return poolAdapters An instance of IPoolAdapter (with repay function)
-  function findBorrows (
-    address collateralToken_,
-    address borrowedToken_
-  ) external view returns (
-    address[] memory poolAdapters
-  );
 }

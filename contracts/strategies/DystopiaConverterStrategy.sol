@@ -38,6 +38,8 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
       thresholdTokens,
       thresholdAmounts
     );
+
+    compoundRatio = 90_000; // TODO remove, ratio will set up trough platform voter
   }
 
 }

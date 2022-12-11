@@ -5,8 +5,8 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
-import "../interfaces/ITetuConverter.sol";
-import "../interfaces/ITetuConverterCallback.sol";
+import "../interfaces/converter/ITetuConverter.sol";
+import "../interfaces/converter/ITetuConverterCallback.sol";
 import "./depositors/DepositorBase.sol";
 import "../tools/TokenAmountsLib.sol";
 
@@ -121,6 +121,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Deposit given amount to the pool.
   function _depositToPool(uint amount) override internal virtual {
+    console.log('_depositToPool... amount', amount);
     doHardWork();
     if (amount == 0) return;
 
@@ -132,11 +133,23 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint len = tokens.length;
     uint[] memory tokenAmounts = new uint[](len);
 
+    // we need twice (_COLLATERAL_RATE) more weight for non-asset tokens to borrow target amount
+    for (uint i = 0; i < len; ++i) {
+      if (tokens[i] != _asset) {
+        totalWeight += weights[i] * (_COLLATERAL_RATE - 1);
+        weights[i] *= _COLLATERAL_RATE;
+      }
+    }
+    console.log('_depositToPool Weights:');
+    TokenAmountsLib.print(tokens, weights);
+
     for (uint i = 0; i < len; ++i) {
       uint assetAmountForToken = amount * weights[i] / totalWeight;
       address token = tokens[i];
+
       if (token == _asset) {
         tokenAmounts[i] = assetAmountForToken;
+
       } else {
         uint tokenBalance = _balance(token);
 
@@ -144,13 +157,25 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           tokenAmounts[i] = tokenBalance;
 
         } else { // we do not have enough tokens - borrow
-         _openPosition(_asset, assetAmountForToken - tokenBalance, token, ITetuConverter.ConversionMode.BORROW_1);
+          uint collateral = assetAmountForToken - tokenBalance;
+          console.log('collateral', collateral);
+         _borrowPosition(_asset, collateral, token);
           tokenAmounts[i] = _balance(token);
         }
       }
     }
+    console.log('_depositToPool Amounts:');
+    TokenAmountsLib.print(tokens, tokenAmounts);
 
     _depositorEnter(tokenAmounts);
+
+    // TODO remove - check result amounts
+    for (uint i = 0; i < len; ++i) {
+      tokenAmounts[i] = _balance(tokens[i]);
+    }
+    console.log('Balance after deposit:');
+    TokenAmountsLib.print(tokens, tokenAmounts);
+
     _investedAssets += (assetBalanceBefore - _balance(_asset));
   }
 
@@ -333,24 +358,23 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //                        HELPERS
   // *************************************************************
 
-  function _openPosition(
+  function _borrowPosition(
     address collateralAsset,
     uint collateralAmount,
-    address borrowAsset,
-    ITetuConverter.ConversionMode conversionMode
+    address borrowAsset
   ) internal returns (uint borrowedAmount) {
     console.log('_openPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
-     ITetuConverter _tetuConverter = tetuConverter;
+    ITetuConverter _tetuConverter = tetuConverter;
+    _approveIfNeeded(collateralAsset, collateralAmount, address(_tetuConverter));
     (
       address converter,
       uint maxTargetAmount,
       /*int aprForPeriod36*/
-    ) = _tetuConverter.findConversionStrategy(
+    ) = _tetuConverter.findBorrowStrategy(
       collateralAsset,
-        collateralAmount,
-        borrowAsset,
-        _LOAN_PERIOD_IN_BLOCKS,
-        conversionMode
+      collateralAmount,
+      borrowAsset,
+      _LOAN_PERIOD_IN_BLOCKS
     );
     console.log('converter, maxTargetAmount', converter, maxTargetAmount);
     require(converter != address(0), 'CSB: Can not borrow asset');

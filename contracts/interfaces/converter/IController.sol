@@ -20,8 +20,17 @@ interface IConverterController {
   function targetHealthFactor2() external view returns (uint16);
   function setTargetHealthFactor2(uint16 value_) external;
 
+  /// @notice get current value of blocks per day. The value is set manually at first and can be auto-updated later
   function blocksPerDay() external view returns (uint);
-  function setBlocksPerDay(uint value_) external;
+  /// @notice set value of blocks per day manually and enable/disable auto update of this value
+  function setBlocksPerDay(uint blocksPerDay_, bool enableAutoUpdate_) external;
+  /// @notice Check if it's time to call updateBlocksPerDay()
+  /// @param periodInSeconds_ Period of auto-update in seconds
+  function isBlocksPerDayAutoUpdateRequired(uint periodInSeconds_) external view returns (bool);
+  /// @notice Recalculate blocksPerDay value
+  /// @param periodInSeconds_ Period of auto-update in seconds
+  function updateBlocksPerDay(uint periodInSeconds_) external;
+
 
   ///////////////////////////////////////////////////////
   ///        Core application contracts
@@ -32,6 +41,7 @@ interface IConverterController {
   function debtMonitor() external view returns (address);
   function tetuLiquidator() external view returns (address);
   function swapManager() external view returns (address);
+  function priceOracle() external view returns (address);
 
   ///////////////////////////////////////////////////////
   ///        External contracts

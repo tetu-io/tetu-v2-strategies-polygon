@@ -2,16 +2,12 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {
-  TetuVaultV2,
   IBorrowManager__factory,
   IConverterController__factory,
   ITetuConverter__factory
 } from "../../typechain";
 
 export class ConverterUtils {
-
-  constructor(public vault: TetuVaultV2) {
-  }
 
   /**
    * Disable DForce (as it reverts on repay after block advance)
@@ -29,7 +25,7 @@ export class ConverterUtils {
     const converterGov = await DeployerUtilsLocal.impersonate(converterGovAddr);
     const borrowManagerAddr = await converterController.borrowManager();
     const borrowManager = IBorrowManager__factory.connect(borrowManagerAddr, converterGov);
-    const DFORCE_POOL_ADAPTER = '0x782b232a8C98aa14c8D48144845ccdf1fD3eeCBA';
+    const DFORCE_POOL_ADAPTER = '0x2E9D9dAB99F031dD13B26717c42c510154B2C9F1';
     await borrowManager.removeAssetPairs(DFORCE_POOL_ADAPTER, [token1Address], [token2Address]);
     console.log('disableDForce done.\n\n');
   }

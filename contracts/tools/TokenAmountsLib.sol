@@ -124,7 +124,10 @@ library TokenAmountsLib {
     ) internal view {
         require (tokens.length == amounts.length, 'TAL: Arrays mismatch');
         uint len = tokens.length;
-        console.log('Symbol \t Amount');
+        if (len == 0) {
+            console.log('-[EMPTY ARRAY]-');
+            return;
+        }
         console.log('---------------');
 
         for (uint i = 0; i < len; i++) {

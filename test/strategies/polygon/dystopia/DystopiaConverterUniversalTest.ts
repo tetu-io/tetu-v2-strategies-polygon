@@ -6,7 +6,9 @@ import {DeployInfo} from "../../DeployInfo";
 import {StrategyTestUtils} from "../../StrategyTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {DystopiaConverterStrategy__factory} from "../../../../typechain";
+import {
+  DystopiaConverterStrategy__factory
+} from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../ConverterUtils";
@@ -77,6 +79,17 @@ describe('Universal tests', async () => {
 
     console.log('getControllerGovernance...');
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+
+/*    { // Set Liquidator address // TODO remove after address updated onchain
+      const controllerGov = ControllerV2__factory.connect(core.controller, gov);
+      const _LIQUIDATOR = 4;
+      const liquidatorAddr = '0xC737eaB847Ae6A92028862fE38b828db41314772'; // tools.liquidator;
+      await controllerGov.announceAddressChange(_LIQUIDATOR, liquidatorAddr);
+      await TimeUtils.advanceBlocksOnTs(86400 /!*1day*!/);
+      await controllerGov.changeAddress(_LIQUIDATOR);
+      const liqAddress = await controllerGov.liquidator();
+      console.log('liqAddress', liqAddress);
+    }*/
 
     console.log('deployAndInitVaultAndStrategy...');
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(

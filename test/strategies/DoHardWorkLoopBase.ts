@@ -158,11 +158,13 @@ export class DoHardWorkLoopBase {
     console.log('INITIAL DEPOSIT', amount.toString());
 
     await VaultUtils.deposit(this.user, this.vault, amount);
-    expect(await this.userBalanceInVault()).eq(this.subDepositFee(amount));
+    expect(await this.userBalanceInVault()).gte(this.subDepositFee(amount));
 
   }
 
   protected async loopStartActions(i: number) {
+    console.log('loopStartActions i', i);
+    // TODO
     // const start = Date.now();
     // if (i > 1) {
     //   const den = (await this.core.controller.psDenominator()).toNumber();
@@ -220,6 +222,7 @@ export class DoHardWorkLoopBase {
   }
 
   protected async userCheckBalance(userBalanceExpected: BigNumber) {
+    console.log('userBalanceExpected', userBalanceExpected.toString());
     const userUndBal = await this.userBalance();
     const userUndBalN = +utils.formatUnits(userUndBal, this.undDec);
     const userBalanceExpectedN = +utils.formatUnits(userBalanceExpected, this.undDec);
@@ -335,9 +338,9 @@ export class DoHardWorkLoopBase {
     this.totalToClaimInTetuN = 0;
     const isReadyToHardWork = await this.strategy.isReadyToHardWork();
     if (isReadyToHardWork) {
-      const platform = await this.strategy.PLATFORM();
+      // const platform = await this.strategy.PLATFORM();
       // const tetuPriceN = +utils.formatUnits(await this.getPrice(this.core.tetu.address));
-      let rts;
+      // let rts;
       // if (platform === 24) {
       //   rts = await ISplitter__factory.connect(this.strategy.address, this.signer).strategyRewardTokens();
       // } else {
@@ -357,6 +360,8 @@ export class DoHardWorkLoopBase {
 
   protected async doHardWork() {
     await VaultUtils.doHardWorkAndCheck(this.vault);
+    // distribute all forwarded amounts back to the vault
+    await this.core.forwarder.distributeAll(this.vault.address);
   }
 
   protected async loop(loops: number, loopValue: number, advanceBlocks: boolean) {
@@ -380,6 +385,7 @@ export class DoHardWorkLoopBase {
       await this.loopEndActions(i);
       Misc.printDuration(i + ' Loop ended', start);
     }
+
   }
 
   protected async postLoopCheck() {
