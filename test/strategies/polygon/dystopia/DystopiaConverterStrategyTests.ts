@@ -147,7 +147,7 @@ describe("Dystopia Converter Strategy tests", function () {
       expect(await vault.withdrawFee()).eq(0);
     });
 
-    it("deposit", async () => {
+    it("deposit / withdraw", async () => {
       console.log('deposit...');
       const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
       await vault.deposit('1', signer.address);
@@ -184,18 +184,14 @@ describe("Dystopia Converter Strategy tests", function () {
       snapshot = await TimeUtils.snapshot();
       await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
       await TokenUtils.getToken(asset.address, signer.address, BIG_AMOUNT);
-    });
+      expect(await vault.depositFee()).eq(DEPOSIT_FEE);
+      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE); });
 
     afterEach(async function () {
       await TimeUtils.rollback(snapshot);
     });
 
-    it("fees check", async () => {
-      expect(await vault.depositFee()).eq(DEPOSIT_FEE);
-      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE);
-    });
-
-    it("deposit", async () => {
+    it("deposit / withdraw", async () => {
       console.log('deposit...');
       await vault.deposit(BIG_AMOUNT, signer.address);
       const leftover = await TokenUtils.balanceOf(asset.address, signer.address);
@@ -228,15 +224,11 @@ describe("Dystopia Converter Strategy tests", function () {
       snapshot = await TimeUtils.snapshot();
       console.log('setFees...');
       await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
-    });
+      expect(await vault.depositFee()).eq(DEPOSIT_FEE);
+      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE);});
 
     afterEach(async function () {
       await TimeUtils.rollback(snapshot);
-    });
-
-    it("fees check", async () => {
-      expect(await vault.depositFee()).eq(DEPOSIT_FEE);
-      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE);
     });
 
     it("deposit", async () => {
