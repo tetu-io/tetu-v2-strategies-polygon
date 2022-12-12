@@ -125,17 +125,6 @@ describe("Dystopia Converter Strategy tests", function () {
     // Disable DForce at TetuConverter
     await ConverterUtils.disableDForce(asset.address, token2.address, signer);
 
-/*    { // Set Liquidator address // TODO remove after address updated onchain
-      const controllerGov = ControllerV2__factory.connect(core.controller, gov);
-      const _LIQUIDATOR = 4;
-      const liquidatorAddr = '0xC737eaB847Ae6A92028862fE38b828db41314772'; // tools.liquidator;
-      await controllerGov.announceAddressChange(_LIQUIDATOR, liquidatorAddr);
-      await TimeUtils.advanceBlocksOnTs(86400 /!*1day*!/);
-      await controllerGov.changeAddress(_LIQUIDATOR);
-      const liqAddress = await controllerGov.liquidator();
-      console.log('liqAddress', liqAddress);
-    }*/
-
   });
 
   after(async function () {
@@ -187,12 +176,14 @@ describe("Dystopia Converter Strategy tests", function () {
   });
 
   describe("Big Amounts", function () {
-    const DEPOSIT_FEE = 1_000;
-    const WITHDRAW_FEE = 1_000;
+    const DEPOSIT_FEE = 300; // 1_000;
+    const WITHDRAW_FEE = 300; // 1_000;
+    const BIG_AMOUNT = parseUnits('30000000', 6);
 
     beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
       await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
+      await TokenUtils.getToken(asset.address, signer.address, BIG_AMOUNT);
     });
 
     afterEach(async function () {
@@ -206,21 +197,24 @@ describe("Dystopia Converter Strategy tests", function () {
 
     it("deposit", async () => {
       console.log('deposit...');
-      const deposit = _100_000;
-      await vault.deposit(deposit, signer.address);
+      await vault.deposit(BIG_AMOUNT, signer.address);
+      const leftover = await TokenUtils.balanceOf(asset.address, signer.address);
 
-      const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
-      expect(await balanceOf(asset.address, insuranceAddress)).eq(depositFee);
-      // const depositWithFee = deposit.sub(depositFee);
-      // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
-      // expect(await balanceOf(asset.address, vault.address)).eq(buffer);
-      expect(await balanceOf(asset.address, splitter.address)).eq(0);
-      // expect(await balanceOf(asset.address, strategy.address)).eq(0);
+      await vault.connect(signer1).deposit(_100_000, signer1.address);
+      await vault.connect(signer2).deposit(_100_000, signer2.address);
 
       console.log('withdrawAll...');
-      hre.tracer.enabled = true;
+
+      await vault.connect(signer1).withdrawAll();
+      await vault.connect(signer2).withdrawAll();
+
       await vault.withdrawAll();
 
+      const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
+      const depositedWithFee = BIG_AMOUNT.mul(feeDenominator.sub(DEPOSIT_FEE)).div(feeDenominator);
+      const withdrawnWithFee = depositedWithFee.mul(feeDenominator.sub(WITHDRAW_FEE)).div(feeDenominator);
+
+      expect(balanceAfter).eq(withdrawnWithFee.add(leftover));
     });
 
   });
