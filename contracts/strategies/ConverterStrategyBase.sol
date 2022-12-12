@@ -7,6 +7,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/ITetuConverterCallback.sol";
+import "../interfaces/IERC20Extended.sol";
 import "./depositors/DepositorBase.sol";
 import "../tools/TokenAmountsLib.sol";
 
@@ -66,8 +67,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory thresholdAmounts_
   ) internal onlyInitializing {
     __StrategyBase_init(controller_, splitter_, rewardTokens_);
-  //  _requireInterface(converter_, InterfaceIds.I_TETU_CONVERTER);
     tetuConverter = ITetuConverter(converter_);
+
+
+    // Set threshold for asset
+    address _asset = asset;
+    uint8 decimals = IERC20Extended(_asset).decimals();
+    setThreshold(_asset, 10**(decimals-2));
 
     _setThresholds(thresholdTokens_, thresholdAmounts_);
 
@@ -89,7 +95,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //                     OPERATORS
   // *************************************************************
 
-  function setThreshold(address token, uint amount) external {
+  function setThreshold(address token, uint amount) public {
     _onlyOperators();
     thresholds[token] = amount;
     emit ThresholdChanged(token, amount);
@@ -123,9 +129,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount) override internal virtual {
     console.log('_depositToPool... amount', amount);
     doHardWork();
-    if (amount == 0) return;
 
     address _asset = asset;
+    // skip deposit for small amounts
+    if (amount < thresholds[_asset]) return;
+
     uint assetBalanceBefore = _balance(_asset);
 
     address[] memory tokens = _depositorPoolAssets();
@@ -140,7 +148,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         weights[i] *= _COLLATERAL_RATE;
       }
     }
-    console.log('_depositToPool Weights:');
+    console.log('Weights:');
     TokenAmountsLib.print(tokens, weights);
 
     for (uint i = 0; i < len; ++i) {
@@ -164,7 +172,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         }
       }
     }
-    console.log('_depositToPool Amounts:');
+    console.log('Amounts:');
     TokenAmountsLib.print(tokens, tokenAmounts);
 
     _depositorEnter(tokenAmounts);
@@ -173,7 +181,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     for (uint i = 0; i < len; ++i) {
       tokenAmounts[i] = _balance(tokens[i]);
     }
-    console.log('Balance after deposit:');
+    console.log('Balance after:');
     TokenAmountsLib.print(tokens, tokenAmounts);
 
     _investedAssets += (assetBalanceBefore - _balance(_asset));
@@ -271,22 +279,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address[] memory tokens1;
     uint[] memory amounts1;
     (tokens1, amounts1) = _depositorClaimRewards();
-    console.log('_depositorClaimRewards...');
-    TokenAmountsLib.print(tokens1, amounts1);
 
     // Rewards from TetuConverter
     address[] memory tokens2;
     uint[] memory amounts2;
     (tokens2, amounts2) =  tetuConverter.claimRewards(address(this));
-    console.log('tetuConverter.claimRewards...');
-    TokenAmountsLib.print(tokens2, amounts2);
 
     address[] memory tokens;
     uint[] memory amounts;
     // Join arrays and recycle tokens
     (tokens, amounts) = TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
-    console.log('TOTAL ...');
-    TokenAmountsLib.print(tokens, amounts);
+    TokenAmountsLib.print(tokens, amounts); // TODO remove
     if (tokens.length > 0) {
       _recycle(tokens, amounts);
     }
@@ -377,12 +380,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _LOAN_PERIOD_IN_BLOCKS
     );
     console.log('converter, maxTargetAmount', converter, maxTargetAmount);
-    require(converter != address(0), 'CSB: Can not borrow asset');
+    if (converter == address(0) || maxTargetAmount == 0) {
+      borrowedAmount = 0;
 
-    IERC20(collateralAsset).safeTransfer(address(_tetuConverter), collateralAmount);
-
-    borrowedAmount = _tetuConverter.borrow(
-      converter, collateralAsset, collateralAmount, borrowAsset, maxTargetAmount, address(this));
+    } else {
+      IERC20(collateralAsset).safeTransfer(address(_tetuConverter), collateralAmount);
+      borrowedAmount = _tetuConverter.borrow(
+        converter, collateralAsset, collateralAmount, borrowAsset, maxTargetAmount, address(this));
+    }
   }
 
   function _estimateRepay(

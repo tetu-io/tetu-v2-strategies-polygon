@@ -78,17 +78,22 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual
   returns (uint[] memory amountsConsumed, uint liquidity) {
 
+    uint amount0 = amountsDesired_[0];
+    uint amount1 = amountsDesired_[1];
+    amountsConsumed = new uint[](2);
+
+    if (amount0 == 0 || amount1 == 0) {
+      return (amountsConsumed, 0);
+    }
+
     address tokenA = depositorTokenA;
     address tokenB = depositorTokenB;
     address router = depositorRouter;
     bool stable = depositorStable;
-    uint amount0 = amountsDesired_[0];
-    uint amount1 = amountsDesired_[1];
 
     _approveIfNeeded(tokenA, amount0, router);
     _approveIfNeeded(tokenB, amount1, router);
 
-    amountsConsumed = new uint[](2);
     (amountsConsumed[0], amountsConsumed[1], liquidity) = IRouter(router).addLiquidity(
       tokenA,
       tokenB,
