@@ -18,13 +18,13 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant DYSTOPIA_DEPOSITOR_VERSION = "1.0.0";
 
-  address public depositorRouter;
-  address public depositorGauge;
-  address public depositorPair;
-  address public depositorTokenA;
-  address public depositorTokenB;
-  bool public depositorStable;
-  bool public depositorSwapTokens;
+  address private depositorRouter;
+  address private depositorGauge;
+  address private depositorPair;
+  address private depositorTokenA;
+  address private depositorTokenB;
+  bool private depositorStable;
+  bool private depositorSwapTokens;
 
   // @notice tokens must be MockTokens
   function __DystopiaDepositor_init(
@@ -42,7 +42,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Returns pool assets
-  function _depositorPoolAssets() override public virtual view
+  function _depositorPoolAssets() override internal virtual view
   returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
     poolAssets[0] = depositorTokenA;
@@ -50,7 +50,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Returns pool weights in percents (50/50%)
-  function _depositorPoolWeights() override public virtual view
+  function _depositorPoolWeights() override internal virtual view
   returns (uint[] memory weights, uint totalWeight) {
     weights = new uint[](2);
     weights[0] = 1; // 50%
@@ -59,7 +59,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Returns pool weights in percents
-  function _depositorPoolReserves() override public virtual view
+  function _depositorPoolReserves() override internal virtual view
   returns (uint[] memory reserves) {
     reserves = new uint[](2);
     if (depositorSwapTokens) {
@@ -70,7 +70,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Returns depositor's pool shares / lp token amount
-  function _depositorLiquidity() override public virtual view returns (uint) {
+  function _depositorLiquidity() override internal virtual view returns (uint) {
     return IERC20(depositorGauge).balanceOf(address(this));
   }
 
@@ -171,6 +171,6 @@ contract DystopiaDepositor is DepositorBase, Initializable {
    * variables without shifting down storage in the inheritance chain.
    * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
    */
-  uint[32] private __gap;
+  uint[16] private __gap;
 
 }

@@ -46,13 +46,13 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Returns pool assets
-  function _depositorPoolAssets() override public virtual view
+  function _depositorPoolAssets() override internal virtual view
   returns (address[] memory) {
     return _depositorAssets;
   }
 
   /// @dev Returns pool weights
-  function _depositorPoolWeights() override public virtual view
+  function _depositorPoolWeights() override internal virtual view
   returns (uint[] memory weights, uint totalWeight) {
     weights = _depositorWeights;
     uint len = weights.length;
@@ -63,13 +63,13 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   function _depositorPoolReserves()
-  override public virtual view returns (uint[] memory reserves) {
+  override internal virtual view returns (uint[] memory reserves) {
     reserves = new uint[](_depositorWeights.length);
   }
 
 
   /// @dev Returns depositor's pool shares / lp token amount
-  function _depositorLiquidity() override public virtual view returns (uint) {
+  function _depositorLiquidity() override internal virtual view returns (uint) {
     return _depositorAmounts[0];
   }
 

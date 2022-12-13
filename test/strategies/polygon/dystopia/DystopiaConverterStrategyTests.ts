@@ -215,6 +215,41 @@ describe("Dystopia Converter Strategy tests", function () {
 
   });
 
+  describe("Profit distribution", function () {
+    const DEPOSIT_FEE = 300; // 1_000;
+    const WITHDRAW_FEE = 300; // 1_000;
+
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+      await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
+      // await TokenUtils.getToken(asset.address, signer.address, BIG_AMOUNT);
+      expect(await vault.depositFee()).eq(DEPOSIT_FEE);
+      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE); });
+
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    it("deposit / withdraw", async () => {
+      console.log('deposit...');
+
+      const vault1 = await vault.connect(signer1);
+      const vault2 = await vault.connect(signer2);
+
+      await vault1.deposit(_100_000, signer1.address);
+      await vault2.deposit(_100_000, signer2.address);
+
+      console.log('withdrawAll...');
+
+      await vault1.withdrawAll();
+      await vault2.withdrawAll();
+
+
+
+    });
+
+  });
+
 
   describe("Tokens Movement", function () {
     const DEPOSIT_FEE = 300;

@@ -13,19 +13,19 @@ abstract contract DepositorBase is ERC20Helpers {
   using SafeERC20 for IERC20;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant DEPOSITOR_BASE_VERSION = "1.0.0";
+  string internal constant DEPOSITOR_BASE_VERSION = "1.0.0";
 
   /// @dev Returns pool assets
-  function _depositorPoolAssets() public virtual view returns (address[] memory assets);
+  function _depositorPoolAssets() internal virtual view returns (address[] memory assets);
 
   /// @dev Returns pool token proportions
-  function _depositorPoolWeights() public virtual view returns (uint[] memory weights, uint total);
+  function _depositorPoolWeights() internal virtual view returns (uint[] memory weights, uint total);
 
   /// @dev Returns pool token reserves
-  function _depositorPoolReserves() public virtual view returns (uint[] memory reserves);
+  function _depositorPoolReserves() internal virtual view returns (uint[] memory reserves);
 
   /// @dev Returns depositor's pool shares / lp token amount
-  function _depositorLiquidity() public virtual view returns (uint);
+  function _depositorLiquidity() internal virtual view returns (uint);
 
   /// @dev Deposit given amount to the pool.
   /// @notice Depositor must care about tokens approval by itself.

@@ -30,6 +30,4 @@ import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/ForwarderV3.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/ControllerV2.sol";
 
 
-contract ___typechain___ {
-
-}
+contract ___typechain___ {}

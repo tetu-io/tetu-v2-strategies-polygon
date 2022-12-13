@@ -127,14 +127,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Deposit given amount to the pool.
   function _depositToPool(uint amount) override internal virtual {
-    console.log('_depositToPool... amount', amount);
+    console.log('_depositToPoolUniversal... amount', amount);
+    _depositToPoolUniversal(amount);
     doHardWork();
+  }
+
+  /// @dev Deposit given amount to the pool.
+  function _depositToPoolUniversal(uint amount) internal virtual {
+    console.log('_depositToPoolUniversal... amount', amount);
 
     address _asset = asset;
     // skip deposit for small amounts
     if (amount < thresholds[_asset]) return;
-
-    uint assetBalanceBefore = _balance(_asset);
 
     address[] memory tokens = _depositorPoolAssets();
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
@@ -184,23 +188,33 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log('Balance after:');
     TokenAmountsLib.print(tokens, tokenAmounts);
 
-    _investedAssets += (assetBalanceBefore - _balance(_asset));
+    _updateInvestedAssets();
   }
 
   /// @dev Withdraw given amount from the pool.
   function _withdrawFromPoolUniversal(uint amount, bool emergency) internal {
     if (amount == 0) return;
 
-    if (!emergency) doHardWork();
+    if (!emergency) {
+      doHardWork();
+    }
 
     address _asset = asset;
-    uint assetBalanceBefore = _balance(_asset);
 
     if (emergency) {
       _depositorEmergencyExit();
+
     } else {
-      uint liquidityAmount = amount * _depositorLiquidity() / _investedAssets;
-      liquidityAmount += liquidityAmount / 100; // add 1% on top
+      uint liquidityAmount;
+
+      if (amount == type(uint).max) {
+        liquidityAmount = _depositorLiquidity();
+
+      } else {
+        liquidityAmount = amount * _depositorLiquidity() / _investedAssets;
+        liquidityAmount += liquidityAmount / 100; // add 1% on top
+      }
+
       _depositorExit(liquidityAmount);
     }
 
@@ -213,9 +227,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _closePosition(_asset, borrowedToken, _balance(borrowedToken));
       }
     }
-
-    uint amountReceived = _balance(_asset) - assetBalanceBefore;
-    _investedAssets -= amountReceived;
+    _updateInvestedAssets();
   }
 
   /// @dev Withdraw given amount from the pool.
@@ -225,12 +237,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Withdraw all from the pool.
   function _withdrawAllFromPool() override internal virtual {
-    _withdrawFromPoolUniversal(_investedAssets, false);
+    _withdrawFromPoolUniversal(type(uint).max, false);
   }
 
   /// @dev If pool support emergency withdraw need to call it for emergencyExit()
   function _emergencyExitFromPool() override internal virtual {
-    _withdrawFromPoolUniversal(_investedAssets, true);
+    _withdrawFromPoolUniversal(type(uint).max, true);
   }
 
 
@@ -266,7 +278,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
     }
 
-    // TODO optimization: do not distribute here, distribute when cheap gas
     _forwarder.registerIncome(tokens, amountsToForward, ISplitter(splitter).vault(), true);
 
   }
@@ -305,12 +316,79 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Do hard work
   function doHardWork()
   override public returns (uint earned, uint lost) {
-
+    console.log('doHardWork...');
     uint assetBalanceBefore = _balance(asset);
     _claim();
-    earned = _balance(asset) - assetBalanceBefore;
+    uint assetBalanceAfter = _balance(asset);
+    earned = assetBalanceAfter - assetBalanceBefore;
 
-    lost = 0; // TODO
+    lost = 0;
+
+    if (assetBalanceAfter > 0) { // re-invest income
+      uint investedBefore = _investedAssets;
+      _depositToPoolUniversal(assetBalanceAfter);
+      _updateInvestedAssets();
+      uint investedAfter = _investedAssets;
+
+      if (investedAfter > investedBefore) {
+        earned += investedAfter - investedBefore;
+      } else {
+        lost = investedBefore - investedAfter;
+      }
+
+    }
+
+  }
+
+
+  // *************************************************************
+  //               InvestedAssets Calculations
+  // *************************************************************
+
+  /// @dev Function to calculate amount we will receive when we withdraw all from pool
+  ///      Return amountOut in revert message
+  function getInvestedAssetsReverted() public {
+    _withdrawAllFromPool();
+    uint256 amountOut = _balance(asset);
+
+    // store answer in revert message data
+    assembly {
+      let ptr := mload(0x40)
+      mstore(ptr, amountOut)
+      revert(ptr, 32)
+    }
+  }
+
+  /// @dev Returns invested asset amount (when we withdraw amountIn most underlying tokens to pipe with specified index)
+  function _getInvestedAssets() internal returns (uint256) {
+    try ConverterStrategyBase(address(this)).getInvestedAssetsReverted()
+    {} catch (bytes memory reason) {
+      return parseRevertReason(reason);
+    }
+    return 0;
+  }
+
+  /// @dev Updates cached _investedAssets to actual value
+  /// @notice Should be called after deposit / withdraw / claim
+  function _updateInvestedAssets() internal {
+    _investedAssets = _getInvestedAssets();
+    console.log('_updateInvestedAssets _investedAssets', _investedAssets);
+  }
+
+  /// @dev Parses a revert reason that should contain the numeric answer
+  /// @param reason encoded revert reason
+  /// @return numeric answer
+  function parseRevertReason(bytes memory reason) private pure returns (uint256) {
+    if (reason.length != 32) {
+      if (reason.length < 68) {
+        revert('CSB: Unexpected');
+      }
+      assembly {
+        reason := add(reason, 0x04)
+      }
+      revert(abi.decode(reason, (string)));
+    }
+    return abi.decode(reason, (uint256));
   }
 
 
@@ -437,6 +515,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-  uint[32] private __gap;
+  uint[16] private __gap;
 
 }
