@@ -19,7 +19,7 @@ import {
   IController,
   StrategySplitterV2__factory,
   DystopiaConverterStrategy__factory,
-  DystopiaConverterStrategy,
+  DystopiaConverterStrategy, IStrategyV2,
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
@@ -97,7 +97,7 @@ describe("Dystopia Converter Strategy tests", function () {
         true
       );
 
-      return _strategy;
+      return _strategy as unknown as IStrategyV2;
     }
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
@@ -105,7 +105,7 @@ describe("Dystopia Converter Strategy tests", function () {
       bufferRate, 0, 0, false
     );
     vault = data.vault.connect(signer);
-    strategy = data.strategy as DystopiaConverterStrategy;
+    strategy = data.strategy as unknown as DystopiaConverterStrategy;
 
     insuranceAddress = await vault.insurance();
     feeDenominator = await vault.FEE_DENOMINATOR();

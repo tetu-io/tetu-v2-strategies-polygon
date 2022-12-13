@@ -73,7 +73,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // Set threshold for asset
     address _asset = asset;
     uint8 decimals = IERC20Extended(_asset).decimals();
-    setThreshold(_asset, 10**(decimals-2));
+    thresholds[_asset] = 10**(decimals-2); // 1 cent
 
     _setThresholds(thresholdTokens_, thresholdAmounts_);
 
@@ -128,8 +128,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Deposit given amount to the pool.
   function _depositToPool(uint amount) override internal virtual {
     console.log('_depositToPoolUniversal... amount', amount);
+    _doHardWork(false);
     _depositToPoolUniversal(amount);
-    doHardWork();
   }
 
   /// @dev Deposit given amount to the pool.
@@ -193,10 +193,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Withdraw given amount from the pool.
   function _withdrawFromPoolUniversal(uint amount, bool emergency) internal {
+    console.log('_withdrawFromPoolUniversal amount, emergency', amount, emergency);
     if (amount == 0) return;
 
     if (!emergency) {
-      doHardWork();
+      _doHardWork(false);
     }
 
     address _asset = asset;
@@ -227,22 +228,27 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _closePosition(_asset, borrowedToken, _balance(borrowedToken));
       }
     }
-    _updateInvestedAssets();
   }
 
   /// @dev Withdraw given amount from the pool.
   function _withdrawFromPool(uint amount) override internal virtual {
     _withdrawFromPoolUniversal(amount, false);
+    _updateInvestedAssets();
+
   }
 
   /// @dev Withdraw all from the pool.
   function _withdrawAllFromPool() override internal virtual {
     _withdrawFromPoolUniversal(type(uint).max, false);
+    _investedAssets = 0;
+
   }
 
   /// @dev If pool support emergency withdraw need to call it for emergencyExit()
   function _emergencyExitFromPool() override internal virtual {
     _withdrawFromPoolUniversal(type(uint).max, true);
+    _investedAssets = 0;
+
   }
 
 
@@ -315,7 +321,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Do hard work
   function doHardWork()
-  override public returns (uint earned, uint lost) {
+  override public returns (uint, uint) {
+    return _doHardWork(true);
+  }
+
+  function _doHardWork(bool reInvest)
+  internal returns (uint earned, uint lost) {
     console.log('doHardWork...');
     uint assetBalanceBefore = _balance(asset);
     _claim();
@@ -324,7 +335,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     lost = 0;
 
-    if (assetBalanceAfter > 0) { // re-invest income
+    if (reInvest && assetBalanceAfter > 0) { // re-invest income
       uint investedBefore = _investedAssets;
       _depositToPoolUniversal(assetBalanceAfter);
       _updateInvestedAssets();
@@ -348,8 +359,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Function to calculate amount we will receive when we withdraw all from pool
   ///      Return amountOut in revert message
   function getInvestedAssetsReverted() public {
-    _withdrawAllFromPool();
-    uint256 amountOut = _balance(asset);
+    uint assetsBefore = _balance(asset);
+    _withdrawFromPoolUniversal(type(uint).max, true);
+    uint assetsAfter = _balance(asset);
+    uint amountOut = assetsAfter - assetsBefore;
 
     // store answer in revert message data
     assembly {
@@ -360,7 +373,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @dev Returns invested asset amount (when we withdraw amountIn most underlying tokens to pipe with specified index)
-  function _getInvestedAssets() internal returns (uint256) {
+  function _getInvestedAssets() internal returns (uint) {
     try ConverterStrategyBase(address(this)).getInvestedAssetsReverted()
     {} catch (bytes memory reason) {
       return parseRevertReason(reason);
@@ -378,7 +391,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Parses a revert reason that should contain the numeric answer
   /// @param reason encoded revert reason
   /// @return numeric answer
-  function parseRevertReason(bytes memory reason) private pure returns (uint256) {
+  function parseRevertReason(bytes memory reason) private pure returns (uint) {
     if (reason.length != 32) {
       if (reason.length < 68) {
         revert('CSB: Unexpected');

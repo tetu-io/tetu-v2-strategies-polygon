@@ -114,7 +114,13 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @dev Withdraw given lp amount from the pool.
   /// @notice if requested liquidityAmount >= invested, then should make full exit
-  function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+  function _depositorExit(uint liquidityAmount)
+  override internal virtual returns (uint[] memory amountsOut) {
+    amountsOut = new uint[](2);
+    if (liquidityAmount == 0) {
+      return amountsOut;
+    }
+
     uint totalLiquidity = _depositorLiquidity();
     if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
 
@@ -126,7 +132,6 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
     _approveIfNeeded(depositorPair, liquidityAmount, router);
 
-    amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = IRouter(router).removeLiquidity(
       depositorTokenA,
       depositorTokenB,

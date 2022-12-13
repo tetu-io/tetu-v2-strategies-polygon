@@ -7,7 +7,7 @@ import {StrategyTestUtils} from "../../StrategyTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {
-  DystopiaConverterStrategy__factory
+  DystopiaConverterStrategy__factory, IStrategyV2
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
@@ -74,7 +74,7 @@ describe('Universal tests', async () => {
       // Disable DForce (as it reverts on repay after block advance)
       await ConverterUtils.disableDForce(token1, token2, signer);
 
-      return strategy;
+      return strategy as unknown as IStrategyV2;
     }
 
     console.log('getControllerGovernance...');
