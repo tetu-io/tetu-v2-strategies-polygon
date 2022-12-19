@@ -3,7 +3,7 @@
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "hardhat/console.sol";
 
-pragma solidity 0.8.4;
+pragma solidity 0.8.17;
 
 /// @title Library for clearing / joining token addresses & amounts arrays
 /// @author bogdoslav

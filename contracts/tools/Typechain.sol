@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.4;
+pragma solidity 0.8.17;
 
 // import contracts here from node_moules to include it in to typechain
 import "@tetu_io/tetu-contracts-v2/contracts/test/MockToken.sol";
