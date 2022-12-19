@@ -171,7 +171,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         } else { // we do not have enough tokens - borrow
           uint collateral = assetAmountForToken - tokenBalance;
           console.log('collateral', collateral);
-         _borrowPosition(_asset, collateral, token);
+          _borrowPosition(_asset, collateral, token);
           tokenAmounts[i] = _balance(token);
         }
       }
@@ -228,6 +228,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _closePosition(_asset, borrowedToken, _balance(borrowedToken));
       }
     }
+    console.log('_withdrawFromPoolUniversal _balance', _balance(_asset));
   }
 
   /// @dev Withdraw given amount from the pool.
@@ -372,10 +373,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
   }
 
-  /// @dev Returns invested asset amount (when we withdraw amountIn most underlying tokens to pipe with specified index)
+  /// @dev Returns invested asset amount
   function _getInvestedAssets() internal returns (uint) {
+    uint startGas = gasleft();
     try ConverterStrategyBase(address(this)).getInvestedAssetsReverted()
     {} catch (bytes memory reason) {
+      uint gasUsed = startGas - gasleft();
+      console.log('_getInvestedAssets gasUsed', gasUsed);
       return parseRevertReason(reason);
     }
     return 0;
@@ -402,6 +406,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       revert(abi.decode(reason, (string)));
     }
     return abi.decode(reason, (uint256));
+  }
+
+  // *************************************************************
+
+  /// @dev Returns invested asset amount under control
+  function _calcInvestedAssets() internal pure returns (uint) {
+    // TODO
+    return 0;
   }
 
 
