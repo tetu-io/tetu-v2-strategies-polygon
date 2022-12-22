@@ -18,12 +18,13 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant DYSTOPIA_DEPOSITOR_VERSION = "1.0.0";
 
-  address private depositorRouter;
+  address public depositorRouter;
+  address public depositorPair;
+  bool public depositorStable;
+
   address private depositorGauge;
-  address private depositorPair;
   address private depositorTokenA;
   address private depositorTokenB;
-  bool private depositorStable;
   bool private depositorSwapTokens;
 
   // @notice tokens must be MockTokens

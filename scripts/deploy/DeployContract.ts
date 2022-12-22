@@ -21,12 +21,11 @@ export async function deployContract<T extends ContractFactory>(
   // tslint:disable-next-line:no-any
   ...args: any[]
 ) {
-  const web3 = hre.web3;
   const ethers = hre.ethers;
   log.info(`Deploying ${name}`);
   log.info("Account balance: " + utils.formatUnits(await signer.getBalance(), 18));
 
-  const gasPrice = await web3.eth.getGasPrice();
+  const gasPrice = await ethers.provider.getGasPrice();
   log.info("Gas price: " + formatUnits(gasPrice, 9));
   const lib: string | undefined = libraries.get(name);
   let _factory;
@@ -72,7 +71,6 @@ export async function deployContract<T extends ContractFactory>(
   }
   return _factory.attach(receipt.contractAddress);
 }
-
 
 // tslint:disable-next-line:no-any
 async function wait(hre: any, blocks: number) {

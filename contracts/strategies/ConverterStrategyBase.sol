@@ -387,7 +387,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Updates cached _investedAssets to actual value
   /// @notice Should be called after deposit / withdraw / claim
-  function _updateInvestedAssets() internal {
+  function _updateInvestedAssets() public { // TODO !!! change to private
     _investedAssets = _getInvestedAssets();
     console.log('_updateInvestedAssets _investedAssets', _investedAssets);
   }
