@@ -34,12 +34,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
 
     address[] memory thresholdTokens;
     uint[] memory thresholdAmounts;
-    address[] memory rewardTokens_;
 
     __ConverterStrategyBase_init(
       controller_,
       splitter_,
-      rewardTokens_,
       converter_,
       thresholdTokens,
       thresholdAmounts

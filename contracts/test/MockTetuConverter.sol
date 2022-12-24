@@ -15,7 +15,7 @@ contract MockTetuConverter is ITetuConverter {
   using SafeERC20 for IERC20;
   using FixedPointMathLib for uint;
 
-  address public override controller;
+  address public controller;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant TETU_CONVERTER_MOCK_VERSION = "1.0.0";
@@ -34,8 +34,8 @@ contract MockTetuConverter is ITetuConverter {
   uint[] public rewardAmounts;
 
   /// @dev msg.sender, collateral, borrow token, amounts
-  mapping (address => mapping (address => mapping (address => uint))) public collaterals;
-  mapping (address => mapping (address => mapping (address => uint))) public debts;
+  mapping(address => mapping(address => mapping(address => uint))) public collaterals;
+  mapping(address => mapping(address => mapping(address => uint))) public debts;
 
   constructor(address[] memory rewardTokens_, uint[] memory rewardAmounts_) {
     require(rewardTokens_.length == rewardAmounts_.length);
@@ -48,7 +48,8 @@ contract MockTetuConverter is ITetuConverter {
 
   /// @dev See {IERC165-supportsInterface}.
   function supportsInterface(bytes4 interfaceId) external view virtual returns (bool) {
-    return interfaceId == InterfaceIds.I_TETU_CONVERTER;// || super.supportsInterface(interfaceId);
+    return interfaceId == InterfaceIds.I_TETU_CONVERTER;
+    // || super.supportsInterface(interfaceId);
   }
 
   /// SETTERS
@@ -69,13 +70,13 @@ contract MockTetuConverter is ITetuConverter {
 
   function _calcMaxTargetAmount(address sourceToken, uint sourceAmount, address targetToken)
   internal view returns (uint maxTargetAmount) {
-    maxTargetAmount = sourceAmount * borrowRate2 / 10**2;
+    maxTargetAmount = sourceAmount * borrowRate2 / 10 ** 2;
     maxTargetAmount = _convertDecimals(sourceToken, maxTargetAmount, targetToken);
   }
 
   function _calcSourceAmount(address sourceToken, address targetToken, uint targetAmount)
   internal view returns (uint sourceAmount) {
-    sourceAmount = targetAmount * 10**2 / borrowRate2;
+    sourceAmount = targetAmount * 10 ** 2 / borrowRate2;
     sourceAmount = _convertDecimals(targetToken, sourceAmount, sourceToken);
   }
 
@@ -84,8 +85,8 @@ contract MockTetuConverter is ITetuConverter {
     uint sourceDecimals = IMockToken(sourceToken).decimals();
     uint targetDecimals = IMockToken(targetToken).decimals();
     targetAmount = sourceDecimals == targetDecimals
-      ? sourceAmount
-      : sourceAmount * 10**targetDecimals / 10**sourceDecimals;
+    ? sourceAmount
+    : sourceAmount * 10 ** targetDecimals / 10 ** sourceDecimals;
   }
 
   function findBorrowStrategy(
@@ -151,7 +152,8 @@ contract MockTetuConverter is ITetuConverter {
     borrowedAmountTransferred = amountToBorrow_;
     collaterals[msg.sender][collateralAsset_][borrowAsset_] += collateralAmount_;
     debts[msg.sender][collateralAsset_][borrowAsset_] += uint(int(borrowedAmountTransferred)
-      + int(borrowedAmountTransferred) * borrowAprForPeriod36 / 10**36); // apply apr
+      + int(borrowedAmountTransferred) * borrowAprForPeriod36 / 10 ** 36);
+    // apply apr
 
     IMockToken(borrowAsset_).mint(receiver_, borrowedAmountTransferred);
 
@@ -170,7 +172,7 @@ contract MockTetuConverter is ITetuConverter {
     collateralAmountTransferred = 0;
     uint debt = debts[msg.sender][collateralAsset_][borrowAsset_];
 
-    if (amountToRepay_ >= debt) { // close full debt
+    if (amountToRepay_ >= debt) {// close full debt
       delete debts[msg.sender][collateralAsset_][borrowAsset_];
       collateralAmountTransferred = collaterals[msg.sender][collateralAsset_][borrowAsset_];
       delete collaterals[msg.sender][collateralAsset_][borrowAsset_];
@@ -180,14 +182,15 @@ contract MockTetuConverter is ITetuConverter {
         collateralAmountTransferred += _calcSourceAmount(uint(ConversionMode.SWAP_1), collateralAsset_, borrowAsset_, excess);
       }*/
 
-    } else { // partial repay
+    } else {// partial repay
       debts[msg.sender][collateralAsset_][borrowAsset_] -= amountToRepay_;
       collateralAmountTransferred = _calcSourceAmount(collateralAsset_, borrowAsset_, amountToRepay_);
       collaterals[msg.sender][collateralAsset_][borrowAsset_] -= collateralAmountTransferred;
     }
 
     IMockToken(collateralAsset_).mint(collateralReceiver_, collateralAmountTransferred);
-    returnedBorrowAmountOut = 0; // stub
+    returnedBorrowAmountOut = 0;
+    // stub
   }
 
   function estimateRepay(
@@ -198,8 +201,10 @@ contract MockTetuConverter is ITetuConverter {
     uint borrowAssetAmount,
     uint unobtainableCollateralAssetAmount
   ) {
-    borrowAssetAmount = 0; // stub for now
-    unobtainableCollateralAssetAmount = 0; // stub for now
+    borrowAssetAmount = 0;
+    // stub for now
+    unobtainableCollateralAssetAmount = 0;
+    // stub for now
 
     revert('MTC: Not implemented');
   }
@@ -221,7 +226,7 @@ contract MockTetuConverter is ITetuConverter {
   ///     CALLBACKS
   ////////////////////////
 
-  function callRequireAmountBack (
+  function callRequireAmountBack(
     address borrower,
     address collateralAsset_,
     uint requiredAmountCollateralAsset_,
@@ -245,7 +250,7 @@ contract MockTetuConverter is ITetuConverter {
     }
   }
 
-  function callOnTransferBorrowedAmount (
+  function callOnTransferBorrowedAmount(
     address borrower,
     address collateralAsset_,
     address borrowAsset_,
@@ -281,8 +286,15 @@ contract MockTetuConverter is ITetuConverter {
     totalCollateralAmountOut = collaterals[msg.sender][collateralAsset_][borrowAsset_];
   }
 
-
-
+  function quoteRepay(
+    address /*collateralAsset_*/,
+    address /*borrowAsset_*/,
+    uint /*amountToRepay_*/
+  ) external pure returns (
+    uint collateralAmountOut
+  ) {
+    return 0;
+  }
 
 
 }

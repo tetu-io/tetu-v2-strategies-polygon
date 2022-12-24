@@ -272,7 +272,7 @@ describe("Dystopia Converter Strategy tests", function () {
       await vault.deposit(deposit, signer.address);
 
       const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
-      expect(await balanceOf(asset.address, insuranceAddress)).eq(depositFee);
+      expect((await balanceOf(asset.address, insuranceAddress)).toNumber()).approximately(depositFee.toNumber(), 2);
       // const depositWithFee = deposit.sub(depositFee);
       // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
       // expect(await balanceOf(asset.address, vault.address)).eq(buffer);

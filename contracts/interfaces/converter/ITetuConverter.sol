@@ -107,6 +107,19 @@ interface ITetuConverter {
     uint returnedBorrowAmountOut
   );
 
+  /// @notice Estimate result amount after making full or partial repay
+  /// @dev It works in exactly same way as repay() but don't make actual repay
+  ///      Anyway, the function is write, not read-only, because it makes updateStatus()
+  /// @param amountToRepay_ Amount of borrowed asset to repay.
+  /// @return collateralAmountOut Total collateral amount to be returned after repay in exchange of {amountToRepay_}
+  function quoteRepay(
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountToRepay_
+  ) external returns (
+    uint collateralAmountOut
+  );
+
   /// @notice Update status in all opened positions
   ///         and calculate exact total amount of borrowed and collateral assets
   function getDebtAmountCurrent(
@@ -154,5 +167,4 @@ interface ITetuConverter {
     uint[] memory amountsOut
   );
 
-  //TODO: salvage
 }

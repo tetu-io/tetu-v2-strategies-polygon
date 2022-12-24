@@ -1,11 +1,12 @@
-import {ethers} from "hardhat";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import axios from "axios";
-import {config as dotEnvConfig} from "dotenv";
-import logSettings from "../../log_settings";
-import {Logger} from "tslog";
-import {MaticAddresses} from "../MaticAddresses";
+import { ethers } from 'hardhat';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import axios from 'axios';
+import { config as dotEnvConfig } from 'dotenv';
+import logSettings from '../../log_settings';
+import { Logger } from 'tslog';
+import { MaticAddresses } from '../MaticAddresses';
 import {
+  ControllerV2,
   ControllerV2__factory,
   IBribe__factory,
   IController,
@@ -26,17 +27,17 @@ import {
   StrategySplitterV2__factory,
   TetuVaultV2,
   TetuVaultV2__factory,
-  VaultFactory__factory
-} from "../../typechain";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {ICoreContractsWrapper} from "../../test/CoreContractsWrapper";
-import {IToolsAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses";
-import {IToolsContractsWrapper} from "../../test/ToolsContractsWrapper";
-import {RunHelper} from "./RunHelper";
+  VaultFactory__factory,
+} from '../../typechain';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
+import { ICoreContractsWrapper } from '../../test/CoreContractsWrapper';
+import { IToolsContractsWrapper } from '../../test/ToolsContractsWrapper';
+import { RunHelper } from './RunHelper';
+import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
+import { ToolsAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses';
 
 // tslint:disable-next-line:no-var-requires
-const hre = require("hardhat");
+const hre = require('hardhat');
 const log: Logger = new Logger(logSettings);
 
 
@@ -46,15 +47,15 @@ const argv = require('yargs/yargs')()
   .env('TETU')
   .options({
     networkScanKey: {
-      type: "string",
+      type: 'string',
     },
     vaultLogic: {
-      type: "string",
-      default: "0x9ED23756ECD0B9012E4D7ee807dA0E6Ec94A1a70"
+      type: 'string',
+      default: '0x9ED23756ECD0B9012E4D7ee807dA0E6Ec94A1a70',
     },
     splitterLogic: {
-      type: "string",
-      default: "0xC4c776e6D2bbae93Ed5acac6cFF35a5980F81845"
+      type: 'string',
+      default: '0xC4c776e6D2bbae93Ed5acac6cFF35a5980F81845',
     },
   }).argv;
 
@@ -69,9 +70,9 @@ export class DeployerUtilsLocal {
 
   public static async verify(address: string) {
     try {
-      await hre.run("verify:verify", {
-        address
-      })
+      await hre.run('verify:verify', {
+        address,
+      });
     } catch (e) {
       log.info('error verify ' + e);
     }
@@ -82,9 +83,9 @@ export class DeployerUtilsLocal {
     const address = await proxy.implementation();
     console.log('impl address', address);
     try {
-      await hre.run("verify:verify", {
-        address
-      })
+      await hre.run('verify:verify', {
+        address,
+      });
     } catch (e) {
       log.info('error verify ' + e);
     }
@@ -94,9 +95,9 @@ export class DeployerUtilsLocal {
   // tslint:disable-next-line:no-any
   public static async verifyWithArgs(address: string, args: any[]) {
     try {
-      await hre.run("verify:verify", {
-        address, constructorArguments: args
-      })
+      await hre.run('verify:verify', {
+        address, constructorArguments: args,
+      });
     } catch (e) {
       log.info('error verify ' + e);
     }
@@ -105,9 +106,9 @@ export class DeployerUtilsLocal {
   // tslint:disable-next-line:no-any
   public static async verifyWithContractName(address: string, contractPath: string, args?: any[]) {
     try {
-      await hre.run("verify:verify", {
-        address, contract: contractPath, constructorArguments: args
-      })
+      await hre.run('verify:verify', {
+        address, contract: contractPath, constructorArguments: args,
+      });
     } catch (e) {
       log.info('error verify ' + e);
     }
@@ -115,14 +116,19 @@ export class DeployerUtilsLocal {
 
 
   // tslint:disable-next-line:no-any
-  public static async verifyImplWithContractName(signer: SignerWithAddress, proxyAddress: string, contractPath: string, args?: any[]) {
+  public static async verifyImplWithContractName(
+    signer: SignerWithAddress,
+    proxyAddress: string,
+    contractPath: string,
+    args?: any[],
+  ) {
     const proxy = ProxyControlled__factory.connect(proxyAddress, signer);
     const address = await proxy.implementation();
     console.log('impl address', address);
     try {
-      await hre.run("verify:verify", {
-        address, contract: contractPath, constructorArguments: args
-      })
+      await hre.run('verify:verify', {
+        address, contract: contractPath, constructorArguments: args,
+      });
     } catch (e) {
       log.info('error verify ' + e);
     }
@@ -132,9 +138,9 @@ export class DeployerUtilsLocal {
   // tslint:disable-next-line:no-any
   public static async verifyWithArgsAndContractName(address: string, args: any[], contractPath: string) {
     try {
-      await hre.run("verify:verify", {
-        address, constructorArguments: args, contract: contractPath
-      })
+      await hre.run('verify:verify', {
+        address, constructorArguments: args, contract: contractPath,
+      });
     } catch (e) {
       log.info('error verify ' + e);
     }
@@ -145,10 +151,11 @@ export class DeployerUtilsLocal {
     try {
 
       // const resp =
-        await axios.post(
-          (await DeployerUtilsLocal.getNetworkScanUrl()) +
-          `?module=contract&action=verifyproxycontract&apikey=${argv.networkScanKey}`,
-          `address=${adr}`);
+      await axios.post(
+        (await DeployerUtilsLocal.getNetworkScanUrl()) +
+        `?module=contract&action=verifyproxycontract&apikey=${argv.networkScanKey}`,
+        `address=${adr}`,
+      );
       // log.info("proxy verify resp", resp.data);
     } catch (e) {
       log.info('error proxy verify ' + adr + e);
@@ -168,11 +175,11 @@ export class DeployerUtilsLocal {
     } else if (net.name === 'ethereum') {
       return 'https://api.etherscan.io/api';
     } else if (net.name === 'matic') {
-      return 'https://api.polygonscan.com/api'
+      return 'https://api.polygonscan.com/api';
     } else if (net.chainId === 80001) {
-      return 'https://api-testnet.polygonscan.com/api'
+      return 'https://api-testnet.polygonscan.com/api';
     } else if (net.chainId === 250) {
-      return 'https://api.ftmscan.com//api'
+      return 'https://api.ftmscan.com//api';
     } else {
       throw Error('network not found ' + net);
     }
@@ -189,27 +196,39 @@ export class DeployerUtilsLocal {
     return core;
   }
 
-  public static getController(signer: SignerWithAddress): IController {
+  public static getController(signer: SignerWithAddress): ControllerV2 {
     const core = Addresses.getCore();
-    return IController__factory.connect(core.controller, signer);
+    return ControllerV2__factory.connect(core.controller, signer);
   }
 
   public static async getControllerGovernance(signer: SignerWithAddress): Promise<SignerWithAddress> {
-    if (!signer) signer = (await ethers.getSigners())[0];
+    if (!signer) {
+      signer = (await ethers.getSigners())[0];
+    }
     const controller = DeployerUtilsLocal.getController(signer);
     const govAddress = await controller.governance();
-    return DeployerUtilsLocal.impersonate(govAddress);
+    const gov = await DeployerUtilsLocal.impersonate(govAddress);
+
+    if (!(await controller.isOperator(govAddress))) {
+      await controller.connect(gov).registerOperator(govAddress);
+    }
+
+    return gov;
   }
 
   public static async getControllerLiquidator(signer?: SignerWithAddress): Promise<ITetuLiquidator> {
-    if (!signer) signer = (await ethers.getSigners())[0];
+    if (!signer) {
+      signer = (await ethers.getSigners())[0];
+    }
     const controller = IController__factory.connect(Addresses.getCore().controller, signer);
     const liquidatorAddress = await controller.liquidator();
     return ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
   }
 
   public static async getLiquidator(signer?: SignerWithAddress): Promise<ITetuLiquidator> {
-    if (!signer) signer = (await ethers.getSigners())[0];
+    if (!signer) {
+      signer = (await ethers.getSigners())[0];
+    }
     const liquidatorAddress = Addresses.getTools().liquidator;
     return ITetuLiquidator__factory.connect(liquidatorAddress, signer);
   }
@@ -252,7 +271,7 @@ export class DeployerUtilsLocal {
 
   }
 
-  public static async getToolsAddresses(): Promise<IToolsAddresses> {
+  public static async getToolsAddresses(): Promise<ToolsAddresses> {
     const net = await ethers.provider.getNetwork();
     log.info('network ' + net.chainId);
     const tools = Addresses.TOOLS.get(net.chainId);
@@ -263,16 +282,16 @@ export class DeployerUtilsLocal {
   }
 
   /*
-  public static async getTokenAddresses(): Promise<Map<string, string>> {
-  const net = await ethers.provider.getNetwork();
-  log.info('network ' + net.chainId);
-  const mocks = Addresses.TOKENS.get(net.chainId + '');
-  if (!mocks) {
-    throw Error('No config for ' + net.chainId);
-  }
-  return mocks;
-}
-*/
+   public static async getTokenAddresses(): Promise<Map<string, string>> {
+   const net = await ethers.provider.getNetwork();
+   log.info('network ' + net.chainId);
+   const mocks = Addresses.TOKENS.get(net.chainId + '');
+   if (!mocks) {
+   throw Error('No config for ' + net.chainId);
+   }
+   return mocks;
+   }
+   */
 
   public static async getGovernance() {
     const net = await ethers.provider.getNetwork();
@@ -288,13 +307,13 @@ export class DeployerUtilsLocal {
       address = await DeployerUtilsLocal.getGovernance();
     }
     await hre.network.provider.request({
-      method: "hardhat_impersonateAccount",
+      method: 'hardhat_impersonateAccount',
       params: [address],
     });
 
     await hre.network.provider.request({
-      method: "hardhat_setBalance",
-      params: [address, "0x1431E0FAE6D7217CAA0000000"],
+      method: 'hardhat_setBalance',
+      params: [address, '0x1431E0FAE6D7217CAA0000000'],
     });
     console.log('address impersonated', address);
     return ethers.getSigner(address || '');
@@ -348,7 +367,7 @@ export class DeployerUtilsLocal {
   public static async isBlueChip(address: string): Promise<boolean> {
     const net = await ethers.provider.getNetwork();
     if (net.chainId === 137) {
-      return MaticAddresses.BLUE_CHIPS.has(address.toLowerCase())
+      return MaticAddresses.BLUE_CHIPS.has(address.toLowerCase());
     } else {
       throw Error('No config for ' + net.chainId);
     }
@@ -372,8 +391,8 @@ export class DeployerUtilsLocal {
   }
 
   public static async setStorageAt(address: string, index: string, value: string) {
-    await ethers.provider.send("hardhat_setStorageAt", [address, index, value]);
-    await ethers.provider.send("evm_mine", []); // Just mines to the next block
+    await ethers.provider.send('hardhat_setStorageAt', [address, index, value]);
+    await ethers.provider.send('evm_mine', []); // Just mines to the next block
   }
 
   // ****************** WAIT ******************
@@ -405,7 +424,7 @@ export class DeployerUtilsLocal {
     buffer = 0,
     depositFee = 0,
     withdrawFee = 0,
-    wait = false
+    wait = false,
   ): Promise<IVaultStrategyInfo> {
     console.log('deployAndInitVaultAndStrategy', vaultName);
     const core = Addresses.getCore();
@@ -423,7 +442,7 @@ export class DeployerUtilsLocal {
 
     await splitter.addStrategies([strategy.address], [0]);
 
-    return {vault, strategy};
+    return { vault, strategy };
   }
 
   public static async deployAndInitVault<T>(
@@ -434,7 +453,7 @@ export class DeployerUtilsLocal {
     buffer = 100,
     depositFee = 300,
     withdrawFee = 300,
-    wait = false
+    wait = false,
   ): Promise<TetuVaultV2> {
     console.log('deployAndInitVault', vaultName);
 
@@ -444,34 +463,37 @@ export class DeployerUtilsLocal {
     // const symbol = await asset.symbol();
     console.log('vaultName', vaultName);
 
-    const factory = VaultFactory__factory.connect(core.vaultFactory, signer)
+    const factory = VaultFactory__factory.connect(core.vaultFactory, signer);
 
     await RunHelper.runAndWait(() => factory.createVault(
       assetAddress,
       vaultName,
       vaultName,
       core.gauge,
-      buffer
-    ),true, wait);
+      buffer,
+    ), true, wait);
     const l = (await factory.deployedVaultsLength()).toNumber();
     const vaultAddress = await factory.deployedVaults(l - 1);
-    console.log(l, 'VAULT: ', vaultAddress)
+    console.log(l, 'VAULT: ', vaultAddress);
     const vault = TetuVaultV2__factory.connect(vaultAddress, signer);
 
     console.log('setFees', depositFee, withdrawFee);
     await RunHelper.runAndWait(() =>
-      vault.setFees(depositFee, withdrawFee),
-      true, wait);
+        vault.setFees(depositFee, withdrawFee),
+      true, wait,
+    );
 
     console.log('registerVault');
     await RunHelper.runAndWait(() =>
-      ControllerV2__factory.connect(core.controller, signer).registerVault(vaultAddress),
-      true, wait);
+        ControllerV2__factory.connect(core.controller, signer).registerVault(vaultAddress),
+      true, wait,
+    );
 
     console.log('addStakingToken');
     await RunHelper.runAndWait(() =>
-      IGauge__factory.connect(core.gauge, signer).addStakingToken(vaultAddress),
-      true, wait);
+        IGauge__factory.connect(core.gauge, signer).addStakingToken(vaultAddress),
+      true, wait,
+    );
 
     console.log('+Vault Deployed');
     return vault;

@@ -48,8 +48,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Minimum token amounts to liquidate etc.
   mapping (address => uint) public thresholds;
 
-  bool private _isReadyToHardWork;
-
   event ThresholdChanged(address token, uint amount);
 
 
@@ -61,12 +59,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function __ConverterStrategyBase_init(
     address controller_,
     address splitter_,
-    address[] memory rewardTokens_,
     address converter_,
     address[] memory thresholdTokens_,
     uint[] memory thresholdAmounts_
   ) internal onlyInitializing {
-    __StrategyBase_init(controller_, splitter_, rewardTokens_);
+    __StrategyBase_init(controller_, splitter_);
     tetuConverter = ITetuConverter(converter_);
 
 
@@ -76,20 +73,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     thresholds[_asset] = 10**(decimals-2); // 1 cent
 
     _setThresholds(thresholdTokens_, thresholdAmounts_);
-
-    _isReadyToHardWork = true;
-
   }
-
-  // *************************************************************
-  //                     RESTRICTIONS
-  // *************************************************************
-
-  /// @dev Restrict access only for TetuConverter
-  function _onlyTetuConverter() internal view {
-    require(msg.sender == address(tetuConverter), "CSB: Only TetuConverter");
-  }
-
 
   // *************************************************************
   //                     OPERATORS
@@ -128,7 +112,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Deposit given amount to the pool.
   function _depositToPool(uint amount) override internal virtual {
     console.log('_depositToPoolUniversal... amount', amount);
-    _doHardWork(false);
     _depositToPoolUniversal(amount);
   }
 
@@ -196,10 +179,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log('_withdrawFromPoolUniversal amount, emergency', amount, emergency);
     if (amount == 0) return;
 
-    if (!emergency) {
-      _doHardWork(false);
-    }
-
     address _asset = asset;
 
     if (emergency) {
@@ -232,14 +211,24 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @dev Withdraw given amount from the pool.
-  function _withdrawFromPool(uint amount) override internal virtual {
+  function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
+
+    // todo calc
+    investedAssetsUSD = 0;
+    assetPrice = 0;
+
     _withdrawFromPoolUniversal(amount, false);
     _updateInvestedAssets();
 
   }
 
   /// @dev Withdraw all from the pool.
-  function _withdrawAllFromPool() override internal virtual {
+  function _withdrawAllFromPool() override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
+
+    // todo calc
+    investedAssetsUSD = 0;
+    assetPrice = 0;
+
     _withdrawFromPoolUniversal(type(uint).max, false);
     _investedAssets = 0;
 
@@ -316,8 +305,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Is strategy ready to hard work
   function isReadyToHardWork()
-  override external view returns (bool) {
-    return _isReadyToHardWork;
+  override external pure returns (bool) {
+    // check claimable amounts and compare with thresholds
+    return true;
   }
 
   /// @dev Do hard work
@@ -360,6 +350,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Function to calculate amount we will receive when we withdraw all from pool
   ///      Return amountOut in revert message
   function getInvestedAssetsReverted() public {
+    // todo change to converter quoteRepay
     uint assetsBefore = _balance(asset);
     _withdrawFromPoolUniversal(type(uint).max, true);
     uint assetsAfter = _balance(asset);
@@ -409,15 +400,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   // *************************************************************
-
-  /// @dev Returns invested asset amount under control
-  function _calcInvestedAssets() internal pure returns (uint) {
-    // TODO
-    return 0;
-  }
-
-
-  // *************************************************************
   //               OVERRIDES ITetuConverterCallback
   // *************************************************************
 
@@ -431,7 +413,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint amountOut,
     bool isCollateral
   ) {
-    _onlyTetuConverter();
+    address _tetuConverter = address(tetuConverter);
+    require(msg.sender == _tetuConverter, "CSB: Only TetuConverter");
     require(collateralAsset_ == asset, 'CSB: Wrong asset');
 
     amountOut = 0;
@@ -447,7 +430,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       amountOut = _balance(collateralAsset_);
     }
 
-    IERC20(collateralAsset_).safeTransfer(address(tetuConverter), amountOut);
+    IERC20(collateralAsset_).safeTransfer(_tetuConverter, amountOut);
     isCollateral = true;
   }
 

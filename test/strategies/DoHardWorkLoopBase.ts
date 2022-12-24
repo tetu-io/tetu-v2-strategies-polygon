@@ -405,8 +405,8 @@ export class DoHardWorkLoopBase {
 
 
     // strategy should not contain any tokens in the end
-    const rts = await this.strategy.rewardTokens();
-    console.log('rts', rts);
+    // const rts = await this.strategy.rewardTokens();
+    // console.log('rts', rts);
     /*for (const rt of rts) {
       if (rt.toLowerCase() === this.underlying.toLowerCase()) {
         continue;
