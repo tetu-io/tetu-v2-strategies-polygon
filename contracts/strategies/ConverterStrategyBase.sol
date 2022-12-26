@@ -512,6 +512,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (returnedAssetAmount, returnedBorrowAmountOut) = tetuConverter.repay(
       collateralAsset, borrowAsset, amountToRepay, address(this)
     );
+    console.log('returnedAssetAmount    ', returnedAssetAmount);
+    console.log('returnedBorrowAmountOut', returnedBorrowAmountOut);
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
 
   }
