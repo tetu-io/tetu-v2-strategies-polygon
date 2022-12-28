@@ -33,6 +33,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   uint private constant _COLLATERAL_RATE = 2; // Collateral to debt target rate 200%
 
+  uint private constant _ON_TOP_DIVIDER = 100; // 1/100 (1%)
+
   // *************************************************************
   //                        VARIABLES
   //                Keep names and ordering!
@@ -212,8 +214,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         liquidityAmount = _depositorLiquidity();
 
       } else {
-        liquidityAmount = amount * _depositorLiquidity() / _investedAssets;
-        liquidityAmount += liquidityAmount / 100; // add 1% on top
+        uint depositorLiquidity = _depositorLiquidity();
+        liquidityAmount = amount * depositorLiquidity / _investedAssets;
+        liquidityAmount += liquidityAmount / _ON_TOP_DIVIDER;
       }
 
       _depositorExit(liquidityAmount);
@@ -359,7 +362,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Function to calculate amount we will receive when we withdraw all from pool
   ///      Return amountOut in revert message
-  function getInvestedAssetsReverted() public {
+  function getInvestedAssetsReverted() external {
     uint assetsBefore = _balance(asset);
     _withdrawFromPoolUniversal(type(uint).max, true);
     uint assetsAfter = _balance(asset);
@@ -411,9 +414,20 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   // *************************************************************
 
   /// @dev Returns invested asset amount under control
-  function _calcInvestedAssets() internal pure returns (uint) {
-    // TODO
-    return 0;
+  function _calcInvestedAssets() internal returns (uint estimatedAssets) {
+    uint[] memory amountsOut = _depositorQuoteExit(_depositorLiquidity());
+    address[] memory tokens = _depositorPoolAssets();
+
+    address _asset = asset;
+    estimatedAssets = 0;
+
+    uint len = tokens.length;
+    for (uint i = 0; i < len; ++i) {
+      address borrowedToken = tokens[i];
+      estimatedAssets += _asset == borrowedToken
+        ? amountsOut[i]
+        : tetuConverter.quoteRepay(address(this), _asset, borrowedToken, _balance(borrowedToken) + amountsOut[i]);
+    }
   }
 
 
@@ -493,7 +507,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
   }
 
-  function _estimateRepay(
+/*  function _estimateRepay(
+    address user_,
     address collateralAsset_,
     uint collateralAmountRequired_,
     address borrowAsset_
@@ -501,8 +516,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint borrowAssetAmount,
     uint unobtainableCollateralAssetAmount
   ){
-    return tetuConverter.estimateRepay(collateralAsset_, collateralAmountRequired_, borrowAsset_);
-  }
+    return tetuConverter.estimateRepay(user_, collateralAsset_, collateralAmountRequired_, borrowAsset_);
+  }*/
 
   function _closePosition(address collateralAsset, address borrowAsset, uint amountToRepay)
   internal returns (uint returnedAssetAmount) {

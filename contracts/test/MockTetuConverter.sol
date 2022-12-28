@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
+/*
 
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/ITetuConverterCallback.sol";
@@ -15,7 +16,7 @@ contract MockTetuConverter is ITetuConverter {
   using SafeERC20 for IERC20;
   using FixedPointMathLib for uint;
 
-  address public override controller;
+//  address public override controller;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant TETU_CONVERTER_MOCK_VERSION = "1.0.0";
@@ -92,7 +93,9 @@ contract MockTetuConverter is ITetuConverter {
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_,
-    uint /*periodInBlocks_*/
+    uint */
+/*periodInBlocks_*//*
+
   ) override public view returns (
     address converter,
     uint maxTargetAmount,
@@ -100,7 +103,9 @@ contract MockTetuConverter is ITetuConverter {
   ) {
     converter = address(1);
     maxTargetAmount = _calcMaxTargetAmount(sourceToken_, sourceAmount_, targetToken_);
-    aprForPeriod36 = /*conversionMode == ConversionMode.SWAP_1 ? swapAprForPeriod36 :*/ borrowAprForPeriod36;
+    aprForPeriod36 = */
+/*conversionMode == ConversionMode.SWAP_1 ? swapAprForPeriod36 :*//*
+ borrowAprForPeriod36;
   }
 
   function findConversionStrategy(
@@ -117,9 +122,15 @@ contract MockTetuConverter is ITetuConverter {
   }
 
   function findSwapStrategy(
-    address /*sourceToken_*/,
-    uint /*sourceAmount_*/,
-    address /*targetToken_*/
+    address */
+/*sourceToken_*//*
+,
+    uint */
+/*sourceAmount_*//*
+,
+    address */
+/*targetToken_*//*
+
   ) override external pure returns (
     address converter,
     uint maxTargetAmount,
@@ -175,10 +186,12 @@ contract MockTetuConverter is ITetuConverter {
       collateralAmountTransferred = collaterals[msg.sender][collateralAsset_][borrowAsset_];
       delete collaterals[msg.sender][collateralAsset_][borrowAsset_];
       // swap excess
-      /*uint excess = amountToRepay_ - debt;
+      */
+/*uint excess = amountToRepay_ - debt;
       if (excess > 0) {
         collateralAmountTransferred += _calcSourceAmount(uint(ConversionMode.SWAP_1), collateralAsset_, borrowAsset_, excess);
-      }*/
+      }*//*
+
 
     } else { // partial repay
       debts[msg.sender][collateralAsset_][borrowAsset_] -= amountToRepay_;
@@ -191,9 +204,18 @@ contract MockTetuConverter is ITetuConverter {
   }
 
   function estimateRepay(
-    address /*collateralAsset_*/,
-    uint /*collateralAmountRequired_*/,
-    address /*borrowAsset_*/
+    address */
+/*user_*//*
+,
+    address */
+/*collateralAsset_*//*
+,
+    uint */
+/*collateralAmountRequired_*//*
+,
+    address */
+/*borrowAsset_*//*
+
   ) override external pure returns (
     uint borrowAssetAmount,
     uint unobtainableCollateralAssetAmount
@@ -259,7 +281,8 @@ contract MockTetuConverter is ITetuConverter {
     );
   }
 
-  function getDebtAmountCurrent(
+ */
+/* function getDebtAmountCurrent(
     address collateralAsset_,
     address borrowAsset_
   ) external override view returns (
@@ -268,9 +291,11 @@ contract MockTetuConverter is ITetuConverter {
   ) {
     totalDebtAmountOut = debts[msg.sender][collateralAsset_][borrowAsset_];
     totalCollateralAmountOut = collaterals[msg.sender][collateralAsset_][borrowAsset_];
-  }
+  }*//*
 
-  function getDebtAmountStored(
+
+*/
+/*  function getDebtAmountStored(
     address collateralAsset_,
     address borrowAsset_
   ) external override view returns (
@@ -279,10 +304,12 @@ contract MockTetuConverter is ITetuConverter {
   ) {
     totalDebtAmountOut = debts[msg.sender][collateralAsset_][borrowAsset_];
     totalCollateralAmountOut = collaterals[msg.sender][collateralAsset_][borrowAsset_];
-  }
+  }*//*
+
 
 
 
 
 
 }
+*/

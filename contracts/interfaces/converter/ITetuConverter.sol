@@ -5,8 +5,6 @@ pragma solidity 0.8.17;
 /// @notice Main contract of the TetuConverter application
 /// @dev Borrower (strategy) makes all operations via this contract only.
 interface ITetuConverter {
-  function controller() external view returns (address);
-
   /// @notice Find best borrow strategy and provide "cost of money" as interest for the period
   /// @param sourceAmount_ Amount to be converted
   /// @param periodInBlocks_ Estimated period to keep target amount. It's required to compute APR
@@ -68,7 +66,7 @@ interface ITetuConverter {
   /// @dev Transferring of {collateralAmount_} by TetuConverter-contract must be approved by the caller before the call
   /// @param converter_ A converter received from findBestConversionStrategy.
   /// @param collateralAmount_ Amount of {collateralAsset_}.
-  ///                          This amount must be transferred to TetuConverter before the call.
+  ///                          This amount must be approved to TetuConverter before the call.
   /// @param amountToBorrow_ Amount of {borrowAsset_} to be borrowed and sent to {receiver_}
   /// @param receiver_ A receiver of borrowed amount
   /// @return borrowedAmountOut Exact borrowed amount transferred to {receiver_}
@@ -107,9 +105,26 @@ interface ITetuConverter {
     uint returnedBorrowAmountOut
   );
 
+  /// @notice Estimate result amount after making full or partial repay
+  /// @dev It works in exactly same way as repay() but don't make actual repay
+  ///      Anyway, the function is write, not read-only, because it makes updateStatus()
+  /// @param user_ user whose amount-to-repay will be calculated
+  /// @param amountToRepay_ Amount of borrowed asset to repay.
+  /// @return collateralAmountOut Total collateral amount to be returned after repay in exchange of {amountToRepay_}
+  function quoteRepay(
+    address user_,
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountToRepay_
+  ) external returns (
+    uint collateralAmountOut
+  );
+
   /// @notice Update status in all opened positions
   ///         and calculate exact total amount of borrowed and collateral assets
+  /// @param user_ user whose debts will be updated and returned
   function getDebtAmountCurrent(
+    address user_,
     address collateralAsset_,
     address borrowAsset_
   ) external returns (
@@ -122,7 +137,9 @@ interface ITetuConverter {
   ///      I.e. AAVE's pool adapter returns (amount of debt + tiny addon ~ 1 cent)
   ///      The addon is required to workaround dust-tokens problem.
   ///      After repaying the remaining amount is transferred back on the balance of the caller strategy.
+  /// @param user_ user whose debts will be returned
   function getDebtAmountStored(
+    address user_,
     address collateralAsset_,
     address borrowAsset_
   ) external view returns (
@@ -131,6 +148,7 @@ interface ITetuConverter {
   );
 
   /// @notice User needs to redeem some collateral amount. Calculate an amount of borrow token that should be repaid
+  /// @param user_ user whose debts will be returned
   /// @param collateralAmountRequired_ Amount of collateral required by the user
   /// @return borrowAssetAmount Borrowed amount that should be repaid to receive back following amount of collateral:
   ///                           amountToReceive = collateralAmountRequired_ - unobtainableCollateralAssetAmount
@@ -138,6 +156,7 @@ interface ITetuConverter {
   ///                                           even if all borrowed amount will be returned.
   ///                                           If this amount is not 0, you ask to get too much collateral.
   function estimateRepay(
+    address user_,
     address collateralAsset_,
     uint collateralAmountRequired_,
     address borrowAsset_

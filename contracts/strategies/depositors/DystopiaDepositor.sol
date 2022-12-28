@@ -143,8 +143,28 @@ contract DystopiaDepositor is DepositorBase, Initializable {
       address(this),
       block.timestamp
     );
-
   }
+
+  /// @dev Quotes output for given lp amount from the pool.
+  /// @notice if requested liquidityAmount >= invested, then should make full exit
+  function _depositorQuoteExit(uint liquidityAmount)
+  override internal virtual view returns (uint[] memory amountsOut) {
+    amountsOut = new uint[](2);
+    if (liquidityAmount == 0) {
+      return amountsOut;
+    }
+
+    uint totalLiquidity = _depositorLiquidity();
+    if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
+
+    (amountsOut[0], amountsOut[1]) = IRouter(depositorRouter).quoteRemoveLiquidity(
+      depositorTokenA,
+      depositorTokenB,
+      depositorStable,
+      liquidityAmount
+    );
+  }
+
 
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual

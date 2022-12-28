@@ -119,6 +119,22 @@ contract MockDepositor is DepositorBase, Initializable {
       amountsOut[i] = liquidityAmount;
     }
   }
+  /// @dev Quotes output for given lp amount from the pool.
+  function _depositorQuoteExit(uint liquidityAmount)
+  override internal virtual view returns (uint[] memory amountsOut) {
+
+    uint depositorLiquidity = _depositorLiquidity();
+    if (liquidityAmount > depositorLiquidity) {
+      liquidityAmount = depositorLiquidity;
+    }
+
+    uint len = _depositorAssets.length;
+    amountsOut = new uint[](len);
+
+    for (uint i = 0; i < len; ++i) {
+      amountsOut[i] = liquidityAmount;
+    }
+  }
 
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual
