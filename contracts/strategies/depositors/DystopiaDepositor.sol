@@ -22,32 +22,32 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   address public depositorPair;
   bool public depositorStable;
 
-  address private depositorGauge;
-  address private depositorTokenA;
-  address private depositorTokenB;
-  bool private depositorSwapTokens;
+  address internal _depositorGauge;
+  address private _depositorTokenA;
+  address private _depositorTokenB;
+  bool private _depositorSwapTokens;
 
   // @notice tokens must be MockTokens
   function __DystopiaDepositor_init(
     address router, address tokenA, address tokenB, bool stable, address voter
   ) internal onlyInitializing {
     depositorRouter = router;
-    depositorTokenA = tokenA;
-    depositorTokenB = tokenB;
+    _depositorTokenA = tokenA;
+    _depositorTokenB = tokenB;
     depositorStable = stable;
     address _depositorPair = IRouter(router).pairFor(tokenA, tokenB, stable);
-    depositorSwapTokens = tokenA == IPair(_depositorPair).token1();
+    _depositorSwapTokens = tokenA == IPair(_depositorPair).token1();
     depositorPair = _depositorPair;
-    depositorGauge = IVoter(voter).gauges(_depositorPair);
-    require(depositorGauge != address(0), 'DD: No Gauge');
+    _depositorGauge = IVoter(voter).gauges(_depositorPair);
+    require(_depositorGauge != address(0), 'DD: No Gauge');
   }
 
   /// @dev Returns pool assets
   function _depositorPoolAssets() override internal virtual view
   returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
-    poolAssets[0] = depositorTokenA;
-    poolAssets[1] = depositorTokenB;
+    poolAssets[0] = _depositorTokenA;
+    poolAssets[1] = _depositorTokenB;
   }
 
   /// @dev Returns pool weights in percents (50/50%)
@@ -63,7 +63,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   function _depositorPoolReserves() override internal virtual view
   returns (uint[] memory reserves) {
     reserves = new uint[](2);
-    if (depositorSwapTokens) {
+    if (_depositorSwapTokens) {
       (reserves[1], reserves[0],) = IPair(depositorPair).getReserves();
     } else {
       (reserves[0], reserves[1],) = IPair(depositorPair).getReserves();
@@ -72,7 +72,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @dev Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return IERC20(depositorGauge).balanceOf(address(this));
+    return IERC20(_depositorGauge).balanceOf(address(this));
   }
 
   /// @dev Deposit given amount to the pool.
@@ -87,8 +87,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
       return (amountsConsumed, 0);
     }
 
-    address tokenA = depositorTokenA;
-    address tokenB = depositorTokenB;
+    address tokenA = _depositorTokenA;
+    address tokenB = _depositorTokenB;
     address router = depositorRouter;
     bool stable = depositorStable;
 
@@ -108,8 +108,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     );
 
     // Stake to the Gauge
-    _approveIfNeeded(depositorPair, type(uint).max / 2, depositorGauge);
-    IGauge(depositorGauge).depositAll(0);
+    _approveIfNeeded(depositorPair, type(uint).max / 2, _depositorGauge);
+    IGauge(_depositorGauge).depositAll(0);
 
   }
 
@@ -126,7 +126,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
 
     // Unstake from the gauge
-    IGauge(depositorGauge).withdraw(liquidityAmount);
+    IGauge(_depositorGauge).withdraw(liquidityAmount);
 
     // Remove liquidity
     address router = depositorRouter;
@@ -134,8 +134,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     _approveIfNeeded(depositorPair, liquidityAmount, router);
 
     (amountsOut[0], amountsOut[1]) = IRouter(router).removeLiquidity(
-      depositorTokenA,
-      depositorTokenB,
+      _depositorTokenA,
+      _depositorTokenB,
       depositorStable,
       liquidityAmount,
       1,
@@ -158,8 +158,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
 
     (amountsOut[0], amountsOut[1]) = IRouter(depositorRouter).quoteRemoveLiquidity(
-      depositorTokenA,
-      depositorTokenB,
+      _depositorTokenA,
+      _depositorTokenB,
       depositorStable,
       liquidityAmount
     );
@@ -169,7 +169,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual
   returns (address[] memory tokens, uint[] memory amounts) {
-    IGauge gauge = IGauge(depositorGauge);
+    IGauge gauge = IGauge(_depositorGauge);
     gauge.claimFees(); // sends fees to bribe
 
     uint len = gauge.rewardTokensLength();

@@ -12,4 +12,8 @@ contract DystopiaDepositorTest is DepositorTestBase, DystopiaDepositor {
   initializer {
     __DystopiaDepositor_init(router, tokenA, tokenB, stable, voter);
   }
+
+  function depositorGauge() external view returns (address) {
+    return _depositorGauge;
+  }
 }

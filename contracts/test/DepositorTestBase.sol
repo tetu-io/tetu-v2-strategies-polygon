@@ -24,6 +24,12 @@ abstract contract DepositorTestBase is DepositorBase {
     return _depositorExit(liquidityAmount);
   }
 
+  /// @dev Quotes output for given lp amount from the pool.
+  function depositorQuoteExit(uint liquidityAmount)
+  external view returns (uint[] memory amountsOut) {
+    return _depositorQuoteExit(liquidityAmount);
+  }
+
   /// @dev If pool supports emergency withdraw need to call it for emergencyExit()
   function depositorEmergencyExit()
   external returns (uint[] memory amountsOut) {
@@ -47,5 +53,27 @@ abstract contract DepositorTestBase is DepositorBase {
   external view returns (uint[] memory) {
     return _claimedRewardAmounts;
   }
+
+  /// @dev Returns depositor's pool shares / lp token amount
+  function depositorLiquidity() external view returns (uint) {
+    return _depositorLiquidity();
+
+  }
+
+  /// @dev Returns pool token reserves
+  function depositorPoolReserves() external view returns (uint[] memory reserves) {
+    return _depositorPoolReserves();
+  }
+
+  /// @dev Returns pool token assets
+  function depositorPoolAssets() external view returns (address[] memory assets) {
+    return _depositorPoolAssets();
+  }
+
+  /// @dev Returns pool token weights
+  function depositorPoolWeights() external view returns (uint[] memory weights, uint total) {
+    return _depositorPoolWeights();
+  }
+
 
 }

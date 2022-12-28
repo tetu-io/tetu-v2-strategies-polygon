@@ -98,10 +98,10 @@ describe("Dystopia Depositor tests", function () {
   describe("deposit", function () {
 
     it("deposit should consume one of tokens", async () => {
-      expect(await depositor._depositorLiquidity()).eq(0);
+      expect(await depositor.depositorLiquidity()).eq(0);
 
       await depositor.depositorEnter([a100000, b100000]);
-      expect(await depositor._depositorLiquidity()).gt(1);
+      expect(await depositor.depositorLiquidity()).gt(1);
 
       const balanceA = await _balanceOf(tokenA.address, depositor.address);
       const balanceB = await _balanceOf(tokenB.address, depositor.address);
@@ -110,14 +110,14 @@ describe("Dystopia Depositor tests", function () {
     });
 
     it("deposit should consume both tokens proportionally", async () => {
-      expect(await depositor._depositorLiquidity()).eq(0);
+      expect(await depositor.depositorLiquidity()).eq(0);
 
-      const reserves = await depositor._depositorPoolReserves();
+      const reserves = await depositor.depositorPoolReserves();
       const amountA = a1000;
       const amountB = reserves[1].mul(amountA).div(reserves[0]);
 
       await depositor.depositorEnter([amountA, amountB]);
-      expect(await depositor._depositorLiquidity()).gt(1);
+      expect(await depositor.depositorLiquidity()).gt(1);
 
       const balanceA = await _balanceOf(tokenA.address, depositor.address);
       const balanceB = await _balanceOf(tokenB.address, depositor.address);
@@ -135,12 +135,12 @@ describe("Dystopia Depositor tests", function () {
   describe("withdraw", function () {
 
     it("withdraw all should return all", async () => {
-      expect(await depositor._depositorLiquidity()).eq(0);
+      expect(await depositor.depositorLiquidity()).eq(0);
 
       await depositor.depositorEnter([a100000, b100000]);
-      expect(await depositor._depositorLiquidity()).gt(1);
+      expect(await depositor.depositorLiquidity()).gt(1);
       await depositor.depositorEmergencyExit();
-      expect(await depositor._depositorLiquidity()).eq(0);
+      expect(await depositor.depositorLiquidity()).eq(0);
 
       const balanceA = await _balanceOf(tokenA.address, depositor.address);
       const balanceB = await _balanceOf(tokenB.address, depositor.address);
@@ -152,14 +152,14 @@ describe("Dystopia Depositor tests", function () {
 
 
     it("withdraw 50% should return 50%", async () => {
-      expect(await depositor._depositorLiquidity()).eq(0);
+      expect(await depositor.depositorLiquidity()).eq(0);
 
-      const reserves = await depositor._depositorPoolReserves();
+      const reserves = await depositor.depositorPoolReserves();
       const amountA = a1000;
       const amountB = reserves[1].mul(amountA).div(reserves[0]);
 
       await depositor.depositorEnter([amountA, amountB]);
-      const liquidity = await depositor._depositorLiquidity();
+      const liquidity = await depositor.depositorLiquidity();
       expect(liquidity).gt(1);
       await depositor.depositorExit(liquidity.div(2));
 
@@ -174,25 +174,54 @@ describe("Dystopia Depositor tests", function () {
 
     });
 
+    it("quoteExit should be exact as exit", async () => {
+      expect(await depositor.depositorLiquidity()).eq(0);
+
+      const reserves = await depositor.depositorPoolReserves();
+      const amountA = a1000;
+      const amountB = reserves[1].mul(amountA).div(reserves[0]);
+
+      await depositor.depositorEnter([amountA, amountB]);
+      const liquidity = await depositor.depositorLiquidity();
+      expect(liquidity).gt(1);
+      const quotes = await depositor.depositorQuoteExit(liquidity.div(2));
+      console.log('quotes', quotes);
+
+      const balanceABefore = await _balanceOf(tokenA.address, depositor.address);
+      const balanceBBefore = await _balanceOf(tokenB.address, depositor.address);
+
+      await depositor.depositorExit(liquidity.div(2));
+
+      const returnedA = (await _balanceOf(tokenA.address, depositor.address)).sub(balanceABefore);
+      console.log('returnedA', returnedA);
+      const returnedB = (await _balanceOf(tokenB.address, depositor.address)).sub(balanceBBefore);
+      console.log('returnedB', returnedB);
+
+
+      expect(returnedA).eq(quotes[0]);
+      expect(returnedB).eq(quotes[1]);
+
+    });
+
   });
 
   describe("views", function () {
 
     it("_depositorPoolAssets", async () => {
-      const assets = await depositor._depositorPoolAssets();
+      const assets = await depositor.depositorPoolAssets();
       expect(assets.length).eq(2);
       expect(assets[0]).eq(_addr(tokenAAddress));
       expect(assets[1]).eq(_addr(tokenBAddress));
     });
 
     it("_depositorLiquidity", async () => {
-      const liq = await depositor._depositorLiquidity();
+      const liq = await depositor.depositorLiquidity();
       const gaugeBalance = await TokenUtils.balanceOf(gauge.address, depositor.address);
       expect(liq).eq(gaugeBalance);
     });
 
     it("_depositorPoolReserves", async () => {
-      const weights = await depositor._depositorPoolReserves();
+      const weights = await depositor.depositorPoolReserves();
       const pair = IPair__factory.connect(await depositor.depositorPair(), signer);
       const reserves = await pair.getReserves();
       const token1 = await pair.token1();
@@ -210,7 +239,7 @@ describe("Dystopia Depositor tests", function () {
     it("_depositorPoolWeights", async () => {
       let weights;
       let totalWeight;
-      [weights, totalWeight] = await depositor._depositorPoolWeights();
+      [weights, totalWeight] = await depositor.depositorPoolWeights();
       expect(weights.length).eq(2);
       expect(weights[0]).eq(1);
       expect(weights[1]).eq(1);
