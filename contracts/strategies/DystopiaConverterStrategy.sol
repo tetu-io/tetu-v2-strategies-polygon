@@ -15,7 +15,6 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
   address constant public _DYSTOPIA_ROUTER = 0xbE75Dd16D029c6B32B7aD57A0FD9C1c20Dd2862e;
   address constant public _DYSTOPIA_VOTER = 0x649BdF58B09A0Cd4Ac848b42c4B5e1390A72A49A;
 
-
   /// @dev Reward Tokens
   address[] internal _rewardTokens;
 
@@ -31,18 +30,11 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
 
     __DystopiaDepositor_init(_DYSTOPIA_ROUTER, tokenA_, tokenB_, stable_, _DYSTOPIA_VOTER);
 
-    address[] memory thresholdTokens;
-    uint[] memory thresholdAmounts;
-
     __ConverterStrategyBase_init(
       controller_,
       splitter_,
-      converter_,
-      thresholdTokens,
-      thresholdAmounts
+      converter_
     );
-
-    compoundRatio = 90_000; // TODO remove, ratio will set up trough platform voter
 
     _rewardTokens = rewardTokens_;
   }

@@ -13,6 +13,7 @@ import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addre
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../ConverterUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
+import { getConverterAddress } from '../../../../scripts/utils/Misc';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -53,7 +54,6 @@ describe.skip('Universal tests', async () => {
   const token2 = PolygonAddresses.DAI_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
-  const tools = Addresses.getTools();
 
   const deployer = async (signer: SignerWithAddress) => {
 
@@ -66,7 +66,7 @@ describe.skip('Universal tests', async () => {
         core.controller,
         splitterAddress,
         [PolygonAddresses.TETU_TOKEN],
-        tools.converter,
+        getConverterAddress(),
         token1,
         token2,
         true

@@ -1,9 +1,9 @@
-import chai from "chai";
-import chaiAsPromised from "chai-as-promised";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import hre, {ethers} from "hardhat";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import chai from 'chai';
+import chaiAsPromised from 'chai-as-promised';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import hre, { ethers } from 'hardhat';
+import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
+import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import {
   MockGauge,
   IERC20__factory,
@@ -19,24 +19,25 @@ import {
   IController,
   StrategySplitterV2__factory,
   DystopiaConverterStrategy__factory,
-  DystopiaConverterStrategy, IStrategyV2,
-} from "../../../../typechain";
-import {Misc} from "../../../../scripts/utils/Misc";
-import {parseUnits} from "ethers/lib/utils";
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {BigNumber} from "ethers";
-import {ConverterUtils} from "../../ConverterUtils";
+  DystopiaConverterStrategy, IStrategyV2, IRouter__factory, IPair__factory, ITetuLiquidator__factory,
+} from '../../../../typechain';
+import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
+import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
+import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
+import { BigNumber } from 'ethers';
+import { ConverterUtils } from '../../ConverterUtils';
+import { MaticAddresses } from '../../../../scripts/MaticAddresses';
 
 
-const {expect} = chai;
+const { expect } = chai;
 chai.use(chaiAsPromised);
 
 const balanceOf = TokenUtils.balanceOf;
 
-describe("Dystopia Converter Strategy tests", function () {
+describe('Dystopia Converter Strategy tests', function() {
   let snapshotBefore: string;
   let snapshot: string;
   let gov: SignerWithAddress;
@@ -61,15 +62,14 @@ describe("Dystopia Converter Strategy tests", function () {
   const bufferRate = 1_000; // n_%
   // const bufferDenominator = 100_000;
 
-  before(async function () {
-    [signer, signer1, signer2] = await ethers.getSigners()
+  before(async function() {
+    [signer, signer1, signer2] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     snapshotBefore = await TimeUtils.snapshot();
 
     const core = Addresses.getCore();
-    const tools = Addresses.getTools();
-    controller =  DeployerUtilsLocal.getController(signer);
+    controller = DeployerUtilsLocal.getController(signer);
     asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
     token1 = asset;
     token2 = IERC20__factory.connect(PolygonAddresses.DAI_TOKEN, signer);
@@ -83,7 +83,7 @@ describe("Dystopia Converter Strategy tests", function () {
     const coreContracts = await DeployerUtilsLocal.getCoreAddressesWrapper(gov);
     gauge = coreContracts.gauge;
 
-    const strategyDeployer = async (_splitterAddress: string) => {
+    const strategyDeployer = async(_splitterAddress: string) => {
       const _strategy = DystopiaConverterStrategy__factory.connect(
         await DeployerUtils.deployProxy(signer, 'DystopiaConverterStrategy'), gov);
 
@@ -91,18 +91,25 @@ describe("Dystopia Converter Strategy tests", function () {
         core.controller,
         _splitterAddress,
         [PolygonAddresses.TETU_TOKEN],
-        tools.converter,
+        getConverterAddress(),
         token1.address,
         token2.address,
-        true
+        true,
       );
 
       return _strategy as unknown as IStrategyV2;
-    }
+    };
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
-      asset.address, vaultName, strategyDeployer, controller, gov,
-      bufferRate, 0, 0, false
+      asset.address,
+      vaultName,
+      strategyDeployer,
+      controller,
+      gov,
+      bufferRate,
+      0,
+      0,
+      false,
     );
     vault = data.vault.connect(signer);
     strategy = data.strategy as unknown as DystopiaConverterStrategy;
@@ -114,9 +121,9 @@ describe("Dystopia Converter Strategy tests", function () {
 
     // GET TOKENS & APPROVE
 
-    await TokenUtils.getToken(asset.address, signer.address, _100_000)
-    await TokenUtils.getToken(asset.address, signer1.address, _100_000)
-    await TokenUtils.getToken(asset.address, signer2.address, _100_000)
+    await TokenUtils.getToken(asset.address, signer.address, _100_000);
+    await TokenUtils.getToken(asset.address, signer1.address, _100_000);
+    await TokenUtils.getToken(asset.address, signer2.address, _100_000);
 
     await asset.connect(signer1).approve(vault.address, Misc.MAX_UINT);
     await asset.connect(signer2).approve(vault.address, Misc.MAX_UINT);
@@ -127,28 +134,31 @@ describe("Dystopia Converter Strategy tests", function () {
 
   });
 
-  after(async function () {
+  after(async function() {
     await TimeUtils.rollback(snapshotBefore);
   });
 
-  beforeEach(async function () {
+  beforeEach(async function() {
     snapshot = await TimeUtils.snapshot();
   });
 
-  afterEach(async function () {
+  afterEach(async function() {
     await TimeUtils.rollback(snapshot);
   });
 
   ////////////////////// TESTS ///////////////////////
 
-  describe("Small Amounts", function () {
-    it("fees check", async () => {
+  describe('Small Amounts', function() {
+    it('fees check', async() => {
       expect(await vault.depositFee()).eq(0);
       expect(await vault.withdrawFee()).eq(0);
     });
 
-    it("deposit / withdraw", async () => {
+    it('deposit / withdraw', async() => {
       console.log('deposit...');
+
+      await strategy.setThreshold(asset.address, 100);
+
       const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
       await vault.deposit('1', signer.address);
 
@@ -175,62 +185,84 @@ describe("Dystopia Converter Strategy tests", function () {
 
   });
 
-  describe("Big Amounts", function () {
+  describe('Big Amounts', function() {
     const DEPOSIT_FEE = 300; // 1_000;
     const WITHDRAW_FEE = 300; // 1_000;
-    const BIG_AMOUNT = parseUnits('30000000', 6);
+    const BIG_AMOUNT = parseUnits('100000', 6);
 
-    beforeEach(async function () {
+    beforeEach(async function() {
       snapshot = await TimeUtils.snapshot();
       await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
       await TokenUtils.getToken(asset.address, signer.address, BIG_AMOUNT);
       expect(await vault.depositFee()).eq(DEPOSIT_FEE);
-      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE); });
+      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE);
+    });
 
-    afterEach(async function () {
+    afterEach(async function() {
       await TimeUtils.rollback(snapshot);
     });
 
-    it("deposit / withdraw", async () => {
+    it('deposit / withdraw multiple', async() => {
       console.log('deposit...');
-      await vault.deposit(BIG_AMOUNT, signer.address);
+      await depositToVaultAndCheck(signer, vault, BIG_AMOUNT, strategy);
       const leftover = await TokenUtils.balanceOf(asset.address, signer.address);
 
-      await vault.connect(signer1).deposit(_100_000, signer1.address);
-      await vault.connect(signer2).deposit(_100_000, signer2.address);
+      await depositToVaultAndCheck(signer1, vault, _100_000, strategy);
+      await depositToVaultAndCheck(signer2, vault, _100_000, strategy);
 
       console.log('withdrawAll...');
 
-      await vault.connect(signer1).withdrawAll();
-      await vault.connect(signer2).withdrawAll();
+      await withdrawAllVaultAndCheck(signer1, vault, strategy);
+      await withdrawAllVaultAndCheck(signer2, vault, strategy);
+      await withdrawAllVaultAndCheck(signer, vault, strategy);
 
-      await vault.withdrawAll();
-
-      const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
+      const balanceAfter = +formatUnits((await TokenUtils.balanceOf(asset.address, signer.address)).sub(leftover), 6);
       const depositedWithFee = BIG_AMOUNT.mul(feeDenominator.sub(DEPOSIT_FEE)).div(feeDenominator);
       const withdrawnWithFee = depositedWithFee.mul(feeDenominator.sub(WITHDRAW_FEE)).div(feeDenominator);
+      const expectedBalance = +formatUnits(withdrawnWithFee, 6);
 
-      expect(balanceAfter).eq(withdrawnWithFee.add(leftover));
+      expect(balanceAfter).approximately(expectedBalance, 0.1);
+    });
+
+    it('deposit / withdraw simple', async() => {
+      // await setLiquidatorPath(strategy);
+
+      // keep something inside for properly check
+      await depositToVaultAndCheck(signer1, vault, BigNumber.from(1), strategy);
+
+      const amount = parseUnits('10000', 6);
+      await depositToVaultAndCheck(signer, vault, amount, strategy);
+      const leftover = await TokenUtils.balanceOf(asset.address, signer.address);
+
+      await withdrawAllVaultAndCheck(signer, vault, strategy);
+
+      const balanceAfter = formatUnits((await TokenUtils.balanceOf(asset.address, signer.address)).sub(leftover), 6);
+      const depositedWithFee = amount.mul(feeDenominator.sub(DEPOSIT_FEE)).div(feeDenominator);
+      const withdrawnWithFee = depositedWithFee.mul(feeDenominator.sub(WITHDRAW_FEE)).div(feeDenominator);
+      const expectedBalance = formatUnits(withdrawnWithFee, 6);
+
+      expect(balanceAfter).eq(expectedBalance);
     });
 
   });
 
-  describe("Profit distribution", function () {
+  describe('Profit distribution', function() {
     const DEPOSIT_FEE = 300; // 1_000;
     const WITHDRAW_FEE = 300; // 1_000;
 
-    beforeEach(async function () {
+    beforeEach(async function() {
       snapshot = await TimeUtils.snapshot();
       await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
       // await TokenUtils.getToken(asset.address, signer.address, BIG_AMOUNT);
       expect(await vault.depositFee()).eq(DEPOSIT_FEE);
-      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE); });
+      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE);
+    });
 
-    afterEach(async function () {
+    afterEach(async function() {
       await TimeUtils.rollback(snapshot);
     });
 
-    it("deposit / withdraw", async () => {
+    it('deposit / withdraw', async() => {
       console.log('deposit...');
 
       const vault1 = await vault.connect(signer1);
@@ -245,34 +277,34 @@ describe("Dystopia Converter Strategy tests", function () {
       await vault2.withdrawAll();
 
 
-
     });
 
   });
 
 
-  describe("Tokens Movement", function () {
+  describe('Tokens Movement', function() {
     const DEPOSIT_FEE = 300;
     const WITHDRAW_FEE = 300;
 
-    beforeEach(async function () {
+    beforeEach(async function() {
       snapshot = await TimeUtils.snapshot();
       console.log('setFees...');
       await vault.connect(gov).setFees(DEPOSIT_FEE, WITHDRAW_FEE);
       expect(await vault.depositFee()).eq(DEPOSIT_FEE);
-      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE);});
+      expect(await vault.withdrawFee()).eq(WITHDRAW_FEE);
+    });
 
-    afterEach(async function () {
+    afterEach(async function() {
       await TimeUtils.rollback(snapshot);
     });
 
-    it("deposit", async () => {
+    it('deposit', async() => {
       console.log('deposit...');
       const deposit = _100_000;
       await vault.deposit(deposit, signer.address);
 
       const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
-      expect((await balanceOf(asset.address, insuranceAddress)).toNumber()).approximately(depositFee.toNumber(), 2);
+      expect((await balanceOf(asset.address, insuranceAddress)).toNumber()).approximately(depositFee.toNumber(), 10);
       // const depositWithFee = deposit.sub(depositFee);
       // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
       // expect(await balanceOf(asset.address, vault.address)).eq(buffer);
@@ -286,427 +318,119 @@ describe("Dystopia Converter Strategy tests", function () {
     });
 
   });
-
-  // TODO remove .skip , update tests
-  describe.skip("Base Vault tests", function () {
-
-    it("decimals test", async () => {
-      expect(await vault.decimals()).eq(6);
-    });
-
-    it("deposit revert on zero test", async () => {
-      await expect(vault.deposit(0, signer.address)).revertedWith('ZERO_SHARES');
-    });
-
-    it("previewDeposit test", async () => {
-      expect(await vault.previewDeposit(100)).eq(100);
-    });
-
-    it("previewMint test", async () => {
-      expect(await vault.previewMint(100)).eq(100);
-    });
-
-    it("previewWithdraw test", async () => {
-      expect(await vault.previewWithdraw(10000)).eq(10000);
-    });
-
-    it("previewRedeem test", async () => {
-      expect(await vault.previewRedeem(100)).eq(100);
-    });
-
-    it("maxDeposit test", async () => {
-      expect(await vault.maxDeposit(signer.address)).eq(Misc.MAX_UINT_MINUS_ONE);
-    });
-
-    it("maxMint test", async () => {
-      expect(await vault.maxMint(signer.address)).eq(Misc.MAX_UINT_MINUS_ONE);
-    });
-
-    it("maxWithdraw test", async () => {
-      expect(await vault.maxWithdraw(signer.address)).eq(0);
-    });
-
-    it("maxRedeem test", async () => {
-      expect(await vault.maxRedeem(signer.address)).eq(0);
-    });
-
-    it("max withdraw revert", async () => {
-      await expect(vault.withdraw(Misc.MAX_UINT, signer.address, signer.address)).revertedWith('MAX')
-    });
-
-    it("withdraw not owner revert", async () => {
-      await expect(vault.withdraw(100, signer.address, signer1.address)).revertedWith('')
-    });
-
-    it("withdraw not owner test", async () => {
-      await vault.deposit(parseUnits('1', 6), signer.address);
-      await vault.approve(signer1.address, parseUnits('1', 6));
-      await vault.connect(signer1).withdraw(parseUnits('0.1', 6), signer1.address, signer.address);
-    });
-
-    it("withdraw not owner with max approve test", async () => {
-      await vault.deposit(parseUnits('1', 6), signer.address);
-      await vault.approve(signer1.address, Misc.MAX_UINT);
-      await vault.connect(signer1).withdraw(parseUnits('0.1', 6), signer1.address, signer.address);
-    });
-
-    it("max redeem revert", async () => {
-      await expect(vault.redeem(Misc.MAX_UINT, signer.address, signer.address)).revertedWith('MAX')
-    });
-
-    it("redeem not owner revert", async () => {
-      await expect(vault.redeem(100, signer.address, signer1.address)).revertedWith('')
-    });
-
-    it("redeem not owner test", async () => {
-      await vault.deposit(parseUnits('1', 6), signer.address);
-      await vault.approve(signer1.address, parseUnits('1', 6));
-      await vault.connect(signer1).redeem(parseUnits('0.1', 6), signer1.address, signer.address);
-    });
-
-    it("redeem not owner with max approve test", async () => {
-      await vault.deposit(parseUnits('1', 6), signer.address);
-      await vault.approve(signer1.address, Misc.MAX_UINT);
-      await vault.connect(signer1).redeem(parseUnits('0.1', 6), signer1.address, signer.address);
-    });
-
-    it("redeem zero revert", async () => {
-      await vault.deposit(parseUnits('1', 6), signer.address);
-      await expect(vault.redeem(0, signer.address, signer.address)).revertedWith('ZERO_ASSETS')
-    });
-
-    it("deposit with fee test", async () => {
-      await vault.connect(gov).setFees(1_000, 1_000);
-
-      const bal1 = await asset.balanceOf(signer.address);
-      await vault.deposit(parseUnits('1', 6), signer1.address);
-      expect(await vault.balanceOf(signer1.address)).eq(990_000);
-      expect(bal1.sub(await asset.balanceOf(signer.address))).eq(parseUnits('1', 6));
-
-      const bal2 = await asset.balanceOf(signer.address);
-      await vault.deposit(parseUnits('1', 6), signer.address);
-      expect(await vault.balanceOf(signer.address)).eq(990_000);
-      expect(bal2.sub(await asset.balanceOf(signer.address))).eq(parseUnits('1', 6));
-
-      const insurance = await vault.insurance();
-      expect(await asset.balanceOf(insurance)).eq(20_000);
-      expect(await vault.sharePrice()).eq(parseUnits('1', 6))
-    });
-
-    it("mint with fee test", async () => {
-      await vault.connect(gov).setFees(1_000, 1_000);
-
-      const bal1 = await asset.balanceOf(signer.address);
-      await vault.mint(990_000, signer1.address);
-      expect(await vault.balanceOf(signer1.address)).eq(990_000);
-      expect(bal1.sub(await asset.balanceOf(signer.address))).eq(parseUnits('1', 6));
-
-      const bal2 = await asset.balanceOf(signer.address);
-      await vault.mint(990_000, signer.address);
-      expect(await vault.balanceOf(signer.address)).eq(990_000);
-      expect(bal2.sub(await asset.balanceOf(signer.address))).eq(parseUnits('1', 6));
-
-      const insurance = await vault.insurance();
-      expect(await asset.balanceOf(insurance)).eq(20_000);
-      expect(await vault.sharePrice()).eq(parseUnits('1', 6))
-    });
-
-    it("withdraw with fee test", async () => {
-      await vault.connect(gov).setFees(1_000, 1_000);
-
-      await vault.deposit(parseUnits('1', 6), signer1.address);
-      await vault.deposit(parseUnits('1', 6), signer.address);
-
-      const shares = await vault.balanceOf(signer.address);
-      expect(shares).eq(990_000);
-
-      const assets = await vault.convertToAssets(shares);
-      const assetsMinusTax = assets.mul(99).div(100);
-      expect(assetsMinusTax).eq(980100);
-
-      const bal1 = await asset.balanceOf(signer.address);
-      const shares1 = await vault.balanceOf(signer.address);
-      await vault.withdraw(assetsMinusTax, signer.address, signer.address);
-      expect(shares1.sub(await vault.balanceOf(signer.address))).eq(shares);
-      expect((await asset.balanceOf(signer.address)).sub(bal1)).eq(assetsMinusTax);
-
-      const insurance = await vault.insurance();
-      expect(await asset.balanceOf(insurance)).eq(29_900);
-      expect(await vault.sharePrice()).eq(parseUnits('1', 6))
-    });
-
-    it("redeem with fee test", async () => {
-      await vault.connect(gov).setFees(1_000, 1_000);
-
-      await vault.deposit(parseUnits('1', 6), signer1.address);
-      await vault.deposit(parseUnits('1', 6), signer.address);
-
-      const shares = await vault.balanceOf(signer.address);
-      expect(shares).eq(990_000);
-
-      const assets = await vault.convertToAssets(shares);
-      const assetsMinusTax = assets.mul(99).div(100);
-      expect(assetsMinusTax).eq(980100);
-
-      const bal1 = await asset.balanceOf(signer.address);
-      const shares1 = await vault.balanceOf(signer.address);
-      await vault.redeem(shares, signer.address, signer.address);
-      expect(shares1.sub(await vault.balanceOf(signer.address))).eq(shares);
-      expect((await asset.balanceOf(signer.address)).sub(bal1)).eq(assetsMinusTax);
-
-      const insurance = await vault.insurance();
-      expect(await asset.balanceOf(insurance)).eq(29_900);
-      expect(await vault.sharePrice()).eq(parseUnits('1', 6))
-    });
-
-    it("init wrong buffer revert", async () => {
-      const logic = await DeployerUtils.deployContract(signer, 'TetuVaultV2') as TetuVaultV2;
-      const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
-      await proxy.initProxy(logic.address);
-      const v = TetuVaultV2__factory.connect(proxy.address, signer);
-      await expect(v.init(
-        controller.address,
-        asset.address,
-        '1',
-        '2',
-        gauge.address,
-        10000000,
-      )).revertedWith("!BUFFER");
-    });
-
-    it("init wrong gauge revert", async () => {
-      const logic = await DeployerUtils.deployContract(signer, 'TetuVaultV2') as TetuVaultV2;
-      const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
-      await proxy.initProxy(logic.address);
-      const v = TetuVaultV2__factory.connect(proxy.address, signer);
-      await expect(v.init(
-        controller.address,
-        asset.address,
-        '1',
-        '2',
-        Misc.ZERO_ADDRESS,
-        10,
-      )).revertedWith("!GAUGE");
-    });
-
-    it("init wrong gauge controller revert", async () => {
-      const logic = await DeployerUtils.deployContract(signer, 'TetuVaultV2') as TetuVaultV2;
-      const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
-      await proxy.initProxy(logic.address);
-      const v = TetuVaultV2__factory.connect(proxy.address, signer);
-      const c = await DeployerUtils.deployMockController(signer);
-      const g = await DeployerUtils.deployContract(signer, 'MockGauge', c.address) as MockGauge;
-      await expect(v.init(
-        controller.address,
-        asset.address,
-        '1',
-        '2',
-        g.address,
-        10,
-      )).revertedWith("!GAUGE_CONTROLLER");
-    });
-
-    it("set too high buffer revert", async () => {
-      await expect(vault.connect(gov).setBuffer(1000_000)).revertedWith("BUFFER");
-    });
-
-    it("set buffer from 3d party revert", async () => {
-      await expect(vault.connect(signer2).setBuffer(10)).revertedWith("DENIED");
-    });
-
-    it("set buffer test", async () => {
-      await vault.connect(gov).setBuffer(1_000);
-      await vault.deposit(parseUnits('1', 6), signer.address)
-      expect(await asset.balanceOf(vault.address)).eq(10_000);
-      await vault.deposit(100, signer.address)
-      expect(await asset.balanceOf(vault.address)).eq(10001);
-    });
-
-    it("set max withdraw from 3d party revert", async () => {
-      await expect(vault.connect(signer2).setMaxWithdraw(1, 1)).revertedWith("DENIED");
-    });
-
-    it("set max deposit from 3d party revert", async () => {
-      await expect(vault.connect(signer2).setMaxDeposit(1, 1)).revertedWith("DENIED");
-    });
-
-    it("set max deposit test", async () => {
-      await vault.connect(gov).setMaxDeposit(10, 10);
-      await expect(vault.deposit(11, signer.address)).revertedWith("MAX");
-      await expect(vault.mint(11, signer.address)).revertedWith("MAX");
-    });
-
-    it("set buffer test", async () => {
-      await vault.connect(gov).setMaxWithdraw(10, 10);
-      await vault.deposit(parseUnits('1', 6), signer.address)
-      await expect(vault.withdraw(11, signer.address, signer.address)).revertedWith("MAX");
-      await expect(vault.redeem(11, signer.address, signer.address)).revertedWith("MAX");
-      await vault.withdraw(10, signer.address, signer.address)
-      await vault.redeem(10, signer.address, signer.address)
-    });
-
-    it("set fees from 3d party revert", async () => {
-      await expect(vault.connect(signer2).setFees(1, 1)).revertedWith("DENIED");
-    });
-
-    it("set fees too high revert", async () => {
-      await expect(vault.connect(gov).setFees(10_000, 1)).revertedWith("TOO_HIGH");
-    });
-
-    it("set DoHardWorkOnInvest from 3d party revert", async () => {
-      await expect(vault.connect(signer2).setDoHardWorkOnInvest(false)).revertedWith("DENIED");
-    });
-
-    it("insurance transfer revert", async () => {
-      const insurance = VaultInsurance__factory.connect(await vault.insurance(), signer);
-      await expect(insurance.init(Misc.ZERO_ADDRESS, Misc.ZERO_ADDRESS)).revertedWith("INITED");
-    });
-
-    it("insurance transfer revert", async () => {
-      const insurance = VaultInsurance__factory.connect(await vault.insurance(), signer);
-      await expect(insurance.transferToVault(1)).revertedWith("!VAULT");
-    });
-
-    it("set DoHardWorkOnInvest test", async () => {
-      await vault.connect(gov).setDoHardWorkOnInvest(false);
-      expect(await vault.doHardWorkOnInvest()).eq(false);
-      await vault.deposit(parseUnits('1', 6), signer.address)
-    });
-
-    /*  it("check buffer complex test", async () => {
-        await vault.connect(gov).setBuffer(100_000);
-        await vault.deposit(parseUnits('1', 6), signer.address)
-        expect(await usdc.balanceOf(vault.address)).eq(1_000_000);
-        await vault.connect(gov).setBuffer(10_000);
-        await vault.deposit(parseUnits('1', 6), signer.address)
-        expect(await usdc.balanceOf(vault.address)).eq(200_000);
-        await vault.connect(gov).setBuffer(100_000);
-        await vault.deposit(parseUnits('1', 6), signer.address)
-        expect(await usdc.balanceOf(vault.address)).eq(1200_000);
-        await vault.withdraw(parseUnits('1', 6), signer.address, signer.address)
-        expect(await usdc.balanceOf(vault.address)).eq(200_000);
-        await vault.withdraw(parseUnits('2', 6), signer.address, signer.address)
-        expect(await usdc.balanceOf(vault.address)).eq(0);
-      });*/
-
-    it("not invest on deposit", async () => {
-      await vault.connect(gov).setBuffer(10_000);
-      await vault.deposit(parseUnits('1', 6), signer.address)
-      expect(await asset.balanceOf(vault.address)).eq(100_000);
-      await vault.connect(gov).setBuffer(20_000);
-      await vault.deposit(parseUnits('0.01', 6), signer.address)
-      expect(await asset.balanceOf(vault.address)).eq(110_000);
-    });
-
-    /*  it("withdraw when splitter have not enough balance", async () => {
-        await vault.connect(gov).setBuffer(10_000);
-        const bal = await usdc.balanceOf(signer.address);
-        await vault.deposit(parseUnits('1', 6), signer.address)
-        expect(await usdc.balanceOf(vault.address)).eq(100_000);
-        // await splitter.connect(signer2).lost(parseUnits('0.1', 6))
-        await vault.withdrawAll()
-        expect(await usdc.balanceOf(vault.address)).eq(0);
-        const balAfter = await usdc.balanceOf(signer.address);
-        expect(bal.sub(balAfter)).eq(parseUnits('0.1', 6));
-      });*/
-
-    /*  it("withdraw with slippage should be fair for all users", async () => {
-        await vault.connect(gov).setBuffer(0);
-        const bal = await usdc.balanceOf(signer.address);
-        const bal1 = await usdc.balanceOf(signer2.address);
-        await vault.deposit(parseUnits('1', 6), signer.address)
-        await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address)
-
-        await splitter.setSlippage(10_0);
-        await expect(vault.withdrawAll()).revertedWith('SLIPPAGE');
-
-        await vault.connect(gov).setFees(0, 1_000);
-        await splitter.setSlippage(1_0);
-        await vault.withdrawAll();
-
-        const balAfter = await usdc.balanceOf(signer.address);
-        expect(bal.sub(balAfter)).eq(parseUnits('0.01', 6));
-
-        await splitter.setSlippage(1);
-        await vault.connect(signer2).withdrawAll()
-        const balAfter1 = await usdc.balanceOf(signer2.address);
-        expect(bal1.sub(balAfter1)).eq(parseUnits('0.01', 6));
-      });*/
-
-    it("splitter assets test", async () => {
-      expect(await vault.splitterAssets()).eq(0);
-    });
-
-    /*  it("cover loss test", async () => {
-        const bal = await usdc.balanceOf(signer.address);
-        await vault.connect(gov).setFees(1_000, 0);
-        await vault.deposit(parseUnits('1', 6), signer.address);
-        await splitter.coverLoss(10_000);
-        await vault.withdrawAll();
-        const balAfter = await usdc.balanceOf(signer.address);
-        expect(bal.sub(balAfter)).eq(0);
-      });*/
-
-    it("cover loss revert", async () => {
-      await expect(vault.coverLoss(1)).revertedWith('!SPLITTER');
-    });
-
-    describe("splitter/insurance setup tests", function () {
-      let v: TetuVaultV2;
-      before(async function () {
-        const logic = await DeployerUtils.deployContract(signer, 'TetuVaultV2') as TetuVaultV2;
-        const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
-        await proxy.initProxy(logic.address);
-        v = TetuVaultV2__factory.connect(proxy.address, signer);
-        await v.init(
-          controller.address,
-          asset.address,
-          '1',
-          '2',
-          gauge.address,
-          10,
-        )
-      });
-
-      it("init insurance already inited revert", async () => {
-        await expect(vault.initInsurance(Misc.ZERO_ADDRESS)).revertedWith('INITED');
-      });
-
-      it("init insurance wrong vault revert", async () => {
-        const insurance = await DeployerUtils.deployContract(signer, 'VaultInsurance') as VaultInsurance;
-        await insurance.init(vault.address, asset.address);
-        await expect(v.initInsurance(insurance.address)).revertedWith('!VAULT');
-      });
-
-      it("init insurance wrong asset revert", async () => {
-        const insurance = await DeployerUtils.deployContract(signer, 'VaultInsurance') as VaultInsurance;
-        await insurance.init(v.address, tetu.address);
-        await expect(v.initInsurance(insurance.address)).revertedWith('!ASSET');
-      });
-
-      it("set splitter from 3d party revert", async () => {
-        await expect(vault.connect(signer2).setSplitter(Misc.ZERO_ADDRESS)).revertedWith("DENIED");
-      });
-
-      it("wrong asset revert", async () => {
-        const s = await DeployerUtils.deployContract(signer, 'MockSplitter') as MockSplitter;
-        await s.init(controller.address, tetu.address, vault.address);
-        await expect(v.setSplitter(s.address)).revertedWith("WRONG_UNDERLYING");
-      });
-
-      it("wrong vault revert", async () => {
-        const s = await DeployerUtils.deployContract(signer, 'MockSplitter') as MockSplitter;
-        await s.init(controller.address, asset.address, vault.address);
-        await expect(v.setSplitter(s.address)).revertedWith("WRONG_VAULT");
-      });
-
-      it("wrong controller revert", async () => {
-        const cc = await DeployerUtils.deployMockController(signer);
-        const s = await DeployerUtils.deployContract(signer, 'MockSplitter') as MockSplitter;
-        await s.init(cc.address, asset.address, v.address);
-        await expect(v.setSplitter(s.address)).revertedWith("WRONG_CONTROLLER");
-      });
-    });
-  });
-
 });
+
+
+async function depositToVaultAndCheck(
+  signer: SignerWithAddress,
+  vault: TetuVaultV2,
+  amount: BigNumber,
+  strategy: DystopiaConverterStrategy,
+  movePriceBefore = false,
+) {
+
+  const pairAdr = await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer)
+    .pairFor(PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, true);
+  const pair = IPair__factory.connect(pairAdr, signer);
+
+  const daiOutBefore = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+  if (movePriceBefore) {
+    await swap(signer, PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, parseUnits('10000', 6));
+  }
+
+  const sharePriceBefore = await vault.sharePrice();
+
+  await vault.connect(signer).deposit(amount, signer.address);
+
+  const sharePriceAfter = await vault.sharePrice();
+  const daiOutAfter = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+  console.log(`>>> /// DEPOSIT sharePrice before ${formatUnits(
+    sharePriceBefore,
+    6,
+  )} after ${formatUnits(sharePriceAfter, 6)}`);
+
+  console.log(`>>> /// DEPOSIT price before ${daiOutBefore} after ${daiOutAfter} diff: ${((daiOutAfter - daiOutBefore) /
+    daiOutAfter).toFixed(6)}%`);
+}
+
+async function withdrawAllVaultAndCheck(
+  signer: SignerWithAddress,
+  vault: TetuVaultV2,
+  strategy: DystopiaConverterStrategy,
+  movePriceBefore = false,
+) {
+
+  const pairAdr = await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer)
+    .pairFor(PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, true);
+  const pair = IPair__factory.connect(pairAdr, signer);
+
+  const daiOutBefore = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+  if (movePriceBefore) {
+    await swap(signer, PolygonAddresses.DAI_TOKEN, PolygonAddresses.USDC_TOKEN, parseUnits('1000'));
+  }
+
+
+  const sharePriceBefore = await vault.sharePrice();
+
+  await vault.connect(signer).withdrawAll();
+
+  const sharePriceAfter = await vault.sharePrice();
+  const totalAssets = formatUnits(await vault.totalAssets(), 6);
+  const totalSupply = formatUnits(await vault.totalSupply(), 6);
+  const daiOutAfter = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+
+  console.log(`>>> /// WITHDRAW sharePrice before ${formatUnits(sharePriceBefore, 6)} after ${formatUnits(
+    sharePriceAfter,
+    6,
+  )}`);
+  console.log(`>>> /// WITHDRAW price before ${daiOutBefore} after ${daiOutAfter} diff: ${((daiOutAfter -
+    daiOutBefore) / daiOutAfter).toFixed(6)}%`);
+  console.log(`>>> /// WITHDRAW totalAssets ${totalAssets} totalSupply ${totalSupply}`);
+}
+
+async function swap(signer: SignerWithAddress, tokenIn: string, tokenOut: string, amount: BigNumber) {
+  await TokenUtils.getToken(tokenIn, signer.address, amount.mul(2));
+  await IERC20__factory.connect(tokenIn, signer)
+    .approve(MaticAddresses.DYSTOPIA_ROUTER, Misc.MAX_UINT);
+  await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer).swapExactTokensForTokensSimple(
+    amount,
+    0,
+    tokenIn,
+    tokenOut,
+    true,
+    signer.address,
+    (Date.now() / 1000 + 100000).toFixed(0),
+  );
+
+  // await IERC20__factory.connect(tokenIn, signer)
+  //   .approve(MaticAddresses.TETU_LIQUIDATOR, Misc.MAX_UINT);
+  // await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).liquidate(tokenIn, tokenOut, amount, 100_000)
+}
+
+async function setLiquidatorPath(strategy: DystopiaConverterStrategy) {
+  const signer = await Misc.impersonate('0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94');
+  const DYSTOPIA_SWAPPER = '0x867F88209074f4B7300e7593Cd50C05B2c02Ad01';
+  const pair = await strategy.depositorPair();
+
+  await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).addLargestPools([
+    {
+      pool: pair,
+      swapper: DYSTOPIA_SWAPPER,
+      tokenIn: MaticAddresses.DAI_TOKEN,
+      tokenOut: MaticAddresses.USDC_TOKEN,
+    },
+  ], true);
+
+  await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).addLargestPools([
+    {
+      pool: pair,
+      swapper: DYSTOPIA_SWAPPER,
+      tokenIn: MaticAddresses.USDC_TOKEN,
+      tokenOut: MaticAddresses.DAI_TOKEN,
+    },
+  ], true);
+}

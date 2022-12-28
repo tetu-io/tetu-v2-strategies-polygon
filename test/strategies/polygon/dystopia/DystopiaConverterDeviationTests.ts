@@ -15,7 +15,7 @@ import {
   DystopiaConverterStrategy__factory,
   DystopiaConverterStrategy, IStrategyV2, IPair, DystopiaDepositor, IPair__factory, IRouter__factory, IRouter,
 } from "../../../../typechain";
-import {Misc} from "../../../../scripts/utils/Misc";
+import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
 import {parseUnits} from "ethers/lib/utils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
@@ -134,7 +134,6 @@ describe("Dystopia Converter Strategy tests", function () {
     snapshotBefore = await TimeUtils.snapshot();
 
     const core = Addresses.getCore();
-    const tools = Addresses.getTools();
     controller =  DeployerUtilsLocal.getController(signer);
     asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
     token1 = asset;
@@ -161,7 +160,7 @@ describe("Dystopia Converter Strategy tests", function () {
         core.controller,
         _splitterAddress,
         [PolygonAddresses.TETU_TOKEN],
-        tools.converter,
+        getConverterAddress(),
         token1.address,
         token2.address,
         true
@@ -258,7 +257,7 @@ describe("Dystopia Converter Strategy tests", function () {
       const amount = parseUnits('100', 6);
       for (let i = 0; i < 25; i++) {
         await trade(token1.address, amount, token2.address);
-        await strategy._updateInvestedAssets();
+        // await strategy._updateInvestedAssets();
         const deviation = await getDeviation();
         console.log('deviation', deviation);
         d.push(deviation);

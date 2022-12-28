@@ -11,6 +11,8 @@ import "../../third_party/dystopia/IBribe.sol";
 import "../../tools/TokenAmountsLib.sol";
 import "./DepositorBase.sol";
 
+import "hardhat/console.sol";
+
 /// @title Dystopia Depositor for ConverterStrategies
 /// @author bogdoslav
 contract DystopiaDepositor is DepositorBase, Initializable {
@@ -81,6 +83,10 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
     uint amount0 = amountsDesired_[0];
     uint amount1 = amountsDesired_[1];
+
+    console.log('/// !!! DEPOSITOR deposit amount0', amount0);
+    console.log('/// !!! DEPOSITOR deposit amount1', amount1);
+
     amountsConsumed = new uint[](2);
 
     if (amount0 == 0 || amount1 == 0) {
@@ -143,6 +149,9 @@ contract DystopiaDepositor is DepositorBase, Initializable {
       address(this),
       block.timestamp
     );
+
+    console.log('/// !!! DEPOSITOR withdraw amountsOut[0]', amountsOut[0]);
+    console.log('/// !!! DEPOSITOR withdraw amountsOut[1]', amountsOut[1]);
 
   }
 

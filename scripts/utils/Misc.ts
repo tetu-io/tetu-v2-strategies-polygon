@@ -5,6 +5,7 @@ import logSettings from "../../log_settings";
 import {DeployerUtils} from "./DeployerUtils";
 import {DeployerUtilsLocal} from "./DeployerUtilsLocal";
 import {Multicall} from "../../typechain";
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 
 const log: Logger = new Logger(logSettings);
 
@@ -107,4 +108,11 @@ export class Misc {
     }
   }
 
+}
+
+
+export function getConverterAddress() {
+  const tools = Addresses.getTools();
+  // return tools.converter;
+  return '0xB855177E9A62BEFf1A0d852c34f1c1343264a078';
 }
