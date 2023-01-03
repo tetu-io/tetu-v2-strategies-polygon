@@ -294,7 +294,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Claim all possible rewards.
   function _claim() override internal virtual {
-    console.log('_claim...');
+    // TODO Enable claim. Now it reverted for some reason
+    console.log('_claim disabled...');
+    return;
 
     // Rewards from the Depositor
     address[] memory tokens1;
@@ -377,7 +379,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @dev Returns invested asset amount
-  function _getInvestedAssets() internal returns (uint) {
+  function _getInvestedAssets() public returns (uint) {
     uint startGas = gasleft();
     try ConverterStrategyBase(address(this)).getInvestedAssetsReverted()
     {} catch (bytes memory reason) {
@@ -390,7 +392,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Updates cached _investedAssets to actual value
   /// @notice Should be called after deposit / withdraw / claim
-  function _updateInvestedAssets() public { // TODO !!! change to private
+  function _updateInvestedAssets() private {
     _investedAssets = _getInvestedAssets();
     console.log('_updateInvestedAssets _investedAssets', _investedAssets);
   }
@@ -414,7 +416,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   // *************************************************************
 
   /// @dev Returns invested asset amount under control
-  function _calcInvestedAssets() internal returns (uint estimatedAssets) {
+  function _calcInvestedAssets() public returns (uint estimatedAssets) {
     uint[] memory amountsOut = _depositorQuoteExit(_depositorLiquidity());
     address[] memory tokens = _depositorPoolAssets();
 
@@ -489,7 +491,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (
       address converter,
       uint maxTargetAmount,
-      /*int aprForPeriod36*/
+      /*int apr18*/
     ) = _tetuConverter.findBorrowStrategy(
       collateralAsset,
       collateralAmount,

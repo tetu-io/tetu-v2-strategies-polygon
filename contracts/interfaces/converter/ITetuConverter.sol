@@ -173,5 +173,8 @@ interface ITetuConverter {
     uint[] memory amountsOut
   );
 
+  function controller() external view returns (address);
+
+
   //TODO: salvage
 }

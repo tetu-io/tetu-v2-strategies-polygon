@@ -3,7 +3,7 @@
 pragma solidity 0.8.17;
 
 /// @notice Keep and provide addresses of all application contracts
-interface IController {
+interface IConverterController {
   function governance() external view returns (address);
 
   /// @notice min allowed health factor with decimals 2
