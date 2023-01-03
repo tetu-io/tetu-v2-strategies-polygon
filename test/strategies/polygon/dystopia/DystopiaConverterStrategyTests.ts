@@ -130,7 +130,7 @@ describe('Dystopia Converter Strategy tests', function() {
     await asset.approve(vault.address, Misc.MAX_UINT);
 
     // Disable DForce at TetuConverter
-    await ConverterUtils.disableDForce(asset.address, token2.address, signer);
+    // await ConverterUtils.disableDForce(asset.address, token2.address, signer);
 
   });
 
@@ -147,6 +147,19 @@ describe('Dystopia Converter Strategy tests', function() {
   });
 
   ////////////////////// TESTS ///////////////////////
+  describe("Invested Assets Calculation", function () {
+    it("calc must be same as got by revert", async () => {
+      await vault.deposit(_1, signer.address);
+      const assetCalculated = await strategy.callStatic._calcInvestedAssets();
+      console.log('assetCalculated', assetCalculated.toString());
+
+      const assetsGet = await strategy.callStatic._getInvestedAssets();
+      console.log('assetsGet      ', assetsGet.toString());
+
+      expect(assetCalculated).eq(assetsGet);
+
+    });
+  });
 
   describe('Small Amounts', function() {
     it('fees check', async() => {
@@ -262,6 +275,7 @@ describe('Dystopia Converter Strategy tests', function() {
       await TimeUtils.rollback(snapshot);
     });
 
+<<<<<<< HEAD
     it('deposit / withdraw', async() => {
       console.log('deposit...');
 
@@ -276,6 +290,10 @@ describe('Dystopia Converter Strategy tests', function() {
       await vault1.withdrawAll();
       await vault2.withdrawAll();
 
+=======
+    it("Profit distribution", async () => {
+      // TODO
+>>>>>>> slava
 
     });
 
@@ -298,8 +316,13 @@ describe('Dystopia Converter Strategy tests', function() {
       await TimeUtils.rollback(snapshot);
     });
 
+<<<<<<< HEAD
     it('deposit', async() => {
       console.log('deposit...');
+=======
+    it("deposit", async () => {
+      /*console.log('deposit...');
+>>>>>>> slava
       const deposit = _100_000;
       await vault.deposit(deposit, signer.address);
 
@@ -314,10 +337,15 @@ describe('Dystopia Converter Strategy tests', function() {
       console.log('withdrawAll...');
       hre.tracer.enabled = true;
       await vault.withdrawAll();
-
+*/
     });
 
   });
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> slava
 });
 
 

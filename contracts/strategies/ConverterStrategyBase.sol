@@ -30,6 +30,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
 
+  uint private constant _ON_TOP_DIVIDER = 100; // 1/100 (1%)
+
   // *************************************************************
   //                        VARIABLES
   //                Keep names and ordering!
@@ -247,7 +249,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Claim all possible rewards.
   function _claim() override internal virtual {
-    console.log('_claim...');
+    // TODO Enable claim. Now it reverted for some reason
+    console.log('_claim disabled...');
+    return;
 
     // Rewards from the Depositor
     address[] memory tokens1;
@@ -316,8 +320,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @dev Function to calculate amount we will receive when we withdraw all from pool
   ///      Return amountOut in revert message
-  function getInvestedAssetsReverted() public {
-    // todo change to converter quoteRepay
+  function getInvestedAssetsReverted() external {
     uint assetsBefore = _balance(asset);
     _withdrawFromPoolUniversal(type(uint).max, true, false);
     uint assetsAfter = _balance(asset);
@@ -332,7 +335,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @dev Returns invested asset amount
-  function _getInvestedAssets() internal returns (uint) {
+  function _getInvestedAssets() public returns (uint) {
     uint startGas = gasleft();
     try ConverterStrategyBase(address(this)).getInvestedAssetsReverted()
     {} catch (bytes memory reason) {
@@ -366,6 +369,26 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
     return abi.decode(reason, (uint256));
   }
+
+  // *************************************************************
+
+  /// @dev Returns invested asset amount under control
+  function _calcInvestedAssets() public returns (uint estimatedAssets) {
+    uint[] memory amountsOut = _depositorQuoteExit(_depositorLiquidity());
+    address[] memory tokens = _depositorPoolAssets();
+
+    address _asset = asset;
+    estimatedAssets = 0;
+
+    uint len = tokens.length;
+    for (uint i = 0; i < len; ++i) {
+      address borrowedToken = tokens[i];
+      estimatedAssets += _asset == borrowedToken
+        ? amountsOut[i]
+        : tetuConverter.quoteRepay(address(this), _asset, borrowedToken, _balance(borrowedToken) + amountsOut[i]);
+    }
+  }
+
 
   // *************************************************************
   //               OVERRIDES ITetuConverterCallback
@@ -424,9 +447,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     ITetuConverter _tetuConverter = tetuConverter;
     _approveIfNeeded(collateralAsset, collateralAmount, address(_tetuConverter));
     (
-    address converter,
-    uint maxTargetAmount,
-    /*int aprForPeriod36*/
+      address converter,
+      uint maxTargetAmount,
+      /*int apr18*/
     ) = _tetuConverter.findBorrowStrategy(
       collateralAsset,
       collateralAmount,
@@ -447,7 +470,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log('>>> BORROW borrowedAmount', borrowedAmount / 1e18);
   }
 
-  function _estimateRepay(
+/*  function _estimateRepay(
+    address user_,
     address collateralAsset_,
     uint collateralAmountRequired_,
     address borrowAsset_
@@ -455,14 +479,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint borrowAssetAmount,
     uint unobtainableCollateralAssetAmount
   ){
-    return tetuConverter.estimateRepay(collateralAsset_, collateralAmountRequired_, borrowAsset_);
-  }
+    return tetuConverter.estimateRepay(user_, collateralAsset_, collateralAmountRequired_, borrowAsset_);
+  }*/
 
   function _closePosition(address collateralAsset, address borrowAsset, uint amountToRepay)
   internal returns (uint returnedAssetAmount) {
     ITetuConverter _tetuConverter = tetuConverter;
 
-    (uint needToRepay,) = _tetuConverter.getDebtAmountCurrent(collateralAsset, borrowAsset);
+    (uint needToRepay,) = _tetuConverter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset);
     uint leftover = amountToRepay > needToRepay ? amountToRepay - needToRepay : 0;
 
     console.log('CLOSE POSITION initial amountToRepay', amountToRepay);
@@ -473,14 +497,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     IERC20(borrowAsset).safeTransfer(address(_tetuConverter), amountToRepay);
     uint returnedBorrowAmountOut;
-    (returnedAssetAmount, returnedBorrowAmountOut) = _tetuConverter.repay(
-      collateralAsset, borrowAsset, amountToRepay, address(this)
-    );
+    (returnedAssetAmount,
+      returnedBorrowAmountOut,
+      /*uint swappedLeftoverCollateralOut*/,
+      /*uint swappedLeftoverBorrowOut*/
+    ) = _tetuConverter.repay(collateralAsset, borrowAsset, amountToRepay, address(this));
 
     console.log('position closed: returnedAssetAmount:', returnedAssetAmount);
     console.log('position closed: returnedBorrowAmountOut:', returnedBorrowAmountOut);
     console.log('>>> REPAY amountToRepay', amountToRepay / 1e18);
-
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
 
     if (leftover != 0) {

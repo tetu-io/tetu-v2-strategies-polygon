@@ -15,7 +15,7 @@ import {
   DystopiaConverterStrategy__factory,
   DystopiaConverterStrategy, IStrategyV2, IPair, DystopiaDepositor, IPair__factory, IRouter__factory, IRouter,
 } from "../../../../typechain";
-import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
+import {Misc} from "../../../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
@@ -57,6 +57,8 @@ describe("Dystopia Converter Strategy tests", function () {
   let _1: BigNumber;
   let _1T: BigNumber;
   let _100_000: BigNumber;
+  let _1_000_000: BigNumber;
+  let _1_000_000T: BigNumber;
   let _10_000_000: BigNumber;
   let _10_000_000T: BigNumber;
   let feeDenominator: BigNumber;
@@ -140,6 +142,7 @@ describe("Dystopia Converter Strategy tests", function () {
     snapshotBefore = await TimeUtils.snapshot();
 
     const core = Addresses.getCore();
+    const tools = Addresses.getTools();
     controller =  DeployerUtilsLocal.getController(signer);
     asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
     vaultToken1 = asset;
@@ -151,6 +154,8 @@ describe("Dystopia Converter Strategy tests", function () {
     _1 = parseUnits('1', assetDecimals);
     _1T = parseUnits('1', token2Decimals);
     _100_000 = parseUnits('100000', assetDecimals);
+    _1_000_000 = parseUnits('1000000', assetDecimals);
+    _1_000_000T = parseUnits('1000000', token2Decimals);
     _10_000_000 = parseUnits('10000000', assetDecimals);
     _10_000_000T = parseUnits('10000000', token2Decimals);
 
@@ -167,15 +172,9 @@ describe("Dystopia Converter Strategy tests", function () {
         core.controller,
         _splitterAddress,
         [PolygonAddresses.TETU_TOKEN],
-<<<<<<< HEAD
-        getConverterAddress(),
-        token1.address,
-        token2.address,
-=======
         tools.converter,
         vaultToken1.address,
         vaultToken2.address,
->>>>>>> slava
         true
       );
 
@@ -204,9 +203,9 @@ describe("Dystopia Converter Strategy tests", function () {
     // GET TOKENS & APPROVE
 
     await TokenUtils.getToken(asset.address, signer.address, _100_000)
-    await TokenUtils.getToken(asset.address, signer1.address, _100_000)
-    await TokenUtils.getToken(asset.address, signer2.address, _10_000_000)
-    await TokenUtils.getToken(vaultToken2.address, signer2.address, _10_000_000T)
+    await TokenUtils.getToken(asset.address, signer1.address, _1_000_000)
+    // await TokenUtils.getToken(vaultToken1.address, signer2.address, _10_000_000)
+    await TokenUtils.getToken(vaultToken2.address, signer2.address, _1_000_000T)
 
     await asset.connect(signer1).approve(vault.address, Misc.MAX_UINT);
     // await asset.connect(signer2).approve(vault.address, Misc.MAX_UINT);
@@ -248,7 +247,7 @@ describe("Dystopia Converter Strategy tests", function () {
 
   ////////////////////// TESTS ///////////////////////
 
-  describe("Total Assets Deviation", function () {
+  describe("Converter Strategy Hack Try", function () {
 
     beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
@@ -264,38 +263,38 @@ describe("Dystopia Converter Strategy tests", function () {
         amountIn, 1, tokenIn, tokenOut, stable, signer2.address, constants.MaxUint256);
     }
 
-    // tslint:disable-next-line:no-any
 
-
-    it("deviation cycle asset price down", async () => {
-      const d = [];
-      const amount = parseUnits('1000', assetDecimals);
-      for (let i = 0; i < 25; i++) {
-<<<<<<< HEAD
-        await trade(token1.address, amount, token2.address);
-        // await strategy._updateInvestedAssets();
-=======
-        await trade(vaultToken1.address, amount, vaultToken2.address);
-        await strategy._updateInvestedAssets();
->>>>>>> slava
-        const deviation = await getDeviation();
-        console.log('deviation', deviation);
-        d.push(deviation);
-        await saveToFile('tmp/1-down_step-1000-res.csv', d);
-      }
-    });
-
-    it("deviation cycle asset price up", async () => {
+    it("hack try", async () => {
       const d = [];
       const amount = parseUnits('1000', token2Decimals);
-      for (let i = 0; i < 25; i++) {
+      // If trade amount too large, Converter fails to swap excess on repay, when updates invested assets
+      for (let i = 0; i < 20; i++) {
         await trade(vaultToken2.address, amount, vaultToken1.address);
         await strategy._updateInvestedAssets();
         const deviation = await getDeviation();
         console.log('deviation', deviation);
         d.push(deviation);
-        await saveToFile('tmp/1-up_step-1000-res.csv', d);
+        await saveToFile('tmp/1-up_step-1000-hack.csv', d);
       }
+
+      await strategy._updateInvestedAssets();
+      await vault.withdrawAll();
+
+      const assetsBack = (await balanceOf(asset.address, signer.address));
+      console.log('assetsBack', assetsBack);
+      const amountProfit = assetsBack.sub(_100_000);
+      console.log('amountProfit', amountProfit);
+
+      const amountTraded = (await balanceOf(vaultToken1.address, signer2.address));
+      console.log('amountTraded', amountTraded);
+
+
+      await trade(vaultToken1.address, amountTraded, vaultToken2.address);
+
+      const tradeLoss = _1_000_000T.sub(await balanceOf(vaultToken2.address, signer2.address)).div(10**(18-6));
+      console.log('tradeLoss   ', tradeLoss);
+
+
     });
 
   });

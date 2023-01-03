@@ -36,6 +36,9 @@ abstract contract DepositorBase is ERC20Helpers {
   /// @notice if requested liquidityAmount >= invested, then should make full exit
   function _depositorExit(uint liquidityAmount) internal virtual returns (uint[] memory amountsOut);
 
+  /// @dev Quotes output for given lp amount from the pool.
+  function _depositorQuoteExit(uint liquidityAmount) internal virtual view returns (uint[] memory amountsOut);
+
   /// @dev If pool supports emergency withdraw need to call it for emergencyExit()
   function _depositorEmergencyExit() internal virtual returns (uint[] memory amountsOut) {
     return _depositorExit(_depositorLiquidity());
