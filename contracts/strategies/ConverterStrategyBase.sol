@@ -218,16 +218,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     IForwarder _forwarder = IForwarder(IController(controller()).forwarder());
 
     address _asset = asset;
-    uint len = tokens.length;
     uint _compoundRatio = compoundRatio;
-    console.log('_compoundRatio', _compoundRatio);
+    console.log('_recycle._compoundRatio', _compoundRatio);
+
+    uint len = tokens.length;
     uint[] memory amountsToForward = new uint[](len);
 
+    // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
+    // the part-to-compound is converted to the main asset and kept on the balance up to the next investing
     for (uint i = 0; i < len; ++i) {
       address token = tokens[i];
       uint amount = amounts[i];
 
-      console.log('token, amount', token, amount);
+      console.log('_recycle.token, amount', token, amount);
       if (amount != 0 && amount > thresholds[token]) {
         uint amountToCompound = amount * _compoundRatio / COMPOUND_DENOMINATOR;
         if (amountToCompound > 0) {
@@ -276,20 +279,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @dev Is strategy ready to hard work
-  function isReadyToHardWork()
-  override external pure returns (bool) {
+  function isReadyToHardWork() override external pure returns (bool) {
     // check claimable amounts and compare with thresholds
     return true;
   }
 
   /// @dev Do hard work
-  function doHardWork()
-  override public returns (uint, uint) {
+  function doHardWork() override public returns (uint, uint) {
     return _doHardWork(true);
   }
 
-  function _doHardWork(bool reInvest)
-  internal returns (uint earned, uint lost) {
+  function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
     console.log('doHardWork...');
     uint assetBalanceBefore = _balance(asset);
     _claim();
@@ -318,8 +318,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //               InvestedAssets Calculations
   // *************************************************************
 
-  /// @dev Function to calculate amount we will receive when we withdraw all from pool
-  ///      Return amountOut in revert message
+  /// @notice Function to calculate amount we will receive when we withdraw all from pool
+  ///         Return amountOut in revert message
+  /// @dev todo Deprecated
   function getInvestedAssetsReverted() external {
     uint assetsBefore = _balance(asset);
     _withdrawFromPoolUniversal(type(uint).max, true, false);

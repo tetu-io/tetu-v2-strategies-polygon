@@ -114,15 +114,14 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     );
 
     // Stake to the Gauge
-    _approveIfNeeded(depositorPair, type(uint).max / 2, _depositorGauge);
+    _approveIfNeeded(depositorPair, type(uint).max / 2, _depositorGauge); // TODO: make infinite approve in init
     IGauge(_depositorGauge).depositAll(0);
 
   }
 
   /// @dev Withdraw given lp amount from the pool.
   /// @notice if requested liquidityAmount >= invested, then should make full exit
-  function _depositorExit(uint liquidityAmount)
-  override internal virtual returns (uint[] memory amountsOut) {
+  function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
     if (liquidityAmount == 0) {
       return amountsOut;
@@ -156,15 +155,16 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @dev Quotes output for given lp amount from the pool.
   /// @notice if requested liquidityAmount >= invested, then should make full exit
-  function _depositorQuoteExit(uint liquidityAmount)
-  override internal virtual view returns (uint[] memory amountsOut) {
+  function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
     if (liquidityAmount == 0) {
       return amountsOut;
     }
 
     uint totalLiquidity = _depositorLiquidity();
-    if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
+    if (liquidityAmount > totalLiquidity) {
+      liquidityAmount = totalLiquidity;
+    }
 
     (amountsOut[0], amountsOut[1]) = IRouter(depositorRouter).quoteRemoveLiquidity(
       _depositorTokenA,
@@ -176,8 +176,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
 
   /// @dev Claim all possible rewards.
-  function _depositorClaimRewards() override internal virtual
-  returns (address[] memory tokens, uint[] memory amounts) {
+  function _depositorClaimRewards() override internal virtual returns (address[] memory tokens, uint[] memory amounts) {
     IGauge gauge = IGauge(_depositorGauge);
     gauge.claimFees(); // sends fees to bribe
 
