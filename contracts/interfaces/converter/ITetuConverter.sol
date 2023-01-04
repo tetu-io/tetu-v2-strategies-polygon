@@ -5,6 +5,8 @@ pragma solidity 0.8.17;
 /// @notice Main contract of the TetuConverter application
 /// @dev Borrower (strategy) makes all operations via this contract only.
 interface ITetuConverter {
+  function controller() external view returns (address);
+
   /// @notice Find best borrow strategy and provide "cost of money" as interest for the period
   /// @param sourceAmount_ Amount to be converted
   /// @param periodInBlocks_ Estimated period to keep target amount. It's required to compute APR

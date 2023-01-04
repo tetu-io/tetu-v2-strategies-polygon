@@ -21,49 +21,58 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   string public constant DYSTOPIA_DEPOSITOR_VERSION = "1.0.0";
 
   address public depositorRouter;
+
+  /// @notice A pair of tokens A and B registered in the router
   address public depositorPair;
+
   bool public depositorStable;
 
   address internal _depositorGauge;
   address private _depositorTokenA;
   address private _depositorTokenB;
+
+  /// @notice false: _depositorTokenA == depositorPair.token0
+  ///         true:  _depositorTokenA == depositorPair.token1
   bool private _depositorSwapTokens;
 
   // @notice tokens must be MockTokens
   function __DystopiaDepositor_init(
-    address router, address tokenA, address tokenB, bool stable, address voter
+    address router,
+    address tokenA,
+    address tokenB,
+    bool stable,
+    address voter
   ) internal onlyInitializing {
     depositorRouter = router;
     _depositorTokenA = tokenA;
     _depositorTokenB = tokenB;
     depositorStable = stable;
+
     address _depositorPair = IRouter(router).pairFor(tokenA, tokenB, stable);
-    _depositorSwapTokens = tokenA == IPair(_depositorPair).token1();
     depositorPair = _depositorPair;
+    _depositorSwapTokens = tokenA == IPair(_depositorPair).token1();
     _depositorGauge = IVoter(voter).gauges(_depositorPair);
     require(_depositorGauge != address(0), 'DD: No Gauge');
   }
 
   /// @dev Returns pool assets
-  function _depositorPoolAssets() override internal virtual view
-  returns (address[] memory poolAssets) {
+  function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
     poolAssets[0] = _depositorTokenA;
     poolAssets[1] = _depositorTokenB;
   }
 
   /// @dev Returns pool weights in percents (50/50%)
-  function _depositorPoolWeights() override internal virtual view
-  returns (uint[] memory weights, uint totalWeight) {
+  function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
     weights = new uint[](2);
     weights[0] = 1; // 50%
     weights[1] = 1; // 50%
     totalWeight = 2; // 100%
   }
 
-  /// @dev Returns pool weights in percents
-  function _depositorPoolReserves() override internal virtual view
-  returns (uint[] memory reserves) {
+  /// @notice Returns pool weights in percents
+  /// @return reserves Reserves for: _depositorTokenA, _depositorTokenB
+  function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
     reserves = new uint[](2);
     if (_depositorSwapTokens) {
       (reserves[1], reserves[0],) = IPair(depositorPair).getReserves();
@@ -78,9 +87,10 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Deposit given amount to the pool.
-  function _depositorEnter(uint[] memory amountsDesired_) override internal virtual
-  returns (uint[] memory amountsConsumed, uint liquidity) {
-
+  function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
+    uint[] memory amountsConsumed,
+    uint liquidity
+  ) {
     uint amount0 = amountsDesired_[0];
     uint amount1 = amountsDesired_[1];
 
@@ -128,7 +138,9 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     }
 
     uint totalLiquidity = _depositorLiquidity();
-    if (liquidityAmount > totalLiquidity) liquidityAmount = totalLiquidity;
+    if (liquidityAmount > totalLiquidity) {
+      liquidityAmount = totalLiquidity;
+    }
 
     // Unstake from the gauge
     IGauge(_depositorGauge).withdraw(liquidityAmount);
@@ -198,6 +210,11 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     }
     (tokens, amounts) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
 
+  }
+
+  //// @notice Total amount of LP tokens in the depositor
+  function _depositorTotalSupply() override internal returns (uint) {
+    return IPair(depositorPair).totalSupply();
   }
 
   /**

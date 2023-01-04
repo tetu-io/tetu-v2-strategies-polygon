@@ -21,6 +21,9 @@ contract MockDepositor is DepositorBase, Initializable {
   address[] private _depositorRewardTokens;
   uint[] private _depositorRewardAmounts;
 
+  /// @notice total amount of active LP tokens.
+  uint public totalSupply;
+
   // @notice tokens must be MockTokens
   function __MockDepositor_init(
     address[] memory tokens_,
@@ -46,14 +49,12 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Returns pool assets
-  function _depositorPoolAssets() override internal virtual view
-  returns (address[] memory) {
+  function _depositorPoolAssets() override internal virtual view returns (address[] memory) {
     return _depositorAssets;
   }
 
   /// @dev Returns pool weights
-  function _depositorPoolWeights() override internal virtual view
-  returns (uint[] memory weights, uint totalWeight) {
+  function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
     weights = _depositorWeights;
     uint len = weights.length;
     totalWeight = 0;
@@ -62,8 +63,7 @@ contract MockDepositor is DepositorBase, Initializable {
     }
   }
 
-  function _depositorPoolReserves()
-  override internal virtual view returns (uint[] memory reserves) {
+  function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
     reserves = new uint[](_depositorWeights.length);
   }
 
@@ -84,8 +84,10 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Deposit given amount to the pool.
-  function _depositorEnter(uint[] memory amountsDesired_) override internal virtual
-  returns (uint[] memory amountsConsumed, uint liquidityOut) {
+  function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
+    uint[] memory amountsConsumed,
+    uint liquidityOut
+  ) {
     require(_depositorAssets.length == amountsDesired_.length);
 
     uint len = amountsDesired_.length;
@@ -99,6 +101,7 @@ contract MockDepositor is DepositorBase, Initializable {
     }
 
     liquidityOut = minAmount;
+    totalSupply += minAmount;
   }
 
   /// @dev Withdraw given lp amount from the pool.
@@ -118,10 +121,12 @@ contract MockDepositor is DepositorBase, Initializable {
       token.mint(address(this), liquidityAmount);
       amountsOut[i] = liquidityAmount;
     }
+
+    require(totalSupply >= liquidityAmount, "totalSupply >= liquidityAmount");
+    totalSupply -= liquidityAmount;
   }
   /// @dev Quotes output for given lp amount from the pool.
-  function _depositorQuoteExit(uint liquidityAmount)
-  override internal virtual view returns (uint[] memory amountsOut) {
+  function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
 
     uint depositorLiquidity = _depositorLiquidity();
     if (liquidityAmount > depositorLiquidity) {
@@ -137,8 +142,10 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   /// @dev Claim all possible rewards.
-  function _depositorClaimRewards() override internal virtual
-  returns (address[] memory rewardTokens, uint[] memory rewardAmounts) {
+  function _depositorClaimRewards() override internal virtual returns (
+    address[] memory rewardTokens,
+    uint[] memory rewardAmounts
+  ) {
     uint len = _depositorRewardTokens.length;
     for (uint i = 0; i < len; ++i) {
       IMockToken token = IMockToken(_depositorRewardTokens[i]);
@@ -148,4 +155,8 @@ contract MockDepositor is DepositorBase, Initializable {
     return (_depositorRewardTokens, _depositorRewardAmounts);
   }
 
+  //// @notice Total amount of LP tokens in the depositor
+  function _depositorTotalSupply() override internal returns (uint) {
+    return totalSupply;
+  }
 }
