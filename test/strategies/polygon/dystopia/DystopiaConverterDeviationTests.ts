@@ -167,15 +167,9 @@ describe("Dystopia Converter Strategy tests", function () {
         core.controller,
         _splitterAddress,
         [PolygonAddresses.TETU_TOKEN],
-<<<<<<< HEAD
         getConverterAddress(),
-        token1.address,
-        token2.address,
-=======
-        tools.converter,
         vaultToken1.address,
         vaultToken2.address,
->>>>>>> slava
         true
       );
 
@@ -271,13 +265,8 @@ describe("Dystopia Converter Strategy tests", function () {
       const d = [];
       const amount = parseUnits('1000', assetDecimals);
       for (let i = 0; i < 25; i++) {
-<<<<<<< HEAD
-        await trade(token1.address, amount, token2.address);
-        // await strategy._updateInvestedAssets();
-=======
         await trade(vaultToken1.address, amount, vaultToken2.address);
-        await strategy._updateInvestedAssets();
->>>>>>> slava
+        // await strategy._updateInvestedAssets();
         const deviation = await getDeviation();
         console.log('deviation', deviation);
         d.push(deviation);
@@ -290,7 +279,7 @@ describe("Dystopia Converter Strategy tests", function () {
       const amount = parseUnits('1000', token2Decimals);
       for (let i = 0; i < 25; i++) {
         await trade(vaultToken2.address, amount, vaultToken1.address);
-        await strategy._updateInvestedAssets();
+        // await strategy._updateInvestedAssets();
         const deviation = await getDeviation();
         console.log('deviation', deviation);
         d.push(deviation);

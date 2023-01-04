@@ -275,7 +275,6 @@ describe('Dystopia Converter Strategy tests', function() {
       await TimeUtils.rollback(snapshot);
     });
 
-<<<<<<< HEAD
     it('deposit / withdraw', async() => {
       console.log('deposit...');
 
@@ -289,12 +288,6 @@ describe('Dystopia Converter Strategy tests', function() {
 
       await vault1.withdrawAll();
       await vault2.withdrawAll();
-
-=======
-    it("Profit distribution", async () => {
-      // TODO
->>>>>>> slava
-
     });
 
   });
@@ -316,36 +309,25 @@ describe('Dystopia Converter Strategy tests', function() {
       await TimeUtils.rollback(snapshot);
     });
 
-<<<<<<< HEAD
     it('deposit', async() => {
-      console.log('deposit...');
-=======
-    it("deposit", async () => {
-      /*console.log('deposit...');
->>>>>>> slava
-      const deposit = _100_000;
-      await vault.deposit(deposit, signer.address);
-
-      const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
-      expect((await balanceOf(asset.address, insuranceAddress)).toNumber()).approximately(depositFee.toNumber(), 10);
-      // const depositWithFee = deposit.sub(depositFee);
-      // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
-      // expect(await balanceOf(asset.address, vault.address)).eq(buffer);
-      expect(await balanceOf(asset.address, splitter.address)).eq(0);
-      // expect(await balanceOf(asset.address, strategy.address)).eq(0);
-
-      console.log('withdrawAll...');
-      hre.tracer.enabled = true;
-      await vault.withdrawAll();
-*/
+      // console.log('deposit...');
+      // const deposit = _100_000;
+      // await vault.deposit(deposit, signer.address);
+      //
+      // const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
+      // expect((await balanceOf(asset.address, insuranceAddress)).toNumber()).approximately(depositFee.toNumber(), 10);
+      // // const depositWithFee = deposit.sub(depositFee);
+      // // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
+      // // expect(await balanceOf(asset.address, vault.address)).eq(buffer);
+      // expect(await balanceOf(asset.address, splitter.address)).eq(0);
+      // // expect(await balanceOf(asset.address, strategy.address)).eq(0);
+      //
+      // console.log('withdrawAll...');
+      // hre.tracer.enabled = true;
+      // await vault.withdrawAll();
     });
 
   });
-<<<<<<< HEAD
-=======
-
-
->>>>>>> slava
 });
 
 
