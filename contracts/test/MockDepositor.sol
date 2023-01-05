@@ -24,6 +24,10 @@ contract MockDepositor is DepositorBase, Initializable {
   /// @notice total amount of active LP tokens.
   uint public totalSupply;
 
+  /////////////////////////////////////////////////////////////////////
+  ///                   Initialization
+  /////////////////////////////////////////////////////////////////////
+
   // @notice tokens must be MockTokens
   function __MockDepositor_init(
     address[] memory tokens_,
@@ -32,21 +36,31 @@ contract MockDepositor is DepositorBase, Initializable {
     uint[] memory depositorWeights_,
     uint[] memory depositorReserves_
   ) internal onlyInitializing {
-    require(rewardTokens_.length == rewardAmounts_.length);
+    require(rewardTokens_.length == rewardAmounts_.length, "rewardAmounts_.length");
+    require(tokens_.length == depositorReserves_.length, "depositorReserves_.length");
+    require(tokens_.length == depositorWeights_.length, "depositorWeights_.length");
+
     uint tokensLength = tokens_.length;
     for (uint i = 0; i < tokensLength; ++i) {
       _depositorAssets.push(tokens_[i]);
       _depositorAmounts.push(0);
+
+      _depositorWeights.push(depositorWeights_[i]);
+      _depositorReserves.push(depositorReserves_[i]);
     }
     for (uint i = 0; i < rewardTokens_.length; ++i) {
       _depositorRewardTokens.push(rewardTokens_[i]);
       _depositorRewardAmounts.push(rewardAmounts_[i]);
     }
-
-    // proportional weights for now
-    _depositorWeights = depositorWeights_;
-    _depositorReserves = depositorReserves_;
   }
+
+  function setTotalSupply(uint totalSupply_) external {
+    totalSupply = totalSupply_;
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                   DepositorBase
+  /////////////////////////////////////////////////////////////////////
 
   /// @dev Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory) {
@@ -64,7 +78,10 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    reserves = new uint[](_depositorWeights.length);
+    reserves = new uint[](_depositorReserves.length);
+    for (uint i = 0; i < _depositorReserves.length; ++i) {
+      reserves[i] = _depositorReserves[i];
+    }
   }
 
 

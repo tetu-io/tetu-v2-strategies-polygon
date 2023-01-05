@@ -39,4 +39,25 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
+  //////////////////////////////////////////////////////////////////////
+  ///    Provide direct access to internal functions for tests
+  //////////////////////////////////////////////////////////////////////
+  function getExpectedWithdrawnAmountUSDTestAccess(
+    uint liquidityAmount_,
+    uint totalSupply_,
+    address priceOracle_
+  ) external view returns (
+    uint investedAssetsUSD,
+    uint assetPrice
+  ) {
+    return _getExpectedWithdrawnAmountUSD(
+      liquidityAmount_,
+      totalSupply_,
+      IPriceOracle(priceOracle_)
+    );
+  }
+
+  function convertWithdrawnAmountsToAssetTestAccess() external {
+    _convertWithdrawnAmountsToAsset();
+  }
 }

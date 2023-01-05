@@ -152,7 +152,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       console.log("_withdrawFromPool, liquidityAmount", liquidityAmount, _depositorLiquidity(), _investedAssets);
 
       // predict expected amount to be withdrawn (in USD)
-      (investedAssetsUSD, assetPrice) = getExpectedWithdrawnAmountUSD(liquidityAmount, _depositorTotalSupply());
+      (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(
+        liquidityAmount,
+        _depositorTotalSupply(),
+        IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
+    );
 
       // withdraw the amount from the depositor to balance of the strategy
       _depositorExit(liquidityAmount);
@@ -172,7 +176,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint liquidityAmount = _depositorLiquidity();
 
     // predict expected amount to be withdrawn (in USD)
-    (investedAssetsUSD, assetPrice) = getExpectedWithdrawnAmountUSD(liquidityAmount, _depositorTotalSupply());
+    (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(
+      liquidityAmount,
+      _depositorTotalSupply(),
+      IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
+    );
     console.log("_withdrawAllFromPool, liquidityAmount", liquidityAmount);
 
     // withdraw all available amounts from the depositor to balance of the strategy
@@ -204,7 +212,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
             console.log('/// Balance after withdraw:');
             TokenAmountsLib.print(tokens, tokenAmounts);
 
-    // convert all amounts withdrawn from the depositor to {asset}
     address _asset = asset;
     for (uint i = 0; i < len; ++i) {
       address borrowedToken = tokens[i];
@@ -224,58 +231,38 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param totalSupply_ Total amount of LP tokens in the depositor
   /// @return investedAssetsUSD Amount of USD that we expect to receive after withdrawing, decimals of {asset}
   /// @return assetPrice Price of {asset}, decimals 18
-  function getExpectedWithdrawnAmountUSD(uint liquidityAmount_, uint totalSupply_) internal view returns (
+  function _getExpectedWithdrawnAmountUSD(
+    uint liquidityAmount_,
+    uint totalSupply_,
+    IPriceOracle priceOracle_
+  ) internal view returns (
     uint investedAssetsUSD,
     uint assetPrice
   ) {
-    console.log("getExpectedWithdrawnAmountUSD", liquidityAmount_, totalSupply_);
-    IConverterController converterController = IConverterController(tetuConverter.controller());
-    IPriceOracle priceOracle = IPriceOracle(converterController.priceOracle());
-
     address[] memory poolAssets = _depositorPoolAssets(); // token A - first, token B - second
     uint[] memory reserves = _depositorPoolReserves(); // token A - first, token B - second
 
-    console.log("getExpectedWithdrawnAmountUSD.poolAssets", poolAssets[0], poolAssets[1]);
-    console.log("getExpectedWithdrawnAmountUSD.reserves", reserves[0], reserves[1]);
     uint ratio = totalSupply_ == 0
       ? 0
       : (liquidityAmount_ >= totalSupply_
         ? 1e18
         : 1e18 * liquidityAmount_ / totalSupply_
       ); // we need brackets here for npm.run.coverage
-    console.log("getExpectedWithdrawnAmountUSD.lpTokensToWithdrawRatio", ratio);
 
-    if (poolAssets[0] == asset) {
-      assetPrice = priceOracle.getAssetPrice(poolAssets[0]);
-      uint priceB = priceOracle.getAssetPrice(poolAssets[1]);
-      console.log("getExpectedWithdrawnAmountUSD.assetPrice, priceB", assetPrice, priceB);
+    uint index0 = poolAssets[0] == asset ? 0 : 1;
+    uint index1 = index0 == 0 ? 1 : 0;
 
-      investedAssetsUSD =
-        reserves[0]
-          * assetPrice * ratio
-          / 1e18 / 1e18
-        + reserves[1]
-          * priceB * ratio
-          * 10**IERC20Metadata(poolAssets[0]).decimals()
-          / 10**IERC20Metadata(poolAssets[1]).decimals()
-          / 1e18 / 1e18;
-      console.log("getExpectedWithdrawnAmountUSD.investedAssetsUSD", investedAssetsUSD);
-    } else {
-      assetPrice = priceOracle.getAssetPrice(poolAssets[1]);
-      uint priceA = priceOracle.getAssetPrice(poolAssets[0]);
-      console.log("getExpectedWithdrawnAmountUSD.assetPrice, priceA", assetPrice, priceA);
+    assetPrice = priceOracle_.getAssetPrice(poolAssets[index0]);
+    uint priceSecond = priceOracle_.getAssetPrice(poolAssets[index1]);
 
-      investedAssetsUSD =
-        reserves[1]
-          * assetPrice * ratio
-          / 1e18 / 1e18
-        + reserves[0]
-          * priceA * ratio
-          * 10**IERC20Metadata(poolAssets[1]).decimals()
-          / 10**IERC20Metadata(poolAssets[0]).decimals()
-          / 1e18 / 1e18;
-      console.log("getExpectedWithdrawnAmountUSD.investedAssetsUSD", investedAssetsUSD);
-    }
+    investedAssetsUSD = assetPrice == 0 || priceSecond == 0
+    ? 0 // it's better to return zero here than a half of the amount
+    : ratio * (
+      reserves[index0] * assetPrice
+      + reserves[index1] * priceSecond
+        * 10**IERC20Metadata(poolAssets[index0]).decimals()
+        / 10**IERC20Metadata(poolAssets[index1]).decimals()
+    ) / 1e18 / 1e18; // price, ratio
   }
 
   /////////////////////////////////////////////////////////////////////
