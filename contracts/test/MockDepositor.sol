@@ -156,7 +156,7 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   //// @notice Total amount of LP tokens in the depositor
-  function _depositorTotalSupply() override internal returns (uint) {
+  function _depositorTotalSupply() override internal view returns (uint) {
     return totalSupply;
   }
 }

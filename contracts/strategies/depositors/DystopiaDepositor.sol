@@ -20,6 +20,10 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant DYSTOPIA_DEPOSITOR_VERSION = "1.0.0";
 
+  /////////////////////////////////////////////////////////////////////
+  ///                   Variables
+  /////////////////////////////////////////////////////////////////////
+
   address public depositorRouter;
 
   /// @notice A pair of tokens A and B registered in the router
@@ -34,6 +38,10 @@ contract DystopiaDepositor is DepositorBase, Initializable {
   /// @notice false: _depositorTokenA == depositorPair.token0
   ///         true:  _depositorTokenA == depositorPair.token1
   bool private _depositorSwapTokens;
+
+  /////////////////////////////////////////////////////////////////////
+  ///                   Initialization
+  /////////////////////////////////////////////////////////////////////
 
   // @notice tokens must be MockTokens
   function __DystopiaDepositor_init(
@@ -55,14 +63,19 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     require(_depositorGauge != address(0), 'DD: No Gauge');
   }
 
-  /// @dev Returns pool assets
+
+  /////////////////////////////////////////////////////////////////////
+  ///                       View
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
     poolAssets[0] = _depositorTokenA;
     poolAssets[1] = _depositorTokenB;
   }
 
-  /// @dev Returns pool weights in percents (50/50%)
+  /// @notice Returns pool weights in percents (50/50%)
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
     weights = new uint[](2);
     weights[0] = 1; // 50%
@@ -81,12 +94,22 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     }
   }
 
-  /// @dev Returns depositor's pool shares / lp token amount
+  /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
     return IERC20(_depositorGauge).balanceOf(address(this));
   }
 
-  /// @dev Deposit given amount to the pool.
+  //// @notice Total amount of LP tokens in the depositor
+  function _depositorTotalSupply() override internal view returns (uint) {
+    return IPair(depositorPair).totalSupply();
+  }
+
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Enter, exit, claim rewards
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Deposit given amount to the pool.
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
     uint[] memory amountsConsumed,
     uint liquidity
@@ -129,8 +152,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   }
 
-  /// @dev Withdraw given lp amount from the pool.
-  /// @notice if requested liquidityAmount >= invested, then should make full exit
+  /// @notice Withdraw given lp amount from the pool.
+  /// @dev if requested liquidityAmount >= invested, then should make full exit
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
     if (liquidityAmount == 0) {
@@ -165,8 +188,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     console.log('/// !!! DEPOSITOR withdraw amountsOut[1]', amountsOut[1]);
   }
 
-  /// @dev Quotes output for given lp amount from the pool.
-  /// @notice if requested liquidityAmount >= invested, then should make full exit
+  /// @notice Quotes output for given lp amount from the pool.
+  /// @dev if requested liquidityAmount >= invested, then should make full exit
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
     if (liquidityAmount == 0) {
@@ -212,10 +235,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   }
 
-  //// @notice Total amount of LP tokens in the depositor
-  function _depositorTotalSupply() override internal returns (uint) {
-    return IPair(depositorPair).totalSupply();
-  }
+
+
 
   /**
    * @dev This empty reserved space is put in place to allow future versions to add new

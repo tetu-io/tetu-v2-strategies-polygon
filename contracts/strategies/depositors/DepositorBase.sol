@@ -27,6 +27,9 @@ abstract contract DepositorBase is ERC20Helpers {
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() internal virtual view returns (uint);
 
+  //// @notice Total amount of LP tokens in the depositor
+  function _depositorTotalSupply() internal view virtual returns (uint);
+
   /// @notice Deposit given amount to the pool.
   /// @dev Depositor must care about tokens approval by itself.
   function _depositorEnter(uint[] memory amountsDesired_) internal virtual returns (
@@ -54,7 +57,4 @@ abstract contract DepositorBase is ERC20Helpers {
     address[] memory rewardTokens,
     uint[] memory rewardAmounts
   );
-
-  //// @notice Total amount of LP tokens in the depositor
-  function _depositorTotalSupply() internal virtual returns (uint);
 }
