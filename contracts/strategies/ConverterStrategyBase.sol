@@ -461,7 +461,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address collateralAsset,
     uint collateralAmount,
     address borrowAsset
-  ) internal returns (uint borrowedAmount) {
+  ) internal returns (uint borrowedAmountOut) {
     console.log('_borrowPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
     ITetuConverter _tetuConverter = tetuConverter;
 
@@ -475,10 +475,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log('converter, maxTargetAmount', converter, maxTargetAmount);
 
     if (converter == address(0) || maxTargetAmount == 0) {
-      borrowedAmount = 0;
+      borrowedAmountOut = 0;
     } else {
       // we need to approve collateralAmount before the borrow-call but we already made the approval above
-      borrowedAmount = _tetuConverter.borrow(
+      borrowedAmountOut = _tetuConverter.borrow(
         converter,
         collateralAsset,
         collateralAmount,
@@ -489,7 +489,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
 
     console.log('>>> BORROW collateralAmount', collateralAmount);
-    console.log('>>> BORROW borrowedAmount', borrowedAmount);
+    console.log('>>> BORROW borrowedAmount', borrowedAmountOut);
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -500,7 +500,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) {
     ITetuConverter _tetuConverter = tetuConverter;
 
-    // We cannot try to pay more than we actually need to repay
+    // We shouldn't try to pay more than we actually need to repay
     // The leftover will be swapped inside TetuConverter, it's inefficient.
     // Let's limit amountToRepay by needToRepay-amount
     (uint needToRepay,) = _tetuConverter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset);
@@ -530,8 +530,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log('>>> REPAY amountToRepay', amountToRepay / 1e18);
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
 
+    // Manually swap remain leftover
     if (leftover != 0) {
-      // manually swap leftover
       uint balanceBefore = _balance(collateralAsset);
       ITetuLiquidator _tetuLiquidator = ITetuLiquidator(IController(controller()).liquidator());
       _liquidate(_tetuLiquidator, borrowAsset, collateralAsset, leftover, _ASSET_LIQUIDATION_SLIPPAGE);
