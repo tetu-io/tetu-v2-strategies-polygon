@@ -146,17 +146,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
     console.log("_withdrawFromPool, amount", amount);
     if (amount != 0) {
-      // withdraw all available amount from the depositor to balance of the strategy
+      // calculate amount of LP-tokens to be withdrawn
       uint liquidityAmount = amount * _depositorLiquidity() / _investedAssets;
       liquidityAmount += liquidityAmount / 100; // add 1% on top
-
       console.log("_withdrawFromPool, liquidityAmount", liquidityAmount, _depositorLiquidity(), _investedAssets);
 
+      // predict expected amount to be withdrawn (in USD)
       (investedAssetsUSD, assetPrice) = getExpectedWithdrawnAmountUSD(liquidityAmount, _depositorTotalSupply());
 
+      // withdraw the amount from the depositor to balance of the strategy
       _depositorExit(liquidityAmount);
 
-      _convertWithdrawnAmountsToAsset(true);
+      // convert all received amounts to the asset
+      _convertWithdrawnAmountsToAsset();
     }
 
     return (investedAssetsUSD, assetPrice);
@@ -166,38 +168,41 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return investedAssetsUSD The value that we should receive after withdrawing
   /// @return assetPrice Price of the {asset} taken from the price oracle
   function _withdrawAllFromPool() override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    // withdraw amounts from the depositor to balance of the strategy
+    // total amount of LP-tokens deposited by the strategy
     uint liquidityAmount = _depositorLiquidity();
+
+    // predict expected amount to be withdrawn (in USD)
+    (investedAssetsUSD, assetPrice) = getExpectedWithdrawnAmountUSD(liquidityAmount, _depositorTotalSupply());
     console.log("_withdrawAllFromPool, liquidityAmount", liquidityAmount);
 
-    (investedAssetsUSD, assetPrice) = getExpectedWithdrawnAmountUSD(liquidityAmount, _depositorTotalSupply());
-
+    // withdraw all available amounts from the depositor to balance of the strategy
     _depositorExit(liquidityAmount);
 
-    _convertWithdrawnAmountsToAsset(true);
+    // convert all received amounts to the asset
+    _convertWithdrawnAmountsToAsset();
   }
 
   /// @notice If pool support emergency withdraw need to call it for emergencyExit()
   function _emergencyExitFromPool() override internal virtual {
     _depositorEmergencyExit();
 
-    _convertWithdrawnAmountsToAsset(true);
+    _convertWithdrawnAmountsToAsset();
   }
 
   /// @notice Convert all amounts withdrawn from the depositor to {asset} and update balance
-  function _convertWithdrawnAmountsToAsset(bool updateBalance) internal {
+  function _convertWithdrawnAmountsToAsset() internal {
     console.log('_convertWithdrawnAmountToAsset');
 
     address[] memory tokens = _depositorPoolAssets();
     uint len = tokens.length;
 
-    // TODO remove - check result amounts
-    uint[] memory tokenAmounts = new uint[](len);
-    for (uint i = 0; i < len; ++i) {
-      tokenAmounts[i] = _balance(tokens[i]);
-    }
-    console.log('/// Balance after withdraw:');
-    TokenAmountsLib.print(tokens, tokenAmounts);
+            // TODO remove - check result amounts
+            uint[] memory tokenAmounts = new uint[](len);
+            for (uint i = 0; i < len; ++i) {
+              tokenAmounts[i] = _balance(tokens[i]);
+            }
+            console.log('/// Balance after withdraw:');
+            TokenAmountsLib.print(tokens, tokenAmounts);
 
     // convert all amounts withdrawn from the depositor to {asset}
     address _asset = asset;
@@ -209,12 +214,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
     console.log('_convertWithdrawnAmountToAsset _balance', _balance(_asset));
 
-    if (updateBalance) {
-      _updateInvestedAssets();
-    }
+    _updateInvestedAssets();
   }
 
   /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset}
+  ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
+  ///         investedAssetsUSD = reserve0 * ratio * price0 + reserve1 * ratio * price1 (+ set correct decimals)
   /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
   /// @param totalSupply_ Total amount of LP tokens in the depositor
   /// @return investedAssetsUSD Amount of USD that we expect to receive after withdrawing, decimals of {asset}
@@ -232,13 +237,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     console.log("getExpectedWithdrawnAmountUSD.poolAssets", poolAssets[0], poolAssets[1]);
     console.log("getExpectedWithdrawnAmountUSD.reserves", reserves[0], reserves[1]);
-    uint lpTokensToWithdrawRatio = totalSupply_ == 0
-    ? 0
-    : (liquidityAmount_ >= totalSupply_
-    ? 1e18
-    : 1e18 * liquidityAmount_ / totalSupply_
-    );
-    console.log("getExpectedWithdrawnAmountUSD.lpTokensToWithdrawRatio", lpTokensToWithdrawRatio);
+    uint ratio = totalSupply_ == 0
+      ? 0
+      : (liquidityAmount_ >= totalSupply_
+        ? 1e18
+        : 1e18 * liquidityAmount_ / totalSupply_
+      ); // we need brackets here for npm.run.coverage
+    console.log("getExpectedWithdrawnAmountUSD.lpTokensToWithdrawRatio", ratio);
 
     if (poolAssets[0] == asset) {
       assetPrice = priceOracle.getAssetPrice(poolAssets[0]);
@@ -246,14 +251,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       console.log("getExpectedWithdrawnAmountUSD.assetPrice, priceB", assetPrice, priceB);
 
       investedAssetsUSD =
-      reserves[0]
-      * assetPrice * lpTokensToWithdrawRatio
-      / 1e18 / 1e18
-      + reserves[1]
-      * priceB * lpTokensToWithdrawRatio
-      * 10**IERC20Metadata(poolAssets[0]).decimals()
-      / 10**IERC20Metadata(poolAssets[1]).decimals()
-      / 1e18 / 1e18;
+        reserves[0]
+          * assetPrice * ratio
+          / 1e18 / 1e18
+        + reserves[1]
+          * priceB * ratio
+          * 10**IERC20Metadata(poolAssets[0]).decimals()
+          / 10**IERC20Metadata(poolAssets[1]).decimals()
+          / 1e18 / 1e18;
       console.log("getExpectedWithdrawnAmountUSD.investedAssetsUSD", investedAssetsUSD);
     } else {
       assetPrice = priceOracle.getAssetPrice(poolAssets[1]);
@@ -261,14 +266,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       console.log("getExpectedWithdrawnAmountUSD.assetPrice, priceA", assetPrice, priceA);
 
       investedAssetsUSD =
-      reserves[1]
-      * assetPrice * lpTokensToWithdrawRatio
-      / 1e18 / 1e18
-      + reserves[0]
-      * priceA * lpTokensToWithdrawRatio
-      * 10**IERC20Metadata(poolAssets[1]).decimals()
-      / 10**IERC20Metadata(poolAssets[0]).decimals()
-      / 1e18 / 1e18;
+        reserves[1]
+          * assetPrice * ratio
+          / 1e18 / 1e18
+        + reserves[0]
+          * priceA * ratio
+          * 10**IERC20Metadata(poolAssets[1]).decimals()
+          / 10**IERC20Metadata(poolAssets[0]).decimals()
+          / 1e18 / 1e18;
       console.log("getExpectedWithdrawnAmountUSD.investedAssetsUSD", investedAssetsUSD);
     }
   }
