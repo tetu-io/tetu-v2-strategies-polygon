@@ -12,6 +12,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {expect} from "chai";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {BigNumber} from "ethers";
 
 /**
  * Test internal functions of ConverterStrategyBase
@@ -411,37 +412,171 @@ describe('ConverterStrategyBaseInternalTests', function() {
         // provide the amount to be borrowed by the strategy
         await dai.transfer(tetuConverter.address, borrowAmount);
 
+        const balanceUsdcBefore = await usdc.balanceOf(strategy.address);
+        const balanceDaiBefore = await dai.balanceOf(strategy.address);
         const ret = await strategy.callStatic.borrowPositionTestAccess(usdc.address, collateralAmount, dai.address);
         await strategy.borrowPositionTestAccess(usdc.address, collateralAmount, dai.address);
+        const balanceUsdcAfter = await usdc.balanceOf(strategy.address);
+        const balanceDaiAfter = await dai.balanceOf(strategy.address);
 
         const sret = [
-          ret.toString()
+          // should return expected value
+          ret.toString(),
+
+          // should receive expected amount on balance
+          balanceUsdcBefore.sub(balanceUsdcAfter).toString(),
+          balanceDaiAfter.sub(balanceDaiBefore).toString(),
         ].join();
         const sexpected = [
+          borrowAmount.toString(),
+          collateralAmount.toString(),
           borrowAmount.toString()
         ].join();
 
         expect(sret).eq(sexpected);
       });
-      it("should receive expected amount on balance", async () => {
-
-      });
       it("should receive expected debt in tetuConverter", async () => {
-
+// TODO
       });
     });
     describe("Bad paths", () => {
       it("should return 0 if a borrow strategy is not found", async () => {
+        const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+        const strategy = await setupMockedStrategy(
+          usdc,
+          [usdc, dai],
+          [100_000, 200_000],
+          tetuConverter.address
+        );
+        const collateralAmount = parseUnits("1000", 6);
 
+        // prepare tetu converter mock
+        await tetuConverter.setFindBorrowStrategyOutputParams(
+          Misc.ZERO_ADDRESS, // (!) the borrow strategy not found
+          0,
+          0, // apr is not used
+          usdc.address,
+          collateralAmount,
+          dai.address,
+          1 // we can use any period for mock
+        );
+        // put collateral on the balance of the strategy
+        await usdc.transfer(strategy.address, collateralAmount);
+
+        const ret = await strategy.callStatic.borrowPositionTestAccess(usdc.address, collateralAmount, dai.address);
+
+        expect(ret.toString()).eq("0");
       });
     });
   });
 
   describe("_closePosition", () => {
     describe("Good paths", () => {
+      interface IMakeClosePositionTestResults {
+        retRepay: BigNumber;
+        balanceCollateralStrategyBefore: BigNumber;
+        balanceCollateralStrategyAfter: BigNumber;
+        balanceBorrowAssetStrategyBefore: BigNumber;
+        balanceBorrowAssetStrategyAfter: BigNumber;
+      }
+      async function makeClosePositionTest(
+        collateralAsset: MockToken,
+        collateralAmountNum: number,
+        borrowAsset: MockToken,
+        amountToRepayNum: number,
+        needToRepayNum: number,
+        amountRepaidNum: number,
+        swappedLeftoverCollateralOutNum: number,
+        swappedLeftoverBorrowOutNum: number
+      ) : Promise<IMakeClosePositionTestResults> {
+        const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+        const strategy = await setupMockedStrategy(
+          collateralAsset,
+          [collateralAsset, borrowAsset],
+          [100_000, 200_000],
+          tetuConverter.address
+        );
+        const collateralAmount = parseUnits(collateralAmountNum.toString(), await collateralAsset.decimals());
+
+        const borrowAssetDecimals = await borrowAsset.decimals();
+        const amountToRepay = parseUnits(amountToRepayNum.toString(), borrowAssetDecimals);
+        const needToRepay = parseUnits(needToRepayNum.toString(), borrowAssetDecimals);
+        const amountRepaid = parseUnits(amountRepaidNum.toString(), borrowAssetDecimals);
+        const swappedLeftoverCollateralOut = parseUnits(swappedLeftoverCollateralOutNum.toString(), borrowAssetDecimals);
+        const swappedLeftoverBorrowOut = parseUnits(swappedLeftoverBorrowOutNum.toString(), borrowAssetDecimals);
+        console.log("makeClosePositionTest.amountToRepay", amountToRepay);
+        console.log("makeClosePositionTest.needToRepay", needToRepay);
+        console.log("makeClosePositionTest.amountRepaid", amountRepaid);
+        console.log("makeClosePositionTest.swappedLeftoverCollateralOut", swappedLeftoverCollateralOut);
+        console.log("makeClosePositionTest.swappedLeftoverBorrowOut", swappedLeftoverBorrowOut);
+
+        // Prepare tetu converter mock
+        await tetuConverter.setGetDebtAmountCurrent(
+          strategy.address,
+          collateralAsset.address,
+          borrowAsset.address,
+          needToRepay,
+          collateralAmount
+        );
+        await tetuConverter.setRepay(
+          collateralAsset.address,
+          borrowAsset.address,
+          needToRepay,
+          strategy.address,
+          collateralAmount,
+          needToRepay.sub(amountRepaid),
+          swappedLeftoverCollateralOut,
+          swappedLeftoverBorrowOut
+        );
+
+        // Prepare balances
+        // put collateral on the balance of the tetuConverter
+        await collateralAsset.transfer(tetuConverter.address, collateralAmount);
+        // put borrowed amount to the balance of the strategy
+        await borrowAsset.transfer(strategy.address, needToRepay);
+
+        const balanceBorrowAssetStrategyBefore = await borrowAsset.balanceOf(strategy.address);
+        const balanceCollateralStrategyBefore = await collateralAsset.balanceOf(strategy.address);
+        const retRepay = await strategy.callStatic.closePositionTestAccess(collateralAsset.address, borrowAsset.address, amountToRepay);
+        await strategy.closePositionTestAccess(collateralAsset.address, borrowAsset.address, amountToRepay);
+
+        return {
+          retRepay,
+          balanceBorrowAssetStrategyBefore,
+          balanceCollateralStrategyBefore,
+          balanceBorrowAssetStrategyAfter: await borrowAsset.balanceOf(strategy.address),
+          balanceCollateralStrategyAfter: await collateralAsset.balanceOf(strategy.address),
+        };
+      }
+
       describe("amountToRepay <= needToRepay", () => {
         it("should return expected value", async () => {
+          const collateralAmountNum = 2000;
+          const borrowedAmountNum = 1000;
+          const r = await makeClosePositionTest(
+            usdc,
+            collateralAmountNum,
+            dai,
+            borrowedAmountNum, // amount to repay
+            borrowedAmountNum, // need to repay
+            borrowedAmountNum, // actually repaid
+            0,
+            0
+          );
+          console.log("Results", r);
 
+          const sret = [
+            r.retRepay.toString(),
+            r.balanceBorrowAssetStrategyBefore.sub(r.balanceBorrowAssetStrategyAfter).toString(),
+            r.balanceCollateralStrategyAfter.sub(r.balanceCollateralStrategyBefore).toString()
+          ].join("\n");
+          const sexpected = [
+            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
+            parseUnits(borrowedAmountNum.toString(), await dai.decimals()),
+            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
+          ].join("\n");
+
+          expect(sret).eq(sexpected);
         });
         it("should make repay(amountToRepay)", async () => {
 
@@ -452,7 +587,33 @@ describe('ConverterStrategyBaseInternalTests', function() {
       });
       describe("amountToRepay > needToRepay", () => {
         it("should return expected value", async () => {
+          const collateralAmountNum = 2000;
+          const borrowedAmountNum = 1000;
+          const delta = 100;
+          const r = await makeClosePositionTest(
+            usdc,
+            collateralAmountNum,
+            dai,
+            borrowedAmountNum, // amount to repay
+            borrowedAmountNum - delta, // need to repay
+            borrowedAmountNum - delta, // actually repaid
+            0,
+            0
+          );
+          console.log("Results", r);
 
+          const sret = [
+            r.retRepay.toString(),
+            r.balanceBorrowAssetStrategyBefore.sub(r.balanceBorrowAssetStrategyAfter).toString(),
+            r.balanceCollateralStrategyAfter.sub(r.balanceCollateralStrategyBefore).toString()
+          ].join("\n");
+          const sexpected = [
+            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
+            parseUnits((borrowedAmountNum - delta).toString(), await dai.decimals()),
+            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
+          ].join("\n");
+
+          expect(sret).eq(sexpected);
         });
         it("should make repay(amountToRepay)", async () => {
 

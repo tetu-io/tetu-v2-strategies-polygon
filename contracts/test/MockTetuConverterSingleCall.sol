@@ -41,7 +41,7 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_,
-    uint periodInBlocks_
+    uint /*periodInBlocks_*/
   ) external view returns (
     address converter,
     uint maxTargetAmount,
@@ -99,7 +99,7 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_
-  ) external returns (
+  ) external view returns (
     address converter,
     uint maxTargetAmount,
     int apr18
@@ -154,8 +154,8 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_,
-    uint periodInBlocks_
-  ) external returns (
+    uint /*periodInBlocks_*/
+  ) external view returns (
     address converter,
     uint maxTargetAmount,
     int apr18
@@ -289,7 +289,7 @@ contract MockTetuConverterSingleCall is ITetuConverter {
       repayParams.collateralAsset == collateralAsset_
     && repayParams.borrowAsset == borrowAsset_
     && repayParams.amountToRepay == amountToRepay_
-    && repayParams.receiver == receiver_
+    // && repayParams.receiver == receiver_
     ) {
       require(
         IERC20Extended(collateralAsset_).balanceOf(address(this)) == repayParams.collateralAmountOut,
@@ -312,6 +312,7 @@ contract MockTetuConverterSingleCall is ITetuConverter {
         repayParams.swappedLeftoverBorrowOut
       );
     } else {
+      console.log("MockTetuConverterSingleCall.repay.missed collateral,borrow,amount", repayParams.collateralAsset, repayParams.borrowAsset, repayParams.amountToRepay);
       return (collateralAmountOut, returnedBorrowAmountOut, swappedLeftoverCollateralOut, swappedLeftoverBorrowOut);
     }
   }
@@ -402,18 +403,23 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     uint totalDebtAmountOut,
     uint totalCollateralAmountOut
   ) {
-    console.log("MockTetuConverterSingleCall.getDebtAmountCurrent collateral,borrow", collateralAsset_, borrowAsset_);
+    console.log("MockTetuConverterSingleCall.getDebtAmountCurrent user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
 
     if (
       getDebtAmountCurrentParams.user == user_
     && getDebtAmountCurrentParams.collateralAsset == collateralAsset_
     && getDebtAmountCurrentParams.borrowAsset == borrowAsset_
     ) {
+      console.log("MockTetuConverterSingleCall.getDebtAmountCurrent totalDebtAmountOut,totalCollateralAmountOut",
+        getDebtAmountCurrentParams.totalDebtAmountOut,
+        getDebtAmountCurrentParams.totalCollateralAmountOut
+      );
       return (
         getDebtAmountCurrentParams.totalDebtAmountOut,
         getDebtAmountCurrentParams.totalCollateralAmountOut
       );
     } else {
+      console.log("MockTetuConverterSingleCall.getDebtAmountCurrent.missed user,collateral,borrow", getDebtAmountCurrentParams.user, getDebtAmountCurrentParams.collateralAsset, getDebtAmountCurrentParams.borrowAsset);
       return (0, 0);
     }
   }
@@ -443,7 +449,7 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     uint totalDebtAmountOut,
     uint totalCollateralAmountOut
   ) {
-    console.log("MockTetuConverterSingleCall.getDebtAmountStored collateral,borrow", collateralAsset_, borrowAsset_);
+    console.log("MockTetuConverterSingleCall.getDebtAmountStored user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
 
     if (
       getDebtAmountStoredParams.user == user_
@@ -496,7 +502,7 @@ contract MockTetuConverterSingleCall is ITetuConverter {
   //////////////////////////////////////////////////////////
   ///  claimRewards
   //////////////////////////////////////////////////////////
-  function claimRewards(address receiver_) external returns (
+  function claimRewards(address receiver_) external pure returns (
     address[] memory rewardTokensOut,
     uint[] memory amountsOut
   ) {
