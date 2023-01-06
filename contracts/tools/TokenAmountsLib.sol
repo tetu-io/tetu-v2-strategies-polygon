@@ -162,4 +162,16 @@ library TokenAmountsLib {
 
     }
 
+    function printBalances(
+        address[] memory tokens_,
+        address strategy_
+    ) external view {
+        uint len = tokens_.length;
+        uint[] memory tokenAmounts = new uint[](len);
+        for (uint i = 0; i < len; ++i) {
+            tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(strategy_);
+        }
+        TokenAmountsLib.print(tokens_, tokenAmounts);
+
+    }
 }

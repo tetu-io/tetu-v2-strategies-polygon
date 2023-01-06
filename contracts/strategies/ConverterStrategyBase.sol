@@ -124,12 +124,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     _depositorEnter(tokenAmounts);
 
-    // TODO remove - check result amounts
-    for (uint i = 0; i < len; ++i) {
-      tokenAmounts[i] = _balance(tokens[i]);
-    }
     console.log('Balance after:');
-    TokenAmountsLib.print(tokens, tokenAmounts);
+    TokenAmountsLib.printBalances(tokens, address(this));
 
     _updateInvestedAssets();
   }
@@ -162,7 +158,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _depositorExit(liquidityAmount);
 
       // convert all received amounts to the asset
-      _convertWithdrawnAmountsToAsset();
+      _convertDepositorPoolAssets();
+      _updateInvestedAssets();
     }
 
     return (investedAssetsUSD, assetPrice);
@@ -187,30 +184,27 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     _depositorExit(liquidityAmount);
 
     // convert all received amounts to the asset
-    _convertWithdrawnAmountsToAsset();
+    _convertDepositorPoolAssets();
+    _updateInvestedAssets();
   }
 
   /// @notice If pool support emergency withdraw need to call it for emergencyExit()
   function _emergencyExitFromPool() override internal virtual {
     _depositorEmergencyExit();
 
-    _convertWithdrawnAmountsToAsset();
+    _convertDepositorPoolAssets();
+    _updateInvestedAssets();
   }
 
-  /// @notice Convert all amounts withdrawn from the depositor to {asset} and update balance
-  function _convertWithdrawnAmountsToAsset() internal {
+  /// @notice Convert all amounts withdrawn from the depositor to {asset}
+  function _convertDepositorPoolAssets() internal {
     console.log('_convertWithdrawnAmountToAsset');
 
     address[] memory tokens = _depositorPoolAssets();
     uint len = tokens.length;
 
-            // TODO remove - check result amounts
-            uint[] memory tokenAmounts = new uint[](len);
-            for (uint i = 0; i < len; ++i) {
-              tokenAmounts[i] = _balance(tokens[i]);
-            }
-            console.log('/// Balance after withdraw:');
-            TokenAmountsLib.print(tokens, tokenAmounts);
+    console.log('/// Balance after withdraw:');
+    TokenAmountsLib.printBalances(tokens, address(this));
 
     address _asset = asset;
     for (uint i = 0; i < len; ++i) {
@@ -220,8 +214,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
     }
     console.log('_convertWithdrawnAmountToAsset _balance', _balance(_asset));
-
-    _updateInvestedAssets();
   }
 
   /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset}
@@ -256,13 +248,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint priceSecond = priceOracle_.getAssetPrice(poolAssets[index1]);
 
     investedAssetsUSD = assetPrice == 0 || priceSecond == 0
-    ? 0 // it's better to return zero here than a half of the amount
-    : ratio * (
-      reserves[index0] * assetPrice
-      + reserves[index1] * priceSecond
-        * 10**IERC20Metadata(poolAssets[index0]).decimals()
-        / 10**IERC20Metadata(poolAssets[index1]).decimals()
-    ) / 1e18 / 1e18; // price, ratio
+      ? 0 // it's better to return zero here than a half of the amount
+      : ratio * (
+        reserves[index0] * assetPrice
+        + reserves[index1] * priceSecond
+          * 10**IERC20Metadata(poolAssets[index0]).decimals()
+          / 10**IERC20Metadata(poolAssets[index1]).decimals()
+      ) / 1e18 / 1e18; // price, ratio
   }
 
   /////////////////////////////////////////////////////////////////////

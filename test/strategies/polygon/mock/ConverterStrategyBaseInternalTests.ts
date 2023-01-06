@@ -472,6 +472,15 @@ describe('ConverterStrategyBaseInternalTests', function() {
 
   describe("_closePosition", () => {
     describe("Good paths", () => {
+      interface IMakeClosePositionTestInputParams {
+        collateralAmountNum: number;
+        amountToRepayNum: number;
+        needToRepayNum: number;
+        amountRepaidNum: number;
+        swappedLeftoverCollateralOutNum?: number;
+        swappedLeftoverBorrowOutNum?: number;
+        priceOut?: number;
+      }
       interface IMakeClosePositionTestResults {
         retRepay: BigNumber;
         balanceCollateralStrategyBefore: BigNumber;
@@ -481,13 +490,8 @@ describe('ConverterStrategyBaseInternalTests', function() {
       }
       async function makeClosePositionTest(
         collateralAsset: MockToken,
-        collateralAmountNum: number,
         borrowAsset: MockToken,
-        amountToRepayNum: number,
-        needToRepayNum: number,
-        amountRepaidNum: number,
-        swappedLeftoverCollateralOutNum: number,
-        swappedLeftoverBorrowOutNum: number
+        params: IMakeClosePositionTestInputParams
       ) : Promise<IMakeClosePositionTestResults> {
         const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
         const strategy = await setupMockedStrategy(
@@ -496,14 +500,14 @@ describe('ConverterStrategyBaseInternalTests', function() {
           [100_000, 200_000],
           tetuConverter.address
         );
-        const collateralAmount = parseUnits(collateralAmountNum.toString(), await collateralAsset.decimals());
+        const collateralAmount = parseUnits(params.collateralAmountNum.toString(), await collateralAsset.decimals());
 
         const borrowAssetDecimals = await borrowAsset.decimals();
-        const amountToRepay = parseUnits(amountToRepayNum.toString(), borrowAssetDecimals);
-        const needToRepay = parseUnits(needToRepayNum.toString(), borrowAssetDecimals);
-        const amountRepaid = parseUnits(amountRepaidNum.toString(), borrowAssetDecimals);
-        const swappedLeftoverCollateralOut = parseUnits(swappedLeftoverCollateralOutNum.toString(), borrowAssetDecimals);
-        const swappedLeftoverBorrowOut = parseUnits(swappedLeftoverBorrowOutNum.toString(), borrowAssetDecimals);
+        const amountToRepay = parseUnits(params.amountToRepayNum.toString(), borrowAssetDecimals);
+        const needToRepay = parseUnits(params.needToRepayNum.toString(), borrowAssetDecimals);
+        const amountRepaid = parseUnits(params.amountRepaidNum.toString(), borrowAssetDecimals);
+        const swappedLeftoverCollateralOut = parseUnits((params.swappedLeftoverCollateralOutNum || 0).toString(), borrowAssetDecimals);
+        const swappedLeftoverBorrowOut = parseUnits((params.swappedLeftoverBorrowOutNum || 0).toString(), borrowAssetDecimals);
         console.log("makeClosePositionTest.amountToRepay", amountToRepay);
         console.log("makeClosePositionTest.needToRepay", needToRepay);
         console.log("makeClosePositionTest.amountRepaid", amountRepaid);
@@ -529,11 +533,40 @@ describe('ConverterStrategyBaseInternalTests', function() {
           swappedLeftoverBorrowOut
         );
 
+        // prepare liquidator
+        if (amountToRepay.gt(needToRepay)) {
+          const pool = ethers.Wallet.createRandom().address;
+          const swapper = ethers.Wallet.createRandom().address;
+          const priceOut = parseUnits((params.priceOut || 0).toString(), await collateralAsset.decimals());
+
+          const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+          await controller.setLiquidator(liquidator.address);
+
+          await liquidator.setBuildRoute(borrowAsset.address, collateralAsset.address, pool, swapper, "");
+          await liquidator.setGetPriceForRoute(
+            borrowAsset.address,
+            collateralAsset.address,
+            pool,
+            swapper,
+            amountToRepay.sub(needToRepay),
+            priceOut
+          );
+          await liquidator.setLiquidateWithRoute(
+            borrowAsset.address,
+            collateralAsset.address,
+            pool,
+            swapper,
+            amountToRepay.sub(needToRepay),
+            priceOut
+          );
+          await collateralAsset.transfer(liquidator.address, priceOut);
+        }
+
         // Prepare balances
         // put collateral on the balance of the tetuConverter
         await collateralAsset.transfer(tetuConverter.address, collateralAmount);
         // put borrowed amount to the balance of the strategy
-        await borrowAsset.transfer(strategy.address, needToRepay);
+        await borrowAsset.transfer(strategy.address, amountToRepay);
 
         const balanceBorrowAssetStrategyBefore = await borrowAsset.balanceOf(strategy.address);
         const balanceCollateralStrategyBefore = await collateralAsset.balanceOf(strategy.address);
@@ -549,88 +582,99 @@ describe('ConverterStrategyBaseInternalTests', function() {
         };
       }
 
-      describe("amountToRepay <= needToRepay", () => {
-        it("should return expected value", async () => {
-          const collateralAmountNum = 2000;
-          const borrowedAmountNum = 1000;
-          const r = await makeClosePositionTest(
-            usdc,
-            collateralAmountNum,
-            dai,
-            borrowedAmountNum, // amount to repay
-            borrowedAmountNum, // need to repay
-            borrowedAmountNum, // actually repaid
-            0,
-            0
-          );
-          console.log("Results", r);
+      describe("Actually repaid amount is equal to needToRepay", () => {
+        describe("amountToRepay == needToRepay", () => {
+          it("should return expected value", async () => {
+            const collateralAmountNum = 2000;
+            const borrowedAmountNum = 1000;
+            const r = await makeClosePositionTest(
+              usdc,
+              dai,
+              {
+                collateralAmountNum,
+                amountToRepayNum: borrowedAmountNum,
+                needToRepayNum: borrowedAmountNum,
+                amountRepaidNum: borrowedAmountNum
+              }
+            );
+            console.log("Results", r);
 
-          const sret = [
-            r.retRepay.toString(),
-            r.balanceBorrowAssetStrategyBefore.sub(r.balanceBorrowAssetStrategyAfter).toString(),
-            r.balanceCollateralStrategyAfter.sub(r.balanceCollateralStrategyBefore).toString()
-          ].join("\n");
-          const sexpected = [
-            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
-            parseUnits(borrowedAmountNum.toString(), await dai.decimals()),
-            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
-          ].join("\n");
+            const sret = [
+              r.retRepay.toString(),
+              r.balanceBorrowAssetStrategyBefore.sub(r.balanceBorrowAssetStrategyAfter).toString(),
+              r.balanceCollateralStrategyAfter.sub(r.balanceCollateralStrategyBefore).toString()
+            ].join("\n");
+            const sexpected = [
+              parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
+              parseUnits(borrowedAmountNum.toString(), await dai.decimals()),
+              parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
+            ].join("\n");
 
-          expect(sret).eq(sexpected);
+            expect(sret).eq(sexpected);
+          });
         });
-        it("should make repay(amountToRepay)", async () => {
+        describe("amountToRepay > needToRepay", () => {
+          it("should swap (amountToRepay-needToRepay) and return expected collateral value", async () => {
+            const collateralAmountNum = 2000;
+            const borrowedAmountNum = 1000;
+            const delta = 100;
+            const deltaPriceOut = 500;
+            const r = await makeClosePositionTest(
+              usdc,
+              dai,
+              {
+                collateralAmountNum,
+                amountToRepayNum: borrowedAmountNum,
+                needToRepayNum: borrowedAmountNum - delta,
+                amountRepaidNum: borrowedAmountNum - delta,
+                priceOut: deltaPriceOut
+              }
+            );
+            console.log("Results", r);
 
-        });
-        it("should not call liquidate()", async () => {
+            const sret = [
+              r.retRepay.toString(),
 
-        });
-      });
-      describe("amountToRepay > needToRepay", () => {
-        it("should return expected value", async () => {
-          const collateralAmountNum = 2000;
-          const borrowedAmountNum = 1000;
-          const delta = 100;
-          const r = await makeClosePositionTest(
-            usdc,
-            collateralAmountNum,
-            dai,
-            borrowedAmountNum, // amount to repay
-            borrowedAmountNum - delta, // need to repay
-            borrowedAmountNum - delta, // actually repaid
-            0,
-            0
-          );
-          console.log("Results", r);
+              r.balanceBorrowAssetStrategyBefore.sub(r.balanceBorrowAssetStrategyAfter).toString(),
+              r.balanceCollateralStrategyAfter.sub(r.balanceCollateralStrategyBefore).toString()
+            ].join("\n");
+            const sexpected = [
+              parseUnits((collateralAmountNum + deltaPriceOut).toString(), await usdc.decimals()),
 
-          const sret = [
-            r.retRepay.toString(),
-            r.balanceBorrowAssetStrategyBefore.sub(r.balanceBorrowAssetStrategyAfter).toString(),
-            r.balanceCollateralStrategyAfter.sub(r.balanceCollateralStrategyBefore).toString()
-          ].join("\n");
-          const sexpected = [
-            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
-            parseUnits((borrowedAmountNum - delta).toString(), await dai.decimals()),
-            parseUnits(collateralAmountNum.toString(), await usdc.decimals()),
-          ].join("\n");
+              parseUnits(borrowedAmountNum.toString(), await dai.decimals()),
+              parseUnits((collateralAmountNum + deltaPriceOut).toString(), await usdc.decimals()),
+            ].join("\n");
 
-          expect(sret).eq(sexpected);
-        });
-        it("should make repay(amountToRepay)", async () => {
-
-        });
-        it("should liquidate (amountToRepay-needToRepay)", async () => {
-
+            expect(sret).eq(sexpected);
+          });
         });
       });
-    });
-    describe("Bad paths", () => {
-      describe("AmountToRepay exceeds actual value of the debt", () => {
-
+      describe("Actually repaid amount is less than needToRepay", () => {
+        it("should revert", async () => {
+          const collateralAmountNum = 2000;
+          const borrowedAmountNum = 1000;
+          const delta = 100; // amountToRepay - needToRepay
+          const delta2 = 50; // needToRepay - amountRepaid
+          const deltaPriceOut = 500;
+          await expect(
+            makeClosePositionTest(
+              usdc,
+              dai,
+              {
+                collateralAmountNum,
+                amountToRepayNum: borrowedAmountNum,
+                needToRepayNum: borrowedAmountNum - delta,
+                amountRepaidNum: borrowedAmountNum - delta - delta2,
+                priceOut: deltaPriceOut
+              }
+            )
+          ).revertedWith("CSB: Can not convert back");
+        });
       });
     });
   });
 
-  describe("_convertWithdrawnAmountsToAsset", () => {
+  describe("_convertDepositorPoolAssets", () => {
     describe("Good paths", () => {
       describe("amountToRepay <= needToRepay", () => {
         it("should call _closePosition() for borrowed token", async () => {

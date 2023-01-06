@@ -57,8 +57,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-  function convertWithdrawnAmountsToAssetTestAccess() external {
-    _convertWithdrawnAmountsToAsset();
+  function convertDepositorPoolAssetsTestAccess() external {
+    _convertDepositorPoolAssets();
   }
 
   function borrowPositionTestAccess(address collateralAsset, uint collateralAmount, address borrowAsset) external returns (

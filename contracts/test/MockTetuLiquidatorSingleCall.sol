@@ -44,8 +44,8 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
         route = new PoolData[](1);
         route[0].tokenIn = buildRouteParams.tokenIn;
         route[0].tokenOut = buildRouteParams.tokenOut;
-        route[0].pool = buildRouteParams.tokenOut;
-        route[0].swapper = buildRouteParams.tokenOut;
+        route[0].pool = buildRouteParams.pool;
+        route[0].swapper = buildRouteParams.swapper;
         return (route, errorMessage);
       } else {
         console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found");
@@ -80,7 +80,9 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   }
   GetPriceForRouteParams public getPriceForRouteParams;
   function getPriceForRoute(PoolData[] memory route, uint amount) external view override returns (uint) {
-    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute");
+    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute amount route.length", amount, route.length);
+    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute tokenIn, tokenOut", route[0].tokenIn, route[0].tokenOut);
+    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute pool, swapper", route[0].pool, route[0].swapper);
     if (
       route.length == 1
       && route[0].tokenOut == getPriceForRouteParams.tokenOut
@@ -92,7 +94,9 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.data");
       return getPriceForRouteParams.priceOut;
     } else {
-      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed");
+      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed amount", getPriceForRouteParams.amount);
+      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed tokenIn, tokenOut", getPriceForRouteParams.tokenIn, getPriceForRouteParams.tokenOut);
+      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed pool, swapper", getPriceForRouteParams.pool, getPriceForRouteParams.swapper);
       return 0;
     }
   }
@@ -122,6 +126,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     address swapper;
     uint amount;
     uint slippage;
+    uint amountOut;
   }
   LiquidateWithRouteParams public liquidateWithRouteParams;
 
@@ -139,9 +144,10 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       && route[0].pool == liquidateWithRouteParams.pool
       && amount == liquidateWithRouteParams.amount
     ) {
-      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.data");
+      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.data.1");
       IERC20(route[0].tokenIn).transferFrom(msg.sender, address(this), amount);
-      IERC20(route[0].tokenOut).transfer(msg.sender, amount);
+      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.data.2");
+      IERC20(route[0].tokenOut).transfer(msg.sender, liquidateWithRouteParams.amountOut);
     } else {
       console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.missed");
     }
@@ -152,14 +158,15 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     address pool,
     address swapper,
     uint amount,
-    uint slippage
+    uint amountOut
   ) external {
     liquidateWithRouteParams.tokenIn = tokenIn;
     liquidateWithRouteParams.tokenOut = tokenOut;
     liquidateWithRouteParams.pool = pool;
     liquidateWithRouteParams.swapper = swapper;
     liquidateWithRouteParams.amount = amount;
-    liquidateWithRouteParams.slippage = slippage;
+    liquidateWithRouteParams.slippage = 0;
+    liquidateWithRouteParams.amountOut = amountOut;
   }
 
   ///////////////////////////////////////////////////

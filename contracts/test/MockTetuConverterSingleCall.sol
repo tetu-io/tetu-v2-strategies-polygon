@@ -291,15 +291,18 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     && repayParams.amountToRepay == amountToRepay_
     // && repayParams.receiver == receiver_
     ) {
+      // transfer collateral back to the strategy
       require(
         IERC20Extended(collateralAsset_).balanceOf(address(this)) == repayParams.collateralAmountOut,
         "MockTetuConverterSingleCall.repay.collateralAmountOut"
       );
       IERC20Extended(collateralAsset_).transfer(receiver_, repayParams.collateralAmountOut);
 
+      // needToRepay was bigger than amountRepaid
+      // we need to return the leftover back to the strategy
       if (repayParams.returnedBorrowAmountOut != 0) {
         require(
-          IERC20Extended(borrowAsset_).balanceOf(address(this)) == repayParams.returnedBorrowAmountOut,
+          IERC20Extended(borrowAsset_).balanceOf(address(this)) >= repayParams.returnedBorrowAmountOut,
           "MockTetuConverterSingleCall.repay.returnedBorrowAmountOut"
         );
         IERC20Extended(borrowAsset_).transfer(receiver_, repayParams.returnedBorrowAmountOut);
