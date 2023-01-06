@@ -361,6 +361,7 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     uint collateralAmountOut
   ) {
     console.log("MockTetuConverterSingleCall.quoteRepay collateral,borrow,amount", collateralAsset_, borrowAsset_, amountToRepay_);
+    console.log("MockTetuConverterSingleCall.quoteRepay user_", user_);
 
     if (
       quoteRepayParams.user == user_
@@ -368,8 +369,11 @@ contract MockTetuConverterSingleCall is ITetuConverter {
     && quoteRepayParams.borrowAsset == borrowAsset_
     && quoteRepayParams.amountToRepay == amountToRepay_
     ) {
+      console.log("MockTetuConverterSingleCall.quoteRepay collateralAmountOut", quoteRepayParams.collateralAmountOut);
       return quoteRepayParams.collateralAmountOut;
     } else {
+      console.log("MockTetuConverterSingleCall.quoteRepay.missed collateralAsset,borrowAsset", quoteRepayParams.collateralAsset, quoteRepayParams.borrowAsset);
+      console.log("MockTetuConverterSingleCall.quoteRepay.missed user,collateralAmountOut", quoteRepayParams.user, quoteRepayParams.collateralAmountOut);
       return 0;
     }
   }

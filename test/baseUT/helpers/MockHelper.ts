@@ -1,6 +1,6 @@
 import {
   MockConverterStrategy,
-  MockConverterStrategy__factory,
+  MockConverterStrategy__factory, MockTetuConverterController,
   MockTetuConverterSingleCall, MockTetuLiquidatorSingleCall,
   PriceOracleMock
 } from "../../../typechain";
@@ -41,5 +41,16 @@ export class MockHelper {
       signer,
       'MockTetuLiquidatorSingleCall',
     )) as MockTetuLiquidatorSingleCall;
+  }
+
+  public static async createMockTetuConverterController(
+    signer: SignerWithAddress,
+    priceOracle: string
+  ) : Promise<MockTetuConverterController> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'MockTetuConverterController',
+      priceOracle
+    )) as MockTetuConverterController;
   }
 }

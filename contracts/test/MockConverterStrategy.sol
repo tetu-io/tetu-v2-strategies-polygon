@@ -72,4 +72,21 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ) {
     return _closePosition(collateralAsset, borrowAsset, amountToRepay);
   }
+
+  function updateInvestedAssetsTestAccess() external {
+    _updateInvestedAssets();
+  }
+
+  function withdrawFromPoolTestAccess(uint amount) external returns (uint investedAssetsUSD, uint assetPrice) {
+    return _withdrawFromPool(amount);
+  }
+
+  function _withdrawAllFromPoolTestAccess() external returns (uint investedAssetsUSD, uint assetPrice) {
+    return _withdrawAllFromPool();
+  }
+
+  function depositorLiquidityTestAccess() external view returns (uint) {
+    return _depositorLiquidity();
+  }
+
 }

@@ -180,7 +180,7 @@ describe('Dystopia Converter Strategy tests', function() {
   // const bufferDenominator = 100_000;
 //endregion Variables
 
-//region Before, after
+//region before, after
   before(async function() {
     [signer, signer1, signer2] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -266,7 +266,7 @@ describe('Dystopia Converter Strategy tests', function() {
   afterEach(async function() {
     await TimeUtils.rollback(snapshot);
   });
-//endregion Before, after
+//endregion before, after
 
 //region Unit tests
   describe("Invested Assets Calculation", function () {

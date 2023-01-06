@@ -82,7 +82,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount) override internal virtual {
-    console.log('_depositToPoolUniversal... amount', amount);
+    console.log('_depositToPool amount', amount);
 
     address _asset = asset;
     // skip deposit for small amounts
@@ -92,12 +92,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     address[] memory tokens = _depositorPoolAssets();
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
+
     uint len = tokens.length;
     uint[] memory tokenAmounts = new uint[](len);
 
-    console.log('Weights:');
-    TokenAmountsLib.print(tokens, weights);
-
+    // split the amount on tokens proportionally sto the weights
     for (uint i = 0; i < len; ++i) {
       uint assetAmountForToken = amount * weights[i] / totalWeight;
       address token = tokens[i];
@@ -112,22 +111,23 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         } else {
           // we do not have enough tokens - borrow
           uint collateral = assetAmountForToken - tokenBalance;
-          console.log('collateral', collateral);
           _borrowPosition(_asset, collateral, token);
           tokenAmounts[i] = _balance(token);
         }
       }
     }
 
+    _depositorEnter(tokenAmounts);
+    _updateInvestedAssets();
+
+    console.log('Weights:');
+    TokenAmountsLib.print(tokens, weights);
+
     console.log('Amounts for enter:');
     TokenAmountsLib.print(tokens, tokenAmounts);
 
-    _depositorEnter(tokenAmounts);
-
     console.log('Balance after:');
     TokenAmountsLib.printBalances(tokens, address(this));
-
-    _updateInvestedAssets();
   }
 
 
@@ -137,29 +137,25 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Withdraw given amount from the pool.
   /// @param amount Amount to be withdrawn in terms of the asset.
-  /// @return investedAssetsUSD The value that we should receive after withdrawing
+  /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
     console.log("_withdrawFromPool, amount", amount);
+    require(_investedAssets != 0, "CSB: no investments");
     if (amount != 0) {
-      // calculate amount of LP-tokens to be withdrawn
-      uint liquidityAmount = amount * _depositorLiquidity() / _investedAssets;
-      liquidityAmount += liquidityAmount / 100; // add 1% on top
-      console.log("_withdrawFromPool, liquidityAmount", liquidityAmount, _depositorLiquidity(), _investedAssets);
-
-      // predict expected amount to be withdrawn (in USD)
+      uint liquidityAmount = _depositorLiquidity()  // total amount of LP tokens owned by the strategy
+        * 101 // add 1% on top...
+        * amount / _investedAssets // a part of amount that we are going to withdraw
+        / 100; // .. add 1% on top
+      console.log("_withdrawFromPool._investedAssets", _investedAssets);
+      console.log("_withdrawFromPool._depositorLiquidity()", _depositorLiquidity());
+      console.log("_withdrawFromPool.liquidityAmount", liquidityAmount);
       (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(
-        liquidityAmount,
-        _depositorTotalSupply(),
+        liquidityAmount, // total amount of LP tokens to be withdrawn
+        _depositorTotalSupply(), // total amount of LP tokens in the pool
         IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
-    );
-
-      // withdraw the amount from the depositor to balance of the strategy
-      _depositorExit(liquidityAmount);
-
-      // convert all received amounts to the asset
-      _convertDepositorPoolAssets();
-      _updateInvestedAssets();
+      );
+      _withdrawFromPoolUniversal(liquidityAmount, false);
     }
 
     return (investedAssetsUSD, assetPrice);
@@ -178,42 +174,46 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _depositorTotalSupply(),
       IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
     );
-    console.log("_withdrawAllFromPool, liquidityAmount", liquidityAmount);
+    _withdrawFromPoolUniversal(liquidityAmount, false);
+  }
 
-    // withdraw all available amounts from the depositor to balance of the strategy
-    _depositorExit(liquidityAmount);
+  /// @notice If pool support emergency withdraw need to call it for emergencyExit()
+  function _emergencyExitFromPool() override internal virtual {
+    _withdrawFromPoolUniversal(0, true);
+  }
+
+  function _withdrawFromPoolUniversal(uint liquidityAmount_, bool emergency_) internal {
+    // withdraw the amount from the depositor to balance of the strategy
+    if (emergency_) {
+      _depositorEmergencyExit();
+    } else {
+      console.log("_withdrawFromPoolUniversal liquidityAmount", liquidityAmount_);
+      _depositorExit(liquidityAmount_);
+    }
+
+    console.log('/// Balance after withdraw:');
+    TokenAmountsLib.printBalances(_depositorPoolAssets(), address(this));
 
     // convert all received amounts to the asset
     _convertDepositorPoolAssets();
     _updateInvestedAssets();
   }
 
-  /// @notice If pool support emergency withdraw need to call it for emergencyExit()
-  function _emergencyExitFromPool() override internal virtual {
-    _depositorEmergencyExit();
-
-    _convertDepositorPoolAssets();
-    _updateInvestedAssets();
-  }
-
   /// @notice Convert all amounts withdrawn from the depositor to {asset}
   function _convertDepositorPoolAssets() internal {
-    console.log('_convertWithdrawnAmountToAsset');
+    address _asset = asset;
+    console.log('_convertDepositorPoolAssets balance before', _balance(_asset));
 
     address[] memory tokens = _depositorPoolAssets();
     uint len = tokens.length;
 
-    console.log('/// Balance after withdraw:');
-    TokenAmountsLib.printBalances(tokens, address(this));
-
-    address _asset = asset;
     for (uint i = 0; i < len; ++i) {
       address borrowedToken = tokens[i];
       if (_asset != borrowedToken) {
         _closePosition(_asset, borrowedToken, _balance(borrowedToken));
       }
     }
-    console.log('_convertWithdrawnAmountToAsset _balance', _balance(_asset));
+    console.log('_convertDepositorPoolAssets balance after', _balance(_asset));
   }
 
   /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset}
@@ -231,6 +231,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint investedAssetsUSD,
     uint assetPrice
   ) {
+    console.log("_getExpectedWithdrawnAmountUSD.liquidityAmount_", liquidityAmount_);
+    console.log("_getExpectedWithdrawnAmountUSD.totalSupply_", totalSupply_);
     address[] memory poolAssets = _depositorPoolAssets(); // token A - first, token B - second
     uint[] memory reserves = _depositorPoolReserves(); // token A - first, token B - second
 
@@ -246,6 +248,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     assetPrice = priceOracle_.getAssetPrice(poolAssets[index0]);
     uint priceSecond = priceOracle_.getAssetPrice(poolAssets[index1]);
+    console.log("_getExpectedWithdrawnAmountUSD.assetPrice", assetPrice);
+    console.log("_getExpectedWithdrawnAmountUSD.priceSecond", priceSecond);
 
     investedAssetsUSD = assetPrice == 0 || priceSecond == 0
       ? 0 // it's better to return zero here than a half of the amount
@@ -363,9 +367,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       } else {
         lost = investedBefore - investedAfter;
       }
-
     }
-
   }
 
 
@@ -398,6 +400,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       estimatedAssets += _asset == borrowedToken
         ? amountsOut[i]
         : tetuConverter.quoteRepay(address(this), _asset, borrowedToken, _balance(borrowedToken) + amountsOut[i]);
+      console.log("_balance(borrowedToken)", _balance(borrowedToken));
+      console.log("amountsOut[i]", amountsOut[i]);
+      console.log("estimatedAssets", estimatedAssets);
     }
     console.log("calcInvestedAssets.estimatedAssets", estimatedAssets);
   }

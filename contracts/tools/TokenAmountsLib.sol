@@ -162,10 +162,11 @@ library TokenAmountsLib {
 
     }
 
+    /// @notice Print tokens and tokens balances of the {strategy_}
     function printBalances(
         address[] memory tokens_,
         address strategy_
-    ) external view {
+    ) internal view {
         uint len = tokens_.length;
         uint[] memory tokenAmounts = new uint[](len);
         for (uint i = 0; i < len; ++i) {

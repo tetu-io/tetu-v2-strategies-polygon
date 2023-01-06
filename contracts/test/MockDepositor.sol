@@ -16,13 +16,13 @@ contract MockDepositor is DepositorBase, Initializable {
   uint[] private _depositorWeights;
 
   address[] private _depositorAssets;
-  uint[] private _depositorAmounts;
 
   address[] private _depositorRewardTokens;
   uint[] private _depositorRewardAmounts;
 
   /// @notice total amount of active LP tokens.
   uint public totalSupply;
+  uint private depositorLiquidity;
 
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
@@ -43,8 +43,6 @@ contract MockDepositor is DepositorBase, Initializable {
     uint tokensLength = tokens_.length;
     for (uint i = 0; i < tokensLength; ++i) {
       _depositorAssets.push(tokens_[i]);
-      _depositorAmounts.push(0);
-
       _depositorWeights.push(depositorWeights_[i]);
       _depositorReserves.push(depositorReserves_[i]);
     }
@@ -56,6 +54,10 @@ contract MockDepositor is DepositorBase, Initializable {
 
   function setTotalSupply(uint totalSupply_) external {
     totalSupply = totalSupply_;
+  }
+
+  function setDepositorLiquidity(uint depositorLiquidity_) external {
+    depositorLiquidity = depositorLiquidity_;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -87,7 +89,7 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return _depositorAmounts[0];
+    return depositorLiquidity;
   }
 
   function _minValue(uint[] memory values_) private pure returns (uint min) {
