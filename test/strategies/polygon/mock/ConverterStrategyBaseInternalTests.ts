@@ -7,7 +7,7 @@ import {
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {parseUnits} from "ethers/lib/utils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {expect} from "chai";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
@@ -112,8 +112,6 @@ describe('ConverterStrategyBaseInternalTests', function() {
       splitter.address,
       tetuConverterAddress || ethers.Wallet.createRandom().address,
       depositorTokens.map(x => x.address),
-      [],
-      [],
       [1, 1],
       depositorReserves
     );
@@ -855,6 +853,87 @@ describe('ConverterStrategyBaseInternalTests', function() {
     });
     describe("Bad paths", () => {
       // amount == 0
+    });
+  });
+
+  describe("calcInvestedAssets", () => {
+    interface IMakeCalcInvestedAssetsInputParams {
+      amountCollateralOnStrategyBalanceNum: number;
+      amountBorrowAssetOnStrategyBalanceNum: number;
+      quoteRepayResultCollateralAmountNum: number;
+      depositorLiquidity: BigNumber;
+      amountCollateralFromDepositorNum: number;
+      amountBorrowAssetFromDepositorNum: number;
+    }
+    interface IMakeCalcInvestedAssetsTestResults {
+      estimatedAssetsNum: number;
+    }
+    async function makeCalcInvestedAssetsTest(
+      collateralAsset: MockToken,
+      borrowAsset: MockToken,
+      params: IMakeCalcInvestedAssetsInputParams
+    ) : Promise<IMakeCalcInvestedAssetsTestResults> {
+      const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+      const strategy = await setupMockedStrategy(
+        collateralAsset,
+        [collateralAsset, borrowAsset],
+        [100_000, 200_000],
+        tetuConverter.address
+      );
+
+      const collateralDecimals = await collateralAsset.decimals();
+      const borrowDecimals = await borrowAsset.decimals();
+
+      const collateralAmount = parseUnits(params.amountCollateralOnStrategyBalanceNum.toString(), collateralDecimals);
+      const collateralAmountOut = parseUnits(params.quoteRepayResultCollateralAmountNum.toString(), collateralDecimals);
+      const borrowAmount = parseUnits(params.amountBorrowAssetOnStrategyBalanceNum.toString(), borrowDecimals);
+      const amountCollateralFromDepositor = parseUnits(params.amountCollateralFromDepositorNum.toString(), collateralDecimals);
+      const amountBorrowAssetFromDepositor = parseUnits(params.amountBorrowAssetFromDepositorNum.toString(), borrowDecimals);
+
+      // Put two amounts on the balance of the strategy
+      await collateralAsset.transfer(strategy.address, collateralAmount);
+      await borrowAsset.transfer(strategy.address, borrowAmount);
+
+      // set up mocked quoteRepay to exchange borrow asset => collateral asset
+      await tetuConverter.setQuoteRepay(
+        strategy.address,
+        collateralAsset.address,
+        borrowAsset.address,
+        borrowAmount.add(amountBorrowAssetFromDepositor),
+        collateralAmountOut
+      );
+
+      // set up mocked _depositorQuoteExit
+      await strategy.setDepositorLiquidity(params.depositorLiquidity);
+      await strategy.setDepositorQuoteExit(
+        params.depositorLiquidity,
+        [amountCollateralFromDepositor, amountBorrowAssetFromDepositor]
+      );
+
+      const estimatedAssets = await strategy.callStatic.calcInvestedAssets();
+
+      return {
+        estimatedAssetsNum: Number(formatUnits(estimatedAssets, collateralDecimals))
+      };
+    }
+    describe("Good paths", () => {
+     it("should return expected value", async () => {
+       const r = await makeCalcInvestedAssetsTest(
+         dai,
+         usdc,
+         {
+           amountCollateralOnStrategyBalanceNum: 500,
+           amountBorrowAssetOnStrategyBalanceNum: 700,
+           quoteRepayResultCollateralAmountNum: 300,
+           depositorLiquidity: parseUnits("1", 27), // the actual value doesn't matter
+           amountCollateralFromDepositorNum: 77,
+           amountBorrowAssetFromDepositorNum: 33
+         }
+       )
+       console.log("Results", r);
+
+       expect(r.estimatedAssetsNum).eq(300 + 77);
+     });
     });
   });
 

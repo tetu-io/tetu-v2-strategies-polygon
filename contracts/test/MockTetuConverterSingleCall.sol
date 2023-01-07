@@ -372,8 +372,12 @@ contract MockTetuConverterSingleCall is ITetuConverter {
       console.log("MockTetuConverterSingleCall.quoteRepay collateralAmountOut", quoteRepayParams.collateralAmountOut);
       return quoteRepayParams.collateralAmountOut;
     } else {
+      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.user == user_", quoteRepayParams.user == user_);
+      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.collateralAsset == collateralAsset_", quoteRepayParams.collateralAsset == collateralAsset_);
+      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.borrowAsset == borrowAsset_", quoteRepayParams.borrowAsset == borrowAsset_);
+      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.amountToRepay == amountToRepay_", quoteRepayParams.amountToRepay == amountToRepay_);
       console.log("MockTetuConverterSingleCall.quoteRepay.missed collateralAsset,borrowAsset", quoteRepayParams.collateralAsset, quoteRepayParams.borrowAsset);
-      console.log("MockTetuConverterSingleCall.quoteRepay.missed user,collateralAmountOut", quoteRepayParams.user, quoteRepayParams.collateralAmountOut);
+      console.log("MockTetuConverterSingleCall.quoteRepay.missed amountToRepay_,user,collateralAmountOut", quoteRepayParams.amountToRepay, quoteRepayParams.user, quoteRepayParams.collateralAmountOut);
       return 0;
     }
   }
