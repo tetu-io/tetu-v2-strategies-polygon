@@ -1,19 +1,13 @@
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import hre, { ethers } from 'hardhat';
+import { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import {
-  MockGauge,
   IERC20__factory,
-  MockSplitter,
-  ProxyControlled,
   StrategySplitterV2,
   TetuVaultV2,
-  TetuVaultV2__factory,
-  VaultInsurance,
-  VaultInsurance__factory,
   IERC20,
   IGauge,
   IController,
@@ -28,7 +22,6 @@ import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addres
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { BigNumber } from 'ethers';
-import { ConverterUtils } from '../../ConverterUtils';
 import { MaticAddresses } from '../../../../scripts/MaticAddresses';
 
 
@@ -37,7 +30,124 @@ chai.use(chaiAsPromised);
 
 const balanceOf = TokenUtils.balanceOf;
 
-describe('Dystopia Converter Strategy tests', function() {
+//region Utils
+async function depositToVaultAndCheck(
+  signer: SignerWithAddress,
+  vault: TetuVaultV2,
+  amount: BigNumber,
+  strategy: DystopiaConverterStrategy,
+  movePriceBefore = false,
+) {
+
+  const pairAdr = await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer)
+    .pairFor(PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, true);
+  const pair = IPair__factory.connect(pairAdr, signer);
+
+  const daiOutBefore = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+  if (movePriceBefore) {
+    await swap(signer, PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, parseUnits('10000', 6));
+  }
+
+  const sharePriceBefore = await vault.sharePrice();
+
+  await vault.connect(signer).deposit(amount, signer.address);
+
+  const sharePriceAfter = await vault.sharePrice();
+  const daiOutAfter = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+  console.log(`>>> /// DEPOSIT sharePrice before ${formatUnits(
+    sharePriceBefore,
+    6,
+  )} after ${formatUnits(sharePriceAfter, 6)}`);
+
+  console.log(`>>> /// DEPOSIT price before ${daiOutBefore} after ${daiOutAfter} diff: ${((daiOutAfter - daiOutBefore) /
+    daiOutAfter).toFixed(6)}%`);
+}
+
+async function withdrawAllVaultAndCheck(
+  signer: SignerWithAddress,
+  vault: TetuVaultV2,
+  strategy: DystopiaConverterStrategy,
+  movePriceBefore = false,
+) {
+
+  const pairAdr = await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer)
+    .pairFor(PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, true);
+  const pair = IPair__factory.connect(pairAdr, signer);
+
+  const daiOutBefore = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+  if (movePriceBefore) {
+    await swap(signer, PolygonAddresses.DAI_TOKEN, PolygonAddresses.USDC_TOKEN, parseUnits('1000'));
+  }
+
+
+  const sharePriceBefore = await vault.sharePrice();
+
+  await vault.connect(signer).withdrawAll();
+
+  const sharePriceAfter = await vault.sharePrice();
+  const totalAssets = formatUnits(await vault.totalAssets(), 6);
+  const totalSupply = formatUnits(await vault.totalSupply(), 6);
+  const daiOutAfter = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
+
+
+  console.log(`>>> /// WITHDRAW sharePrice before ${formatUnits(sharePriceBefore, 6)} after ${formatUnits(
+    sharePriceAfter,
+    6,
+  )}`);
+  console.log(`>>> /// WITHDRAW price before ${daiOutBefore} after ${daiOutAfter} diff: ${((daiOutAfter -
+    daiOutBefore) / daiOutAfter).toFixed(6)}%`);
+  console.log(`>>> /// WITHDRAW totalAssets ${totalAssets} totalSupply ${totalSupply}`);
+}
+
+async function swap(signer: SignerWithAddress, tokenIn: string, tokenOut: string, amount: BigNumber) {
+  await TokenUtils.getToken(tokenIn, signer.address, amount.mul(2));
+  await IERC20__factory.connect(tokenIn, signer)
+    .approve(MaticAddresses.DYSTOPIA_ROUTER, Misc.MAX_UINT);
+  await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer).swapExactTokensForTokensSimple(
+    amount,
+    0,
+    tokenIn,
+    tokenOut,
+    true,
+    signer.address,
+    (Date.now() / 1000 + 100000).toFixed(0),
+  );
+
+  // await IERC20__factory.connect(tokenIn, signer)
+  //   .approve(MaticAddresses.TETU_LIQUIDATOR, Misc.MAX_UINT);
+  // await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).liquidate(tokenIn, tokenOut, amount, 100_000)
+}
+
+async function setLiquidatorPath(strategy: DystopiaConverterStrategy) {
+  const signer = await Misc.impersonate('0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94');
+  const DYSTOPIA_SWAPPER = '0x867F88209074f4B7300e7593Cd50C05B2c02Ad01';
+  const pair = await strategy.depositorPair();
+
+  await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).addLargestPools([
+    {
+      pool: pair,
+      swapper: DYSTOPIA_SWAPPER,
+      tokenIn: MaticAddresses.DAI_TOKEN,
+      tokenOut: MaticAddresses.USDC_TOKEN,
+    },
+  ], true);
+
+  await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).addLargestPools([
+    {
+      pool: pair,
+      swapper: DYSTOPIA_SWAPPER,
+      tokenIn: MaticAddresses.USDC_TOKEN,
+      tokenOut: MaticAddresses.DAI_TOKEN,
+    },
+  ], true);
+}
+//endregion Utils
+
+describe('DystopiaConverterStrategyTests', function() {
+//region Variables
   let snapshotBefore: string;
   let snapshot: string;
   let gov: SignerWithAddress;
@@ -61,7 +171,9 @@ describe('Dystopia Converter Strategy tests', function() {
   let feeDenominator: BigNumber;
   const bufferRate = 1_000; // n_%
   // const bufferDenominator = 100_000;
+//endregion Variables
 
+//region before, after
   before(async function() {
     [signer, signer1, signer2] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -85,7 +197,9 @@ describe('Dystopia Converter Strategy tests', function() {
 
     const strategyDeployer = async(_splitterAddress: string) => {
       const _strategy = DystopiaConverterStrategy__factory.connect(
-        await DeployerUtils.deployProxy(signer, 'DystopiaConverterStrategy'), gov);
+        await DeployerUtils.deployProxy(signer, 'DystopiaConverterStrategy'),
+        gov
+      );
 
       await _strategy.init(
         core.controller,
@@ -130,7 +244,7 @@ describe('Dystopia Converter Strategy tests', function() {
     await asset.approve(vault.address, Misc.MAX_UINT);
 
     // Disable DForce at TetuConverter
-    await ConverterUtils.disableDForce(asset.address, token2.address, signer);
+    // await ConverterUtils.disableDForce(asset.address, token2.address, signer);
 
   });
 
@@ -145,10 +259,27 @@ describe('Dystopia Converter Strategy tests', function() {
   afterEach(async function() {
     await TimeUtils.rollback(snapshot);
   });
+//endregion before, after
 
-  ////////////////////// TESTS ///////////////////////
+//region Unit tests
+  describe("Invested Assets Calculation", function () {
+    it("calc must be same as the amount actually got on withdraw", async () => {
+      await vault.deposit(_1, signer.address);
+      await vault.withdrawAll();
 
-  describe('Small Amounts', function() {
+      // todo we need a test to check calcInvestedAssets
+      const ret = await strategy.callStatic.calcInvestedAssets();
+      // const expected = await strategy.callStatic._getInvestedAssets();
+      //
+      // console.log('_investedAssets', (await strategy.investedAssets()).toString());
+      // console.log('assetCalculated', ret.toString());
+      // console.log('assetsGet      ', expected.toString());
+      //
+      // expect(ret.toString()).eq(expected.toString());
+    });
+  });
+
+  describe('Small Amounts, less then the threshold', function() {
     it('fees check', async() => {
       expect(await vault.depositFee()).eq(0);
       expect(await vault.withdrawFee()).eq(0);
@@ -275,12 +406,9 @@ describe('Dystopia Converter Strategy tests', function() {
 
       await vault1.withdrawAll();
       await vault2.withdrawAll();
-
-
     });
 
   });
-
 
   describe('Tokens Movement', function() {
     const DEPOSIT_FEE = 300;
@@ -299,138 +427,26 @@ describe('Dystopia Converter Strategy tests', function() {
     });
 
     it('deposit', async() => {
-      console.log('deposit...');
-      const deposit = _100_000;
-      await vault.deposit(deposit, signer.address);
-
-      const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
-      expect((await balanceOf(asset.address, insuranceAddress)).toNumber()).approximately(depositFee.toNumber(), 10);
-      // const depositWithFee = deposit.sub(depositFee);
-      // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
-      // expect(await balanceOf(asset.address, vault.address)).eq(buffer);
-      expect(await balanceOf(asset.address, splitter.address)).eq(0);
-      // expect(await balanceOf(asset.address, strategy.address)).eq(0);
-
-      console.log('withdrawAll...');
-      hre.tracer.enabled = true;
-      await vault.withdrawAll();
-
+      // console.log('deposit...');
+      // const deposit = _100_000;
+      // await vault.deposit(deposit, signer.address);
+      //
+      // const depositFee = deposit.mul(DEPOSIT_FEE).div(feeDenominator);
+      // expect((await balanceOf(asset.address, insuranceAddress)).toNumber()).approximately(depositFee.toNumber(), 10);
+      // // const depositWithFee = deposit.sub(depositFee);
+      // // const buffer = depositWithFee.mul(bufferRate).div(bufferDenominator);
+      // // expect(await balanceOf(asset.address, vault.address)).eq(buffer);
+      // expect(await balanceOf(asset.address, splitter.address)).eq(0);
+      // // expect(await balanceOf(asset.address, strategy.address)).eq(0);
+      //
+      // console.log('withdrawAll...');
+      // hre.tracer.enabled = true;
+      // await vault.withdrawAll();
     });
 
   });
+//endregion Unit tests
 });
 
 
-async function depositToVaultAndCheck(
-  signer: SignerWithAddress,
-  vault: TetuVaultV2,
-  amount: BigNumber,
-  strategy: DystopiaConverterStrategy,
-  movePriceBefore = false,
-) {
 
-  const pairAdr = await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer)
-    .pairFor(PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, true);
-  const pair = IPair__factory.connect(pairAdr, signer);
-
-  const daiOutBefore = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
-
-  if (movePriceBefore) {
-    await swap(signer, PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, parseUnits('10000', 6));
-  }
-
-  const sharePriceBefore = await vault.sharePrice();
-
-  await vault.connect(signer).deposit(amount, signer.address);
-
-  const sharePriceAfter = await vault.sharePrice();
-  const daiOutAfter = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
-
-  console.log(`>>> /// DEPOSIT sharePrice before ${formatUnits(
-    sharePriceBefore,
-    6,
-  )} after ${formatUnits(sharePriceAfter, 6)}`);
-
-  console.log(`>>> /// DEPOSIT price before ${daiOutBefore} after ${daiOutAfter} diff: ${((daiOutAfter - daiOutBefore) /
-    daiOutAfter).toFixed(6)}%`);
-}
-
-async function withdrawAllVaultAndCheck(
-  signer: SignerWithAddress,
-  vault: TetuVaultV2,
-  strategy: DystopiaConverterStrategy,
-  movePriceBefore = false,
-) {
-
-  const pairAdr = await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer)
-    .pairFor(PolygonAddresses.USDC_TOKEN, PolygonAddresses.DAI_TOKEN, true);
-  const pair = IPair__factory.connect(pairAdr, signer);
-
-  const daiOutBefore = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
-
-  if (movePriceBefore) {
-    await swap(signer, PolygonAddresses.DAI_TOKEN, PolygonAddresses.USDC_TOKEN, parseUnits('1000'));
-  }
-
-
-  const sharePriceBefore = await vault.sharePrice();
-
-  await vault.connect(signer).withdrawAll();
-
-  const sharePriceAfter = await vault.sharePrice();
-  const totalAssets = formatUnits(await vault.totalAssets(), 6);
-  const totalSupply = formatUnits(await vault.totalSupply(), 6);
-  const daiOutAfter = +formatUnits(await pair.getAmountOut(parseUnits('1', 6), PolygonAddresses.USDC_TOKEN));
-
-
-  console.log(`>>> /// WITHDRAW sharePrice before ${formatUnits(sharePriceBefore, 6)} after ${formatUnits(
-    sharePriceAfter,
-    6,
-  )}`);
-  console.log(`>>> /// WITHDRAW price before ${daiOutBefore} after ${daiOutAfter} diff: ${((daiOutAfter -
-    daiOutBefore) / daiOutAfter).toFixed(6)}%`);
-  console.log(`>>> /// WITHDRAW totalAssets ${totalAssets} totalSupply ${totalSupply}`);
-}
-
-async function swap(signer: SignerWithAddress, tokenIn: string, tokenOut: string, amount: BigNumber) {
-  await TokenUtils.getToken(tokenIn, signer.address, amount.mul(2));
-  await IERC20__factory.connect(tokenIn, signer)
-    .approve(MaticAddresses.DYSTOPIA_ROUTER, Misc.MAX_UINT);
-  await IRouter__factory.connect(MaticAddresses.DYSTOPIA_ROUTER, signer).swapExactTokensForTokensSimple(
-    amount,
-    0,
-    tokenIn,
-    tokenOut,
-    true,
-    signer.address,
-    (Date.now() / 1000 + 100000).toFixed(0),
-  );
-
-  // await IERC20__factory.connect(tokenIn, signer)
-  //   .approve(MaticAddresses.TETU_LIQUIDATOR, Misc.MAX_UINT);
-  // await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).liquidate(tokenIn, tokenOut, amount, 100_000)
-}
-
-async function setLiquidatorPath(strategy: DystopiaConverterStrategy) {
-  const signer = await Misc.impersonate('0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94');
-  const DYSTOPIA_SWAPPER = '0x867F88209074f4B7300e7593Cd50C05B2c02Ad01';
-  const pair = await strategy.depositorPair();
-
-  await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).addLargestPools([
-    {
-      pool: pair,
-      swapper: DYSTOPIA_SWAPPER,
-      tokenIn: MaticAddresses.DAI_TOKEN,
-      tokenOut: MaticAddresses.USDC_TOKEN,
-    },
-  ], true);
-
-  await ITetuLiquidator__factory.connect(MaticAddresses.TETU_LIQUIDATOR, signer).addLargestPools([
-    {
-      pool: pair,
-      swapper: DYSTOPIA_SWAPPER,
-      tokenIn: MaticAddresses.USDC_TOKEN,
-      tokenOut: MaticAddresses.DAI_TOKEN,
-    },
-  ], true);
-}

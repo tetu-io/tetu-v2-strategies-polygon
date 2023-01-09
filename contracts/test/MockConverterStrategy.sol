@@ -18,16 +18,12 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address splitter_,
     address converter_,
     address[] memory depositorTokens_,
-    address[] memory depositorRewardTokens_,
-    uint[] memory depositorRewardAmounts_,
     uint[] memory depositorWeights_,
     uint[] memory depositorReserves_
   ) external initializer {
 
     __MockDepositor_init(
       depositorTokens_,
-      depositorRewardTokens_,
-      depositorRewardAmounts_,
       depositorWeights_,
       depositorReserves_
     );
@@ -37,6 +33,56 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       splitter_,
       converter_
     );
+  }
+
+  //////////////////////////////////////////////////////////////////////
+  ///    Provide direct access to internal functions for tests
+  //////////////////////////////////////////////////////////////////////
+  function getExpectedWithdrawnAmountUSDTestAccess(
+    uint liquidityAmount_,
+    uint totalSupply_,
+    address priceOracle_
+  ) external view returns (
+    uint investedAssetsUSD,
+    uint assetPrice
+  ) {
+    return _getExpectedWithdrawnAmountUSD(
+      liquidityAmount_,
+      totalSupply_,
+      IPriceOracle(priceOracle_)
+    );
+  }
+
+  function convertDepositorPoolAssetsTestAccess() external {
+    _convertDepositorPoolAssets();
+  }
+
+  function borrowPositionTestAccess(address collateralAsset, uint collateralAmount, address borrowAsset) external returns (
+    uint borrowedAmount
+  ) {
+    return _borrowPosition(collateralAsset, collateralAmount, borrowAsset);
+  }
+
+  function closePositionTestAccess(address collateralAsset, address borrowAsset, uint amountToRepay) external returns (
+    uint returnedAssetAmount
+  ) {
+    return _closePosition(collateralAsset, borrowAsset, amountToRepay);
+  }
+
+  function updateInvestedAssetsTestAccess() external {
+    _updateInvestedAssets();
+  }
+
+  function withdrawFromPoolTestAccess(uint amount) external returns (uint investedAssetsUSD, uint assetPrice) {
+    return _withdrawFromPool(amount);
+  }
+
+  function _withdrawAllFromPoolTestAccess() external returns (uint investedAssetsUSD, uint assetPrice) {
+    return _withdrawAllFromPool();
+  }
+
+  function depositorLiquidityTestAccess() external view returns (uint) {
+    return _depositorLiquidity();
   }
 
 }

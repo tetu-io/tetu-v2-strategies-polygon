@@ -34,7 +34,7 @@ const argv = require('yargs/yargs')()
 chai.use(chaiAsPromised);
 
 //todo broken
-describe.skip('Universal tests', async () => {
+describe.skip('DystopiaConverterUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
