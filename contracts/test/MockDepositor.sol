@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 import "../strategies/depositors/DepositorBase.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/test/IMockToken.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
+import "hardhat/console.sol";
 
 /// @title Mock contract for base Depositor.
 /// @author bogdoslav
@@ -143,6 +144,7 @@ contract MockDepositor is DepositorBase, Initializable {
   DepositorExitParams public depositorExitParams;
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+    console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
     require(liquidityAmount == depositorExitParams.liquidityAmount, "_depositorExit input params");
 
     uint len = _depositorAssets.length;
@@ -170,6 +172,7 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Quotes output for given lp amount from the pool.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
+    console.log("_depositorQuoteExit liquidityAmount", liquidityAmount);
     require(liquidityAmount == depositorQuoteExitParams.liquidityAmount, "_depositorQuoteExit input params");
 
     uint len = _depositorAssets.length;

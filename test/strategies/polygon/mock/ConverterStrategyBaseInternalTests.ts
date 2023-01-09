@@ -681,6 +681,8 @@ describe('ConverterStrategyBaseInternalTests', function() {
       totalSupply: BigNumber;
       investedAssetNum: number;
       amountToWithdrawNum: number | undefined; // use undefined to withdraw all
+      collateralDepositorAmountOutNum: number;
+      borrowAssetDepositorAmountOutNum: number;
     }
     interface IMakeWithdrawTestResults {
       ret: {
@@ -709,7 +711,9 @@ describe('ConverterStrategyBaseInternalTests', function() {
       );
       const collateralAmount = parseUnits(params.collateralAmountNum.toString(), await collateralAsset.decimals());
 
+      const collateralAssetDecimals = await collateralAsset.decimals();
       const borrowAssetDecimals = await borrowAsset.decimals();
+
       const amountToRepay = parseUnits(params.amountToRepayNum.toString(), borrowAssetDecimals);
       const needToRepay = parseUnits(params.needToRepayNum.toString(), borrowAssetDecimals);
       const amountRepaid = parseUnits(params.amountRepaidNum.toString(), borrowAssetDecimals);
@@ -729,18 +733,41 @@ describe('ConverterStrategyBaseInternalTests', function() {
       const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await tetuConverter.setController(tetuConverterController.address);
 
+      const amountToWithdraw = params.amountToWithdrawNum
+        ? parseUnits(params.amountToWithdrawNum.toString(), await collateralAsset.decimals())
+        : undefined;
+
       // Prepare balances
       // put collateral on the balance of the tetuConverter
       await collateralAsset.transfer(tetuConverter.address, collateralAmount);
       // put borrowed amount to the balance of the strategy
       await borrowAsset.transfer(strategy.address, amountToRepay);
 
-      // set _investedAssets to predicted value
+      // set _investedAssets to predefined value
+      const depositorAmountsOut = [
+        parseUnits(params.collateralDepositorAmountOutNum.toString(), collateralAssetDecimals),
+        parseUnits(params.borrowAssetDepositorAmountOutNum.toString(), borrowAssetDecimals),
+      ];
+      await strategy.setDepositorQuoteExit(params.depositorLiquidity, depositorAmountsOut);
+
+      const expectedInvestedAssets = parseUnits(
+        (params.collateralDepositorAmountOutNum + params.investedAssetNum).toString(),
+        collateralAssetDecimals
+      );
+      const expectedLiquidityAmount = amountToWithdraw
+        ? params.depositorLiquidity
+          .mul(101)
+          .mul(amountToWithdraw)
+          .div(expectedInvestedAssets)
+          .div(100)
+        : params.depositorLiquidity;
+
+      await strategy.setDepositorExit(expectedLiquidityAmount, depositorAmountsOut);
       await tetuConverter.setQuoteRepay(
         strategy.address,
         collateralAsset.address,
         borrowAsset.address,
-        amountToRepay.add(params.depositorLiquidity),
+        amountToRepay.add(depositorAmountsOut[1]),
         parseUnits(params.investedAssetNum.toString(), await collateralAsset.decimals())
       );
       await strategy.updateInvestedAssetsTestAccess(); // tetuConverter.quoteRepay is called internally
@@ -760,9 +787,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
       const depositorLiquidity = await strategy.depositorLiquidityTestAccess();
       const investedAssets = await strategy.investedAssets();
 
-      const amountToWithdraw = params.amountToWithdrawNum
-        ? parseUnits(params.amountToWithdrawNum.toString(), await collateralAsset.decimals())
-        : undefined;
+
       const liquidityAmount = amountToWithdraw
         ? depositorLiquidity
           .mul(101)
@@ -805,7 +830,10 @@ describe('ConverterStrategyBaseInternalTests', function() {
 
               amountToRepayNum: 900,
               amountRepaidNum: 900,
-              needToRepayNum: 900
+              needToRepayNum: 900,
+
+              collateralDepositorAmountOutNum: 1999,
+              borrowAssetDepositorAmountOutNum: 173
             }
           );
           console.log(r);
@@ -835,7 +863,11 @@ describe('ConverterStrategyBaseInternalTests', function() {
 
               amountToRepayNum: 900,
               amountRepaidNum: 900,
-              needToRepayNum: 900
+              needToRepayNum: 900,
+
+              collateralDepositorAmountOutNum: 1999,
+              borrowAssetDepositorAmountOutNum: 173
+
             }
           );
           console.log(r);

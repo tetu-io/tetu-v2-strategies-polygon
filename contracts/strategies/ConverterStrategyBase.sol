@@ -66,6 +66,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function setThreshold(address token, uint amount) public {
+    console.log("ConverterStrategyBase.setThreshold", token, amount);
     _onlyOperators();
     thresholds[token] = amount;
     emit ThresholdChanged(token, amount);
@@ -87,6 +88,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address _asset = asset;
     // skip deposit for small amounts
     if (amount < thresholds[_asset]) {
+      console.log('_depositToPool thresholds', thresholds[_asset]);
       return;
     }
 
@@ -142,7 +144,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
     console.log("_withdrawFromPool, amount", amount);
     require(_investedAssets != 0, "CSB: no investments");
-    if (amount != 0) {
+    if (amount != 0 && _investedAssets != 0) {
       uint liquidityAmount = _depositorLiquidity()  // total amount of LP tokens owned by the strategy
         * 101 // add 1% on top...
         * amount / _investedAssets // a part of amount that we are going to withdraw
@@ -155,7 +157,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _depositorTotalSupply(), // total amount of LP tokens in the pool
         IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
       );
+      console.log("_withdrawFromPool investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
       _withdrawFromPoolUniversal(liquidityAmount, false);
+      console.log("_withdrawFromPool.liquidityAmount finish");
     }
 
     return (investedAssetsUSD, assetPrice);
@@ -165,6 +169,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return investedAssetsUSD The value that we should receive after withdrawing
   /// @return assetPrice Price of the {asset} taken from the price oracle
   function _withdrawAllFromPool() override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
+    console.log("_withdrawAllFromPool.start");
     // total amount of LP-tokens deposited by the strategy
     uint liquidityAmount = _depositorLiquidity();
 
@@ -175,6 +180,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
     );
     _withdrawFromPoolUniversal(liquidityAmount, false);
+    console.log("_withdrawAllFromPool.finish");
   }
 
   /// @notice If pool support emergency withdraw need to call it for emergencyExit()
@@ -197,6 +203,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // convert all received amounts to the asset
     _convertDepositorPoolAssets();
     _updateInvestedAssets();
+    console.log("_withdrawFromPoolUniversal.finish");
   }
 
   /// @notice Convert all amounts withdrawn from the depositor to {asset}

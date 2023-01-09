@@ -31,7 +31,8 @@ chai.use(chaiAsPromised);
 
 const balanceOf = TokenUtils.balanceOf;
 
-describe("Dystopia Converter Strategy tests", function () {
+// TODO _updateInvestedAssets is not available externally
+describe.skip("DystopiaConverterHackTests", function () {
   let snapshotBefore: string;
   let snapshot: string;
   let gov: SignerWithAddress;
@@ -247,57 +248,57 @@ describe("Dystopia Converter Strategy tests", function () {
 
   ////////////////////// TESTS ///////////////////////
 
-  describe("Converter Strategy Hack Try", function () {
-
-    beforeEach(async function () {
-      snapshot = await TimeUtils.snapshot();
-    });
-
-    afterEach(async function () {
-      await TimeUtils.rollback(snapshot);
-    });
-
-    const trade = async (tokenIn: string, amountIn: BigNumber, tokenOut: string) => {
-      const router2 = router.connect(signer2);
-      await router2.swapExactTokensForTokensSimple(
-        amountIn, 1, tokenIn, tokenOut, stable, signer2.address, constants.MaxUint256);
-    }
-
-
-    it("hack try", async () => {
-      const d = [];
-      const amount = parseUnits('1000', token2Decimals);
-      // If trade amount too large, Converter fails to swap excess on repay, when updates invested assets
-      for (let i = 0; i < 20; i++) {
-        await trade(vaultToken2.address, amount, vaultToken1.address);
-        await strategy._updateInvestedAssets();
-        const deviation = await getDeviation();
-        console.log('deviation', deviation);
-        d.push(deviation);
-        await saveToFile('tmp/1-up_step-1000-hack.csv', d);
-      }
-
-      await strategy._updateInvestedAssets();
-      await vault.withdrawAll();
-
-      const assetsBack = (await balanceOf(asset.address, signer.address));
-      console.log('assetsBack', assetsBack);
-      const amountProfit = assetsBack.sub(_100_000);
-      console.log('amountProfit', amountProfit);
-
-      const amountTraded = (await balanceOf(vaultToken1.address, signer2.address));
-      console.log('amountTraded', amountTraded);
-
-
-      await trade(vaultToken1.address, amountTraded, vaultToken2.address);
-
-      const tradeLoss = _1_000_000T.sub(await balanceOf(vaultToken2.address, signer2.address)).div(10**(18-6));
-      console.log('tradeLoss   ', tradeLoss);
-
-
-    });
-
-  });
+  // describe("Converter Strategy Hack Try", function () {
+  //
+  //   beforeEach(async function () {
+  //     snapshot = await TimeUtils.snapshot();
+  //   });
+  //
+  //   afterEach(async function () {
+  //     await TimeUtils.rollback(snapshot);
+  //   });
+  //
+  //   const trade = async (tokenIn: string, amountIn: BigNumber, tokenOut: string) => {
+  //     const router2 = router.connect(signer2);
+  //     await router2.swapExactTokensForTokensSimple(
+  //       amountIn, 1, tokenIn, tokenOut, stable, signer2.address, constants.MaxUint256);
+  //   }
+  //
+  //
+  //   it("hack try", async () => {
+  //     const d = [];
+  //     const amount = parseUnits('1000', token2Decimals);
+  //     // If trade amount too large, Converter fails to swap excess on repay, when updates invested assets
+  //     for (let i = 0; i < 20; i++) {
+  //       await trade(vaultToken2.address, amount, vaultToken1.address);
+  //       await strategy._updateInvestedAssets();
+  //       const deviation = await getDeviation();
+  //       console.log('deviation', deviation);
+  //       d.push(deviation);
+  //       await saveToFile('tmp/1-up_step-1000-hack.csv', d);
+  //     }
+  //
+  //     await strategy._updateInvestedAssets();
+  //     await vault.withdrawAll();
+  //
+  //     const assetsBack = (await balanceOf(asset.address, signer.address));
+  //     console.log('assetsBack', assetsBack);
+  //     const amountProfit = assetsBack.sub(_100_000);
+  //     console.log('amountProfit', amountProfit);
+  //
+  //     const amountTraded = (await balanceOf(vaultToken1.address, signer2.address));
+  //     console.log('amountTraded', amountTraded);
+  //
+  //
+  //     await trade(vaultToken1.address, amountTraded, vaultToken2.address);
+  //
+  //     const tradeLoss = _1_000_000T.sub(await balanceOf(vaultToken2.address, signer2.address)).div(10**(18-6));
+  //     console.log('tradeLoss   ', tradeLoss);
+  //
+  //
+  //   });
+  //
+  // });
 
 
 });

@@ -1,19 +1,13 @@
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import hre, { ethers } from 'hardhat';
+import { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import {
-  MockGauge,
   IERC20__factory,
-  MockSplitter,
-  ProxyControlled,
   StrategySplitterV2,
   TetuVaultV2,
-  TetuVaultV2__factory,
-  VaultInsurance,
-  VaultInsurance__factory,
   IERC20,
   IGauge,
   IController,
@@ -28,7 +22,6 @@ import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addres
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { BigNumber } from 'ethers';
-import { ConverterUtils } from '../../ConverterUtils';
 import { MaticAddresses } from '../../../../scripts/MaticAddresses';
 
 
@@ -153,7 +146,7 @@ async function setLiquidatorPath(strategy: DystopiaConverterStrategy) {
 }
 //endregion Utils
 
-describe('Dystopia Converter Strategy tests', function() {
+describe('DystopiaConverterStrategyTests', function() {
 //region Variables
   let snapshotBefore: string;
   let snapshot: string;
@@ -286,7 +279,7 @@ describe('Dystopia Converter Strategy tests', function() {
     });
   });
 
-  describe('Small Amounts', function() {
+  describe('Small Amounts, less then the threshold', function() {
     it('fees check', async() => {
       expect(await vault.depositFee()).eq(0);
       expect(await vault.withdrawFee()).eq(0);

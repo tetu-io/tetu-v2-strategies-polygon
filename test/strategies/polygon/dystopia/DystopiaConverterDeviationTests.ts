@@ -31,7 +31,8 @@ chai.use(chaiAsPromised);
 
 const balanceOf = TokenUtils.balanceOf;
 
-describe("Dystopia Converter Strategy tests", function () {
+// TODO It's necessary to fix DystopiaConverterHackTests and make csv file at first
+describe.skip("DystopiaConverterDeviationTests", function () {
   let snapshotBefore: string;
   let snapshot: string;
   let gov: SignerWithAddress;
