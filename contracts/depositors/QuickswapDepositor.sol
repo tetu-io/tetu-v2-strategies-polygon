@@ -38,8 +38,7 @@ contract QuickswapDepositor is DepositorBase, Initializable {
   function __QuickswapDepositor_init(
     address router_,
     address tokenA_,
-    address tokenB_,
-    address voter
+    address tokenB_
   ) internal onlyInitializing {
     router = IUniswapV2Router02(router_);
     tokenA = tokenA_;
@@ -48,15 +47,9 @@ contract QuickswapDepositor is DepositorBase, Initializable {
     IUniswapV2Factory factory = IUniswapV2Factory(IUniswapV2Router02(router_).factory());
     address pair = factory.getPair(tokenA_, tokenB_);
     require(pair != address(0), AppErrors.UNISWAP_PAIR_NOT_FOUND);
-    depositorPair = pair;
+    depositorPair = IUniswapV2Pair(pair);
 
-    _depositorSwapTokens = tokenA == IUniswapV2Pair(pair_).token1();
-
-    address gauge = IVoter(voter).gauges(_depositorPair);
-    _depositorGauge = gauge;
-
-    // infinity approve, 2**255 is more gas-efficient then type(uint).max
-    IERC20(pair).safeApprove(gauge, 2**255);
+    _depositorSwapTokens = tokenA == IUniswapV2Pair(pair).token1();
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -108,8 +101,8 @@ contract QuickswapDepositor is DepositorBase, Initializable {
 
   /// @notice Deposit given amount to the pool.
   /// @param amountsDesired_ Amounts of token A and B on the balance of the depositor
-  /// @return amountsConsumed Amounts of token A and B deposited to the internal pool
-  /// @return liquidity Total amount of liquidity added to the internal pool
+  /// @return amountsConsumedOut Amounts of token A and B deposited to the internal pool
+  /// @return liquidityOut Total amount of liquidity added to the internal pool
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
@@ -128,12 +121,12 @@ contract QuickswapDepositor is DepositorBase, Initializable {
 
     address _tokenA = tokenA; // gas saving
     address _tokenB = tokenB; // gas saving
-    address _router = router; // gas saving
+    IUniswapV2Router02 _router = router; // gas saving
 
-    _approveIfNeeded(_tokenA, amount0, _router);
-    _approveIfNeeded(_tokenB, amount1, _router);
+    _approveIfNeeded(_tokenA, amount0, address(_router));
+    _approveIfNeeded(_tokenB, amount1, address(_router));
 
-    (amountsConsumedOut[0], amountsConsumedOut[1], liquidityOut) = IRouter(_router).addLiquidity(
+    (amountsConsumedOut[0], amountsConsumedOut[1], liquidityOut) = _router.addLiquidity(
       _tokenA,
       _tokenB,
       amount0,
@@ -143,40 +136,31 @@ contract QuickswapDepositor is DepositorBase, Initializable {
       address(this),
       block.timestamp
     );
-
-    // Stake to the Gauge. The infinity approve is already made for the gage on initialization
-    IGauge(_depositorGauge).depositAll(0);
-
   }
 
-  /// @notice Withdraw given lp amount from the pool.
+  /// @notice Withdraw given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
-  function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+  function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
-    if (liquidityAmount == 0) {
+    if (liquidityAmount_ == 0) {
       return amountsOut;
     }
 
     uint totalLiquidity = _depositorLiquidity();
-    if (liquidityAmount > totalLiquidity) {
-      liquidityAmount = totalLiquidity;
+    if (liquidityAmount_ > totalLiquidity) {
+      liquidityAmount_ = totalLiquidity;
     }
 
-    // Unstake from the gauge
-    IGauge(_depositorGauge).withdraw(liquidityAmount);
-
     // Remove liquidity
-    address router = router;
+    IUniswapV2Router02 _router = router; // gas saving
 
-    _approveIfNeeded(depositorPair, liquidityAmount, router);
-
-    (amountsOut[0], amountsOut[1]) = IRouter(router).removeLiquidity(
+    _approveIfNeeded(address(depositorPair), liquidityAmount_, address(_router));
+    (amountsOut[0], amountsOut[1]) = _router.removeLiquidity(
       tokenA,
       tokenB,
-      depositorStable,
-      liquidityAmount,
-      1,
-      1,
+      liquidityAmount_,
+      1, // todo
+      1, // todo
       address(this),
       block.timestamp
     );
@@ -185,25 +169,20 @@ contract QuickswapDepositor is DepositorBase, Initializable {
     console.log('/// !!! DEPOSITOR withdraw amountsOut[1]', amountsOut[1]);
   }
 
-  /// @notice Quotes output for given lp amount from the pool.
+  /// @notice Quotes output for given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
-  function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
+  function _depositorQuoteExit(uint liquidityAmount_) override internal virtual view returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
-    if (liquidityAmount == 0) {
+    if (liquidityAmount_ == 0) {
       return amountsOut;
     }
 
     uint totalLiquidity = _depositorLiquidity();
-    if (liquidityAmount > totalLiquidity) {
-      liquidityAmount = totalLiquidity;
+    if (liquidityAmount_ > totalLiquidity) {
+      liquidityAmount_ = totalLiquidity;
     }
 
-    (amountsOut[0], amountsOut[1]) = IRouter(router).quoteRemoveLiquidity(
-      tokenA,
-      tokenB,
-      depositorStable,
-      liquidityAmount
-    );
+    // todo (amountsOut[0], amountsOut[1]) = router.quoteTODO(liquidityAmount_, tokenA, tokenB);
   }
 
 
@@ -213,26 +192,26 @@ contract QuickswapDepositor is DepositorBase, Initializable {
 
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual returns (address[] memory tokens, uint[] memory amounts) {
-    IGauge gauge = IGauge(_depositorGauge);
-    gauge.claimFees(); // sends fees to bribe
-
-    uint len = gauge.rewardTokensLength();
-    amounts = new uint[](len);
-    tokens = new address[](len);
-
-    for (uint i = 0; i < len; i++) {
-      address token = gauge.rewardTokens(i);
-      tokens[i] = token;
-      // temporary store current token balance
-      amounts[i] = IERC20(token).balanceOf(address(this));
-    }
-
-    gauge.getReward(address(this), tokens);
-
-    for (uint i = 0; i < len; i++) {
-      amounts[i] = IERC20(tokens[i]).balanceOf(address(this)) - amounts[i];
-    }
-    (tokens, amounts) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
+//    IGauge gauge = IGauge(_depositorGauge);
+//    gauge.claimFees(); // sends fees to bribe
+//
+//    uint len = gauge.rewardTokensLength();
+//    amounts = new uint[](len);
+//    tokens = new address[](len);
+//
+//    for (uint i = 0; i < len; i++) {
+//      address token = gauge.rewardTokens(i);
+//      tokens[i] = token;
+//      // temporary store current token balance
+//      amounts[i] = IERC20(token).balanceOf(address(this));
+//    }
+//
+//    gauge.getReward(address(this), tokens);
+//
+//    for (uint i = 0; i < len; i++) {
+//      amounts[i] = IERC20(tokens[i]).balanceOf(address(this)) - amounts[i];
+//    }
+//    (tokens, amounts) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
 
   }
 
