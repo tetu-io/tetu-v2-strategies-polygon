@@ -8,6 +8,12 @@ import {
 } from '../../typechain';
 import {PolygonAddresses as PA} from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import {BigNumber, utils} from "ethers";
+import {
+  GAS_FILTER_2_ALL_AMOUNTS_NOT_ZERO,
+  GAS_FILTER_2_ALL_AMOUNTS_ZERO,
+  GAS_FILTER_2_SECOND_AMOUNT_ZERO
+} from "../baseUT/GasLimits";
+import {controlGasLimitsEx} from "../../scripts/utils/GasLimitUtils";
 
 
 const {expect} = chai;
@@ -44,96 +50,133 @@ describe('TokenAmountsLib tests', function () {
 
   describe('filterZeroAmounts', async () => {
 
-    it('at index 0', async () => {
-      const tokens = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts = [0, 1, 2];
-      const filtered = await lib.filterZeroAmounts(tokens, amounts);
-      await lib.print(filtered[0], filtered[1]);
+    describe("Good paths", () => {
+      describe("Zero amounts exist", () => {
+        it('at index 0', async () => {
+          const tokens = [
+            PA.USDC_TOKEN,
+            PA.DAI_TOKEN,
+            PA.TETU_TOKEN,
+          ];
+          const amounts = [0, 1, 2];
+          const filtered = await lib.filterZeroAmounts(tokens, amounts);
+          await lib.print(filtered[0], filtered[1]);
 
-      expect(filtered[0].length).eq(2);
-      expect(filtered[0]).deep.equal([
-        _addr(PA.DAI_TOKEN),
-        _addr(PA.TETU_TOKEN),
-      ]);
-      expect(filtered[1][0]).eq(1);
-      expect(filtered[1][1]).eq(2);
+          expect(filtered[0].length).eq(2);
+          expect(filtered[0]).deep.equal([
+            _addr(PA.DAI_TOKEN),
+            _addr(PA.TETU_TOKEN),
+          ]);
+          expect(filtered[1][0]).eq(1);
+          expect(filtered[1][1]).eq(2);
+        });
+
+        it('at index 1', async () => {
+          const tokens = [
+            PA.USDC_TOKEN,
+            PA.DAI_TOKEN,
+            PA.TETU_TOKEN,
+          ];
+          const amounts = [1, 0, 2];
+          const filtered = await lib.filterZeroAmounts(tokens, amounts);
+          await lib.print(filtered[0], filtered[1]);
+
+          expect(filtered[0].length).eq(2);
+          expect(filtered[0]).deep.equal([
+            _addr(PA.USDC_TOKEN),
+            _addr(PA.TETU_TOKEN),
+          ]);
+          expect(filtered[1][0]).eq(1);
+          expect(filtered[1][1]).eq(2);
+        });
+
+        it('at index 2', async () => {
+          const tokens = [
+            PA.USDC_TOKEN,
+            PA.DAI_TOKEN,
+            PA.TETU_TOKEN,
+          ];
+          const amounts = [1, 2, 0];
+          const filtered = await lib.filterZeroAmounts(tokens, amounts);
+          await lib.print(filtered[0], filtered[1]);
+
+          expect(filtered[0].length).eq(2);
+          expect(filtered[0]).deep.equal([
+            _addr(PA.USDC_TOKEN),
+            _addr(PA.DAI_TOKEN),
+          ]);
+          expect(filtered[1][0]).eq(1);
+          expect(filtered[1][1]).eq(2);
+        });
+
+        it('all zeros', async () => {
+          const tokens = [
+            PA.USDC_TOKEN,
+            PA.DAI_TOKEN,
+            PA.TETU_TOKEN,
+          ];
+          const amounts = [0, 0, 0];
+          const filtered = await lib.filterZeroAmounts(tokens, amounts);
+          await lib.print(filtered[0], filtered[1]);
+
+          expect(filtered[0].length).eq(0);
+          expect(filtered[1].length).eq(0);
+        });
+      });
+      it('empty array', async () => {
+        const tokens: string[] = [];
+        const amounts: BigNumber[] = [];
+        const filtered = await lib.filterZeroAmounts(tokens, amounts);
+        await lib.print(filtered[0], filtered[1]);
+
+        expect(filtered[0].length).eq(0);
+        expect(filtered[1].length).eq(0);
+      });
     });
 
-    it('at index 1', async () => {
-      const tokens = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts = [1, 0, 2];
-      const filtered = await lib.filterZeroAmounts(tokens, amounts);
-      await lib.print(filtered[0], filtered[1]);
+    describe("Bad paths", () => {
+      it('array mismatch', async () => {
+        const tokens = [
+          PA.USDC_TOKEN,
+          PA.DAI_TOKEN,
+          PA.TETU_TOKEN,
+        ];
+        const amounts = [0, 0];
 
-      expect(filtered[0].length).eq(2);
-      expect(filtered[0]).deep.equal([
-        _addr(PA.USDC_TOKEN),
-        _addr(PA.TETU_TOKEN),
-      ]);
-      expect(filtered[1][0]).eq(1);
-      expect(filtered[1][1]).eq(2);
+        await expect(lib.filterZeroAmounts(tokens, amounts)).revertedWith('TAL: Arrays mismatch');
+      });
     });
 
-    it('at index 2', async () => {
-      const tokens = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts = [1, 2, 0];
-      const filtered = await lib.filterZeroAmounts(tokens, amounts);
-      await lib.print(filtered[0], filtered[1]);
+    describe("Gas estimation @skip-on-coverage", () => {
+      it('Two tokens, no zero amounts', async () => {
+        const tokens = [PA.USDC_TOKEN, PA.DAI_TOKEN];
+        const amounts = [1, 2];
+        const gasUsed = await lib.estimateGas.filterZeroAmounts(tokens, amounts);
 
-      expect(filtered[0].length).eq(2);
-      expect(filtered[0]).deep.equal([
-        _addr(PA.USDC_TOKEN),
-        _addr(PA.DAI_TOKEN),
-      ]);
-      expect(filtered[1][0]).eq(1);
-      expect(filtered[1][1]).eq(2);
-    });
+        controlGasLimitsEx(gasUsed, GAS_FILTER_2_ALL_AMOUNTS_NOT_ZERO, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
 
-    it('empty array', async () => {
-      const tokens: string[] = [];
-      const amounts: BigNumber[] = [];
-      const filtered = await lib.filterZeroAmounts(tokens, amounts);
-      await lib.print(filtered[0], filtered[1]);
+      it('Two tokens, both amounts are zero', async () => {
+        const tokens = [PA.USDC_TOKEN, PA.DAI_TOKEN];
+        const amounts = [0, 0];
+        const gasUsed = await lib.estimateGas.filterZeroAmounts(tokens, amounts);
 
-      expect(filtered[0].length).eq(0);
-      expect(filtered[1].length).eq(0);
-    });
+        controlGasLimitsEx(gasUsed, GAS_FILTER_2_ALL_AMOUNTS_ZERO, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
 
-    it('all zeros', async () => {
-      const tokens = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts = [0, 0, 0];
-      const filtered = await lib.filterZeroAmounts(tokens, amounts);
-      await lib.print(filtered[0], filtered[1]);
+      it('Two tokens, second amount is zero', async () => {
+        const tokens = [PA.USDC_TOKEN, PA.DAI_TOKEN];
+        const amounts = [1, 0];
+        const gasUsed = await lib.estimateGas.filterZeroAmounts(tokens, amounts);
 
-      expect(filtered[0].length).eq(0);
-      expect(filtered[1].length).eq(0);
-    });
-
-    it('array mismatch', async () => {
-      const tokens = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts = [0, 0];
-
-      await expect(lib.filterZeroAmounts(tokens, amounts)).revertedWith('TAL: Arrays mismatch');
+        controlGasLimitsEx(gasUsed, GAS_FILTER_2_SECOND_AMOUNT_ZERO, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
     });
   });
 
