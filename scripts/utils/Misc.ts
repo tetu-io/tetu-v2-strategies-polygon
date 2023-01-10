@@ -107,12 +107,26 @@ export class Misc {
       }
     }
   }
-
 }
 
+//region TetuConverter addresses
 
+const TETU_CONVERTER_ADDRESS = "0x89563a0d6917A893B3b4dE49f56D8Bc35541038D";
+const DFORCE_PLATFORM_ADAPTER_ADDRESS = "0x6605Ce0d8E92A0c5d542F19DdB5B236A03137c64";
+
+/**
+ * Address of TetuConverter
+ */
 export function getConverterAddress() {
-  const tools = Addresses.getTools();
+  // const tools = Addresses.getTools();
   // return tools.converter;
-  return "0x89563a0d6917A893B3b4dE49f56D8Bc35541038D"; // '0xB855177E9A62BEFf1A0d852c34f1c1343264a078';
+  return TETU_CONVERTER_ADDRESS;
 }
+
+/**
+ * Address of DForce platform adapter registered in TetuConveter
+ */
+export function getDForcePlatformAdapter() {
+  return DFORCE_PLATFORM_ADAPTER_ADDRESS;
+}
+//endregion TetuConverter addresses

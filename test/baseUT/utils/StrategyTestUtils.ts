@@ -17,7 +17,6 @@ import {Logger} from "tslog";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
-import {MaticAddresses} from "../../../scripts/MaticAddresses";
 
 const log: Logger = new Logger(logSettings);
 

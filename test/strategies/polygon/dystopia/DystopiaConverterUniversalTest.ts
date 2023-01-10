@@ -33,12 +33,10 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-//todo broken
-describe.skip('DystopiaConverterUniversalTest', async () => {
+describe('DystopiaConverterUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
-
 
   const deployInfo: DeployInfo = new DeployInfo();
   before(async function () {
@@ -49,18 +47,18 @@ describe.skip('DystopiaConverterUniversalTest', async () => {
   const assetName = 'USDC';
   const asset = PolygonAddresses.USDC_TOKEN;
   const token1 = asset;
-  // const token2 = PolygonAddresses.USDPlus_TOKEN;
-  // const token2 = PolygonAddresses.USDT_TOKEN;
   const token2 = PolygonAddresses.DAI_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
 
   const deployer = async (signer: SignerWithAddress) => {
-
     const controller = DeployerUtilsLocal.getController(signer);
+
     const strategyDeployer = async (splitterAddress: string) => {
       const strategy = DystopiaConverterStrategy__factory.connect(
-        await DeployerUtils.deployProxy(signer, strategyName), signer);
+        await DeployerUtils.deployProxy(signer, strategyName),
+        signer
+      );
 
       await strategy.init(
         core.controller,
@@ -97,7 +95,6 @@ describe.skip('DystopiaConverterUniversalTest', async () => {
       asset, vaultName, strategyDeployer, controller, gov,
       100, 250, 500, false
     );
-
   }
 
   /* tslint:disable:no-floating-promises */
@@ -108,6 +105,4 @@ describe.skip('DystopiaConverterUniversalTest', async () => {
     deployInfo,
     deployer
   );
-
-
 });
