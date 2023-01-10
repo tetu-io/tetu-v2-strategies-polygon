@@ -3,16 +3,20 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
-import "./DepositorBase.sol";
-import "../tools/TokenAmountsLib.sol";
-import "../tools/AppErrors.sol";
-import "../integrations/uniswap/IUniswapV2Pair.sol";
-import "../integrations/uniswap/IUniswapV2Factory.sol";
-import "../integrations/uniswap/IUniswapV2Router02.sol";
+import "../DepositorBase.sol";
+import "../../tools/TokenAmountsLib.sol";
+import "../../tools/AppErrors.sol";
+import "../../tools/Uniswap2Lib.sol";
+import "../../integrations/uniswap/IUniswapV2Pair.sol";
+import "../../integrations/uniswap/IUniswapV2Factory.sol";
+import "../../integrations/uniswap/IUniswapV2Router02.sol";
 
 import "hardhat/console.sol";
+import "../../integrations/quickswap/IStakingRewards.sol";
 
 /// @title Quickswap Depositor for ConverterStrategies
+/// @notice Put two amounts to the pool, get LP tokens in exchange,
+///         stake the LP tokens in the reward pool, claim the rewards by request
 contract QuickswapDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
@@ -30,7 +34,8 @@ contract QuickswapDepositor is DepositorBase, Initializable {
   ///         true:  _depositorTokenA == depositorPair.token1
   bool private _depositorSwapTokens;
 
-  address internal _depositorGauge;
+  address internal _rewardsPool;
+  address[] internal _rewardTokens;
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
@@ -38,8 +43,18 @@ contract QuickswapDepositor is DepositorBase, Initializable {
   function __QuickswapDepositor_init(
     address router_,
     address tokenA_,
-    address tokenB_
+    address tokenB_,
+    address rewardsPool_,
+    address[] memory rewardTokens_
   ) internal onlyInitializing {
+    require(
+      router_ != address(0)
+      && rewardsPool_ != address(0)
+      && tokenA_ != address(0)
+      && tokenB_ != address(0),
+      AppErrors.ZERO_ADDRESS
+    );
+
     router = IUniswapV2Router02(router_);
     tokenA = tokenA_;
     tokenB = tokenB_;
@@ -50,6 +65,12 @@ contract QuickswapDepositor is DepositorBase, Initializable {
     depositorPair = IUniswapV2Pair(pair);
 
     _depositorSwapTokens = tokenA == IUniswapV2Pair(pair).token1();
+
+    _rewardsPool = rewardsPool_;
+    _rewardTokens = rewardTokens_;
+
+    // infinity approve,  2*255 is more gas-efficient than type(uint).max
+    IERC20(address(this)).approve(_rewardsPool, 2**255);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -136,6 +157,9 @@ contract QuickswapDepositor is DepositorBase, Initializable {
       address(this),
       block.timestamp
     );
+
+    // stake the liquidity to the rewards pool
+    _stakeLiquidity(liquidityOut);
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -150,6 +174,9 @@ contract QuickswapDepositor is DepositorBase, Initializable {
     if (liquidityAmount_ > totalLiquidity) {
       liquidityAmount_ = totalLiquidity;
     }
+
+    // unstake the liquidity from the rewards pool
+    _withdrawLiquidity(liquidityAmount_);
 
     // Remove liquidity
     IUniswapV2Router02 _router = router; // gas saving
@@ -182,7 +209,31 @@ contract QuickswapDepositor is DepositorBase, Initializable {
       liquidityAmount_ = totalLiquidity;
     }
 
-    // todo (amountsOut[0], amountsOut[1]) = router.quoteTODO(liquidityAmount_, tokenA, tokenB);
+    (amountsOut[0], amountsOut[1]) = Uniswap2Lib.quoteRemoveLiquidity(
+      router,
+      address(this),
+      tokenA,
+      tokenB,
+      liquidityAmount_
+    );
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///        Staking of LP tokens to the reward pool
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Stake {liquidity} into the reward pool
+  function _stakeLiquidity(uint liquidity_) internal {
+    IStakingRewards __rewardsPool = IStakingRewards(_rewardsPool);
+
+    // infinity approve was made in initialization
+    __rewardsPool.stake(liquidity_);
+  }
+
+  /// @notice Withdraw {liquidity} from the reward pool
+  function _withdrawLiquidity(uint liquidity_) internal {
+    IStakingRewards __rewardsPool = IStakingRewards(_rewardsPool);
+    __rewardsPool.withdraw(liquidity_);
   }
 
 

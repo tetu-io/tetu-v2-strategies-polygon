@@ -3,13 +3,13 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
-import "../integrations/dystopia/IRouter.sol";
-import "../integrations/dystopia/IPair.sol";
-import "../integrations/dystopia/IVoter.sol";
-import "../integrations/dystopia/IGauge.sol";
-import "../integrations/dystopia/IBribe.sol";
-import "../tools/TokenAmountsLib.sol";
-import "./DepositorBase.sol";
+import "../../integrations/dystopia/IRouter.sol";
+import "../../integrations/dystopia/IPair.sol";
+import "../../integrations/dystopia/IVoter.sol";
+import "../../integrations/dystopia/IGauge.sol";
+import "../../integrations/dystopia/IBribe.sol";
+import "../../tools/TokenAmountsLib.sol";
+import "../DepositorBase.sol";
 
 import "hardhat/console.sol";
 
