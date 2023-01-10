@@ -1,23 +1,23 @@
-import {ICoreContractsWrapper} from "../CoreContractsWrapper";
+import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
   IForwarder,
   ITetuLiquidator,
   TetuVaultV2,
   IStrategyV2,
-} from "../../typechain";
+} from "../../../typechain";
 import {BigNumber, utils} from "ethers";
 import {expect} from "chai";
 import {ethers} from "hardhat";
 import {readFileSync} from "fs";
-import {Misc} from "../../scripts/utils/Misc";
+import {Misc} from "../../../scripts/utils/Misc";
 import {DeployInfo} from "./DeployInfo";
-import logSettings from "../../log_settings";
+import logSettings from "../../../log_settings";
 import {Logger} from "tslog";
-import {PriceCalculatorUtils} from "../PriceCalculatorUtils";
-import {TokenUtils} from "../../scripts/utils/TokenUtils";
-import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../scripts/utils/DeployerUtilsLocal";
-import {MaticAddresses} from "../../scripts/MaticAddresses";
+import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
+import {MaticAddresses} from "../../../scripts/MaticAddresses";
 
 const log: Logger = new Logger(logSettings);
 

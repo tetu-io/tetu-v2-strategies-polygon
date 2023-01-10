@@ -1,4 +1,4 @@
-import {DeployInfo} from "./DeployInfo";
+import {DeployInfo} from "../baseUT/utils/DeployInfo";
 
 export abstract class SpecificStrategyTest {
 

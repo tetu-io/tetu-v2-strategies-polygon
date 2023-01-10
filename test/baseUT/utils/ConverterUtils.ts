@@ -1,11 +1,11 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
+import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {
   IBorrowManager__factory,
   IConverterController__factory,
   ITetuConverter__factory
-} from "../../typechain";
+} from "../../../typechain";
 
 export class ConverterUtils {
 

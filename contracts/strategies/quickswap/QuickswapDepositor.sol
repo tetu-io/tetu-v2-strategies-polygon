@@ -161,7 +161,8 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
     );
 
     // stake the liquidity to the rewards pool
-    _stakeLiquidity(liquidityOut);
+    // infinity approve was made in initialization
+    IStakingBase(_rewardsPool).stake(liquidityOut);
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -178,7 +179,7 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
     }
 
     // unstake the liquidity from the rewards pool
-    _withdrawLiquidity(liquidityAmount_);
+    IStakingBase(_rewardsPool).withdraw(liquidityAmount_);
 
     // Remove liquidity
     IUniswapV2Router02 _router = router; // gas saving
@@ -221,26 +222,6 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
   }
 
   /////////////////////////////////////////////////////////////////////
-  ///   Staking/withdraw of LP tokens to/from the reward pool.
-  ///   We use IStakingBase here, so the implementation can be used for
-  //    both IStakingRewards and IStakingDualRewards
-  /////////////////////////////////////////////////////////////////////
-
-  /// @notice Stake {liquidity} into the reward pool
-  function _stakeLiquidity(uint liquidity_) internal {
-    IStakingBase __rewardsPool = IStakingBase(_rewardsPool);
-
-    // infinity approve was made in initialization
-    __rewardsPool.stake(liquidity_);
-  }
-
-  /// @notice Withdraw {liquidity} from the reward pool
-  function _withdrawLiquidity(uint liquidity_) internal {
-    IStakingBase __rewardsPool = IStakingBase(_rewardsPool);
-    __rewardsPool.withdraw(liquidity_);
-  }
-
-  /////////////////////////////////////////////////////////////////////
   ////   Abstract functions
   ///    The implementation depends on the rewards pool kind:
   ///    IStakingRewards and IStakingDualRewards have different implementations.
@@ -261,9 +242,9 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    IStakingBase __rewardsPool = IStakingBase(_rewardsPool);
-    if (_earned(address(__rewardsPool), address(this))) {
+    IStakingBase __rewardsPool = IStakingBase(_rewardsPool); // gas saving
 
+    if (_earned(address(__rewardsPool), address(this))) {
       tokensOut = _getRewardTokens(address(__rewardsPool));
       uint len = tokensOut.length;
       amountsOut = new uint[](len);

@@ -6,8 +6,8 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../CoreContractsWrapper";
 import {IToolsContractsWrapper} from "../ToolsContractsWrapper";
 import {universalStrategyTest} from "./UniversalStrategyTest";
-import {DeployInfo} from "./DeployInfo";
-import {DoHardWorkLoopBase} from "./DoHardWorkLoopBase";
+import {DeployInfo} from "../baseUT/utils/DeployInfo";
+import {DoHardWorkLoopBase} from "../baseUT/utils/DoHardWorkLoopBase";
 import {IVaultStrategyInfo} from "../../scripts/utils/DeployerUtilsLocal";
 
 chai.use(chaiAsPromised);

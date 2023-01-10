@@ -2,8 +2,8 @@ import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {startDefaultStrategyTest} from "../../DefaultSingleTokenStrategyTest";
 import {config as dotEnvConfig} from "dotenv";
-import {DeployInfo} from "../../DeployInfo";
-import {StrategyTestUtils} from "../../StrategyTestUtils";
+import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {
@@ -11,7 +11,7 @@ import {
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {ConverterUtils} from "../../ConverterUtils";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import { getConverterAddress } from '../../../../scripts/utils/Misc';
 
