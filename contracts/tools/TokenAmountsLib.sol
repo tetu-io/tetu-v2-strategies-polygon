@@ -9,6 +9,12 @@ pragma solidity 0.8.17;
 /// @author bogdoslav
 library TokenAmountsLib {
 
+    function uncheckedInc(uint i) internal pure returns (uint) {
+        unchecked {
+            return i + 1;
+        }
+    }
+
     /// @notice Version of the contract
     /// @dev Should be incremented when contract changed
     string internal constant TOKEN_AMOUNTS_LIB_VERSION = "1.0.0";

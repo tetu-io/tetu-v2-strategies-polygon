@@ -10,14 +10,17 @@ import "../../tools/Uniswap2Lib.sol";
 import "../../integrations/uniswap/IUniswapV2Pair.sol";
 import "../../integrations/uniswap/IUniswapV2Factory.sol";
 import "../../integrations/uniswap/IUniswapV2Router02.sol";
+import "../../integrations/quickswap/IStakingBase.sol";
 
 import "hardhat/console.sol";
-import "../../integrations/quickswap/IStakingRewards.sol";
 
 /// @title Quickswap Depositor for ConverterStrategies
 /// @notice Put two amounts to the pool, get LP tokens in exchange,
 ///         stake the LP tokens in the reward pool, claim the rewards by request
-contract QuickswapDepositor is DepositorBase, Initializable {
+/// @dev The contract is abstract because it can be used with two different rewards pool -
+///      both with IStakingRewards and IStakingDualRewards, but the strategy should implement few functions
+///      that depend on the variant of reward pool.
+abstract contract QuickswapDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
@@ -34,8 +37,8 @@ contract QuickswapDepositor is DepositorBase, Initializable {
   ///         true:  _depositorTokenA == depositorPair.token1
   bool private _depositorSwapTokens;
 
+  /// @notice IStakingRewards or IStakingDualRewards depending on implementation
   address internal _rewardsPool;
-  address[] internal _rewardTokens;
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
@@ -44,8 +47,7 @@ contract QuickswapDepositor is DepositorBase, Initializable {
     address router_,
     address tokenA_,
     address tokenB_,
-    address rewardsPool_,
-    address[] memory rewardTokens_
+    address rewardsPool_
   ) internal onlyInitializing {
     require(
       router_ != address(0)
@@ -67,10 +69,9 @@ contract QuickswapDepositor is DepositorBase, Initializable {
     _depositorSwapTokens = tokenA == IUniswapV2Pair(pair).token1();
 
     _rewardsPool = rewardsPool_;
-    _rewardTokens = rewardTokens_;
 
-    // infinity approve,  2*255 is more gas-efficient than type(uint).max
-    IERC20(address(this)).approve(_rewardsPool, 2**255);
+    // infinity approve,  2**255 is more gas-efficient than type(uint).max
+    IERC20(address(depositorPair)).approve(_rewardsPool, 2**255);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -107,7 +108,8 @@ contract QuickswapDepositor is DepositorBase, Initializable {
 
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return depositorPair.balanceOf(address(this));
+    // All LP tokens were staked into the rewards pool
+    return IStakingBase(_rewardsPool).balanceOf(address(this));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
@@ -219,12 +221,14 @@ contract QuickswapDepositor is DepositorBase, Initializable {
   }
 
   /////////////////////////////////////////////////////////////////////
-  ///        Staking of LP tokens to the reward pool
+  ///   Staking/withdraw of LP tokens to/from the reward pool.
+  ///   We use IStakingBase here, so the implementation can be used for
+  //    both IStakingRewards and IStakingDualRewards
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Stake {liquidity} into the reward pool
   function _stakeLiquidity(uint liquidity_) internal {
-    IStakingRewards __rewardsPool = IStakingRewards(_rewardsPool);
+    IStakingBase __rewardsPool = IStakingBase(_rewardsPool);
 
     // infinity approve was made in initialization
     __rewardsPool.stake(liquidity_);
@@ -232,41 +236,53 @@ contract QuickswapDepositor is DepositorBase, Initializable {
 
   /// @notice Withdraw {liquidity} from the reward pool
   function _withdrawLiquidity(uint liquidity_) internal {
-    IStakingRewards __rewardsPool = IStakingRewards(_rewardsPool);
+    IStakingBase __rewardsPool = IStakingBase(_rewardsPool);
     __rewardsPool.withdraw(liquidity_);
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ////   Abstract functions
+  ///    The implementation depends on the rewards pool kind:
+  ///    IStakingRewards and IStakingDualRewards have different implementations.
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice List of rewards tokens
+  function _getRewardTokens(address rewardsPool_) internal virtual view returns (address[] memory rewardTokensOut);
+
+  /// @notice True if any reward token can be claimed with not zero amount for the given address
+  function _earned(address rewardsPool_, address user_) internal virtual view returns (bool);
 
   /////////////////////////////////////////////////////////////////////
   ///             Claim rewards
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Claim all possible rewards.
-  function _depositorClaimRewards() override internal virtual returns (address[] memory tokens, uint[] memory amounts) {
-//    IGauge gauge = IGauge(_depositorGauge);
-//    gauge.claimFees(); // sends fees to bribe
-//
-//    uint len = gauge.rewardTokensLength();
-//    amounts = new uint[](len);
-//    tokens = new address[](len);
-//
-//    for (uint i = 0; i < len; i++) {
-//      address token = gauge.rewardTokens(i);
-//      tokens[i] = token;
-//      // temporary store current token balance
-//      amounts[i] = IERC20(token).balanceOf(address(this));
-//    }
-//
-//    gauge.getReward(address(this), tokens);
-//
-//    for (uint i = 0; i < len; i++) {
-//      amounts[i] = IERC20(tokens[i]).balanceOf(address(this)) - amounts[i];
-//    }
-//    (tokens, amounts) = TokenAmountsLib.filterZeroAmounts(tokens, amounts);
+  function _depositorClaimRewards() override internal virtual returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
+    IStakingBase __rewardsPool = IStakingBase(_rewardsPool);
+    if (_earned(address(__rewardsPool), address(this))) {
 
+      tokensOut = _getRewardTokens(address(__rewardsPool));
+      uint len = tokensOut.length;
+      amountsOut = new uint[](len);
+
+      // temporary save exist balances of reward-tokens to amountsOut
+      for (uint i; i < len; ++i) {
+        amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this));
+      }
+
+      __rewardsPool.getReward();
+
+      // get amounts of the claimed rewards
+      for (uint i; i < len; ++i) {
+        amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - amountsOut[i];
+      }
+    }
+
+    (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
   }
-
-
 
 
   /**

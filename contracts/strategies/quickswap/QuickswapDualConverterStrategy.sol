@@ -4,10 +4,10 @@ pragma solidity 0.8.17;
 
 import "../ConverterStrategyBase.sol";
 import "./QuickswapDepositor.sol";
-import "../../integrations/quickswap/IStakingRewards.sol";
+import "../../integrations/quickswap/IStakingDualRewards.sol";
 
-/// @title Converter Strategy with Quickswap for reward pool StakingRewards
-contract QuickswapConverterStrategy is ConverterStrategyBase, QuickswapDepositor {
+/// @title Converter Strategy with Quickswap for reward pool StakingDualRewards
+contract QuickswapDualConverterStrategy is ConverterStrategyBase, QuickswapDepositor {
 
   string public constant override NAME = "Quickswap Converter Strategy";
   string public constant override PLATFORM = "Quickswap";
@@ -43,12 +43,15 @@ contract QuickswapConverterStrategy is ConverterStrategyBase, QuickswapDepositor
 
   /// @notice List of rewards tokens
   function _getRewardTokens(address rewardsPool_) internal override view returns (address[] memory rewardTokensOut) {
-    rewardTokensOut = new address[](1);
-    rewardTokensOut[0] = address(IStakingRewards(rewardsPool_).rewardsToken());
+    IStakingDualRewards rewardsPool = IStakingDualRewards(rewardsPool_);
+    rewardTokensOut = new address[](2);
+    rewardTokensOut[0] = address(rewardsPool.rewardsTokenA());
+    rewardTokensOut[1] = address(rewardsPool.rewardsTokenB());
   }
 
   /// @notice True if any reward token can be claimed for the given address
   function _earned(address rewardsPool_, address user_) internal override view returns (bool) {
-    return IStakingRewards(rewardsPool_).earned(user_) != 0;
+    IStakingDualRewards rewardsPool = IStakingDualRewards(rewardsPool_);
+    return rewardsPool.earnedA(user_) != 0 || rewardsPool.earnedB(user_) != 0;
   }
 }
