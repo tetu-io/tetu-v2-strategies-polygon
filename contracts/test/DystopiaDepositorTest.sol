@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../strategies/depositors/DepositorBase.sol";
-import "../strategies/depositors/DystopiaDepositor.sol";
+import "../depositors/DepositorBase.sol";
+import "../depositors/DystopiaDepositor.sol";
 import "./DepositorTestBase.sol";
 
 /// @title Dystopia Depositor Test contract.

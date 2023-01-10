@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../strategies/depositors/DepositorBase.sol";
+import "../depositors/DepositorBase.sol";
+
 
 /// @title Abstract Depositor Test Base contract.
 /// @author bogdoslav

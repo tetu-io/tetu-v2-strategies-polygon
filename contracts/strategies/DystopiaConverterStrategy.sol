@@ -3,7 +3,7 @@
 pragma solidity 0.8.17;
 
 import "./ConverterStrategyBase.sol";
-import "./depositors/DystopiaDepositor.sol";
+import "../depositors/DystopiaDepositor.sol";
 
 /// @title Converter Strategy with Dystopia Depositor
 /// @author bogdoslav

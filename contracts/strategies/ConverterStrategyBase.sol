@@ -8,7 +8,7 @@ import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/ITetuConverterCallback.sol";
 import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/IConverterController.sol";
-import "./depositors/DepositorBase.sol";
+import "../depositors/DepositorBase.sol";
 import "../tools/TokenAmountsLib.sol";
 
 import "hardhat/console.sol";

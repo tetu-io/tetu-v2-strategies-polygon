@@ -3,52 +3,66 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
-import "../../tools/TokenAmountsLib.sol";
-import "../../third_party/Uniswap/IUniswapV2Pair.sol";
-import "../../third_party/Uniswap/IUniswapV2Factory.sol";
+import "../integrations/dystopia/IRouter.sol";
+import "../integrations/dystopia/IPair.sol";
+import "../integrations/dystopia/IVoter.sol";
+import "../integrations/dystopia/IGauge.sol";
+import "../integrations/dystopia/IBribe.sol";
+import "../tools/TokenAmountsLib.sol";
 import "./DepositorBase.sol";
 
 import "hardhat/console.sol";
-import "../../third_party/Uniswap/IUniswapV2Router02.sol";
 
-/// @title Quickswap Depositor for ConverterStrategies
-contract QuickswapDepositor is DepositorBase, Initializable {
+/// @title Dystopia Depositor for ConverterStrategies
+/// @author bogdoslav
+contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant QUICKSWAP_DEPOSITOR_VERSION = "1.0.0";
+  string public constant DYSTOPIA_DEPOSITOR_VERSION = "1.0.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                   Variables
   /////////////////////////////////////////////////////////////////////
-  IUniswapV2Pair public depositorPair;
-  IUniswapV2Router02 public router;
-  address public tokenA;
-  address public tokenB;
+
+  address public depositorRouter;
+
+  /// @notice A pair of tokens A and B registered in the router
+  address public depositorPair;
+
+  bool public depositorStable;
+
+  address internal _depositorGauge;
+  address private _depositorTokenA;
+  address private _depositorTokenB;
+
   /// @notice false: _depositorTokenA == depositorPair.token0
   ///         true:  _depositorTokenA == depositorPair.token1
   bool private _depositorSwapTokens;
+
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
 
-  function __QuickswapDepositor_init(
-    address router_,
-    address factory_,
-    address tokenA_,
-    address tokenB_,
+  // @notice tokens must be MockTokens
+  function __DystopiaDepositor_init(
+    address router,
+    address tokenA,
+    address tokenB,
+    bool stable,
     address voter
   ) internal onlyInitializing {
-    router = IUniswapV2Router02(router_);
-    tokenA = tokenA_;
-    tokenB = tokenB_;
+    depositorRouter = router;
+    _depositorTokenA = tokenA;
+    _depositorTokenB = tokenB;
+    depositorStable = stable;
 
-    IUniswapV2Factory factory = IUniswapV2Factory(factory_);
-    address pair = factory.getPair(tokenA_, tokenB_);
-    require(pair != address(0), "TODO");
-    depositorPair = pair;
-
-    _depositorSwapTokens = tokenA == IUniswapV2Pair(pair_).token1();
+    address _depositorPair = IRouter(router).pairFor(tokenA, tokenB, stable);
+    depositorPair = _depositorPair;
+    _depositorSwapTokens = tokenA == IPair(_depositorPair).token1();
+    _depositorGauge = IVoter(voter).gauges(_depositorPair);
+    require(_depositorGauge != address(0), 'DD: No Gauge');
   }
+
 
   /////////////////////////////////////////////////////////////////////
   ///                       View
@@ -57,8 +71,8 @@ contract QuickswapDepositor is DepositorBase, Initializable {
   /// @notice Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
-    poolAssets[0] = tokenA;
-    poolAssets[1] = tokenB;
+    poolAssets[0] = _depositorTokenA;
+    poolAssets[1] = _depositorTokenB;
   }
 
   /// @notice Returns pool weights in percents (50/50%)
@@ -72,33 +86,30 @@ contract QuickswapDepositor is DepositorBase, Initializable {
   /// @notice Returns pool weights in percents
   /// @return reserves Reserves for: _depositorTokenA, _depositorTokenB
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    IUniswapV2Pair _depositorPair = depositorPair; // gas saving
-
     reserves = new uint[](2);
     if (_depositorSwapTokens) {
-      (reserves[1], reserves[0],) = _depositorPair.getReserves();
+      (reserves[1], reserves[0],) = IPair(depositorPair).getReserves();
     } else {
-      (reserves[0], reserves[1],) = _depositorPair.getReserves();
+      (reserves[0], reserves[1],) = IPair(depositorPair).getReserves();
     }
   }
 
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return depositorPair.balanceOf(address(this));
+    return IERC20(_depositorGauge).balanceOf(address(this));
   }
 
-  //// @notice Total amount of liquidity (LP tokens) in the depositor
+  //// @notice Total amount of LP tokens in the depositor
   function _depositorTotalSupply() override internal view returns (uint) {
-    return depositorPair.totalSupply();
+    return IPair(depositorPair).totalSupply();
   }
 
 
   /////////////////////////////////////////////////////////////////////
-  ///             Enter, exit
+  ///             Enter, exit, claim rewards
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Deposit given amount to the pool.
-  /// @param amountsDesired_ Amounts of token A and B on the balance of the depositor
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
     uint[] memory amountsConsumed,
     uint liquidity
@@ -115,20 +126,22 @@ contract QuickswapDepositor is DepositorBase, Initializable {
       return (amountsConsumed, 0);
     }
 
-    address _tokenA = tokenA; // gas saving
-    address _tokenB = tokenB; // gas saving
-    address _router = router; // gas saving
+    address tokenA = _depositorTokenA;
+    address tokenB = _depositorTokenB;
+    address router = depositorRouter;
+    bool stable = depositorStable;
 
-    _approveIfNeeded(_tokenA, amount0, _router);
-    _approveIfNeeded(_tokenB, amount1, _router);
+    _approveIfNeeded(tokenA, amount0, router);
+    _approveIfNeeded(tokenB, amount1, router);
 
-    (amountsConsumed[0], amountsConsumed[1], liquidity) = IRouter(_router).addLiquidity(
-      _tokenA,
-      _tokenB,
+    (amountsConsumed[0], amountsConsumed[1], liquidity) = IRouter(router).addLiquidity(
+      tokenA,
+      tokenB,
+      stable,
       amount0,
       amount1,
-      0, // todo
-      0, // todo
+      0,
+      0,
       address(this),
       block.timestamp
     );
@@ -156,13 +169,13 @@ contract QuickswapDepositor is DepositorBase, Initializable {
     IGauge(_depositorGauge).withdraw(liquidityAmount);
 
     // Remove liquidity
-    address router = router;
+    address router = depositorRouter;
 
     _approveIfNeeded(depositorPair, liquidityAmount, router);
 
     (amountsOut[0], amountsOut[1]) = IRouter(router).removeLiquidity(
-      tokenA,
-      tokenB,
+      _depositorTokenA,
+      _depositorTokenB,
       depositorStable,
       liquidityAmount,
       1,
@@ -188,18 +201,14 @@ contract QuickswapDepositor is DepositorBase, Initializable {
       liquidityAmount = totalLiquidity;
     }
 
-    (amountsOut[0], amountsOut[1]) = IRouter(router).quoteRemoveLiquidity(
-      tokenA,
-      tokenB,
+    (amountsOut[0], amountsOut[1]) = IRouter(depositorRouter).quoteRemoveLiquidity(
+      _depositorTokenA,
+      _depositorTokenB,
       depositorStable,
       liquidityAmount
     );
   }
 
-
-  /////////////////////////////////////////////////////////////////////
-  ///             Claim rewards
-  /////////////////////////////////////////////////////////////////////
 
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual returns (address[] memory tokens, uint[] memory amounts) {
