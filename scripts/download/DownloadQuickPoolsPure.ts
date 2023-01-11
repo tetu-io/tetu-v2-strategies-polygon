@@ -20,6 +20,7 @@ async function downloadQuickswapPure() {
 
   const rows: string[] = [];
   rows.push([
+    "index",
     "pool",
     "token0",
     "token0Name",
@@ -30,11 +31,14 @@ async function downloadQuickswapPure() {
     "duration",
     "rewardRate",
     "TVL",
-    "finished"
+    "finished",
+    "expire in [days]",
+    "finish",
+    "current"
   ].join(";"));
 
   const poolLength = 10000;
-  const startFrom = 117; // all reward-pools with lower indices are finished... we can skip them
+  const startFrom = 0; // 110 // all reward-pools with lower indices are finished... we can skip them
 
   for (let i = startFrom; i < poolLength; i++) {
     console.log("i", i);
@@ -78,6 +82,7 @@ async function downloadQuickswapPure() {
     }
 
     const line = [
+      i,
       lp,
       token0,
       token0Name,
@@ -89,6 +94,11 @@ async function downloadQuickswapPure() {
       rewardRate,
       tvl,
       isRewardPeriodFinished,
+      finish > currentTime
+        ? (finish - currentTime) / 60 / 60 / 24
+        : 0,
+      finish,
+      currentTime
     ].join(";");
     rows.push(line);
 

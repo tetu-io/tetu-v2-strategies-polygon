@@ -24,6 +24,7 @@ async function downloadDualQuickswapPure() {
 
   const rows: string[] = [];
   rows.push([
+    "index",
     "pool",
     "token0",
     "token0Name",
@@ -36,7 +37,10 @@ async function downloadDualQuickswapPure() {
     "rewardRateA",
     "rewardRateB",
     "TVL",
-    "finished"
+    "finished",
+    "expire in [days]",
+    "finish",
+    "current"
   ].join(";"));
 
   const poolLength = 10000;
@@ -85,6 +89,7 @@ async function downloadDualQuickswapPure() {
     }
 
     const line = [
+      i,
       lp,
       token0,
       token0Name,
@@ -98,6 +103,11 @@ async function downloadDualQuickswapPure() {
       rewardRateB,
       tvl,
       isRewardPeriodFinished,
+      finish > currentTime
+        ? (finish - currentTime) / 60 / 60 / 24 // the number of days after which the pool will expire
+        : 0,
+      finish,
+      currentTime
     ].join(";");
     rows.push(line);
 

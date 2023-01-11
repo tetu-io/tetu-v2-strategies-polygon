@@ -7,7 +7,7 @@ import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {
-  DystopiaConverterStrategy__factory, IStrategyV2, QuickswapConverterStrategy__factory
+  IStrategyV2, QuickswapConverterStrategy__factory
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
@@ -44,9 +44,14 @@ describe('QuickswapConverterUniversalTest', async () => {
 
   const strategyName = 'QuickswapConverterStrategy';
   const assetName = 'USDC';
-  const asset = PolygonAddresses.USDC_TOKEN;
+  /**
+   * Any finished reward pool that supports IStakingRewards
+   * See DownloadQuickPoolsPure.ts, address in column stakingRewards, row with "finished = false"
+   */
+  const rewardsPool = "0xACb9EB5B52F495F09bA98aC96D8e61257F3daE14";
+  const asset = PolygonAddresses.DAI_TOKEN;
   const token1 = asset;
-  const token2 = PolygonAddresses.DAI_TOKEN;
+  const token2 = PolygonAddresses.USDC_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
 
@@ -62,11 +67,10 @@ describe('QuickswapConverterUniversalTest', async () => {
       await strategy.init(
         core.controller,
         splitterAddress,
-        [PolygonAddresses.QUICK_SWAP_REWARDS_POOL],
+        rewardsPool,
         getConverterAddress(),
         token1,
         token2,
-        true
       );
 
       // Disable DForce (as it reverts on repay after block advance)
@@ -78,16 +82,16 @@ describe('QuickswapConverterUniversalTest', async () => {
     console.log('getControllerGovernance...');
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
 
-/*    { // Set Liquidator address // TODO remove after address updated onchain
-      const controllerGov = ControllerV2__factory.connect(core.controller, gov);
-      const _LIQUIDATOR = 4;
-      const liquidatorAddr = '0xC737eaB847Ae6A92028862fE38b828db41314772'; // tools.liquidator;
-      await controllerGov.announceAddressChange(_LIQUIDATOR, liquidatorAddr);
-      await TimeUtils.advanceBlocksOnTs(86400 /!*1day*!/);
-      await controllerGov.changeAddress(_LIQUIDATOR);
-      const liqAddress = await controllerGov.liquidator();
-      console.log('liqAddress', liqAddress);
-    }*/
+    // { // Set Liquidator address // TODO remove after address updated onchain
+    //   const controllerGov = ControllerV2__factory.connect(core.controller, gov);
+    //   const _LIQUIDATOR = 4;
+    //   const liquidatorAddr = '0xC737eaB847Ae6A92028862fE38b828db41314772'; // tools.liquidator;
+    //   await controllerGov.announceAddressChange(_LIQUIDATOR, liquidatorAddr);
+    //   await TimeUtils.advanceBlocksOnTs(86400 /!*1day*!/);
+    //   await controllerGov.changeAddress(_LIQUIDATOR);
+    //   const liqAddress = await controllerGov.liquidator();
+    //   console.log('liqAddress', liqAddress);
+    // }
 
     console.log('deployAndInitVaultAndStrategy...');
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(

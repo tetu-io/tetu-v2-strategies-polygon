@@ -38,7 +38,7 @@ contract QuickswapDualConverterStrategy is ConverterStrategyBase, QuickswapDepos
   }
 
   /////////////////////////////////////////////////////////////////////
-  ////   Implementation of claim-rewards-abstract-functions for IStakingRewards
+  ////   Implementation of claim-rewards-abstract-functions for IStakingDualRewards
   /////////////////////////////////////////////////////////////////////
 
   /// @notice List of rewards tokens
@@ -50,7 +50,7 @@ contract QuickswapDualConverterStrategy is ConverterStrategyBase, QuickswapDepos
   }
 
   /// @notice True if any reward token can be claimed for the given address
-  function _earned(address rewardsPool_, address user_) internal override view returns (bool) {
+  function _hasAnyRewards(address rewardsPool_, address user_) internal override view returns (bool) {
     IStakingDualRewards rewardsPool = IStakingDualRewards(rewardsPool_);
     return rewardsPool.earnedA(user_) != 0 || rewardsPool.earnedB(user_) != 0;
   }

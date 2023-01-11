@@ -231,7 +231,7 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
   function _getRewardTokens(address rewardsPool_) internal virtual view returns (address[] memory rewardTokensOut);
 
   /// @notice True if any reward token can be claimed with not zero amount for the given address
-  function _earned(address rewardsPool_, address user_) internal virtual view returns (bool);
+  function _hasAnyRewards(address rewardsPool_, address user_) internal virtual view returns (bool);
 
   /////////////////////////////////////////////////////////////////////
   ///             Claim rewards
@@ -244,7 +244,7 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
   ) {
     IStakingBase __rewardsPool = IStakingBase(_rewardsPool); // gas saving
 
-    if (_earned(address(__rewardsPool), address(this))) {
+    if (_hasAnyRewards(address(__rewardsPool), address(this))) {
       tokensOut = _getRewardTokens(address(__rewardsPool));
       uint len = tokensOut.length;
       amountsOut = new uint[](len);

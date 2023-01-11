@@ -18,7 +18,8 @@ contract QuickswapConverterStrategy is ConverterStrategyBase, QuickswapDepositor
 
   address[] public _rewardTokens;
 
-  /// @param rewardsPool_ Implementation of IStakingRewards
+  /// @param rewardsPool_ Implementation of IStakingRewards, see DownloadQuickPoolsPure.ts
+  /// @param converter_ An address of TetuConverter contract
   function init(
     address controller_,
     address splitter_,
@@ -48,7 +49,7 @@ contract QuickswapConverterStrategy is ConverterStrategyBase, QuickswapDepositor
   }
 
   /// @notice True if any reward token can be claimed for the given address
-  function _earned(address rewardsPool_, address user_) internal override view returns (bool) {
+  function _hasAnyRewards(address rewardsPool_, address user_) internal override view returns (bool) {
     return IStakingRewards(rewardsPool_).earned(user_) != 0;
   }
 }
