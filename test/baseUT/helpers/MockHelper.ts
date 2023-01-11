@@ -2,7 +2,7 @@ import {
   MockConverterStrategy,
   MockConverterStrategy__factory, MockTetuConverterController,
   MockTetuConverterSingleCall, MockTetuLiquidatorSingleCall,
-  PriceOracleMock
+  PriceOracleMock, Uniswap2LibFacade
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
@@ -52,5 +52,9 @@ export class MockHelper {
       'MockTetuConverterController',
       priceOracle
     )) as MockTetuConverterController;
+  }
+
+  public static async createUniswap2LibFacade(signer: SignerWithAddress) : Promise<Uniswap2LibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'Uniswap2LibFacade')) as Uniswap2LibFacade;
   }
 }
