@@ -108,12 +108,14 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
 
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
+    console.log("_depositorLiquidity", IStakingBase(_rewardsPool).balanceOf(address(this)));
     // All LP tokens were staked into the rewards pool
     return IStakingBase(_rewardsPool).balanceOf(address(this));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
   function _depositorTotalSupply() override internal view returns (uint) {
+    console.log("_depositorTotalSupply", depositorPair.totalSupply());
     return depositorPair.totalSupply();
   }
 
@@ -159,15 +161,21 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
       address(this),
       block.timestamp
     );
+    console.log("_depositorEnter.amountsConsumedOut[0]", amountsConsumedOut[0]);
+    console.log("_depositorEnter.amountsConsumedOut[1]", amountsConsumedOut[1]);
+    console.log("_depositorEnter.liquidityOut", liquidityOut);
+    console.log("_depositorEnter.depositorPair balance", IERC20(address(depositorPair)).balanceOf(address(this)));
 
     // stake the liquidity to the rewards pool
     // infinity approve was made in initialization
     IStakingBase(_rewardsPool).stake(liquidityOut);
+    console.log("_depositorEnter.depositorPair balance after staking", IERC20(address(depositorPair)).balanceOf(address(this)));
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
+    console.log("_depositorExit.liquidityAmount_", liquidityAmount_);
     amountsOut = new uint[](2);
     if (liquidityAmount_ == 0) {
       return amountsOut;
@@ -177,9 +185,12 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
     if (liquidityAmount_ > totalLiquidity) {
       liquidityAmount_ = totalLiquidity;
     }
+    console.log("_depositorExit.liquidityAmount_ updated", liquidityAmount_);
 
     // unstake the liquidity from the rewards pool
+    console.log("_depositorEnter.depositorPair balance before unstaking", IERC20(address(depositorPair)).balanceOf(address(this)));
     IStakingBase(_rewardsPool).withdraw(liquidityAmount_);
+    console.log("_depositorEnter.depositorPair balance after unstaking", IERC20(address(depositorPair)).balanceOf(address(this)));
 
     // Remove liquidity
     IUniswapV2Router02 _router = router; // gas saving
@@ -202,6 +213,7 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
   /// @notice Quotes output for given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
   function _depositorQuoteExit(uint liquidityAmount_) override internal virtual view returns (uint[] memory amountsOut) {
+    console.log("_depositorQuoteExit", liquidityAmount_);
     amountsOut = new uint[](2);
     if (liquidityAmount_ == 0) {
       return amountsOut;

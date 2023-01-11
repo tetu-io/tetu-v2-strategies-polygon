@@ -32,7 +32,7 @@ const argv = require('yargs/yargs')()
 
 chai.use(chaiAsPromised);
 
-describe('QuickswapConverterUniversalTest', async () => {
+describe('QuickswapDualConverterUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -42,16 +42,16 @@ describe('QuickswapConverterUniversalTest', async () => {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
   });
 
-  const strategyName = 'QuickswapConverterStrategy';
+  const strategyName = 'QuickswapDualConverterStrategy';
   const assetName = 'USDC';
   /**
-   * Any not-finished reward pool for the given pair of assets that supports IStakingRewards
-   * See DownloadQuickswapPoolsPure.ts, address in column stakingRewards, row with "finished = false"
+   * Any not-finished reward pool for the given pair of assets that supports IStakingDualRewards
+   * See DownloadQuickswapDualPoolsPure.ts, address in column stakingRewards, row with "finished = false"
    */
-  const rewardsPool = "0xACb9EB5B52F495F09bA98aC96D8e61257F3daE14";
+  const rewardsPool = "0x14e6DCE087b37ccDE76ff86Dd9e84C542C42f955";
   const asset = PolygonAddresses.USDC_TOKEN;
   const token1 = asset;
-  const token2 = PolygonAddresses.DAI_TOKEN;
+  const token2 = PolygonAddresses.USDT_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
 

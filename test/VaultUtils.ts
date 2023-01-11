@@ -63,19 +63,19 @@ export class VaultUtils {
     return vaultForUser.deposit(BigNumber.from(amount), user.address);
   }
 
-
-  public static async getVaultInfoFromServer() {
-    const net = await ethers.provider.getNetwork();
-    let network;
-    if (net.chainId === 137) {
-      network = 'MATIC';
-    } else if (net.chainId === 250) {
-      network = 'FANTOM';
-    } else {
-      throw Error('unknown net ' + net.chainId);
-    }
-    return (await axios.get(`https://tetu-server-staging.herokuapp.com//api/v1/reader/vaultInfos?network=${network}`)).data; // todo change to v2
-  }
+  // NOT used in tetu-v2: it's possible to get addresses of vaults on-chain, there are not too much vaults
+          // public static async getVaultInfoFromServer() {
+          //   const net = await ethers.provider.getNetwork();
+          //   let network;
+          //   if (net.chainId === 137) {
+          //     network = 'MATIC';
+          //   } else if (net.chainId === 250) {
+          //     network = 'FANTOM';
+          //   } else {
+          //     throw Error('unknown net ' + net.chainId);
+          //   }
+          //   return (await axios.get(`https://tetu-server-staging.herokuapp.com//api/v1/reader/vaultInfos?network=${network}`)).data; // todo change to v2
+          // }
 
   public static async addRewardsTetu(
     signer: SignerWithAddress,

@@ -1,5 +1,10 @@
 import {ethers} from "hardhat";
-import {IStakingRewards__factory, IStakingRewardsFactory__factory, IUniswapV2Pair__factory} from "../../typechain";
+import {
+  IStakingDualRewards__factory,
+  IStakingRewards__factory,
+  IStakingRewardsFactory__factory, IStakingRewardsFactoryV2__factory,
+  IUniswapV2Pair__factory
+} from "../../typechain";
 import {MaticAddresses} from "../MaticAddresses";
 import {TokenUtils} from "../utils/TokenUtils";
 import {BigNumber} from "ethers";
@@ -10,13 +15,12 @@ import {mkdir, writeFileSync} from "fs";
  * "Pure" means that there are no vaults or other tetu-related info in results.
  *
  * To run the script execute a following command:
- *      npx hardhat run scripts/download/DownloadQuickPoolsPure.ts
- *      npx hardhat run --network localhost scripts/download/DownloadQuickPoolsPure.ts
+ *      npx hardhat run scripts/download/DownloadQuickswapDualPoolsPure.ts
+ *      npx hardhat run --network localhost scripts/download/DownloadQuickswapDualPoolsPure.ts
  */
-async function downloadQuickswapPure() {
+async function downloadQuickswapDualPure() {
   const signer = (await ethers.getSigners())[0];
-  const factory = IStakingRewardsFactory__factory.connect(MaticAddresses.QUICK_STAKING_FACTORY_V2, signer);
-  console.log('rewardsToken', await factory.rewardsToken());
+  const factory = IStakingRewardsFactoryV2__factory.connect(MaticAddresses.QUICK_STAKING_FACTORY_V3, signer);
 
   const rows: string[] = [];
   rows.push([
@@ -27,9 +31,11 @@ async function downloadQuickswapPure() {
     "token1",
     "token1Name",
     "stakingRewards",
-    "rewardAmount",
+    "rewardAmountA",
+    "rewardAmountB",
     "duration",
-    "rewardRate",
+    "rewardRateA",
+    "rewardRateB",
     "TVL",
     "finished",
     "expire in [days]",
@@ -38,7 +44,7 @@ async function downloadQuickswapPure() {
   ].join(";"));
 
   const poolLength = 10000;
-  const startFrom = 0; // 110 // all reward-pools with lower indices are finished... we can skip them
+  const startFrom = 0; // all reward-pools with lower indices are finished... we can skip them
 
   for (let i = startFrom; i < poolLength; i++) {
     console.log("i", i);
@@ -68,9 +74,10 @@ async function downloadQuickswapPure() {
     }
 
     const info = await factory.stakingRewardsInfoByStakingToken(lp);
-    const poolContract = IStakingRewards__factory.connect(info.stakingRewards, signer);
+    const poolContract = IStakingDualRewards__factory.connect(info.stakingRewards, signer);
 
-    const rewardRate = await poolContract.rewardRate();
+    const rewardRateA = await poolContract.rewardRateA();
+    const rewardRateB = await poolContract.rewardRateB();
     const finish = (await poolContract.periodFinish()).toNumber();
     const currentTime = Math.floor(Date.now() / 1000);
     const isRewardPeriodFinished = finish < currentTime;
@@ -89,13 +96,15 @@ async function downloadQuickswapPure() {
       token1,
       token1Name,
       info.stakingRewards,
-      info.rewardAmount,
+      info.rewardAmountA,
+      info.rewardAmountB,
       info.duration,
-      rewardRate,
+      rewardRateA,
+      rewardRateB,
       tvl,
       isRewardPeriodFinished,
       finish > currentTime
-        ? (finish - currentTime) / 60 / 60 / 24
+        ? (finish - currentTime) / 60 / 60 / 24 // the number of days after which the pool will expire
         : 0,
       finish,
       currentTime
@@ -111,11 +120,11 @@ async function downloadQuickswapPure() {
     }
   });
 
-  writeFileSync('./tmp/download/quick_pools_pure.csv', rows.join("\n"), 'utf8');
+  writeFileSync('./tmp/download/dual_quick_pools_pure.csv', rows.join("\n"), 'utf8');
   console.log('done');
 }
 
-downloadQuickswapPure()
+downloadQuickswapDualPure()
   .then(() => process.exit(0))
   .catch(error => {
     console.error(error);
