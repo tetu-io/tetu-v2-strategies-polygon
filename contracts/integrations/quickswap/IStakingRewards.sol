@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "./IStakingBase.sol";
@@ -17,4 +17,5 @@ interface IStakingRewards is IStakingBase {
   /// quickswap-core, StakingRewards
   /////////////////////////////////////////////////
   function rewardsToken() external view returns (IERC20);
+  function rewardRate() external view returns (uint256);
 }

@@ -15,6 +15,8 @@ import {Misc} from "../scripts/utils/Misc";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {ICoreContractsWrapper} from "./CoreContractsWrapper";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
+import {ethers} from "hardhat";
+import axios from "axios";
 
 export const PPFS_NO_INCREASE = new Set<string>([
   'QiStakingStrategyBase',
@@ -62,7 +64,7 @@ export class VaultUtils {
   }
 
 
-  /*public static async getVaultInfoFromServer() {
+  public static async getVaultInfoFromServer() {
     const net = await ethers.provider.getNetwork();
     let network;
     if (net.chainId === 137) {
@@ -72,8 +74,8 @@ export class VaultUtils {
     } else {
       throw Error('unknown net ' + net.chainId);
     }
-    return (await axios.get(`https://tetu-server-staging.herokuapp.com//api/v1/reader/vaultInfos?network=${network}`)).data;
-  }*/
+    return (await axios.get(`https://tetu-server-staging.herokuapp.com//api/v1/reader/vaultInfos?network=${network}`)).data; // todo change to v2
+  }
 
   public static async addRewardsTetu(
     signer: SignerWithAddress,
