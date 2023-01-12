@@ -6,6 +6,7 @@ import "./QuickswapDepositor.sol";
 import "../../integrations/quickswap/IStakingRewards.sol";
 
 /// @title Converter Strategy with Quickswap for reward pool StakingRewards
+/// @dev deprecated, we don't use it - no rewards...
 contract QuickswapConverterStrategy is ConverterStrategyBase, QuickswapDepositor {
 
   string public constant override NAME = "Quickswap Converter Strategy";
