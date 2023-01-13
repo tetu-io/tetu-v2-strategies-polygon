@@ -262,7 +262,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       ? 0 // it's better to return zero here than a half of the amount
       : ratio * (
         reserves[index0] * assetPrice
-        + reserves[index1] * priceSecond
+        + reserves[index1] * priceSecond // todo support ANY(!) number of tokens
           * 10**IERC20Metadata(poolAssets[index0]).decimals()
           / 10**IERC20Metadata(poolAssets[index1]).decimals()
       ) / 1e18 / 1e18; // price, ratio

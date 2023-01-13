@@ -2,7 +2,7 @@
 pragma solidity 0.8.17;
 
 /// @notice Restored from https://polygonscan.com/address/0x48e6b98ef6329f8f0a30ebb8c7c960330d648085
-interface IBalancerBoostedAaveUsdPool {
+interface IBalancerBoostedAaveStablePool {
   event AmpUpdateStarted(
     uint256 startValue,
     uint256 endValue,

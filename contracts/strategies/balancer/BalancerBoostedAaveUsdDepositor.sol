@@ -6,9 +6,16 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "../DepositorBase.sol";
 import "../../tools/TokenAmountsLib.sol";
 import "../../tools/AppErrors.sol";
+import "../../integrations/balancer/IBVault.sol";
+
 
 /// @title Depositor for the pool Balancer Boosted Aave USD (Polygon)
 /// @dev See https://app.balancer.fi/#/polygon/pool/0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
+///      See https://docs.balancer.fi/products/balancer-pools/boosted-pools for explanation of Boosted Pools on BalanceR.
+///      Terms
+///         Phantom BPT = bb-a-* tokens (In pools that use Phantom BPT all pool tokens are minted at the time of pool creation)
+///      Boosted pool:
+///            bb-am-DAI (DAI + amDAI) + bb-am-USDC (USDC + amUSDC) + bb-am-USDT (USDT + amUSDT)
 abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
@@ -26,58 +33,46 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
   /////////////////////////////////////////////////////////////////////
   address public tokenA;
   address public tokenB;
+  address public tokenC;
 
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
 
-  function __BalancerBoostedAaveUsdDepositor_init(
-    address router_,
-    address tokenA_,
-    address tokenB_,
-    address rewardsPool_
-  ) internal onlyInitializing {
-    require(
-      router_ != address(0)
-      && rewardsPool_ != address(0)
-      && tokenA_ != address(0)
-      && tokenB_ != address(0),
-      AppErrors.ZERO_ADDRESS
-    );
-
-    router = IUniswapV2Router02(router_);
-    tokenA = tokenA_;
-    tokenB = tokenB_;
-
-    _rewardsPool = rewardsPool_;
+  function __BalancerBoostedAaveUsdDepositor_init() internal onlyInitializing {
+    tokenA = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063; // dai
+    tokenB = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174; // usdc
+    tokenC = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F; // usdt
 
     // infinity approve,  2**255 is more gas-efficient than type(uint).max
-    IERC20(address(depositorPair)).approve(_rewardsPool, 2**255);
+    // IERC20(address(depositorPair)).approve(_rewardsPool, 2**255);
   }
 
   /////////////////////////////////////////////////////////////////////
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Returns pool assets
+  /// @notice Returns pool assets (DAI, USDC, USDT)
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
     poolAssets[0] = tokenA;
     poolAssets[1] = tokenB;
+    poolAssets[2] = tokenC;
   }
 
   /// @notice Returns pool weights in percents (50/50%)
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
-    weights = new uint[](2);
+    weights = new uint[](3);
     weights[0] = 1; // 50%
     weights[1] = 1; // 50%
-    totalWeight = 2; // 100%
+    weights[2] = 1; // 50%
+    totalWeight = 3; // 100%
   }
 
-  /// @notice Returns pool weights in percents
   /// @return reserves Reserves for: _depositorTokenA, _depositorTokenB
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    IUniswapV2Pair _depositorPair = depositorPair; // gas saving
+    // get balances of bb-am-* tokens
+    (IERC20[] memory tokens, uint256[] memory balances,) = BALANCER_VAULT.getPoolTokens(POOL_ID);
 
     reserves = new uint[](2);
     if (_depositorSwapTokens) {
@@ -142,11 +137,20 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
   }
 
 
-  /**
-   * @dev This empty reserved space is put in place to allow future versions to add new
-   * variables without shifting down storage in the inheritance chain.
-   * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-   */
-  uint[16] private __gap;
+  /////////////////////////////////////////////////////////////////////
+  ///             Utils
+  /////////////////////////////////////////////////////////////////////
 
+  /// @dev Returns the address of a Pool's contract.
+  ///      Due to how Pool IDs are created, this is done with no storage accesses and costs little gas.
+  function _getPoolAddress(bytes32 id) internal pure returns (address) {
+    // 12 byte logical shift left to remove the nonce and specialization setting. We don't need to mask,
+    // since the logical shift already sets the upper bits to zero.
+    return address(uint160(uint(id) >> (12 * 8)));
+  }
+
+  /// @dev This empty reserved space is put in place to allow future versions to add new
+  /// variables without shifting down storage in the inheritance chain.
+  /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+  uint[16] private __gap;
 }
