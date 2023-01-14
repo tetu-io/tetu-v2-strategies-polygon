@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: ISC
 pragma solidity 0.8.17;
 
+import "./IPoolSwapStructs.sol";
+
 /// @notice Restored from Balancer Aave Boosted Pool (DAI) (bb-am-DAI) https://polygonscan.com/address/0x178E029173417b1F9C8bC16DCeC6f697bC323746
 interface IBalancerBoostedAavePool {
   event Approval(
@@ -55,6 +57,11 @@ interface IBalancerBoostedAavePool {
   function getWrappedIndex() external view returns (uint256);
 
   function getWrappedToken() external view returns (address);
+
+  /**
+   * @notice Return the conversion rate between the wrapped and main tokens.
+     * @dev This is an 18-decimal fixed point value.
+     */
   function getWrappedTokenRate() external view returns (uint256);
 
   function inRecoveryMode() external view returns (bool);
@@ -153,19 +160,5 @@ interface AaveLinearPool {
     uint256 pauseWindowDuration;
     uint256 bufferPeriodDuration;
     address owner;
-  }
-}
-
-interface IPoolSwapStructs {
-  struct SwapRequest {
-    uint8 kind;
-    address tokenIn;
-    address tokenOut;
-    uint256 amount;
-    bytes32 poolId;
-    uint256 lastChangeBlock;
-    address from;
-    address to;
-    bytes userData;
   }
 }

@@ -7,6 +7,8 @@ import "../DepositorBase.sol";
 import "../../tools/TokenAmountsLib.sol";
 import "../../tools/AppErrors.sol";
 import "../../integrations/balancer/IBVault.sol";
+import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
+import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 
 
 /// @title Depositor for the pool Balancer Boosted Aave USD (Polygon)
@@ -16,7 +18,7 @@ import "../../integrations/balancer/IBVault.sol";
 ///         Phantom BPT = bb-a-* tokens (In pools that use Phantom BPT all pool tokens are minted at the time of pool creation)
 ///      Boosted pool:
 ///            bb-am-DAI (DAI + amDAI) + bb-am-USDC (USDC + amUSDC) + bb-am-USDT (USDT + amUSDT)
-abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializable {
+abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
@@ -27,6 +29,7 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
 
   /// @notice Balancer Boosted Aave USD pool ID
   bytes32 public constant POOL_ID = 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b;
+  address private constant BB_AM_USD_TOKEN = 0x48e6B98ef6329f8f0A30eBB8c7C960330d648085; // TODO: use _getPoolAddress instead?
 
   /////////////////////////////////////////////////////////////////////
   ///                   Variables
@@ -34,6 +37,8 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
   address public tokenA;
   address public tokenB;
   address public tokenC;
+  /// @notice Token => index + 1 (tokenA => 1, tokenB => 2, tokenC => 3)
+  mapping (address => uint) public tokenIndices;
 
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
@@ -46,13 +51,16 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
 
     // infinity approve,  2**255 is more gas-efficient than type(uint).max
     // IERC20(address(depositorPair)).approve(_rewardsPool, 2**255);
+    tokenIndices[tokenA] = 1;
+    tokenIndices[tokenB] = 2;
+    tokenIndices[tokenC] = 3;
   }
 
   /////////////////////////////////////////////////////////////////////
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Returns pool assets (DAI, USDC, USDT)
+  /// @notice Returns pool assets (token A, token B, token C)
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
     poolAssets[0] = tokenA;
@@ -60,7 +68,7 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
     poolAssets[2] = tokenC;
   }
 
-  /// @notice Returns pool weights in percents (50/50%)
+  /// @notice Returns pool weights in percents (token A, token B, token C)
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
     weights = new uint[](3);
     weights[0] = 1; // 50%
@@ -69,30 +77,66 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
     totalWeight = 3; // 100%
   }
 
-  /// @return reserves Reserves for: _depositorTokenA, _depositorTokenB
+  /// @notice Total amounts of the assets under control of the pool for token A, token B, token C
+  /// @return reserves bb-am-DAI (DAI + amDAI): balance DAI + (balance amDAI recalculated to DAI)
+  ///                  bb-am-USDC (USDC + amUSDC): balance USDC + (amUSDC recalculated to USDC)
+  ///                  bb-am-USDT (USDT + amUSDT): balance USDT + (amUSDT recalculated to USDT)
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    // get balances of bb-am-* tokens
-    (IERC20[] memory tokens, uint256[] memory balances,) = BALANCER_VAULT.getPoolTokens(POOL_ID);
+    // enumerate all bb-am-XXX tokens and return amounts of A, B, C tokens in proper order (A, B, C)
+    (IERC20[] memory tokens,,) = BALANCER_VAULT.getPoolTokens(POOL_ID);
+    uint len = tokens.length;
+    uint[] memory reserves = new uint[](3);
+    for (uint i; i < len; i = uncheckedInc(i)) {
+      if (address(tokens[i]) != BB_AM_USD_TOKEN) {
+        IBalancerBoostedAavePool poolBbAm = IBalancerBoostedAavePool(address(tokens[i]));
 
-    reserves = new uint[](2);
-    if (_depositorSwapTokens) {
-      (reserves[1], reserves[0],) = _depositorPair.getReserves();
-    } else {
-      (reserves[0], reserves[1],) = _depositorPair.getReserves();
+        uint indexInReserves1;
+        uint totalReserveAmount;
+
+        // Each bb-am-* returns (main-token, wrapped-token, bb-am-itself), the order of tokens in undetermined
+        // i.e. (DAI + amDAI + bb-am-DAI) or (bb-am-USDC, amUSDC, USDC)
+
+        // enumerate all tokens inside bb-am-XXX token, i.e. (DAI, amDAI, bb-am-DAI)
+        (IERC20[] memory subTokens, uint256[] memory balances,) = BALANCER_VAULT.getPoolTokens(poolBbAm.getPoolId());
+        uint lenSubTokens = subTokens.length;
+        for (uint j; j < len; j = uncheckedInc(j)) {
+          if (address(subTokens[j]) == address(tokens[i])) {
+            // this is bb-am-* token itself, we should ignore it
+          } else {
+            uint tokenIndex = tokenIndices[address(subTokens[j])];
+            if (tokenIndex == 0) {
+              // this is a wrapped token, i.e. amDAI, amUSDC, amUSDT
+              // wrappedTokenRate = The conversion rate between the wrapped and main tokens, decimals 18
+
+              // TODO we assume here, that main and wrapped tokens have same decimals
+              // TODO it's true for Balancer Boosted Aave USD, but probably in general case we need a recalculation
+              totalReserveAmount += balances[j] * poolBbAm.getWrappedTokenRate() / 1e18;
+              indexInReserves1 = tokenIndex + 1;
+            } else {
+              // this is a main token, i.e. DAI, USDC .. take the amount as is
+              totalReserveAmount += balances[j];
+            }
+          }
+        }
+
+        require(indexInReserves1 != 0, AppErrors.BB_AM_POOL_DOESNT_RETURN_MAIN_TOKEN);
+        reserves[indexInReserves1 - 1] = totalReserveAmount;
+      }
     }
+
+    return reserves;
   }
 
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    console.log("_depositorLiquidity", IStakingBase(_rewardsPool).balanceOf(address(this)));
-    // All LP tokens were staked into the rewards pool
-    return IStakingBase(_rewardsPool).balanceOf(address(this));
+    console.log("_depositorLiquidity", IBalancerBoostedAaveStablePool(BB_AM_USD_TOKEN).balanceOf(address(this)));
+    return IBalancerBoostedAaveStablePool(BB_AM_USD_TOKEN).balanceOf(address(this));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
   function _depositorTotalSupply() override internal view returns (uint) {
-    console.log("_depositorTotalSupply", depositorPair.totalSupply());
-    return depositorPair.totalSupply();
+    console.log("_depositorTotalSupply", IBalancerBoostedAaveStablePool(BB_AM_USD_TOKEN).getActualSupply());
+    return IBalancerBoostedAaveStablePool(BB_AM_USD_TOKEN).getActualSupply();
   }
 
 
@@ -115,7 +159,7 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
   /// @dev if requested liquidityAmount >= invested, then should make full exit
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
     console.log("_depositorExit.liquidityAmount_", liquidityAmount_);
-
+    return amountsOut;
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
@@ -141,12 +185,18 @@ abstract contract BalancerBoostedAaveUsdDepositor is DepositorBase, Initializabl
   ///             Utils
   /////////////////////////////////////////////////////////////////////
 
-  /// @dev Returns the address of a Pool's contract.
-  ///      Due to how Pool IDs are created, this is done with no storage accesses and costs little gas.
-  function _getPoolAddress(bytes32 id) internal pure returns (address) {
-    // 12 byte logical shift left to remove the nonce and specialization setting. We don't need to mask,
-    // since the logical shift already sets the upper bits to zero.
-    return address(uint160(uint(id) >> (12 * 8)));
+//  /// @dev Returns the address of a Pool's contract.
+//  ///      Due to how Pool IDs are created, this is done with no storage accesses and costs little gas.
+//  function _getPoolAddress(bytes32 id) internal pure returns (address) {
+//    // 12 byte logical shift left to remove the nonce and specialization setting. We don't need to mask,
+//    // since the logical shift already sets the upper bits to zero.
+//    return address(uint160(uint(id) >> (12 * 8)));
+//  }
+
+  function uncheckedInc(uint i) internal pure returns (uint) {
+  unchecked {
+    return i + 1;
+  }
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new

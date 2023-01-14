@@ -10,4 +10,6 @@ library AppErrors {
   /// @notice A pair of the tokens cannot be found in the factory of uniswap pairs
   string public constant UNISWAP_PAIR_NOT_FOUND = "TS-2 pair not found";
 
+  /// @return Each bb-am-* pool returns in getPoolTokens (main, wrapped, itself) tokens, i.e. DAI, amDAI, bb-am-DAI
+  string public constant BB_AM_POOL_DOESNT_RETURN_MAIN_TOKEN = "TS-3 bb-am-* main";
 }

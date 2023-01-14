@@ -97,6 +97,8 @@ describe("study", () => {
       const wrappedTokenInfo = await vault.getPoolTokenInfo(poolId, wrappedToken);
 
       const tokensForPool = await vault.getPoolTokens(poolId);
+      const mainTokenDecimals = await IERC20Extended__factory.connect(mainToken, signer).decimals();
+      const wrappedTokenDecimals = await IERC20Extended__factory.connect(wrappedToken, signer).decimals();
 
       console.log("Boosted pool token", tokenNames[i]);
       console.log("BalanceBPT", balanceBPT);
@@ -112,6 +114,8 @@ describe("study", () => {
       console.log("wrappedToken.managed", wrappedTokenInfo.managed);
       console.log("wrappedTokenRate", wrappedTokenRate);
       console.log("tokensForPool", tokensForPool);
+      console.log("mainTokenDecimals", mainTokenDecimals);
+      console.log("wrappedTokenDecimals", wrappedTokenDecimals);
 
       amounts.push(
         mainTokenInfo.cash.mul(mainTokenRate).add(wrappedTokenInfo.cash.mul(wrappedTokenRate))

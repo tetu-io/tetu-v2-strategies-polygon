@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: ISC
 pragma solidity 0.8.17;
 
+import "./IPoolSwapStructs.sol";
+
 /// @notice Restored from https://polygonscan.com/address/0x48e6b98ef6329f8f0a30ebb8c7c960330d648085
 interface IBalancerBoostedAaveStablePool {
   event AmpUpdateStarted(
@@ -41,6 +43,19 @@ interface IBalancerBoostedAaveStablePool {
   function disableRecoveryMode() external;
   function enableRecoveryMode() external;
   function getActionId(bytes4 selector) external view returns (bytes32);
+
+  /**
+   * @dev Returns the effective BPT supply.
+     *
+     * In other pools, this would be the same as `totalSupply`, but there are two key differences here:
+     *  - this pool pre-mints BPT and holds it in the Vault as a token, and as such we need to subtract the Vault's
+     *    balance to get the total "circulating supply". This is called the 'virtualSupply'.
+     *  - the Pool owes debt to the Protocol in the form of unminted BPT, which will be minted immediately before the
+     *    next join or exit. We need to take these into account since, even if they don't yet exist, they will
+     *    effectively be included in any Pool operation that involves BPT.
+     *
+     * In the vast majority of cases, this function should be used instead of `totalSupply()`.
+     */
   function getActualSupply() external view returns (uint256);
   function getAmplificationParameter() external view returns (
     uint256 value,
@@ -175,19 +190,5 @@ interface ComposableStablePool {
     uint256 pauseWindowDuration;
     uint256 bufferPeriodDuration;
     address owner;
-  }
-}
-
-interface IPoolSwapStructs {
-  struct SwapRequest {
-    uint8 kind;
-    address tokenIn;
-    address tokenOut;
-    uint256 amount;
-    bytes32 poolId;
-    uint256 lastChangeBlock;
-    address from;
-    address to;
-    bytes userData;
   }
 }
