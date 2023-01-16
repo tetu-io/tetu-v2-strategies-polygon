@@ -30,6 +30,15 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
   /// @notice Balancer Boosted Aave USD pool ID
   bytes32 public constant POOL_ID = 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b;
   address private constant BB_AM_USD_TOKEN = 0x48e6B98ef6329f8f0A30eBB8c7C960330d648085; // TODO: use _getPoolAddress instead?
+  address private constant BB_AM_DAI =  0x178E029173417b1F9C8bC16DCeC6f697bC323746;
+  address private constant BB_AM_USDC = 0xF93579002DBE8046c43FEfE86ec78b1112247BB8;
+  address private constant BB_AM_USDT = 0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6;
+  address private constant DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
+  address private constant USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+  address private constant USDT = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
+  address private constant AM_DAI = 0xEE029120c72b0607344f35B17cdD90025e647B00;
+  address private constant AM_USDC = 0x221836a597948Dce8F3568E044fF123108aCc42A;
+  address private constant AM_USDT = 0x19C60a251e525fa88Cd6f3768416a8024e98fC19;
 
   /////////////////////////////////////////////////////////////////////
   ///                   Variables
@@ -45,9 +54,9 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
   /////////////////////////////////////////////////////////////////////
 
   function __BalancerBoostedAaveUsdDepositor_init() internal onlyInitializing {
-    tokenA = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063; // dai
-    tokenB = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174; // usdc
-    tokenC = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F; // usdt
+    tokenA = DAI; // dai
+    tokenB = USDC; // usdc
+    tokenC = USDT; // usdt
 
     // infinity approve,  2**255 is more gas-efficient than type(uint).max
     // IERC20(address(depositorPair)).approve(_rewardsPool, 2**255);
@@ -71,9 +80,9 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
   /// @notice Returns pool weights in percents (token A, token B, token C)
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
     weights = new uint[](3);
-    weights[0] = 1; // 50%
-    weights[1] = 1; // 50%
-    weights[2] = 1; // 50%
+    weights[0] = 1; // 33.3(3)%
+    weights[1] = 1; // 33.3(3)%
+    weights[2] = 1; // 33.3(3)%
     totalWeight = 3; // 100%
   }
 
@@ -144,6 +153,54 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
   ///             Enter, exit
   /////////////////////////////////////////////////////////////////////
 
+  /// @notice Swap given part of main token to wrapped token, i.e. DAI to amDAI and join to the pool
+  /// @param wrappedTokenPart100_ A part of main tokens to be wrapped in percents, i.e. 90%
+  function _addLiquidityToLinearPool(
+    IBalancerBoostedAavePool pool_,
+    uint wrappedTokenPart100_
+  ) internal returns (uint) {
+    address mainToken = pool_.getMainToken();
+    address wrappedToken = pool_.getWrappedToken();
+
+    uint mainTokenBalance = IERC20(mainToken).balanceOf(address(this));
+    uint requiredWrappedTokenBalance = mainTokenBalance * wrappedTokenPart100_ / 100;
+
+    uint balanceBefore = pool_.balanceOf(address(this));
+    BALANCER_VAULT.swap(
+      IBVault.SingleSwap({
+        poolId: IBalancerBoostedAavePool(pool_).getPoolId(),
+        kind: IBVault.SwapKind.GIVEN_IN,
+        assetIn: IAsset(mainToken),
+        assetOut: IAsset(wrappedToken),
+        amount: requiredWrappedTokenBalance,
+        userData: bytes("")
+      }),
+      IBVault.FundManagement({
+        sender: address(this),
+        fromInternalBalance: false,
+        recipient: payable(address(this)),
+        toInternalBalance: true
+      }),
+      0,
+      block.timestamp
+    );
+
+    BALANCER_VAULT.joinPool(
+      POOL_ID,
+      address(this),
+      address(this),
+      IBVault.JoinPoolRequest({
+        assets: assets, // `assets` must have the same length and order as the array returned by `getPoolTokens`
+        maxAmountsIn: maxAmountsIn,
+        userData: 0,
+        fromInternalBalance: true
+      })
+    );
+
+    uint balanceAfter = pool_.balanceOf(address(this));
+    return balanceAfter - balanceBefore;
+  }
+
   /// @notice Deposit given amount to the pool.
   /// @param amountsDesired_ Amounts of token A and B on the balance of the depositor
   /// @return amountsConsumedOut Amounts of token A and B deposited to the internal pool
@@ -152,6 +209,38 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
+    // get list of bb-am-tokens
+    // we should get: bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt
+    (IERC20[] memory tokens,,) = BALANCER_VAULT.getPoolTokens(POOL_ID);
+    uint len = tokens.length;
+
+    // we keep bb-am-* token in the list, but don't add any liquidity for it directly
+    IAsset[] memory assets = new IAsset[](len);
+    assets[0] = BB_AM_DAI;
+    assets[1] = BB_AM_USD_TOKEN;
+    assets[2] = BB_AM_USDC;
+    assets[3] = BB_AM_USDT;
+
+    // add liquidity to each embedded pool
+    uint[] memory maxAmountsIn = new uint[](len);
+    uint partAM = 95; // TODO
+    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[0]), partAM); // dai
+    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[2]), partAM); // usdc
+    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[3]), partAM); // usdt
+
+
+    BALANCER_VAULT.joinPool(
+      POOL_ID,
+      address(this),
+      address(this),
+      IBVault.JoinPoolRequest({
+        assets: assets, // `assets` must have the same length and order as the array returned by `getPoolTokens`
+        maxAmountsIn: maxAmountsIn,
+        userData: 0, // TODO userData
+        fromInternalBalance: fromInternalBalance
+      })
+    );
+
     return (amountsConsumedOut, liquidityOut);
   }
 

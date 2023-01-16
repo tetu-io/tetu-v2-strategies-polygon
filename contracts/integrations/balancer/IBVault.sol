@@ -273,6 +273,8 @@ interface IBVault {
      * directly to the Pool's contract, as is `recipient`.
      *
      * Emits a `PoolBalanceChanged` event.
+     *
+     * See https://dev.balancer.fi/resources/joins-and-exits/pool-joins
      */
   function joinPool(
     bytes32 poolId,
