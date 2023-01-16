@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../integrations/uniswap/IUniswapV2Router02.sol";
-import "../tools/Uniswap2Lib.sol";
+import "../../integrations/uniswap/IUniswapV2Router02.sol";
+import "../../tools/Uniswap2Lib.sol";
 
 /// @notice Provide direct access to Uniswal2Lib functions for unit tests
 contract Uniswap2LibFacade {

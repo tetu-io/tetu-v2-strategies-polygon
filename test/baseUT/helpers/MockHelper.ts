@@ -1,4 +1,5 @@
 import {
+  BalancerLogicLibFacade,
   MockConverterStrategy,
   MockConverterStrategy__factory, MockTetuConverterController,
   MockTetuConverterSingleCall, MockTetuLiquidatorSingleCall,
@@ -56,5 +57,9 @@ export class MockHelper {
 
   public static async createUniswap2LibFacade(signer: SignerWithAddress) : Promise<Uniswap2LibFacade> {
     return (await DeployerUtils.deployContract(signer, 'Uniswap2LibFacade')) as Uniswap2LibFacade;
+  }
+
+  public static async createBalancerLogicLibFacade(signer: SignerWithAddress) : Promise<BalancerLogicLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'BalancerLogicLibFacade')) as BalancerLogicLibFacade;
   }
 }

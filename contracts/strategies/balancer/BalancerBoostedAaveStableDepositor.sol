@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../DepositorBase.sol";
 import "../../tools/TokenAmountsLib.sol";
 import "../../tools/AppErrors.sol";
@@ -94,7 +95,7 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
     // enumerate all bb-am-XXX tokens and return amounts of A, B, C tokens in proper order (A, B, C)
     (IERC20[] memory tokens,,) = BALANCER_VAULT.getPoolTokens(POOL_ID);
     uint len = tokens.length;
-    uint[] memory reserves = new uint[](3);
+    reserves = new uint[](3);
     for (uint i; i < len; i = uncheckedInc(i)) {
       if (address(tokens[i]) != BB_AM_USD_TOKEN) {
         IBalancerBoostedAavePool poolBbAm = IBalancerBoostedAavePool(address(tokens[i]));
@@ -153,93 +154,95 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
   ///             Enter, exit
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Swap given part of main token to wrapped token, i.e. DAI to amDAI and join to the pool
-  /// @param wrappedTokenPart100_ A part of main tokens to be wrapped in percents, i.e. 90%
-  function _addLiquidityToLinearPool(
-    IBalancerBoostedAavePool pool_,
-    uint wrappedTokenPart100_
-  ) internal returns (uint) {
-    address mainToken = pool_.getMainToken();
-    address wrappedToken = pool_.getWrappedToken();
-
-    uint mainTokenBalance = IERC20(mainToken).balanceOf(address(this));
-    uint requiredWrappedTokenBalance = mainTokenBalance * wrappedTokenPart100_ / 100;
-
-    uint balanceBefore = pool_.balanceOf(address(this));
-    BALANCER_VAULT.swap(
-      IBVault.SingleSwap({
-        poolId: IBalancerBoostedAavePool(pool_).getPoolId(),
-        kind: IBVault.SwapKind.GIVEN_IN,
-        assetIn: IAsset(mainToken),
-        assetOut: IAsset(wrappedToken),
-        amount: requiredWrappedTokenBalance,
-        userData: bytes("")
-      }),
-      IBVault.FundManagement({
-        sender: address(this),
-        fromInternalBalance: false,
-        recipient: payable(address(this)),
-        toInternalBalance: true
-      }),
-      0,
-      block.timestamp
-    );
-
-    BALANCER_VAULT.joinPool(
-      POOL_ID,
-      address(this),
-      address(this),
-      IBVault.JoinPoolRequest({
-        assets: assets, // `assets` must have the same length and order as the array returned by `getPoolTokens`
-        maxAmountsIn: maxAmountsIn,
-        userData: 0,
-        fromInternalBalance: true
-      })
-    );
-
-    uint balanceAfter = pool_.balanceOf(address(this));
-    return balanceAfter - balanceBefore;
-  }
+//  /// @notice Swap given part of main token to wrapped token, i.e. DAI to amDAI and join to the pool
+//  /// @param wrappedTokenPart100_ A part of main tokens to be wrapped in percents, i.e. 90%
+//  function _addLiquidityToLinearPool(
+//    IBalancerBoostedAavePool pool_,
+//    uint wrappedTokenPart100_
+//  ) internal returns (uint) {
+//    address mainToken = pool_.getMainToken();
+//    address wrappedToken = pool_.getWrappedToken();
+//
+//    uint mainTokenBalance = IERC20(mainToken).balanceOf(address(this));
+//    uint requiredWrappedTokenBalance = mainTokenBalance * wrappedTokenPart100_ / 100;
+//
+//    uint balanceBefore = pool_.balanceOf(address(this));
+//    BALANCER_VAULT.swap(
+//      IBVault.SingleSwap({
+//        poolId: IBalancerBoostedAavePool(pool_).getPoolId(),
+//        kind: IBVault.SwapKind.GIVEN_IN,
+//        assetIn: IAsset(mainToken),
+//        assetOut: IAsset(wrappedToken),
+//        amount: requiredWrappedTokenBalance,
+//        userData: bytes("")
+//      }),
+//      IBVault.FundManagement({
+//        sender: address(this),
+//        fromInternalBalance: false,
+//        recipient: payable(address(this)),
+//        toInternalBalance: true
+//      }),
+//      0,
+//      block.timestamp
+//    );
+//
+//    BALANCER_VAULT.joinPool(
+//      POOL_ID,
+//      address(this),
+//      address(this),
+//      IBVault.JoinPoolRequest({
+//        assets: assets, // `assets` must have the same length and order as the array returned by `getPoolTokens`
+//        maxAmountsIn: maxAmountsIn,
+//        userData: 0,
+//        fromInternalBalance: true
+//      })
+//    );
+//
+//    uint balanceAfter = pool_.balanceOf(address(this));
+//    return balanceAfter - balanceBefore;
+//  }
 
   /// @notice Deposit given amount to the pool.
-  /// @param amountsDesired_ Amounts of token A and B on the balance of the depositor
-  /// @return amountsConsumedOut Amounts of token A and B deposited to the internal pool
+  /// @param amountsDesired_ Amounts of token A, B, C on the balance of the depositor
+  /// @return amountsConsumedOut Amounts of token A, B, C deposited to the internal pool
   /// @return liquidityOut Total amount of liquidity added to the internal pool
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
-    // get list of bb-am-tokens
-    // we should get: bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt
-    (IERC20[] memory tokens,,) = BALANCER_VAULT.getPoolTokens(POOL_ID);
-    uint len = tokens.length;
-
-    // we keep bb-am-* token in the list, but don't add any liquidity for it directly
-    IAsset[] memory assets = new IAsset[](len);
-    assets[0] = BB_AM_DAI;
-    assets[1] = BB_AM_USD_TOKEN;
-    assets[2] = BB_AM_USDC;
-    assets[3] = BB_AM_USDT;
-
-    // add liquidity to each embedded pool
-    uint[] memory maxAmountsIn = new uint[](len);
-    uint partAM = 95; // TODO
-    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[0]), partAM); // dai
-    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[2]), partAM); // usdc
-    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[3]), partAM); // usdt
-
-
-    BALANCER_VAULT.joinPool(
-      POOL_ID,
-      address(this),
-      address(this),
-      IBVault.JoinPoolRequest({
-        assets: assets, // `assets` must have the same length and order as the array returned by `getPoolTokens`
-        maxAmountsIn: maxAmountsIn,
-        userData: 0, // TODO userData
-        fromInternalBalance: fromInternalBalance
-      })
-    );
+//    // get list of bb-am-tokens
+//    // we should get: bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt
+//    (IERC20[] memory tokens, uint[] balances,) = BALANCER_VAULT.getPoolTokens(POOL_ID);
+//    uint len = tokens.length;
+//
+//    uint[] amountsToDeposit = _getAmountsToDeposit(amountsDesired_, tokens, balances);
+//
+//    // we keep bb-am-* token in the list, but don't add any liquidity for it directly
+//    IAsset[] memory assets = new IAsset[](len);
+//    assets[0] = BB_AM_DAI;
+//    assets[1] = BB_AM_USD_TOKEN;
+//    assets[2] = BB_AM_USDC;
+//    assets[3] = BB_AM_USDT;
+//
+//    // add liquidity to each embedded pool
+//    uint[] memory maxAmountsIn = new uint[](len);
+//    uint partAM = 95; // TODO
+//    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[0]), partAM); // dai
+//    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[2]), partAM); // usdc
+//    _addLiquidityToLinearPool(IBalancerBoostedAavePool(tokens[3]), partAM); // usdt
+//
+//
+//    BALANCER_VAULT.joinPool(
+//      POOL_ID,
+//      address(this),
+//      address(this),
+//      IBVault.JoinPoolRequest({
+//        assets: assets, // `assets` must have the same length and order as the array returned by `getPoolTokens`
+//        maxAmountsIn: maxAmountsIn,
+//        userData: 0, // TODO userData
+//        fromInternalBalance: fromInternalBalance
+//      })
+//    );
 
     return (amountsConsumedOut, liquidityOut);
   }
@@ -283,9 +286,9 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
 //  }
 
   function uncheckedInc(uint i) internal pure returns (uint) {
-  unchecked {
-    return i + 1;
-  }
+    unchecked {
+      return i + 1;
+    }
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new

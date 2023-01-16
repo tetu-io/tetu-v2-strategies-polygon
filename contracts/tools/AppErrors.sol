@@ -12,4 +12,10 @@ library AppErrors {
 
   /// @return Each bb-am-* pool returns in getPoolTokens (main, wrapped, itself) tokens, i.e. DAI, amDAI, bb-am-DAI
   string public constant BB_AM_POOL_DOESNT_RETURN_MAIN_TOKEN = "TS-3 bb-am-* main";
+
+  /// @notice Lengths not matched
+  string public constant WRONG_LENGTHS = "TS-4 wrong lengths";
+
+  /// @notice Unexpected zero balance
+  string public constant ZERO_BALANCE = "TS-5 zero balance";
 }
