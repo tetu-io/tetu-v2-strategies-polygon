@@ -20,4 +20,6 @@ library AppErrors {
   string public constant ZERO_BALANCE = "TS-5 zero balance";
 
   string public constant ITEM_NOT_FOUND = "TS-6 not found";
+
+  string public constant NOT_ENOUGH_BALANCE = "TS-7 not enough balance";
 }

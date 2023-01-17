@@ -11,6 +11,8 @@ import {BigNumber} from "ethers";
 import {MaticHolders} from "../../../../scripts/MaticHolders";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {Misc} from "../../../../scripts/utils/Misc";
+import {facades} from "../../../../typechain/contracts/test";
+import {sign} from "crypto";
 
 describe("study", () => {
   let signer: SignerWithAddress;
@@ -142,6 +144,7 @@ describe("study", () => {
 
   it("Try to enter to the pool", async () => {
     const balancerVault = "0xBA12222222228d8Ba445958a75a0704d566BF2C8";
+    const balancerHelper = "0x239e55F427D44C3cc793f49bFB507ebe76638a2b";
 
     // Balancer Boosted Aave USD pool ID
     const poolBoostedId = "0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b";
@@ -320,41 +323,119 @@ describe("study", () => {
     // 1482183424449255846
     console.log("retDecode", retDecode);
 
-    const bbAmDaiBalance = await IERC20__factory.connect(bbAmDAI, signer).balanceOf(signer.address);
-    const bbAmUsdcBalance = await IERC20__factory.connect(bbAmUSDC, signer).balanceOf(signer.address);
-    const bbAmUsdtBalance = await IERC20__factory.connect(bbAmUSDT, signer).balanceOf(signer.address);
+    {
+      const bbAmDaiBalance = await IERC20__factory.connect(bbAmDAI, signer).balanceOf(signer.address);
+      const bbAmUsdcBalance = await IERC20__factory.connect(bbAmUSDC, signer).balanceOf(signer.address);
+      const bbAmUsdtBalance = await IERC20__factory.connect(bbAmUSDT, signer).balanceOf(signer.address);
 
-    await IERC20__factory.connect(bbAmDAI, signer).approve(vault.address, MAX_INT);
-    await IERC20__factory.connect(bbAmUSDC, signer).approve(vault.address, MAX_INT);
-    await IERC20__factory.connect(bbAmUSDT, signer).approve(vault.address, MAX_INT);
+      await IERC20__factory.connect(bbAmDAI, signer).approve(vault.address, MAX_INT);
+      await IERC20__factory.connect(bbAmUSDC, signer).approve(vault.address, MAX_INT);
+      await IERC20__factory.connect(bbAmUSDT, signer).approve(vault.address, MAX_INT);
 
-    const joinKind = 1; // EXACT_TOKENS_IN_FOR_BPT_OUT
-    const initBalances = [bbAmDaiBalance, bbAmUsdcBalance, bbAmUsdtBalance];
-    const abi = ['uint256', 'uint256[]', 'uint256'];
-    const data = [
-      joinKind,
-      initBalances,
-      parseUnits("0")
-    ]; // [EXACT_TOKENS_IN_FOR_BPT_OUT, amountsIn, minimumBPT]
-    const userDataEncoded = defaultAbiCoder.encode(abi, data);
+      const joinKind = 1; // EXACT_TOKENS_IN_FOR_BPT_OUT
+      const initBalances = [bbAmDaiBalance, bbAmUsdcBalance, bbAmUsdtBalance];
+      const abi = ['uint256', 'uint256[]', 'uint256'];
+      const data = [
+        joinKind,
+        initBalances,
+        parseUnits("0")
+      ]; // [EXACT_TOKENS_IN_FOR_BPT_OUT, amountsIn, minimumBPT]
+      const userDataInEncoded = defaultAbiCoder.encode(abi, data);
 
-    await vault.joinPool(
-      poolBoostedId,
-      signer.address,
-      signer.address,
-      {
-        assets: pi.tokens,
-        maxAmountsIn: [
-          bbAmDaiBalance.mul(1),
-          parseUnits("0"),
-          bbAmUsdcBalance.mul(1),
-          bbAmUsdtBalance.mul(1)
-        ],
-        fromInternalBalance: false,
-        userData: userDataEncoded
-    });
+      await vault.joinPool(
+        poolBoostedId,
+        signer.address,
+        signer.address,
+        {
+          assets: pi.tokens,
+          maxAmountsIn: [
+            bbAmDaiBalance.mul(1),
+            parseUnits("0"),
+            bbAmUsdcBalance.mul(1),
+            bbAmUsdtBalance.mul(1)
+          ],
+          fromInternalBalance: false,
+          userData: userDataInEncoded
+        });
+    }
     const bbAmUsdResultBalance = await IERC20__factory.connect(bbAmUSD, signer).balanceOf(signer.address);
     console.log("bbAmUsdResultBalance", bbAmUsdResultBalance);
+
+    // { // Exit with single TOKEN
+    //   const joinKind = 0; // EXACT_BPT_IN_FOR_ONE_TOKEN_OUT
+    //   const abi = ['uint256', 'uint256', 'uint256'];
+    //   const data = [
+    //     joinKind,
+    //     bbAmUsdResultBalance,
+    //     await IBalancerBoostedAavePool__factory.connect(bbAmDAI, signer).getBptIndex()
+    //   ]; // [EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, bptAmountIn, exitTokenIndex]
+    //   const userDataOutEncoded = defaultAbiCoder.encode(abi, data);
+    //
+    //   await IERC20__factory.connect(bbAmUSD, signer).approve(vault.address, MAX_INT);
+    //   const bpt = await poolBoosted.balanceOf(signer.address);
+    //   console.log("bpt", bpt);
+    //
+    //   // try to exit from the pool
+    //   await vault.exitPool(
+    //     poolBoostedId,
+    //     signer.address,
+    //     signer.address,
+    //     {
+    //       assets: pi.tokens,
+    //       minAmountsOut: [0, 0, 0, 0],
+    //       toInternalBalance: false,
+    //       userData: userDataOutEncoded
+    //     }
+    //   );
+    //   console.log("vault.exitPool done");
+    //
+    //   const bbAmDaiBalance = await IERC20__factory.connect(bbAmDAI, signer).balanceOf(signer.address);
+    //   const bbAmUsdcBalance = await IERC20__factory.connect(bbAmUSDC, signer).balanceOf(signer.address);
+    //   const bbAmUsdtBalance = await IERC20__factory.connect(bbAmUSDT, signer).balanceOf(signer.address);
+    //   console.log("bbAmDaiBalance", bbAmDaiBalance.toString());
+    //   console.log("bbAmUsdcBalance", bbAmUsdcBalance.toString());
+    //   console.log("bbAmUsdtBalance", bbAmUsdtBalance.toString());
+    // }
+
+    { // Exit with multiple TOKENs
+      const joinKind = 1; // BPT_IN_FOR_EXACT_TOKENS_OUT
+      const abi = ['uint256', 'uint256[]', 'uint256'];
+      const data = [
+        joinKind,
+        [
+          bbAmUsdResultBalance.div(3),
+          bbAmUsdResultBalance.div(3),
+          bbAmUsdResultBalance.sub(bbAmUsdResultBalance.div(3).mul(2))
+        ],
+        bbAmUsdResultBalance
+      ]; // [BPT_IN_FOR_EXACT_TOKENS_OUT, amountsOut, maxBPTAmountIn]
+      const userDataOutEncoded = defaultAbiCoder.encode(abi, data);
+
+      // await IERC20__factory.connect(bbAmUSD, signer).approve(vault.address, MAX_INT);
+      const bpt = await poolBoosted.balanceOf(signer.address);
+      console.log("bpt", bpt);
+
+      // try to exit from the pool
+      await vault.exitPool(
+        poolBoostedId,
+        signer.address,
+        signer.address,
+        {
+          assets: pi.tokens,
+          minAmountsOut: [0, 0, 0, 0],
+          toInternalBalance: false,
+          userData: userDataOutEncoded
+        }
+      );
+      console.log("vault.exitPool done");
+
+      const bbAmDaiBalance = await IERC20__factory.connect(bbAmDAI, signer).balanceOf(signer.address);
+      const bbAmUsdcBalance = await IERC20__factory.connect(bbAmUSDC, signer).balanceOf(signer.address);
+      const bbAmUsdtBalance = await IERC20__factory.connect(bbAmUSDT, signer).balanceOf(signer.address);
+      console.log("bbAmDaiBalance", bbAmDaiBalance.toString());
+      console.log("bbAmUsdcBalance", bbAmUsdcBalance.toString());
+      console.log("bbAmUsdtBalance", bbAmUsdtBalance.toString());
+    }
   });
 
 });

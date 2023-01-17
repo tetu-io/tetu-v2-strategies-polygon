@@ -43,8 +43,9 @@ abstract contract DepositorBase is ERC20Helpers {
   function _depositorExit(uint liquidityAmount) internal virtual returns (uint[] memory amountsOut);
 
   /// @notice Quotes output for given lp amount from the pool.
+  /// @dev Write function with read-only behavior. BalanceR's depositor requires not-view.
   /// @return amountsOut The order of amounts is the same as in {_depositorPoolAssets}
-  function _depositorQuoteExit(uint liquidityAmount) internal virtual view returns (uint[] memory amountsOut);
+  function _depositorQuoteExit(uint liquidityAmount) internal virtual returns (uint[] memory amountsOut);
 
   /// @dev If pool supports emergency withdraw need to call it for emergencyExit()
   /// @return amountsOut The order of amounts is the same as in {_depositorPoolAssets}

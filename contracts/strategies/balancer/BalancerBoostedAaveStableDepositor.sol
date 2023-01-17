@@ -9,6 +9,7 @@ import "./BalancerLogicLib.sol";
 import "../../tools/TokenAmountsLib.sol";
 import "../../tools/AppErrors.sol";
 import "../../integrations/balancer/IBVault.sol";
+import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
 import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 import "hardhat/console.sol";
@@ -29,6 +30,8 @@ abstract contract BalancerBoostedAaveStableDepositor is DepositorBase, Initializ
 
   /// @dev https://dev.balancer.fi/references/contracts/deployment-addresses
   IBVault public constant BALANCER_VAULT = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+
+  address public constant BALANCER_HELPER = 0x239e55F427D44C3cc793f49bFB507ebe76638a2b;
 
   /// @notice Balancer Boosted Aave USD pool ID
   bytes32 public constant BB_AM_USD_POOL_ID = 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b;
@@ -270,17 +273,81 @@ abstract contract BalancerBoostedAaveStableDepositor is DepositorBase, Initializ
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
+  /// @param liquidityAmount_ Amount to withdraw in bpt
+  /// @return amountsOut TODO
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
     console.log("_depositorExit.liquidityAmount_", liquidityAmount_);
+
+    require(liquidityAmount_ <= IERC20(BB_AM_USD).balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
+    uint[] memory minAmountsOut = new uint[](4); // todo: no limits?
+
+    (IERC20[] memory tokens, uint[] memory balances,) = BALANCER_VAULT.getPoolTokens(BB_AM_USD_POOL_ID);
+    uint[] memory bptAmountsOut = getBtpAmountsOut(liquidityAmount_, balances);
+
+    BALANCER_VAULT.exitPool(
+      BB_AM_USD_POOL_ID,
+      address(this),
+      payable(address(this)),
+      IBVault.ExitPoolRequest({
+        assets: _asIAsset(tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        minAmountsOut: minAmountsOut,
+        userData: abi.encode(IBVault.ExitKind.BPT_IN_FOR_EXACT_TOKENS_OUT, bptAmountsOut, liquidityAmount_),
+        toInternalBalance: false
+      })
+    );
+
+    // now we have amBbXXX tokens; swap them to XXX assets
+
+    // we can create funds_ once and use it several times
+    IBVault.FundManagement memory funds_ = IBVault.FundManagement({
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
+    });
+
+    amountsOut = new uint[](3);
+    amountsOut[0] = _swap(BB_AM_DAI_POOL_ID, BB_AM_DAI, DAI, IERC20(BB_AM_DAI).balanceOf(address(this)), funds_);
+    amountsOut[1] = _swap(BB_AM_USDC_POOL_ID, BB_AM_USDC, USDC, IERC20(BB_AM_USDC).balanceOf(address(this)), funds_);
+    amountsOut[2] = _swap(BB_AM_USDT_POOL_ID, BB_AM_USDT, USDT, IERC20(BB_AM_USDT).balanceOf(address(this)), funds_);
+
     return amountsOut;
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
-  function _depositorQuoteExit(uint liquidityAmount_) override internal virtual view returns (uint[] memory amountsOut) {
-    return amountsOut;
+  function _depositorQuoteExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
+    (IERC20[] memory tokens, uint[] memory balances,) = BALANCER_VAULT.getPoolTokens(BB_AM_USD_POOL_ID);
+    uint[] memory bptAmountsOut = getBtpAmountsOut(liquidityAmount_, balances);
+    uint[] memory minAmountsOut = new uint[](4);
+    require(liquidityAmount_ <= IERC20(BB_AM_USD).balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
+
+    (, amountsOut) = IBalancerHelper(BALANCER_HELPER).queryExit(
+      BB_AM_USD_POOL_ID,
+      address(this),
+      payable(address(this)),
+      IBVault.ExitPoolRequest({
+        assets: _asIAsset(tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        minAmountsOut: minAmountsOut,
+        userData: abi.encode(IBVault.ExitKind.BPT_IN_FOR_EXACT_TOKENS_OUT, bptAmountsOut, liquidityAmount_),
+        toInternalBalance: false
+      })
+    );
   }
 
+  /// @notice Split {liquidityAmount_} by assets according to proportions of their total balances
+  /// @param liquidityAmount_ Amount to withdraw in bpt
+  /// @param balances_ Balances received from getPoolTokens
+  function getBtpAmountsOut(uint liquidityAmount_, uint[] memory balances_) internal pure returns (uint[] memory) {
+    uint totalBalances = balances_[0] + balances_[2] + balances_[3];
+
+    uint[] memory bptAmountsOut = new uint[](3);
+    for (uint i; i < 3; i = uncheckedInc(i)) {
+      bptAmountsOut[i] = liquidityAmount_ * balances_[i] / totalBalances;
+    }
+
+    return bptAmountsOut;
+  }
   /////////////////////////////////////////////////////////////////////
   ///             Claim rewards
   /////////////////////////////////////////////////////////////////////

@@ -190,7 +190,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
 
   /// @notice Quotes output for given lp amount from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
-  function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
+  function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
     if (liquidityAmount == 0) {
       return amountsOut;

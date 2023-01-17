@@ -26,8 +26,7 @@ abstract contract DepositorTestBase is DepositorBase {
   }
 
   /// @dev Quotes output for given lp amount from the pool.
-  function depositorQuoteExit(uint liquidityAmount)
-  external view returns (uint[] memory amountsOut) {
+  function depositorQuoteExit(uint liquidityAmount) external returns (uint[] memory amountsOut) {
     return _depositorQuoteExit(liquidityAmount);
   }
 

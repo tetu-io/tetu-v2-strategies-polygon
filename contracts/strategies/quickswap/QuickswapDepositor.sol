@@ -212,7 +212,7 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
-  function _depositorQuoteExit(uint liquidityAmount_) override internal virtual view returns (uint[] memory amountsOut) {
+  function _depositorQuoteExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
     console.log("_depositorQuoteExit", liquidityAmount_);
     amountsOut = new uint[](2);
     if (liquidityAmount_ == 0) {
