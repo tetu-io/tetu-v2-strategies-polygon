@@ -23,7 +23,8 @@ contract ERC20Helpers {
   function _approveIfNeeded(address token, uint amount, address spender) internal {
     if (IERC20(token).allowance(address(this), spender) < amount) {
       IERC20(token).safeApprove(spender, 0);
-      IERC20(token).safeApprove(spender, type(uint).max);
+      // infinite approve, 2*255 is more gas efficient then type(uint).max
+      IERC20(token).safeApprove(spender, 2**255);
     }
   }
 

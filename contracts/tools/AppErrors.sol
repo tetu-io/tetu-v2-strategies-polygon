@@ -18,4 +18,6 @@ library AppErrors {
 
   /// @notice Unexpected zero balance
   string public constant ZERO_BALANCE = "TS-5 zero balance";
+
+  string public constant ITEM_NOT_FOUND = "TS-6 not found";
 }
