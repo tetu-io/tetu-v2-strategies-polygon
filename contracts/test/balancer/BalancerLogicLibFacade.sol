@@ -12,8 +12,7 @@ contract BalancerLogicLibFacade {
     uint[] memory balances,
     address bbAmUsdToken
   ) external view returns (
-    uint[] memory amountsToDepositOut,
-    uint[] memory userDataAmountsOut
+    uint[] memory amountsToDepositOut
   ) {
     return BalancerLogicLib.getAmountsToDeposit(amountsDesiredABC_, tokens, balances, bbAmUsdToken);
   }

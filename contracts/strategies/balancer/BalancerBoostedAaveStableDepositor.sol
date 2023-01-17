@@ -11,6 +11,7 @@ import "../../tools/AppErrors.sol";
 import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
 import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
+import "hardhat/console.sol";
 
 
 /// @title Depositor for the pool Balancer Boosted Aave USD (Polygon)
@@ -20,7 +21,7 @@ import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 ///         Phantom BPT = bb-a-* tokens (In pools that use Phantom BPT all pool tokens are minted at the time of pool creation)
 ///      Boosted pool:
 ///            bb-am-DAI (DAI + amDAI) + bb-am-USDC (USDC + amUSDC) + bb-am-USDT (USDT + amUSDT)
-abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initializable {
+abstract contract BalancerBoostedAaveStableDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
@@ -66,7 +67,8 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
 
   /// @notice Returns pool assets (DAI, USDC, USDT)
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
-    poolAssets = new address[](2);
+    poolAssets = new address[](3);
+    // todo The order must be exactly the same as in getPoolTokens.tokens, see BalancerLogicLib.getAmountsToDeposit impl
     poolAssets[0] = DAI;
     poolAssets[1] = USDC;
     poolAssets[2] = USDT;
@@ -148,7 +150,7 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
   ///             Enter, exit
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Swap given part of main token to wrapped token, i.e. DAI to amDAI and join to the pool
+  /// @notice Swap given {amountIn_} of {assetIn_} to {assetOut_} using the given BalanceR pool
   function _swap(
     bytes32 poolId_,
     address assetIn_,
@@ -156,6 +158,7 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
     uint amountIn_,
     IBVault.FundManagement memory funds_
   ) internal returns (uint) {
+    console.log("_swap, asset, balance", assetIn_, IERC20(assetIn_).balanceOf(address(this)));
     IERC20(assetIn_).approve(address(BALANCER_VAULT), amountIn_);
     BALANCER_VAULT.swap(
       IBVault.SingleSwap({
@@ -174,37 +177,34 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
     return IERC20(assetOut_).balanceOf(address(this));
   }
 
-  /// @dev see balancer-labs, ERC20Helpers.sol
-  function _asIAsset(IERC20[] memory tokens) internal pure returns (IAsset[] memory assets) {
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      assets := tokens
-    }
-  }
-
-
   /// @notice Deposit given amount to the pool.
-  /// @param amountsDesired_ Amounts of DAI, USDC, USDT on the balance of the depositor
-  /// @return amountsConsumedOut Amounts of DAI, USDC, USDT deposited to balanceR pool
-  /// @return liquidityOut Total amount of liquidity added to balanceR pool
+  /// @param amountsDesired_ Amounts of assets on the balance of the depositor
+  ///         The order of assets is DAI, USDC, USDT - same as in getPoolTokens, but there is no BB-AM-USD
+  /// @return amountsConsumedOut Amounts of assets deposited to balanceR pool
+  ///         The order of assets is DAI, USDC, USDT - same as in getPoolTokens, but there is no BB-AM-USD
+  /// @return liquidityOut Total amount of liquidity added to balanceR pool in terms of BB-AM-USD tokens
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
-    // Get list of bb-am-tokens. We should get here: bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt
+    // The implementation below assumes, that getPoolTokens returns the assets in following order:
+    //    bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt
     (IERC20[] memory tokens, uint[] memory balances,) = BALANCER_VAULT.getPoolTokens(BB_AM_USD_POOL_ID);
     uint len = tokens.length;
+    console.log("Token and balance 0", address(tokens[0]), balances[0]);
+    console.log("Token and balance 1", address(tokens[1]), balances[1]);
+    console.log("Token and balance 2", address(tokens[2]), balances[2]);
+    console.log("Token and balance 3", address(tokens[3]), balances[3]);
 
-    // indices of the assets in results of getPoolTokens
-    // We assume that getPoolTokens can change the order of the tokens in the future
-    uint daiIndex = BalancerLogicLib.getAssetIndex(0, tokens, DAI, len);
-    uint usdcIndex = BalancerLogicLib.getAssetIndex(2, tokens, USDC, len);
-    uint usdtIndex = BalancerLogicLib.getAssetIndex(3, tokens, USDT, len);
+    // temporary save current liquidity
+    liquidityOut = IBalancerBoostedAaveStablePool(BB_AM_USD).balanceOf(address(this));
+    console.log("Current liquidityOut", liquidityOut);
 
     // Original amounts can have any values. But we need amounts in proportions according to the current balances
-    (uint[] memory amountsToDeposit,  // bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt   - 4 items
-     uint[] memory userDataAmounts    // bb-am-dai,            bb-am-usdc, bb-am-usdt   - 3 items, same order
-    ) = BalancerLogicLib.getAmountsToDeposit(amountsDesired_, tokens, balances, BB_AM_USD);
+    amountsConsumedOut = BalancerLogicLib.getAmountsToDeposit(amountsDesired_, tokens, balances, BB_AM_USD);
+    console.log("amountsConsumedOut 0", amountsConsumedOut[0]);
+    console.log("amountsConsumedOut 1", amountsConsumedOut[1]);
+    console.log("amountsConsumedOut 2", amountsConsumedOut[2]);
 
     // we can create funds_ once and use it several times
     IBVault.FundManagement memory funds_ = IBVault.FundManagement({
@@ -215,14 +215,36 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
     });
 
     // swap all tokens XX => bb-am-XX
-    _swap(BB_AM_DAI_POOL_ID, DAI, BB_AM_DAI, amountsToDeposit[daiIndex], funds_);
-    _swap(BB_AM_USDC_POOL_ID, USDC, BB_AM_USDC, amountsToDeposit[usdcIndex], funds_);
-    _swap(BB_AM_USDT_POOL_ID, USDT, BB_AM_USDT, amountsToDeposit[usdtIndex], funds_);
+    // we need two arrays with same amounts: amountsToDeposit (with 0 for BB-AM-USD) and userDataAmounts (no BB-AM-USD)
+    uint[] memory amountsToDeposit = new uint[](4);
+    amountsToDeposit[0] = _swap(BB_AM_DAI_POOL_ID, DAI, BB_AM_DAI, amountsConsumedOut[0], funds_);
+    amountsToDeposit[2] = _swap(BB_AM_USDC_POOL_ID, USDC, BB_AM_USDC, amountsConsumedOut[1], funds_);
+    amountsToDeposit[3] = _swap(BB_AM_USDT_POOL_ID, USDT, BB_AM_USDT, amountsConsumedOut[2], funds_);
+    console.log("amountsToDeposit DAI 0", amountsToDeposit[0]);
+    console.log("amountsToDeposit USDC 2", amountsToDeposit[2]);
+    console.log("amountsToDeposit USDT 3", amountsToDeposit[3]);
+
+    uint[] memory userDataAmounts = new uint[](3);
+    userDataAmounts[0] = amountsToDeposit[0];
+    userDataAmounts[1] = amountsToDeposit[2];
+    userDataAmounts[2] = amountsToDeposit[3];
+    console.log("userDataAmounts DAI 0", userDataAmounts[0]);
+    console.log("userDataAmounts USDC 1", userDataAmounts[1]);
+    console.log("userDataAmounts USDT 2", userDataAmounts[2]);
 
     // add liquidity to balancer
-    _approveIfNeeded(BB_AM_DAI, amountsToDeposit[daiIndex], address(BALANCER_VAULT));
-    _approveIfNeeded(BB_AM_USDC, amountsToDeposit[usdcIndex], address(BALANCER_VAULT));
-    _approveIfNeeded(BB_AM_USDT, amountsToDeposit[usdtIndex], address(BALANCER_VAULT));
+    _approveIfNeeded(BB_AM_DAI, amountsToDeposit[0], address(BALANCER_VAULT));
+    _approveIfNeeded(BB_AM_USDC, amountsToDeposit[2], address(BALANCER_VAULT));
+    _approveIfNeeded(BB_AM_USDT, amountsToDeposit[3], address(BALANCER_VAULT));
+
+//    uint j;
+//    for (uint i; i < len; ++i) {
+//      if (address(tokens[i]) != BB_AM_USD) {
+//        _approveIfNeeded(BB_AM_DAI, amountsToDeposit[i], address(BALANCER_VAULT));
+//        userDataAmounts[j] = amountsToDeposit[i];
+//        j++;
+//      }
+//    }
 
     BALANCER_VAULT.joinPool(
       BB_AM_USD_POOL_ID,
@@ -236,7 +258,14 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
       })
     );
 
-    return (amountsConsumedOut, liquidityOut);
+    uint liquidityAfter = IERC20(BB_AM_USD).balanceOf(address(this));
+    console.log("balance", BB_AM_USD, address(this), liquidityAfter);
+
+    liquidityOut = liquidityAfter > liquidityOut
+      ? liquidityAfter - liquidityOut
+      : 0;
+    console.log("liquidityAfter", liquidityAfter);
+    console.log("liquidityOut", liquidityOut);
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -280,6 +309,14 @@ abstract contract BalancerBoostedAaveStabledDepositor is DepositorBase, Initiali
   function uncheckedInc(uint i) internal pure returns (uint) {
     unchecked {
       return i + 1;
+    }
+  }
+
+  /// @dev see balancer-labs, ERC20Helpers.sol
+  function _asIAsset(IERC20[] memory tokens) internal pure returns (IAsset[] memory assets) {
+    // solhint-disable-next-line no-inline-assembly
+    assembly {
+      assets := tokens
     }
   }
 

@@ -15,7 +15,6 @@ library BalancerLogicLib {
   }
 
   /// @notice Calculate amounts of {tokens} to be deposited to POOL_ID in proportions according to the {balances}
-  ///         It returns 2 same arrays: {amountsToDepositOut} with BB-AM-USD and {userDataAmountsOut} without BB-AM-USD
   /// @dev It takes into account the case when getPoolTokens doesn't return BB-AM-USD in results.
   /// @param amountsDesiredABC_ Desired amounts of tokens. The order of the tokens is exactly the same as in {tokens}.
   ///                           But the array has length 3, not 4, because there is no amount for bb-am-USD here.
@@ -26,17 +25,14 @@ library BalancerLogicLib {
   /// @param bbAmUsdToken_ BB_AM_USD_TOKEN
   /// @return amountsToDepositOut Desired amounts, including zero for BB-AM-USD
   ///         The order of the tokens is exactly the same as in results of getPoolTokens:
-  ///         BB-AM-DAI, BB-AM-USD, BB-AM-USDC, BB-AM-USDT
-  /// @return userDataAmountsOut Same array as amountsToDepositOut but there is no amount for BB-AM-USD here.
-  ///         BB-AM-DAI,            BB-AM-USDC, BB-AM-USDT
+  ///             DAI, BB-AM-USD, USDC, USDT
   function getAmountsToDeposit(
     uint[] memory amountsDesiredABC_,
     IERC20[] memory tokens_,
     uint[] memory balances_,
     address bbAmUsdToken_
   ) internal view returns (
-    uint[] memory amountsToDepositOut,
-    uint[] memory userDataAmountsOut
+    uint[] memory amountsToDepositOut
   ) {
     LocalGetAmountsToDeposit memory p;
     // check not zero balances, cache index of bbAmUSD, save 10**decimals to array
@@ -54,8 +50,7 @@ library BalancerLogicLib {
       }
     }
 
-    amountsToDepositOut = new uint[](p.len);
-    userDataAmountsOut = new uint[](p.len - (p.indexBbAmUsdToken1 == 0 ? 0 : 1));
+    amountsToDepositOut = new uint[](p.len - (p.indexBbAmUsdToken1 == 0 ? 0 : 1));
 
     // the balances set proportions, i.e. 1 DAI, 2 USDC, 4 USDT => 1/7 - DAI, 2/7 - USDC, 4/7 - USDT
     // we have arbitrary desired amounts, i.e. DAI = X, USDC = Y, USDT = Z
@@ -65,27 +60,24 @@ library BalancerLogicLib {
     // or   USDC = Y = 100.0 => DAI = 50.0, USDT = 200.0. We need: X >= 50, Z >= 200
     // If any amount is less then expected, the token cannot be used in full.
     // A token with min amount can be used in full, let's try to find its index.
-    uint i3;
+    uint i3; // [0-2]
     for (uint i; i < p.len; i = uncheckedInc(i)) {
       if (p.indexBbAmUsdToken1 == i + 1) continue;
 
-      uint j;
-      uint j3;
+      uint j; // [0-3]
+      uint j3; // [0-2]
       for (; j < p.len; j = uncheckedInc(j)) {
         if (p.indexBbAmUsdToken1 == j + 1) continue;
 
         // amountDAI = amountUSDC * balancesDAI / balancesUSDC * decimalsDAI / decimalsUSDC
-        amountsToDepositOut[j] = amountsDesiredABC_[i3] * balances_[j] * p.decimals[j] / balances_[i] / p.decimals[i];
-        if (amountsToDepositOut[j] > amountsDesiredABC_[j3]) break;
-        userDataAmountsOut[j3] = amountsToDepositOut[j];
+        amountsToDepositOut[j3] = amountsDesiredABC_[i3] * balances_[j] * p.decimals[j] / balances_[i] / p.decimals[i];
+        if (amountsToDepositOut[j3] > amountsDesiredABC_[j3]) break;
         j3++;
       }
 
       if (j == p.len) break;
       i3++;
     }
-
-    return (amountsToDepositOut, userDataAmountsOut);
   }
 
   /// @notice Find 0-based index of the {asset_} in {tokens_}, revert if the asset is not found

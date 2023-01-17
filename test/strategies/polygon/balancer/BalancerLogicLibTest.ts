@@ -14,8 +14,6 @@ import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
 const { expect } = chai;
 chai.use(chaiAsPromised);
 
-const balanceOf = TokenUtils.balanceOf;
-
 describe('BalancerLogicLibTest', function() {
 //region Variables
   let snapshotBefore: string;
