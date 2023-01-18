@@ -2,10 +2,10 @@
 pragma solidity 0.8.17;
 
 import "../../integrations/balancer/IBVault.sol";
-import "../../strategies/balancer/BalancerBoostedAaveStableDepositor.sol";
+import "../../strategies/balancer/BalancerComposableStableDepositor.sol";
 
 /// @notice Provide direct access to internal functions of {BalancerBoostedAaveStableDepositor}
-contract BalancerBoostedAaveStableDepositorFacade is BalancerBoostedAaveStableDepositor {
+contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepositor {
   function init() external initializer {
     __BalancerBoostedAaveUsdDepositor_init();
   }
@@ -40,10 +40,17 @@ contract BalancerBoostedAaveStableDepositorFacade is BalancerBoostedAaveStableDe
     return _swap(poolId_, assetIn_, assetOut_, amountIn_, funds_);
   }
 
+
+  uint[] public lastAmountsConsumedOut;
+  uint public lastAmountsConsumedOutLength;
+  uint public lastLiquidityOut;
   function _depositorEnterAccess(uint[] memory amountsDesired_) external virtual returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
-    return _depositorEnter(amountsDesired_);
+    (amountsConsumedOut, liquidityOut) = _depositorEnter(amountsDesired_);
+    // let's store results of _depositorEnter last call to public members
+    (lastAmountsConsumedOut, lastLiquidityOut) = (amountsConsumedOut, liquidityOut);
+    lastAmountsConsumedOutLength = lastAmountsConsumedOut.length;
   }
 }

@@ -2,11 +2,11 @@
 pragma solidity 0.8.17;
 
 import "../ConverterStrategyBase.sol";
-import "./BalancerBoostedAaveStableDepositor.sol";
+import "./BalancerComposableStableDepositor.sol";
 
 /// @title Converter Strategy with Quickswap for reward pool StakingDualRewards
 /// @dev deprecated, we don't use it - no rewards...
-contract BalancerBoostedAaveStableStrategy is ConverterStrategyBase, BalancerBoostedAaveStableDepositor {
+contract BalancerComposableStablePoolStrategy is ConverterStrategyBase, BalancerComposableStableDepositor {
   string public constant override NAME = "Balancer Boosted Aave USD Strategy";
   string public constant override PLATFORM = "Balancer";
   string public constant override STRATEGY_VERSION = "1.0.0";

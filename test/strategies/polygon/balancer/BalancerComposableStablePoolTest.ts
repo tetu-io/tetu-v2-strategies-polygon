@@ -11,10 +11,8 @@ import {BigNumber} from "ethers";
 import {MaticHolders} from "../../../../scripts/MaticHolders";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {Misc} from "../../../../scripts/utils/Misc";
-import {facades} from "../../../../typechain/contracts/test";
-import {sign} from "crypto";
 
-describe("study", () => {
+describe("BalancerComposableStablePoolTest (study)", () => {
   let signer: SignerWithAddress;
 
   before(async function () {

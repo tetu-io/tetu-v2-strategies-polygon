@@ -36,7 +36,7 @@ export class Misc {
   public static readonly MAX_UINT_MINUS_ONE = '115792089237316195423570985008687907853269984665640564039457584007913129639934';
 
   /** 1e18 */
-  public static readonly WEI = BigNumber.from('1000000000000000000');
+  public static readonly ONE18 = BigNumber.from('1000000000000000000');
   /** 1e36 */
   public static readonly WEI_DOUBLE = BigNumber.from('1000000000000000000000000000000000000');
   /** 1e27 */

@@ -1,5 +1,5 @@
 import {
-  BalancerBoostedAaveStableDepositorFacade,
+  BalancerComposableStableDepositorFacade,
   BalancerLogicLibFacade,
   MockConverterStrategy,
   MockConverterStrategy__factory, MockTetuConverterController,
@@ -64,8 +64,8 @@ export class MockHelper {
     return (await DeployerUtils.deployContract(signer, 'BalancerLogicLibFacade')) as BalancerLogicLibFacade;
   }
 
-  public static async createBalancerBoostedAaveStableDepositorFacade(signer: SignerWithAddress) : Promise<BalancerBoostedAaveStableDepositorFacade> {
-    const ret = (await DeployerUtils.deployContract(signer, 'BalancerBoostedAaveStableDepositorFacade')) as BalancerBoostedAaveStableDepositorFacade;
+  public static async createBalancerComposableStableDepositorFacade(signer: SignerWithAddress) : Promise<BalancerComposableStableDepositorFacade> {
+    const ret = (await DeployerUtils.deployContract(signer, 'BalancerComposableStableDepositorFacade')) as BalancerComposableStableDepositorFacade;
     ret.init();
     return ret;
   }

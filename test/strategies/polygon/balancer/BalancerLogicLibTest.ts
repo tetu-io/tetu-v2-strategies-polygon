@@ -68,25 +68,19 @@ describe('BalancerLogicLibTest', function() {
             parseUnits("10", 8),
           ];
 
-          const r = await facade.getAmountsToDeposit(
+          const amountsOut = await facade.getAmountsToDeposit(
             desiredAmounts,
             [usdc.address, dai.address, bbAmUSD.address, wbtc.address],
             [1, 1, 0, 1],
-            bbAmUSD.address
+            [1, 1, 0, 1],
+            2
           );
 
-          const ret = [
-            r.amountsToDepositOut.map(x => x.toString()).join(),
-            r.userDataAmountsOut.map(x => x.toString()).join()
-          ].join();
+          const ret = amountsOut.map(x => x.toString()).join();
           const expected = [
             parseUnits("10", 6),
             parseUnits("10", 18),
-            parseUnits("0", 27),
-            parseUnits("10", 8),
-
-            parseUnits("10", 6),
-            parseUnits("10", 18),
+            // parseUnits("0", 27),
             parseUnits("10", 8),
           ].map(x => x.toString()).join();
           expect(ret).eq(expected);
@@ -100,25 +94,19 @@ describe('BalancerLogicLibTest', function() {
             parseUnits("100", 8),
           ];
 
-          const r = await facade.getAmountsToDeposit(
+          const amountsOut = await facade.getAmountsToDeposit(
             desiredAmounts,
             [bbAmUSD.address, usdc.address, dai.address, wbtc.address],
             [100, 1, 2, 4],
-            bbAmUSD.address
+            [0, 1, 1, 1],
+            0
           );
 
-          const ret = [
-            r.amountsToDepositOut.map(x => x.toString()).join(),
-            r.userDataAmountsOut.map(x => x.toString()).join()
-          ].join();
+          const ret = amountsOut.map(x => x.toString()).join();
           const expected = [
-            parseUnits("0", 27),
-            parseUnits("25", 6),
-            parseUnits("50", 18),
-            parseUnits("100", 8),
-
-            parseUnits("25", 6),
-            parseUnits("50", 18),
+            // parseUnits("0", 27),
+            parseUnits("100", 6),
+            parseUnits("100", 18),
             parseUnits("100", 8),
           ].map(x => x.toString()).join();
           expect(ret).eq(expected);
@@ -130,26 +118,20 @@ describe('BalancerLogicLibTest', function() {
             parseUnits("100", 8),
           ];
 
-          const r = await facade.getAmountsToDeposit(
+          const amountsOut = await facade.getAmountsToDeposit(
             desiredAmounts,
             [usdc.address, dai.address, wbtc.address, bbAmUSD.address],
             [1, 4, 2, 100],
-            bbAmUSD.address
+            [1, 4, 2, 100],
+            3
           );
 
-          const ret = [
-            r.amountsToDepositOut.map(x => x.toString()).join(),
-            r.userDataAmountsOut.map(x => x.toString()).join()
-          ].join();
+          const ret = amountsOut.map(x => x.toString()).join();
           const expected = [
             parseUnits("25", 6),
             parseUnits("100", 18),
             parseUnits("50", 8),
-            parseUnits("0", 27),
-
-            parseUnits("25", 6),
-            parseUnits("100", 18),
-            parseUnits("50", 8),
+            // parseUnits("0", 27),
           ].map(x => x.toString()).join();
           expect(ret).eq(expected);
         });
@@ -174,7 +156,7 @@ describe('BalancerLogicLibTest', function() {
               amountUSDT
             ];
 
-            const r = await facade.getAmountsToDeposit(
+            const amountsOut = await facade.getAmountsToDeposit(
               desiredAmounts,
               [dai.address, bbAmUSD.address, usdc.address, usdt.address],
               [
@@ -183,21 +165,17 @@ describe('BalancerLogicLibTest', function() {
                 balanceUSDC,
                 balanceUSDT,
               ],
-              bbAmUSD.address
+              // for simplicity let's assume that amount of underlying is exactly the same of amount of corresponded bpt
+              // todo we can make more realistic tests later
+              [balanceDai, 0, balanceUSDC, balanceUSDT],
+              1
             );
 
-            const ret = [
-              r.amountsToDepositOut.map(x => x.toString()).join(),
-              r.userDataAmountsOut.map(x => x.toString()).join()
-            ].join();
+            const ret = amountsOut.map(x => x.toString()).join();
 
             const expected = [
               amountDai,
-              BigNumber.from("0"),
-              amountUSDC,
-              amountUSDT,
-
-              amountDai,
+              // BigNumber.from("0"),
               amountUSDC,
               amountUSDT,
             ].map(x => x.toString()).join();
@@ -225,7 +203,7 @@ describe('BalancerLogicLibTest', function() {
               amountUSDT
             ];
 
-            const r = await facade.getAmountsToDeposit(
+            const amountsOut = await facade.getAmountsToDeposit(
               desiredAmounts,
               [dai.address, bbAmUSD.address, usdc.address, usdt.address],
               [
@@ -234,21 +212,17 @@ describe('BalancerLogicLibTest', function() {
                 balanceUSDC,
                 balanceUSDT,
               ],
-              bbAmUSD.address
+              // for simplicity let's assume that amount of underlying is exactly the same of amount of corresponded bpt
+              // todo we can make more realistic tests later
+              [balanceDai, 0, balanceUSDC, balanceUSDT],
+              1
             );
 
-            const ret = [
-              r.amountsToDepositOut.map(x => x.toString()).join(),
-              r.userDataAmountsOut.map(x => x.toString()).join()
-            ].join();
+            const ret = amountsOut.map(x => x.toString()).join();
 
             const expected = [
               amountDai,
-              BigNumber.from("0"),
-              amountUSDC,
-              amountUSDT,
-
-              amountDai,
+              // BigNumber.from("0"),
               amountUSDC,
               amountUSDT,
             ].map(x => x.toString()).join();
@@ -276,7 +250,7 @@ describe('BalancerLogicLibTest', function() {
               amountUSDT.mul(100), // (!) too much,
             ];
 
-            const r = await facade.getAmountsToDeposit(
+            const amountsOut = await facade.getAmountsToDeposit(
               desiredAmounts,
               [dai.address, bbAmUSD.address, usdc.address, usdt.address],
               [
@@ -285,20 +259,16 @@ describe('BalancerLogicLibTest', function() {
                 balanceUSDC,
                 balanceUSDT,
               ],
-              bbAmUSD.address
+              // for simplicity let's assume that amount of underlying is exactly the same of amount of corresponded bpt
+              // todo we can make more realistic tests later
+              [balanceDai, 0, balanceUSDC, balanceUSDT],
+              1
             );
 
-            const ret = [
-              r.amountsToDepositOut.map(x => x.toString()).join(),
-              r.userDataAmountsOut.map(x => x.toString()).join()
-            ].join();
+            const ret = amountsOut.map(x => x.toString()).join();
             const expected = [
               amountDai,
-              BigNumber.from("0"),
-              amountUSDC,
-              amountUSDT,
-
-              amountDai,
+              // BigNumber.from("0"),
               amountUSDC,
               amountUSDT,
             ].map(x => x.toString()).join();
@@ -326,7 +296,7 @@ describe('BalancerLogicLibTest', function() {
               amountUSDT.mul(100), // (!) too much,
             ];
 
-            const r = await facade.getAmountsToDeposit(
+            const amountsOut = await facade.getAmountsToDeposit(
               desiredAmounts,
               [dai.address, bbAmUSD.address, usdc.address, usdt.address],
               [
@@ -335,19 +305,20 @@ describe('BalancerLogicLibTest', function() {
                 balanceUSDC,
                 balanceUSDT,
               ],
-              bbAmUSD.address
+              // for simplicity let's assume that amount of underlying is exactly the same of amount of corresponded bpt
+              // todo we can make more realistic tests later
+              [balanceDai, 0, balanceUSDC, balanceUSDT],
+              1
             );
 
             const ret = [
-              areAlmostEqual(r.amountsToDepositOut[0], amountDai, 6),
-              r.amountsToDepositOut[1].toString(),
-              r.amountsToDepositOut[2].toString(),
-              areAlmostEqual(r.amountsToDepositOut[3], amountUSDT, 6)
+              areAlmostEqual(amountsOut[0], amountDai, 6),
+              amountsOut[1].toString(),
+              areAlmostEqual(amountsOut[2], amountUSDT, 6)
             ].join();
 
             const expected = [
               true,
-              BigNumber.from("0"),
               amountUSDC,
               true,
             ].map(x => x.toString()).join();
@@ -370,7 +341,8 @@ describe('BalancerLogicLibTest', function() {
           desiredAmounts,
           [bbAmUSD.address, usdc.address, dai.address], // (!) tokens and balances
           [100, 1, 2, 4],                             // (!)  have different lengths
-          bbAmUSD.address
+          [1, 0, 1, 1],
+          0
         )).revertedWith("TS-4 wrong lengths");
       });
       it("desired amounts is too long", async () => {
@@ -386,7 +358,8 @@ describe('BalancerLogicLibTest', function() {
           desiredAmounts,
           [bbAmUSD.address, usdc.address, dai.address, usdt.address],
           [100, 1, 2, 4],
-          bbAmUSD.address
+          [0, 1, 1, 1],
+          0
         )).revertedWith("TS-4 wrong lengths");
       });
       it("desired amounts is too short", async () => {
@@ -400,7 +373,8 @@ describe('BalancerLogicLibTest', function() {
           desiredAmounts,
           [bbAmUSD.address, usdc.address, dai.address, usdt.address],
           [100, 1, 2, 4],
-          bbAmUSD.address
+          [0, 1, 1, 1],
+          0
         )).revertedWith("TS-4 wrong lengths");
       });
       it("zero balance 1", async () => {
@@ -408,7 +382,8 @@ describe('BalancerLogicLibTest', function() {
           [parseUnits("100", 6), parseUnits("100"), parseUnits("100", 8)],
           [bbAmUSD.address, usdc.address, dai.address, usdt.address],
           [1, 0, 2, 4],
-          bbAmUSD.address
+          [0, 1, 1, 1],
+          0
         )).revertedWith("TS-5 zero balance");
       });
       it("zero balance 2", async () => {
@@ -416,7 +391,8 @@ describe('BalancerLogicLibTest', function() {
           [parseUnits("100", 6), parseUnits("100"), parseUnits("100", 8)],
           [bbAmUSD.address, usdc.address, dai.address, usdt.address],
           [1, 2, 0, 4],
-          bbAmUSD.address
+          [0, 1, 1, 1],
+          0
         )).revertedWith("TS-5 zero balance");
       });
       it("zero balance 3", async () => {
@@ -424,7 +400,8 @@ describe('BalancerLogicLibTest', function() {
           [parseUnits("100", 6), parseUnits("100"), parseUnits("100", 8)],
           [bbAmUSD.address, usdc.address, dai.address, usdt.address],
           [1, 2, 2, 0],
-          bbAmUSD.address
+          [0, 1, 1, 1],
+          0
         )).revertedWith("TS-5 zero balance");
       });
     });

@@ -22,7 +22,7 @@ import "hardhat/console.sol";
 ///         Phantom BPT = bb-a-* tokens (In pools that use Phantom BPT all pool tokens are minted at the time of pool creation)
 ///      Boosted pool:
 ///            bb-am-DAI (DAI + amDAI) + bb-am-USDC (USDC + amUSDC) + bb-am-USDT (USDT + amUSDT)
-abstract contract BalancerBoostedAaveStableDepositor is DepositorBase, Initializable {
+abstract contract BalancerComposableStableDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
