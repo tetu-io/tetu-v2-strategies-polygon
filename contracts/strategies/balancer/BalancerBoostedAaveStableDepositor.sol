@@ -204,8 +204,11 @@ abstract contract BalancerBoostedAaveStableDepositor is DepositorBase, Initializ
     liquidityOut = IBalancerBoostedAaveStablePool(BB_AM_USD).balanceOf(address(this));
     console.log("Current liquidityOut", liquidityOut);
 
+    uint indexBpt = IBalancerBoostedAaveStablePool(BB_AM_USD).getBptIndex();
+
     // Original amounts can have any values. But we need amounts in proportions according to the current balances
-    amountsConsumedOut = BalancerLogicLib.getAmountsToDeposit(amountsDesired_, tokens, balances, BB_AM_USD);
+    uint[] memory underlying = BalancerLogicLib.getTotalAssetAmounts(BALANCER_VAULT, tokens, indexBpt);
+    amountsConsumedOut = BalancerLogicLib.getAmountsToDeposit(amountsDesired_, tokens, balances, underlying, indexBpt);
     console.log("amountsConsumedOut 0", amountsConsumedOut[0]);
     console.log("amountsConsumedOut 1", amountsConsumedOut[1]);
     console.log("amountsConsumedOut 2", amountsConsumedOut[2]);
