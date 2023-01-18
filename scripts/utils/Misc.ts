@@ -6,6 +6,7 @@ import {DeployerUtils} from "./DeployerUtils";
 import {DeployerUtilsLocal} from "./DeployerUtilsLocal";
 import {Multicall} from "../../typechain";
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
+import {BigNumber} from "ethers";
 
 const log: Logger = new Logger(logSettings);
 
@@ -33,6 +34,13 @@ export class Misc {
   public static readonly ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
   public static readonly MAX_UINT = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
   public static readonly MAX_UINT_MINUS_ONE = '115792089237316195423570985008687907853269984665640564039457584007913129639934';
+
+  /** 1e18 */
+  public static readonly WEI = BigNumber.from('1000000000000000000');
+  /** 1e36 */
+  public static readonly WEI_DOUBLE = BigNumber.from('1000000000000000000000000000000000000');
+  /** 1e27 */
+  public static readonly RAYS = BigNumber.from('1000000000000000000000000000');
 
   public static printDuration(text: string, start: number) {
     log.info('>>>' + text, ((Date.now() - start) / 1000).toFixed(1), 'sec');

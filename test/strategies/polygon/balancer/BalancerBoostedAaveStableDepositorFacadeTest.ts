@@ -7,7 +7,6 @@ import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {MaticHolders} from "../../../../scripts/MaticHolders";
 import {
   BalancerBoostedAaveStableDepositorFacade,
-  IBalancerBoostedAaveStablePool__factory,
   IBVault__factory,
   IERC20__factory
 } from "../../../../typechain";
@@ -61,31 +60,42 @@ describe('BalancerLogicLibTest', function() {
     balancesBefore: BigNumber[];
     /** DAI, USDC, USDT */
     balancesAfter: BigNumber[];
+    poolTokensBefore: {
+      tokens: string[];
+      balances: BigNumber[];
+      lastChangeBlock: BigNumber;
+    };
+    poolTokensAfter: {
+      tokens: string[];
+      balances: BigNumber[];
+      lastChangeBlock: BigNumber;
+    };
   }
   async function makeDepositorEnterTest(
-    facade: BalancerBoostedAaveStableDepositorFacade
+    facade: BalancerBoostedAaveStableDepositorFacade,
+    amount: string = "1"
   ) : Promise<IDepositorEnterTestResults> {
     const assets = [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN];
     const holders = [MaticHolders.HOLDER_DAI, MaticHolders.HOLDER_USDC, MaticHolders.HOLDER_USDT];
+    const vault = IBVault__factory.connect(balancerVault, signer);
 
     const amountsDesired = [
-      parseUnits("1", 18), // dai
-      parseUnits("1", 6),  // usdc
-      parseUnits("1", 6)   // usdt
+      parseUnits(amount, 18), // dai
+      parseUnits(amount, 6),  // usdc
+      parseUnits(amount, 6)   // usdt
     ];
 
     const balancesBefore: BigNumber[] = [];
     for (let i = 0; i < 3; ++i) {
-      await IERC20__factory.connect(
-        assets[i],
-        await Misc.impersonate(holders[i])
-      ).transfer(facade.address, amountsDesired[i])
+      const holder = await Misc.impersonate(holders[i]);
+      await IERC20__factory.connect(assets[i], holder).transfer(facade.address, amountsDesired[i]);
       balancesBefore.push(await IERC20__factory.connect(assets[i], signer).balanceOf(facade.address));
     }
-
-    const gasUsed = await facade.estimateGas._depositorEnterAccess(amountsDesired);
+    const poolTokensBefore = await vault.getPoolTokens(poolBoostedId);
     const ret = await facade.callStatic._depositorEnterAccess(amountsDesired);
-    await facade._depositorEnterAccess(amountsDesired);
+    const tx = await facade._depositorEnterAccess(amountsDesired);
+    const gasUsed = (await tx.wait()).gasUsed;
+    const poolTokensAfter = await vault.getPoolTokens(poolBoostedId);
 
     const balancesAfter: BigNumber[] = [];
     for (let i = 0; i < 3; ++i) {
@@ -98,7 +108,9 @@ describe('BalancerLogicLibTest', function() {
       liquidityOut: ret.liquidityOut,
       gasUsed,
       balancesBefore,
-      balancesAfter
+      balancesAfter,
+      poolTokensBefore,
+      poolTokensAfter
     }
   }
 //endregion Utils
@@ -151,6 +163,64 @@ describe('BalancerLogicLibTest', function() {
             true,
             true
           ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should not change proportions of balances $1", async () => {
+          const facade = await MockHelper.createBalancerBoostedAaveStableDepositorFacade(signer);
+          const r = await makeDepositorEnterTest(facade, "1");
+
+          const totalTokensBefore = r.poolTokensBefore.balances[0]
+            .add(r.poolTokensBefore.balances[2])
+            .add(r.poolTokensBefore.balances[3]);
+          const totalTokensAfter = r.poolTokensAfter.balances[0]
+            .add(r.poolTokensAfter.balances[2])
+            .add(r.poolTokensAfter.balances[3]);
+          console.log("Before", r.poolTokensBefore, totalTokensBefore);
+          console.log("After", r.poolTokensAfter, totalTokensAfter);
+
+          const ret = [
+            r.poolTokensBefore.balances[0].mul(Misc.WEI).div(totalTokensBefore),
+            r.poolTokensBefore.balances[2].mul(Misc.WEI).div(totalTokensBefore),
+            r.poolTokensBefore.balances[3].mul(Misc.WEI).div(totalTokensBefore),
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          const expected = [
+            r.poolTokensAfter.balances[0].mul(Misc.WEI).div(totalTokensAfter),
+            r.poolTokensAfter.balances[2].mul(Misc.WEI).div(totalTokensAfter),
+            r.poolTokensAfter.balances[3].mul(Misc.WEI).div(totalTokensAfter),
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+          console.log("ret", ret);
+          console.log("expected", expected);
+
+          expect(ret).eq(expected);
+        });
+        it("should not change proportions of balances $10_000", async () => {
+          const facade = await MockHelper.createBalancerBoostedAaveStableDepositorFacade(signer);
+          const r = await makeDepositorEnterTest(facade, "10000");
+
+          const totalTokensBefore = r.poolTokensBefore.balances[0]
+            .add(r.poolTokensBefore.balances[2])
+            .add(r.poolTokensBefore.balances[3]);
+          const totalTokensAfter = r.poolTokensAfter.balances[0]
+            .add(r.poolTokensAfter.balances[2])
+            .add(r.poolTokensAfter.balances[3]);
+          console.log("Before", r.poolTokensBefore, totalTokensBefore);
+          console.log("After", r.poolTokensAfter, totalTokensAfter);
+
+          const ret = [
+            r.poolTokensBefore.balances[0].mul(Misc.WEI).div(totalTokensBefore),
+            r.poolTokensBefore.balances[2].mul(Misc.WEI).div(totalTokensBefore),
+            r.poolTokensBefore.balances[3].mul(Misc.WEI).div(totalTokensBefore),
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          const expected = [
+            r.poolTokensAfter.balances[0].mul(Misc.WEI).div(totalTokensAfter),
+            r.poolTokensAfter.balances[2].mul(Misc.WEI).div(totalTokensAfter),
+            r.poolTokensAfter.balances[3].mul(Misc.WEI).div(totalTokensAfter),
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+          console.log("ret", ret);
+          console.log("expected", expected);
 
           expect(ret).eq(expected);
         });
