@@ -4,14 +4,19 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../../tools/AppErrors.sol";
+import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
+import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
+import "../../integrations/balancer/IBVault.sol";
 import "hardhat/console.sol";
 
 library BalancerLogicLib {
+
   /// @dev local vars in getAmountsToDeposit to avoid stack too deep
   struct LocalGetAmountsToDeposit {
     uint indexBbAmUsdToken1;
     uint[] decimals;
     uint len;
+    uint[] rates;
   }
 
   /// @notice Calculate amounts of {tokens} to be deposited to POOL_ID in proportions according to the {balances}
@@ -39,14 +44,28 @@ library BalancerLogicLib {
     p.len = tokens_.length;
     require(p.len == balances_.length, AppErrors.WRONG_LENGTHS);
     require(p.len == amountsDesiredABC_.length || p.len - 1 == amountsDesiredABC_.length, AppErrors.WRONG_LENGTHS);
+    IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(0x48e6B98ef6329f8f0A30eBB8c7C960330d648085);
+    IBVault vault = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
     p.decimals = new uint[](p.len);
+    p.rates = new uint[](p.len);
     for (uint i = 0; i < p.len; i = uncheckedInc(i)) {
       if (address(tokens_[i]) == bbAmUsdToken_) {
         p.indexBbAmUsdToken1 = i + 1;
       } else {
         require(balances_[i] != 0, AppErrors.ZERO_BALANCE);
         p.decimals[i] = 10**IERC20Metadata(address(tokens_[i])).decimals();
+        IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens_[i]));
+        (,uint[] memory subBalances,) = vault.getPoolTokens(linearPool.getPoolId());
+        uint assetAmount = subBalances[linearPool.getMainIndex()]
+          + subBalances[linearPool.getWrappedIndex()] * linearPool.getWrappedTokenRate() / 1e18;
+        p.rates[i] = balances_[i] * 1e18 / assetAmount; // bpt/asset
+        console.log("getAmountsToDeposit, i, assetAmount", i, assetAmount);
+        console.log("getAmountsToDeposit, rate", p.rates[i]);
+        console.log("getAmountsToDeposit, subBalances[linearPool.getMainIndex()]", subBalances[linearPool.getMainIndex()]);
+        console.log("getAmountsToDeposit, subBalances[linearPool.getWrappedIndex()]", subBalances[linearPool.getWrappedIndex()]);
+        console.log("getAmountsToDeposit, linearPool.getWrappedTokenRate()", linearPool.getWrappedTokenRate());
+        //balances_[i] *= pool.getTokenRate(address(tokens_[i])) / 1e18;
       }
     }
 
@@ -64,19 +83,51 @@ library BalancerLogicLib {
     for (uint i; i < p.len; i = uncheckedInc(i)) {
       if (p.indexBbAmUsdToken1 == i + 1) continue;
 
+      uint amountInBpt18 = amountsDesiredABC_[i3] * p.rates[i];
+      console.log("amountInBpt18, i", amountInBpt18, i);
+
       uint j; // [0-3]
       uint j3; // [0-2]
       for (; j < p.len; j = uncheckedInc(j)) {
         if (p.indexBbAmUsdToken1 == j + 1) continue;
 
         // amountDAI = amountUSDC * balancesDAI / balancesUSDC * decimalsDAI / decimalsUSDC
-        amountsToDepositOut[j3] = amountsDesiredABC_[i3] * balances_[j] * p.decimals[j] / balances_[i] / p.decimals[i];
+        console.log("amountsDesiredABC_[i3]", amountsDesiredABC_[i3]);
+        console.log("p.rates[i3]", p.rates[i]);
+        console.log("amountInBpt18", amountInBpt18);
+        console.log("balances_[j]", balances_[j]);
+        console.log("p.decimals[j]", p.decimals[j]);
+        console.log("balances_[i]", balances_[i]);
+        console.log("p.decimals[i]", p.decimals[i]);
+        console.log("p.rates[j3]", p.rates[j]);
+        amountsToDepositOut[j3] = amountInBpt18 * balances_[j] / p.rates[j] * p.decimals[j] / balances_[i] / p.decimals[i];
+        console.log(" amountsToDepositOut[j3], j3",  amountsToDepositOut[j3], j3);
         if (amountsToDepositOut[j3] > amountsDesiredABC_[j3]) break;
         j3++;
       }
 
       if (j == p.len) break;
       i3++;
+    }
+  }
+
+
+  /// @notice Calculate total amount of underlying asset for each token except BPT
+  /// @dev Amount is calculated as MainTokenAmount + WrappedTokenAmount * WrappedTokenRate, see AaveLinearPool src
+  function getTotalAssetAmounts(IBVault vault_, IERC20[] memory tokens_, uint indexBpt_) internal view returns (
+    uint[] memory amountsOut
+  ) {
+    uint len = tokens_.length;
+    amountsOut = new uint[](len);
+    for (uint i; i < len; i = uncheckedInc(i)) {
+      if (i != indexBpt_) {
+        IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens_[i]));
+        (, uint[] memory balances, ) = vault_.getPoolTokens(linearPool.getPoolId());
+
+        amountsOut[i] =
+          balances[linearPool.getMainIndex()]
+          + balances[linearPool.getWrappedIndex()] * linearPool.getWrappedTokenRate() / 1e18;
+      }
     }
   }
 
@@ -89,12 +140,12 @@ library BalancerLogicLib {
     uint lengthTokens_
   ) internal pure returns (uint) {
 
-    for (uint i = startIndex0_; i < lengthTokens_; ++i) {
+    for (uint i = startIndex0_; i < lengthTokens_; i = uncheckedInc(i)) {
       if (address(tokens_[i]) == asset_) {
         return i;
       }
     }
-    for (uint i = 0; i < startIndex0_; ++i) {
+    for (uint i = 0; i < startIndex0_; i = uncheckedInc(i)) {
       if (address(tokens_[i]) == asset_) {
         return i;
       }

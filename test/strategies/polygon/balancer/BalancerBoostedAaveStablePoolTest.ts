@@ -79,11 +79,13 @@ describe("study", () => {
     const sumAmounts = [...Array(tokens.length).keys()].reduce(
       (prev, cur) => prev.add(cashes[cur].mul(tokenRates[cur])), BigNumber.from(0)
     );
+
     console.log("Pool.getRate", rate);
     console.log("Pool.actualSupply", actualSupply);
 
     console.log("actualSupplyUSD", actualSupplyUSD);
     console.log("sumAmounts", sumAmounts);
+
 
     const amounts: BigNumber[] = [];
     for (let i = 0; i < tokens.length; ++i) {
@@ -107,7 +109,8 @@ describe("study", () => {
       const tokensForPool = await vault.getPoolTokens(poolId);
       const mainTokenDecimals = await IERC20Extended__factory.connect(mainToken, signer).decimals();
       const wrappedTokenDecimals = await IERC20Extended__factory.connect(wrappedToken, signer).decimals();
-      const embeddedPoolScalingFactors = await poolBoosted.getScalingFactors();
+
+      const embeddedPoolScalingFactors = await pool.getScalingFactors();
 
       console.log("Boosted pool token", tokenNames[i]);
       console.log("BalanceBPT", balanceBPT);
@@ -125,7 +128,7 @@ describe("study", () => {
       console.log("tokensForPool", tokensForPool);
       console.log("mainTokenDecimals", mainTokenDecimals);
       console.log("wrappedTokenDecimals", wrappedTokenDecimals);
-      console.log("scalingFactors", embeddedPoolScalingFactors);
+      console.log("embeddedPoolScalingFactors", embeddedPoolScalingFactors);
 
 
       amounts.push(

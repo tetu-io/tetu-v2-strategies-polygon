@@ -162,6 +162,7 @@ abstract contract BalancerBoostedAaveStableDepositor is DepositorBase, Initializ
     IBVault.FundManagement memory funds_
   ) internal returns (uint) {
     console.log("_swap, asset, balance", assetIn_, IERC20(assetIn_).balanceOf(address(this)));
+    console.log("_swap, amountIn", amountIn_);
     IERC20(assetIn_).approve(address(BALANCER_VAULT), amountIn_);
     BALANCER_VAULT.swap(
       IBVault.SingleSwap({
