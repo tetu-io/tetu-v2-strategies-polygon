@@ -32,4 +32,12 @@ contract BalancerLogicLibFacade {
   ) external pure returns (uint) {
     return BalancerLogicLib.getAssetIndex(startIndex0_, tokens_, asset_, lengthTokens_);
   }
+
+  function getBtpAmountsOut(
+    uint liquidityAmount_,
+    uint[] memory balances_,
+    uint bptIndex_
+  ) external pure returns (uint[] memory) {
+    return BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances_, bptIndex_);
+  }
 }

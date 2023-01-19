@@ -10,6 +10,8 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {BigNumber} from "ethers";
 import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
+import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
+import {BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_BPT_AMOUNTS_OUT} from "../../../baseUT/GasLimits";
 
 const { expect } = chai;
 chai.use(chaiAsPromised);
@@ -403,6 +405,51 @@ describe('BalancerLogicLibTest', function() {
           [0, 1, 1, 1],
           0
         )).revertedWith("TS-5 zero balance");
+      });
+    });
+  });
+
+  describe("getBtpAmountsOut", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+        const r = await facade.getBtpAmountsOut(
+          1000,
+          [2, 4, 1000, 94],
+          2
+        );
+
+        const ret = r.map(x => x.toNumber()).join();
+        const expected = [20, 40, 940].join();
+
+        expect(ret).eq(expected);
+      });
+      it("should return tokens which sum is equal to original liquidityAmount_", async () => {
+        const r = await facade.getBtpAmountsOut(
+          1000,
+          [3, 3, 1000, 3],
+          2
+        );
+
+        const ret = r.reduce((p, c) => c = p.add(c), BigNumber.from(0)).toNumber();
+        const expected = 1000;
+
+        expect(ret).eq(expected);
+      });
+    });
+    describe("Bad paths", () => {
+// totalBalances = 0
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should not exceed gas limits @skip-on-coverage", async () => {
+        const gasUsed = await facade.estimateGas.getBtpAmountsOut(
+          1000,
+          [2, 4, 1000, 94],
+          2
+        );
+
+        controlGasLimitsEx(gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_BPT_AMOUNTS_OUT, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
       });
     });
   });

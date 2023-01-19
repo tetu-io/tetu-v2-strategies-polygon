@@ -116,6 +116,48 @@ library BalancerLogicLib {
     }
   }
 
+  /// @notice Split {liquidityAmount_} by assets according to proportions of their total balances
+  /// @param liquidityAmount_ Amount to withdraw in bpt
+  /// @param balances_ Balances received from getPoolTokens
+  /// @param bptIndex_ Index of pool-pbt inside {balances_}
+  /// @return bptAmountsOut Amounts of underlying-BPT. The array doesn't include an amount for pool-bpt
+  ///         Total amount of {bptAmountsOut}-items is equal to {liquidityAmount_}
+  function getBtpAmountsOut(
+    uint liquidityAmount_,
+    uint[] memory balances_,
+    uint bptIndex_
+  ) internal pure returns (uint[] memory bptAmountsOut) {
+    // we assume here, that len >= 2
+    // we don't check it because StableMath.sol in balancer has _MIN_TOKENS = 2;
+    uint len = balances_.length;
+    bptAmountsOut = new uint[](len - 1);
+
+    // compute total balance, skip pool-bpt
+    uint totalBalances;
+    uint k;
+    for (uint i; i < len; i = uncheckedInc(i)) {
+      if (i == bptIndex_) continue;
+      totalBalances += balances_[i];
+      // temporary save incomplete amounts to bptAmountsOut
+      bptAmountsOut[k] = liquidityAmount_ * balances_[i];
+      ++k;
+    }
+
+    // finalize computation of bptAmountsOut using known totalBalances
+    uint total;
+    for (uint i; i < len - 1; i = uncheckedInc(i)) {
+      if (i == len - 2) {
+        // leftovers => last item
+        bptAmountsOut[i] = total > liquidityAmount_
+          ? 0
+          : liquidityAmount_ - total;
+      } else {
+        bptAmountsOut[i] /= totalBalances;
+        total += bptAmountsOut[i];
+      }
+    }
+  }
+
   /// @notice Find 0-based index of the {asset_} in {tokens_}, revert if the asset is not found
   /// @param startIndex0_ A position from which the search should be started
   function getAssetIndex(

@@ -1,7 +1,8 @@
 import {BigNumber} from "ethers";
-import {IERC20Metadata, IERC20Metadata__factory} from "../../../typechain";
+import {IERC20__factory, IERC20Metadata, IERC20Metadata__factory} from "../../../typechain";
 import {parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../scripts/utils/Misc";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 export interface IUserBalances {
   collateral: BigNumber;
@@ -81,6 +82,20 @@ export class BalanceUtils {
       }
     }
 
+    return dest;
+  }
+
+  static async getBalances(
+    signer: SignerWithAddress,
+    userAddress: string,
+    assets: string[]
+  ) : Promise<BigNumber[]> {
+    const dest: BigNumber[] = [];
+    for (const asset of assets) {
+      dest.push(
+        await IERC20__factory.connect(asset, signer).balanceOf(userAddress)
+      );
+    }
     return dest;
   }
 }

@@ -64,9 +64,15 @@ export class MockHelper {
     return (await DeployerUtils.deployContract(signer, 'BalancerLogicLibFacade')) as BalancerLogicLibFacade;
   }
 
-  public static async createBalancerComposableStableDepositorFacade(signer: SignerWithAddress) : Promise<BalancerComposableStableDepositorFacade> {
-    const ret = (await DeployerUtils.deployContract(signer, 'BalancerComposableStableDepositorFacade')) as BalancerComposableStableDepositorFacade;
-    ret.init();
+  public static async createBalancerComposableStableDepositorFacade(
+    signer: SignerWithAddress,
+    poolId: string = "0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b"
+  ) : Promise<BalancerComposableStableDepositorFacade> {
+    const ret = (await DeployerUtils.deployContract(
+      signer,
+      'BalancerComposableStableDepositorFacade',
+    )) as BalancerComposableStableDepositorFacade;
+    ret.init(poolId);
     return ret;
   }
 }
