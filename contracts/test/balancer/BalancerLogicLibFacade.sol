@@ -36,8 +36,9 @@ contract BalancerLogicLibFacade {
   function getBtpAmountsOut(
     uint liquidityAmount_,
     uint[] memory balances_,
+    uint[] memory tokenRates_,
     uint bptIndex_
   ) external pure returns (uint[] memory) {
-    return BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances_, bptIndex_);
+    return BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances_, tokenRates_, bptIndex_);
   }
 }

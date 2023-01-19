@@ -66,12 +66,14 @@ describe("BalancerComposableStablePoolTest (study)", () => {
         async x => poolBoosted.getTokenRate(x)
       )
     );
+    const tokenRatePoolBpt = await poolBoosted.getTokenRate("0x48e6B98ef6329f8f0A30eBB8c7C960330d648085");
     for (let i = 0; i < tokens.length; ++i) {
       console.log("Token.Balance", tokenNames[i], cashes[i]);
       console.log("Token.Rate", tokenNames[i], tokenRates[i]);
     }
     console.log("Cash", cashes);
     console.log("Managed", managed);
+    console.log("tokenRatePoolBpt", tokenRatePoolBpt);
 
     const actualSupplyUSD = actualSupply.mul(rate);
     const sumAmounts = [...Array(tokens.length).keys()].reduce(

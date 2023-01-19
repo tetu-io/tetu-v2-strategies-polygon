@@ -13,11 +13,11 @@ import {
 import {Misc} from "../../../../scripts/utils/Misc";
 import {BigNumber} from "ethers";
 import {expect} from "chai";
-import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
+import {areAlmostEqual, differenceInPercentsLessThan} from "../../../baseUT/utils/MathUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {
-  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_ENTER,
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_ENTER, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_EXIT,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_ASSETS, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_BPT_AMOUNTS_OUT,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_LIQUIDITY,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_RESERVES, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_TOTAL_SUPPLY,
@@ -64,14 +64,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
 //endregion before, after
 
 //region Utils enter/exit
-  interface IDepositorEnterTestResults {
-    amountsConsumedOut: BigNumber[];
-    liquidityOut: BigNumber;
-    gasUsed: BigNumber;
-    /** DAI, USDC, USDT */
-    balancesBefore: BigNumber[];
-    /** DAI, USDC, USDT */
-    balancesAfter: BigNumber[];
+  interface IDepositorChangeBalances {
     poolTokensBefore: {
       tokens: string[];
       balances: BigNumber[];
@@ -83,6 +76,54 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       lastChangeBlock: BigNumber;
     };
   }
+  function getMaxPercentDelta(r: IDepositorChangeBalances): BigNumber {
+    const totalTokensBefore = r.poolTokensBefore.balances[0]
+      .add(r.poolTokensBefore.balances[2])
+      .add(r.poolTokensBefore.balances[3]);
+    const totalTokensAfter = r.poolTokensAfter.balances[0]
+      .add(r.poolTokensAfter.balances[2])
+      .add(r.poolTokensAfter.balances[3]);
+    console.log("Before", r.poolTokensBefore, totalTokensBefore);
+    console.log("After", r.poolTokensAfter, totalTokensAfter);
+
+    const proportionsAfter = [
+      r.poolTokensAfter.balances[0].mul(Misc.ONE18).div(totalTokensAfter),
+      r.poolTokensAfter.balances[2].mul(Misc.ONE18).div(totalTokensAfter),
+      r.poolTokensAfter.balances[3].mul(Misc.ONE18).div(totalTokensAfter),
+    ];
+    const proportionsBefore = [
+      r.poolTokensBefore.balances[0].mul(Misc.ONE18).div(totalTokensBefore),
+      r.poolTokensBefore.balances[2].mul(Misc.ONE18).div(totalTokensBefore),
+      r.poolTokensBefore.balances[3].mul(Misc.ONE18).div(totalTokensBefore),
+    ];
+    const percentDeltas = [
+      proportionsAfter[0].sub(proportionsBefore[0]).mul(Misc.ONE18).div(proportionsAfter[0]),
+      proportionsAfter[1].sub(proportionsBefore[1]).mul(Misc.ONE18).div(proportionsAfter[1]),
+      proportionsAfter[2].sub(proportionsBefore[2]).mul(Misc.ONE18).div(proportionsAfter[2]),
+    ];
+
+    const maxPercentDeltas = percentDeltas.reduce(
+      (prev, current) => current.gt(prev) ? current : prev, percentDeltas[0]
+    );
+
+    console.log("proportionsAfter", proportionsAfter);
+    console.log("proportionsBefore", proportionsBefore);
+    console.log("percentDeltas", percentDeltas);
+    console.log("maxPercentDeltas", maxPercentDeltas);
+
+    return maxPercentDeltas;
+  }
+
+  interface IDepositorEnterTestResults extends IDepositorChangeBalances {
+    amountsConsumedOut: BigNumber[];
+    liquidityOut: BigNumber;
+    gasUsed: BigNumber;
+    /** DAI, USDC, USDT */
+    balancesBefore: BigNumber[];
+    /** DAI, USDC, USDT */
+    balancesAfter: BigNumber[];
+  }
+
   async function makeDepositorEnterTest(
     facade: BalancerComposableStableDepositorFacade,
     amount: string = "1"
@@ -132,7 +173,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     }
   }
 
-  interface IDepositorExitTestResults {
+  interface IDepositorExitTestResults extends IDepositorChangeBalances {
     amountsOut: BigNumber[];
     assets: string[];
     balanceFacadeAssetsBefore: BigNumber[];
@@ -140,16 +181,6 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     liquidityFacadeBefore: BigNumber;
     liquidityFacadeAfter: BigNumber;
     gasUsed: BigNumber;
-    poolTokensBefore: {
-      tokens: string[];
-      balances: BigNumber[];
-      lastChangeBlock: BigNumber;
-    };
-    poolTokensAfter: {
-      tokens: string[];
-      balances: BigNumber[];
-      lastChangeBlock: BigNumber;
-    };
   }
   async function makeDepositorExitTest(
     facade: BalancerComposableStableDepositorFacade,
@@ -374,44 +405,6 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
           });
         });
         describe("Ensure that deposit doesn't change proportions too much", () => {
-          function getMaxPercentDelta(r: IDepositorEnterTestResults): BigNumber {
-            const totalTokensBefore = r.poolTokensBefore.balances[0]
-              .add(r.poolTokensBefore.balances[2])
-              .add(r.poolTokensBefore.balances[3]);
-            const totalTokensAfter = r.poolTokensAfter.balances[0]
-              .add(r.poolTokensAfter.balances[2])
-              .add(r.poolTokensAfter.balances[3]);
-            console.log("Before", r.poolTokensBefore, totalTokensBefore);
-            console.log("After", r.poolTokensAfter, totalTokensAfter);
-
-            const proportionsAfter = [
-              r.poolTokensAfter.balances[0].mul(Misc.ONE18).div(totalTokensAfter),
-              r.poolTokensAfter.balances[2].mul(Misc.ONE18).div(totalTokensAfter),
-              r.poolTokensAfter.balances[3].mul(Misc.ONE18).div(totalTokensAfter),
-            ];
-            const proportionsBefore = [
-              r.poolTokensBefore.balances[0].mul(Misc.ONE18).div(totalTokensBefore),
-              r.poolTokensBefore.balances[2].mul(Misc.ONE18).div(totalTokensBefore),
-              r.poolTokensBefore.balances[3].mul(Misc.ONE18).div(totalTokensBefore),
-            ];
-            const percentDeltas = [
-              proportionsAfter[0].sub(proportionsBefore[0]).mul(Misc.ONE18).div(proportionsAfter[0]),
-              proportionsAfter[1].sub(proportionsBefore[1]).mul(Misc.ONE18).div(proportionsAfter[1]),
-              proportionsAfter[2].sub(proportionsBefore[2]).mul(Misc.ONE18).div(proportionsAfter[2]),
-            ];
-
-            const maxPercentDeltas = percentDeltas.reduce(
-              (prev, current) => current.gt(prev) ? current : prev, percentDeltas[0]
-            );
-
-            console.log("proportionsAfter", proportionsAfter);
-            console.log("proportionsBefore", proportionsBefore);
-            console.log("percentDeltas", percentDeltas);
-            console.log("maxPercentDeltas", maxPercentDeltas);
-
-            return maxPercentDeltas;
-          }
-
           it("$1", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, "1");
@@ -446,6 +439,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
         });
       });
     });
+
     describe("_depositorExit", () => {
       describe("Good paths", () => {
         describe("Withdraw full", () => {
@@ -455,8 +449,43 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             const retEnter = await makeDepositorEnterTest(facade, "1000");
             console.log("retEnter", retEnter);
 
-            const retExit = await makeDepositorExitTest(facade, "75854759892527712255");
+            const retExit = await makeDepositorExitTest(facade);
             console.log("retExit", retExit);
+
+            const percent100 = 2;
+            const ret = [
+              // we receive back same amounts as ones we have deposited
+              retExit.amountsOut.length,
+              differenceInPercentsLessThan(retExit.amountsOut[0], retEnter.amountsConsumedOut[0], percent100),
+              differenceInPercentsLessThan(retExit.amountsOut[1], retEnter.amountsConsumedOut[1], percent100),
+              differenceInPercentsLessThan(retExit.amountsOut[2], retEnter.amountsConsumedOut[2], percent100),
+
+              // all amounts were transferred to the balance of the depositor
+              retExit.balanceFacadeAssetsAfter[0].sub(retExit.balanceFacadeAssetsBefore[0]),
+              retExit.balanceFacadeAssetsAfter[1].sub(retExit.balanceFacadeAssetsBefore[1]),
+              retExit.balanceFacadeAssetsAfter[2].sub(retExit.balanceFacadeAssetsBefore[2]),
+
+              // amount of liquidity in the pool was reduced up to zero
+              retExit.liquidityFacadeAfter,
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            const expected = [
+              // we receive back same amounts as ones we have deposited
+              3,
+              true,
+              true,
+              true,
+
+              // all amounts were transferred to the balance of the depositor
+              retExit.amountsOut[0],
+              retExit.amountsOut[1],
+              retExit.amountsOut[2],
+
+              // amount of liquidity in the pool was reduced on the withdrawn value
+              0
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            expect(ret).eq(expected);
           });
         });
         describe("Withdraw partial", () => {
@@ -464,12 +493,27 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
 
           });
         });
-        describe("Ensure that withdrawing doesn't change proportions too much", () => {
+        describe("Ensure that the withdrawing doesn't change proportions too much", () => {
           it("$1", async () => {
-
+            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            await makeDepositorEnterTest(facade, "1");
+            const r = await makeDepositorExitTest(facade);
+            const maxPercentDeltas = getMaxPercentDelta(r);
+            expect(maxPercentDeltas.abs().lt(1e5)).eq(true);
           });
           it("$10_000", async () => {
-
+            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            await makeDepositorEnterTest(facade, "10000");
+            const r = await makeDepositorExitTest(facade);
+            const maxPercentDeltas = getMaxPercentDelta(r);
+            expect(maxPercentDeltas.abs().lt(1e9)).eq(true);
+          });
+          it("$1_000_000", async () => {
+            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            await makeDepositorEnterTest(facade, "1000000");
+            const r = await makeDepositorExitTest(facade);
+            const maxPercentDeltas = getMaxPercentDelta(r);
+            expect(maxPercentDeltas.abs().lt(1e11)).eq(true);
           });
         });
       });
@@ -477,7 +521,15 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       // todo
       });
       describe("Gas estimation @skip-on-coverage", () => {
+        it("should not exceed gas limits @skip-on-coverage", async () => {
+          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const retEnter = await makeDepositorEnterTest(facade, "1000");
+          const retExit = await makeDepositorExitTest(facade);
 
+          controlGasLimitsEx(retExit.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_EXIT, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
       });
     });
   });

@@ -284,7 +284,12 @@ interface IBVault {
   ) external payable;
 
   enum JoinKind {INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT}
+
+  /// @notice WeightedPool ExitKinds
   enum ExitKind {EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT}
+  /// @notice Composable Stable V2 ExitKinds
+  enum ExitKindComposableStable {EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT, EXACT_BPT_IN_FOR_ALL_TOKENS_OUT}
+
 
   struct JoinPoolRequest {
     IAsset[] assets;

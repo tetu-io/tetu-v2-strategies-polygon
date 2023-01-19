@@ -435,6 +435,23 @@ describe('BalancerLogicLibTest', function() {
 
         expect(ret).eq(expected);
       });
+      it("should return tokens which sum is equal to original liquidityAmount_ (rel values)", async () => {
+        const r = await facade.getBtpAmountsOut(
+          BigNumber.from("2875854761747828210454"),
+          [
+            BigNumber.from("5372145387028495219437932"),
+            BigNumber.from("2596148417831512044017929463269193"),
+            BigNumber.from("6027657899829781959978705"),
+            BigNumber.from("6051057251727129911185863")
+          ],
+          1
+        );
+
+        const ret = r.reduce((p, c) => c = p.add(c), BigNumber.from(0));
+        const expected = BigNumber.from("2875854761747828210454");
+
+        expect(ret.eq(expected)).eq(true);
+      });
     });
     describe("Bad paths", () => {
 // totalBalances = 0

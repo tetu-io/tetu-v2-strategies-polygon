@@ -227,12 +227,19 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   /// @return amountsOut TODO
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
     console.log("_depositorExit.liquidityAmount_", liquidityAmount_);
+    console.log("_depositorExit.liquidityAmount_ available", _depositorLiquidity());
 
     bytes32 _poolId = poolId; // gas saving
     (IERC20[] memory tokens, uint[] memory balances,) = BALANCER_VAULT.getPoolTokens(_poolId);
 
     uint bptIndex = IBalancerBoostedAaveStablePool(_getPoolAddress(_poolId)).getBptIndex();
-    //uint len = tokens.length;
+    {
+      uint[] memory bpt = _getBtpAmountsOut(liquidityAmount_, tokens, balances, bptIndex);
+      console.log("bpt[0]", bpt[0]);
+      console.log("bpt[1]", bpt[1]);
+      console.log("bpt[2]", bpt[2]);
+    }
+    uint len = tokens.length;
 
     console.log("tokens[bptIndex].balanceOf(address(this)", tokens[bptIndex].balanceOf(address(this)));
     require(liquidityAmount_ <= tokens[bptIndex].balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
@@ -244,16 +251,17 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
       payable(address(this)),
       IBVault.ExitPoolRequest({
         assets: _asIAsset(tokens), // must have the same length and order as the array returned by `getPoolTokens`
-        minAmountsOut: new uint[](tokens.length), // todo: no limits?
+        minAmountsOut: new uint[](len), // todo: no limits?
         userData: abi.encode(
-          IBVault.ExitKind.BPT_IN_FOR_EXACT_TOKENS_OUT,
-          BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances, bptIndex),
+          IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
+          _getBtpAmountsOut(liquidityAmount_, tokens, balances, bptIndex),
           liquidityAmount_
         ),
         toInternalBalance: false
       })
     );
     console.log("Exit pool done");
+    console.log("now liquidityAmount_ available", _depositorLiquidity());
 
     // now we have amBbXXX tokens; swap them to XXX assets
 
@@ -265,15 +273,19 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
       toInternalBalance: false
     });
 
-    console.log("Start swap");
-    amountsOut = new uint[](3);
-    amountsOut[0] = _swap(BB_AM_DAI_POOL_ID, BB_AM_DAI, DAI, IERC20(BB_AM_DAI).balanceOf(address(this)), funds_);
-    amountsOut[1] = _swap(BB_AM_USDC_POOL_ID, BB_AM_USDC, USDC, IERC20(BB_AM_USDC).balanceOf(address(this)), funds_);
-    amountsOut[2] = _swap(BB_AM_USDT_POOL_ID, BB_AM_USDT, USDT, IERC20(BB_AM_USDT).balanceOf(address(this)), funds_);
-
-    console.log("End swap");
-
-    return amountsOut;
+    amountsOut = new uint[](len - 1);
+    uint k;
+    for (uint i; i < len; i = uncheckedInc(i)) {
+      if (i == bptIndex) continue;
+      amountsOut[k] = _swap(
+        IBalancerBoostedAavePool(address(tokens[i])).getPoolId(),
+        address(tokens[i]),
+        IBalancerBoostedAavePool(address(tokens[i])).getMainToken(),
+        tokens[i].balanceOf(address(this)),
+        funds_
+      );
+      ++k;
+    }
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
@@ -286,20 +298,36 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     require(liquidityAmount_ <= tokens[bptIndex].balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
 
     (, amountsOut) = IBalancerHelper(BALANCER_HELPER).queryExit(
-      BB_AM_USD_POOL_ID,
+      _poolId,
       address(this),
       payable(address(this)),
       IBVault.ExitPoolRequest({
         assets: _asIAsset(tokens), // must have the same length and order as the array returned by `getPoolTokens`
         minAmountsOut: new uint[](tokens.length),
         userData: abi.encode(
-          IBVault.ExitKind.BPT_IN_FOR_EXACT_TOKENS_OUT,
-            BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances, bptIndex),
+          IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
+          _getBtpAmountsOut(liquidityAmount_, tokens, balances, bptIndex),
           liquidityAmount_
         ),
         toInternalBalance: false
       })
     );
+  }
+
+  function _getBtpAmountsOut(
+    uint liquidityAmount_,
+    IERC20[] memory tokens_,
+    uint[] memory balances_,
+    uint bptIndex_
+  ) internal view returns (uint[] memory bptAmountsOut) {
+    IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(_getPoolAddress(poolId));
+    uint len = tokens_.length;
+    uint[] memory tokenRates = new uint[](len);
+    for (uint i = 0; i < len; i = uncheckedInc(i)) {
+      if (i == bptIndex_) continue;
+      tokenRates[i] = pool.getTokenRate(address(tokens_[i]));
+    }
+    return BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances_, tokenRates, bptIndex_);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -316,22 +344,26 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ) internal returns (uint) {
     console.log("_swap, asset, balance", assetIn_, IERC20(assetIn_).balanceOf(address(this)));
     console.log("_swap, amountIn", amountIn_);
+
+    uint balanceBefore = IERC20(assetOut_).balanceOf(address(this));
+
     IERC20(assetIn_).approve(address(BALANCER_VAULT), amountIn_);
     BALANCER_VAULT.swap(
       IBVault.SingleSwap({
-    poolId: poolId_,
-    kind: IBVault.SwapKind.GIVEN_IN,
-    assetIn: IAsset(assetIn_),
-    assetOut: IAsset(assetOut_),
-    amount: amountIn_,
-    userData: bytes("")
-    }),
+        poolId: poolId_,
+        kind: IBVault.SwapKind.GIVEN_IN,
+        assetIn: IAsset(assetIn_),
+        assetOut: IAsset(assetOut_),
+        amount: amountIn_,
+        userData: bytes("")
+      }),
       funds_,
       1,
       block.timestamp
     );
 
-    return IERC20(assetOut_).balanceOf(address(this));
+    // we assume here, that the balance cannot be decreased
+    return IERC20(assetOut_).balanceOf(address(this)) - balanceBefore;
   }
 
   /////////////////////////////////////////////////////////////////////

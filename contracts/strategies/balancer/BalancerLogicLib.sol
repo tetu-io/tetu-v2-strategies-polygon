@@ -125,6 +125,7 @@ library BalancerLogicLib {
   function getBtpAmountsOut(
     uint liquidityAmount_,
     uint[] memory balances_,
+    uint[] memory tokenRates_,
     uint bptIndex_
   ) internal pure returns (uint[] memory bptAmountsOut) {
     // we assume here, that len >= 2
