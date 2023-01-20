@@ -12,20 +12,17 @@ contract BalancerComposableStablePoolStrategy is ConverterStrategyBase, Balancer
   string public constant override STRATEGY_VERSION = "1.0.0";
   bytes32 public constant POOL_ID = 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b;
 
-  address[] public _rewardTokens;
-
   function init(
     address controller_,
     address splitter_,
     address converter_
   ) external initializer {
-    __BalancerBoostedAaveUsdDepositor_init(POOL_ID);
-    __ConverterStrategyBase_init(controller_, splitter_, converter_);
-    //todo _rewardTokens
-  }
+    // we can take address of the reward tokens using gauge and gauge.reward_contract
+    // it worth to encode these array to avoid calculation in init
+    address[] memory rewardTokens = new address[](1);
+    rewardTokens[0] = 0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3;
 
-  /// @dev Returns reward token addresses array.
-  function rewardTokens() external view returns (address[] memory tokens) {
-    return _rewardTokens;
+    __BalancerBoostedAaveUsdDepositor_init(POOL_ID, rewardTokens);
+    __ConverterStrategyBase_init(controller_, splitter_, converter_);
   }
 }

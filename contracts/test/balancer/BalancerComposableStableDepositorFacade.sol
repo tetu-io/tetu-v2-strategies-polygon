@@ -6,8 +6,11 @@ import "../../strategies/balancer/BalancerComposableStableDepositor.sol";
 
 /// @notice Provide direct access to internal functions of {BalancerBoostedAaveStableDepositor}
 contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepositor {
-  function init(bytes32 poolId) external initializer {
-    __BalancerBoostedAaveUsdDepositor_init(poolId);
+  function init(
+    bytes32 poolId,
+    address[] memory rewardTokens_
+  ) external initializer {
+    __BalancerBoostedAaveUsdDepositor_init(poolId, rewardTokens_);
   }
 
   function _depositorPoolAssetsAccess() external virtual view returns (address[] memory poolAssets) {

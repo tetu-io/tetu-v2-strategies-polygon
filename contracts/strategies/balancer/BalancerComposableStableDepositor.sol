@@ -13,6 +13,7 @@ import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
 import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 import "hardhat/console.sol";
+import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
 
 
 /// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Aave USD"
@@ -31,16 +32,29 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   /// @dev https://dev.balancer.fi/references/contracts/deployment-addresses
   IBVault private constant BALANCER_VAULT = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
   address private constant BALANCER_HELPER = 0x239e55F427D44C3cc793f49bFB507ebe76638a2b;
+  /// @notice ChildChainLiquidityGaugeFactory allows to get gauge address by pool id
+  /// @dev see https://dev.balancer.fi/resources/vebal-and-gauges/gauges
+  address private constant CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY = 0x3b8cA519122CdD8efb272b0D3085453404B25bD0;
+
 
   /// @notice For "Balancer Boosted Aave USD": 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
   bytes32 public poolId;
+  address private _gauge;
+  address[] private _rewardTokens;
 
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
 
-  function __BalancerBoostedAaveUsdDepositor_init(bytes32 poolId_) internal onlyInitializing {
+  function __BalancerBoostedAaveUsdDepositor_init(
+    bytes32 poolId_,
+    address[] memory rewardTokens_
+  ) internal onlyInitializing {
     poolId = poolId_;
+    _gauge = IChildChainLiquidityGaugeFactory(CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY).getGaugePool(
+      BalancerLogicLib.getPoolAddress(poolId_)
+    );
+    _rewardTokens = rewardTokens_;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -149,6 +163,10 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     return (tokensOut, amountsOut);
   }
 
+  /// @dev Returns reward token addresses array.
+  function rewardTokens() external view returns (address[] memory tokens) {
+    return _rewardTokens;
+  }
 
 
   /// @dev This empty reserved space is put in place to allow future versions to add new

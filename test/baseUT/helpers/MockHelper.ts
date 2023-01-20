@@ -66,13 +66,14 @@ export class MockHelper {
 
   public static async createBalancerComposableStableDepositorFacade(
     signer: SignerWithAddress,
-    poolId: string = "0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b"
+    poolId: string = "0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b",
+    rewardTokens: string[] = ["0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3"]
   ) : Promise<BalancerComposableStableDepositorFacade> {
     const ret = (await DeployerUtils.deployContract(
       signer,
       'BalancerComposableStableDepositorFacade',
     )) as BalancerComposableStableDepositorFacade;
-    ret.init(poolId);
+    ret.init(poolId, rewardTokens);
     return ret;
   }
 }

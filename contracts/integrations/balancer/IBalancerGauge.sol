@@ -24,7 +24,7 @@ interface IBalancerGauge {
   function rewards_receiver(address arg0) external view returns (address);
   function reward_integral(address arg0) external view returns (uint256);
   function reward_integral_for(address arg0, address arg1) external view returns (uint256);
-    function set_rewards_receiver(address _receiver) external;
+  function set_rewards_receiver(address _receiver) external;
   function set_rewards(
     address _reward_contract,
     bytes32 _claim_sig,
