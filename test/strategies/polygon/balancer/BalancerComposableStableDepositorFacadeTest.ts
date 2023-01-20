@@ -17,11 +17,13 @@ import {areAlmostEqual, differenceInPercentsLessThan} from "../../../baseUT/util
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {
-  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_ENTER, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_EXIT,
-  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_ASSETS, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_BPT_AMOUNTS_OUT,
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_ENTER,
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_EXIT,
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_ASSETS,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_LIQUIDITY,
-  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_RESERVES, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_TOTAL_SUPPLY,
-  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_WEIGHTS
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_RESERVES,
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_TOTAL_SUPPLY,
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_WEIGHTS, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_QUOTE_EXIT
 } from "../../../baseUT/GasLimits";
 
 describe('BalancerComposableStableDepositorFacadeTest', function() {
@@ -465,8 +467,8 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
               retExit.balanceFacadeAssetsAfter[1].sub(retExit.balanceFacadeAssetsBefore[1]),
               retExit.balanceFacadeAssetsAfter[2].sub(retExit.balanceFacadeAssetsBefore[2]),
 
-              // amount of liquidity in the pool was reduced up to zero
-              retExit.liquidityFacadeAfter,
+              // amount of liquidity in the pool was reduced up to dust level
+              differenceInPercentsLessThan(retEnter.liquidityOut.sub(retExit.liquidityFacadeAfter), retEnter.liquidityOut, 1)
             ].map(x => BalanceUtils.toString(x)).join("\n");
 
             const expected = [
@@ -482,15 +484,10 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
               retExit.amountsOut[2],
 
               // amount of liquidity in the pool was reduced on the withdrawn value
-              0
+              true
             ].map(x => BalanceUtils.toString(x)).join("\n");
 
             expect(ret).eq(expected);
-          });
-        });
-        describe("Withdraw partial", () => {
-          it("should return expected values", async () => {
-
           });
         });
         describe("Ensure that the withdrawing doesn't change proportions too much", () => {
@@ -521,12 +518,116 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       // todo
       });
       describe("Gas estimation @skip-on-coverage", () => {
-        it("should not exceed gas limits @skip-on-coverage", async () => {
+        it("withdraw $1 should not exceed gas limits @skip-on-coverage", async () => {
           const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
-          const retEnter = await makeDepositorEnterTest(facade, "1000");
+          await makeDepositorEnterTest(facade, "1");
           const retExit = await makeDepositorExitTest(facade);
 
           controlGasLimitsEx(retExit.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_EXIT, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+        it("withdraw $100_000 should not exceed gas limits @skip-on-coverage", async () => {
+          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          await makeDepositorEnterTest(facade, "100000");
+          const retExit = await makeDepositorExitTest(facade);
+
+          controlGasLimitsEx(retExit.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_EXIT, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+      });
+    });
+
+    describe("_depositorQuoteExit", () => {
+      interface IQuoteExitTestResults {
+        exitAmountsOut: BigNumber[];
+        quoteExitAmountsOut: BigNumber[];
+        gasUsed: BigNumber;
+      }
+      async function makeQuoteExitTest(
+        facade: BalancerComposableStableDepositorFacade,
+        amount: string
+      ) : Promise<IQuoteExitTestResults> {
+        const retEnter = await makeDepositorEnterTest(facade, "1000");
+        console.log("retEnter", retEnter);
+
+        const retQuoteExit = await facade.callStatic._depositorQuoteExitAccess(0);
+        const gasUsed = await facade.estimateGas._depositorQuoteExitAccess(0);
+        console.log("retQuoteExit", retQuoteExit);
+
+        const retExit = await makeDepositorExitTest(facade);
+        console.log("retExit", retExit);
+
+        return {
+          exitAmountsOut: retExit.amountsOut,
+          quoteExitAmountsOut: retQuoteExit,
+          gasUsed
+        }
+      }
+      describe("Good paths", () => {
+        describe("Withdraw full", () => {
+          it("should return same values as on real exit, $1", async () => {
+            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const r = await makeQuoteExitTest(facade, "1");
+
+            const ret = [
+              r.quoteExitAmountsOut.length,
+              areAlmostEqual(r.exitAmountsOut[0], r.quoteExitAmountsOut[0]),
+              areAlmostEqual(r.exitAmountsOut[1], r.quoteExitAmountsOut[1]),
+              areAlmostEqual(r.exitAmountsOut[2], r.quoteExitAmountsOut[2]),
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            const expected = [
+              r.exitAmountsOut.length,
+              true,
+              true,
+              true,
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            expect(ret).eq(expected);
+          });
+          it("should return same values as on real exit, $100_000", async () => {
+            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const r = await makeQuoteExitTest(facade, "100000");
+
+            const ret = [
+              r.quoteExitAmountsOut.length,
+              areAlmostEqual(r.exitAmountsOut[0], r.quoteExitAmountsOut[0]),
+              areAlmostEqual(r.exitAmountsOut[1], r.quoteExitAmountsOut[1]),
+              areAlmostEqual(r.exitAmountsOut[2], r.quoteExitAmountsOut[2]),
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            const expected = [
+              r.exitAmountsOut.length,
+              true,
+              true,
+              true,
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            expect(ret).eq(expected);
+          });
+        });
+      });
+      describe("Bad paths", () => {
+        // todo
+      });
+      describe("Gas estimation @skip-on-coverage", () => {
+        it("withdraw $1 should not exceed gas limits @skip-on-coverage", async () => {
+          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          await makeDepositorEnterTest(facade, "1");
+          const retExit = await makeQuoteExitTest(facade, "1");
+
+          controlGasLimitsEx(retExit.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_QUOTE_EXIT, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+        it("withdraw $100_000 should not exceed gas limits @skip-on-coverage", async () => {
+          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          await makeDepositorEnterTest(facade, "100000");
+          const retExit = await makeQuoteExitTest(facade, "100000");
+
+          controlGasLimitsEx(retExit.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_QUOTE_EXIT, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
         });

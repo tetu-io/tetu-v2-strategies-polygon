@@ -30,19 +30,6 @@ contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepo
     return _depositorTotalSupply();
   }
 
-  uint public lastSwapAmountOut;
-  function _swapAccess(
-    bytes32 poolId_,
-    address assetIn_,
-    address assetOut_,
-    uint amountIn_,
-    IBVault.FundManagement memory funds_
-  ) external returns (uint) {
-    lastSwapAmountOut = _swap(poolId_, assetIn_, assetOut_, amountIn_, funds_);
-    return lastSwapAmountOut;
-  }
-
-
   uint[] public lastAmountsConsumedOut;
   uint public lastAmountsConsumedOutLength;
   uint public lastLiquidityOut;

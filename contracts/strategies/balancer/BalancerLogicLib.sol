@@ -3,13 +3,16 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../../tools/AppErrors.sol";
 import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
 import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 import "../../integrations/balancer/IBVault.sol";
 import "hardhat/console.sol";
+import "../../integrations/balancer/IBalancerHelper.sol";
 
 library BalancerLogicLib {
+  using SafeERC20 for IERC20;
 
   /// @dev local vars in getAmountsToDeposit to avoid stack too deep
   struct LocalGetAmountsToDeposit {
@@ -19,6 +22,14 @@ library BalancerLogicLib {
     uint len;
     /// @notice amountBPT / underlyingAmount, decimals 18, 0 for BPT
     uint[] rates;
+  }
+
+  /// @notice Local variables required inside _depositorEnter/Exit/QuoteExit, avoid stack too deep
+  struct DepositorLocal {
+    uint bptIndex;
+    uint len;
+    IERC20[] tokens;
+    uint[] balances;
   }
 
   /// @notice Calculate amounts of {tokens} to be deposited to POOL_ID in proportions according to the {balances}
@@ -125,7 +136,6 @@ library BalancerLogicLib {
   function getBtpAmountsOut(
     uint liquidityAmount_,
     uint[] memory balances_,
-    uint[] memory tokenRates_,
     uint bptIndex_
   ) internal pure returns (uint[] memory bptAmountsOut) {
     // we assume here, that len >= 2
@@ -159,33 +169,279 @@ library BalancerLogicLib {
     }
   }
 
-  /// @notice Find 0-based index of the {asset_} in {tokens_}, revert if the asset is not found
-  /// @param startIndex0_ A position from which the search should be started
-  function getAssetIndex(
-    uint startIndex0_,
-    IERC20[] memory tokens_,
-    address asset_,
-    uint lengthTokens_
-  ) internal pure returns (uint) {
+  /////////////////////////////////////////////////////////////////////
+  ///             Enter, exit
+  /////////////////////////////////////////////////////////////////////
+  /// @notice Deposit given amount to the pool.
+  /// @param amountsDesired_ Amounts of assets on the balance of the depositor
+  ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
+  ///         i.e. for "Balancer Boosted Aave USD" we have DAI, USDC, USDT
+  /// @return amountsConsumedOut Amounts of assets deposited to balanceR pool
+  ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
+  /// @return liquidityOut Total amount of liquidity added to balanceR pool in terms of pool-bpt tokens
+  function depositorEnter(IBVault vault_, bytes32 poolId_, uint[] memory amountsDesired_) internal returns (
+    uint[] memory amountsConsumedOut,
+    uint liquidityOut
+  ) {
+    DepositorLocal memory p;
 
-    for (uint i = startIndex0_; i < lengthTokens_; i = uncheckedInc(i)) {
-      if (address(tokens_[i]) == asset_) {
-        return i;
-      }
-    }
-    for (uint i = 0; i < startIndex0_; i = uncheckedInc(i)) {
-      if (address(tokens_[i]) == asset_) {
-        return i;
-      }
+    // The implementation below assumes, that getPoolTokens returns the assets in following order:
+    //    bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt
+    (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
+    p.len = p.tokens.length;
+    p.bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+
+    // temporary save current liquidity
+    liquidityOut = IBalancerBoostedAaveStablePool(address(p.tokens[p.bptIndex])).balanceOf(address(this));
+
+    // Original amounts can have any values.
+    // But we need amounts in such proportions that won't move the current balances
+    {
+      uint[] memory underlying = BalancerLogicLib.getTotalAssetAmounts(vault_, p.tokens, p.bptIndex);
+      amountsConsumedOut = BalancerLogicLib.getAmountsToDeposit(amountsDesired_, p.tokens, p.balances, underlying, p.bptIndex);
     }
 
-    revert(AppErrors.ITEM_NOT_FOUND);
+    // we can create funds_ once and use it several times
+    IBVault.FundManagement memory funds_ = IBVault.FundManagement({
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
+    });
+
+    // swap all tokens XX => bb-am-XX
+    // we need two arrays with same amounts: amountsToDeposit (with 0 for BB-AM-USD) and userDataAmounts (no BB-AM-USD)
+    uint[] memory amountsToDeposit = new uint[](p.len);
+    uint[] memory userDataAmounts = new uint[](p.len - 1); // no bpt
+    uint k;
+    for (uint i; i < p.len; i = uncheckedInc(i)) {
+      if (i == p.bptIndex) continue;
+      amountsToDeposit[i] = BalancerLogicLib.swap(
+        vault_,
+        IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
+        IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
+        address(p.tokens[i]),
+        amountsConsumedOut[k],
+        funds_
+      );
+      userDataAmounts[k] = amountsToDeposit[i];
+      _approveIfNeeded(address(p.tokens[i]), amountsToDeposit[i], address(vault_));
+      ++k;
+    }
+
+    // add liquidity to balancer
+    vault_.joinPool(
+      poolId_,
+      address(this),
+      address(this),
+      IBVault.JoinPoolRequest({
+        assets: asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        maxAmountsIn: amountsToDeposit,
+        userData: abi.encode(IBVault.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, userDataAmounts, 0),
+        fromInternalBalance: false
+      })
+    );
+
+    uint liquidityAfter = IERC20(address(p.tokens[p.bptIndex])).balanceOf(address(this));
+    console.log("balance", address(p.tokens[p.bptIndex]), address(this), liquidityAfter);
+
+    liquidityOut = liquidityAfter > liquidityOut
+      ? liquidityAfter - liquidityOut
+      : 0;
+    console.log("liquidityAfter", liquidityAfter);
+    console.log("liquidityOut", liquidityOut);
+  }
+
+  function depositorExit(IBVault vault_, bytes32 poolId_, uint liquidityAmount_) internal returns (
+    uint[] memory amountsOut
+  ) {
+    DepositorLocal memory p;
+
+    p.bptIndex = IBalancerBoostedAaveStablePool(getPoolAddress(poolId_)).getBptIndex();
+    (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
+    p.len = p.tokens.length;
+
+    require(liquidityAmount_ <= p.tokens[p.bptIndex].balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
+
+    // BalancerR can spend a bit less amount of liquidity than {liquidityAmount_}
+    // i.e. we if liquidityAmount_ = 2875841, we can have leftovers = 494 after exit
+    vault_.exitPool(
+      poolId_,
+      address(this),
+      payable(address(this)),
+      IBVault.ExitPoolRequest({
+        assets: asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        minAmountsOut: new uint[](p.len), // todo: no limits?
+        userData: abi.encode(
+            IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
+            BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, p.balances, p.bptIndex),
+            liquidityAmount_
+          ),
+        toInternalBalance: false
+        })
+    );
+
+    // now we have amBbXXX tokens; swap them to XXX assets
+
+    // we can create funds_ once and use it several times
+    IBVault.FundManagement memory funds_ = IBVault.FundManagement({
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
+    });
+
+    amountsOut = new uint[](p.len - 1);
+    uint k;
+    for (uint i; i < p.len; i = uncheckedInc(i)) {
+      if (i == p.bptIndex) continue;
+      amountsOut[k] = swap(
+        vault_,
+        IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
+        address(p.tokens[i]),
+        IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
+        p.tokens[i].balanceOf(address(this)),
+        funds_
+      );
+      ++k;
+    }
+  }
+
+  /// @notice Quotes output for given amount of LP-tokens from the pool.
+  /// @dev if requested liquidityAmount >= invested, then should make full exit
+  ///      TODO
+  /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
+  ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
+  function depositorQuoteExit(
+    IBVault vault_,
+    IBalancerHelper helper_,
+    bytes32 poolId_,
+    uint liquidityAmount_
+  ) internal returns (
+    uint[] memory amountsOut
+  ) {
+    DepositorLocal memory p;
+
+    p.bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+    (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
+    p.len = p.tokens.length;
+
+    (, uint[] memory amountsBpt) = helper_.queryExit(
+      poolId_,
+      address(this),
+      payable(address(this)),
+      IBVault.ExitPoolRequest({
+        assets: asIAsset(p.tokens),
+        minAmountsOut: new uint[](p.len), // todo: no limits?
+        userData: abi.encode(
+          IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
+          BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, p.balances, p.bptIndex),
+          liquidityAmount_
+        ),
+        toInternalBalance: false
+      })
+    );
+
+    IBVault.BatchSwapStep[] memory steps = new IBVault.BatchSwapStep[](p.len - 1);
+    IAsset[] memory assets = new IAsset[](2 * (p.len - 1));
+    uint k;
+    for (uint i = 0; i < p.len; i = uncheckedInc(i)) {
+      if (i == p.bptIndex) continue;
+      IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(p.tokens[i]));
+      steps[k].poolId = linearPool.getPoolId();
+      steps[k].assetInIndex = 2 * k + 1;
+      steps[k].assetOutIndex = 2 * k;
+      steps[k].amount = amountsBpt[i];
+
+      assets[2 * k] = IAsset(linearPool.getMainToken());
+      assets[2 * k + 1] = IAsset(address(p.tokens[i]));
+      ++k;
+    }
+
+    int[] memory assetDeltas = vault_.queryBatchSwap(
+      IBVault.SwapKind.GIVEN_IN,
+      steps,
+      assets,
+      IBVault.FundManagement({
+        sender: address(this),
+        fromInternalBalance: false,
+        recipient: payable(address(this)),
+        toInternalBalance: false
+     })
+    );
+
+    amountsOut = new uint[](p.len - 1);
+    k = 0;
+    for (uint i = 0; i < p.len; i = uncheckedInc(i)) {
+      if (i == p.bptIndex) continue;
+      amountsOut[k] = assetDeltas[2 * k] < 0
+        ? uint256(-assetDeltas[2 * k])
+        : 0;
+      ++k;
+    }
+  }  
+
+  /// @notice Swap given {amountIn_} of {assetIn_} to {assetOut_} using the given BalanceR pool
+  function swap(
+    IBVault vault_,
+    bytes32 poolId_,
+    address assetIn_,
+    address assetOut_,
+    uint amountIn_,
+    IBVault.FundManagement memory funds_
+  ) internal returns (uint) {
+    console.log("_swap, asset, balance", assetIn_, IERC20(assetIn_).balanceOf(address(this)));
+    console.log("_swap, amountIn", amountIn_);
+
+    uint balanceBefore = IERC20(assetOut_).balanceOf(address(this));
+
+    IERC20(assetIn_).approve(address(vault_), amountIn_);
+    vault_.swap(
+      IBVault.SingleSwap({
+        poolId: poolId_,
+        kind: IBVault.SwapKind.GIVEN_IN,
+        assetIn: IAsset(assetIn_),
+        assetOut: IAsset(assetOut_),
+        amount: amountIn_,
+        userData: bytes("")
+      }),
+      funds_,
+      1,
+      block.timestamp
+    );
+
+    // we assume here, that the balance cannot be decreased
+    return IERC20(assetOut_).balanceOf(address(this)) - balanceBefore;
+  }
+
+  /// @dev Returns the address of a Pool's contract.
+  ///      Due to how Pool IDs are created, this is done with no storage accesses and costs little gas.
+  function getPoolAddress(bytes32 id) internal pure returns (address) {
+    // 12 byte logical shift left to remove the nonce and specialization setting. We don't need to mask,
+    // since the logical shift already sets the upper bits to zero.
+    return address(uint160(uint(id) >> (12 * 8)));
+  }
+
+  /// @dev see balancer-labs, ERC20Helpers.sol
+  function asIAsset(IERC20[] memory tokens) internal pure returns (IAsset[] memory assets) {
+    // solhint-disable-next-line no-inline-assembly
+    assembly {
+      assets := tokens
+    }
   }
 
   function uncheckedInc(uint i) internal pure returns (uint) {
-    unchecked {
-      return i + 1;
-    }
+  unchecked {
+    return i + 1;
+  }
   }
 
+  /// @notice Should NOT be used for third-party pools
+  function _approveIfNeeded(address token, uint amount, address spender) internal {
+    if (IERC20(token).allowance(address(this), spender) < amount) {
+      IERC20(token).safeApprove(spender, 0);
+      // infinite approve, 2*255 is more gas efficient then type(uint).max
+      IERC20(token).safeApprove(spender, 2**255);
+    }
+  }
 }

@@ -24,21 +24,11 @@ contract BalancerLogicLibFacade {
     return BalancerLogicLib.getTotalAssetAmounts(vault_, tokens_, indexBpt_);
   }
 
-  function getAssetIndex(
-    uint startIndex0_,
-    IERC20[] memory tokens_,
-    address asset_,
-    uint lengthTokens_
-  ) external pure returns (uint) {
-    return BalancerLogicLib.getAssetIndex(startIndex0_, tokens_, asset_, lengthTokens_);
-  }
-
   function getBtpAmountsOut(
     uint liquidityAmount_,
     uint[] memory balances_,
-    uint[] memory tokenRates_,
     uint bptIndex_
   ) external pure returns (uint[] memory) {
-    return BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances_, tokenRates_, bptIndex_);
+    return BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, balances_, bptIndex_);
   }
 }

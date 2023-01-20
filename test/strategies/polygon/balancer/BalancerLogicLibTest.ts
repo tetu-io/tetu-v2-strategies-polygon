@@ -1,6 +1,5 @@
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
@@ -469,67 +468,6 @@ describe('BalancerLogicLibTest', function() {
         });
       });
     });
-  });
-
-  describe("getAssetIndex", () => {
-    describe("Good paths", () => {
-      async function makeGetAssetIndexTest(startIndex0: number, asset: MockToken) : Promise<number> {
-        const tokens = [dai, bbAmUSD, usdc, usdt];
-        return (
-          await facade.getAssetIndex(startIndex0, tokens.map(x => x.address), asset.address, 4)
-        ).toNumber();
-      }
-      describe("predicted position is correct", () => {
-        it("should return correct position of DAI", async () => {
-          const ret = await makeGetAssetIndexTest(0, dai);
-          expect(ret).eq(0);
-        });
-        it("should return correct position of USDC", async () => {
-          const ret = await makeGetAssetIndexTest(2, usdc);
-          expect(ret).eq(2);
-        });
-        it("should return correct position of USDT", async () => {
-          const ret = await makeGetAssetIndexTest(3, usdt);
-          expect(ret).eq(3);
-        });
-      });
-      describe("predicted position is less then actual one", () => {
-        it("should return correct position of USDC", async () => {
-          const ret = await makeGetAssetIndexTest(0, usdc);
-          expect(ret).eq(2);
-        });
-        it("should return correct position of USDT", async () => {
-          const ret = await makeGetAssetIndexTest(2, usdt);
-          expect(ret).eq(3);
-        });
-      });
-      describe("predicted position is greater then actual one", () => {
-        it("should return correct position of DAI", async () => {
-          const ret = await makeGetAssetIndexTest(1, dai);
-          expect(ret).eq(0);
-        });
-        it("should return correct position of USDC", async () => {
-          const ret = await makeGetAssetIndexTest(3, usdc);
-          expect(ret).eq(2);
-        });
-      });
-    });
-    describe("Bad paths", () => {
-      describe("Tokens don't include the given asset", () => {
-        it("should revert", async () => {
-          const tokens = [dai, bbAmUSD, usdc, usdt];
-          await expect(
-            facade.getAssetIndex(
-              0,
-              tokens.map(x => x.address),
-              wbtc.address, // (!) there is no such asset in the {tokens}
-              4
-            )
-          ).revertedWith("TS-6 not found");
-        });
-      });
-    });
-
   });
 //endregion Unit tests
 });
