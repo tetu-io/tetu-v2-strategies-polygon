@@ -153,14 +153,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 //      console.log("_withdrawFromPool._investedAssets", _investedAssets);
 //      console.log("_withdrawFromPool._depositorLiquidity()", _depositorLiquidity());
 //      console.log("_withdrawFromPool.liquidityAmount", liquidityAmount);
-      (investedAssetsUSD, assetPrice) = ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
-        _depositorPoolAssets(),
-        _depositorPoolReserves(),
-        asset,
-        liquidityAmount, // total amount of LP tokens to be withdrawn
-        _depositorTotalSupply(), // total amount of LP tokens in the pool
-        IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
-      );
+      (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
 //      console.log("_withdrawFromPool investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
       _withdrawFromPoolUniversal(liquidityAmount, false);
 //      console.log("_withdrawFromPool.liquidityAmount finish");
@@ -178,6 +171,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint liquidityAmount = _depositorLiquidity();
 
     // predict expected amount to be withdrawn (in USD)
+    (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
+    _withdrawFromPoolUniversal(liquidityAmount, false);
+//    console.log("_withdrawAllFromPool.finish");
+  }
+
+  /// @notice If pool support emergency withdraw need to call it for emergencyExit()
+  function _emergencyExitFromPool() override internal virtual {
+    _withdrawFromPoolUniversal(0, true);
+  }
+
+  function _getExpectedWithdrawnAmountUSD(uint liquidityAmount) internal view returns (
+    uint investedAssetsUSD,
+    uint assetPrice
+  ) {
+    // predict expected amount to be withdrawn (in USD)
     (investedAssetsUSD, assetPrice) = ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
       _depositorPoolAssets(),
       _depositorPoolReserves(),
@@ -186,13 +194,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _depositorTotalSupply(),
       IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
     );
-    _withdrawFromPoolUniversal(liquidityAmount, false);
-//    console.log("_withdrawAllFromPool.finish");
-  }
-
-  /// @notice If pool support emergency withdraw need to call it for emergencyExit()
-  function _emergencyExitFromPool() override internal virtual {
-    _withdrawFromPoolUniversal(0, true);
   }
 
   function _withdrawFromPoolUniversal(uint liquidityAmount_, bool emergency_) internal {
