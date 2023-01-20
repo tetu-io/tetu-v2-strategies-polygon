@@ -186,7 +186,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice
   ) {
     // predict expected amount to be withdrawn (in USD)
-    (investedAssetsUSD, assetPrice) = ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
       _depositorPoolAssets(),
       _depositorPoolReserves(),
       asset,

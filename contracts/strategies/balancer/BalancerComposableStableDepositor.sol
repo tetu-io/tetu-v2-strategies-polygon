@@ -14,6 +14,7 @@ import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
 import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 import "hardhat/console.sol";
 import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
+import "../../integrations/balancer/IBalancerGauge.sol";
 
 
 /// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Aave USD"
@@ -36,10 +37,9 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   /// @dev see https://dev.balancer.fi/resources/vebal-and-gauges/gauges
   address private constant CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY = 0x3b8cA519122CdD8efb272b0D3085453404B25bD0;
 
-
-  /// @notice For "Balancer Boosted Aave USD": 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
+  /// @notice i.e. for "Balancer Boosted Aave USD": 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
   bytes32 public poolId;
-  address private _gauge;
+  IBalancerGauge private _gauge;
   address[] private _rewardTokens;
 
   /////////////////////////////////////////////////////////////////////
@@ -51,9 +51,16 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     address[] memory rewardTokens_
   ) internal onlyInitializing {
     poolId = poolId_;
-    _gauge = IChildChainLiquidityGaugeFactory(CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY).getGaugePool(
-      BalancerLogicLib.getPoolAddress(poolId_)
+
+    _gauge = IBalancerGauge(
+      IChildChainLiquidityGaugeFactory(
+        CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY
+      ).getPoolGauge(BalancerLogicLib.getPoolAddress(poolId_))
     );
+    // infinite approve of pool-BPT to the gauge
+    IERC20(BalancerLogicLib.getPoolAddress(poolId_)).safeApprove(address(_gauge), 2**255);
+
+    // we can get list of reward tokens from the gauge, but it's more cheaper to get it outside
     _rewardTokens = rewardTokens_;
   }
 
@@ -84,8 +91,8 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
 
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    console.log("_depositorLiquidity", IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this)));
-    return IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this));
+    console.log("_depositorLiquidity", _gauge.balanceOf(address(this)));
+    return _gauge.balanceOf(address(this));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
@@ -110,7 +117,15 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
-    return BalancerLogicLib.depositorEnter(BALANCER_VAULT, poolId, amountsDesired_);
+    // join to the pool, receive pool-BPTs
+    (amountsConsumedOut, liquidityOut) = BalancerLogicLib.depositorEnter(BALANCER_VAULT, poolId, amountsDesired_);
+
+    console.log("_depositorEnter.1", liquidityOut);
+    console.log("_depositorEnter.balance.1", _gauge.balanceOf(address(this)));
+    // stake all pool-BPTs to the gage
+    _gauge.deposit(liquidityOut);
+    console.log("_depositorEnter.2", liquidityOut);
+    console.log("_depositorEnter.balance.2", _gauge.balanceOf(address(this)));
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -120,6 +135,20 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
+    console.log("_depositorExit.1", liquidityAmount_);
+    console.log("_depositorExit.balance.1", _gauge.balanceOf(address(this)));
+
+    // un-stake required pool-BPTs from the gauge
+    uint balance = _gauge.balanceOf(address(this));
+    if (liquidityAmount_ > balance) {
+      liquidityAmount_ = balance;
+    }
+    _gauge.withdraw(liquidityAmount_);
+
+    console.log("_depositorExit.2", liquidityAmount_);
+    console.log("_depositorExit.balance.2", _gauge.balanceOf(address(this)));
+
+    // withdraw the liquidity from the pool
     if (liquidityAmount_ >= _depositorLiquidity()) {
       // todo Full exit
       return BalancerLogicLib.depositorExit(BALANCER_VAULT, poolId, liquidityAmount_);

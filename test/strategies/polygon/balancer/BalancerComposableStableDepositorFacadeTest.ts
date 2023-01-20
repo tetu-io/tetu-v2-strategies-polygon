@@ -6,7 +6,10 @@ import {parseUnits} from "ethers/lib/utils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {MaticHolders} from "../../../../scripts/MaticHolders";
 import {
-  BalancerComposableStableDepositorFacade, IBalancerBoostedAavePool__factory, IBalancerBoostedAaveStablePool__factory,
+  BalancerComposableStableDepositorFacade,
+  IBalancerBoostedAavePool__factory,
+  IBalancerBoostedAaveStablePool__factory,
+  IBalancerGauge__factory,
   IBVault__factory,
   IERC20__factory
 } from "../../../../typechain";
@@ -34,6 +37,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
   const poolAmDaiId= "0x178e029173417b1f9c8bc16dcec6f697bc323746000000000000000000000758";
   const poolAmUsdcId = "0xf93579002dbe8046c43fefe86ec78b1112247bb8000000000000000000000759";
   const poolAmUsdtId = "0xff4ce5aaab5a627bf82f4a571ab1ce94aa365ea600000000000000000000075a";
+  const gauge = "0x1c514fEc643AdD86aeF0ef14F4add28cC3425306";
 
   const BB_AM_USD = "0x48e6b98ef6329f8f0a30ebb8c7c960330d648085";
 //endregion Constants
@@ -359,17 +363,20 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
         describe("Deposit to balanceR pool", () => {
           it("should return expected values", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+
+            const balanceGaugeBefore = await IBalancerGauge__factory.connect(gauge, signer).balanceOf(facade.address);
             const r = await makeDepositorEnterTest(facade);
             console.log("r", r);
 
-            const balanceAfter = await IERC20__factory.connect(BB_AM_USD, signer).balanceOf(facade.address);
-            console.log("balanceAfter", BB_AM_USD, facade.address, balanceAfter);
+            const balanceGaugeAfter = await IBalancerGauge__factory.connect(gauge, signer).balanceOf(facade.address);
+            console.log("balanceGaugeAfter", facade.address, balanceGaugeAfter);
             console.log("liquidityOut", r.liquidityOut);
             console.log("DAI", r.amountsConsumedOut[0], r.balancesAfter[0].sub(r.balancesBefore[0]));
 
             const ret = [
+              balanceGaugeBefore.eq(0),
               // there is small difference in results (static call and call are different calls)
-              areAlmostEqual(r.liquidityOut, balanceAfter),
+              areAlmostEqual(r.liquidityOut, balanceGaugeAfter),
 
               r.amountsConsumedOut.length,
 
@@ -388,6 +395,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             ].map(x => BalanceUtils.toString(x)).join("\n");
 
             const expected = [
+              true,
               true,
 
               3,

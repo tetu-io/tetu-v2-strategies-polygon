@@ -12,7 +12,7 @@ library ConverterStrategyBaseLib {
   ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
   ///         investedAssetsUSD = reserve0 * ratio * price0 + reserve1 * ratio * price1 (+ set correct decimals)
   /// @param poolAssets_ Any number of assets, one of them should be {asset_}
-  /// @params reserves_ Reserves of the {poolAssets_}, same order, same length (we don't check it)
+  /// @param reserves_ Reserves of the {poolAssets_}, same order, same length (we don't check it)
   /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
   /// @param totalSupply_ Total amount of LP tokens in the depositor
   /// @return investedAssetsUSD Amount of USD that we expect to receive after withdrawing, decimals of {asset_}
