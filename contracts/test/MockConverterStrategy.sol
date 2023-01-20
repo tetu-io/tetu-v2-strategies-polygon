@@ -46,7 +46,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint investedAssetsUSD,
     uint assetPrice
   ) {
-    return _getExpectedWithdrawnAmountUSD(
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
+      _depositorPoolAssets(),
+      _depositorPoolReserves(),
+      asset,
       liquidityAmount_,
       totalSupply_,
       IPriceOracle(priceOracle_)

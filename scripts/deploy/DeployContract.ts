@@ -10,7 +10,9 @@ const log: Logger = new Logger(logSettings);
 export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 
 const libraries = new Map<string, string>([
-  ['VeTetu', 'VeTetuLogo']
+  ['VeTetu', 'VeTetuLogo'],
+  ['BalancerComposableStableDepositorFacade', 'BalancerLogicLib'],
+  ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib'],
 ]);
 
 export async function deployContract<T extends ContractFactory>(

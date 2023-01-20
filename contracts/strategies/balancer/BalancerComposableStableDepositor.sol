@@ -36,10 +36,6 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   bytes32 public poolId;
 
   /////////////////////////////////////////////////////////////////////
-  ///                   Variables
-  /////////////////////////////////////////////////////////////////////
-
-  /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
 
@@ -53,30 +49,14 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
 
   /// @notice Returns pool assets, same as getPoolTokens but without pool-bpt
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
-    (IERC20[] memory tokens,,) = BALANCER_VAULT.getPoolTokens(poolId);
-    uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).getBptIndex();
-    uint len = tokens.length;
-
-    poolAssets = new address[](len - 1);
-    uint k;
-    for (uint i; i < len; i = uncheckedInc(i)) {
-      if (i == bptIndex) continue;
-
-      poolAssets[k] = IBalancerBoostedAavePool(address(tokens[i])).getMainToken();
-      ++k;
-    }
+    return BalancerLogicLib.depositorPoolAssets(BALANCER_VAULT, poolId);
   }
 
   /// @notice Returns pool weights
   /// @return weights Array with weights, length = getPoolTokens.tokens - 1 (all assets except BPT)
   /// @return totalWeight Total sum of all items of {weights}
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
-    (IERC20[] memory tokens,,) = BALANCER_VAULT.getPoolTokens(poolId);
-    totalWeight = tokens.length - 1; // totalWeight is equal to length of output array here
-    weights = new uint[](totalWeight);
-    for (uint i; i < totalWeight; i = uncheckedInc(i)) {
-      weights[i] = 1;
-    }
+    return BalancerLogicLib.depositorPoolWeights(BALANCER_VAULT, poolId);
   }
 
   /// @notice Total amounts of the main assets under control of the pool, i.e amounts of DAI, USDC, USDT
@@ -85,27 +65,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ///                     1: balance USDC + (amUSDC recalculated to USDC)
   ///                     2: balance USDT + (amUSDT recalculated to USDT)
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reservesOut) {
-    (IERC20[] memory tokens,,) = BALANCER_VAULT.getPoolTokens(poolId);
-    uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).getBptIndex();
-    uint len = tokens.length;
-    reservesOut = new uint[](len - 1); // exclude pool-BPT
-
-    uint k;
-    for (uint i; i < len; i = uncheckedInc(i)) {
-      if (i == bptIndex) continue;
-      IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens[i]));
-
-      // Each bb-am-* returns (main-token, wrapped-token, bb-am-itself), the order of tokens is arbitrary
-      // i.e. (DAI + amDAI + bb-am-DAI) or (bb-am-USDC, amUSDC, USDC)
-
-      // get balances of all tokens of bb-am-XXX token, i.e. balances of (DAI, amDAI, bb-am-DAI)
-      (, uint256[] memory balances,) = BALANCER_VAULT.getPoolTokens(linearPool.getPoolId());
-      uint mainIndex = linearPool.getMainIndex(); // DAI
-      uint wrappedIndex = linearPool.getWrappedIndex(); // amDAI
-
-      reservesOut[k] = balances[mainIndex] + balances[wrappedIndex] * linearPool.getWrappedTokenRate() / 1e18;
-      ++k;
-    }
+    return BalancerLogicLib.depositorPoolReserves(BALANCER_VAULT, poolId);
   }
 
   /// @notice Returns depositor's pool shares / lp token amount
@@ -141,7 +101,8 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
   /// @dev if requested liquidityAmount >= invested, then should make full exit
-  /// @param liquidityAmount_ Amount to withdraw in bpt
+  /// @param liquidityAmount_ Max amount to withdraw in bpt. Actual withdrawn amount will be less,
+  ///                         so it worth to add a gap to this amount, i.e. 1%
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
@@ -189,14 +150,6 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   }
 
 
-  /////////////////////////////////////////////////////////////////////
-  ///             Utils
-  /////////////////////////////////////////////////////////////////////
-  function uncheckedInc(uint i) internal pure returns (uint) {
-    unchecked {
-      return i + 1;
-    }
-  }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.

@@ -11,8 +11,14 @@ import "../../integrations/balancer/IBVault.sol";
 import "hardhat/console.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 
+/// @notice Functions of BalancerComposableStableDepositor
+/// @dev Many of functions are declared as public to reduce contract size
 library BalancerLogicLib {
   using SafeERC20 for IERC20;
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Types
+  /////////////////////////////////////////////////////////////////////
 
   /// @dev local vars in getAmountsToDeposit to avoid stack too deep
   struct LocalGetAmountsToDeposit {
@@ -31,6 +37,10 @@ library BalancerLogicLib {
     IERC20[] tokens;
     uint[] balances;
   }
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Asset related utils
+  /////////////////////////////////////////////////////////////////////
 
   /// @notice Calculate amounts of {tokens} to be deposited to POOL_ID in proportions according to the {balances}
   /// @param amountsDesired_ Desired amounts of tokens. The order of the tokens is exactly the same as in {tokens}.
@@ -170,7 +180,70 @@ library BalancerLogicLib {
   }
 
   /////////////////////////////////////////////////////////////////////
-  ///             Enter, exit
+  ///             Depositor view logic
+  /////////////////////////////////////////////////////////////////////
+  /// @notice Total amounts of the main assets under control of the pool, i.e amounts of DAI, USDC, USDT
+  /// @return reservesOut Total amounts of embedded assets, i.e. for "Balancer Boosted Aave USD" we return:
+  ///                     0: balance DAI + (balance amDAI recalculated to DAI)
+  ///                     1: balance USDC + (amUSDC recalculated to USDC)
+  ///                     2: balance USDT + (amUSDT recalculated to USDT)
+  function depositorPoolReserves(IBVault vault_, bytes32 poolId_) public view returns (uint[] memory reservesOut) {
+    (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
+    uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+    uint len = tokens.length;
+    reservesOut = new uint[](len - 1); // exclude pool-BPT
+
+    uint k;
+    for (uint i; i < len; i = uncheckedInc(i)) {
+      if (i == bptIndex) continue;
+      IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens[i]));
+
+      // Each bb-am-* returns (main-token, wrapped-token, bb-am-itself), the order of tokens is arbitrary
+      // i.e. (DAI + amDAI + bb-am-DAI) or (bb-am-USDC, amUSDC, USDC)
+
+      // get balances of all tokens of bb-am-XXX token, i.e. balances of (DAI, amDAI, bb-am-DAI)
+      (, uint256[] memory balances,) = vault_.getPoolTokens(linearPool.getPoolId());
+      uint mainIndex = linearPool.getMainIndex(); // DAI
+      uint wrappedIndex = linearPool.getWrappedIndex(); // amDAI
+
+      reservesOut[k] = balances[mainIndex] + balances[wrappedIndex] * linearPool.getWrappedTokenRate() / 1e18;
+      ++k;
+    }
+  }
+
+  /// @notice Returns pool assets, same as getPoolTokens but without pool-bpt
+  function depositorPoolAssets(IBVault vault_, bytes32 poolId_) public view returns (address[] memory poolAssets) {
+    (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
+    uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+    uint len = tokens.length;
+
+    poolAssets = new address[](len - 1);
+    uint k;
+    for (uint i; i < len; i = uncheckedInc(i)) {
+      if (i == bptIndex) continue;
+
+      poolAssets[k] = IBalancerBoostedAavePool(address(tokens[i])).getMainToken();
+      ++k;
+    }
+  }
+
+  /// @notice Returns pool weights
+  /// @return weights Array with weights, length = getPoolTokens.tokens - 1 (all assets except BPT)
+  /// @return totalWeight Total sum of all items of {weights}
+  function depositorPoolWeights(IBVault vault_, bytes32 poolId_) public view returns (
+    uint[] memory weights,
+    uint totalWeight
+  ) {
+    (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
+    totalWeight = tokens.length - 1; // totalWeight is equal to length of output array here
+    weights = new uint[](totalWeight);
+    for (uint i; i < totalWeight; i = uncheckedInc(i)) {
+      weights[i] = 1;
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Depositor enter, exit logic
   /////////////////////////////////////////////////////////////////////
   /// @notice Deposit given amount to the pool.
   /// @param amountsDesired_ Amounts of assets on the balance of the depositor
@@ -179,7 +252,7 @@ library BalancerLogicLib {
   /// @return amountsConsumedOut Amounts of assets deposited to balanceR pool
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   /// @return liquidityOut Total amount of liquidity added to balanceR pool in terms of pool-bpt tokens
-  function depositorEnter(IBVault vault_, bytes32 poolId_, uint[] memory amountsDesired_) internal returns (
+  function depositorEnter(IBVault vault_, bytes32 poolId_, uint[] memory amountsDesired_) public returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
@@ -252,7 +325,11 @@ library BalancerLogicLib {
     console.log("liquidityOut", liquidityOut);
   }
 
-  function depositorExit(IBVault vault_, bytes32 poolId_, uint liquidityAmount_) internal returns (
+  /// @notice Withdraw given amount of LP-tokens from the pool.
+  /// @param liquidityAmount_ Amount to withdraw in bpt
+  /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
+  ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
+  function depositorExit(IBVault vault_, bytes32 poolId_, uint liquidityAmount_) public returns (
     uint[] memory amountsOut
   ) {
     DepositorLocal memory p;
@@ -308,8 +385,6 @@ library BalancerLogicLib {
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
-  /// @dev if requested liquidityAmount >= invested, then should make full exit
-  ///      TODO
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function depositorQuoteExit(
@@ -317,7 +392,7 @@ library BalancerLogicLib {
     IBalancerHelper helper_,
     bytes32 poolId_,
     uint liquidityAmount_
-  ) internal returns (
+  ) public returns (
     uint[] memory amountsOut
   ) {
     DepositorLocal memory p;
