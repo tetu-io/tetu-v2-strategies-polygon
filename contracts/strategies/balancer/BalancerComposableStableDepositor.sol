@@ -12,10 +12,10 @@ import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
 import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
-import "hardhat/console.sol";
 import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
+import "hardhat/console.sol";
 
 /// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Aave USD"
 /// @dev See https://app.balancer.fi/#/polygon/pool/0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
@@ -118,11 +118,11 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint liquidityOut
   ) {
     // join to the pool, receive pool-BPTs
-    (amountsConsumedOut, liquidityOut) = BalancerLogicLib.depositorEnter(BALANCER_VAULT, poolId, amountsDesired_);
+    (amountsConsumedOut, liquidityOut) = BalancerLogicLib.enter(BALANCER_VAULT, poolId, amountsDesired_);
 
     console.log("_depositorEnter.1", liquidityOut);
     console.log("_depositorEnter.balance.1", _gauge.balanceOf(address(this)));
-    // stake all pool-BPTs to the gage
+    // stake all pool-BPTs to the gauge
     _gauge.deposit(liquidityOut);
     console.log("_depositorEnter.2", liquidityOut);
     console.log("_depositorEnter.balance.2", _gauge.balanceOf(address(this)));
@@ -189,7 +189,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    return (tokensOut, amountsOut);
+    return AppLib.depositorClaimRewards(_gauge, _rewardTokens);
   }
 
   /// @dev Returns reward token addresses array.

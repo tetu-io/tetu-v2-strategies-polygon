@@ -5,14 +5,18 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../../tools/AppErrors.sol";
+import "../../tools/AppLib.sol";
+import "../../tools/TokenAmountsLib.sol";
 import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
 import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 import "../../integrations/balancer/IBVault.sol";
-import "hardhat/console.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
+import "../../integrations/balancer/IBalancerGauge.sol";
+
+import "hardhat/console.sol";
 
 /// @notice Functions of BalancerComposableStableDepositor
-/// @dev Many of functions are declared as public to reduce contract size
+/// @dev Many of functions are declared as external to reduce contract size
 library BalancerLogicLib {
   using SafeERC20 for IERC20;
 
@@ -72,7 +76,7 @@ library BalancerLogicLib {
 
     p.decimals = new uint[](p.len);
     p.rates = new uint[](p.len);
-    for (uint i = 0; i < p.len; i = uncheckedInc(i)) {
+    for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i != indexBpt_) {
         require(balances_[i] != 0, AppErrors.ZERO_BALANCE);
         p.decimals[i] = 10**IERC20Metadata(address(tokens_[i])).decimals();
@@ -94,7 +98,7 @@ library BalancerLogicLib {
     // If any amount is less then expected, the token cannot be used in full.
     // A token with min amount can be used in full, let's try to find its index.
     uint i3; // [0 : len - 1]
-    for (uint i; i < p.len; i = uncheckedInc(i)) {
+    for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (indexBpt_ == i) continue;
 
       uint amountInBpt18 = amountsDesired_[i3] * p.rates[i];
@@ -102,7 +106,7 @@ library BalancerLogicLib {
 
       uint j; // [0 : len]
       uint j3; // [0 : len - 1]
-      for (; j < p.len; j = uncheckedInc(j)) {
+      for (; j < p.len; j = AppLib.uncheckedInc(j)) {
         if (indexBpt_ == j) continue;
 
         // alpha = balancesDAI / balancesUSDC * decimalsDAI / decimalsUSDC
@@ -125,7 +129,7 @@ library BalancerLogicLib {
   ) {
     uint len = tokens_.length;
     amountsOut = new uint[](len);
-    for (uint i; i < len; i = uncheckedInc(i)) {
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i != indexBpt_) {
         IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens_[i]));
         (, uint[] memory balances, ) = vault_.getPoolTokens(linearPool.getPoolId());
@@ -156,7 +160,7 @@ library BalancerLogicLib {
     // compute total balance, skip pool-bpt
     uint totalBalances;
     uint k;
-    for (uint i; i < len; i = uncheckedInc(i)) {
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == bptIndex_) continue;
       totalBalances += balances_[i];
       // temporary save incomplete amounts to bptAmountsOut
@@ -166,15 +170,15 @@ library BalancerLogicLib {
 
     // finalize computation of bptAmountsOut using known totalBalances
     uint total;
-    for (uint i; i < len - 1; i = uncheckedInc(i)) {
-      if (i == len - 2) {
+    for (k = 0; k < len - 1; k = AppLib.uncheckedInc(k)) {
+      if (k == len - 2) {
         // leftovers => last item
-        bptAmountsOut[i] = total > liquidityAmount_
+        bptAmountsOut[k] = total > liquidityAmount_
           ? 0
           : liquidityAmount_ - total;
       } else {
-        bptAmountsOut[i] /= totalBalances;
-        total += bptAmountsOut[i];
+        bptAmountsOut[k] /= totalBalances;
+        total += bptAmountsOut[k];
       }
     }
   }
@@ -187,14 +191,14 @@ library BalancerLogicLib {
   ///                     0: balance DAI + (balance amDAI recalculated to DAI)
   ///                     1: balance USDC + (amUSDC recalculated to USDC)
   ///                     2: balance USDT + (amUSDT recalculated to USDT)
-  function depositorPoolReserves(IBVault vault_, bytes32 poolId_) public view returns (uint[] memory reservesOut) {
+  function depositorPoolReserves(IBVault vault_, bytes32 poolId_) internal view returns (uint[] memory reservesOut) {
     (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
     uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
     uint len = tokens.length;
     reservesOut = new uint[](len - 1); // exclude pool-BPT
 
     uint k;
-    for (uint i; i < len; i = uncheckedInc(i)) {
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == bptIndex) continue;
       IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens[i]));
 
@@ -212,14 +216,14 @@ library BalancerLogicLib {
   }
 
   /// @notice Returns pool assets, same as getPoolTokens but without pool-bpt
-  function depositorPoolAssets(IBVault vault_, bytes32 poolId_) public view returns (address[] memory poolAssets) {
+  function depositorPoolAssets(IBVault vault_, bytes32 poolId_) internal view returns (address[] memory poolAssets) {
     (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
     uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
     uint len = tokens.length;
 
     poolAssets = new address[](len - 1);
     uint k;
-    for (uint i; i < len; i = uncheckedInc(i)) {
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == bptIndex) continue;
 
       poolAssets[k] = IBalancerBoostedAavePool(address(tokens[i])).getMainToken();
@@ -230,14 +234,14 @@ library BalancerLogicLib {
   /// @notice Returns pool weights
   /// @return weights Array with weights, length = getPoolTokens.tokens - 1 (all assets except BPT)
   /// @return totalWeight Total sum of all items of {weights}
-  function depositorPoolWeights(IBVault vault_, bytes32 poolId_) public view returns (
+  function depositorPoolWeights(IBVault vault_, bytes32 poolId_) internal view returns (
     uint[] memory weights,
     uint totalWeight
   ) {
     (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
     totalWeight = tokens.length - 1; // totalWeight is equal to length of output array here
     weights = new uint[](totalWeight);
-    for (uint i; i < totalWeight; i = uncheckedInc(i)) {
+    for (uint i; i < totalWeight; i = AppLib.uncheckedInc(i)) {
       weights[i] = 1;
     }
   }
@@ -252,7 +256,7 @@ library BalancerLogicLib {
   /// @return amountsConsumedOut Amounts of assets deposited to balanceR pool
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   /// @return liquidityOut Total amount of liquidity added to balanceR pool in terms of pool-bpt tokens
-  function depositorEnter(IBVault vault_, bytes32 poolId_, uint[] memory amountsDesired_) public returns (
+  function enter(IBVault vault_, bytes32 poolId_, uint[] memory amountsDesired_) external returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
@@ -287,7 +291,7 @@ library BalancerLogicLib {
     uint[] memory amountsToDeposit = new uint[](p.len);
     uint[] memory userDataAmounts = new uint[](p.len - 1); // no bpt
     uint k;
-    for (uint i; i < p.len; i = uncheckedInc(i)) {
+    for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i == p.bptIndex) continue;
       amountsToDeposit[i] = BalancerLogicLib.swap(
         vault_,
@@ -298,7 +302,7 @@ library BalancerLogicLib {
         funds_
       );
       userDataAmounts[k] = amountsToDeposit[i];
-      _approveIfNeeded(address(p.tokens[i]), amountsToDeposit[i], address(vault_));
+      AppLib.approveIfNeeded(address(p.tokens[i]), amountsToDeposit[i], address(vault_));
       ++k;
     }
 
@@ -329,7 +333,7 @@ library BalancerLogicLib {
   /// @param liquidityAmount_ Amount to withdraw in bpt
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
-  function depositorExit(IBVault vault_, bytes32 poolId_, uint liquidityAmount_) public returns (
+  function depositorExit(IBVault vault_, bytes32 poolId_, uint liquidityAmount_) external returns (
     uint[] memory amountsOut
   ) {
     DepositorLocal memory p;
@@ -370,7 +374,7 @@ library BalancerLogicLib {
 
     amountsOut = new uint[](p.len - 1);
     uint k;
-    for (uint i; i < p.len; i = uncheckedInc(i)) {
+    for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i == p.bptIndex) continue;
       amountsOut[k] = swap(
         vault_,
@@ -392,7 +396,7 @@ library BalancerLogicLib {
     IBalancerHelper helper_,
     bytes32 poolId_,
     uint liquidityAmount_
-  ) public returns (
+  ) external returns (
     uint[] memory amountsOut
   ) {
     DepositorLocal memory p;
@@ -420,7 +424,7 @@ library BalancerLogicLib {
     IBVault.BatchSwapStep[] memory steps = new IBVault.BatchSwapStep[](p.len - 1);
     IAsset[] memory assets = new IAsset[](2 * (p.len - 1));
     uint k;
-    for (uint i = 0; i < p.len; i = uncheckedInc(i)) {
+    for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i == p.bptIndex) continue;
       IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(p.tokens[i]));
       steps[k].poolId = linearPool.getPoolId();
@@ -447,7 +451,7 @@ library BalancerLogicLib {
 
     amountsOut = new uint[](p.len - 1);
     k = 0;
-    for (uint i = 0; i < p.len; i = uncheckedInc(i)) {
+    for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i == p.bptIndex) continue;
       amountsOut[k] = assetDeltas[2 * k] < 0
         ? uint256(-assetDeltas[2 * k])
@@ -489,6 +493,40 @@ library BalancerLogicLib {
     return IERC20(assetOut_).balanceOf(address(this)) - balanceBefore;
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ///             Rewards
+  /////////////////////////////////////////////////////////////////////
+
+  function depositorClaimRewards(IBalancerGauge gauge_, address[] memory rewardTokens_) internal returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
+    uint len = rewardTokens_.length;
+
+    tokensOut = new address[](len);
+    amountsOut = new uint[](len);
+
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      tokensOut[i] = rewardTokens_[i];
+
+      // temporary store current reward balance
+      amountsOut[i] = IERC20(rewardTokens_[i]).balanceOf(address(this));
+    }
+
+    gauge_.claim_rewards();
+
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      // temporary store current reward balance
+      amountsOut[i] = IERC20(rewardTokens_[i]).balanceOf(address(this)) - amountsOut[i];
+    }
+
+    (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Utils
+  /////////////////////////////////////////////////////////////////////
+
   /// @dev Returns the address of a Pool's contract.
   ///      Due to how Pool IDs are created, this is done with no storage accesses and costs little gas.
   function getPoolAddress(bytes32 id) internal pure returns (address) {
@@ -502,21 +540,6 @@ library BalancerLogicLib {
     // solhint-disable-next-line no-inline-assembly
     assembly {
       assets := tokens
-    }
-  }
-
-  function uncheckedInc(uint i) internal pure returns (uint) {
-  unchecked {
-    return i + 1;
-  }
-  }
-
-  /// @notice Should NOT be used for third-party pools
-  function _approveIfNeeded(address token, uint amount, address spender) internal {
-    if (IERC20(token).allowance(address(this), spender) < amount) {
-      IERC20(token).safeApprove(spender, 0);
-      // infinite approve, 2*255 is more gas efficient then type(uint).max
-      IERC20(token).safeApprove(spender, 2**255);
     }
   }
 }

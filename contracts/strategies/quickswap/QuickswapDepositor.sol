@@ -7,6 +7,7 @@ import "../DepositorBase.sol";
 import "../../tools/TokenAmountsLib.sol";
 import "../../tools/AppErrors.sol";
 import "../../tools/Uniswap2Lib.sol";
+import "../../tools/AppLib.sol";
 import "../../integrations/uniswap/IUniswapV2Pair.sol";
 import "../../integrations/uniswap/IUniswapV2Factory.sol";
 import "../../integrations/uniswap/IUniswapV2Router02.sol";
@@ -148,8 +149,8 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
     address _tokenB = tokenB; // gas saving
     IUniswapV2Router02 _router = router; // gas saving
 
-    _approveIfNeeded(_tokenA, amount0, address(_router));
-    _approveIfNeeded(_tokenB, amount1, address(_router));
+    AppLib.approveIfNeeded(_tokenA, amount0, address(_router));
+    AppLib.approveIfNeeded(_tokenB, amount1, address(_router));
 
     (amountsConsumedOut[0], amountsConsumedOut[1], liquidityOut) = _router.addLiquidity(
       _tokenA,
@@ -195,7 +196,7 @@ abstract contract QuickswapDepositor is DepositorBase, Initializable {
     // Remove liquidity
     IUniswapV2Router02 _router = router; // gas saving
 
-    _approveIfNeeded(address(depositorPair), liquidityAmount_, address(_router));
+    AppLib.approveIfNeeded(address(depositorPair), liquidityAmount_, address(_router));
     (amountsOut[0], amountsOut[1]) = _router.removeLiquidity(
       tokenA,
       tokenB,

@@ -9,6 +9,7 @@ import "../../integrations/dystopia/IVoter.sol";
 import "../../integrations/dystopia/IGauge.sol";
 import "../../integrations/dystopia/IBribe.sol";
 import "../../tools/TokenAmountsLib.sol";
+import "../../tools/AppLib.sol";
 import "../DepositorBase.sol";
 
 import "hardhat/console.sol";
@@ -131,8 +132,8 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     address router = depositorRouter;
     bool stable = depositorStable;
 
-    _approveIfNeeded(tokenA, amount0, router);
-    _approveIfNeeded(tokenB, amount1, router);
+    AppLib.approveIfNeeded(tokenA, amount0, router);
+    AppLib.approveIfNeeded(tokenB, amount1, router);
 
     (amountsConsumed[0], amountsConsumed[1], liquidity) = IRouter(router).addLiquidity(
       tokenA,
@@ -147,7 +148,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     );
 
     // Stake to the Gauge
-    _approveIfNeeded(depositorPair, type(uint).max / 2, _depositorGauge); // TODO: make infinite approve in init
+    AppLib.approveIfNeeded(depositorPair, type(uint).max / 2, _depositorGauge); // TODO: make infinite approve in init
     IGauge(_depositorGauge).depositAll(0);
 
   }
@@ -171,7 +172,7 @@ contract DystopiaDepositor is DepositorBase, Initializable {
     // Remove liquidity
     address router = depositorRouter;
 
-    _approveIfNeeded(depositorPair, liquidityAmount, router);
+    AppLib.approveIfNeeded(depositorPair, liquidityAmount, router);
 
     (amountsOut[0], amountsOut[1]) = IRouter(router).removeLiquidity(
       _depositorTokenA,

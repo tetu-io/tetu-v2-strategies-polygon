@@ -8,9 +8,10 @@ import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/ITetuConverterCallback.sol";
 import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/IConverterController.sol";
-import "./DepositorBase.sol";
 import "../tools/TokenAmountsLib.sol";
+import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
+import "./DepositorBase.sol";
 
 import "hardhat/console.sol";
 
@@ -63,11 +64,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) internal onlyInitializing {
     __StrategyBase_init(controller_, splitter_);
     tetuConverter = ITetuConverter(converter_);
-//    console.log("__ConverterStrategyBase_init, totalSupply", _depositorTotalSupply());
+    console.log("__ConverterStrategyBase_init, totalSupply", _depositorTotalSupply());
   }
 
   function setThreshold(address token, uint amount) public {
-//    console.log("ConverterStrategyBase.setThreshold", token, amount);
+    console.log("ConverterStrategyBase.setThreshold", token, amount);
     _onlyOperators();
     thresholds[token] = amount;
     emit ThresholdChanged(token, amount);
@@ -84,12 +85,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount) override internal virtual {
-//    console.log('_depositToPool amount', amount);
+    console.log('_depositToPool amount', amount);
 
     address _asset = asset;
     // skip deposit for small amounts
     if (amount < thresholds[_asset]) {
-//      console.log('_depositToPool thresholds', thresholds[_asset]);
+      console.log('_depositToPool thresholds', thresholds[_asset]);
       return;
     }
 
@@ -100,7 +101,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory tokenAmounts = new uint[](len);
 
     // split the amount on tokens proportionally sto the weights
-    for (uint i = 0; i < len; ++i) {
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       uint assetAmountForToken = amount * weights[i] / totalWeight;
       address token = tokens[i];
 
@@ -123,14 +124,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     _depositorEnter(tokenAmounts);
     _updateInvestedAssets();
 
-//    console.log('Weights:');
-//    TokenAmountsLib.print(tokens, weights);
-//
-//    console.log('Amounts for enter:');
-//    TokenAmountsLib.print(tokens, tokenAmounts);
-//
-//    console.log('Balance after:');
-//    TokenAmountsLib.printBalances(tokens, address(this));
+    console.log('Weights:');
+    TokenAmountsLib.print(tokens, weights);
+
+    console.log('Amounts for enter:');
+    TokenAmountsLib.print(tokens, tokenAmounts);
+
+    console.log('Balance after:');
+    TokenAmountsLib.printBalances(tokens, address(this));
   }
 
 
@@ -143,20 +144,20 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-//    console.log("_withdrawFromPool, amount", amount);
+    console.log("_withdrawFromPool, amount", amount);
     require(_investedAssets != 0, "CSB: no investments");
     if (amount != 0 && _investedAssets != 0) {
       uint liquidityAmount = _depositorLiquidity()  // total amount of LP tokens owned by the strategy
         * 101 // add 1% on top...
         * amount / _investedAssets // a part of amount that we are going to withdraw
         / 100; // .. add 1% on top
-//      console.log("_withdrawFromPool._investedAssets", _investedAssets);
-//      console.log("_withdrawFromPool._depositorLiquidity()", _depositorLiquidity());
-//      console.log("_withdrawFromPool.liquidityAmount", liquidityAmount);
+      console.log("_withdrawFromPool._investedAssets", _investedAssets);
+      console.log("_withdrawFromPool._depositorLiquidity()", _depositorLiquidity());
+      console.log("_withdrawFromPool.liquidityAmount", liquidityAmount);
       (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
-//      console.log("_withdrawFromPool investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
+      console.log("_withdrawFromPool investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
       _withdrawFromPoolUniversal(liquidityAmount, false);
-//      console.log("_withdrawFromPool.liquidityAmount finish");
+      console.log("_withdrawFromPool.liquidityAmount finish");
     }
 
     return (investedAssetsUSD, assetPrice);
@@ -166,14 +167,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return investedAssetsUSD The value that we should receive after withdrawing
   /// @return assetPrice Price of the {asset} taken from the price oracle
   function _withdrawAllFromPool() override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-//    console.log("_withdrawAllFromPool.start");
+    console.log("_withdrawAllFromPool.start");
     // total amount of LP-tokens deposited by the strategy
     uint liquidityAmount = _depositorLiquidity();
 
     // predict expected amount to be withdrawn (in USD)
     (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
     _withdrawFromPoolUniversal(liquidityAmount, false);
-//    console.log("_withdrawAllFromPool.finish");
+    console.log("_withdrawAllFromPool.finish");
   }
 
   /// @notice If pool support emergency withdraw need to call it for emergencyExit()
@@ -201,34 +202,34 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     if (emergency_) {
       _depositorEmergencyExit();
     } else {
-//      console.log("_withdrawFromPoolUniversal liquidityAmount", liquidityAmount_);
+      console.log("_withdrawFromPoolUniversal liquidityAmount", liquidityAmount_);
       _depositorExit(liquidityAmount_);
     }
 
-//    console.log('/// Balance after withdraw:');
-//    TokenAmountsLib.printBalances(_depositorPoolAssets(), address(this));
+    console.log('/// Balance after withdraw:');
+    TokenAmountsLib.printBalances(_depositorPoolAssets(), address(this));
 
     // convert all received amounts to the asset
     _convertDepositorPoolAssets();
     _updateInvestedAssets();
-//    console.log("_withdrawFromPoolUniversal.finish");
+    console.log("_withdrawFromPoolUniversal.finish");
   }
 
   /// @notice Convert all amounts withdrawn from the depositor to {asset}
   function _convertDepositorPoolAssets() internal {
     address _asset = asset;
-//    console.log('_convertDepositorPoolAssets balance before', _balance(_asset));
+    console.log('_convertDepositorPoolAssets balance before', _balance(_asset));
 
     address[] memory tokens = _depositorPoolAssets();
     uint len = tokens.length;
 
-    for (uint i = 0; i < len; ++i) {
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       address borrowedToken = tokens[i];
       if (_asset != borrowedToken) {
         _closePosition(_asset, borrowedToken, _balance(borrowedToken));
       }
     }
-//    console.log('_convertDepositorPoolAssets balance after', _balance(_asset));
+    console.log('_convertDepositorPoolAssets balance after', _balance(_asset));
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -237,10 +238,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual {
-    // TODO Enable claim. Now it reverted for some reason
-//    console.log('_claim disabled...');
-    return;
-
     // Rewards from the Depositor
     address[] memory tokens1;
     uint[] memory amounts1;
@@ -256,7 +253,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // Join arrays and recycle tokens
     (tokens, amounts) = TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
 
-//    TokenAmountsLib.print(tokens, amounts); // TODO remove
+    TokenAmountsLib.print(tokens, amounts); // TODO remove
 
 
     if (tokens.length > 0) {
@@ -273,18 +270,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     address _asset = asset;
     uint _compoundRatio = compoundRatio;
-//    console.log('_recycle._compoundRatio', _compoundRatio);
+    console.log('_recycle._compoundRatio', _compoundRatio);
 
     uint len = tokens.length;
     uint[] memory amountsToForward = new uint[](len);
 
     // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
     // the part-to-compound is converted to the main asset and kept on the balance up to the next investing
-    for (uint i = 0; i < len; ++i) {
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       address token = tokens[i];
       uint amount = amounts[i];
 
-//      console.log('_recycle.token, amount', token, amount);
+      console.log('_recycle.token, amount', token, amount);
       if (amount != 0 && amount > thresholds[token]) {
         uint amountToCompound = amount * _compoundRatio / COMPOUND_DENOMINATOR;
         if (amountToCompound > 0) {
@@ -292,11 +289,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         }
 
         uint amountToForward = amount - amountToCompound;
-//        console.log('amountToCompound', amountToCompound);
+        console.log('amountToCompound', amountToCompound);
         amountsToForward[i] = amountToForward;
-//        console.log('amountToForward ', amountToForward);
+        console.log('amountToForward ', amountToForward);
 
-        _approveIfNeeded(token, amountToForward, address(_forwarder));
+        AppLib.approveIfNeeded(token, amountToForward, address(_forwarder));
       }
     }
 
@@ -319,7 +316,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-//    console.log('doHardWork...');
+    console.log('doHardWork...');
     uint assetBalanceBefore = _balance(asset);
     _claim();
     uint assetBalanceAfter = _balance(asset);
@@ -348,9 +345,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim
   function _updateInvestedAssets() internal {
-//    console.log('_updateInvestedAssets _investedAssets BEFORE', _investedAssets);
+    console.log('_updateInvestedAssets _investedAssets BEFORE', _investedAssets);
     _investedAssets = calcInvestedAssets();
-//    console.log('_updateInvestedAssets _investedAssets AFTER', _investedAssets);
+    console.log('_updateInvestedAssets _investedAssets AFTER', _investedAssets);
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
@@ -362,19 +359,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     address _asset = asset;
     estimatedAssets = 0;
-//    console.log("calcInvestedAssets._asset", _asset);
+    console.log("calcInvestedAssets._asset", _asset);
 
     uint len = tokens.length;
-    for (uint i = 0; i < len; ++i) {
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       address borrowedToken = tokens[i];
       estimatedAssets += _asset == borrowedToken
         ? amountsOut[i]
         : tetuConverter.quoteRepay(address(this), _asset, borrowedToken, _balance(borrowedToken) + amountsOut[i]);
-//      console.log("_balance(borrowedToken)", _balance(borrowedToken));
-//      console.log("amountsOut[i]", amountsOut[i]);
-//      console.log("estimatedAssets", estimatedAssets);
+      console.log("_balance(borrowedToken)", _balance(borrowedToken));
+      console.log("amountsOut[i]", amountsOut[i]);
+      console.log("estimatedAssets", estimatedAssets);
     }
-//    console.log("calcInvestedAssets.estimatedAssets", estimatedAssets);
+    console.log("calcInvestedAssets.estimatedAssets", estimatedAssets);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -429,17 +426,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint collateralAmount,
     address borrowAsset
   ) internal returns (uint borrowedAmountOut) {
-//    console.log('_borrowPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
+    console.log('_borrowPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
     ITetuConverter _tetuConverter = tetuConverter;
 
-    _approveIfNeeded(collateralAsset, collateralAmount, address(_tetuConverter));
+    AppLib.approveIfNeeded(collateralAsset, collateralAmount, address(_tetuConverter));
     (address converter, uint maxTargetAmount, /*int apr18*/) = _tetuConverter.findBorrowStrategy(
       collateralAsset,
       collateralAmount,
       borrowAsset,
       _LOAN_PERIOD_IN_BLOCKS
     );
-//    console.log('converter, maxTargetAmount', converter, maxTargetAmount);
+    console.log('converter, maxTargetAmount', converter, maxTargetAmount);
 
     if (converter == address(0) || maxTargetAmount == 0) {
       borrowedAmountOut = 0;
@@ -455,8 +452,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       );
     }
 
-//    console.log('>>> BORROW collateralAmount', collateralAmount);
-//    console.log('>>> BORROW borrowedAmount', borrowedAmountOut);
+    console.log('>>> BORROW collateralAmount', collateralAmount);
+    console.log('>>> BORROW borrowedAmount', borrowedAmountOut);
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -475,9 +472,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       ? amountToRepay - needToRepay
       : 0;
 
-//    console.log('CLOSE POSITION initial amountToRepay', amountToRepay);
-//    console.log('CLOSE POSITION needToRepay', needToRepay);
-//    console.log('CLOSE POSITION leftover', leftover);
+    console.log('CLOSE POSITION initial amountToRepay', amountToRepay);
+    console.log('CLOSE POSITION needToRepay', needToRepay);
+    console.log('CLOSE POSITION leftover', leftover);
 
     amountToRepay = amountToRepay < needToRepay
       ? amountToRepay
@@ -492,9 +489,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       /*uint swappedLeftoverBorrowOut*/
     ) = _tetuConverter.repay(collateralAsset, borrowAsset, amountToRepay, address(this));
 
-//    console.log('position closed: returnedAssetAmount:', returnedAssetAmount);
-//    console.log('position closed: returnedBorrowAmountOut:', returnedBorrowAmountOut);
-//    console.log('>>> REPAY amountToRepay', amountToRepay / 1e18);
+    console.log('position closed: returnedAssetAmount:', returnedAssetAmount);
+    console.log('position closed: returnedBorrowAmountOut:', returnedBorrowAmountOut);
+    console.log('>>> REPAY amountToRepay', amountToRepay / 1e18);
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
 
     // Manually swap remain leftover
@@ -504,7 +501,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _liquidate(_tetuLiquidator, borrowAsset, collateralAsset, leftover, _ASSET_LIQUIDATION_SLIPPAGE);
       uint balanceAfter = _balance(collateralAsset);
 
-//      console.log('SWAP LEFTOVER returned asset', balanceAfter - balanceBefore);
+      console.log('SWAP LEFTOVER returned asset', balanceAfter - balanceBefore);
       returnedAssetAmount += balanceAfter - balanceBefore;
     }
   }
@@ -528,7 +525,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // if the value higher than threshold distribute to destinations
     if (amountOut > thresholds[tokenOut]) {
       // we need to approve each time, liquidator address can be changed in controller
-      _approveIfNeeded(tokenIn, amountIn, address(_liquidator));
+      AppLib.approveIfNeeded(tokenIn, amountIn, address(_liquidator));
       _liquidator.liquidateWithRoute(route, amountIn, slippage);
     }
   }
