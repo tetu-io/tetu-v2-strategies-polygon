@@ -18,13 +18,20 @@ import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresse
 import {ethers} from "hardhat";
 import axios from "axios";
 
+/** Amounts earned/lost by the given strategies during the hardwork */
+export interface IDoHardworkAndCheckResults {
+  strategy: string[];
+  earned: BigNumber[];
+  lost: BigNumber[];
+}
+
 export const PPFS_NO_INCREASE = new Set<string>([
-  'QiStakingStrategyBase',
-  'BalBridgedStakingStrategyBase',
-  'MeshLpStrategyBase',
-  'BalancerPoolStrategyBase',
-  'PenroseStrategyBase',
-])
+  // 'QiStakingStrategyBase',
+  // 'BalBridgedStakingStrategyBase',
+  // 'MeshLpStrategyBase',
+  // 'BalancerPoolStrategyBase',
+  // 'PenroseStrategyBase',
+]);
 
 export class VaultUtils {
 
@@ -63,82 +70,69 @@ export class VaultUtils {
     return vaultForUser.deposit(BigNumber.from(amount), user.address);
   }
 
-  // NOT used in tetu-v2: it's possible to get addresses of vaults on-chain, there are not too much vaults
-          // public static async getVaultInfoFromServer() {
-          //   const net = await ethers.provider.getNetwork();
-          //   let network;
-          //   if (net.chainId === 137) {
-          //     network = 'MATIC';
-          //   } else if (net.chainId === 250) {
-          //     network = 'FANTOM';
-          //   } else {
-          //     throw Error('unknown net ' + net.chainId);
-          //   }
-          //   return (await axios.get(`https://tetu-server-staging.herokuapp.com//api/v1/reader/vaultInfos?network=${network}`)).data; // todo change to v2
-          // }
-
-  public static async addRewardsTetu(
-    signer: SignerWithAddress,
+  public static async doHardWorkAndCheck(
     vault: TetuVaultV2,
-    core: ICoreContractsWrapper,
-    amount: number,
-    // period = 60 * 60 * 24 * 2
-  ) {
+    positiveCheck = true
+  ) : Promise<IDoHardworkAndCheckResults> {
     const start = Date.now();
-    // const net = await ethers.provider.getNetwork();
+    const dest: IDoHardworkAndCheckResults = {
+      strategy: [],
+      earned: [],
+      lost: []
+    }
 
-    console.log("Add TETU as reward to vault: ", amount.toString())
-    const rewardTokenAddress = PolygonAddresses.TETU_TOKEN;
-    const amountWei = utils.parseUnits(amount + '');
-    // if (core.tetu.address.toLowerCase() !== rewardTokenAddress) {
-    await TokenUtils.getToken(rewardTokenAddress, signer.address, amountWei);
-    // } else {
-    //   await MintHelperUtils.mint(core.controller, core.announcer, amount * 2 + '', signer.address, false, period)
-    // }
-    const gauge = IGauge__factory.connect(await vault.gauge(), signer);
-    await TokenUtils.approve(rewardTokenAddress, signer, vault.address, amountWei.toString());
-    await gauge.notifyRewardAmount(vault.address, rewardTokenAddress, amountWei);
-    Misc.printDuration('Tetu reward token added to vault', start);
-  }
+    const underlying = await vault.asset();
+    const underlyingDecimals = await TokenUtils.decimals(underlying);
 
-  public static async doHardWorkAndCheck(vault: TetuVaultV2, positiveCheck = true) {
-    const start = Date.now();
-    // const controller = await IControllable__factory.connect(vault.address, vault.signer).controller();
-    // const controllerCtr = IController__factory.connect(controller, vault.signer);
-
-    const und = await vault.asset();
-    const undDec = await TokenUtils.decimals(und);
     // const gauge = IGauge__factory.connect(await vault.gauge(), vault.signer);
-    const rt = Addresses.getCore().tetu; // TODO May we get reward tokens from the Gauge?
+    // const rt = Addresses.getCore().tetu; // TODO May we get reward tokens from the Gauge?
     const psRatio = 1;
     // const ppfsDecreaseAllowed = false; // await vault.ppfsDecreaseAllowed();
 
-    const ppfs = +utils.formatUnits(await vault.sharePrice(), undDec);
-    const undBal = +utils.formatUnits(await vault.totalAssets(), undDec);
-    const rtBal = +utils.formatUnits(await TokenUtils.balanceOf(rt, vault.address));
+    const ppfs = +utils.formatUnits(await vault.sharePrice(), underlyingDecimals);
+    const underlyingBalance = +utils.formatUnits(await vault.totalAssets(), underlyingDecimals);
+    // const rtBal = +utils.formatUnits(await TokenUtils.balanceOf(rt, vault.address));
 
     console.log('splitter dohardworks');
     const splitterAddress = await vault.splitter();
+    console.log("splitter", splitterAddress);
     const splitter = StrategySplitterV2__factory.connect(splitterAddress, vault.signer);
+
     const subStrategies = await splitter.allStrategies();
     for (const subStrategy of subStrategies) {
       const strategy = IStrategyV2__factory.connect(subStrategy, vault.signer);
-      console.log('Call substrategy dohardwork', await strategy.NAME())
-      await strategy.doHardWork();
+      console.log('Call substrategy dohardwork', await strategy.NAME());
+
+      // handle HardWork-event to extract earned and lost values
+      const tx = await strategy.doHardWork();
+      const receipt = await tx.wait();
+      if (receipt.events) {
+        console.log("Events", receipt);
+        for (const event of receipt.events) {
+          if (event.args && event.address === splitter.address) {
+            dest.strategy.push(strategy.address);
+            dest.earned.push(BigNumber.from(event.args[3]));
+            dest.lost.push(BigNumber.from(event.args[4]));
+            console.log("HardWork event is detected", event);
+          }
+        }
+      }
     }
 
     console.log('hard works called');
 
-    const ppfsAfter = +utils.formatUnits(await vault.sharePrice(), undDec);
-    const undBalAfter = +utils.formatUnits(await vault.totalAssets(), undDec);
+    const ppfsAfter = +utils.formatUnits(await vault.sharePrice(), underlyingDecimals);
+    const undBalAfter = +utils.formatUnits(await vault.totalAssets(), underlyingDecimals);
     // const psPpfsAfter = +utils.formatUnits(await psVaultCtr.getPricePerFullShare());
-    const rtBalAfter = +utils.formatUnits(await TokenUtils.balanceOf(rt, vault.address));
+    // const rtBalAfter = +utils.formatUnits(await TokenUtils.balanceOf(rt, vault.address));
 
     console.log('-------- HARDWORK --------');
     console.log('- Vault Share price:', ppfsAfter);
     console.log('- Vault Share price change:', ppfsAfter - ppfs);
-    console.log('- Vault und balance change:', undBalAfter - undBal);
-    console.log('- Vault first RT change:', rtBalAfter - rtBal);
+    console.log('- Vault und balance change:', undBalAfter - underlyingBalance);
+    console.log('- Earned by the strategies:', dest.earned.reduce((p, c) => c = p.add(c), BigNumber.from(0)));
+    console.log('- Lost by the strategies:', dest.lost.reduce((p, c) => c = p.add(c), BigNumber.from(0)));
+    // console.log('- Vault first RT change:', rtBalAfter - rtBal);
     console.log('- PS ratio:', psRatio);
     console.log('--------------------------');
     // TODO !!! check Gauges, Bribes, Invest fund?
@@ -149,7 +143,7 @@ export class VaultUtils {
       //     'PS didnt have any income, it means that rewards was not liquidated and properly sent to PS.' +
       //     ' Check reward tokens list and liquidation paths');
         if (psRatio !== 1) {
-          expect(rtBalAfter).is.greaterThan(rtBal, 'With ps ratio less than 1 we should send a part of buybacks to vaults as rewards.');
+          // expect(rtBalAfter).is.greaterThan(rtBal, 'With ps ratio less than 1 we should send a part of buybacks to vaults as rewards.');
         }
       // }
 
@@ -162,6 +156,8 @@ export class VaultUtils {
       // }
     }
     Misc.printDuration('doHardWorkAndCheck completed', start);
+
+    return dest;
   }
 
 }

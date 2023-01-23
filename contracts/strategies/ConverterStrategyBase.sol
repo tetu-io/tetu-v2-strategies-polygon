@@ -145,19 +145,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
     console.log("_withdrawFromPool, amount", amount);
+
     require(_investedAssets != 0, "CSB: no investments");
     if (amount != 0 && _investedAssets != 0) {
       uint liquidityAmount = _depositorLiquidity()  // total amount of LP tokens owned by the strategy
         * 101 // add 1% on top...
         * amount / _investedAssets // a part of amount that we are going to withdraw
         / 100; // .. add 1% on top
-      console.log("_withdrawFromPool._investedAssets", _investedAssets);
-      console.log("_withdrawFromPool._depositorLiquidity()", _depositorLiquidity());
-      console.log("_withdrawFromPool.liquidityAmount", liquidityAmount);
       (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
-      console.log("_withdrawFromPool investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
       _withdrawFromPoolUniversal(liquidityAmount, false);
-      console.log("_withdrawFromPool.liquidityAmount finish");
+
+      console.log("_withdrawFromPool.liquidityAmount, assetPrice finish", liquidityAmount, assetPrice);
     }
 
     return (investedAssetsUSD, assetPrice);
@@ -214,6 +212,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // convert all received amounts to the asset
     _convertDepositorPoolAssets();
     _updateInvestedAssets();
+
     console.log("_withdrawFromPoolUniversal.finish with balances:");
     TokenAmountsLib.printBalances(_depositorPoolAssets(), address(this));
   }
@@ -233,6 +232,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _closePosition(_asset, borrowedToken, _balance(borrowedToken));
       }
     }
+
     console.log('_convertDepositorPoolAssets balance after', _balance(_asset));
   }
 
@@ -323,6 +323,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return _doHardWork(true);
   }
 
+  /// @return earned Earned amount in terms of {asset}
+  /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
     console.log('doHardWork...');
     uint assetBalanceBefore = _balance(asset);
@@ -339,8 +341,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       if (investedAfter > investedBefore) {
         earned += investedAfter - investedBefore;
+        console.log("earned", earned);
       } else {
         lost = investedBefore - investedAfter;
+        console.log("lost", earned);
       }
     }
   }
@@ -554,6 +558,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-  uint[16] private __gap;
+  uint[16] private __gap; // TODO 16???
 
 }

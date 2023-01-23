@@ -151,25 +151,24 @@ export class StrategyTestUtils {
   }
 
   public static async getUnderlying(
-    underlying: string,
-    amountN: number,
     signer: SignerWithAddress,
-    calculator: ITetuLiquidator,
+    underlying: string,
+    amountNum: number,
+    liquidator: ITetuLiquidator,
     recipients: string[],
   ) {
-    log.info('get underlying', amountN, recipients.length, underlying);
+    log.info('get underlying', amountNum, recipients.length, underlying);
     const start = Date.now();
-    const uName = await TokenUtils.tokenSymbol(underlying);
-    const uDec = await TokenUtils.decimals(underlying);
-    const uPrice = await PriceCalculatorUtils.getPriceCached(underlying, calculator);
-    const uPriceN = +utils.formatUnits(uPrice);
-    log.info('Underlying price: ', uPriceN);
+    const underlyingName = await TokenUtils.tokenSymbol(underlying);
+    const underlyingDecimals = await TokenUtils.decimals(underlying);
+    const underlyingPrice = await PriceCalculatorUtils.getPriceCached(underlying, liquidator);
+    const underlyingPriceNum = +utils.formatUnits(underlyingPrice);
+    log.info('Underlying price: ', underlyingPriceNum, underlyingPrice);
 
-    const amountAdjustedN = amountN / uPriceN;
-    const amountAdjusted = utils.parseUnits(amountAdjustedN.toFixed(uDec), uDec);
-    log.info('Get underlying: ', uName, amountAdjustedN);
+    const amountAdjustedN = amountNum / underlyingPriceNum;
+    const amountAdjusted = utils.parseUnits(amountAdjustedN.toFixed(underlyingDecimals), underlyingDecimals);
+    log.info('Get underlying: ', underlyingName, amountAdjustedN);
 
-    // const amountAdjustedN2 = amountAdjustedN * (recipients.length + 1);
     const amountAdjusted2 = amountAdjusted.mul(recipients.length + 1);
 
     const balance = amountAdjusted2;
@@ -178,9 +177,9 @@ export class StrategyTestUtils {
     for (const recipient of recipients) {
       await TokenUtils.transfer(underlying, signer, recipient, balance.div(recipients.length + 1).toString())
     }
-    const finalBal = await TokenUtils.balanceOf(underlying, signer.address);
+    const signerUnderlyingBalanceFinal = await TokenUtils.balanceOf(underlying, signer.address);
     Misc.printDuration('Get underlying finished for', start);
-    return finalBal;
+    return signerUnderlyingBalanceFinal;
   }
 
 }

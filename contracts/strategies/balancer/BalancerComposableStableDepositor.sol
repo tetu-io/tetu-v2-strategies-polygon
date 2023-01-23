@@ -57,7 +57,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
         CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY
       ).getPoolGauge(BalancerLogicLib.getPoolAddress(poolId_))
     );
-    // infinite approve of pool-BPT to the gauge
+    // infinite approve of pool-BPT to the gauge todo is it safe for the external gauge?
     IERC20(BalancerLogicLib.getPoolAddress(poolId_)).safeApprove(address(_gauge), 2**255);
 
     // we can get list of reward tokens from the gauge, but it's more cheaper to get it outside
@@ -86,24 +86,17 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ///                     1: balance USDC + (amUSDC recalculated to USDC)
   ///                     2: balance USDT + (amUSDT recalculated to USDT)
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reservesOut) {
-    console.log("_depositorPoolReserves");
     reservesOut =  BalancerLogicLib.depositorPoolReserves(BALANCER_VAULT, poolId);
-
-    for (uint i = 0; i < reservesOut.length; ++i) {
-      console.log("_depositorPoolReserves", i, reservesOut[i]);
-    }
   }
 
   /// @notice Returns depositor's pool shares / lp token amount
-  function _depositorLiquidity() override internal virtual view returns (uint) {
-    console.log("_depositorLiquidity", _gauge.balanceOf(address(this)));
-    return _gauge.balanceOf(address(this));
+  function _depositorLiquidity() override internal virtual view returns (uint liquidityOut) {
+    liquidityOut = _gauge.balanceOf(address(this));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
-  function _depositorTotalSupply() override internal view returns (uint) {
-    console.log("_depositorTotalSupply", IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).getActualSupply());
-    return IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).getActualSupply();
+  function _depositorTotalSupply() override internal view returns (uint totalSupplyOut) {
+    totalSupplyOut = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).getActualSupply();
   }
 
 
@@ -173,7 +166,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
       // there is no liquidity, output is zero
       return new uint[](_depositorPoolAssets().length);
     } else if (liquidityAmount_ >= liquidity) {
-      // todo Full exit
+      // todo quote full exit using try/catch
       return BalancerLogicLib.depositorQuoteExit(
         BALANCER_VAULT,
         IBalancerHelper(BALANCER_HELPER),

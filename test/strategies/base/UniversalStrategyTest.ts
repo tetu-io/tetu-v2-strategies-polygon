@@ -5,7 +5,7 @@ import {
   IForwarder,
   ITetuLiquidator,
   TetuVaultV2,
-  IStrategyV2
+  IStrategyV2, IERC20__factory
 } from "../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
@@ -16,6 +16,24 @@ import {BigNumber} from "ethers";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
 import {Misc} from "../../../scripts/utils/Misc";
+
+export interface IUniversalStrategyInputParams {
+  /** only for strategies where we expect PPFS fluctuations */
+  balanceTolerance: number;
+  deposit: number;
+  /** number of blocks, at least 3 */
+  loops: number;
+  /** number of blocks or timestamp value, the meaning depends on advanceBlocks */
+  loopValue: number;
+  /** use 'true' if farmable platform values depends on blocks, instead you can use timestamp */
+  advanceBlocks: boolean;
+
+  /** add custom liquidation path if necessary */
+  forwarderConfigurator?: ((forwarder: IForwarder) => Promise<void>);
+  /** only for strategies where we expect PPFS fluctuations */
+  ppfsDecreaseAllowed: boolean;
+  specificTests: SpecificStrategyTest[];
+}
 
 async function universalStrategyTest(
   name: string,
@@ -31,14 +49,7 @@ async function universalStrategyTest(
     strategy: IStrategyV2,
     balanceTolerance: number
   ) => DoHardWorkLoopBase,
-  forwarderConfigurator: ((forwarder: IForwarder) => Promise<void>) | null = null,
-  ppfsDecreaseAllowed = false,
-  balanceTolerance = 0,
-  deposit = 100_000,
-  loops = 9,
-  loopValue = 300,
-  advanceBlocks = true,
-  specificTests: SpecificStrategyTest[] | null = null,
+  params: IUniversalStrategyInputParams
 ) {
 
   describe(name + "_Test", async function () {
@@ -51,10 +62,11 @@ async function universalStrategyTest(
     let strategy: IStrategyV2;
     let userBalance: BigNumber;
 
+//region Before, after
     before(async function () {
       const start = Date.now();
       snapshotBefore = await TimeUtils.snapshot();
-      signer = await DeployerUtilsLocal.impersonate();
+      signer = await DeployerUtilsLocal.impersonate(); // governance by default
       user = (await ethers.getSigners())[1];
       const core = deployInfo.core as ICoreContractsWrapper;
 
@@ -63,18 +75,13 @@ async function universalStrategyTest(
       strategy = data.strategy;
       asset = await vault.asset();
 
-      if (forwarderConfigurator !== null) {
-        await forwarderConfigurator(core.forwarder);
+      if (params.forwarderConfigurator !== undefined) {
+        await params.forwarderConfigurator(core.forwarder);
       }
-      if (ppfsDecreaseAllowed) {
+      if (params.ppfsDecreaseAllowed) {
         throw Error('ppfsDecreaseAllowed not supported');
         // await core.vaultController.changePpfsDecreasePermissions([vault.address], true);
       }
-      // TODO check own rewards?
-      // const firstRt = (await strategy.rewardTokens())[0];
-      // if (firstRt.toLowerCase() === core.psVault.address.toLowerCase()) {
-      //   await VaultUtils.addRewardsXTetu(signer, vault, core, 1);
-      // }
 
       // set class variables for keep objects links
       deployInfo.signer = signer;
@@ -83,15 +90,19 @@ async function universalStrategyTest(
       deployInfo.vault = vault;
       deployInfo.strategy = strategy;
 
-      // get asset
+      // put deposit-amount to user's balance and the same amount on the signer's balance
       userBalance = await StrategyTestUtils.getUnderlying(
-        asset,
-        deposit,
         user,
+        asset,
+        params.deposit,
         deployInfo?.tools?.liquidator as ITetuLiquidator,
         [signer.address],
       );
-      // await TokenUtils.wrapNetworkToken(signer, parseUnits('10000000').toString());
+
+      // display initial balances
+      console.log("Balance of signer", await IERC20__factory.connect(asset, signer).balanceOf(signer.address));
+      console.log("Balance of user", await IERC20__factory.connect(asset, signer).balanceOf(user.address));
+
       Misc.printDuration('Test Preparations completed', start);
     });
 
@@ -106,7 +117,9 @@ async function universalStrategyTest(
     after(async function () {
       await TimeUtils.rollback(snapshotBefore);
     });
+//endregion Before, after
 
+//region Unit tests
     it("doHardWork loop", async function () {
       const core = deployInfo.core as ICoreContractsWrapper;
       const tools = deployInfo.tools as IToolsContractsWrapper;
@@ -118,17 +131,19 @@ async function universalStrategyTest(
         asset,
         vault,
         strategy,
-        balanceTolerance,
-      ).start(userBalance, loops, loopValue, advanceBlocks);
+        params.balanceTolerance,
+      ).start(userBalance, params.loops, params.loopValue, params.advanceBlocks);
     });
 
     it("common test should be ok", async () => {
       await StrategyTestUtils.commonTests(strategy, asset);
     });
 
-    if (specificTests) {
-      specificTests?.forEach(test => test.do(deployInfo));
+    if (params.specificTests) {
+      params.specificTests?.forEach(test => test.do(deployInfo));
     }
+//endregion Unit tests
+
   });
 }
 

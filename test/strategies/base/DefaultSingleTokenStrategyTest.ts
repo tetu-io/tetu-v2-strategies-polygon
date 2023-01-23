@@ -1,11 +1,10 @@
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {IStrategyV2, TetuVaultV2} from "../../../typechain";
-import {SpecificStrategyTest} from "./SpecificStrategyTest";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
 import {IToolsContractsWrapper} from "../../ToolsContractsWrapper";
-import {universalStrategyTest} from "./UniversalStrategyTest";
+import {IUniversalStrategyInputParams, universalStrategyTest} from "./UniversalStrategyTest";
 import {DeployInfo} from "../../baseUT/utils/DeployInfo";
 import {DoHardWorkLoopBase} from "../../baseUT/utils/DoHardWorkLoopBase";
 import {IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
@@ -19,26 +18,21 @@ async function startDefaultStrategyTest(
   deployInfo: DeployInfo,
   deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>)
 ) {
-  // **********************************************
-  // ************** CONFIG*************************
-  // **********************************************
+
+  // ***********************************************
+  //               Test configuration
+  // ***********************************************
   const vaultName = 'tetu' + assetName;
-  // const asset = token;
-  // add custom liquidation path if necessary
-  const forwarderConfigurator = null;
-  // only for strategies where we expect PPFS fluctuations
-  const ppfsDecreaseAllowed = false;
-  // only for strategies where we expect PPFS fluctuations
-  const balanceTolerance = 0.000001; // looks like some rounding issues with 6-decimals tokens
   const finalBalanceTolerance = 0;
-  const deposit = 100_000;
-  // at least 3
-  const loops = 3; // TODO at lest 3
-  // number of blocks or timestamp value
-  const loopValue = 300;
-  // use 'true' if farmable platform values depends on blocks, instead you can use timestamp
-  const advanceBlocks = true;
-  const specificTests: SpecificStrategyTest[] = [];
+  const params: IUniversalStrategyInputParams = {
+      ppfsDecreaseAllowed: false,
+      balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
+      deposit: 100_000,
+      loops: 9,
+      loopValue: 300,
+      advanceBlocks: true,
+      specificTests: []
+  }
   // **********************************************
 
   const hwInitiator = (
@@ -64,19 +58,13 @@ async function startDefaultStrategyTest(
     );
   };
 
+
   await universalStrategyTest(
     strategyName + '_' + vaultName,
     deployInfo,
     deployer as (signer: SignerWithAddress) => Promise<IVaultStrategyInfo>,
     hwInitiator,
-    forwarderConfigurator,
-    ppfsDecreaseAllowed,
-    balanceTolerance,
-    deposit,
-    loops,
-    loopValue,
-    advanceBlocks,
-    specificTests,
+    params
   );
 }
 

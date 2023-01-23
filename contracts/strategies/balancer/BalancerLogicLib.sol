@@ -13,8 +13,6 @@ import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
-import "hardhat/console.sol";
-
 /// @notice Functions of BalancerComposableStableDepositor
 /// @dev Many of functions are declared as external to reduce contract size
 library BalancerLogicLib {
@@ -102,7 +100,6 @@ library BalancerLogicLib {
       if (indexBpt_ == i) continue;
 
       uint amountInBpt18 = amountsDesired_[i3] * p.rates[i];
-      console.log("amountInBpt18, i", amountInBpt18, i);
 
       uint j; // [0 : len]
       uint j3; // [0 : len - 1]
@@ -397,7 +394,6 @@ library BalancerLogicLib {
   function depositorExitFull(IBVault vault_, bytes32 poolId_) external returns (
     uint[] memory amountsOut
   ) {
-    console.log("depositorExitFull");
     DepositorLocal memory p;
 
     p.bptIndex = IBalancerBoostedAaveStablePool(getPoolAddress(poolId_)).getBptIndex();
@@ -408,7 +404,6 @@ library BalancerLogicLib {
     uint liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
     if (liquidityAmount > 0) {
       uint liquidityThreshold = 10**IERC20Metadata(address(p.tokens[p.bptIndex])).decimals() / 100;
-      console.log("depositorExitFull.1 liquidityAmount,liquidityThreshold", liquidityAmount, liquidityThreshold);
 
       // we can make at most 2 attempts to withdraw amounts from the balanceR pool
       for (uint i = 0; i < 2; ++i) {
@@ -428,7 +423,6 @@ library BalancerLogicLib {
           })
         );
         liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
-        console.log("depositorExitFull.2 liquidityAmount,liquidityThreshold", liquidityAmount, liquidityThreshold);
         if (liquidityAmount < liquidityThreshold || i == 1) {
           break;
         }
@@ -546,9 +540,6 @@ library BalancerLogicLib {
     uint amountIn_,
     IBVault.FundManagement memory funds_
   ) internal returns (uint amountOut) {
-    console.log("_swap, asset, balance", assetIn_);
-    console.log("_swap, amountIn", amountIn_);
-
     uint balanceBefore = IERC20(assetOut_).balanceOf(address(this));
 
     IERC20(assetIn_).approve(address(vault_), amountIn_);
@@ -568,7 +559,6 @@ library BalancerLogicLib {
 
     // we assume here, that the balance cannot be decreased
     amountOut = IERC20(assetOut_).balanceOf(address(this)) - balanceBefore;
-    console.log("_swap, amountOut", amountOut);
   }
 
   /////////////////////////////////////////////////////////////////////
