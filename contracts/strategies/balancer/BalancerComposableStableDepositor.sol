@@ -189,7 +189,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    return AppLib.depositorClaimRewards(_gauge, _rewardTokens);
+    return BalancerLogicLib.depositorClaimRewards(_gauge, _rewardTokens);
   }
 
   /// @dev Returns reward token addresses array.

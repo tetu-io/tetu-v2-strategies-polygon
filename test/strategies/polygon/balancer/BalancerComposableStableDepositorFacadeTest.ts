@@ -20,6 +20,7 @@ import {areAlmostEqual, differenceInPercentsLessThan} from "../../../baseUT/util
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_CLAIM_REWARDS,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_ENTER,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_EXIT,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_ASSETS,
@@ -222,6 +223,34 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       balanceFacadeAssetsAfter,
       liquidityFacadeBefore,
       liquidityFacadeAfter,
+      poolTokensBefore,
+      poolTokensAfter,
+      gasUsed
+    }
+  }
+
+  interface IDepositorClaimRewardsTestResults extends IDepositorChangeBalances {
+    tokensOut: string[];
+    amountsOut: BigNumber[];
+    gasUsed: BigNumber;
+  }
+  async function makeDepositorClaimRewardsTest(
+    facade: BalancerComposableStableDepositorFacade,
+  ) : Promise<IDepositorClaimRewardsTestResults> {
+    const assets = [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN];
+    const vault = IBVault__factory.connect(balancerVault, signer);
+
+    const poolTokensBefore = await vault.getPoolTokens(poolBoostedId);
+
+    const ret = await facade.callStatic._depositorClaimRewardsAccess();
+    const tx = await facade._depositorClaimRewardsAccess();
+    const gasUsed = (await tx.wait()).gasUsed;
+
+    const poolTokensAfter = await vault.getPoolTokens(poolBoostedId);
+
+    return {
+      amountsOut: ret.amountsOut,
+      tokensOut: ret.tokensOut,
       poolTokensBefore,
       poolTokensAfter,
       gasUsed
@@ -636,6 +665,56 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
           const retExit = await makeQuoteExitTest(facade, "100000");
 
           controlGasLimitsEx(retExit.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_QUOTE_EXIT, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+      });
+    });
+
+    describe("depositorClaimRewards", () => {
+      describe("Good paths", () => {
+        describe("Withdraw full", () => {
+          it("should return expected values", async () => {
+            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+
+            const retEnter = await makeDepositorEnterTest(facade, "1000");
+            console.log("retEnter", retEnter);
+
+            await TimeUtils.advanceNBlocks(2000);
+
+            const retClaimRewards = await makeDepositorClaimRewardsTest(facade);
+            console.log("retExit", retClaimRewards);
+
+            const ret = [
+              retClaimRewards.amountsOut.length,
+              retClaimRewards.tokensOut.length,
+
+              retClaimRewards.tokensOut[0],
+              retClaimRewards.amountsOut[0].gt(0),
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            const expected = [
+              1,
+              1,
+
+              "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3",
+              true
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            expect(ret).eq(expected);
+          });
+        });
+      });
+      describe("Bad paths", () => {
+        // todo
+      });
+      describe("Gas estimation @skip-on-coverage", () => {
+        it("withdraw $1 should not exceed gas limits @skip-on-coverage", async () => {
+          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          await makeDepositorEnterTest(facade, "1");
+          const retExit = await makeDepositorClaimRewardsTest(facade);
+
+          controlGasLimitsEx(retExit.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_CLAIM_REWARDS, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
         });

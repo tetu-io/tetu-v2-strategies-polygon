@@ -516,7 +516,6 @@ library BalancerLogicLib {
     gauge_.claim_rewards();
 
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      // temporary store current reward balance
       amountsOut[i] = IERC20(rewardTokens_[i]).balanceOf(address(this)) - amountsOut[i];
     }
 
