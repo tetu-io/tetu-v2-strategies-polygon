@@ -17,6 +17,7 @@ import {ICoreContractsWrapper} from "./CoreContractsWrapper";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {ethers} from "hardhat";
 import axios from "axios";
+import { LogDescription } from "ethers/lib/utils";
 
 /** Amounts earned/lost by the given strategies during the hardwork */
 export interface IDoHardworkAndCheckResults {
@@ -104,19 +105,48 @@ export class VaultUtils {
       console.log('Call substrategy dohardwork', await strategy.NAME());
 
       // handle HardWork-event to extract earned and lost values
+      const {earned, lost} = await strategy.callStatic.doHardWork();
       const tx = await strategy.doHardWork();
+      dest.strategy.push(strategy.address);
+      dest.earned.push(BigNumber.from(earned));
+      dest.lost.push(BigNumber.from(lost));
+
       const receipt = await tx.wait();
-      if (receipt.events) {
-        console.log("Events", receipt);
-        for (const event of receipt.events) {
-          if (event.args && event.address === splitter.address) {
-            dest.strategy.push(strategy.address);
-            dest.earned.push(BigNumber.from(event.args[3]));
-            dest.lost.push(BigNumber.from(event.args[4]));
-            console.log("HardWork event is detected", event);
-          }
-        }
-      }
+
+      // if (receipt.events) {
+      //   console.log("!1!");
+      //   const event = StrategySplitterV2__factory.createInterface().getEvent("HardWork");
+      //   const topic = StrategySplitterV2__factory.createInterface().getEventTopic("HardWork");
+      //   console.log("!2!");
+      //   receipt.logs.map((log) => {
+      //     console.log("!3!");
+      //     let parsed: LogDescription | undefined;
+      //     try {
+      //       console.log("!4!");
+      //       parsed = StrategySplitterV2__factory.createInterface().parseLog(log);
+      //       console.log("!5!");
+      //     } catch (e){ }
+      //
+      //     console.log("!6!");
+      //     if (parsed) {
+      //       console.log("!7!");
+      //       const data = StrategySplitterV2__factory.createInterface().decodeEventLog(event, log.data, log.topics)
+      //       console.log("!8!");
+      //       const earned = data.earned;
+      //       const lost = data.lost;
+      //       console.log("!9!", earned, lost);
+      //       dest.strategy.push(strategy.address);
+      //       dest.earned.push(BigNumber.from(earned));
+      //       dest.lost.push(BigNumber.from(lost));
+      //       console.log("!10!");
+      //     }
+      //   });
+      //
+      //   // we need to display full objects, so we use util.inspect, see
+      //   // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
+      //   require("util").inspect.defaultOptions.depth = null;
+      //   console.log("Receipt events", receipt);
+      // }
     }
 
     console.log('hard works called');

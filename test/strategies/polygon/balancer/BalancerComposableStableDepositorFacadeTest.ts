@@ -153,7 +153,9 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     }
     const poolTokensBefore = await vault.getPoolTokens(poolBoostedId);
     const tx = await facade._depositorEnterAccess(amountsDesired);
-    const gasUsed = (await tx.wait()).gasUsed;
+    const receipt = await tx.wait();
+
+    const gasUsed = receipt.gasUsed;
     const poolTokensAfter = await vault.getPoolTokens(poolBoostedId);
     const liquidityOut = await facade.lastLiquidityOut();
     const amountsConsumedOut: BigNumber[] = [];

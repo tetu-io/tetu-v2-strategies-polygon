@@ -41,7 +41,6 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   bytes32 public poolId;
   IBalancerGauge private _gauge;
   address[] private _rewardTokens;
-
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
