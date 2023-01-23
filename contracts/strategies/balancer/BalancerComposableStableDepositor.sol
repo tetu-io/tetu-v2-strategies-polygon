@@ -86,7 +86,12 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ///                     1: balance USDC + (amUSDC recalculated to USDC)
   ///                     2: balance USDT + (amUSDT recalculated to USDT)
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reservesOut) {
-    return BalancerLogicLib.depositorPoolReserves(BALANCER_VAULT, poolId);
+    console.log("_depositorPoolReserves");
+    reservesOut =  BalancerLogicLib.depositorPoolReserves(BALANCER_VAULT, poolId);
+
+    for (uint i = 0; i < reservesOut.length; ++i) {
+      console.log("_depositorPoolReserves", i, reservesOut[i]);
+    }
   }
 
   /// @notice Returns depositor's pool shares / lp token amount
@@ -162,7 +167,11 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function _depositorQuoteExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
-    if (liquidityAmount_ >= _depositorLiquidity()) {
+    uint liquidity = _depositorLiquidity();
+    if (liquidity == 0) {
+      // there is no liquidity, output is zero
+      return new uint[](_depositorPoolAssets().length);
+    } else if (liquidityAmount_ >= liquidity) {
       // todo Full exit
       return BalancerLogicLib.depositorQuoteExit(
         BALANCER_VAULT,
