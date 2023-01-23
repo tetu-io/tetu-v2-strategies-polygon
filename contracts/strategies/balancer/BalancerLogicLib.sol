@@ -256,7 +256,7 @@ library BalancerLogicLib {
   /// @return amountsConsumedOut Amounts of assets deposited to balanceR pool
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   /// @return liquidityOut Total amount of liquidity added to balanceR pool in terms of pool-bpt tokens
-  function enter(IBVault vault_, bytes32 poolId_, uint[] memory amountsDesired_) external returns (
+  function depositorEnter(IBVault vault_, bytes32 poolId_, uint[] memory amountsDesired_) external returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
@@ -376,15 +376,95 @@ library BalancerLogicLib {
     uint k;
     for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i == p.bptIndex) continue;
-      amountsOut[k] = swap(
-        vault_,
-        IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
-        address(p.tokens[i]),
-        IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
-        p.tokens[i].balanceOf(address(this)),
-        funds_
-      );
+      uint amountIn = p.tokens[i].balanceOf(address(this));
+      if (amountIn != 0) {
+        amountsOut[k] = swap(
+          vault_,
+          IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
+          address(p.tokens[i]),
+          IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
+          amountIn,
+          funds_
+        );
+      }
       ++k;
+    }
+  }
+
+  /// @notice Withdraw all available amount of LP-tokens from the pool
+  ///         BalanceR doesn't allow to withdraw exact amount, so it's allowed to leave dust amount on the balance
+  /// @dev We make at most 2 attempts to withdraw (not more, each attempt takes a lot of gas).
+  ///      Each attempt reduces available balance at ~1e4 times.
+  /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
+  ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
+  function depositorExitFull(IBVault vault_, bytes32 poolId_) external returns (
+    uint[] memory amountsOut
+  ) {
+    console.log("depositorExitFull");
+    DepositorLocal memory p;
+
+    p.bptIndex = IBalancerBoostedAaveStablePool(getPoolAddress(poolId_)).getBptIndex();
+    (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
+    p.len = p.tokens.length;
+    amountsOut = new uint[](p.len - 1);
+
+    uint liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
+    if (liquidityAmount > 0) {
+      uint liquidityThreshold = 10**IERC20Metadata(address(p.tokens[p.bptIndex])).decimals() / 100;
+      console.log("depositorExitFull.1 liquidityAmount,liquidityThreshold", liquidityAmount, liquidityThreshold);
+
+      // we can make at most 2 attempts to withdraw amounts from the balanceR pool
+      for (uint i = 0; i < 2; ++i) {
+        vault_.exitPool(
+          poolId_,
+          address(this),
+          payable(address(this)),
+          IBVault.ExitPoolRequest({
+            assets: asIAsset(p.tokens),
+            minAmountsOut: new uint[](p.len), // todo: no limits?
+            userData: abi.encode(
+                IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
+                BalancerLogicLib.getBtpAmountsOut(liquidityAmount, p.balances, p.bptIndex),
+                liquidityAmount
+              ),
+            toInternalBalance: false
+          })
+        );
+        liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
+        console.log("depositorExitFull.2 liquidityAmount,liquidityThreshold", liquidityAmount, liquidityThreshold);
+        if (liquidityAmount < liquidityThreshold || i == 1) {
+          break;
+        }
+        (, p.balances,) = vault_.getPoolTokens(poolId_);
+      }
+
+      // now we have amBbXXX tokens; swap them to XXX assets
+
+      // we can create funds_ once and use it several times
+      IBVault.FundManagement memory funds_ = IBVault.FundManagement({
+        sender: address(this),
+        fromInternalBalance: false,
+        recipient: payable(address(this)),
+        toInternalBalance: false
+      });
+
+      uint k;
+      for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
+        if (i == p.bptIndex) continue;
+
+        uint amountIn = p.tokens[i].balanceOf(address(this));
+        if (amountIn != 0) {
+          amountsOut[k] = swap(
+            vault_,
+            IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
+            address(p.tokens[i]),
+            IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
+            amountIn,
+            funds_
+          );
+        }
+        ++k;
+      }
     }
   }
 
@@ -468,8 +548,8 @@ library BalancerLogicLib {
     address assetOut_,
     uint amountIn_,
     IBVault.FundManagement memory funds_
-  ) internal returns (uint) {
-    console.log("_swap, asset, balance", assetIn_, IERC20(assetIn_).balanceOf(address(this)));
+  ) internal returns (uint amountOut) {
+    console.log("_swap, asset, balance", assetIn_);
     console.log("_swap, amountIn", amountIn_);
 
     uint balanceBefore = IERC20(assetOut_).balanceOf(address(this));
@@ -490,7 +570,8 @@ library BalancerLogicLib {
     );
 
     // we assume here, that the balance cannot be decreased
-    return IERC20(assetOut_).balanceOf(address(this)) - balanceBefore;
+    amountOut = IERC20(assetOut_).balanceOf(address(this)) - balanceBefore;
+    console.log("_swap, amountOut", amountOut);
   }
 
   /////////////////////////////////////////////////////////////////////

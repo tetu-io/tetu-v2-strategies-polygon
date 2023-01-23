@@ -214,7 +214,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // convert all received amounts to the asset
     _convertDepositorPoolAssets();
     _updateInvestedAssets();
-    console.log("_withdrawFromPoolUniversal.finish");
+    console.log("_withdrawFromPoolUniversal.finish with balances:");
+    TokenAmountsLib.printBalances(_depositorPoolAssets(), address(this));
   }
 
   /// @notice Convert all amounts withdrawn from the depositor to {asset}
