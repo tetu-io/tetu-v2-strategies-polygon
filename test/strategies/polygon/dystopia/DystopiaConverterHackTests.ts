@@ -215,7 +215,7 @@ describe.skip("DystopiaConverterHackTests", function () {
     await asset.approve(vault.address, Misc.MAX_UINT);
 
     // Disable DForce at TetuConverter
-    await ConverterUtils.disableDForce(asset.address, vaultToken2.address, signer);
+    await ConverterUtils.disableDForce(signer);
 
     // INITIAL DEPOSIT
 

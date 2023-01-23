@@ -7,7 +7,8 @@ import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {
-  IStrategyV2, QuickswapConverterStrategy__factory
+  BalancerComposableStableStrategy__factory,
+  IStrategyV2
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
@@ -30,9 +31,10 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
+// const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe('QuickswapConverterUniversalTest', async () => {
+describe('BalancerComposableStableUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -42,16 +44,9 @@ describe('QuickswapConverterUniversalTest', async () => {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
   });
 
-  const strategyName = 'QuickswapConverterStrategy';
+  const strategyName = 'BalancerComposableStableStrategy';
   const assetName = 'USDC';
-  /**
-   * Any not-finished reward pool for the given pair of assets that supports IStakingRewards
-   * See DownloadQuickswapPoolsPure.ts, address in column stakingRewards, row with "finished = false"
-   */
-  const rewardsPool = "0xACb9EB5B52F495F09bA98aC96D8e61257F3daE14";
   const asset = PolygonAddresses.USDC_TOKEN;
-  const token1 = asset;
-  const token2 = PolygonAddresses.DAI_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
 
@@ -59,7 +54,7 @@ describe('QuickswapConverterUniversalTest', async () => {
     const controller = DeployerUtilsLocal.getController(signer);
 
     const strategyDeployer = async (splitterAddress: string) => {
-      const strategy = QuickswapConverterStrategy__factory.connect(
+      const strategy = BalancerComposableStableStrategy__factory.connect(
         await DeployerUtils.deployProxy(signer, strategyName),
         signer
       );
@@ -67,10 +62,7 @@ describe('QuickswapConverterUniversalTest', async () => {
       await strategy.init(
         core.controller,
         splitterAddress,
-        rewardsPool,
         getConverterAddress(),
-        token1,
-        token2,
       );
 
       // Disable DForce (as it reverts on repay after block advance)
@@ -81,17 +73,6 @@ describe('QuickswapConverterUniversalTest', async () => {
 
     console.log('getControllerGovernance...');
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
-
-    // { // Set Liquidator address // TODO remove after address updated onchain
-    //   const controllerGov = ControllerV2__factory.connect(core.controller, gov);
-    //   const _LIQUIDATOR = 4;
-    //   const liquidatorAddr = '0xC737eaB847Ae6A92028862fE38b828db41314772'; // tools.liquidator;
-    //   await controllerGov.announceAddressChange(_LIQUIDATOR, liquidatorAddr);
-    //   await TimeUtils.advanceBlocksOnTs(86400 /!*1day*!/);
-    //   await controllerGov.changeAddress(_LIQUIDATOR);
-    //   const liqAddress = await controllerGov.liquidator();
-    //   console.log('liqAddress', liqAddress);
-    // }
 
     console.log('deployAndInitVaultAndStrategy...');
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(

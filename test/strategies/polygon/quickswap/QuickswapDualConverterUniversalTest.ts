@@ -1,6 +1,6 @@
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-import {startDefaultStrategyTest} from "../../DefaultSingleTokenStrategyTest";
+import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
 import {config as dotEnvConfig} from "dotenv";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
@@ -74,7 +74,7 @@ describe('QuickswapDualConverterUniversalTest', async () => {
       );
 
       // Disable DForce (as it reverts on repay after block advance)
-      await ConverterUtils.disableDForce(token1, token2, signer);
+      await ConverterUtils.disableDForce(signer);
 
       return strategy as unknown as IStrategyV2;
     }

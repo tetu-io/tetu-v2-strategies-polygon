@@ -709,7 +709,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
         // todo
       });
       describe("Gas estimation @skip-on-coverage", () => {
-        it("withdraw $1 should not exceed gas limits @skip-on-coverage", async () => {
+        it("claiming rewards for $1 should not exceed gas limits @skip-on-coverage", async () => {
           const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
           await makeDepositorEnterTest(facade, "1");
           const retExit = await makeDepositorClaimRewardsTest(facade);

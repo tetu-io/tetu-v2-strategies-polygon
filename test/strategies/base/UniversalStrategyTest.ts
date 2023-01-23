@@ -1,21 +1,21 @@
 import {ethers} from "hardhat";
-import {IToolsContractsWrapper} from "../ToolsContractsWrapper";
-import {StrategyTestUtils} from "../baseUT/utils/StrategyTestUtils";
+import {IToolsContractsWrapper} from "../../ToolsContractsWrapper";
+import {StrategyTestUtils} from "../../baseUT/utils/StrategyTestUtils";
 import {
   IForwarder,
   ITetuLiquidator,
   TetuVaultV2,
   IStrategyV2
-} from "../../typechain";
+} from "../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {ICoreContractsWrapper} from "../CoreContractsWrapper";
-import {DoHardWorkLoopBase} from "../baseUT/utils/DoHardWorkLoopBase";
-import {DeployInfo} from "../baseUT/utils/DeployInfo";
+import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
+import {DoHardWorkLoopBase} from "../../baseUT/utils/DoHardWorkLoopBase";
+import {DeployInfo} from "../../baseUT/utils/DeployInfo";
 import {SpecificStrategyTest} from "./SpecificStrategyTest";
 import {BigNumber} from "ethers";
-import {TimeUtils} from "../../scripts/utils/TimeUtils";
-import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../scripts/utils/DeployerUtilsLocal";
-import {Misc} from "../../scripts/utils/Misc";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
+import {Misc} from "../../../scripts/utils/Misc";
 
 async function universalStrategyTest(
   name: string,

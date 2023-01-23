@@ -15,11 +15,9 @@ export class ConverterUtils {
    *
    * We can avoid disabling of DForce also by replacing DForce's price oracle by mocked version (same as in TetuConverter)
    * The mocked version returns not-zero prices after block advance.
-   * @param token1Address
-   * @param token2Address
    * @param signer
    */
-  public static async disableDForce(token1Address: string, token2Address: string, signer: SignerWithAddress) {
+  public static async disableDForce(signer: SignerWithAddress) {
     console.log('disableDForce...');
     const tools = Addresses.getTools();
     const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);

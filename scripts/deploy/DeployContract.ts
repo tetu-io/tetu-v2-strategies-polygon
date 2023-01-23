@@ -12,7 +12,7 @@ export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 const libraries = new Map<string, string>([
   ['VeTetu', 'VeTetuLogo'],
   ['BalancerComposableStableDepositorFacade', 'BalancerLogicLib'],
-  ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib'],
+  ['BalancerComposableStableStrategy', 'BalancerLogicLib'],
 ]);
 
 export async function deployContract<T extends ContractFactory>(
