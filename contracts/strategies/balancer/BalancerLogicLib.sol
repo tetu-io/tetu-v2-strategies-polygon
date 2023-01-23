@@ -279,7 +279,7 @@ library BalancerLogicLib {
     }
 
     // we can create funds_ once and use it several times
-    IBVault.FundManagement memory funds_ = IBVault.FundManagement({
+    IBVault.FundManagement memory funds = IBVault.FundManagement({
       sender: address(this),
       fromInternalBalance: false,
       recipient: payable(address(this)),
@@ -299,7 +299,7 @@ library BalancerLogicLib {
         IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
         address(p.tokens[i]),
         amountsConsumedOut[k],
-        funds_
+        funds
       );
       userDataAmounts[k] = amountsToDeposit[i];
       AppLib.approveIfNeeded(address(p.tokens[i]), amountsToDeposit[i], address(vault_));
@@ -320,13 +320,10 @@ library BalancerLogicLib {
     );
 
     uint liquidityAfter = IERC20(address(p.tokens[p.bptIndex])).balanceOf(address(this));
-    console.log("balance", address(p.tokens[p.bptIndex]), address(this), liquidityAfter);
 
     liquidityOut = liquidityAfter > liquidityOut
       ? liquidityAfter - liquidityOut
       : 0;
-    console.log("liquidityAfter", liquidityAfter);
-    console.log("liquidityOut", liquidityOut);
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -365,7 +362,7 @@ library BalancerLogicLib {
     // now we have amBbXXX tokens; swap them to XXX assets
 
     // we can create funds_ once and use it several times
-    IBVault.FundManagement memory funds_ = IBVault.FundManagement({
+    IBVault.FundManagement memory funds = IBVault.FundManagement({
       sender: address(this),
       fromInternalBalance: false,
       recipient: payable(address(this)),
@@ -384,7 +381,7 @@ library BalancerLogicLib {
           address(p.tokens[i]),
           IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
           amountIn,
-          funds_
+          funds
         );
       }
       ++k;
@@ -441,7 +438,7 @@ library BalancerLogicLib {
       // now we have amBbXXX tokens; swap them to XXX assets
 
       // we can create funds_ once and use it several times
-      IBVault.FundManagement memory funds_ = IBVault.FundManagement({
+      IBVault.FundManagement memory funds = IBVault.FundManagement({
         sender: address(this),
         fromInternalBalance: false,
         recipient: payable(address(this)),
@@ -460,7 +457,7 @@ library BalancerLogicLib {
             address(p.tokens[i]),
             IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
             amountIn,
-            funds_
+            funds
           );
         }
         ++k;

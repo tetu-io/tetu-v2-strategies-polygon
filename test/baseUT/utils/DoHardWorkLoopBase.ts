@@ -465,18 +465,18 @@ export class DoHardWorkLoopBase {
 
   private async strategyEarned() {
     // TODO calc how much strategy earned
-    /*let result = BigNumber.from(0);
-    const platform = await this.strategy.PLATFORM();
-    if (platform === 24) {
-      const splitter = ISplitter__factory.connect(this.strategy.address, this.signer);
-      const strategies = await splitter.allStrategies();
-      for (const s of strategies) {
-        result = result.add(await this.core.bookkeeper.targetTokenEarned(s));
-      }
-    } else {
-      result = await this.core.bookkeeper.targetTokenEarned(this.strategy.address);
-    }
-    return result;*/
+    // let result = BigNumber.from(0);
+    // const platform = await this.strategy.PLATFORM();
+    // if (platform === 24) {
+    //   const splitter = ISplitter__factory.connect(this.strategy.address, this.signer);
+    //   const strategies = await splitter.allStrategies();
+    //   for (const s of strategies) {
+    //     result = result.add(await this.core.bookkeeper.targetTokenEarned(s));
+    //   }
+    // } else {
+    //   result = await this.core.bookkeeper.targetTokenEarned(this.strategy.address);
+    // }
+    // return result;
     return BigNumber.from(0); // TODO
   }
 
