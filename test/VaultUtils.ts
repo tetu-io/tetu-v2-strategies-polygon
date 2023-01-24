@@ -2,22 +2,13 @@ import {
   IERC20__factory,
   TetuVaultV2,
   IStrategyV2__factory,
-  IGauge__factory, StrategySplitterV2__factory
+  StrategySplitterV2__factory
 } from "../typechain";
 import {expect} from "chai";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TokenUtils} from "../scripts/utils/TokenUtils";
 import {BigNumber, ContractTransaction, utils} from "ethers";
-// import axios from "axios";
-// import {MintHelperUtils} from "./MintHelperUtils";
 import {Misc} from "../scripts/utils/Misc";
-// import {ethers} from "hardhat";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {ICoreContractsWrapper} from "./CoreContractsWrapper";
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {ethers} from "hardhat";
-import axios from "axios";
-import { LogDescription } from "ethers/lib/utils";
 
 /** Amounts earned/lost by the given strategies during the hardwork */
 export interface IDoHardworkAndCheckResults {
@@ -38,14 +29,6 @@ export class VaultUtils {
 
   constructor(public vault: TetuVaultV2) {
   }
-
-  // public static async profitSharingRatio(controller: IController): Promise<number> {
-  //   const ratio = (await controller.psNumerator()).toNumber()
-  //     / (await controller.psDenominator()).toNumber();
-  //   expect(ratio).is.not.lessThan(0);
-  //   expect(ratio).is.not.greaterThan(100);
-  //   return ratio;
-  // }
 
   public static async deposit(
     user: SignerWithAddress,
@@ -71,6 +54,7 @@ export class VaultUtils {
     return vaultForUser.deposit(BigNumber.from(amount), user.address);
   }
 
+
   public static async doHardWorkAndCheck(
     vault: TetuVaultV2,
     positiveCheck = true
@@ -85,84 +69,46 @@ export class VaultUtils {
     const underlying = await vault.asset();
     const underlyingDecimals = await TokenUtils.decimals(underlying);
 
-    // const gauge = IGauge__factory.connect(await vault.gauge(), vault.signer);
-    // const rt = Addresses.getCore().tetu; // TODO May we get reward tokens from the Gauge?
     const psRatio = 1;
     // const ppfsDecreaseAllowed = false; // await vault.ppfsDecreaseAllowed();
 
-    const ppfs = +utils.formatUnits(await vault.sharePrice(), underlyingDecimals);
-    const underlyingBalance = +utils.formatUnits(await vault.totalAssets(), underlyingDecimals);
-    // const rtBal = +utils.formatUnits(await TokenUtils.balanceOf(rt, vault.address));
+    const ppfsBefore = +utils.formatUnits(await vault.sharePrice(), underlyingDecimals);
+    const underlyingBalanceBefore = +utils.formatUnits(await vault.totalAssets(), underlyingDecimals);
 
-    console.log('splitter dohardworks');
+    console.log('start hard works');
     const splitterAddress = await vault.splitter();
-    console.log("splitter", splitterAddress);
     const splitter = StrategySplitterV2__factory.connect(splitterAddress, vault.signer);
 
     const subStrategies = await splitter.allStrategies();
     for (const subStrategy of subStrategies) {
       const strategy = IStrategyV2__factory.connect(subStrategy, vault.signer);
-      console.log('Call substrategy dohardwork', await strategy.NAME());
+      const strategyName = await strategy.NAME();
+      console.log(`Call doHardWork, strategy=${strategyName}`);
 
       // handle HardWork-event to extract earned and lost values
       const {earned, lost} = await strategy.callStatic.doHardWork();
-      const tx = await strategy.doHardWork();
+      await strategy.doHardWork();
+      console.log(`Strategy=${strategyName} earned=${earned} lost=${lost}`);
+
       dest.strategy.push(strategy.address);
       dest.earned.push(BigNumber.from(earned));
       dest.lost.push(BigNumber.from(lost));
-
-      const receipt = await tx.wait();
-
-      // if (receipt.events) {
-      //   console.log("!1!");
-      //   const event = StrategySplitterV2__factory.createInterface().getEvent("HardWork");
-      //   const topic = StrategySplitterV2__factory.createInterface().getEventTopic("HardWork");
-      //   console.log("!2!");
-      //   receipt.logs.map((log) => {
-      //     console.log("!3!");
-      //     let parsed: LogDescription | undefined;
-      //     try {
-      //       console.log("!4!");
-      //       parsed = StrategySplitterV2__factory.createInterface().parseLog(log);
-      //       console.log("!5!");
-      //     } catch (e){ }
-      //
-      //     console.log("!6!");
-      //     if (parsed) {
-      //       console.log("!7!");
-      //       const data = StrategySplitterV2__factory.createInterface().decodeEventLog(event, log.data, log.topics)
-      //       console.log("!8!");
-      //       const earned = data.earned;
-      //       const lost = data.lost;
-      //       console.log("!9!", earned, lost);
-      //       dest.strategy.push(strategy.address);
-      //       dest.earned.push(BigNumber.from(earned));
-      //       dest.lost.push(BigNumber.from(lost));
-      //       console.log("!10!");
-      //     }
-      //   });
-      //
-      //   // we need to display full objects, so we use util.inspect, see
-      //   // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
-      //   require("util").inspect.defaultOptions.depth = null;
-      //   console.log("Receipt events", receipt);
-      // }
     }
 
-    console.log('hard works called');
+    console.log('hard works done');
 
     const ppfsAfter = +utils.formatUnits(await vault.sharePrice(), underlyingDecimals);
-    const undBalAfter = +utils.formatUnits(await vault.totalAssets(), underlyingDecimals);
-    // const psPpfsAfter = +utils.formatUnits(await psVaultCtr.getPricePerFullShare());
-    // const rtBalAfter = +utils.formatUnits(await TokenUtils.balanceOf(rt, vault.address));
+    const unerlyingBalanceAfter = +utils.formatUnits(await vault.totalAssets(), underlyingDecimals);
 
     console.log('-------- HARDWORK --------');
-    console.log('- Vault Share price:', ppfsAfter);
-    console.log('- Vault Share price change:', ppfsAfter - ppfs);
-    console.log('- Vault und balance change:', undBalAfter - underlyingBalance);
+    console.log('- Vault Share price after:', ppfsAfter);
+    console.log('- Vault Share price before:', ppfsBefore);
+    console.log('- Vault Share price change:', ppfsAfter - ppfsBefore);
+    console.log('- Vault underlying balance after:', unerlyingBalanceAfter);
+    console.log('- Vault underlying balance before:', underlyingBalanceBefore);
+    console.log('- Vault underlying balance change:', unerlyingBalanceAfter - underlyingBalanceBefore);
     console.log('- Earned by the strategies:', dest.earned.reduce((p, c) => c = p.add(c), BigNumber.from(0)));
     console.log('- Lost by the strategies:', dest.lost.reduce((p, c) => c = p.add(c), BigNumber.from(0)));
-    // console.log('- Vault first RT change:', rtBalAfter - rtBal);
     console.log('- PS ratio:', psRatio);
     console.log('--------------------------');
     // TODO !!! check Gauges, Bribes, Invest fund?

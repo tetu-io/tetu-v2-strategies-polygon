@@ -144,7 +144,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    console.log("_withdrawFromPool, amount", amount);
+    console.log("_withdrawFromPool.1 amount", amount);
 
     require(_investedAssets != 0, "CSB: no investments");
     if (amount != 0 && _investedAssets != 0) {
@@ -154,10 +154,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         / 100; // .. add 1% on top
       (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
       _withdrawFromPoolUniversal(liquidityAmount, false);
-
-      console.log("_withdrawFromPool.liquidityAmount, assetPrice finish", liquidityAmount, assetPrice);
+      console.log("_withdrawFromPool.2 liquidityAmount", liquidityAmount);
     }
 
+    console.log("_withdrawFromPool.3 investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
     return (investedAssetsUSD, assetPrice);
   }
 
@@ -326,13 +326,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    console.log('doHardWork...');
+    console.log('doHardWork.1');
     uint assetBalanceBefore = _balance(asset);
+    console.log('doHardWork.2 assetBalanceBefore', assetBalanceBefore);
     _claim();
     uint assetBalanceAfter = _balance(asset);
-    earned = assetBalanceAfter - assetBalanceBefore;
+    console.log('doHardWork.2 assetBalanceAfter', assetBalanceAfter);
 
+    earned = assetBalanceAfter - assetBalanceBefore;
     lost = 0;
+    console.log('doHardWork.3 earned', earned);
 
     if (reInvest && assetBalanceAfter > 0) {// re-invest income
       uint investedBefore = _investedAssets;
@@ -341,10 +344,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       if (investedAfter > investedBefore) {
         earned += investedAfter - investedBefore;
-        console.log("earned", earned);
+        console.log("doHardWork.4 earned", earned);
       } else {
         lost = investedBefore - investedAfter;
-        console.log("lost", earned);
+        console.log("doHardWork.5 lost", lost);
       }
     }
   }
