@@ -92,7 +92,11 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   function _depositorLiquidity() override internal virtual view returns (uint liquidityOut) {
     liquidityOut = _gauge.balanceOf(address(this))
       + IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this));
-    console.log("_depositorLiquidity", liquidityOut);
+    console.log("_depositorLiquidity: liquidityOut=gauge+depositor balance",
+      liquidityOut,
+      _gauge.balanceOf(address(this)),
+      IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this))
+    );
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
@@ -118,19 +122,19 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ) {
     bytes32 _poolId = poolId; // gas saving
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
-    console.log("_depositorEnter.0 balance", pool.balanceOf(address(this)));
+    console.log("_depositorEnter.0 depositorBalance", pool.balanceOf(address(this)));
 
     // join to the pool, receive pool-BPTs
     (amountsConsumedOut, liquidityOut) = BalancerLogicLib.depositorEnter(BALANCER_VAULT, _poolId, amountsDesired_);
 
-    console.log("_depositorEnter.1 liquidityOut, balance", liquidityOut, pool.balanceOf(address(this)));
-    console.log("_depositorEnter.2 gauge balance", _gauge.balanceOf(address(this)));
+    console.log("_depositorEnter.1 liquidityOut", liquidityOut);
+    console.log("_depositorEnter.2 amountsConsumedOut", amountsConsumedOut[0], amountsConsumedOut[1], amountsConsumedOut[2]);
+    console.log("_depositorEnter.3 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
 
     // stake all available pool-BPTs to the gauge
     // we can have pool-BPTs on depositor's balance after previous exit, stake them too
     _gauge.deposit(pool.balanceOf(address(this)));
-    console.log("_depositorEnter.3 liquidityOut, balance", liquidityOut, pool.balanceOf(address(this)));
-    console.log("_depositorEnter.4 gauge balance", _gauge.balanceOf(address(this)));
+    console.log("_depositorEnter.4 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -141,42 +145,44 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
     bytes32 _poolId = poolId; // gas saving
+    IBalancerGauge __gauge = _gauge; // gas saving
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
-    console.log("_depositorExit.1 liquidityAmount_", liquidityAmount_);
 
     // we need to withdraw pool-BPTs from the _gauge
     // at first, let's try to use exist pool-BPTs on the depositor balance, probably it's enough
     // we can have pool-BPTs on depositor's balance after previous exit, see BalancerLogicLib.depositorExit
     uint depositorBalance = pool.balanceOf(address(this));
+    uint gaugeBalance = __gauge.balanceOf(address(this));
+    console.log("_depositorExit.1 liquidityAmount_, gaugeBalance, depositorBalance", liquidityAmount_, gaugeBalance, depositorBalance);
+
     uint liquidityToWithdraw = liquidityAmount_ > depositorBalance
       ? liquidityAmount_ - depositorBalance
       : 0;
-    console.log("_depositorExit.2 liquidityToWithdraw, depositorBalance", liquidityToWithdraw, depositorBalance);
+    console.log("_depositorExit.2 liquidityToWithdraw", liquidityToWithdraw);
 
     // calculate how much pool-BPTs we should withdraw from the gauge
     if (liquidityToWithdraw > 0) {
-      uint gaugeBalance = _gauge.balanceOf(address(this));
       if (liquidityToWithdraw > gaugeBalance) {
-        console.log("_depositorExit.2 liquidityToWithdraw, gaugeBalance", liquidityToWithdraw, gaugeBalance);
+        console.log("_depositorExit.3 liquidityToWithdraw", liquidityToWithdraw);
         liquidityToWithdraw = gaugeBalance;
       }
-      console.log("_depositorExit.3 liquidityToWithdraw", liquidityToWithdraw);
     }
+    console.log("_depositorExit.4 liquidityToWithdraw", liquidityToWithdraw);
 
     // un-stake required pool-BPTs from the gauge
     if (liquidityToWithdraw > 0) {
-      _gauge.withdraw(liquidityToWithdraw);
-      depositorBalance = pool.balanceOf(address(this));
+      __gauge.withdraw(liquidityToWithdraw);
     }
 
     // withdraw the liquidity from the pool
-    if (liquidityAmount_ >= depositorBalance) {
-      console.log("_depositorExit.4 Full exit, liquidityAmount_, balance", liquidityAmount_, depositorBalance);
-      return BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId);
+    if (liquidityAmount_ >= depositorBalance + gaugeBalance) {
+      console.log("_depositorExit.5 Full exit, liquidityAmount_", liquidityAmount_);
+      amountsOut = BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId);
     } else {
-      console.log("_depositorExit.5 Partial exit, liquidityAmount_, liquidityToWithdraw", liquidityAmount_, liquidityToWithdraw);
-      return BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
+      console.log("_depositorExit.6 Partial exit liquidityToWithdraw", liquidityToWithdraw);
+      amountsOut = BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
     }
+    console.log("_depositorExit.7 gaugeBalance, depositorBalance", __gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.

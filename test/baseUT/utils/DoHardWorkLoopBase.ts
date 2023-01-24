@@ -9,7 +9,12 @@ import {PPFS_NO_INCREASE, VaultUtils} from "../../VaultUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {expect} from "chai";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
+import {IUserBalances} from "./BalanceUtils";
 
+interface IBalances {
+  userBalance: BigNumber;
+  signerBalance: BigNumber;
+}
 
 export class DoHardWorkLoopBase {
 
@@ -44,6 +49,8 @@ export class DoHardWorkLoopBase {
 
   initialDepositWithFee = BigNumber.from(0);
 
+  initialBalances: IBalances;
+
   constructor(
     signer: SignerWithAddress,
     user: SignerWithAddress,
@@ -66,6 +73,10 @@ export class DoHardWorkLoopBase {
     this.finalBalanceTolerance = finalBalanceTolerance;
 
     this.vaultAsUser = vault.connect(user);
+    this.initialBalances = {
+      userBalance: BigNumber.from(0),
+      signerBalance: BigNumber.from(0)
+    }
   }
 
   public async start(deposit: BigNumber, loops: number, loopValue: number, advanceBlocks: boolean) {
@@ -105,11 +116,18 @@ export class DoHardWorkLoopBase {
     this.feeDenominator = await this.vault.FEE_DENOMINATOR();
     this.depositFee = await this.vault.depositFee();
     this.withdrawFee = await this.vault.withdrawFee();
+
+    this.initialBalances = {
+      userBalance: await this.userBalance(),
+      signerBalance: await TokenUtils.balanceOf(this.underlying, this.signer.address)
+    }
+    console.log("initialBalances", this.initialBalances);
   }
 
   protected async initialSnapshot() {
     console.log('>>>initialSnapshot start')
     // TODO capture initial asset and reward balances
+
     this.startTs = await Misc.getBlockTsFromChain();
     this.cRatio = (await this.strategy.compoundRatio()).toNumber();
     console.log('initialSnapshot end')
@@ -214,18 +232,22 @@ export class DoHardWorkLoopBase {
     if (this.isUserDeposited && i % 2 === 0) {
       this.isUserDeposited = false;
       if (i % 4 === 0) {
+        console.log("!!!Withdraw all");
         await this.withdraw(true, BigNumber.from(0));
       } else {
         const userXTokenBal = await TokenUtils.balanceOf(this.vault.address, this.user.address);
         const userAssetsBal = await this.vaultAsUser.convertToAssets(userXTokenBal);
         const toWithdraw = BigNumber.from(userAssetsBal).mul(95).div(100);
+        console.log("!!!Withdraw", toWithdraw);
         await this.withdraw(false, toWithdraw);
       }
 
     } else if (!this.isUserDeposited && i % 2 !== 0) {
       this.isUserDeposited = true;
       const uBal = await TokenUtils.balanceOf(this.underlying, this.user.address);
+      console.log("!!!Deposit", BigNumber.from(uBal).div(3));
       await this.deposit(BigNumber.from(uBal).div(3));
+      console.log("!!!Deposit", BigNumber.from(uBal).div(3));
       await this.deposit(BigNumber.from(uBal).div(3));
     }
     Misc.printDuration('fLoopEndActions completed', start);
@@ -435,6 +457,31 @@ export class DoHardWorkLoopBase {
 
     // TODO check final user and signer balances
     // some pools have auto compounding so user balance can increase
+    const finalBalances: IBalances = {
+      userBalance: await this.userBalance(),
+      signerBalance: await TokenUtils.balanceOf(this.underlying, this.signer.address)
+    }
+
+    const difference: IBalances = {
+      userBalance: finalBalances.userBalance.sub(this.initialBalances.userBalance),
+      signerBalance: finalBalances.signerBalance.sub(this.initialBalances.signerBalance),
+    }
+    console.log("Initial balances", this.initialBalances);
+    console.log("Final balances", finalBalances);
+    console.log("Difference of balances", difference);
+
+    console.log("User balance changes, percents", finalBalances.userBalance
+      .sub(this.initialBalances.userBalance)
+      .mul(100_000)
+      .div(this.initialBalances.userBalance)
+      .toNumber() / 1000
+    );
+    console.log("Signer balance changes, percents", finalBalances.signerBalance
+      .sub(this.initialBalances.signerBalance)
+      .mul(100_000)
+      .div(this.initialBalances.signerBalance)
+      .toNumber() / 1000
+    );
   }
 
   private async getPrice(token: string): Promise<BigNumber> {
