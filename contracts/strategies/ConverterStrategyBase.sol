@@ -523,7 +523,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     console.log('>>> position closed: returnedAssetAmount:', returnedAssetAmount, collateralAsset);
     console.log('position closed: returnedBorrowAmountOut:', returnedBorrowAmountOut);
-    console.log('>>> REPAY amountToRepay', amountToRepay);
+    console.log('>>> REPAY amountToRepay, borrowAsset', amountToRepay, borrowAsset);
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
 
     // Manually swap remain leftover

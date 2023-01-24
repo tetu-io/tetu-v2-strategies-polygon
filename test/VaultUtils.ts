@@ -86,13 +86,13 @@ export class VaultUtils {
       console.log(`Call doHardWork, strategy=${strategyName}`);
 
       // handle HardWork-event to extract earned and lost values
-      const {earned, lost} = await strategy.callStatic.doHardWork();
+      // !TODO const {earned, lost} = await strategy.callStatic.doHardWork();
       await strategy.doHardWork();
-      console.log(`Strategy=${strategyName} earned=${earned} lost=${lost}`);
-
-      dest.strategy.push(strategy.address);
-      dest.earned.push(BigNumber.from(earned));
-      dest.lost.push(BigNumber.from(lost));
+      // console.log(`Strategy=${strategyName} earned=${earned} lost=${lost}`);
+      //
+      // dest.strategy.push(strategy.address);
+      // dest.earned.push(BigNumber.from(earned));
+      // dest.lost.push(BigNumber.from(lost));
     }
 
     console.log('hard works done');

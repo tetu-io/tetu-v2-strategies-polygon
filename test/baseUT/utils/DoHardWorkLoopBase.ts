@@ -1,6 +1,12 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
-import {IStrategyV2, TetuVaultV2} from "../../../typechain";
+import {
+  IBalancerGauge__factory, IController__factory,
+  IERC20__factory, ISplitter__factory,
+  IStrategyV2,
+  StrategyBaseV2__factory,
+  TetuVaultV2
+} from "../../../typechain";
 import {IToolsContractsWrapper} from "../../ToolsContractsWrapper";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {BigNumber, utils} from "ethers";
@@ -9,7 +15,7 @@ import {PPFS_NO_INCREASE, VaultUtils} from "../../VaultUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {expect} from "chai";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
-import {IUserBalances} from "./BalanceUtils";
+import {MaticAddresses} from "../../../scripts/MaticAddresses";
 
 interface IBalances {
   userBalance: BigNumber;
@@ -83,9 +89,11 @@ export class DoHardWorkLoopBase {
     const start = Date.now();
     this.loops = loops;
     await this.init();
+    await this.printAllBalances();
     this.initialDepositWithFee = this.subDepositFee(deposit); // call it after fees init()
     await this.enterToVault(deposit);
     await this.initialSnapshot();
+    await this.printAllBalances();
     await this.loop(loops, loopValue, advanceBlocks);
     await this.postLoopCheck();
     Misc.printDuration('HardWork test finished', start);
@@ -122,6 +130,14 @@ export class DoHardWorkLoopBase {
       signerBalance: await TokenUtils.balanceOf(this.underlying, this.signer.address)
     }
     console.log("initialBalances", this.initialBalances);
+
+    const controller = await StrategyBaseV2__factory.connect(this.strategy.address, this.user).controller();
+    const platformVoter = await IController__factory.connect(controller, this.user).platformVoter();
+    const strategyAsPlatformVoter = await StrategyBaseV2__factory.connect(
+      this.strategy.address,
+      await Misc.impersonate(platformVoter)
+    );
+    await strategyAsPlatformVoter.setCompoundRatio(100_000);
   }
 
   protected async initialSnapshot() {
@@ -193,7 +209,56 @@ export class DoHardWorkLoopBase {
       await this.loopEndCheck();
       await this.loopEndActions(i);
       Misc.printDuration(i + ' Loop ended', start);
+      await this.printAllBalances();
     }
+  }
+
+  async printAllBalances() {
+    const gauge = "0x1c514fEc643AdD86aeF0ef14F4add28cC3425306";
+    const balancerPool = "0x48e6b98ef6329f8f0a30ebb8c7c960330d648085";
+    const bbAmDai = "0x178E029173417b1F9C8bC16DCeC6f697bC323746";
+    const bbAmUsdc = "0xF93579002DBE8046c43FEfE86ec78b1112247BB8";
+    const bbAmUsdt = "0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6";
+    const splitterAddress = await this.vault.splitter();
+    const b = {
+      signerUsdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, this.user).balanceOf(this.signer.address),
+      userUsdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, this.user).balanceOf(this.user.address),
+      userUsdt: await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, this.user).balanceOf(this.user.address),
+      userDai: await IERC20__factory.connect(MaticAddresses.DAI_TOKEN, this.user).balanceOf(this.user.address),
+      strategyUsdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, this.user).balanceOf(this.strategy.address),
+      strategyUsdt: await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, this.user).balanceOf(this.strategy.address),
+      strategyDai: await IERC20__factory.connect(MaticAddresses.DAI_TOKEN, this.user).balanceOf(this.strategy.address),
+      strategyBal: await IERC20__factory.connect(MaticAddresses.BAL_TOKEN, this.user).balanceOf(this.strategy.address),
+      strategyPoolBPT: await IERC20__factory.connect(balancerPool, this.user).balanceOf(this.strategy.address),
+      strategyTotalAssets: await this.strategy.totalAssets(),
+      investedAssets: await StrategyBaseV2__factory.connect(this.strategy.address, this.user).investedAssets(),
+      gaugePoolBPT: await IBalancerGauge__factory.connect(gauge, this.user).balanceOf(this.strategy.address),
+      poolBbAmDai:  await IERC20__factory.connect(bbAmDai, this.user).balanceOf(balancerPool),
+      poolBbAmUsdc:  await IERC20__factory.connect(bbAmUsdc, this.user).balanceOf(balancerPool),
+      poolBbAmUsdt:  await IERC20__factory.connect(bbAmUsdt, this.user).balanceOf(balancerPool),
+      splitterUsdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, this.user).balanceOf(splitterAddress),
+      splitterTotalAssets: await ISplitter__factory.connect(splitterAddress, this.user).totalAssets(),
+      vaultUserUsdc: await this.vault.balanceOf(this.user.address),
+      vaultSignerUsdc: await this.vault.balanceOf(this.signer.address),
+      vaultSharedPrice: await this.vault.sharePrice(),
+      vaultTotalSupply: await this.vault.totalSupply(),
+      vaultTotalAssets: await this.vault.totalAssets(),
+      poolBbAmDaiStrategy:  await IERC20__factory.connect(bbAmDai, this.user).balanceOf(this.strategy.address),
+      poolBbAmUsdcStrategy:  await IERC20__factory.connect(bbAmUsdc, this.user).balanceOf(this.strategy.address),
+      poolBbAmUsdtStrategy:  await IERC20__factory.connect(bbAmUsdt, this.user).balanceOf(this.strategy.address),
+      poolBbAmDaiUser:  await IERC20__factory.connect(bbAmDai, this.user).balanceOf(this.user.address),
+      poolBbAmUsdcUser:  await IERC20__factory.connect(bbAmUsdc, this.user).balanceOf(this.user.address),
+      poolBbAmUsdtUser:  await IERC20__factory.connect(bbAmUsdt, this.user).balanceOf(this.user.address),
+      userPoolBPT: await IERC20__factory.connect(balancerPool, this.user).balanceOf(this.user.address),
+    };
+
+    console.log(`State`, b);
+    console.log(`>>> StateUser usdc=${b.userUsdc} vault-usdc=${b.vaultUserUsdc}`);
+    console.log(`>>> StateSigner usdc=${b.signerUsdc} vault-usdc=${b.vaultSignerUsdc}`);
+    console.log(`>>> StateStrategy usdc=${b.strategyUsdc} usdt=${b.strategyUsdt} dai=${b.strategyDai} investedAssets=${b.investedAssets} totalAssets=${b.strategyTotalAssets}`);
+    console.log(`>>> StatePool strategy=${b.strategyPoolBPT} gauge=${b.gaugePoolBPT}`);
+    console.log(`>>> StateSplitter usdc=${b.splitterUsdc} totalAssets=${b.splitterTotalAssets}`);
+    console.log(`>>> StateVault sharePrice=${b.vaultSharedPrice} totalSupply=${b.vaultTotalSupply} totalAssets=${b.vaultTotalAssets}`);
   }
 
   protected async loopStartActions(i: number) {
@@ -226,7 +291,26 @@ export class DoHardWorkLoopBase {
     }
   }
 
+  /** Simplest version: single deposit, single withdrawing */
   protected async loopEndActions(i: number) {
+    console.log("loopEndActions", i);
+    const start = Date.now();
+    // we need to enter and exit from the vault between loops for properly check all mechanic
+    if (i === 48) {
+      this.isUserDeposited = false;
+      console.log("!!!Withdraw all");
+      await this.withdraw(true, BigNumber.from(0));
+    // } else if (i === 0) {
+    //   this.isUserDeposited = true;
+    //   const underlyingBalance = await TokenUtils.balanceOf(this.underlying, this.user.address);
+    //   console.log("!!!Deposit", BigNumber.from(underlyingBalance));
+    //   await this.deposit(BigNumber.from(underlyingBalance));
+    }
+    Misc.printDuration('fLoopEndActions completed', start);
+  }
+
+  protected async loopEndActionsMain(i: number) {
+    console.log("loopEndActions", i);
     const start = Date.now();
     // we need to enter and exit from the vault between loops for properly check all mechanic
     if (this.isUserDeposited && i % 2 === 0) {
@@ -482,6 +566,8 @@ export class DoHardWorkLoopBase {
       .div(this.initialBalances.signerBalance)
       .toNumber() / 1000
     );
+
+    await this.printAllBalances();
   }
 
   private async getPrice(token: string): Promise<BigNumber> {
