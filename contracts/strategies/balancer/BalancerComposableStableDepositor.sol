@@ -135,6 +135,14 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     // we can have pool-BPTs on depositor's balance after previous exit, stake them too
     _gauge.deposit(pool.balanceOf(address(this)));
     console.log("_depositorEnter.4 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
+
+//    (uint[] memory amountsOut) = BalancerLogicLib.depositorQuoteExit(
+//      BALANCER_VAULT,
+//      IBalancerHelper(BALANCER_HELPER),
+//      _poolId,
+//      _gauge.balanceOf(address(this))
+//    );
+//    console.log("_depositorEnter.5", amountsOut[0], amountsOut[1], amountsOut[2]);
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.

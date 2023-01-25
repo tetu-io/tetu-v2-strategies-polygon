@@ -33,6 +33,7 @@ export interface IUniversalStrategyInputParams {
   /** only for strategies where we expect PPFS fluctuations */
   ppfsDecreaseAllowed: boolean;
   specificTests: SpecificStrategyTest[];
+  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>,
 }
 
 async function universalStrategyTest(
@@ -132,7 +133,7 @@ async function universalStrategyTest(
         vault,
         strategy,
         params.balanceTolerance,
-      ).start(userBalance, params.loops, params.loopValue, params.advanceBlocks);
+      ).start(userBalance, params.loops, params.loopValue, params.advanceBlocks, params.stateRegistrar);
     });
 
     it("common test should be ok", async () => {

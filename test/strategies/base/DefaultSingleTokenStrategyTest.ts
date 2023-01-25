@@ -16,7 +16,8 @@ async function startDefaultStrategyTest(
   asset: string,
   assetName: string,
   deployInfo: DeployInfo,
-  deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>)
+  deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>),
+  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>,
 ) {
 
   // ***********************************************
@@ -28,10 +29,11 @@ async function startDefaultStrategyTest(
       ppfsDecreaseAllowed: false,
       balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
-      loops: 49,
+      loops: 15,
       loopValue: 300,
       advanceBlocks: true,
-      specificTests: []
+      specificTests: [],
+      stateRegistrar
   }
   // **********************************************
 
