@@ -287,14 +287,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // Join arrays and recycle tokens
     (tokens, amounts) = TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
+    TokenAmountsLib.print(tokens, amounts); // TODO remove
 
     // {amounts} contain just received tokens, but probably we already had some tokens on balance
     uint len = tokens.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       amounts[i] = IERC20(tokens[i]).balanceOf(address(this));
     }
-
-    TokenAmountsLib.print(tokens, amounts); // TODO remove
 
     if (len > 0) {
       _recycle(tokens, amounts);
@@ -374,7 +373,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log('doHardWork.3 earned', earned);
 
     if (reInvest
-      && earned > reinvestThresholdPercent * assetBalanceAfterClaim / REINVEST_THRESHOLD_PERCENT_DENOMINATOR
+      && assetBalanceAfterClaim > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR
     ) {// re-invest income
       uint investedBefore = _investedAssets;
       _depositToPool(assetBalanceAfterClaim);

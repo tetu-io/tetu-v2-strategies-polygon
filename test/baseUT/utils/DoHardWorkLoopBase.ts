@@ -152,7 +152,7 @@ export class DoHardWorkLoopBase {
       this.strategy.address,
       await Misc.impersonate(platformVoter)
     );
-    await strategyAsPlatformVoter.setCompoundRatio(50_000);
+    await strategyAsPlatformVoter.setCompoundRatio(100_000);
 
     const controllerAsUser = await ControllerV2__factory.connect(controller, this.user);
     const operators = await controllerAsUser.operatorsList();
@@ -160,7 +160,7 @@ export class DoHardWorkLoopBase {
       strategyAsPlatformVoter.address,
       await Misc.impersonate(operators[0])
     );
-    await strategyAsOperator.setRewardLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits("1", 6)); // TODO
+    // await strategyAsOperator.setRewardLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits("100", 6)); // TODO
     await strategyAsOperator.setReinvestThresholdPercent(1000); // 100_000 / 100
   }
 
@@ -236,7 +236,7 @@ export class DoHardWorkLoopBase {
       await this.doHardWork();
       await this.loopPrintROIAndSaveEarned(i);
       await this.loopEndCheck();
-      await this.loopEndActions(i);
+      await this.loopEndActions(i, loops);
       Misc.printDuration(i + ' Loop ended', start);
       if (stateRegistrar) {
         await stateRegistrar(i.toString(), this);
@@ -275,11 +275,11 @@ export class DoHardWorkLoopBase {
   }
 
   /** Simplest version: single deposit, single withdrawing */
-  protected async loopEndActions(i: number) {
+  protected async loopEndActions(i: number, numberLoops: number) {
     console.log("loopEndActions", i);
     const start = Date.now();
     // we need to enter and exit from the vault between loops for properly check all mechanic
-    if (i === 19) {
+    if (i === numberLoops - 1) {
       this.isUserDeposited = false;
       console.log("!!!Withdraw all");
       await this.withdraw(true, BigNumber.from(0));

@@ -20,7 +20,7 @@ import {DoHardWorkLoopBase} from "../../../baseUT/utils/DoHardWorkLoopBase";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {writeFileSync} from "fs";
 import {formatUnits} from "ethers/lib/utils";
-import {ethers} from "hardhat";
+import hre, {ethers} from "hardhat";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -91,11 +91,11 @@ async function getStates(title: string, h: DoHardWorkLoopBase) : Promise<IState>
   const bbAmUsdt = "0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6";
   const splitterAddress = await h.vault.splitter();
   const insurance = await h.vault.insurance();
-  const block = await ethers.getDefaultProvider().getBlockNumber();
+  const block = await hre.ethers.provider.getBlock("latest");
 
   const dest = {
     title,
-    block,
+    block: block.number,
     signer: {
       usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.signer.address),
     },

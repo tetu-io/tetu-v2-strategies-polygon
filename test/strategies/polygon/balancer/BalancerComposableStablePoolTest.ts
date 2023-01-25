@@ -455,9 +455,9 @@ describe("BalancerComposableStablePoolTest (study)", () => {
     // put them to balanceR pool
     // wait and check the profit
     const amountsDesired = [
-      BigNumber.from("44004014464183246220048"), // dai
-      BigNumber.from("49386335383"),  // usdc
-      BigNumber.from("49386335383"),   // usdt
+      BigNumber.from("44004014464183246220048").div(2), // dai
+      BigNumber.from("49386335383").div(2),  // usdc
+      BigNumber.from("49386335383").div(2),   // usdt
       BigNumber.from("0"), // bal
     ];
     const assets = [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.BAL_TOKEN];
@@ -470,18 +470,19 @@ describe("BalancerComposableStablePoolTest (study)", () => {
       await IERC20__factory.connect(assets[i], holder).transfer(facade.address, amountsDesired[i]);
       balancesBefore.push(await IERC20__factory.connect(assets[i], signer).balanceOf(facade.address));
     }
-    console.log("balancesBefore", balancesBefore);
 
     await facade._depositorEnterAccess(amountsDesired);
     const liquidityBefore = await IGauge__factory.connect(gauge, signer).balanceOf(facade.address);
-    console.log("liquidityBefore", liquidityBefore);
 
-    await TimeUtils.advanceNBlocks(40000);
+    const n = 40;
+    const step = 2000;
+    for (let i = 0; i < n; ++i) {
+      await TimeUtils.advanceNBlocks(step);
+      await facade._depositorClaimRewardsAccess();
+    }
 
     const liquidityAfter = await IGauge__factory.connect(gauge, signer).balanceOf(facade.address);
     await facade._depositorExitAccess(liquidityAfter);
-    await facade._depositorClaimRewardsAccess();
-    console.log("liquidityAfter", liquidityAfter);
 
     const difference: BigNumber[] = [];
     const balancesAfter: BigNumber[] = [];
@@ -493,6 +494,9 @@ describe("BalancerComposableStablePoolTest (study)", () => {
     }
 
 
+    console.log("balancesBefore", balancesBefore);
+    console.log("liquidityBefore", liquidityBefore);
+    console.log("liquidityAfter", liquidityAfter);
     console.log("balancesAfter", balancesAfter);
     console.log("difference", difference);
 
