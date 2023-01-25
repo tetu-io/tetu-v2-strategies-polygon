@@ -1,6 +1,7 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
 import {
+  BalancerComposableStableStrategy__factory, ControllerV2__factory,
   IBalancerGauge__factory, IController__factory,
   IERC20__factory, ISplitter__factory,
   IStrategyV2,
@@ -16,6 +17,7 @@ import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {expect} from "chai";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
 import {MaticAddresses} from "../../../scripts/MaticAddresses";
+import {parseUnits} from "ethers/lib/utils";
 
 interface IBalances {
   userBalance: BigNumber;
@@ -150,7 +152,16 @@ export class DoHardWorkLoopBase {
       this.strategy.address,
       await Misc.impersonate(platformVoter)
     );
-    await strategyAsPlatformVoter.setCompoundRatio(100_000);
+    await strategyAsPlatformVoter.setCompoundRatio(50_000);
+
+    const controllerAsUser = await ControllerV2__factory.connect(controller, this.user);
+    const operators = await controllerAsUser.operatorsList();
+    const strategyAsOperator = await BalancerComposableStableStrategy__factory.connect(
+      strategyAsPlatformVoter.address,
+      await Misc.impersonate(operators[0])
+    );
+    await strategyAsOperator.setRewardLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits("1", 6)); // TODO
+    await strategyAsOperator.setReinvestThresholdPercent(1000); // 100_000 / 100
   }
 
   protected async initialSnapshot() {
@@ -268,7 +279,7 @@ export class DoHardWorkLoopBase {
     console.log("loopEndActions", i);
     const start = Date.now();
     // we need to enter and exit from the vault between loops for properly check all mechanic
-    if (i === 14) {
+    if (i === 19) {
       this.isUserDeposited = false;
       console.log("!!!Withdraw all");
       await this.withdraw(true, BigNumber.from(0));

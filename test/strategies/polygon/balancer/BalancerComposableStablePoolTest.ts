@@ -11,6 +11,9 @@ import {BigNumber} from "ethers";
 import {MaticHolders} from "../../../../scripts/MaticHolders";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {Misc} from "../../../../scripts/utils/Misc";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {IGauge__factory} from "../../../../typechain/factories/contracts/integrations/dystopia";
 
 describe("BalancerComposableStablePoolTest (study)", () => {
   let signer: SignerWithAddress;
@@ -441,4 +444,59 @@ describe("BalancerComposableStablePoolTest (study)", () => {
     }
   });
 
+  it("Try to get a profit from the pool", async () => {
+    const gauge = "0x1c514fEc643AdD86aeF0ef14F4add28cC3425306";
+    const balancerVault = "0xBA12222222228d8Ba445958a75a0704d566BF2C8";
+    const poolBoostedId = "0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b";
+    const blockNumber0 = await ethers.provider.getBlockNumber();
+
+    // we have in total $150 ths
+    // split this amount on 3 equal parts
+    // put them to balanceR pool
+    // wait and check the profit
+    const amountsDesired = [
+      BigNumber.from("44004014464183246220048"), // dai
+      BigNumber.from("49386335383"),  // usdc
+      BigNumber.from("49386335383"),   // usdt
+      BigNumber.from("0"), // bal
+    ];
+    const assets = [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.BAL_TOKEN];
+    const holders = [MaticHolders.HOLDER_DAI, MaticHolders.HOLDER_USDC, MaticHolders.HOLDER_USDT, MaticHolders.HOLDER_BALANCER];
+    const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+
+    const balancesBefore: BigNumber[] = [];
+    for (let i = 0; i < 4; ++i) {
+      const holder = await Misc.impersonate(holders[i]);
+      await IERC20__factory.connect(assets[i], holder).transfer(facade.address, amountsDesired[i]);
+      balancesBefore.push(await IERC20__factory.connect(assets[i], signer).balanceOf(facade.address));
+    }
+    console.log("balancesBefore", balancesBefore);
+
+    await facade._depositorEnterAccess(amountsDesired);
+    const liquidityBefore = await IGauge__factory.connect(gauge, signer).balanceOf(facade.address);
+    console.log("liquidityBefore", liquidityBefore);
+
+    await TimeUtils.advanceNBlocks(40000);
+
+    const liquidityAfter = await IGauge__factory.connect(gauge, signer).balanceOf(facade.address);
+    await facade._depositorExitAccess(liquidityAfter);
+    await facade._depositorClaimRewardsAccess();
+    console.log("liquidityAfter", liquidityAfter);
+
+    const difference: BigNumber[] = [];
+    const balancesAfter: BigNumber[] = [];
+    for (let i = 0; i < 4; ++i) {
+      const balance = await IERC20__factory.connect(assets[i], signer).balanceOf(facade.address);
+      balancesAfter.push(balance);
+
+      difference.push(balance.sub(balancesBefore[i]));
+    }
+
+
+    console.log("balancesAfter", balancesAfter);
+    console.log("difference", difference);
+
+    const blockNumber1 = await ethers.provider.getBlockNumber();
+    console.log("blocks", blockNumber0, blockNumber1, blockNumber1 - blockNumber0);
+  });
 });

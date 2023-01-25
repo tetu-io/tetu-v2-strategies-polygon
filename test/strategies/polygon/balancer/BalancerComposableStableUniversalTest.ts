@@ -20,6 +20,7 @@ import {DoHardWorkLoopBase} from "../../../baseUT/utils/DoHardWorkLoopBase";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {writeFileSync} from "fs";
 import {formatUnits} from "ethers/lib/utils";
+import {ethers} from "hardhat";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -41,6 +42,7 @@ chai.use(chaiAsPromised);
 
 interface IState {
   title: string;
+  block: number;
   signer: {
     usdc: BigNumber;
   }
@@ -89,9 +91,11 @@ async function getStates(title: string, h: DoHardWorkLoopBase) : Promise<IState>
   const bbAmUsdt = "0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6";
   const splitterAddress = await h.vault.splitter();
   const insurance = await h.vault.insurance();
+  const block = await ethers.getDefaultProvider().getBlockNumber();
 
   const dest = {
     title,
+    block,
     signer: {
       usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.signer.address),
     },
@@ -154,6 +158,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
 
     const headers = [
       "title",
+      "block",
       "$signer",
       "$user",
       "vault-$user",
@@ -188,6 +193,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
     const decimalsBptp = 18;
     const decimals = [
       0,
+      0,
       decimalsUSDC, // signer.usdc
       decimalsUSDC, // user.usdc
       decimalsUSDC, // vault.userUsdc
@@ -215,6 +221,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
     for (const item of states) {
       const line = [
         item.title,
+        item.block,
         item.signer.usdc,
         item.user.usdc,
         item.vault.userUsdc,

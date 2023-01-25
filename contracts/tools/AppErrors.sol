@@ -22,4 +22,6 @@ library AppErrors {
 
   /// @notice Price oracle returns zero price
   string public constant ZERO_PRICE = "TS-8 zero price";
+
+  string public constant WRONG_VALUE = "TS-9 wrong value";
 }

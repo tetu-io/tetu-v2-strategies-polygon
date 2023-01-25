@@ -29,8 +29,8 @@ async function startDefaultStrategyTest(
       ppfsDecreaseAllowed: false,
       balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
-      loops: 15,
-      loopValue: 300,
+      loops: 20,
+      loopValue: 1000,
       advanceBlocks: true,
       specificTests: [],
       stateRegistrar
