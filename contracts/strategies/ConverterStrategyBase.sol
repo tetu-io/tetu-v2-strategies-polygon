@@ -109,8 +109,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR) {
-      console.log('_depositToPool is skipped', amount_, reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR);
-    } else {
       address[] memory tokens = _depositorPoolAssets();
       uint len = tokens.length;
 
@@ -122,9 +120,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint[] memory decimals = new uint[](len);
       uint indexAsset;
       {
+        console.log('_depositToPool.1');
         IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
         for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-          decimals[i] = IERC20Metadata(_asset).decimals();
+          decimals[i] = IERC20Metadata(tokens[i]).decimals();
           prices[i] = priceOracle.getAssetPrice(tokens[i]);
           if (tokens[i] == _asset) {
             indexAsset = i;
@@ -153,6 +152,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       console.log(">>> Asset balance after _depositToPool", _balance(asset));
       console.log(">>> _unspentAsset", _unspentAsset);
+    } else {
+      console.log('_depositToPool is skipped', amount_, reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR);
     }
   }
 
@@ -179,9 +180,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       } else {
         uint requiredTokenAmount =  assetAmountForToken
           * prices_[indexAsset_]
-          * decimals_[i]
+          * 10**decimals_[i]
           / prices_[i]
-          / decimals_[indexAsset_];
+          / 10**decimals_[indexAsset_];
 
         uint tokenBalance = _balance(token);
         if (tokenBalance >= requiredTokenAmount) {
@@ -189,7 +190,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           tokenAmountsOut[i] = tokenBalance;
         } else {
           // we do not have enough tokens, we need to borrow
-          uint collateral = assetAmountForToken * (requiredTokenAmount - tokenBalance) / tokenBalance;
+          uint collateral = assetAmountForToken * (requiredTokenAmount - tokenBalance) / requiredTokenAmount;
           _borrowPosition(tokens_[indexAsset_], collateral, token);
           tokenAmountsOut[i] = _balance(token);
         }
