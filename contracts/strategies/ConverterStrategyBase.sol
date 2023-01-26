@@ -102,62 +102,99 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @notice Deposit given amount to the pool.
-  function _depositToPool(uint amount) override internal virtual {
-    console.log('_depositToPool amount', amount);
+  function _depositToPool(uint amount_) override internal virtual {
+    console.log('_depositToPool amount', amount_);
 
-    address _asset = asset;
+    address _asset = asset; // gas saving
+
     // skip deposit for small amounts
-    if (amount < rewardLiquidationThresholds[_asset]) {
-      console.log('_depositToPool thresholds', rewardLiquidationThresholds[_asset]);
-      return;
-    }
+    if (amount_ > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR) {
+      console.log('_depositToPool is skipped', amount_, reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR);
+    } else {
+      address[] memory tokens = _depositorPoolAssets();
+      uint len = tokens.length;
 
-    address[] memory tokens = _depositorPoolAssets();
+      console.log('Balance before:');
+      TokenAmountsLib.printBalances(tokens, address(this));
+
+      // get token prices and decimals
+      uint[] memory prices = new uint[](len);
+      uint[] memory decimals = new uint[](len);
+      uint indexAsset;
+      {
+        IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
+        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+          decimals[i] = IERC20Metadata(_asset).decimals();
+          prices[i] = priceOracle.getAssetPrice(tokens[i]);
+          if (tokens[i] == _asset) {
+            indexAsset = i;
+          }
+        }
+      }
+
+      // split available amount of asset on amounts of token in proportion according to the weights
+      uint[] memory tokenAmounts = _splitAmountByWeights(amount_, tokens, prices, decimals, indexAsset);
+
+      // make deposit
+      (uint[] memory amountsConsumed,) = _depositorEnter(tokenAmounts);
+
+      // consumed asset amount can be different from desired amounts
+      // we should the difference in _unspentAsset
+      if (amount_ > amountsConsumed[indexAsset]) {
+        _unspentAsset += amount_ - amountsConsumed[indexAsset];
+      }
+      _updateInvestedAssets();
+
+      console.log('Amounts for enter:');
+      TokenAmountsLib.print(tokens, tokenAmounts);
+
+      console.log('Balance after:');
+      TokenAmountsLib.printBalances(tokens, address(this));
+
+      console.log(">>> Asset balance after _depositToPool", _balance(asset));
+      console.log(">>> _unspentAsset", _unspentAsset);
+    }
+  }
+
+  /// @notice split available amount of asset on amounts of token in proportion according to the weights
+  function _splitAmountByWeights(
+    uint amount_,
+    address[] memory tokens_,
+    uint[] memory prices_,
+    uint[] memory decimals_,
+    uint indexAsset_
+  ) internal returns (uint[] memory tokenAmountsOut) {
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
 
-    uint len = tokens.length;
-    uint[] memory tokenAmounts = new uint[](len);
-
-    console.log('Balance before:');
-    TokenAmountsLib.printBalances(tokens, address(this));
+    uint len = tokens_.length;
+    tokenAmountsOut = new uint[](len);
 
     // split the amount on tokens proportionally to the weights
-    uint indexAsset;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      uint assetAmountForToken = amount * weights[i] / totalWeight;
-      address token = tokens[i];
+      uint assetAmountForToken = amount_ * weights[i] / totalWeight;
+      address token = tokens_[i];
 
-      if (token == _asset) {
-        tokenAmounts[i] = assetAmountForToken;
-        indexAsset = i;
+      if (token == tokens_[indexAsset_]) {
+        tokenAmountsOut[i] = assetAmountForToken;
       } else {
+        uint requiredTokenAmount =  assetAmountForToken
+          * prices_[indexAsset_]
+          * decimals_[i]
+          / prices_[i]
+          / decimals_[indexAsset_];
+
         uint tokenBalance = _balance(token);
-        if (tokenBalance >= assetAmountForToken) {
+        if (tokenBalance >= requiredTokenAmount) {
           // we already have enough tokens
-           tokenAmounts[i] = tokenBalance;
+          tokenAmountsOut[i] = tokenBalance;
         } else {
-          // we do not have enough tokens - borrow
-          uint collateral = assetAmountForToken - tokenBalance;
-          _borrowPosition(_asset, collateral, token);
-          tokenAmounts[i] = _balance(token);
+          // we do not have enough tokens, we need to borrow
+          uint collateral = assetAmountForToken * (requiredTokenAmount - tokenBalance) / tokenBalance;
+          _borrowPosition(tokens_[indexAsset_], collateral, token);
+          tokenAmountsOut[i] = _balance(token);
         }
       }
     }
-
-    (uint[] memory amountsConsumed,) = _depositorEnter(tokenAmounts);
-    if (amount > amountsConsumed[indexAsset]) {
-      _unspentAsset += amount - amountsConsumed[indexAsset];
-    }
-    _updateInvestedAssets();
-
-    console.log('Amounts for enter:');
-    TokenAmountsLib.print(tokens, tokenAmounts);
-
-    console.log('Balance after:');
-    TokenAmountsLib.printBalances(tokens, address(this));
-
-    console.log(">>> Asset balance after _depositToPool", _balance(asset));
-    console.log(">>> _unspentAsset", _unspentAsset);
   }
 
 

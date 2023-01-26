@@ -174,10 +174,10 @@ describe('BalancerComposableStableUniversalTest', async () => {
       borrowManagerAddress,
       await Misc.impersonate(governance)
     );
-    await controllerAsGovernance.setTargetHealthFactor2(105);
+    await controllerAsGovernance.setTargetHealthFactor2(112);
     await borrowManagerAsGovernance.setTargetHealthFactors(
       [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN, MaticAddresses.USDT_TOKEN],
-      [105, 105, 105]
+      [112, 112, 112]
     );
   });
 
