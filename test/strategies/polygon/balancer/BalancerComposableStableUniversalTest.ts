@@ -7,14 +7,20 @@ import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {
-  BalancerComposableStableStrategy__factory, IBalancerGauge__factory, IERC20__factory, ISplitter__factory,
-  IStrategyV2, StrategyBaseV2__factory
+  BalancerComposableStableStrategy__factory,
+  IBalancerGauge__factory, IBorrowManager__factory,
+  IConverterController__factory,
+  IERC20__factory,
+  ISplitter__factory,
+  IStrategyV2,
+  ITetuConverter__factory,
+  StrategyBaseV2__factory
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import { getConverterAddress } from '../../../../scripts/utils/Misc';
+import {getConverterAddress, Misc} from '../../../../scripts/utils/Misc';
 import {BigNumber} from "ethers";
 import {DoHardWorkLoopBase} from "../../../baseUT/utils/DoHardWorkLoopBase";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
@@ -150,6 +156,29 @@ describe('BalancerComposableStableUniversalTest', async () => {
 
   before(async function () {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+
+    const [signer] = await ethers.getSigners();
+    // set up health factors in tetu converter
+    // set min health factor 1.02
+    // for dai and usdt set target health factor = 1.05
+    const controllerAddress = await ITetuConverter__factory.connect(getConverterAddress(), signer).controller();
+    const controller = IConverterController__factory.connect(controllerAddress, signer);
+    const governance = await controller.governance();
+    const controllerAsGovernance = IConverterController__factory.connect(
+      controllerAddress,
+      await Misc.impersonate(governance)
+    );
+    const borrowManagerAddress = await controller.borrowManager();
+    await controllerAsGovernance.setMinHealthFactor2(102);
+    const borrowManagerAsGovernance = IBorrowManager__factory.connect(
+      borrowManagerAddress,
+      await Misc.impersonate(governance)
+    );
+    await controllerAsGovernance.setTargetHealthFactor2(105);
+    await borrowManagerAsGovernance.setTargetHealthFactors(
+      [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN, MaticAddresses.USDT_TOKEN],
+      [105, 105, 105]
+    );
   });
 
   /** Save collected state to csv */
