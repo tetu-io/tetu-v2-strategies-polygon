@@ -15,10 +15,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         address splitter_,
         address converter_,
         address pool_,
-        int24 lowerTick_,
-        int24 upperTick_
+        int24 tickRange_,
+        int24 rebalanceTickRange_
     ) external initializer {
-        __UniswapV3Depositor_init(pool_, lowerTick_, upperTick_);
+        __UniswapV3Depositor_init(pool_, tickRange_, rebalanceTickRange_);
         __ConverterStrategyBase_init(controller_, splitter_, converter_);
     }
 }

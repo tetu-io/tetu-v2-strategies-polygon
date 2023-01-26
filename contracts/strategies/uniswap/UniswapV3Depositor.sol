@@ -22,6 +22,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     IUniswapV3Pool public pool;
     int24 public lowerTick;
     int24 public upperTick;
+    int24 public rebalanceTickRange;
     address public tokenA;
     address public tokenB;
 
@@ -30,18 +31,15 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
     function __UniswapV3Depositor_init(
         address pool_,
-        int24 lowerTick_,
-        int24 upperTick_
+        int24 tickRange_,
+        int24 rebalanceTickRange_
     ) internal onlyInitializing {
-        require(
-            pool_ != address(0)
-            && lowerTick_ != 0
-            && upperTick_ != 0,
-            AppErrors.ZERO_ADDRESS
-        );
+        require(pool_ != address(0) && tickRange_ != 0 && rebalanceTickRange_ !=0, AppErrors.ZERO_ADDRESS);
         pool = IUniswapV3Pool(pool_);
-        lowerTick = lowerTick_;
-        upperTick = upperTick_;
+        rebalanceTickRange = rebalanceTickRange_;
+        (, int24 tick, , , , , ) = pool.slot0();
+        lowerTick = (tick - tickRange_) / 10 * 10;
+        upperTick = (tick + tickRange_) / 10 * 10;
         tokenA = pool.token0();
         tokenB = pool.token1();
     }
