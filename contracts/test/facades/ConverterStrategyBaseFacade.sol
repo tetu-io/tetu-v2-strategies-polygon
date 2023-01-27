@@ -26,4 +26,71 @@ contract ConverterStrategyBaseFacade {
       priceOracle_
     );
   }
+
+  function getCollaterals(
+    uint amount_,
+    address[] memory tokens_,
+    uint[] memory weights_,
+    uint totalWeight_,
+    uint indexAsset_,
+    IPriceOracle priceOracle
+  ) external view returns (uint[] memory tokenAmountsOut) {
+    return ConverterStrategyBaseLib.getCollaterals(
+      amount_,
+      tokens_,
+      weights_,
+      totalWeight_,
+      indexAsset_,
+      priceOracle
+    );
+  }
+
+  function borrowPosition(
+    ITetuConverter tetuConverter_,
+    address collateralAsset,
+    uint collateralAmount,
+    address borrowAsset
+  ) external returns (uint borrowedAmountOut) {
+    return ConverterStrategyBaseLib.borrowPosition(
+      tetuConverter_,
+      collateralAsset,
+      collateralAmount,
+      borrowAsset
+    );
+  }
+
+  function closePosition(
+    ITetuConverter tetuConverter_,
+    address collateralAsset,
+    address borrowAsset,
+    uint amountToRepay
+  ) external returns (
+    uint returnedAssetAmountOut,
+    uint leftoverOut
+  ) {
+    return ConverterStrategyBaseLib.closePosition(
+      tetuConverter_,
+      collateralAsset,
+      borrowAsset,
+      amountToRepay
+    );
+  }
+
+  function liquidate(
+    ITetuLiquidator liquidator_,
+    address tokenIn,
+    address tokenOut,
+    uint amountIn,
+    uint slippage,
+    uint rewardLiquidationThresholdForTokenOut
+  ) external {
+    return ConverterStrategyBaseLib.liquidate(
+      liquidator_,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      slippage,
+      rewardLiquidationThresholdForTokenOut
+    );
+  }
 }
