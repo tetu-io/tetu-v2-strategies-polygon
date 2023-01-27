@@ -1,13 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../interfaces/converter/IPriceOracle.sol";
+import "../interfaces/converter/ITetuConverter.sol";
+import "../interfaces/converter/IConverterController.sol";
 import "../tools/AppErrors.sol";
+import "../tools/AppLib.sol";
+
+//!! import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
+  using SafeERC20 for IERC20;
+  // approx one month for average block time 2 sec
+  uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
+
   /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset_}
   ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
   ///         investedAssetsUSD = reserve0 * ratio * price0 + reserve1 * ratio * price1 (+ set correct decimals)
@@ -54,4 +64,160 @@ library ConverterStrategyBaseLib {
 
     return (investedAssetsUSD * ratio / 1e18, assetPrice);
   }
+
+  /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights
+  function getCollaterals(
+    uint amount_,
+    address[] memory tokens_,
+    uint[] memory weights_,
+    uint totalWeight_,
+    uint indexAsset_,
+    IPriceOracle priceOracle
+  ) internal view returns (uint[] memory tokenAmountsOut) {
+    uint len = tokens_.length;
+    tokenAmountsOut = new uint[](len);
+
+    // get token prices and decimals
+    uint[] memory prices = new uint[](len);
+    uint[] memory decimals = new uint[](len);
+    {
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        decimals[i] = IERC20Metadata(tokens_[i]).decimals();
+        prices[i] = priceOracle.getAssetPrice(tokens_[i]);
+      }
+    }
+
+    // split the amount on tokens proportionally to the weights
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      uint amountAssetForToken = amount_ * weights_[i] / totalWeight_;
+
+      if (i == indexAsset_) {
+        tokenAmountsOut[i] = amountAssetForToken;
+      } else {
+        // if we have some tokens on balance then we need to use only a part of the collateral
+        uint tokenAmountToBeBorrowed =  amountAssetForToken
+          * prices[indexAsset_]
+          * 10**decimals[i]
+          / prices[i]
+          / 10**decimals[indexAsset_];
+
+        uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
+        if (tokenBalance < tokenAmountToBeBorrowed) {
+          tokenAmountsOut[i] = amountAssetForToken * (tokenAmountToBeBorrowed - tokenBalance) / tokenAmountToBeBorrowed;
+        }
+      }
+    }
+  }
+
+  /// @notice Borrow max available amount of {borrowAsset} using {collateralAmount} of {collateralAsset} as collateral
+  function borrowPosition(
+    ITetuConverter tetuConverter_,
+    address collateralAsset,
+    uint collateralAmount,
+    address borrowAsset
+  ) internal returns (uint borrowedAmountOut) {
+    //!! console.log('_borrowPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
+
+    AppLib.approveIfNeeded(collateralAsset, collateralAmount, address(tetuConverter_));
+    (address converter, uint maxTargetAmount, /*int apr18*/) = tetuConverter_.findBorrowStrategy(
+      collateralAsset,
+      collateralAmount,
+      borrowAsset,
+      _LOAN_PERIOD_IN_BLOCKS
+    );
+    //!! console.log('converter, maxTargetAmount', converter, maxTargetAmount);
+
+    if (converter == address(0) || maxTargetAmount == 0) {
+      borrowedAmountOut = 0;
+    } else {
+      // we need to approve collateralAmount before the borrow-call but we already made the approval above
+      borrowedAmountOut = tetuConverter_.borrow(
+        converter,
+        collateralAsset,
+        collateralAmount,
+        borrowAsset,
+        maxTargetAmount,
+        address(this)
+      );
+    }
+
+    //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
+    //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
+  }
+
+  /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
+  /// @param amountToRepay Amount to repay in terms of {borrowAsset}
+  /// @return returnedAssetAmountOut Amount of collateral received back after repaying
+  /// @return leftoverOut It's equal to amount-to-repay - actual amount of debt, in terms of borrowAsset
+  function closePosition(
+    ITetuConverter tetuConverter_,
+    address collateralAsset,
+    address borrowAsset,
+    uint amountToRepay
+  ) internal returns (
+    uint returnedAssetAmountOut,
+    uint leftoverOut
+  ) {
+    //!! console.log("_closePosition");
+
+    // We shouldn't try to pay more than we actually need to repay
+    // The leftover will be swapped inside TetuConverter, it's inefficient.
+    // Let's limit amountToRepay by needToRepay-amount
+    (uint needToRepay,) = tetuConverter_.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset);
+    leftoverOut = amountToRepay > needToRepay
+      ? amountToRepay - needToRepay
+      : 0;
+
+    //!! console.log('>>> CLOSE POSITION initial amountToRepay borrowAsset', amountToRepay, borrowAsset);
+    //!! console.log('>>> CLOSE POSITION needToRepay', needToRepay);
+    //!! console.log('>>> CLOSE POSITION leftover', leftoverOut);
+
+    amountToRepay = amountToRepay < needToRepay
+    ? amountToRepay
+    : needToRepay;
+
+    // Make full/partial repayment
+    IERC20(borrowAsset).safeTransfer(address(tetuConverter_), amountToRepay);
+    uint returnedBorrowAmountOut;
+    (returnedAssetAmountOut, returnedBorrowAmountOut,,) = tetuConverter_.repay(
+      collateralAsset, borrowAsset, amountToRepay, address(this)
+    );
+
+    //!! console.log('>>> position closed: returnedAssetAmount:', returnedAssetAmountOut, collateralAsset);
+    //!! console.log('position closed: returnedBorrowAmountOut:', returnedBorrowAmountOut);
+    //!! console.log('>>> REPAY amountToRepay, borrowAsset', amountToRepay, borrowAsset);
+    require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
+  }
+
+  function liquidate(
+    ITetuLiquidator _liquidator,
+    address tokenIn,
+    address tokenOut,
+    uint amountIn,
+    uint slippage,
+    uint rewardLiquidationThresholdForTokenOut
+  ) internal {
+    //!! console.log("_liquidate", amountIn);
+    //!! console.log("_liquidate balance tokenOut", IERC20(tokenOut).balanceOf(address(this)), tokenOut);
+    (ITetuLiquidator.PoolData[] memory route, /* string memory error*/) = _liquidator.buildRoute(tokenIn, tokenOut);
+
+    if (route.length == 0) {
+      revert('CSB: No liquidation route');
+    }
+
+    // calculate balance in out value for check threshold
+    uint amountOut = _liquidator.getPriceForRoute(route, amountIn);
+    //!! console.log("_liquidate expected amount out", amountOut);
+
+    // if the value higher than threshold distribute to destinations
+    if (amountOut > rewardLiquidationThresholdForTokenOut) {
+      // we need to approve each time, liquidator address can be changed in controller
+      AppLib.approveIfNeeded(tokenIn, amountIn, address(_liquidator));
+      _liquidator.liquidateWithRoute(route, amountIn, slippage);
+    }
+
+    //!! console.log("_liquidate balance after", IERC20(tokenOut).balanceOf(address(this)));
+  }
+
+
 }

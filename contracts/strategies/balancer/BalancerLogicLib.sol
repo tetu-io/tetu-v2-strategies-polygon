@@ -188,7 +188,7 @@ library BalancerLogicLib {
   ///                     0: balance DAI + (balance amDAI recalculated to DAI)
   ///                     1: balance USDC + (amUSDC recalculated to USDC)
   ///                     2: balance USDT + (amUSDT recalculated to USDT)
-  function depositorPoolReserves(IBVault vault_, bytes32 poolId_) internal view returns (uint[] memory reservesOut) {
+  function depositorPoolReserves(IBVault vault_, bytes32 poolId_) external view returns (uint[] memory reservesOut) {
     (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
     uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
     uint len = tokens.length;
@@ -213,7 +213,7 @@ library BalancerLogicLib {
   }
 
   /// @notice Returns pool assets, same as getPoolTokens but without pool-bpt
-  function depositorPoolAssets(IBVault vault_, bytes32 poolId_) internal view returns (address[] memory poolAssets) {
+  function depositorPoolAssets(IBVault vault_, bytes32 poolId_) external view returns (address[] memory poolAssets) {
     (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
     uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
     uint len = tokens.length;
@@ -231,7 +231,7 @@ library BalancerLogicLib {
   /// @notice Returns pool weights
   /// @return weights Array with weights, length = getPoolTokens.tokens - 1 (all assets except BPT)
   /// @return totalWeight Total sum of all items of {weights}
-  function depositorPoolWeights(IBVault vault_, bytes32 poolId_) internal view returns (
+  function depositorPoolWeights(IBVault vault_, bytes32 poolId_) external view returns (
     uint[] memory weights,
     uint totalWeight
   ) {
@@ -565,7 +565,7 @@ library BalancerLogicLib {
   ///             Rewards
   /////////////////////////////////////////////////////////////////////
 
-  function depositorClaimRewards(IBalancerGauge gauge_, address[] memory rewardTokens_) internal returns (
+  function depositorClaimRewards(IBalancerGauge gauge_, address[] memory rewardTokens_) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
