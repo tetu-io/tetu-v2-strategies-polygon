@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../DepositorBase.sol";
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
 import "../../integrations/uniswap/TickMath.sol";
@@ -16,6 +17,11 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     using SafeERC20 for IERC20;
     using TickMath for int24;
 
+    struct SwapCallbackData {
+        address tokenIn;
+        uint amount;
+    }
+
     /// @dev Version of this contract. Adjust manually on each code modification.
     string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.0";
 
@@ -23,7 +29,11 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     int24 public lowerTick;
     int24 public upperTick;
     int24 public rebalanceTickRange;
+
+    // asset - collateral token
     address public tokenA;
+
+    // borrowing (hedging) token
     address public tokenB;
 
     /// @dev Total fractional shares of Uniswap V3 position
@@ -42,6 +52,13 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         upperTick = (tick + tickRange_) / 10 * 10;
         tokenA = pool.token0();
         tokenB = pool.token1();
+    }
+
+    function _setNewTickRange() internal {
+        (, int24 tick, , , , , ) = pool.slot0();
+        int24 halfRange = (upperTick - lowerTick) / 2;
+        lowerTick = (tick - halfRange) / 10 * 10;
+        upperTick = (tick + halfRange) / 10 * 10;
     }
 
     /// @notice Uniswap V3 callback fn, called back on pool.mint
@@ -94,25 +111,35 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         pool.mint(address(this), lowerTick, upperTick, uint128(liquidityOut), "");
         totalLiquidity += uint128(liquidityOut);
 
-        // todo sendbackchange
+        // todo sendbackchange?
     }
 
     function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+        // compute current fees earned
+        // todo maybe error design, also can receive all and extract fees proportional to liquidityAmount
+        (, int24 tick, , , , , ) = pool.slot0();
+        (, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
+        uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed0);
+        uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed1);
+
         amountsOut = new uint[](2);
         (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, uint128(liquidityAmount));
         pool.collect(
             address(this),
             lowerTick,
             upperTick,
-                uint128(amountsOut[0]),
-                uint128(amountsOut[1])
+                uint128(amountsOut[0]) + uint128(fee0),
+                uint128(amountsOut[1]) + uint128(fee1)
         );
+
+        totalLiquidity -= uint128(liquidityAmount);
     }
 
     function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
         amountsOut = new uint[](2);
 
         (uint160 sqrtRatioX96, int24 tick, , , , , ) = pool.slot0();
+        (, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
 
         (amountsOut[0], amountsOut[1]) = LiquidityAmounts.getAmountsForLiquidity(
             sqrtRatioX96,
@@ -122,10 +149,10 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         );
 
         // compute current fees earned
-//        uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, liquidityAmount);
-//        uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidityAmount);
-//        amountsOut[0] += fee0;
-//        amountsOut[1] += fee1;
+        uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed0);
+        uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed1);
+        amountsOut[0] += fee0;
+        amountsOut[1] += fee1;
     }
 
     /////////////////////////////////////////////////////////////////////
@@ -145,6 +172,16 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     /////////////////////////////////////////////////////////////////////
     ///                       View
     /////////////////////////////////////////////////////////////////////
+
+    function needRebalance() public view returns (bool) {
+        (, int24 tick, , , , , ) = pool.slot0();
+        int24 halfRange = (upperTick - lowerTick) / 2;
+        int24 oldMedianTick = lowerTick + halfRange;
+        if (tick > oldMedianTick) {
+            return tick - oldMedianTick > rebalanceTickRange;
+        }
+        return oldMedianTick - tick > rebalanceTickRange;
+    }
 
     /// @notice Returns pool assets
     function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {

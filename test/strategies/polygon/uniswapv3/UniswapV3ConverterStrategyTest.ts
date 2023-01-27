@@ -98,8 +98,11 @@ describe('UniswapV3ConverterStrategyTests', function() {
     // await TokenUtils.getToken(asset.address, signer2.address, _100_000);
     await asset.approve(vault.address, Misc.MAX_UINT);
 
-    // Disable DForce at TetuConverter
+    // Disable platforms at TetuConverter
+    // await ConverterUtils.disableHf(signer);
     await ConverterUtils.disableDForce(signer);
+    await ConverterUtils.disableAaveV2(signer);
+    await ConverterUtils.disableAaveV3(signer);
 
     swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer)
   })
@@ -117,36 +120,42 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    /*it('Rebalance', async() => {
+    it('Rebalance', async() => {
       const investAmount = _100;
+      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
       let price;
-      let balances;
       price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
       console.log('tokenB price', formatUnits(price, 6))
-      const priceBefore = price
+      let priceBefore = price
 
       console.log('deposit...');
-      const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
+      // const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
       await vault.deposit(investAmount, signer.address);
 
-      balances = await strategy.getUnderlyingBalances()
-      const tokenABalanceBefore = balances[0]
-      const tokenBBalanceBefore = balances[1]
-
-      console.log('swap in pool 1m USDC...');
-      await TokenUtils.getToken(asset.address, swapper.address, parseUnits('1000000', 6));
+      console.log('swap in pool USDC to tokenB...');
+      await TokenUtils.getToken(asset.address, swapper.address, swapAssetValueForPriceMove);
       await swapper.connect(signer2).swap(await strategy.pool(), asset.address, await strategy.tokenB(), signer2.address, 10000) // 10% slippage
       price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
       console.log('tokenB price', formatUnits(price, 6))
       console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
-      // priceBefore = price
+      priceBefore = price
 
-      const needRebalance = await strategy.needRebalance();
-      console.log(needRebalance)
+      await strategy.rebalance()
 
-    })*/
+      console.log('swap in pool tokenB to USDC...');
+      const amountofTokenBToSell = swapAssetValueForPriceMove.mul(parseUnits('1')).div(price)
+      console.log('Swap amount of tokenB:', formatUnits(amountofTokenBToSell, 18))
+      await TokenUtils.getToken(await strategy.tokenB(), swapper.address, amountofTokenBToSell);
+      await swapper.connect(signer2).swap(await strategy.pool(), await strategy.tokenB(), asset.address, signer2.address, 10000) // 10% slippage
+      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+      console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
 
-    it('Calculate rebalance cost when shorted (borrowed) tokenB price goes up', async() => {
+      await strategy.rebalance()
+
+    })
+
+    /*it('Calculate rebalance cost when shorted (borrowed) tokenB price goes up', async() => {
       const investAmount = _1;
       const swapAssetValueForPriceMove = parseUnits('250000', 6);
       let price;
@@ -192,9 +201,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log(`TokenB price change: +${formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
       console.log(`Estimated REBALANCE COST = ${formatUnits(rebalanceCost, 6)} USDC (${formatUnits(rebalanceCostPercent, 5)}%)`)
       console.log('--------------------------')
-    })
+    })*/
 
-    it('Calculate rebalance cost when shorted (borrowed) tokenB price goes down', async() => {
+    /*it('Calculate rebalance cost when shorted (borrowed) tokenB price goes down', async() => {
       const investAmount = _1;
       const swapAssetValueForPriceMove = parseUnits('200000', 6);
       let price;
@@ -239,7 +248,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
       console.log(`Estimated REBALANCE COST = ${formatUnits(rebalanceCost, 6)} USDC (${formatUnits(rebalanceCostPercent, 5)}%)`)
       console.log('--------------------------')
-    })
+    })*/
 
     /*it('deposit / withdraw', async() => {
       console.log('deposit...');

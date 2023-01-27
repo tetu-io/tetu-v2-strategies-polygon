@@ -121,6 +121,10 @@ export class Misc {
 
 const TETU_CONVERTER_ADDRESS = "0x89563a0d6917A893B3b4dE49f56D8Bc35541038D";
 const DFORCE_PLATFORM_ADAPTER_ADDRESS = "0x6605Ce0d8E92A0c5d542F19DdB5B236A03137c64";
+const AAVEV2_PLATFORM_ADAPTER_ADDRESS = "0xf9013c430ef3B81c6Ede7bEffC5239A6D677941F";
+const AAVEV3_PLATFORM_ADAPTER_ADDRESS = "0x6e3c9c624634fEE2924A24Afad8627f60C580D03";
+const HF_PLATFORM_ADAPTER_ADDRESS = "0x3863a4eB9071863EB4CbA999E6952b8283804750";
+
 
 /**
  * Address of TetuConverter
@@ -136,5 +140,26 @@ export function getConverterAddress() {
  */
 export function getDForcePlatformAdapter() {
   return DFORCE_PLATFORM_ADAPTER_ADDRESS;
+}
+
+/**
+ * Address of AaveV2 platform adapter registered in TetuConveter
+ */
+export function getAaveV2PlatformAdapter() {
+  return AAVEV2_PLATFORM_ADAPTER_ADDRESS;
+}
+
+/**
+ * Address of AaveV3 platform adapter registered in TetuConveter
+ */
+export function getAaveV3PlatformAdapter() {
+  return AAVEV3_PLATFORM_ADAPTER_ADDRESS;
+}
+
+/**
+ * Address of Hundred Finance platform adapter registered in TetuConveter
+ */
+export function getHFPlatformAdapter() {
+  return HF_PLATFORM_ADAPTER_ADDRESS;
 }
 //endregion TetuConverter addresses
