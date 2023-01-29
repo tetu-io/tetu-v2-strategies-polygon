@@ -125,6 +125,7 @@ library TokenAmountsLib {
 
     /// @dev prints tokens & amounts
     function print(
+        string memory header_,
         address[] memory tokens,
         uint[] memory amounts
     ) internal view {
@@ -134,6 +135,7 @@ library TokenAmountsLib {
             console.log('-[EMPTY ARRAY]-');
             return;
         }
+        console.log(header_);
         console.log('---------------');
 
         for (uint i = 0; i < len; i++) {
@@ -170,6 +172,7 @@ library TokenAmountsLib {
 
     /// @notice Print tokens and tokens balances of the {strategy_}
     function printBalances(
+        string memory header_,
         address[] memory tokens_,
         address strategy_
     ) internal view {
@@ -178,7 +181,7 @@ library TokenAmountsLib {
         for (uint i = 0; i < len; ++i) {
             tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(strategy_);
         }
-        TokenAmountsLib.print(tokens_, tokenAmounts);
+        TokenAmountsLib.print(header_, tokens_, tokenAmounts);
 
     }
 }

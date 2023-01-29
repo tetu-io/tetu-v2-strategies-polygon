@@ -34,7 +34,7 @@ contract TokenAmountsLibTest {
         address[] memory tokens,
         uint[] memory amounts
     ) external view {
-        TokenAmountsLib.print(tokens, amounts);
+        TokenAmountsLib.print("test", tokens, amounts);
     }
 
 }
