@@ -164,9 +164,52 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         address[] memory tokensOut,
         uint[] memory amountsOut
     ) {
+        uint[] memory balancesBefore = new uint[](2);
+        balancesBefore[0] = _balance(tokenA);
+        balancesBefore[1] = _balance(tokenB);
 
-        tokensOut = new address[](0);
-        amountsOut = new uint[](0);
+        (uint160 sqrtRatioX96, int24 tick, , , , , ) = pool.slot0();
+        (uint128 liquidity, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
+
+        uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, liquidity) + uint256(tokensOwed0);
+        uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) + uint256(tokensOwed1);
+
+        if (fee0 > 0 || fee1 > 0) {
+            console.log('fee0', fee0);
+            console.log('fee1', fee1);
+            uint128 burnLiquidity = LiquidityAmounts.getLiquidityForAmounts(
+                sqrtRatioX96,
+                lowerTick.getSqrtRatioAtTick(),
+                upperTick.getSqrtRatioAtTick(),
+                fee0,
+                fee1
+            );
+
+            console.log('burn fee liquidity', burnLiquidity);
+            amountsOut = new uint[](2);
+            (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, burnLiquidity);
+            pool.collect(
+                address(this),
+                lowerTick,
+                upperTick,
+                type(uint128).max,
+                type(uint128).max
+            );
+
+            tokensOut = new address[](2);
+            tokensOut[0] = tokenA;
+            tokensOut[1] = tokenB;
+
+            console.log('_depositorClaimRewards() amountsOut[0]', amountsOut[0]);
+            console.log('_depositorClaimRewards() amountsOut[1]', amountsOut[1]);
+
+            totalLiquidity -= burnLiquidity;
+        } else {
+            console.log('No fees to burn');
+            tokensOut = new address[](0);
+            amountsOut = new uint[](0);
+        }
+
     }
 
     /////////////////////////////////////////////////////////////////////
@@ -194,7 +237,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         weights = new uint[](2);
         uint128 liquidity = pool.liquidity();
 //        console.log("_depositorPoolWeights() liquidity", liquidity);
-        (uint160 sqrtRatioX96, int24 tick, , , , , ) = pool.slot0();
+        (uint160 sqrtRatioX96, , , , , , ) = pool.slot0();
         uint amount0Current = LiquidityAmounts.getAmount0ForLiquidity(sqrtRatioX96, upperTick.getSqrtRatioAtTick(), liquidity);
 //        console.log("_depositorPoolWeights() amount0Current", amount0Current);
         uint amount0Total = LiquidityAmounts.getAmount0ForLiquidity(lowerTick.getSqrtRatioAtTick(), upperTick.getSqrtRatioAtTick(), liquidity);
