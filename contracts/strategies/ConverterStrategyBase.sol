@@ -42,21 +42,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Amount of underlying assets invested to the pool.
   uint private _investedAssets;
 
-  /// @notice Amount of asset transferred at _depositToPool but not invested
+  /// @notice Amount of asset passed to _depositToPool that wasn't invested but was kept on the balance for a next round
   uint private _unspentAsset;
 
   /// @dev Linked Tetu Converter
   ITetuConverter public tetuConverter;
 
-  /// @notice Minimum reward-token amounts to liquidate etc.
-  mapping(address => uint) public rewardLiquidationThresholds;
+  /// @notice Minimum token amounts that can be liquidated
+  mapping(address => uint) public liquidationThresholds;
 
   /// @notice Percent of asset amount that can be not invested, it's allowed to just keep it on balance
   ///         decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   /// @dev We need this threshold to avoid numerous conversions of small amounts
   uint public reinvestThresholdPercent;
 
-  event RewardLiquidationThresholdChanged(address token, uint amount);
+  event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
 
   /////////////////////////////////////////////////////////////////////
@@ -74,10 +74,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     //!! console.log("__ConverterStrategyBase_init, totalSupply", _depositorTotalSupply());
   }
 
-  function setRewardLiquidationThreshold(address token, uint amount) external {
+  function setLiquidationThreshold(address token, uint amount) external {
     _onlyOperators();
-    rewardLiquidationThresholds[token] = amount;
-    emit RewardLiquidationThresholdChanged(token, amount);
+    liquidationThresholds[token] = amount;
+    emit LiquidationThresholdChanged(token, amount);
   }
 
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
@@ -271,7 +271,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
             _asset,
             leftover,
             _ASSET_LIQUIDATION_SLIPPAGE,
-            rewardLiquidationThresholds[_asset]
+            liquidationThresholds[_asset]
           );
           //!! console.log('SWAP LEFTOVER returned asset', balanceAfter - balanceBefore);
         }
@@ -339,7 +339,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint amount = amounts[i];
 
       //!! console.log('_recycle.token, amount', token, amount);
-      if (amount != 0 && amount > rewardLiquidationThresholds[token]) {
+      uint tokenThreshold = liquidationThresholds[token];
+      if (amount > tokenThreshold) {
         uint amountToCompound = amount * _compoundRatio / COMPOUND_DENOMINATOR;
         if (amountToCompound > 0) {
           ConverterStrategyBaseLib.liquidate(
@@ -348,7 +349,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
             _asset,
             amountToCompound,
             _REWARD_LIQUIDATION_SLIPPAGE,
-            rewardLiquidationThresholds[_asset]
+            tokenThreshold
           );
         }
 

@@ -27,6 +27,7 @@ import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {writeFileSync} from "fs";
 import {formatUnits} from "ethers/lib/utils";
 import hre, {ethers} from "hardhat";
+import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -46,9 +47,11 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
+//region Utils
 interface IState {
   title: string;
   block: number;
+  blockTimestamp: number;
   signer: {
     usdc: BigNumber;
   }
@@ -102,6 +105,7 @@ async function getStates(title: string, h: DoHardWorkLoopBase) : Promise<IState>
   const dest = {
     title,
     block: block.number,
+    blockTimestamp: block.timestamp,
     signer: {
       usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.signer.address),
     },
@@ -146,6 +150,159 @@ async function getStates(title: string, h: DoHardWorkLoopBase) : Promise<IState>
   return dest;
 }
 
+async function saveToCSV(pathOut: string, states: IState[]) {
+
+  const headers = [
+    "title",
+    "block",
+    "timestamp",
+    "$signer",
+    "$user",
+    "vault-$user",
+    "vault-$signer",
+    "sharePrice-vault",
+    "totalSupply-vault",
+    "totalAssets-vault",
+    "$insurance",
+    "$strategy",
+    "usdt-strategy",
+    "dai-strategy",
+    "bal-strategy",
+    "bptp-strategy",
+    "totalAssets-strategy",
+    "investedAssets-strategy",
+    "bptp-gauge",
+    "$vault",
+    "$splitter",
+    "totalAssets-splitter",
+    "bbAmUsdc-pool",
+    "bbAmUsdt-pool",
+    "bbAmDai-pool",
+  ];
+  const decimalsSharedPrice = 6;
+  const decimalsUSDC = 6;
+  const decimalsUSDT = 6;
+  const decimalsDAI = 18;
+  const decimalsBAL = 18;
+  const decimalsBbAmUsdc = 18;
+  const decimalsBbAmUsdt = 18;
+  const decimalsBbAmDai = 18;
+  const decimalsBptp = 18;
+  const decimals = [
+    0,
+    0,
+    decimalsUSDC, // signer.usdc
+    decimalsUSDC, // user.usdc
+    decimalsUSDC, // vault.userUsdc
+    decimalsUSDC, // vault.signerUsdc
+    decimalsSharedPrice, // shared price
+    decimalsUSDC, // vault.totlaSupply
+    decimalsUSDC, // vault.totalAssets
+    decimalsUSDC, // insurance.usdc
+    decimalsUSDC, // strategy.usdc
+    decimalsUSDT, // strategy.usdt
+    decimalsDAI, // strategy.dai
+    decimalsBAL, // strategy.bal
+    decimalsBptp, // strategy.bptPool
+    decimalsUSDC, // strategy.totalAssets
+    decimalsUSDC, // strategy.investedAssets
+    decimalsBptp, // gauge.strategyBalance
+    decimalsUSDC, // vault.usdc
+    decimalsUSDC, // splitter.usdc
+    decimalsUSDC, // splitter.totalAssets,
+    decimalsBbAmUsdc,
+    decimalsBbAmUsdt,
+    decimalsBbAmDai
+  ];
+  writeFileSync(pathOut, headers.join(";") + "\n", {encoding: 'utf8', flag: "a" });
+  for (const item of states) {
+    const line = [
+      item.title,
+      item.block,
+      item.blockTimestamp,
+      item.signer.usdc,
+      item.user.usdc,
+      item.vault.userUsdc,
+      item.vault.signerUsdc,
+      item.vault.sharePrice,
+      item.vault.totalSupply,
+      item.vault.totalAssets,
+      item.insurance.usdc,
+      item.strategy.usdc,
+      item.strategy.usdt,
+      item.strategy.dai,
+      item.strategy.bal,
+      item.strategy.bptPool,
+      item.strategy.totalAssets,
+      item.strategy.investedAssets,
+      item.gauge.strategyBalance,
+      item.vault.usdc,
+      item.splitter.usdc,
+      item.splitter.totalAssets,
+      item.balancerPool.bbAmUsdc,
+      item.balancerPool.bbAmUsdt,
+      item.balancerPool.bbAmDai
+    ];
+    writeFileSync(pathOut,
+      line.map((x, index) =>
+        typeof x === "object"
+          ? +formatUnits(x, decimals[index])
+          : "" + x
+      ).join(";") + "\n",
+      {encoding: 'utf8', flag: "a"}
+    );
+  }
+}
+
+function getTotalUsdAmount(state: IState) : BigNumber {
+  return state.user.usdc.add(
+    state.signer.usdc
+  ).add(
+    state.vault.usdc
+  ).add(
+    state.insurance.usdc
+  ).add(
+    state.strategy.usdc
+  ).add(
+    state.splitter.usdc
+  );
+}
+/**
+ * Get initial state marked as "enter"
+ * and final state marked as "final"
+ * @param states
+ */
+function outputProfit(states: IState[]) {
+  if (states.length < 2) return;
+
+  const enter: IState = states[0];
+  const final: IState = states[states.length - 1];
+
+  // ethereum timestamp is in seconds
+  // https://ethereum.stackexchange.com/questions/7853/is-the-block-timestamp-value-in-solidity-seconds-or-milliseconds
+  const timeSeconds = (final.blockTimestamp - enter.blockTimestamp);
+  const initialAmount = getTotalUsdAmount((enter));
+  const finalAmount = getTotalUsdAmount(final);
+  const amount = finalAmount.sub(initialAmount);
+  const amountNum = +formatUnits(amount, 6);
+  const apr = amountNum * 365
+    / (timeSeconds / (24*60*60))
+    / +formatUnits(initialAmount, 6)
+    * 100;
+  console.log("final.blockTimestamp", final.blockTimestamp);
+  console.log("enter.blockTimestamp", enter.blockTimestamp);
+  console.log("final.getTotalUsdAmount", getTotalUsdAmount(final));
+  console.log("final.getTotalUsdAmount", getTotalUsdAmount(enter));
+  console.log("Initial amount", initialAmount);
+  console.log("Final amount", initialAmount);
+  console.log("Total profit", amountNum);
+  console.log("Duration in seconds", timeSeconds);
+  console.log("Duration in days", timeSeconds / (24*60*60));
+  console.log("Estimated APR, %", apr);
+
+}
+//endregion Utils
+
 describe('BalancerComposableStableUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
@@ -181,108 +338,11 @@ describe('BalancerComposableStableUniversalTest', async () => {
     );
   });
 
-  /** Save collected state to csv */
+  /** Save collected states to csv, compute profit */
   after(async function() {
     const pathOut = "./tmp/ts2-snapshots.csv";
-
-    const headers = [
-      "title",
-      "block",
-      "$signer",
-      "$user",
-      "vault-$user",
-      "vault-$signer",
-      "sharePrice-vault",
-      "totalSupply-vault",
-      "totalAssets-vault",
-      "$insurance",
-      "$strategy",
-      "usdt-strategy",
-      "dai-strategy",
-      "bal-strategy",
-      "bptp-strategy",
-      "totalAssets-strategy",
-      "investedAssets-strategy",
-      "bptp-gauge",
-      "$vault",
-      "$splitter",
-      "totalAssets-splitter",
-      "bbAmUsdc-pool",
-      "bbAmUsdt-pool",
-      "bbAmDai-pool",
-    ];
-    const decimalsSharedPrice = 6;
-    const decimalsUSDC = 6;
-    const decimalsUSDT = 6;
-    const decimalsDAI = 18;
-    const decimalsBAL = 18;
-    const decimalsBbAmUsdc = 18;
-    const decimalsBbAmUsdt = 18;
-    const decimalsBbAmDai = 18;
-    const decimalsBptp = 18;
-    const decimals = [
-      0,
-      0,
-      decimalsUSDC, // signer.usdc
-      decimalsUSDC, // user.usdc
-      decimalsUSDC, // vault.userUsdc
-      decimalsUSDC, // vault.signerUsdc
-      decimalsSharedPrice, // shared price
-      decimalsUSDC, // vault.totlaSupply
-      decimalsUSDC, // vault.totalAssets
-      decimalsUSDC, // insurance.usdc
-      decimalsUSDC, // strategy.usdc
-      decimalsUSDT, // strategy.usdt
-      decimalsDAI, // strategy.dai
-      decimalsBAL, // strategy.bal
-      decimalsBptp, // strategy.bptPool
-      decimalsUSDC, // strategy.totalAssets
-      decimalsUSDC, // strategy.investedAssets
-      decimalsBptp, // gauge.strategyBalance
-      decimalsUSDC, // vault.usdc
-      decimalsUSDC, // splitter.usdc
-      decimalsUSDC, // splitter.totalAssets,
-      decimalsBbAmUsdc,
-      decimalsBbAmUsdt,
-      decimalsBbAmDai
-    ];
-    writeFileSync(pathOut, headers.join(";") + "\n", {encoding: 'utf8', flag: "a" });
-    for (const item of states) {
-      const line = [
-        item.title,
-        item.block,
-        item.signer.usdc,
-        item.user.usdc,
-        item.vault.userUsdc,
-        item.vault.signerUsdc,
-        item.vault.sharePrice,
-        item.vault.totalSupply,
-        item.vault.totalAssets,
-        item.insurance.usdc,
-        item.strategy.usdc,
-        item.strategy.usdt,
-        item.strategy.dai,
-        item.strategy.bal,
-        item.strategy.bptPool,
-        item.strategy.totalAssets,
-        item.strategy.investedAssets,
-        item.gauge.strategyBalance,
-        item.vault.usdc,
-        item.splitter.usdc,
-        item.splitter.totalAssets,
-        item.balancerPool.bbAmUsdc,
-        item.balancerPool.bbAmUsdt,
-        item.balancerPool.bbAmDai
-      ];
-      writeFileSync(pathOut,
-        line.map((x, index) =>
-          typeof x === "object"
-            ? +formatUnits(x, decimals[index])
-            : "" + x
-        ).join(";") + "\n",
-        {encoding: 'utf8', flag: "a"}
-      );
-    }
+    await saveToCSV(pathOut, states);
+    outputProfit(states);
   });
 
   const strategyName = 'BalancerComposableStableStrategy';
@@ -290,6 +350,19 @@ describe('BalancerComposableStableUniversalTest', async () => {
   const asset = PolygonAddresses.USDC_TOKEN;
   const vaultName = 'tetu' + assetName;
   const core = Addresses.getCore();
+  const params: IUniversalStrategyInputParams = {
+    ppfsDecreaseAllowed: false,
+    balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
+    deposit: 100_000,
+    loops: 40,
+    loopValue: 2000,
+    advanceBlocks: true,
+    specificTests: [],
+    hwParams: {
+      compoundRate: 100_000, // 50%
+      reinvestThresholdPercent: 1_000, // 1%
+    }
+  }
 
   const deployer = async (signer: SignerWithAddress) => {
     const controller = DeployerUtilsLocal.getController(signer);
@@ -329,6 +402,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
     assetName,
     deployInfo,
     deployer,
+    params,
     async (title, h) => {
       states.push(await getStates(title, h));
     }

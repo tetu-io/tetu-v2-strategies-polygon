@@ -8,10 +8,13 @@ import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS
+  GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, GET_GET_COLLATERALS
 } from "../../baseUT/GasLimits";
+import {Misc} from "../../../scripts/utils/Misc";
+import exp from "constants";
+import {MaticHolders} from "../../../scripts/MaticHolders";
 
-describe("ConverterStrategyBaseTest", () => {
+describe("ConverterStrategyBaseLibTest", () => {
 //region Variables
   let snapshotBefore: string;
   let snapshot: string;
@@ -19,6 +22,7 @@ describe("ConverterStrategyBaseTest", () => {
   let usdc: MockToken;
   let dai: MockToken;
   let tetu: MockToken;
+  let usdt: MockToken;
   let weth: MockToken;
 //endregion Variables
 
@@ -31,6 +35,7 @@ describe("ConverterStrategyBaseTest", () => {
     tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
     dai = await DeployerUtils.deployMockToken(signer, 'DAI');
     weth = await DeployerUtils.deployMockToken(signer, 'WETH', 8);
+    usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
   });
 
   after(async function () {
@@ -378,6 +383,132 @@ describe("ConverterStrategyBaseTest", () => {
           priceOracle.address
         );
         controlGasLimitsEx(gasUsed, GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
+    });
+  });
+
+  describe("getCollaterals", () => {
+    describe("Good paths", () => {
+      describe("Same prices, same weights", () => {
+        it("should return expected values", async () => {
+          const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
+          const assetAmount = parseUnits("1000", 6);
+          const priceOracle = await MockHelper.createPriceOracle(
+            signer,
+            [dai.address, weth.address, usdc.address, tetu.address],
+            [Misc.ONE18, Misc.ONE18, Misc.ONE18, Misc.ONE18]
+          );
+          const ret = await facade.getCollaterals(
+            assetAmount,
+            [dai.address, weth.address, usdc.address, tetu.address],
+            [1, 1, 1, 1],
+            4,
+            2,
+            priceOracle.address
+          );
+
+          const expected = [
+            parseUnits("250", 6),
+            parseUnits("250", 6),
+            parseUnits("250", 6),
+            parseUnits("250", 6),
+          ];
+
+          expect(ret.join()).eq(expected.join());
+        });
+      });
+      describe("Same prices, different weights", () => {
+        it("should return expected values", async () => {
+          const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
+          const assetAmount = parseUnits("1000", 6);
+          const priceOracle = await MockHelper.createPriceOracle(
+            signer,
+            [dai.address, weth.address, usdc.address, tetu.address],
+            [Misc.ONE18, Misc.ONE18, Misc.ONE18, Misc.ONE18]
+          );
+          const ret = await facade.getCollaterals(
+            assetAmount,
+            [dai.address, weth.address, usdc.address, tetu.address],
+            [1, 2, 3, 4],
+            10,
+            2,
+            priceOracle.address
+          );
+
+          const expected = [
+            parseUnits("100", 6),
+            parseUnits("200", 6),
+            parseUnits("300", 6),
+            parseUnits("400", 6),
+          ];
+
+          expect(ret.join()).eq(expected.join());
+        });
+      });
+      describe("Some amounts are already on balance", () => {
+        it("should return expected values", async () => {
+          const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
+          const assets = [dai, weth, usdc, tetu];
+          const assetAmount = parseUnits("1000", 6);
+          const priceOracle = await MockHelper.createPriceOracle(
+            signer,
+            assets.map(x => x.address),
+            [Misc.ONE18, Misc.ONE18, Misc.ONE18, Misc.ONE18]
+          );
+          const amountsOnBalance = [
+            parseUnits("30", 18), // part of required amount is on the balance
+            parseUnits("200", 8), // more amount than required is on the balance
+            parseUnits("1000", 6), // USDC is the main asset
+            parseUnits("100", 18), // full required amount is on balance
+          ]
+          for (let i = 0; i < assets.length; ++i) {
+            await assets[i].mint(facade.address, amountsOnBalance[i]);
+          }
+
+          const ret = await facade.getCollaterals(
+            assetAmount,
+            assets.map(x => x.address),
+            [1, 1, 1, 1],
+            10,
+            2,
+            priceOracle.address
+          );
+
+          const expected = [
+            parseUnits("70", 6),
+            parseUnits("0", 6),
+            parseUnits("100", 6),
+            parseUnits("0", 6),
+          ];
+
+          expect(ret.join()).eq(expected.join());
+        });
+      });
+    });
+    describe("Bad paths", () => {
+      // todo
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should return expected values", async () => {
+        const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
+        const assetAmount = parseUnits("1000", 6);
+        const priceOracle = await MockHelper.createPriceOracle(
+          signer,
+          [dai.address, weth.address, usdc.address, tetu.address],
+          [Misc.ONE18, Misc.ONE18, Misc.ONE18, Misc.ONE18]
+        );
+        const gasUsed = await facade.estimateGas.getCollaterals(
+          assetAmount,
+          [dai.address, weth.address, usdc.address, tetu.address],
+          [1, 1, 1, 1],
+          4,
+          2,
+          priceOracle.address
+        );
+
+        controlGasLimitsEx(gasUsed, GET_GET_COLLATERALS, (u, t) => {
           expect(u).to.be.below(t + 1);
         });
       });

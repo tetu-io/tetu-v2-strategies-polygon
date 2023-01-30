@@ -11,7 +11,7 @@ import "../interfaces/converter/IConverterController.sol";
 import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 
-//!! import "hardhat/console.sol";
+//! import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -112,17 +112,17 @@ library ConverterStrategyBaseLib {
   /// @notice Borrow max available amount of {borrowAsset} using {collateralAmount} of {collateralAsset} as collateral
   function borrowPosition(
     ITetuConverter tetuConverter_,
-    address collateralAsset,
-    uint collateralAmount,
-    address borrowAsset
+    address collateralAsset_,
+    uint collateralAmount_,
+    address borrowAsset_
   ) internal returns (uint borrowedAmountOut) {
     //!! console.log('_borrowPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
 
-    AppLib.approveIfNeeded(collateralAsset, collateralAmount, address(tetuConverter_));
+    AppLib.approveIfNeeded(collateralAsset_, collateralAmount_, address(tetuConverter_));
     (address converter, uint maxTargetAmount, /*int apr18*/) = tetuConverter_.findBorrowStrategy(
-      collateralAsset,
-      collateralAmount,
-      borrowAsset,
+      collateralAsset_,
+      collateralAmount_,
+      borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
     //!! console.log('converter, maxTargetAmount', converter, maxTargetAmount);
@@ -133,9 +133,9 @@ library ConverterStrategyBaseLib {
       // we need to approve collateralAmount before the borrow-call but we already made the approval above
       borrowedAmountOut = tetuConverter_.borrow(
         converter,
-        collateralAsset,
-        collateralAmount,
-        borrowAsset,
+        collateralAsset_,
+        collateralAmount_,
+        borrowAsset_,
         maxTargetAmount,
         address(this)
       );
@@ -190,30 +190,30 @@ library ConverterStrategyBaseLib {
   }
 
   function liquidate(
-    ITetuLiquidator _liquidator,
-    address tokenIn,
-    address tokenOut,
-    uint amountIn,
-    uint slippage,
-    uint rewardLiquidationThresholdForTokenOut
+    ITetuLiquidator liquidator_,
+    address tokenIn_,
+    address tokenOut_,
+    uint amountIn_,
+    uint slippage_,
+    uint liquidationThresholdForTokenOut_
   ) internal {
     //!! console.log("_liquidate", amountIn);
     //!! console.log("_liquidate balance tokenOut", IERC20(tokenOut).balanceOf(address(this)), tokenOut);
-    (ITetuLiquidator.PoolData[] memory route, /* string memory error*/) = _liquidator.buildRoute(tokenIn, tokenOut);
+    (ITetuLiquidator.PoolData[] memory route, /* string memory error*/) = liquidator_.buildRoute(tokenIn_, tokenOut_);
 
     if (route.length == 0) {
       revert('CSB: No liquidation route');
     }
 
     // calculate balance in out value for check threshold
-    uint amountOut = _liquidator.getPriceForRoute(route, amountIn);
+    uint amountOut = liquidator_.getPriceForRoute(route, amountIn_);
     //!! console.log("_liquidate expected amount out", amountOut);
 
-    // if the value higher than threshold distribute to destinations
-    if (amountOut > rewardLiquidationThresholdForTokenOut) {
+    // if the expected value is higher than threshold distribute to destinations
+    if (amountOut > liquidationThresholdForTokenOut_) {
       // we need to approve each time, liquidator address can be changed in controller
-      AppLib.approveIfNeeded(tokenIn, amountIn, address(_liquidator));
-      _liquidator.liquidateWithRoute(route, amountIn, slippage);
+      AppLib.approveIfNeeded(tokenIn_, amountIn_, address(liquidator_));
+      liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
     }
 
     //!! console.log("_liquidate balance after", IERC20(tokenOut).balanceOf(address(this)));

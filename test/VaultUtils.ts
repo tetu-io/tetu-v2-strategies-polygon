@@ -37,15 +37,15 @@ export class VaultUtils {
   ): Promise<ContractTransaction> {
     const vaultForUser = vault.connect(user);
     const underlying = await vaultForUser.asset();
-    const dec = await TokenUtils.decimals(underlying);
-    const bal = await TokenUtils.balanceOf(underlying, user.address);
-    console.log('balance', utils.formatUnits(bal, dec), bal.toString());
-    expect(+utils.formatUnits(bal, dec))
-      .is.greaterThanOrEqual(+utils.formatUnits(amount, dec), 'not enough balance')
+    const underlyingDecimals = await TokenUtils.decimals(underlying);
+    const userBalance = await TokenUtils.balanceOf(underlying, user.address);
+    console.log('balance', utils.formatUnits(userBalance, underlyingDecimals), userBalance.toString());
+    expect(+utils.formatUnits(userBalance, underlyingDecimals))
+      .is.greaterThanOrEqual(+utils.formatUnits(amount, underlyingDecimals), 'not enough balance')
 
-    const undBal = await vaultForUser.totalAssets();
+    const vaultTotalAssets = await vaultForUser.totalAssets();
     const totalSupply = await IERC20__factory.connect(vault.address, user).totalSupply();
-    if (!totalSupply.isZero() && undBal.isZero()) {
+    if (!totalSupply.isZero() && vaultTotalAssets.isZero()) {
       throw new Error("Wrong underlying balance! Check strategy implementation for _rewardPoolBalance()");
     }
 

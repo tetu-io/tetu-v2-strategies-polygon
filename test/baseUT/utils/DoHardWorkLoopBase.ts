@@ -24,6 +24,13 @@ interface IBalances {
   signerBalance: BigNumber;
 }
 
+export interface IDoHardWorkLoopInputParams {
+  /// 50_000 for 0.5
+  compoundRate?: number;
+  /// 1000 for 1%
+  reinvestThresholdPercent?: number;
+}
+
 export class DoHardWorkLoopBase {
 
   public readonly signer: SignerWithAddress;
@@ -40,13 +47,10 @@ export class DoHardWorkLoopBase {
   underlyingDecimals = 0;
 
   loops = 0;
-  loopStartTs = 0;
   startTs = 0;
   cRatio = 0;
   isUserDeposited = true;
-  stratEarnedTotal = BigNumber.from(0);
   stratEarned = BigNumber.from(0);
-  vaultPPFS = BigNumber.from(0);
   priceCache = new Map<string, BigNumber>();
   totalToClaimInTetuN = 0;
   toClaimCheckTolerance = 0.3;
@@ -92,16 +96,23 @@ export class DoHardWorkLoopBase {
     loops: number,
     loopValue: number,
     advanceBlocks: boolean,
-    stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>,
+    params: IDoHardWorkLoopInputParams,
+    stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>
   ) {
     const start = Date.now();
     this.loops = loops;
-    await this.init();
+    await this.init(params);
+    this.initialDepositWithFee = this.subDepositFee(deposit); // call it after fees init()
+
+    // put half of signer's balance to liquidator
+    await IERC20__factory.connect(this.underlying, this.signer).transfer(this.tools.liquidator.address, deposit.div(2));
+
     if (stateRegistrar) {
       await stateRegistrar("init", this);
     }
-    this.initialDepositWithFee = this.subDepositFee(deposit); // call it after fees init()
-    await this.enterToVault(deposit);
+
+    // user enters to vault with all "deposit" amount, signer enters with "depoit/2"
+    await this.enterToVault();
     await this.initialSnapshot();
     if (stateRegistrar) {
       await stateRegistrar("beforeLoop", this);
@@ -134,7 +145,9 @@ export class DoHardWorkLoopBase {
 //endregion Fee utils
 
 //region Initialization
-  protected async init() {
+  protected async init(
+    params: IDoHardWorkLoopInputParams
+  ) {
     this.underlyingDecimals = await TokenUtils.decimals(this.underlying);
     this.feeDenominator = await this.vault.FEE_DENOMINATOR();
     this.depositFee = await this.vault.depositFee();
@@ -152,7 +165,9 @@ export class DoHardWorkLoopBase {
       this.strategy.address,
       await Misc.impersonate(platformVoter)
     );
-    await strategyAsPlatformVoter.setCompoundRatio(100_000);
+    if (params.compoundRate) {
+      await strategyAsPlatformVoter.setCompoundRatio(params.compoundRate);
+    }
 
     const controllerAsUser = await ControllerV2__factory.connect(controller, this.user);
     const operators = await controllerAsUser.operatorsList();
@@ -161,7 +176,9 @@ export class DoHardWorkLoopBase {
       await Misc.impersonate(operators[0])
     );
     // await strategyAsOperator.setRewardLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits("100", 6)); // TODO
-    await strategyAsOperator.setReinvestThresholdPercent(1000); // 100_000 / 100
+    if (params.reinvestThresholdPercent) {
+      await strategyAsOperator.setReinvestThresholdPercent(params.reinvestThresholdPercent); // 100_000 / 100
+    }
   }
 
   protected async initialSnapshot() {
@@ -177,16 +194,18 @@ export class DoHardWorkLoopBase {
    * signer and user enter to the vault
    * we should have not zero balance if user exit the vault for properly check
    */
-  protected async enterToVault(deposit: BigNumber) {
+  protected async enterToVault() {
     console.log('--- Enter to vault')
 
+    const balanceUser = await TokenUtils.balanceOf(this.underlying, this.user.address);
+    const balanceSigner = await TokenUtils.balanceOf(this.underlying, this.signer.address);
+
     // initial deposit from signer
-    const signerDeposit = deposit.div(2)
-    await VaultUtils.deposit(this.signer, this.vault, signerDeposit);
+    await VaultUtils.deposit(this.signer, this.vault, balanceSigner);
     console.log('enterToVault: deposited for signer');
 
     // initial deposit from user
-    await this.initialDepositFromUser(deposit);
+    await this.initialDepositFromUser(balanceUser);
     console.log('enterToVault: deposited for user');
 
     // remove excess tokens
@@ -223,8 +242,6 @@ export class DoHardWorkLoopBase {
     for (let i = 0; i < loops; i++) {
       console.log('\n=====================\nloop i', i);
       const start = Date.now();
-      await this.loopStartActions(i);
-      await this.loopStartSnapshot();
 
       // *********** DO HARD WORK **************
       if (advanceBlocks) {
@@ -232,9 +249,8 @@ export class DoHardWorkLoopBase {
       } else {
         await TimeUtils.advanceBlocksOnTs(loopValue);
       }
-      await this.afterBlockAdvance();
       await this.doHardWork();
-      await this.loopPrintROIAndSaveEarned(i);
+      // await this.loopPrintROIAndSaveEarned(i);
       await this.loopEndCheck();
       await this.loopEndActions(i, loops);
       Misc.printDuration(i + ' Loop ended', start);
@@ -242,27 +258,6 @@ export class DoHardWorkLoopBase {
         await stateRegistrar(i.toString(), this);
       }
     }
-  }
-
-  protected async loopStartActions(i: number) {
-    console.log('loopStartActions i', i);
-    // TODO
-    // const start = Date.now();
-    // if (i > 1) {
-    //   const den = (await this.core.controller.psDenominator()).toNumber();
-    //   const newNum = +(den / i).toFixed()
-    //   console.log('new ps ratio', newNum, den)
-    //   await this.core.announcer.announceRatioChange(9, newNum, den);
-    //   await TimeUtils.advanceBlocksOnTs(60 * 60 * 48);
-    //   await this.core.controller.setPSNumeratorDenominator(newNum, den);
-    // }
-    // Misc.printDuration('fLoopStartActionsDefault completed', start);
-  }
-
-  protected async loopStartSnapshot() {
-    this.loopStartTs = await Misc.getBlockTsFromChain();
-    this.vaultPPFS = await this.vault.sharePrice();
-    this.stratEarnedTotal = await this.strategyEarned();
   }
 
   protected async loopEndCheck() {
@@ -274,6 +269,7 @@ export class DoHardWorkLoopBase {
     }
   }
 
+//region End actions
   /** Simplest version: single deposit, single withdrawing */
   protected async loopEndActions(i: number, numberLoops: number) {
     console.log("loopEndActions", i);
@@ -319,66 +315,8 @@ export class DoHardWorkLoopBase {
     }
     Misc.printDuration('fLoopEndActions completed', start);
   }
+//endregion End actions
 
-  protected async afterBlockAdvance() {
-    const start = Date.now();
-    // ** calculate to claim
-    this.totalToClaimInTetuN = 0;
-    const isReadyToHardWork = await this.strategy.isReadyToHardWork();
-    if (isReadyToHardWork) {
-      // const platform = await this.strategy.PLATFORM();
-      // const tetuPriceN = +utils.formatUnits(await this.getPrice(this.core.tetu.address));
-      // let rts;
-      // if (platform === 24) {
-      //   rts = await ISplitter__factory.connect(this.strategy.address, this.signer).strategyRewardTokens();
-      // } else {
-      // rts = []; // await this.strategy.rewardTokens(); // TODO we have no rewardTokens() at v2
-      // }
-      // for (let i = 0; i < rts.length; i++) {
-      //   const rt = rts[i];
-      //   const rtDec = await TokenUtils.decimals(rt);
-      //   const rtPriceN = +utils.formatUnits(await this.getPrice(rt));
-      //   // const toClaimInTetuN = +utils.formatUnits(toClaim[i], rtDec) * rtPriceN / tetuPriceN;
-      //   // console.log('toClaim', i, toClaimInTetuN);
-      //   this.totalToClaimInTetuN += toClaimInTetuN;
-      // }
-    }
-    Misc.printDuration('fAfterBlocAdvance completed', start);
-  }
-
-  protected async loopPrintROIAndSaveEarned(i: number) {
-    const start = Date.now();
-    const stratEarnedTotal = await this.strategyEarned();
-    const stratEarnedTotalN = +utils.formatUnits(stratEarnedTotal);
-    this.stratEarned = stratEarnedTotal.sub(this.stratEarnedTotal);
-    const stratEarnedN = +utils.formatUnits(this.stratEarned);
-    const loopEndTs = await Misc.getBlockTsFromChain();
-    const loopTime = loopEndTs - this.loopStartTs;
-
-    const targetTokenPrice = await this.getPrice(this.core.tetu.address);
-    const targetTokenPriceN = +utils.formatUnits(targetTokenPrice);
-    const underlyingPrice = await this.getPrice(this.underlying);
-    const underlyingPriceN = +utils.formatUnits(underlyingPrice);
-
-    const tvl = await this.vault.totalAssets();
-    const tvlN = +utils.formatUnits(tvl, this.underlyingDecimals);
-
-    const tvlUsdc = tvlN * underlyingPriceN;
-    const earnedUsdc = stratEarnedTotalN * targetTokenPriceN;
-    const earnedUsdcThisCycle = stratEarnedN * targetTokenPriceN;
-
-    const roi = ((earnedUsdc / tvlUsdc) / (loopEndTs - this.startTs)) * 100 * Misc.SECONDS_OF_YEAR;
-    const roiThisCycle = ((earnedUsdcThisCycle / tvlUsdc) / loopTime) * 100 * Misc.SECONDS_OF_YEAR;
-
-    console.log('++++++++++++++++ ROI ' + i + ' ++++++++++++++++++++++++++')
-    console.log('Loop time', (loopTime / 60 / 60).toFixed(1), 'hours');
-    console.log('TETU earned total', stratEarnedTotalN);
-    console.log('TETU earned for this loop', stratEarnedN);
-    console.log('ROI total', roi);
-    console.log('ROI current', roiThisCycle);
-    console.log('+++++++++++++++++++++++++++++++++++++++++++++++')
-    Misc.printDuration('fLoopPrintROIAndSaveEarned completed', start);
-  }
 //endregion Loop
 
   protected async userBalanceInVault(): Promise<BigNumber> {
