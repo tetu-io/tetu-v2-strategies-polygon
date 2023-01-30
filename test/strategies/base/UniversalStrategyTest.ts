@@ -9,7 +9,7 @@ import {
 } from "../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
-import {DoHardWorkLoopBase} from "../../baseUT/utils/DoHardWorkLoopBase";
+import {DoHardWorkLoopBase, IDoHardWorkLoopInputParams} from "../../baseUT/utils/DoHardWorkLoopBase";
 import {DeployInfo} from "../../baseUT/utils/DeployInfo";
 import {SpecificStrategyTest} from "./SpecificStrategyTest";
 import {BigNumber} from "ethers";
@@ -33,7 +33,7 @@ export interface IUniversalStrategyInputParams {
   /** only for strategies where we expect PPFS fluctuations */
   ppfsDecreaseAllowed: boolean;
   specificTests: SpecificStrategyTest[];
-  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>,
+  hwParams: IDoHardWorkLoopInputParams;
 }
 
 async function universalStrategyTest(
@@ -50,7 +50,8 @@ async function universalStrategyTest(
     strategy: IStrategyV2,
     balanceTolerance: number
   ) => DoHardWorkLoopBase,
-  params: IUniversalStrategyInputParams
+  params: IUniversalStrategyInputParams,
+  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>
 ) {
 
   describe(name + "_Test", async function () {
@@ -133,7 +134,7 @@ async function universalStrategyTest(
         vault,
         strategy,
         params.balanceTolerance,
-      ).start(userBalance, params.loops, params.loopValue, params.advanceBlocks, params.stateRegistrar);
+      ).start(userBalance, params.loops, params.loopValue, params.advanceBlocks, params.hwParams, stateRegistrar);
     });
 
     it("common test should be ok", async () => {

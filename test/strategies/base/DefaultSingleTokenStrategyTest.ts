@@ -17,7 +17,8 @@ async function startDefaultStrategyTest(
   assetName: string,
   deployInfo: DeployInfo,
   deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>),
-  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>,
+  params: IUniversalStrategyInputParams,
+  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>
 ) {
 
   // ***********************************************
@@ -25,16 +26,6 @@ async function startDefaultStrategyTest(
   // ***********************************************
   const vaultName = 'tetu' + assetName;
   const finalBalanceTolerance = 0;
-  const params: IUniversalStrategyInputParams = {
-      ppfsDecreaseAllowed: false,
-      balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
-      deposit: 100_000,
-      loops: 40,
-      loopValue: 2000,
-      advanceBlocks: true,
-      specificTests: [],
-      stateRegistrar
-  }
   // **********************************************
 
   const hwInitiator = (
@@ -66,7 +57,8 @@ async function startDefaultStrategyTest(
     deployInfo,
     deployer as (signer: SignerWithAddress) => Promise<IVaultStrategyInfo>,
     hwInitiator,
-    params
+    params,
+    stateRegistrar
   );
 }
 
