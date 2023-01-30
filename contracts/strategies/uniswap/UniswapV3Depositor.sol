@@ -36,10 +36,15 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     // borrowing (hedging) token
     address public tokenB;
 
+    /// @notice false: tokenA == pool.token0
+    ///         true:  tokenB == pool.token1
+    bool private _depositorSwapTokens;
+
     /// @dev Total fractional shares of Uniswap V3 position
     uint128 public totalLiquidity;
 
     function __UniswapV3Depositor_init(
+        address asset_,
         address pool_,
         int24 tickRange_,
         int24 rebalanceTickRange_
@@ -50,8 +55,16 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         (, int24 tick, , , , , ) = pool.slot0();
         lowerTick = (tick - tickRange_) / 10 * 10;
         upperTick = (tick + tickRange_) / 10 * 10;
-        tokenA = pool.token0();
-        tokenB = pool.token1();
+        if (asset_ == pool.token0()) {
+            tokenA = pool.token0();
+            tokenB = pool.token1();
+            _depositorSwapTokens = false;
+        } else {
+            tokenA = pool.token1();
+            tokenB = pool.token0();
+            _depositorSwapTokens = true;
+        }
+        console.log('__UniswapV3Depositor_init _depositorSwapTokens', _depositorSwapTokens);
     }
 
     function _setNewTickRange() internal {
@@ -68,9 +81,10 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         bytes calldata /*_data*/
     ) external override {
         require(msg.sender == address(pool), "callback caller");
-
-        if (amount0Owed > 0) IERC20(tokenA).safeTransfer(msg.sender, amount0Owed);
-        if (amount1Owed > 0) IERC20(tokenB).safeTransfer(msg.sender, amount1Owed);
+        console.log('uniswapV3MintCallback amount0Owed', amount0Owed);
+        console.log('uniswapV3MintCallback amount1Owed', amount1Owed);
+        if (amount0Owed > 0) IERC20(_depositorSwapTokens ? tokenB : tokenA).safeTransfer(msg.sender, amount0Owed);
+        if (amount1Owed > 0) IERC20(_depositorSwapTokens ? tokenA : tokenB).safeTransfer(msg.sender, amount1Owed);
     }
 
     /////////////////////////////////////////////////////////////////////
@@ -81,37 +95,42 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         uint[] memory amountsConsumed,
         uint liquidityOut
     ) {
+        console.log('_depositorEnter amountsDesired_[0]', amountsDesired_[0]);
+        console.log('_depositorEnter amountsDesired_[1]', amountsDesired_[1]);
+
+        if (_depositorSwapTokens) {
+            (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
+        }
+
         amountsConsumed = new uint[](2);
 
-        if (totalLiquidity == 0) {
-            (uint160 sqrtRatioX96, , , , , , ) = pool.slot0();
-            uint128 newLiquidity =
-            LiquidityAmounts.getLiquidityForAmounts(
-                sqrtRatioX96,
-                lowerTick.getSqrtRatioAtTick(),
-                upperTick.getSqrtRatioAtTick(),
-                    amountsDesired_[0],
-                    amountsDesired_[1]
-            );
-            liquidityOut = uint(newLiquidity);
-            (amountsConsumed[0], amountsConsumed[1]) = LiquidityAmounts.getAmountsForLiquidity(
-                sqrtRatioX96,
-                lowerTick.getSqrtRatioAtTick(),
-                upperTick.getSqrtRatioAtTick(),
-                newLiquidity
-            );
-        } else {
-            (amountsConsumed[0], amountsConsumed[1], liquidityOut) = _computeMintAmounts(
-                totalLiquidity,
-                    amountsDesired_[0],
-                    amountsDesired_[1]
-            );
+        (uint160 sqrtRatioX96, , , , , , ) = pool.slot0();
+        uint128 newLiquidity =
+        LiquidityAmounts.getLiquidityForAmounts(
+            sqrtRatioX96,
+            lowerTick.getSqrtRatioAtTick(),
+            upperTick.getSqrtRatioAtTick(),
+            amountsDesired_[0],
+            amountsDesired_[1]
+        );
+        liquidityOut = uint(newLiquidity);
+        (amountsConsumed[0], amountsConsumed[1]) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtRatioX96,
+            lowerTick.getSqrtRatioAtTick(),
+            upperTick.getSqrtRatioAtTick(),
+            newLiquidity
+        );
+
+        if (_depositorSwapTokens) {
+            (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
         }
+
+        console.log('_depositorEnter amountsConsumed[0]', amountsConsumed[0]);
+        console.log('_depositorEnter amountsConsumed[1]', amountsConsumed[1]);
+        console.log('_depositorEnter liquidityOut', liquidityOut);
 
         pool.mint(address(this), lowerTick, upperTick, uint128(liquidityOut), "");
         totalLiquidity += uint128(liquidityOut);
-
-        // todo sendbackchange?
     }
 
     function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
@@ -133,9 +152,14 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         );
 
         totalLiquidity -= uint128(liquidityAmount);
+
+        if (_depositorSwapTokens) {
+            (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+        }
     }
 
     function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+        console.log('_depositorQuoteExit liquidityAmount', liquidityAmount);
         amountsOut = new uint[](2);
 
         (uint160 sqrtRatioX96, int24 tick, , , , , ) = pool.slot0();
@@ -153,6 +177,13 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed1);
         amountsOut[0] += fee0;
         amountsOut[1] += fee1;
+
+        if (_depositorSwapTokens) {
+            (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+        }
+
+        console.log('_depositorQuoteExit amountsOut[0]', amountsOut[0]);
+        console.log('_depositorQuoteExit amountsOut[1]', amountsOut[1]);
     }
 
     /////////////////////////////////////////////////////////////////////
@@ -200,6 +231,10 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
             tokensOut[0] = tokenA;
             tokensOut[1] = tokenB;
 
+            if (_depositorSwapTokens) {
+                (tokensOut[0], tokensOut[1]) = (tokensOut[1], tokensOut[0]);
+                (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+            }
             console.log('_depositorClaimRewards() amountsOut[0]', amountsOut[0]);
             console.log('_depositorClaimRewards() amountsOut[1]', amountsOut[1]);
 
@@ -235,22 +270,17 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
     function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
         weights = new uint[](2);
-        uint128 liquidity = pool.liquidity();
-//        console.log("_depositorPoolWeights() liquidity", liquidity);
-        (uint160 sqrtRatioX96, , , , , , ) = pool.slot0();
-        uint amount0Current = LiquidityAmounts.getAmount0ForLiquidity(sqrtRatioX96, upperTick.getSqrtRatioAtTick(), liquidity);
-//        console.log("_depositorPoolWeights() amount0Current", amount0Current);
-        uint amount0Total = LiquidityAmounts.getAmount0ForLiquidity(lowerTick.getSqrtRatioAtTick(), upperTick.getSqrtRatioAtTick(), liquidity);
-//        console.log("_depositorPoolWeights() amount0Total", amount0Total);
-
-        weights[0] = amount0Current;
-        weights[1] = amount0Total - amount0Current;
-        totalWeight = amount0Total;
+        weights[0] = 1;
+        weights[1] = 1;
+        totalWeight = 2;
     }
 
     function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
         reserves = new uint[](2);
         (reserves[0], reserves[1]) = getUnderlyingBalances();
+        if (_depositorSwapTokens) {
+            (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
+        }
     }
 
     function _depositorLiquidity() override internal virtual view returns (uint) {
@@ -259,56 +289,6 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
     function _depositorTotalSupply() override internal view virtual returns (uint) {
         return uint(totalLiquidity);
-    }
-
-    function _computeMintAmounts(
-        uint256 totalSupply,
-        uint256 amount0Max,
-        uint256 amount1Max
-    ) private view returns (
-        uint256 amount0,
-        uint256 amount1,
-        uint256 mintAmount
-    ) {
-        (uint256 amount0Current, uint256 amount1Current) = getUnderlyingBalances();
-
-        // compute proportional amount of tokens to mint
-        if (amount0Current == 0 && amount1Current > 0) {
-            mintAmount = FullMath.mulDiv(
-                amount1Max,
-                totalSupply,
-                amount1Current
-            );
-        } else if (amount1Current == 0 && amount0Current > 0) {
-            mintAmount = FullMath.mulDiv(
-                amount0Max,
-                totalSupply,
-                amount0Current
-            );
-        } else if (amount0Current == 0 && amount1Current == 0) {
-            revert("");
-        } else {
-            // only if both are non-zero
-            uint256 amount0Mint =
-            FullMath.mulDiv(amount0Max, totalSupply, amount0Current);
-            uint256 amount1Mint =
-            FullMath.mulDiv(amount1Max, totalSupply, amount1Current);
-            require(amount0Mint > 0 && amount1Mint > 0, "mint 0");
-
-            mintAmount = amount0Mint < amount1Mint ? amount0Mint : amount1Mint;
-        }
-
-        // compute amounts owed to contract
-        amount0 = FullMath.mulDivRoundingUp(
-            mintAmount,
-            amount0Current,
-            totalSupply
-        );
-        amount1 = FullMath.mulDivRoundingUp(
-            mintAmount,
-            amount1Current,
-            totalSupply
-        );
     }
 
     function getUnderlyingBalances() public view returns (uint256 amount0Current, uint256 amount1Current) {
@@ -332,8 +312,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) + uint256(tokensOwed1);
 
         // add any leftover in contract to current holdings
-        amount0Current += fee0 + IERC20(tokenA).balanceOf(address(this));
-        amount1Current += fee1 + IERC20(tokenB).balanceOf(address(this));
+        amount0Current += fee0 + IERC20(_depositorSwapTokens ? tokenB : tokenA).balanceOf(address(this));
+        amount1Current += fee1 + IERC20(_depositorSwapTokens ? tokenA : tokenB).balanceOf(address(this));
     }
 
     function _getPositionID() internal view returns (bytes32 positionID) {

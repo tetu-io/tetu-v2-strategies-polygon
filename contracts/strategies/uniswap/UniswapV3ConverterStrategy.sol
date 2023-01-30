@@ -18,7 +18,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         int24 tickRange_,
         int24 rebalanceTickRange_
     ) external initializer {
-        __UniswapV3Depositor_init(pool_, tickRange_, rebalanceTickRange_);
+        __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
         __ConverterStrategyBase_init(controller_, splitter_, converter_);
         IERC20(pool.token0()).approve(IController(controller_).liquidator(), type(uint).max);
         IERC20(pool.token1()).approve(IController(controller_).liquidator(), type(uint).max);
