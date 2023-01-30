@@ -282,7 +282,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /////////////////////////////////////////////////////////////////////
-  ///                   Claim rewards
+  ///                 Claim rewards
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Claim all possible rewards.
@@ -293,29 +293,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory amounts1;
     (tokens1, amounts1) = _depositorClaimRewards();
 
-    // Rewards from TetuConverter
-    address[] memory tokens2;
-    uint[] memory amounts2;
-    (tokens2, amounts2) = tetuConverter.claimRewards(address(this));
-
-    address[] memory tokens;
-    uint[] memory amounts;
-
-    // Join arrays and recycle tokens
-    (tokens, amounts) = TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
-    //!! TokenAmountsLib.print("claim", tokens, amounts); // TODO remove
-
-    // {amounts} contain just received tokens, but probably we already had some tokens on balance
-    uint len = tokens.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amounts[i] = IERC20(tokens[i]).balanceOf(address(this));
-    }
-
-    if (len > 0) {
-      _recycle(tokens, amounts);
-    }
-
-    //!! console.log("_claim.end");
+    ConverterStrategyBaseLib.processClaims(
+      tetuConverter,
+      tokens1,
+      amounts1,
+      _recycle
+    );
   }
 
   /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
@@ -370,6 +353,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                   Hardwork
   /////////////////////////////////////////////////////////////////////
 
+  /// @notice A virtual handler to make any action before hardwork
+  function _preHardWork(bool reInvest) internal virtual {}
+
+  /// @notice A virtual handler to make any action after hardwork
+  function _postHardWork() internal virtual {}
+
   /// @notice Is strategy ready to hard work
   function isReadyToHardWork() override external pure returns (bool) {
     // check claimable amounts and compare with thresholds
@@ -381,25 +370,34 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return _doHardWork(true);
   }
 
+  /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
+  function _handleRewards() internal virtual returns (uint earned, uint lost) {
+    uint assetBalanceBefore = _balance(asset);
+    _claim();
+    uint assetBalanceAfterClaim = _balance(asset);
+
+    if (assetBalanceAfterClaim > assetBalanceBefore) {
+      earned = assetBalanceAfterClaim - assetBalanceBefore;
+    } else {
+      lost = assetBalanceBefore - assetBalanceAfterClaim;
+    }
+
+    return (earned, lost);
+  }
+
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    //!! console.log('doHardWork.1');
-    uint assetBalanceBefore = _balance(asset);
-    //!! console.log('doHardWork.2 assetBalanceBefore', assetBalanceBefore);
-    _claim();
-    uint assetBalanceAfterClaim = _balance(asset);
-    //!! console.log('doHardWork.2 assetBalanceAfter', assetBalanceAfterClaim);
+    _preHardWork(reInvest);
+    (earned, lost) = _handleRewards();
+    uint assetBalance = _balance(asset);
 
-    earned = assetBalanceAfterClaim - assetBalanceBefore;
-    lost = 0;
-    //!! console.log('doHardWork.3 earned', earned);
-
+    // re-invest income
     if (reInvest
-      && assetBalanceAfterClaim > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR
-    ) {// re-invest income
+      && assetBalance > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR
+    ) {
       uint investedBefore = _investedAssets;
-      _depositToPool(assetBalanceAfterClaim);
+      _depositToPool(assetBalance);
       uint investedAfter = _investedAssets;
 
       //!! console.log('doHardWork.4 investedAfter, investedBefore, _unspentAsset', investedAfter, investedBefore, _unspentAsset);
@@ -418,11 +416,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         lost = investedBefore - investedAfter;
         //!! console.log("doHardWork.6 lost", lost);
       }
-    } else {
-      //!! console.log("doHardWork.7 reInvest skipped");
     }
 
     //!! console.log(">>> Asset balance after _doHardWork", _balance(asset));
+    _postHardWork();
   }
 
 

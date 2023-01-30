@@ -10,6 +10,7 @@ import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/IConverterController.sol";
 import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
+import "../tools/TokenAmountsLib.sol";
 
 //! import "hardhat/console.sol";
 
@@ -219,5 +220,32 @@ library ConverterStrategyBaseLib {
     //!! console.log("_liquidate balance after", IERC20(tokenOut).balanceOf(address(this)));
   }
 
+  /// @notice Claim rewards from tetuConverter, make list of all available rewards, do post-processing
+  /// @dev The post-processing is rewards conversion to the main asset
+  /// @param tokens_ List of rewards claimed from the internal pool
+  /// @param amounts_ Amounts of rewards claimed from the internal pool
+  /// @param recycle_ ConverterStrategyBase._recycle - the call converts given tokens to the main asset
+  function processClaims(
+    ITetuConverter tetuConverter_,
+    address[] memory tokens_,
+    uint[] memory amounts_,
+    function (address[] memory tokens, uint[] memory amounts) internal recycle_
+  ) internal {
+    // Rewards from TetuConverter
+    (address[] memory tokens2, uint[] memory amounts2) = tetuConverter_.claimRewards(address(this));
 
+    // Join arrays and recycle tokens
+    (address[] memory tokens, uint[] memory amounts) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
+    //!! TokenAmountsLib.print("claim", tokens, amounts); // TODO remove
+
+    // {amounts} contain just received values, but probably we already had some tokens on balance
+    uint len = tokens.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      amounts[i] = IERC20(tokens[i]).balanceOf(address(this));
+    }
+
+    if (len > 0) {
+      recycle_(tokens, amounts);
+    }
+  }
 }
