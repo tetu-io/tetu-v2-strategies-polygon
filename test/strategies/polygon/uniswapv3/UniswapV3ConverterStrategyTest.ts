@@ -161,7 +161,123 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    it('Claim fees', async() => {
+    it('hardwork with rebalance', async() => {
+      const investAmount = _100;
+      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      let price;
+      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+      let priceBefore = price
+
+      console.log('deposit...');
+      // const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
+      await vault.deposit(investAmount, signer.address);
+
+      expect(await strategy.needRebalance()).eq(false)
+
+      console.log('swap in pool USDC to tokenB...');
+      await TokenUtils.getToken(asset.address, swapper.address, swapAssetValueForPriceMove);
+      await swapper.connect(signer2).swap(await strategy.pool(), asset.address, await strategy.tokenB(), signer2.address, 10000) // 10% slippage
+      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+      console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
+      priceBefore = price
+
+      expect(await strategy.needRebalance()).eq(true)
+      await strategy.doHardWork()
+      expect(await strategy.needRebalance()).eq(false)
+
+      console.log('swap in pool tokenB to USDC...');
+      const amountofTokenBToSell = swapAssetValueForPriceMove.mul(parseUnits('1')).div(price)
+      console.log('Swap amount of tokenB:', formatUnits(amountofTokenBToSell, 18))
+      await TokenUtils.getToken(await strategy.tokenB(), swapper.address, amountofTokenBToSell);
+      await swapper.connect(signer2).swap(await strategy.pool(), await strategy.tokenB(), asset.address, signer2.address, 10000) // 10% slippage
+      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+      console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
+
+      expect(await strategy.needRebalance()).eq(true)
+      await strategy.doHardWork()
+      expect(await strategy.needRebalance()).eq(false)
+    })
+
+    it('hardwork with rebalance for reverse tokens order pool', async() => {
+      const investAmount = _100;
+      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      let price;
+      price = await swapper.getPrice(await strategy2.pool(), await strategy2.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+      let priceBefore = price
+
+      console.log('deposit...');
+      // const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
+      await vault2.deposit(investAmount, signer.address);
+
+      console.log('swap in pool USDC to tokenB...');
+      await TokenUtils.getToken(asset.address, swapper.address, swapAssetValueForPriceMove);
+      await swapper.connect(signer2).swap(await strategy2.pool(), asset.address, await strategy2.tokenB(), signer2.address, 10000) // 10% slippage
+      price = await swapper.getPrice(await strategy2.pool(), await strategy2.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+      console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
+      priceBefore = price
+
+      expect(await strategy2.needRebalance()).eq(true)
+      await strategy2.doHardWork()
+      expect(await strategy2.needRebalance()).eq(false)
+
+      console.log('swap in pool tokenB to USDC...');
+      const amountofTokenBToSell = swapAssetValueForPriceMove.mul(parseUnits('1')).div(price)
+      console.log('Swap amount of tokenB:', formatUnits(amountofTokenBToSell, 18))
+      await TokenUtils.getToken(await strategy2.tokenB(), swapper.address, amountofTokenBToSell);
+      await swapper.connect(signer2).swap(await strategy2.pool(), await strategy2.tokenB(), asset.address, signer2.address, 10000) // 10% slippage
+      price = await swapper.getPrice(await strategy2.pool(), await strategy2.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+      console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
+
+      expect(await strategy2.needRebalance()).eq(true)
+      await strategy2.doHardWork()
+      expect(await strategy2.needRebalance()).eq(false)
+
+    })
+
+    it('deposit / withdraw', async() => {
+      console.log('deposit 1.0 USDC...');
+      const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
+      await vault.deposit(_1, signer.address);
+
+      console.log('deposit 100.0 USDC...');
+      await vault.deposit(_100, signer.address);
+
+      console.log('withdraw 100.0 USDC...');
+      await vault.withdraw(_100, signer.address, signer.address);
+
+      console.log('withdrawAll...');
+      await vault.withdrawAll();
+      const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
+      // max loss - 0.000010 USDC
+      expect(balanceBefore.sub(balanceAfter)).lt(10)
+    })
+
+    it('deposit / withdraw for reverse tokens order pool', async() => {
+      console.log('deposit 1.0 USDC...');
+      const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
+      await vault2.deposit(_1, signer.address);
+
+      console.log('deposit 100.0 USDC...');
+      await vault2.deposit(_100, signer.address);
+
+      console.log('withdraw 100.0 USDC...');
+      await vault2.withdraw(_100, signer.address, signer.address);
+
+      console.log('withdrawAll...');
+      await vault2.withdrawAll();
+
+      const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
+      // max loss - 0.000010 USDC
+      expect(balanceBefore.sub(balanceAfter)).lt(10)
+    })
+
+    /*it('Claim fees', async() => {
       const investAmount = _100;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
 
@@ -237,83 +353,12 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('tokenB price', formatUnits(price, 6))
       console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
 
-      // todo make doHardWork workable
       // await strategy2.doHardWork()
 
       await strategy2.connect(gov).claim()
-    })
+    })*/
 
-    it('Rebalance', async() => {
-      const investAmount = _100;
-      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
-      let price;
-      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6))
-      let priceBefore = price
-
-      console.log('deposit...');
-      // const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
-      await vault.deposit(investAmount, signer.address);
-
-      console.log('swap in pool USDC to tokenB...');
-      await TokenUtils.getToken(asset.address, swapper.address, swapAssetValueForPriceMove);
-      await swapper.connect(signer2).swap(await strategy.pool(), asset.address, await strategy.tokenB(), signer2.address, 10000) // 10% slippage
-      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6))
-      console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
-      priceBefore = price
-
-      await strategy.rebalance()
-
-      console.log('swap in pool tokenB to USDC...');
-      const amountofTokenBToSell = swapAssetValueForPriceMove.mul(parseUnits('1')).div(price)
-      console.log('Swap amount of tokenB:', formatUnits(amountofTokenBToSell, 18))
-      await TokenUtils.getToken(await strategy.tokenB(), swapper.address, amountofTokenBToSell);
-      await swapper.connect(signer2).swap(await strategy.pool(), await strategy.tokenB(), asset.address, signer2.address, 10000) // 10% slippage
-      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6))
-      console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
-
-      await strategy.rebalance()
-
-    })
-
-    it('Rebalance for reverse tokens order pool', async() => {
-      const investAmount = _100;
-      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
-      let price;
-      price = await swapper.getPrice(await strategy2.pool(), await strategy2.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6))
-      let priceBefore = price
-
-      console.log('deposit...');
-      // const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
-      await vault2.deposit(investAmount, signer.address);
-
-      console.log('swap in pool USDC to tokenB...');
-      await TokenUtils.getToken(asset.address, swapper.address, swapAssetValueForPriceMove);
-      await swapper.connect(signer2).swap(await strategy2.pool(), asset.address, await strategy2.tokenB(), signer2.address, 10000) // 10% slippage
-      price = await swapper.getPrice(await strategy2.pool(), await strategy2.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6))
-      console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
-      priceBefore = price
-
-      await strategy2.rebalance()
-
-      console.log('swap in pool tokenB to USDC...');
-      const amountofTokenBToSell = swapAssetValueForPriceMove.mul(parseUnits('1')).div(price)
-      console.log('Swap amount of tokenB:', formatUnits(amountofTokenBToSell, 18))
-      await TokenUtils.getToken(await strategy2.tokenB(), swapper.address, amountofTokenBToSell);
-      await swapper.connect(signer2).swap(await strategy2.pool(), await strategy2.tokenB(), asset.address, signer2.address, 10000) // 10% slippage
-      price = await swapper.getPrice(await strategy2.pool(), await strategy2.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6))
-      console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
-
-      await strategy2.rebalance()
-
-    })
-
-    it('Calculate rebalance cost when shorted (borrowed) tokenB price goes up', async() => {
+    /*it('Calculate rebalance cost when shorted (borrowed) tokenB price goes up', async() => {
       const investAmount = _1;
       const swapAssetValueForPriceMove = parseUnits('250000', 6);
       let price;
@@ -406,43 +451,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
       console.log(`Estimated REBALANCE COST = ${formatUnits(rebalanceCost, 6)} USDC (${formatUnits(rebalanceCostPercent, 5)}%)`)
       console.log('--------------------------')
-    })
-
-    it('deposit / withdraw', async() => {
-      console.log('deposit 1.0 USDC...');
-      const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
-      await vault.deposit(_1, signer.address);
-
-      console.log('deposit 100.0 USDC...');
-      await vault.deposit(_100, signer.address);
-
-      console.log('withdraw 100.0 USDC...');
-      await vault.withdraw(_100, signer.address, signer.address);
-
-      console.log('withdrawAll...');
-      await vault.withdrawAll();
-      const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
-      // max loss - 0.000010 USDC
-      expect(balanceBefore.sub(balanceAfter)).lt(10)
-    })
-
-    it('deposit / withdraw for reverse tokens order pool', async() => {
-      console.log('deposit 1.0 USDC...');
-      const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
-      await vault2.deposit(_1, signer.address);
-
-      console.log('deposit 100.0 USDC...');
-      await vault2.deposit(_100, signer.address);
-
-      console.log('withdraw 100.0 USDC...');
-      await vault2.withdraw(_100, signer.address, signer.address);
-
-      console.log('withdrawAll...');
-      await vault2.withdrawAll();
-
-      const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
-      // max loss - 0.000010 USDC
-      expect(balanceBefore.sub(balanceAfter)).lt(10)
-    })
+    })*/
   })
 })

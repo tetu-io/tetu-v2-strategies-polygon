@@ -208,18 +208,12 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         if (fee0 > 0 || fee1 > 0) {
             console.log('fee0', fee0);
             console.log('fee1', fee1);
-            uint128 burnLiquidity = LiquidityAmounts.getLiquidityForAmounts(
-                sqrtRatioX96,
-                lowerTick.getSqrtRatioAtTick(),
-                upperTick.getSqrtRatioAtTick(),
-                fee0,
-                fee1
-            );
 
-            console.log('burn fee liquidity', burnLiquidity);
             amountsOut = new uint[](2);
-            (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, burnLiquidity);
-            pool.collect(
+
+            pool.burn(lowerTick, upperTick, 0);
+
+            (amountsOut[0], amountsOut[1]) = pool.collect(
                 address(this),
                 lowerTick,
                 upperTick,
@@ -237,14 +231,11 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
             }
             console.log('_depositorClaimRewards() amountsOut[0]', amountsOut[0]);
             console.log('_depositorClaimRewards() amountsOut[1]', amountsOut[1]);
-
-            totalLiquidity -= burnLiquidity;
         } else {
             console.log('No fees to burn');
             tokensOut = new address[](0);
             amountsOut = new uint[](0);
         }
-
     }
 
     /////////////////////////////////////////////////////////////////////

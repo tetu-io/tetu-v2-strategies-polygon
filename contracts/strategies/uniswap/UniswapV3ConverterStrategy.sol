@@ -24,8 +24,37 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         IERC20(pool.token1()).approve(IController(controller_).liquidator(), type(uint).max);
     }
 
+    /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
+    function _handleRewards() override internal returns (uint earned, uint lost) {
+        console.log('UniswapV3ConverterStrategy _handleRewards');
+        uint assetBalanceBefore = _balance(asset);
+
+        _claim();
+
+        if (needRebalance()) {
+            rebalance();
+        }
+
+        uint assetBalanceAfterClaim = _balance(asset);
+
+        if (assetBalanceAfterClaim > assetBalanceBefore) {
+            earned = assetBalanceAfterClaim - assetBalanceBefore;
+            console.log('_handleRewards() assetBalanceBefore', assetBalanceBefore);
+            console.log('_handleRewards() assetBalanceAfterClaim', assetBalanceAfterClaim);
+        } else {
+            lost = assetBalanceBefore - assetBalanceAfterClaim;
+        }
+
+        console.log('_handleRewards() earned', earned);
+        console.log('_handleRewards() lost', lost);
+
+        return (earned, lost);
+    }
+
     function rebalance() public {
         require(needRebalance(), "No rebalancing needed");
+
+        console.log('start rebalance');
 
         // close univ3 position
         _depositorEmergencyExit();
@@ -33,7 +62,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         // calculate amount and direction for swap
         ITetuConverter _tetuConverter = tetuConverter;
         (uint needToRepay,) = _tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
-        // (uint needToRepay,) = _tetuConverter.getDebtAmountStored(address(this), tokenA, tokenB);
         console.log('tetuConverter.getDebtAmountCurrent needToRepay', needToRepay);
 
         uint balanceOfCollateral = IERC20(tokenA).balanceOf(address(this));
