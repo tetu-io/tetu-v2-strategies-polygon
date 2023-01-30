@@ -195,7 +195,7 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint rewardLiquidationThresholdForTokenOut_
+    uint liquidationThresholdForTokenOut_
   ) internal {
     //!! console.log("_liquidate", amountIn);
     //!! console.log("_liquidate balance tokenOut", IERC20(tokenOut).balanceOf(address(this)), tokenOut);
@@ -209,8 +209,8 @@ library ConverterStrategyBaseLib {
     uint amountOut = liquidator_.getPriceForRoute(route, amountIn_);
     //!! console.log("_liquidate expected amount out", amountOut);
 
-    // if the value higher than threshold distribute to destinations
-    if (amountOut > rewardLiquidationThresholdForTokenOut_) {
+    // if the expected value is higher than threshold distribute to destinations
+    if (amountOut > liquidationThresholdForTokenOut_) {
       // we need to approve each time, liquidator address can be changed in controller
       AppLib.approveIfNeeded(tokenIn_, amountIn_, address(liquidator_));
       liquidator_.liquidateWithRoute(route, amountIn_, slippage_);

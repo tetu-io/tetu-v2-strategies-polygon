@@ -49,6 +49,7 @@ chai.use(chaiAsPromised);
 interface IState {
   title: string;
   block: number;
+  blockTimestamp: number;
   signer: {
     usdc: BigNumber;
   }
@@ -102,6 +103,7 @@ async function getStates(title: string, h: DoHardWorkLoopBase) : Promise<IState>
   const dest = {
     title,
     block: block.number,
+    blockTimestamp: block.timestamp,
     signer: {
       usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.signer.address),
     },
@@ -188,6 +190,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
     const headers = [
       "title",
       "block",
+      "timestamp",
       "$signer",
       "$user",
       "vault-$user",
@@ -251,6 +254,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
       const line = [
         item.title,
         item.block,
+        item.blockTimestamp,
         item.signer.usdc,
         item.user.usdc,
         item.vault.userUsdc,
