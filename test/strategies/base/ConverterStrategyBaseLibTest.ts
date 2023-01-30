@@ -11,8 +11,6 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, GET_GET_COLLATERALS
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
-import exp from "constants";
-import {MaticHolders} from "../../../scripts/MaticHolders";
 
 describe("ConverterStrategyBaseLibTest", () => {
 //region Variables

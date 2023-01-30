@@ -89,4 +89,19 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _depositorLiquidity();
   }
 
+  function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
+    return _doHardWork(reInvest);
+  }
+
+  function _handleRewardsAccess() external virtual returns (uint earned, uint lost) {
+    return _handleRewards();
+  }
+
+  function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual {
+    return _recycle(tokens, amounts);
+  }
+
+//  function _processClaimsAccess(address[] memory tokens_, uint[] memory amounts_) external virtual {
+//    return _processClaims(tokens_, amounts_);
+//  }
 }

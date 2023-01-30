@@ -15,7 +15,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {IGauge__factory} from "../../../../typechain/factories/contracts/integrations/dystopia";
 
-describe("BalancerComposableStablePoolTest (study)", () => {
+describe("BalancerComposableStableStudyTest", () => {
   let signer: SignerWithAddress;
 
   before(async function () {

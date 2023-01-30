@@ -261,7 +261,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
 //endregion Utils enter/exit
 
 //region Unit tests
-  describe("Balancer Boosted Aave USD", () => {
+  describe("BalancerComposableStableDepositorFacadeTest", () => {
     describe("_depositorPoolAssets", () => {
       it("should return expected list of assets", async () => {
         const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
