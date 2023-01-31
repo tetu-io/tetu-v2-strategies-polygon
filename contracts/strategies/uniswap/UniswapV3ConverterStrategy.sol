@@ -6,105 +6,105 @@ import "./UniswapV3Depositor.sol";
 
 /// @title Converter Strategy with UniswapV3
 contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase {
-    string public constant override NAME = "UniswapV3 Converter Strategy";
-    string public constant override PLATFORM = "UniswapV3";
-    string public constant override STRATEGY_VERSION = "1.0.0";
+  string public constant override NAME = "UniswapV3 Converter Strategy";
+  string public constant override PLATFORM = "UniswapV3";
+  string public constant override STRATEGY_VERSION = "1.0.0";
 
-    function init(
-        address controller_,
-        address splitter_,
-        address converter_,
-        address pool_,
-        int24 tickRange_,
-        int24 rebalanceTickRange_
-    ) external initializer {
-        __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
-        __ConverterStrategyBase_init(controller_, splitter_, converter_);
-        IERC20(pool.token0()).approve(IController(controller_).liquidator(), type(uint).max);
-        IERC20(pool.token1()).approve(IController(controller_).liquidator(), type(uint).max);
+  function init(
+    address controller_,
+    address splitter_,
+    address converter_,
+    address pool_,
+    int24 tickRange_,
+    int24 rebalanceTickRange_
+  ) external initializer {
+    __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
+    __ConverterStrategyBase_init(controller_, splitter_, converter_);
+    IERC20(pool.token0()).approve(IController(controller_).liquidator(), type(uint).max);
+    IERC20(pool.token1()).approve(IController(controller_).liquidator(), type(uint).max);
+  }
+
+  /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
+  function _handleRewards() override internal returns (uint earned, uint lost) {
+    console.log('UniswapV3ConverterStrategy _handleRewards');
+    uint assetBalanceBefore = _balance(asset);
+
+    _claim();
+
+    if (needRebalance()) {
+      rebalance();
     }
 
-    /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-    function _handleRewards() override internal returns (uint earned, uint lost) {
-        console.log('UniswapV3ConverterStrategy _handleRewards');
-        uint assetBalanceBefore = _balance(asset);
+    uint assetBalanceAfterClaim = _balance(asset);
 
-        _claim();
-
-        if (needRebalance()) {
-            rebalance();
-        }
-
-        uint assetBalanceAfterClaim = _balance(asset);
-
-        if (assetBalanceAfterClaim > assetBalanceBefore) {
-            earned = assetBalanceAfterClaim - assetBalanceBefore;
-            console.log('_handleRewards() assetBalanceBefore', assetBalanceBefore);
-            console.log('_handleRewards() assetBalanceAfterClaim', assetBalanceAfterClaim);
-        } else {
-            lost = assetBalanceBefore - assetBalanceAfterClaim;
-        }
-
-        console.log('_handleRewards() earned', earned);
-        console.log('_handleRewards() lost', lost);
-
-        return (earned, lost);
+    if (assetBalanceAfterClaim > assetBalanceBefore) {
+      earned = assetBalanceAfterClaim - assetBalanceBefore;
+      console.log('_handleRewards() assetBalanceBefore', assetBalanceBefore);
+      console.log('_handleRewards() assetBalanceAfterClaim', assetBalanceAfterClaim);
+    } else {
+      lost = assetBalanceBefore - assetBalanceAfterClaim;
     }
 
-    function rebalance() public {
-        require(needRebalance(), "No rebalancing needed");
+    console.log('_handleRewards() earned', earned);
+    console.log('_handleRewards() lost', lost);
 
-        console.log('start rebalance');
+    return (earned, lost);
+  }
 
-        // close univ3 position
-        _depositorEmergencyExit();
+  function rebalance() public {
+    require(needRebalance(), "No rebalancing needed");
 
-        // calculate amount and direction for swap
-        ITetuConverter _tetuConverter = tetuConverter;
-        (uint needToRepay,) = _tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
-        console.log('tetuConverter.getDebtAmountCurrent needToRepay', needToRepay);
+    console.log('start rebalance');
 
-        uint balanceOfCollateral = IERC20(tokenA).balanceOf(address(this));
-        console.log('balanceOfCollateral', balanceOfCollateral);
+    // close univ3 position
+    _depositorEmergencyExit();
 
-        uint balanceOfBorrowed = IERC20(tokenB).balanceOf(address(this));
-        console.log('balanceOfBorrowed', balanceOfBorrowed);
+    // calculate amount and direction for swap
+    ITetuConverter _tetuConverter = tetuConverter;
+    (uint needToRepay,) = _tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
+    console.log('tetuConverter.getDebtAmountCurrent needToRepay', needToRepay);
 
-        ITetuLiquidator _tetuLiquidator = ITetuLiquidator(IController(controller()).liquidator());
+    uint balanceOfCollateral = IERC20(tokenA).balanceOf(address(this));
+    console.log('balanceOfCollateral', balanceOfCollateral);
 
-        if (needToRepay > balanceOfBorrowed) {
-            // need to swap tokenA to exact tokenB
-            console.log('need to swap tokenA to exact tokenB');
-            uint tokenBDecimals = IERC20Metadata(tokenB).decimals();
-            uint needToBuyTokenB = needToRepay - balanceOfBorrowed;
-            console.log('needToBuyTokenB', needToBuyTokenB);
-            uint tokenBPrice = _tetuLiquidator.getPrice(tokenB, tokenA, 10**tokenBDecimals);
+    uint balanceOfBorrowed = IERC20(tokenB).balanceOf(address(this));
+    console.log('balanceOfBorrowed', balanceOfBorrowed);
 
-            console.log('tokenBPrice', tokenBPrice);
+    ITetuLiquidator _tetuLiquidator = ITetuLiquidator(IController(controller()).liquidator());
 
-            // todo add gap
-            uint needToSpendTokenA = needToBuyTokenB * tokenBPrice / 10**tokenBDecimals;
-            console.log('needToSpendTokenA', needToSpendTokenA);
+    if (needToRepay > balanceOfBorrowed) {
+      // need to swap tokenA to exact tokenB
+      console.log('need to swap tokenA to exact tokenB');
+      uint tokenBDecimals = IERC20Metadata(tokenB).decimals();
+      uint needToBuyTokenB = needToRepay - balanceOfBorrowed;
+      console.log('needToBuyTokenB', needToBuyTokenB);
+      uint tokenBPrice = _tetuLiquidator.getPrice(tokenB, tokenA, 10 ** tokenBDecimals);
 
-            // swap by liquidator
-            _tetuLiquidator.liquidate(tokenA, tokenB, needToSpendTokenA, 1000);
-            console.log('new balanceOfBorrowed', IERC20(tokenB).balanceOf(address(this)));
+      console.log('tokenBPrice', tokenBPrice);
 
-        } else {
-            // need to swap exact tokenB to tokenA
-            console.log('need to swap exact tokenB to tokenA');
+      // todo add gap
+      uint needToSpendTokenA = needToBuyTokenB * tokenBPrice / 10 ** tokenBDecimals;
+      console.log('needToSpendTokenA', needToSpendTokenA);
 
-            uint needToSellTokenB = balanceOfBorrowed - needToRepay;
-            _tetuLiquidator.liquidate(tokenB, tokenA, needToSellTokenB, 1000);
-        }
+      // swap by liquidator
+      _tetuLiquidator.liquidate(tokenA, tokenB, needToSpendTokenA, 1000);
+      console.log('new balanceOfBorrowed', IERC20(tokenB).balanceOf(address(this)));
 
-        // repay all debt
-        _convertDepositorPoolAssets();
+    } else {
+      // need to swap exact tokenB to tokenA
+      console.log('need to swap exact tokenB to tokenA');
 
-        // set new ticks
-        _setNewTickRange();
-
-        // deposit all again
-        _depositToPool(IERC20(asset).balanceOf(address(this)));
+      uint needToSellTokenB = balanceOfBorrowed - needToRepay;
+      _tetuLiquidator.liquidate(tokenB, tokenA, needToSellTokenB, 1000);
     }
+
+    // repay all debt
+    _convertDepositorPoolAssets();
+
+    // set new ticks
+    _setNewTickRange();
+
+    // deposit all again
+    _depositToPool(IERC20(asset).balanceOf(address(this)));
+  }
 }
