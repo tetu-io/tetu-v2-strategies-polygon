@@ -360,7 +360,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _postHardWork() internal virtual {}
 
   /// @notice Is strategy ready to hard work
-  function isReadyToHardWork() override external pure returns (bool) {
+  function isReadyToHardWork() override external view returns (bool) {
     // check claimable amounts and compare with thresholds
     return true;
   }
