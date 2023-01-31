@@ -42,7 +42,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Amount of underlying assets invested to the pool.
   uint private _investedAssets;
 
-  /// @notice Amount of asset passed to _depositToPool that wasn't invested but was kept on the balance for a next round
+  /// @notice Amount of asset passed to _depositToPool that wasn't invested but was kept on the balance for a next round todo deprecated, use assetsUnderControl
   uint private _unspentAsset;
 
   /// @dev Linked Tetu Converter
@@ -55,6 +55,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///         decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   /// @dev We need this threshold to avoid numerous conversions of small amounts
   uint public reinvestThresholdPercent;
+
+  /// @notice Amounts of all depositor assets that are not rewards
+  mapping(address => uint) baseAmounts;
 
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
@@ -142,13 +145,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
 
       // make deposit
+      // consumed asset amount can be different from desired amounts
       (uint[] memory amountsConsumed,) = _depositorEnter(tokenAmounts);
 
-      // consumed asset amount can be different from desired amounts
-      // we should the difference in _unspentAsset
-      if (amount_ > amountsConsumed[indexAsset]) {
-        _unspentAsset += amount_ - amountsConsumed[indexAsset];
+      // update base-amounts
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        uint baseAmount = baseAmount[tokens[i]];
+        if (baseAmount > amountsConsumed[i]) {
+          baseAmount[tokens[i]] -= amountsConsumed[i];
+        } else {
+          if (baseAmount != 0) {
+            baseAmount[tokens[i]] = 0;
+          }
+        }
       }
+
       _updateInvestedAssets();
 
       //!! TokenAmountsLib.print('Amounts for enter:', tokens, tokenAmounts);
@@ -227,12 +238,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     //!! console.log("_withdrawFromPoolUniversal");
 
     // withdraw the amount from the depositor to balance of the strategy
-    if (emergency_) {
-      _depositorEmergencyExit();
-    } else {
-      //!! console.log("_withdrawFromPoolUniversal liquidityAmount", liquidityAmount_);
-      _depositorExit(liquidityAmount_);
-    }
+    uint[] memory amountsOut = emergency_
+      ? _depositorEmergencyExit()
+      : _depositorExit(liquidityAmount_);
 
     //!! TokenAmountsLib.printBalances('/// Balance after withdraw:', _depositorPoolAssets(), address(this));
 
@@ -289,14 +297,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _claim() override internal virtual {
     //!! console.log("_claim.start");
     // Rewards from the Depositor
-    address[] memory tokens1;
-    uint[] memory amounts1;
-    (tokens1, amounts1) = _depositorClaimRewards();
+    (address[] memory tokens, uint[] memory amounts) = _depositorClaimRewards();
 
     ConverterStrategyBaseLib.processClaims(
       tetuConverter,
-      tokens1,
-      amounts1,
+      tokens,
+      amounts,
       _recycle
     );
   }
@@ -517,6 +523,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-  uint[16] private __gap; // TODO 16???
+  uint[50] private __gap;
 
 }
