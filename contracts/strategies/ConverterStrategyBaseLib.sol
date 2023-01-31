@@ -63,6 +63,8 @@ library ConverterStrategyBaseLib {
       }
     }
 
+    // todo Take into account collateral for the borrowed amounts
+
     return (investedAssetsUSD * ratio / 1e18, assetPrice);
   }
 
