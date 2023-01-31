@@ -55,6 +55,22 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return (earned, lost);
   }
 
+  /// @notice Is strategy ready to hard work
+  function isReadyToHardWork() override external virtual view returns (bool) {
+    // check claimable amounts and compare with thresholds
+    (,int24 tick, , , , ,) = pool.slot0();
+    (uint128 liquidity ,uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
+    uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, liquidity) + uint256(tokensOwed0);
+    uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) + uint256(tokensOwed1);
+    if (_depositorSwapTokens) {
+      (fee0, fee1) = (fee1, fee0);
+    }
+    fee0 += rebalanceEarned;
+    console.log('isReadyToHardWork fee0', fee0);
+    console.log('isReadyToHardWork fee1', fee1);
+    return fee0 > liquidationThresholds[tokenA] || fee1 > liquidationThresholds[tokenB];
+  }
+
   function rebalance() public {
     require(needRebalance(), "No rebalancing needed");
 

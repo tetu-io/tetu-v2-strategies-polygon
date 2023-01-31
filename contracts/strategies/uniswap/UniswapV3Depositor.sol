@@ -38,7 +38,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
   /// @notice false: tokenA == pool.token0
   ///         true:  tokenB == pool.token1
-  bool private _depositorSwapTokens;
+  bool internal _depositorSwapTokens;
 
   /// @dev Total fractional shares of Uniswap V3 position
   uint128 public totalLiquidity;
@@ -199,7 +199,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     balancesBefore[0] = _balance(tokenA);
     balancesBefore[1] = _balance(tokenB);
 
-    (uint160 sqrtRatioX96, int24 tick, , , , ,) = pool.slot0();
+    (, int24 tick, , , , ,) = pool.slot0();
     (uint128 liquidity, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
 
     uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, liquidity) + uint256(tokensOwed0);
@@ -303,8 +303,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) + uint256(tokensOwed1);
 
     // add any leftover in contract to current holdings
-    amount0Current += fee0 + IERC20(_depositorSwapTokens ? tokenB : tokenA).balanceOf(address(this));
-    amount1Current += fee1 + IERC20(_depositorSwapTokens ? tokenA : tokenB).balanceOf(address(this));
+    amount0Current += fee0 + _balance(_depositorSwapTokens ? tokenB : tokenA);
+    amount1Current += fee1 + _balance(_depositorSwapTokens ? tokenA : tokenB);
   }
 
   function _getPositionID() internal view returns (bytes32 positionID) {
@@ -316,7 +316,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint256 feeGrowthInsideLast,
     int24 tick,
     uint128 liquidity
-  ) private view returns (uint256 fee) {
+  ) internal view returns (uint256 fee) {
     uint256 feeGrowthOutsideLower;
     uint256 feeGrowthOutsideUpper;
     uint256 feeGrowthGlobal;
