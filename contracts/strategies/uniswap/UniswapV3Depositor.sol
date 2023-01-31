@@ -43,6 +43,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @dev Total fractional shares of Uniswap V3 position
   uint128 public totalLiquidity;
 
+  uint public rebalanceEarned;
+  uint public rebalanceLost;
+
   function __UniswapV3Depositor_init(
     address asset_,
     address pool_,
@@ -205,14 +208,16 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, liquidity) + uint256(tokensOwed0);
     uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) + uint256(tokensOwed1);
 
+    console.log('_depositorClaimRewards fee0', fee0);
+    console.log('_depositorClaimRewards fee1', fee1);
+
+    amountsOut = new uint[](2);
+    tokensOut = new address[](2);
+    tokensOut[0] = tokenA;
+    tokensOut[1] = tokenB;
+
     if (fee0 > 0 || fee1 > 0) {
-      console.log('fee0', fee0);
-      console.log('fee1', fee1);
-
-      amountsOut = new uint[](2);
-
       pool.burn(lowerTick, upperTick, 0);
-
       (amountsOut[0], amountsOut[1]) = pool.collect(
         address(this),
         lowerTick,
@@ -221,21 +226,19 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         type(uint128).max
       );
 
-      tokensOut = new address[](2);
-      tokensOut[0] = tokenA;
-      tokensOut[1] = tokenB;
-
       if (_depositorSwapTokens) {
-        (tokensOut[0], tokensOut[1]) = (tokensOut[1], tokensOut[0]);
         (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
       }
-      console.log('_depositorClaimRewards() amountsOut[0]', amountsOut[0]);
-      console.log('_depositorClaimRewards() amountsOut[1]', amountsOut[1]);
-    } else {
-      console.log('No fees to burn');
-      tokensOut = new address[](0);
-      amountsOut = new uint[](0);
     }
+
+    if (rebalanceEarned != 0) {
+      console.log('_depositorClaimRewards() rebalanceEarned', rebalanceEarned);
+      amountsOut[0] += rebalanceEarned;
+      rebalanceEarned = 0;
+    }
+
+    console.log('_depositorClaimRewards() amountsOut[0]', amountsOut[0]);
+    console.log('_depositorClaimRewards() amountsOut[1]', amountsOut[1]);
   }
 
   /////////////////////////////////////////////////////////////////////

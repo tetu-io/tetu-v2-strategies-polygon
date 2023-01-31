@@ -11,9 +11,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   string public constant override PLATFORM = "UniswapV3";
   string public constant override STRATEGY_VERSION = "1.0.0";
 
-  uint public rebalanceEarned;
-  uint public rebalanceLost;
-
   function init(
     address controller_,
     address splitter_,
@@ -34,7 +31,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     if (rebalanceEarned != 0) {
       earned = rebalanceEarned;
-      rebalanceEarned = 0;
+
+      // rebalanceEarned drops in _depositorClaimRewards()
+      // this flow need for sending rebalanceEarned to ConverterStrategyBaseLib.processClaims for compounding and rewards registration
     }
 
     if (rebalanceLost != 0) {
@@ -139,6 +138,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       rebalanceLost += balanceOfCollateralBefore - balanceOfCollateralAfter;
       console.log('rebalance: rebalanceLost', balanceOfCollateralBefore - balanceOfCollateralAfter);
       console.log('rebalance: rebalanceLost total', rebalanceLost);
+    }
+
+    if (rebalanceEarned != 0 && rebalanceLost != 0) {
+      if (rebalanceEarned > rebalanceLost) {
+        rebalanceEarned -= rebalanceLost;
+        rebalanceLost = 0;
+      } else {
+        rebalanceLost -= rebalanceEarned;
+        rebalanceEarned = 0;
+      }
     }
   }
 }

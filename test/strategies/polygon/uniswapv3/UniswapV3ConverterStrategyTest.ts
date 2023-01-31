@@ -209,7 +209,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await strategy.rebalance()
       expect(await strategy.needRebalance()).eq(false)
 
-      expect(await strategy.isReadyToHardWork()).eq(true) // because earned (why earned?)
+      // because rebalanceEarned > 0
+      // first we move price up in pool, but tokenB on first rebalance we buy by real/lower price
+      expect(await strategy.isReadyToHardWork()).eq(true)
       await strategy.doHardWork()
       expect(await strategy.isReadyToHardWork()).eq(false)
     })
