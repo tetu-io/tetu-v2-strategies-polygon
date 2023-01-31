@@ -66,7 +66,10 @@ library ConverterStrategyBaseLib {
     return (investedAssetsUSD * ratio / 1e18, assetPrice);
   }
 
-  /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights
+  /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.
+  ///         I.e. we have 300 USDC, we need to split it on 100 USDC, 100 USDT, 100 DAI
+  ///         USDC is main asset, USDT and DAI should be borrowed. We check amounts of USDT and DAI on the balance
+  ///         and return collaterals reduced on that amounts. For main asset, we return full amount always (100 USDC).
   function getCollaterals(
     uint amount_,
     address[] memory tokens_,
