@@ -161,7 +161,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    it('hardwork with rebalance', async() => {
+    it('Rebalance', async() => {
       const investAmount = _100;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
       let price;
@@ -184,7 +184,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       priceBefore = price
 
       expect(await strategy.needRebalance()).eq(true)
-      await strategy.doHardWork()
+      await strategy.rebalance()
       expect(await strategy.needRebalance()).eq(false)
 
       console.log('swap in pool tokenB to USDC...');
@@ -197,11 +197,13 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
 
       expect(await strategy.needRebalance()).eq(true)
-      await strategy.doHardWork()
+      await strategy.rebalance()
       expect(await strategy.needRebalance()).eq(false)
+
+      await strategy.doHardWork()
     })
 
-    it('hardwork with rebalance for reverse tokens order pool', async() => {
+    it('Rebalance for reverse tokens order pool', async() => {
       const investAmount = _100;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
       let price;
@@ -222,7 +224,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       priceBefore = price
 
       expect(await strategy2.needRebalance()).eq(true)
-      await strategy2.doHardWork()
+      await strategy2.rebalance()
       expect(await strategy2.needRebalance()).eq(false)
 
       console.log('swap in pool tokenB to USDC...');
@@ -235,9 +237,10 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
 
       expect(await strategy2.needRebalance()).eq(true)
-      await strategy2.doHardWork()
+      await strategy2.rebalance()
       expect(await strategy2.needRebalance()).eq(false)
 
+      await strategy2.doHardWork()
     })
 
     it('deposit / withdraw', async() => {
