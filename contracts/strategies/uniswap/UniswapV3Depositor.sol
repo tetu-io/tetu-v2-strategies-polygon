@@ -84,8 +84,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     bytes calldata /*_data*/
   ) external override {
     require(msg.sender == address(pool), "callback caller");
-    console.log('uniswapV3MintCallback amount0Owed', amount0Owed);
-    console.log('uniswapV3MintCallback amount1Owed', amount1Owed);
+    // console.log('uniswapV3MintCallback amount0Owed', amount0Owed);
+    // console.log('uniswapV3MintCallback amount1Owed', amount1Owed);
     if (amount0Owed > 0) IERC20(_depositorSwapTokens ? tokenB : tokenA).safeTransfer(msg.sender, amount0Owed);
     if (amount1Owed > 0) IERC20(_depositorSwapTokens ? tokenA : tokenB).safeTransfer(msg.sender, amount1Owed);
   }
@@ -98,8 +98,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint[] memory amountsConsumed,
     uint liquidityOut
   ) {
-    console.log('_depositorEnter amountsDesired_[0]', amountsDesired_[0]);
-    console.log('_depositorEnter amountsDesired_[1]', amountsDesired_[1]);
+    // console.log('_depositorEnter amountsDesired_[0]', amountsDesired_[0]);
+    // console.log('_depositorEnter amountsDesired_[1]', amountsDesired_[1]);
 
     if (_depositorSwapTokens) {
       (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
@@ -128,9 +128,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
     }
 
-    console.log('_depositorEnter amountsConsumed[0]', amountsConsumed[0]);
-    console.log('_depositorEnter amountsConsumed[1]', amountsConsumed[1]);
-    console.log('_depositorEnter liquidityOut', liquidityOut);
+    // console.log('_depositorEnter amountsConsumed[0]', amountsConsumed[0]);
+    // console.log('_depositorEnter amountsConsumed[1]', amountsConsumed[1]);
+    // console.log('_depositorEnter liquidityOut', liquidityOut);
 
     pool.mint(address(this), lowerTick, upperTick, uint128(liquidityOut), "");
     totalLiquidity += uint128(liquidityOut);
@@ -162,7 +162,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   }
 
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    console.log('_depositorQuoteExit liquidityAmount', liquidityAmount);
+    // console.log('_depositorQuoteExit liquidityAmount', liquidityAmount);
     amountsOut = new uint[](2);
 
     (uint160 sqrtRatioX96, int24 tick, , , , ,) = pool.slot0();
@@ -185,8 +185,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
 
-    console.log('_depositorQuoteExit amountsOut[0]', amountsOut[0]);
-    console.log('_depositorQuoteExit amountsOut[1]', amountsOut[1]);
+    // console.log('_depositorQuoteExit amountsOut[0]', amountsOut[0]);
+    // console.log('_depositorQuoteExit amountsOut[1]', amountsOut[1]);
   }
 
   /////////////////////////////////////////////////////////////////////

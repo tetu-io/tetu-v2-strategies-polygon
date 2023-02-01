@@ -10,7 +10,7 @@ import {
   TetuVaultV2,
   UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory
 } from "../../../../typechain";
-import {BigNumber} from "ethers";
+import {BigNumber, ContractReceipt, ContractTransaction} from "ethers";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
@@ -171,7 +171,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
   describe('UniswapV3 strategy tests', function() {
     /*it('Rebalance and hardwork', async() => {
-      const investAmount = _100;
+      const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
       let price;
       price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
@@ -259,7 +259,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await strategy2.doHardWork()
     })*/
 
-    it('deposit / withdraw, fees, totalAssets', async() => {
+    it('deposit / withdraw, fees, totalAssets + check insurance and LossCovered', async() => {
+      let receipt: ContractReceipt
+      let tx: ContractTransaction
       const depositFee = BigNumber.from(300)
       const withdrawFee = BigNumber.from(300)
 
@@ -268,51 +270,110 @@ describe('UniswapV3ConverterStrategyTests', function() {
       let totalWithdrawFee = BigNumber.from(0);
       let totalAssetsBefore: BigNumber
       let totalAssetsDiff: BigNumber
+      let totalLossCovered = BigNumber.from(0)
 
       // also setting fees prevents 'SB: Impact too high'
       await vault.connect(gov).setFees(depositFee, withdrawFee)
 
       console.log('deposit 1.0 USDC...');
-      await vault.deposit(_1, signer.address);
+      tx = await vault.deposit(_1, signer.address);
+      receipt = await tx.wait()
       totalDeposited = totalDeposited.add(_1);
       expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
 
+      console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
+      if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
+        const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
+        console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
+        totalLossCovered = totalLossCovered.add(lostCovered)
+      }
+
       console.log('deposit 100.0 USDC...');
-      await vault.deposit(_100, signer.address);
+      tx = await vault.deposit(_100, signer.address);
+      receipt = await tx.wait()
       totalDeposited = totalDeposited.add(_100);
       expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
 
+      console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
+      if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
+        const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
+        console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
+        totalLossCovered = totalLossCovered.add(lostCovered)
+      }
+
       console.log('withdraw 1.0 USDC...');
       totalAssetsBefore = await vault.totalAssets()
-      await vault.withdraw(_1, signer.address, signer.address);
+      tx = await vault.withdraw(_1, signer.address, signer.address);
+      receipt = await tx.wait()
       totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
       expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1)
       totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
+      console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
+      if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
+        const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
+        console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
+        totalLossCovered = totalLossCovered.add(lostCovered)
+      }
+
       console.log('deposit 5000.0 USDC...');
-      await vault.deposit(_5_000, signer.address);
+      tx = await vault.deposit(_5_000, signer.address);
+      receipt = await tx.wait()
       totalDeposited = totalDeposited.add(_5_000);
       expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)).sub(_1).sub(totalWithdrawFee))
 
+      console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
+      if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
+        const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
+        console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
+        totalLossCovered = totalLossCovered.add(lostCovered)
+      }
+
       console.log('withdraw 1000.0 USDC...')
       totalAssetsBefore = await vault.totalAssets()
-      await vault.withdraw(_1_000, signer.address, signer.address);
+      tx = await vault.withdraw(_1_000, signer.address, signer.address);
+      receipt = await tx.wait()
       totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
       expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1_000)
       totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
+      console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
+      if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
+        const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
+        console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
+        totalLossCovered = totalLossCovered.add(lostCovered)
+      }
+
       console.log('withdraw 100.0 USDC...');
       totalAssetsBefore = await vault.totalAssets()
-      await vault.withdraw(_100, signer.address, signer.address);
+      tx = await vault.withdraw(_100, signer.address, signer.address);
+      receipt = await tx.wait()
       totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
       expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_100)
       totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
+      console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
+      if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
+        const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
+        console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
+        totalLossCovered = totalLossCovered.add(lostCovered)
+      }
+
       console.log('withdrawAll...');
       totalAssetsBefore = await vault.totalAssets()
-      await vault.withdrawAll();
+      tx = await vault.withdrawAll();
+      receipt = await tx.wait()
       totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
       totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
+
+      console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
+      if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
+        const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
+        console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
+        totalLossCovered = totalLossCovered.add(lostCovered)
+      }
+
+      console.log(`Total lost covered: ${formatUnits(totalLossCovered, 6)} USDC`)
 
       const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
       const totalDepositFee = totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)
