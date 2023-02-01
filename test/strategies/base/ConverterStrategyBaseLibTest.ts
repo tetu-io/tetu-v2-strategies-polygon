@@ -3,7 +3,7 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {parseUnits} from "ethers/lib/utils";
-import {MockToken, PriceOracleMock} from "../../../typechain";
+import {ConverterStrategyBaseFacade, MockToken, PriceOracleMock} from "../../../typechain";
 import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
@@ -22,13 +22,14 @@ describe("ConverterStrategyBaseLibTest", () => {
   let tetu: MockToken;
   let usdt: MockToken;
   let weth: MockToken;
+  let facade: ConverterStrategyBaseFacade;
 //endregion Variables
 
 //region before, after
   before(async function () {
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
-
+    facade = await MockHelper.createConverterStrategyBaseFacade(signer);
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
     tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
     dai = await DeployerUtils.deployMockToken(signer, 'DAI');
@@ -55,7 +56,6 @@ describe("ConverterStrategyBaseLibTest", () => {
       describe("Two assets", () => {
         describe("The asset is first in _depositorPoolAssets", async () => {
           it("should return expected values for USDC", async () => {
-            const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
             const priceOracle = (await DeployerUtils.deployContract(
               signer,
               'PriceOracleMock',
@@ -89,8 +89,6 @@ describe("ConverterStrategyBaseLibTest", () => {
             expect(sret).eq(sexpected);
           });
           it("should return expected values for DAI", async () => {
-            const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
-
             const priceOracle = (await DeployerUtils.deployContract(
               signer,
               'PriceOracleMock',
@@ -126,7 +124,6 @@ describe("ConverterStrategyBaseLibTest", () => {
         });
         describe("The asset is second in _depositorPoolAssets", async () => {
           it("should return expected values for USDC", async () => {
-            const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
             const priceOracle = (await DeployerUtils.deployContract(
               signer,
               'PriceOracleMock',
@@ -160,7 +157,6 @@ describe("ConverterStrategyBaseLibTest", () => {
             expect(sret).eq(sexpected);
           });
           it("should return expected values for DAI", async () => {
-            const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
             const priceOracle = (await DeployerUtils.deployContract(
               signer,
               'PriceOracleMock',
@@ -197,7 +193,6 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
       describe("Three assets", () => {
         it("should return expected values", async () => {
-          const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
           const priceOracle = (await DeployerUtils.deployContract(
             signer,
             'PriceOracleMock',
@@ -242,7 +237,6 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
     describe("Bad paths", () => {
       it("should return zero values if total supply is zero", async () => {
-        const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
         const priceOracle = (await DeployerUtils.deployContract(
           signer,
           'PriceOracleMock',
@@ -273,7 +267,6 @@ describe("ConverterStrategyBaseLibTest", () => {
         expect(sret).eq(sexpected);
       });
       it("should revert if main asset price is zero", async () => {
-        const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
         const priceOracle = await MockHelper.createPriceOracle(
           signer,
           [usdc.address, dai.address],
@@ -297,7 +290,6 @@ describe("ConverterStrategyBaseLibTest", () => {
         ).revertedWith("TS-8 zero price");
       });
       it("should revert if main asset price is zero", async () => {
-        const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
         const priceOracle = await MockHelper.createPriceOracle(
           signer,
           [usdc.address, dai.address],
@@ -321,7 +313,6 @@ describe("ConverterStrategyBaseLibTest", () => {
         ).revertedWith("TS-8 zero price");
       });
       it("should use ratio 1 if liquidityAmount > totalSupply", async () => {
-        const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
         const priceOracle = (await DeployerUtils.deployContract(
           signer,
           'PriceOracleMock',
@@ -356,7 +347,6 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
     describe("Gas estimation @skip-on-coverage", () => {
       it("should not exceed gas limits @skip-on-coverage", async () => {
-        const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
         const priceOracle = (await DeployerUtils.deployContract(
           signer,
           'PriceOracleMock',
@@ -391,7 +381,6 @@ describe("ConverterStrategyBaseLibTest", () => {
     describe("Good paths", () => {
       describe("Same prices, same weights", () => {
         it("should return expected values", async () => {
-          const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
           const assetAmount = parseUnits("1000", 6);
           const priceOracle = await MockHelper.createPriceOracle(
             signer,
@@ -419,7 +408,6 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
       describe("Same prices, different weights", () => {
         it("should return expected values", async () => {
-          const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
           const assetAmount = parseUnits("1000", 6);
           const priceOracle = await MockHelper.createPriceOracle(
             signer,
@@ -447,7 +435,6 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
       describe("Some amounts are already on balance", () => {
         it("should return expected values", async () => {
-          const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
           const assets = [dai, weth, usdc, tetu];
           const assetAmount = parseUnits("1000", 6);
           const priceOracle = await MockHelper.createPriceOracle(
@@ -490,7 +477,6 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
     describe("Gas estimation @skip-on-coverage", () => {
       it("should return expected values", async () => {
-        const facade = await MockHelper.createConverterStrategyBaseFacade(signer);
         const assetAmount = parseUnits("1000", 6);
         const priceOracle = await MockHelper.createPriceOracle(
           signer,
@@ -509,6 +495,24 @@ describe("ConverterStrategyBaseLibTest", () => {
         controlGasLimitsEx(gasUsed, GET_GET_COLLATERALS, (u, t) => {
           expect(u).to.be.below(t + 1);
         });
+      });
+    });
+  });
+
+  describe("getAssetIndex", () => {
+    describe("Good paths", () => {
+      it("should return expected index", async () => {
+        const assets = [usdc.address, tetu.address, usdt.address];
+        for (let i = 0; i < assets.length; ++i) {
+          await expect(await facade.getAssetIndex(assets, assets[i])).eq(i);
+        }
+      });
+    });
+    describe("Bad paths", () => {
+      it("should return expected index", async () => {
+        const assets = [usdc.address, tetu.address, usdt.address];
+        await expect(facade.getAssetIndex(assets, weth.address))
+          .revertedWith("TS-6 not found");
       });
     });
   });

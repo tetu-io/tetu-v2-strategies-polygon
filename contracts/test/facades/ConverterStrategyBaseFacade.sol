@@ -93,4 +93,8 @@ contract ConverterStrategyBaseFacade {
       rewardLiquidationThresholdForTokenOut
     );
   }
+
+  function getAssetIndex(address[] memory tokens_, address asset_) external view returns (uint) {
+    return ConverterStrategyBaseLib.getAssetIndex(tokens_, asset_);
+  }
 }

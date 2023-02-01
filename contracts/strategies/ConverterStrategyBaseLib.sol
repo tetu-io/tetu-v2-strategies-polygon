@@ -253,4 +253,15 @@ library ConverterStrategyBaseLib {
       recycle_(tokens, amounts);
     }
   }
+
+  /// @notice Find index of the given {asset_} in array {tokens_}, revert if not found
+  function getAssetIndex(address[] memory tokens_, address asset_) internal view returns (uint) {
+    uint len = tokens_.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (tokens_[i] == asset_) {
+        return i;
+      }
+    }
+    revert(AppErrors.ITEM_NOT_FOUND);
+  }
 }
