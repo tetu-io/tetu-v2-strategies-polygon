@@ -170,8 +170,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(address(this));
     }
 
-    //!! TokenAmountsLib.printBalances('Balance before:', tokens, address(this));
-
     return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 

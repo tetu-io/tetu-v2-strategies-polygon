@@ -5,7 +5,7 @@ import "../../interfaces/converter/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
-contract ConverterStrategyBaseFacade {
+contract ConverterStrategyBaseLibFacade {
   function getExpectedWithdrawnAmountUSD(
     address[] memory poolAssets_,
     uint[] memory reserves_,

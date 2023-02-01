@@ -3,7 +3,7 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {parseUnits} from "ethers/lib/utils";
-import {ConverterStrategyBaseFacade, MockToken, PriceOracleMock} from "../../../typechain";
+import {ConverterStrategyBaseLibFacade, MockToken, PriceOracleMock} from "../../../typechain";
 import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
@@ -12,6 +12,10 @@ import {
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 
+/**
+ * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
+ * to direct access of the library functions.
+ */
 describe("ConverterStrategyBaseLibTest", () => {
 //region Variables
   let snapshotBefore: string;
@@ -22,7 +26,7 @@ describe("ConverterStrategyBaseLibTest", () => {
   let tetu: MockToken;
   let usdt: MockToken;
   let weth: MockToken;
-  let facade: ConverterStrategyBaseFacade;
+  let facade: ConverterStrategyBaseLibFacade;
 //endregion Variables
 
 //region before, after
