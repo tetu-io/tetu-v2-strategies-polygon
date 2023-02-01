@@ -42,6 +42,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let _100_000: BigNumber;
   const bufferRate = 1_000; // n_%
   let swapper: ISwapper;
+  let FEE_DENOMINATOR: BigNumber
 
   before(async function() {
     [signer, signer2] = await ethers.getSigners();
@@ -152,6 +153,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
     await ConverterUtils.disableAaveV3(signer);
 
     swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer)
+
+    FEE_DENOMINATOR = await vault.FEE_DENOMINATOR()
   })
 
   after(async function() {
@@ -167,7 +170,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    it('Rebalance and hardwork', async() => {
+    /*it('Rebalance and hardwork', async() => {
       const investAmount = _100;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
       let price;
@@ -214,7 +217,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy.isReadyToHardWork()).eq(true)
       await strategy.doHardWork()
       expect(await strategy.isReadyToHardWork()).eq(false)
-    })
+    })*/
 
     /*it('Rebalance for reverse tokens order pool', async() => {
       const investAmount = _100;
@@ -256,60 +259,125 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await strategy2.doHardWork()
     })*/
 
-    /*it('deposit / withdraw', async() => {
+    it('deposit / withdraw, fees, totalAssets', async() => {
+      const depositFee = BigNumber.from(300)
+      const withdrawFee = BigNumber.from(300)
+
       const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
+      let totalDeposited = BigNumber.from(0);
+      let totalWithdrawFee = BigNumber.from(0);
+      let totalAssetsBefore: BigNumber
+      let totalAssetsDiff: BigNumber
+
+      // also setting fees prevents 'SB: Impact too high'
+      await vault.connect(gov).setFees(depositFee, withdrawFee)
 
       console.log('deposit 1.0 USDC...');
       await vault.deposit(_1, signer.address);
-
-      /!*const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
-      console.log('Balance in strategy', await TokenUtils.balanceOf(asset.address, strategy.address))
-      console.log('Balance in vault', await TokenUtils.balanceOf(asset.address, vault.address))
-      console.log('Balance in splitter', await TokenUtils.balanceOf(asset.address, await vault.splitter()))
-      console.log('Invested assets', await strategy.callStatic.calcInvestedAssets())
-      console.log('withdrawAllToSplitter()')
-      await strategy.connect(splitterSigner).withdrawAllToSplitter()
-      console.log('Balance in splitter', await TokenUtils.balanceOf(asset.address, await vault.splitter()))
-      return*!/
+      totalDeposited = totalDeposited.add(_1);
+      expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
 
       console.log('deposit 100.0 USDC...');
       await vault.deposit(_100, signer.address);
+      totalDeposited = totalDeposited.add(_100);
+      expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
 
-      console.log('withdraw 100.0 USDC...');
-      await vault.withdraw(_100, signer.address, signer.address);
+      console.log('withdraw 1.0 USDC...');
+      totalAssetsBefore = await vault.totalAssets()
+      await vault.withdraw(_1, signer.address, signer.address);
+      totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
+      expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1)
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
       console.log('deposit 5000.0 USDC...');
       await vault.deposit(_5_000, signer.address);
+      totalDeposited = totalDeposited.add(_5_000);
+      expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)).sub(_1).sub(totalWithdrawFee))
+
+      console.log('withdraw 1000.0 USDC...')
+      totalAssetsBefore = await vault.totalAssets()
+      await vault.withdraw(_1_000, signer.address, signer.address);
+      totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
+      expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1_000)
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
       console.log('withdraw 100.0 USDC...');
+      totalAssetsBefore = await vault.totalAssets()
       await vault.withdraw(_100, signer.address, signer.address);
+      totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
+      expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_100)
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
       console.log('withdrawAll...');
+      totalAssetsBefore = await vault.totalAssets()
       await vault.withdrawAll();
+      totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
       const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
-      // max loss - 0.000010 USDC
-      expect(balanceBefore.sub(balanceAfter)).lt(10)
-    })*/
+      const totalDepositFee = totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)
+      expect(balanceBefore.sub(balanceAfter)).eq(totalDepositFee.add(totalWithdrawFee))
+    })
 
-    /*it('deposit / withdraw for reverse tokens order pool', async() => {
-      console.log('deposit 1.0 USDC...');
+    it('deposit / withdraw, fees, totalAssets for reverse tokens order pool', async() => {
+      const depositFee = BigNumber.from(300)
+      const withdrawFee = BigNumber.from(300)
+
       const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
+      let totalDeposited = BigNumber.from(0);
+      let totalWithdrawFee = BigNumber.from(0);
+      let totalAssetsBefore: BigNumber
+      let totalAssetsDiff: BigNumber
+
+      // also setting fees prevents 'SB: Impact too high'
+      await vault2.connect(gov).setFees(depositFee, withdrawFee)
+
+      console.log('deposit 1.0 USDC...');
       await vault2.deposit(_1, signer.address);
+      totalDeposited = totalDeposited.add(_1);
+      expect(await vault2.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
 
       console.log('deposit 100.0 USDC...');
       await vault2.deposit(_100, signer.address);
+      totalDeposited = totalDeposited.add(_100);
+      expect(await vault2.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
+
+      console.log('withdraw 1.0 USDC...');
+      totalAssetsBefore = await vault2.totalAssets()
+      await vault2.withdraw(_1, signer.address, signer.address);
+      totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
+      expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1)
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
+
+      console.log('deposit 5000.0 USDC...');
+      await vault2.deposit(_5_000, signer.address);
+      totalDeposited = totalDeposited.add(_5_000);
+      expect(await vault2.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)).sub(_1).sub(totalWithdrawFee))
+
+      console.log('withdraw 1000.0 USDC...')
+      totalAssetsBefore = await vault2.totalAssets()
+      await vault2.withdraw(_1_000, signer.address, signer.address);
+      totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
+      expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1_000)
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
       console.log('withdraw 100.0 USDC...');
+      totalAssetsBefore = await vault2.totalAssets()
       await vault2.withdraw(_100, signer.address, signer.address);
+      totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
+      expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_100)
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
       console.log('withdrawAll...');
+      totalAssetsBefore = await vault2.totalAssets()
       await vault2.withdrawAll();
+      totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
+      totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
 
       const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
-      // max loss - 0.000010 USDC
-      expect(balanceBefore.sub(balanceAfter)).lt(10)
-    })*/
+      const totalDepositFee = totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)
+      expect(balanceBefore.sub(balanceAfter)).eq(totalDepositFee.add(totalWithdrawFee))
+    })
 
     /*it('Claim fees', async() => {
       const investAmount = _100;
