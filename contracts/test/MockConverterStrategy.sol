@@ -56,8 +56,15 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-  function convertDepositorPoolAssetsTestAccess() external {
-    _convertDepositorPoolAssets();
+  function _afterWithdrawAccess(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory amountsToConvert_
+  ) external returns (
+    uint collateralOut,
+    uint[] memory repaidAmountsOut
+  ) {
+    return _afterWithdraw(tokens_, indexAsset_, amountsToConvert_);
   }
 
   function borrowPositionTestAccess(address collateralAsset, uint collateralAmount, address borrowAsset) external returns (
@@ -101,7 +108,26 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _recycle(tokens, amounts);
   }
 
-//  function _processClaimsAccess(address[] memory tokens_, uint[] memory amounts_) external virtual {
-//    return _processClaims(tokens_, amounts_);
-//  }
+  function _beforeDepositAccess(
+    ITetuConverter tetuConverter_,
+    uint amount_,
+    address[] memory tokens_,
+    uint indexAsset_
+  ) external returns (
+    uint[] memory tokenAmounts,
+    uint[] memory borrowedAmounts,
+    uint spentCollateral
+  ) {
+    return _beforeDeposit(tetuConverter_, amount_, tokens_, indexAsset_);
+  }
+
+  function _afterDepositAccess(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory amountsConsumed_,
+    uint[] memory borrowed_,
+    uint collateral_
+  ) external {
+    return _afterDeposit(tokens_, indexAsset_, amountsConsumed_, borrowed_, collateral_);
+  }
 }

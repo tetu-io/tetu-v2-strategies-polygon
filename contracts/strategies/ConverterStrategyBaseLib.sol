@@ -22,6 +22,9 @@ library ConverterStrategyBaseLib {
   /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset_}
   ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
   ///         investedAssetsUSD = reserve0 * ratio * price0 + reserve1 * ratio * price1 (+ set correct decimals)
+  ///         This function doesn't take into account swap/lending difference,
+  ///         so result {investedAssetsUSD} doesn't take into account possible collateral
+  ///         that can be returned after closing positions.
   /// @param poolAssets_ Any number of assets, one of them should be {asset_}
   /// @param reserves_ Reserves of the {poolAssets_}, same order, same length (we don't check it)
   /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
@@ -62,8 +65,6 @@ library ConverterStrategyBaseLib {
           / 1e18;
       }
     }
-
-    // todo Take into account collateral for the borrowed amounts
 
     return (investedAssetsUSD * ratio / 1e18, assetPrice);
   }
@@ -154,7 +155,7 @@ library ConverterStrategyBaseLib {
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
   /// @param amountToRepay Amount to repay in terms of {borrowAsset}
   /// @return returnedAssetAmountOut Amount of collateral received back after repaying
-  /// @return leftoverOut It's equal to amount-to-repay - actual amount of debt, in terms of borrowAsset
+  /// @return repaidAmountOut Amount that was actually repaid
   function closePosition(
     ITetuConverter tetuConverter_,
     address collateralAsset,
@@ -162,7 +163,7 @@ library ConverterStrategyBaseLib {
     uint amountToRepay
   ) internal returns (
     uint returnedAssetAmountOut,
-    uint leftoverOut
+    uint repaidAmountOut
   ) {
     //!! console.log("_closePosition");
 
@@ -170,42 +171,45 @@ library ConverterStrategyBaseLib {
     // The leftover will be swapped inside TetuConverter, it's inefficient.
     // Let's limit amountToRepay by needToRepay-amount
     (uint needToRepay,) = tetuConverter_.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset);
-    leftoverOut = amountToRepay > needToRepay
-      ? amountToRepay - needToRepay
-      : 0;
 
-    //!! console.log('>>> CLOSE POSITION initial amountToRepay borrowAsset', amountToRepay, borrowAsset);
-    //!! console.log('>>> CLOSE POSITION needToRepay', needToRepay);
-    //!! console.log('>>> CLOSE POSITION leftover', leftoverOut);
-
-    amountToRepay = amountToRepay < needToRepay
-    ? amountToRepay
-    : needToRepay;
+    uint amountRepay = amountToRepay < needToRepay
+      ? amountToRepay
+      : needToRepay;
 
     // Make full/partial repayment
-    IERC20(borrowAsset).safeTransfer(address(tetuConverter_), amountToRepay);
+    uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
+    IERC20(borrowAsset).safeTransfer(address(tetuConverter_), amountRepay);
     uint returnedBorrowAmountOut;
-    (returnedAssetAmountOut, returnedBorrowAmountOut,,) = tetuConverter_.repay(
-      collateralAsset, borrowAsset, amountToRepay, address(this)
-    );
 
-    //!! console.log('>>> position closed: returnedAssetAmount:', returnedAssetAmountOut, collateralAsset);
-    //!! console.log('position closed: returnedBorrowAmountOut:', returnedBorrowAmountOut);
-    //!! console.log('>>> REPAY amountToRepay, borrowAsset', amountToRepay, borrowAsset);
+    (returnedAssetAmountOut, returnedBorrowAmountOut,,) = tetuConverter_.repay(
+      collateralAsset,
+      borrowAsset,
+      amountRepay,
+      address(this)
+    );
+    uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
+
+    // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (dust tokens)
+    repaidAmountOut = balanceBefore > balanceAfter
+      ? balanceBefore - balanceAfter
+      : 0;
+
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
   }
 
+  /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   function liquidate(
     ITetuLiquidator liquidator_,
     address tokenIn_,
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_
-  ) internal {
-    //!! console.log("_liquidate", amountIn);
-    //!! console.log("_liquidate balance tokenOut", IERC20(tokenOut).balanceOf(address(this)), tokenOut);
-    (ITetuLiquidator.PoolData[] memory route, /* string memory error*/) = liquidator_.buildRoute(tokenIn_, tokenOut_);
+    uint liquidationThresholdForTokenOut_ // todo Probably it worth to use threshold for amount IN? it would be more gas efficient
+  ) internal returns (
+    uint spentAmountIn,
+    uint receivedAmountOut
+  ) {
+    (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
 
     if (route.length == 0) {
       revert('CSB: No liquidation route');
@@ -213,55 +217,37 @@ library ConverterStrategyBaseLib {
 
     // calculate balance in out value for check threshold
     uint amountOut = liquidator_.getPriceForRoute(route, amountIn_);
-    //!! console.log("_liquidate expected amount out", amountOut);
 
     // if the expected value is higher than threshold distribute to destinations
     if (amountOut > liquidationThresholdForTokenOut_) {
       // we need to approve each time, liquidator address can be changed in controller
       AppLib.approveIfNeeded(tokenIn_, amountIn_, address(liquidator_));
+
+      uint balanceBefore = IERC20(tokenOut_).balanceOf(address(this));
+
       liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
+
+      // temporary save balance of token out after  liquidation to spentAmountIn
+      uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
+
+      // assign correct values to
+      receivedAmountOut = balanceAfter > balanceBefore
+        ? balanceAfter - balanceBefore
+        : 0;
+      spentAmountIn = amountIn_;
     }
 
-    //!! console.log("_liquidate balance after", IERC20(tokenOut).balanceOf(address(this)));
+    return (spentAmountIn, receivedAmountOut);
   }
 
-  /// @notice Claim rewards from tetuConverter, make list of all available rewards, do post-processing
-  /// @dev The post-processing is rewards conversion to the main asset
-  /// @param tokens_ List of rewards claimed from the internal pool
-  /// @param amounts_ Amounts of rewards claimed from the internal pool
-  /// @param recycle_ ConverterStrategyBase._recycle - the call converts given tokens to the main asset
-  function processClaims(
-    ITetuConverter tetuConverter_,
-    address[] memory tokens_,
-    uint[] memory amounts_,
-    function (address[] memory tokens, uint[] memory amounts) internal recycle_
-  ) internal {
-    // Rewards from TetuConverter
-    (address[] memory tokens2, uint[] memory amounts2) = tetuConverter_.claimRewards(address(this));
-
-    // Join arrays and recycle tokens
-    (address[] memory tokens, uint[] memory amounts) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
-    //!! TokenAmountsLib.print("claim", tokens, amounts); // TODO remove
-
-    // {amounts} contain just received values, but probably we already had some tokens on balance
-    uint len = tokens.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amounts[i] = IERC20(tokens[i]).balanceOf(address(this));
-    }
-
-    if (len > 0) {
-      recycle_(tokens, amounts);
-    }
-  }
-
-  /// @notice Find index of the given {asset_} in array {tokens_}, revert if not found
-  function getAssetIndex(address[] memory tokens_, address asset_) internal view returns (uint) {
+  /// @notice Find index of the given {asset_} in array {tokens_}, return type(uint).max if not found
+  function getAssetIndex(address[] memory tokens_, address asset_) internal pure returns (uint) {
     uint len = tokens_.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (tokens_[i] == asset_) {
         return i;
       }
     }
-    revert(AppErrors.ITEM_NOT_FOUND);
+    return type(uint).max;
   }
 }

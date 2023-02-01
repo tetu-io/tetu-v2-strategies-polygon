@@ -83,7 +83,10 @@ contract ConverterStrategyBaseFacade {
     uint amountIn,
     uint slippage,
     uint rewardLiquidationThresholdForTokenOut
-  ) external {
+  ) external returns (
+    uint spentAmountIn,
+    uint receivedAmountOut
+  ) {
     return ConverterStrategyBaseLib.liquidate(
       liquidator_,
       tokenIn,
