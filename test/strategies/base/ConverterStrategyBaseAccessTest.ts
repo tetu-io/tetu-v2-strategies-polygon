@@ -3,10 +3,20 @@ import {
   IController,
   IStrategyV2,
   MockConverterStrategy,
-  MockConverterStrategy__factory, MockTetuConverterController, MockTetuConverter,
-  MockToken, PriceOracleMock, StrategySplitterV2,
+  MockConverterStrategy__factory,
+  MockTetuConverterController,
+  MockTetuConverter,
+  MockToken,
+  PriceOracleMock,
+  StrategySplitterV2,
   StrategySplitterV2__factory,
-  TetuVaultV2, MockTetuLiquidatorSingleCall, ControllerV2__factory, IERC20__factory, IERC20Metadata__factory
+  TetuVaultV2,
+  MockTetuLiquidatorSingleCall,
+  ControllerV2__factory,
+  IERC20__factory,
+  IERC20Metadata__factory,
+  IForwarder,
+  MockForwarder, StrategyBaseV2__factory, IController__factory
 } from "../../../typechain";
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
@@ -25,6 +35,7 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW_ALL, GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST,
 } from "../../baseUT/GasLimits";
+import {Misc} from "../../../scripts/utils/Misc";
 
 /**
  * Test of ConverterStrategyBase
@@ -54,6 +65,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
   let depositorReserves: BigNumber[];
   let indexAsset: number;
   let liquidator: MockTetuLiquidatorSingleCall;
+  let forwarder: MockForwarder;
 //endregion Variables
 
 //region before, after
@@ -123,13 +135,17 @@ describe("ConverterStrategyBaseAccessTest", () => {
     tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
     await tetuConverter.setController(tetuConverterController.address);
 
-    // set up mock liquidator
+    // set up mock liquidator and mock forwarder
     liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+    forwarder = await MockHelper.createMockForwarder(signer);
     const controllerGov = ControllerV2__factory.connect(controller.address, governance);
     const _LIQUIDATOR = 4;
+    const _FORWARDER = 5;
     await controllerGov.announceAddressChange(_LIQUIDATOR, liquidator.address);
+    await controllerGov.announceAddressChange(_FORWARDER, forwarder.address);
     await TimeUtils.advanceBlocksOnTs(86400); // 1 day
     await controllerGov.changeAddress(_LIQUIDATOR);
+    await controllerGov.changeAddress(_FORWARDER);
   });
 
   after(async function () {
@@ -1314,6 +1330,66 @@ describe("ConverterStrategyBaseAccessTest", () => {
           expect(u).to.be.below(t + 1);
         });
       });
+    });
+  });
+
+  describe("_recycle", () => {
+    interface IRecycleTestResults {
+      gasUsed: BigNumber;
+
+      forwarderTokens: string[];
+      forwarderAmounts: BigNumber[];
+    }
+    async function makeRecycleTest(
+      compoundRate: BigNumber,
+      tokens: MockToken[],
+      amounts: BigNumber[]
+    ) : Promise<IRecycleTestResults> {
+      await strategy.connect(await Misc.impersonate(await controller.platformVoter())).setCompoundRatio(compoundRate);
+
+      for (let i = 0; i < tokens.length; ++i) {
+        await tokens[i].mint(strategy.address, amounts[i]);
+      }
+
+      const tx = await strategy._recycleAccess(
+        tokens.map(x => x.address),
+        amounts
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const retForwarder = await forwarder.getLastRegisterIncomeResults();
+      return {
+        gasUsed,
+        forwarderAmounts: retForwarder.amounts,
+        forwarderTokens: retForwarder.tokens
+      }
+    }
+    describe("Good paths", () => {
+      it("should send expected values to forwarder", async () => {
+        const tokens = [usdc, bal];
+        const amounts = [parseUnits("10", 6), parseUnits("20", 18)];
+        const compoundRate = BigNumber.from(30_000); // 30%
+
+        const r = await makeRecycleTest(compoundRate, tokens, amounts);
+
+        const ret = [
+          r.forwarderTokens.join(),
+          r.forwarderAmounts.map(x => BalanceUtils.toString(x)).join()
+        ].join("\n");
+
+        const expected = [
+          tokens.map(x => x.address).join(),
+          [parseUnits("7", 6), parseUnits("14", 18)].map(x => BalanceUtils.toString(x)).join()
+        ].join("\n");
+
+        expect(ret).eq(expected);
+      });
+    });
+    describe("Bad paths", () => {
+    // TODO
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+
     });
   });
 //endregion Unit tests

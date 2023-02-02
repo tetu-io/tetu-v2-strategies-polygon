@@ -477,9 +477,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint amountToCompound = amounts[i] * _compoundRatio / COMPOUND_DENOMINATOR;
 
       if (amountToCompound > 0) {
-        if (ConverterStrategyBaseLib.getAssetIndex(tokens, token) == type(uint).max
+        if (
+          ConverterStrategyBaseLib.getAssetIndex(tokens, token) != type(uint).max
           || amounts[i] < liquidationThresholds[token]
         ) {
+          // Two possible cases here:
+          // 1) The asset is in the list of depositor's assets.
+          // 2) The asset is not in the list, but its amount is less then the threshold.
+          // In both cases, a liquidation is forbidden, so we have just to account this amount in base amounts
+          _increaseBaseAmount(token, amountToCompound, _balance(token));
+        } else {
+          // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
+          // We assume here, that {token} cannot be equal to {_asset}
+          // because the {_asset} is always included to the list of depositor's assets
           uint baseAmountIn = baseAmounts[token];
           (uint spentAmountIn, uint receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
             ITetuLiquidator(IController(controller()).liquidator()),
@@ -489,16 +499,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
             _REWARD_LIQUIDATION_SLIPPAGE,
             liquidationThreshold
           );
+
+          // Adjust amounts after liquidation
           if (receivedAmountOut > 0) {
-            _increaseBaseAmount(_asset, receivedAmountOut, 0);
+            _increaseBaseAmount(_asset, receivedAmountOut, _balance(_asset));
           }
-          if (spentAmountIn > baseAmountIn) {
-            _decreaseBaseAmount(token, baseAmountIn);
+          if (spentAmountIn > amountToCompound) {
+            _decreaseBaseAmount(token, spentAmountIn - amountToCompound);
           } else {
-            _decreaseBaseAmount(token, baseAmountIn);
+            _increaseBaseAmount(token, amountToCompound - baseAmountIn, _balance(token));
           }
-        } else {
-          _increaseBaseAmount(token, amountToCompound, 0);
         }
       }
 

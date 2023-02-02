@@ -4,7 +4,7 @@ import {
   MockConverterStrategy,
   MockConverterStrategy__factory, MockTetuConverterController,
   MockTetuConverter, MockTetuLiquidatorSingleCall,
-  PriceOracleMock, Uniswap2LibFacade
+  PriceOracleMock, Uniswap2LibFacade, MockForwarder
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
@@ -79,5 +79,12 @@ export class MockHelper {
     )) as BalancerComposableStableDepositorFacade;
     ret.init(poolId, rewardTokens);
     return ret;
+  }
+
+  public static async createMockForwarder(signer: SignerWithAddress): Promise<MockForwarder> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'MockForwarder',
+    )) as MockForwarder;
   }
 }
