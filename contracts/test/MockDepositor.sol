@@ -7,7 +7,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "hardhat/console.sol";
 
 /// @title Mock contract for base Depositor.
-/// @author bogdoslav
 contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Version of this contract. Adjust manually on each code modification.
@@ -41,6 +40,7 @@ contract MockDepositor is DepositorBase, Initializable {
       _depositorWeights.push(depositorWeights_[i]);
       _depositorReserves.push(depositorReserves_[i]);
     }
+    console.log("__MockDepositor_init", tokensLength, _depositorAssets.length, _depositorWeights.length);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -72,11 +72,13 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory) {
+    console.log("_depositorPoolAssets");
     return _depositorAssets;
   }
 
   /// @dev Returns pool weights
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
+    console.log("_depositorPoolWeights", _depositorWeights.length);
     weights = _depositorWeights;
     uint len = weights.length;
     totalWeight = 0;

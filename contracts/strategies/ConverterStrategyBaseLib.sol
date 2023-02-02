@@ -12,7 +12,7 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-//! import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -80,7 +80,16 @@ library ConverterStrategyBaseLib {
     uint totalWeight_,
     uint indexAsset_,
     IPriceOracle priceOracle
-  ) internal view returns (uint[] memory tokenAmountsOut) {
+  ) internal view returns (
+    uint[] memory tokenAmountsOut
+  ) {
+    console.log("getCollaterals.1");
+    console.log("priceOracle", address(priceOracle));
+    console.log("amount_", amount_);
+    console.log("totalWeight_", totalWeight_);
+    console.log("indexAsset_", indexAsset_);
+    console.log("tokens_", tokens_[0], tokens_[1], tokens_[2]);
+    console.log("weights_", weights_[0], weights_[1], weights_[2]);
     uint len = tokens_.length;
     tokenAmountsOut = new uint[](len);
 
@@ -114,6 +123,8 @@ library ConverterStrategyBaseLib {
         }
       }
     }
+
+    console.log("getCollaterals.end");
   }
 
   /// @notice Borrow max available amount of {borrowAsset} using {collateralAmount} of {collateralAsset} as collateral

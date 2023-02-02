@@ -1,16 +1,10 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
-  ControllerV2,
-  ConverterStrategyBaseLibFacade,
-  DystopiaConverterStrategy__factory,
   IController,
   IStrategyV2,
-  ITetuConverter,
-  ITetuConverter__factory,
   MockConverterStrategy,
-  MockConverterStrategy__factory, MockTetuConverterSingleCall,
-  MockToken, PriceOracleMock,
-  StrategySplitterV2,
+  MockConverterStrategy__factory, MockTetuConverterController, MockTetuConverter,
+  MockToken, PriceOracleMock, StrategySplitterV2,
   StrategySplitterV2__factory,
   TetuVaultV2
 } from "../../../typechain";
@@ -20,9 +14,13 @@ import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {parseUnits} from "ethers/lib/utils";
-import {BigNumber} from "ethers";
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {getConverterAddress} from "../../../scripts/utils/Misc";
+import {BigNumber, BigNumberish} from "ethers";
+import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
+import {expect} from "chai";
+import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
+import {
+  GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT,
+} from "../../baseUT/GasLimits";
 
 /**
  * Test of ConverterStrategyBase
@@ -43,10 +41,13 @@ describe("ConverterStrategyBaseAccessTest", () => {
   let controller: IController;
   let vault: TetuVaultV2;
   let splitter: StrategySplitterV2;
-  let tetuConverter: MockTetuConverterSingleCall;
-  let depositorTokens: string[];
+  let tetuConverter: MockTetuConverter;
+  let priceOracle: PriceOracleMock;
+  let tetuConverterController: MockTetuConverterController;
+  let depositorTokens: MockToken[];
   let depositorWeights: number[];
   let depositorReserves: BigNumber[];
+  let indexAsset: number;
 //endregion Variables
 
 //region before, after
@@ -62,7 +63,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
     weth = await DeployerUtils.deployMockToken(signer, 'WETH', 8);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
 
-    depositorTokens = [dai.address, usdc.address, usdt.address];
+    // Set up strategy
+    depositorTokens = [dai, usdc, usdt];
+    indexAsset = depositorTokens.findIndex(x => x.address === usdc.address);
     depositorWeights = [1, 1, 1];
     depositorReserves = [
       parseUnits("1000", 18),
@@ -71,17 +74,16 @@ describe("ConverterStrategyBaseAccessTest", () => {
     ];
 
     controller = await DeployerUtilsLocal.getController(signer);
-    strategy = await MockHelper.createMockConverterStrategy(signer);
-
+    tetuConverter = await MockHelper.createMockTetuConverter(signer);
     const strategyDeployer = async (_splitterAddress: string) => {
       const strategyLocal = MockConverterStrategy__factory.connect(
         await DeployerUtils.deployProxy(signer, 'MockConverterStrategy'), governance);
 
       await strategyLocal.init(
         controller.address,
-        splitter.address,
+        _splitterAddress,
         tetuConverter.address,
-        depositorTokens,
+        depositorTokens.map(x => x.address),
         depositorWeights,
         depositorReserves
       );
@@ -102,8 +104,17 @@ describe("ConverterStrategyBaseAccessTest", () => {
     vault = data.vault.connect(signer);
     const splitterAddress = await vault.splitter();
     splitter = await StrategySplitterV2__factory.connect(splitterAddress, signer);
+    strategy = data.strategy as unknown as MockConverterStrategy;
 
-    tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer)
+    // set up TetuConverter
+    priceOracle = (await DeployerUtils.deployContract(
+      signer,
+      'PriceOracleMock',
+      [usdc.address, dai.address, usdt.address],
+      [parseUnits("1", 18), parseUnits("1", 18), parseUnits("1", 18)]
+    )) as PriceOracleMock;
+    tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+    await tetuConverter.setController(tetuConverterController.address);
   });
 
   after(async function () {
@@ -122,13 +133,106 @@ describe("ConverterStrategyBaseAccessTest", () => {
 //region Unit tests
   describe("_beforeDeposit", () => {
     describe("Good paths", () => {
-      it("should return expected values", async () => {
-        await strategy._beforeDepositAccess(
-          tetuConverter.address,
-          amount,
-          tokens,
-          indexAsset
-        )
+      describe("No dai and usdt on the strategy balance", () => {
+        interface IBeforeDepositTestResults {
+          tokenAmounts: BigNumber[];
+          borrowedAmounts: BigNumber[];
+          spentCollateral: BigNumber;
+          gasUsed: BigNumber;
+        }
+        async function makeBeforeDepositTest(
+          inputAmount: BigNumber,
+          borrowAmounts: BigNumber[]
+        ) : Promise<IBeforeDepositTestResults> {
+          // Set up Tetu Converter mock
+          // we assume, that inputAmount will be divided on 3 equal parts
+          const converter = ethers.Wallet.createRandom().address;
+          for (let i = 0; i < depositorTokens.length; ++i) {
+            if (i === indexAsset) continue;
+            await tetuConverter.setFindBorrowStrategyOutputParams(
+              converter,
+              borrowAmounts[i],
+              parseUnits("1", 18),
+              usdc.address,
+              inputAmount.div(3),
+              depositorTokens[i].address,
+              1
+            );
+            await tetuConverter.setBorrowParams(
+              converter,
+              usdc.address,
+              inputAmount.div(3),
+              depositorTokens[i].address,
+              borrowAmounts[i],
+              strategy.address,
+              borrowAmounts[i],
+            );
+            await depositorTokens[i].mint(tetuConverter.address, borrowAmounts[i]);
+          }
+
+          // Set up balances
+          await usdc.mint(strategy.address, inputAmount);
+
+          // call beforeDeposit
+          const r = await strategy.callStatic._beforeDepositAccess(
+            tetuConverter.address,
+            inputAmount,
+            depositorTokens.map(x => x.address),
+            indexAsset
+          );
+          const tx = await strategy._beforeDepositAccess(
+            tetuConverter.address,
+            inputAmount,
+            depositorTokens.map(x => x.address),
+            indexAsset
+          );
+          const gasUsed = (await tx.wait()).gasUsed;
+
+          return {
+            borrowedAmounts: r.borrowedAmounts,
+            spentCollateral: r.spentCollateral,
+            tokenAmounts: r.tokenAmounts,
+            gasUsed
+          }
+        }
+        it("should return expected values", async () => {
+          const inputAmount = parseUnits("900", 6);
+          const borrowAmounts = [
+            parseUnits("290", 18), // dai
+            parseUnits("0", 6), // usdc, not used
+            parseUnits("315", 6), // usdt
+          ];
+          const r = await makeBeforeDepositTest(inputAmount, borrowAmounts);
+
+          const ret = [
+            r.tokenAmounts.map(x => BalanceUtils.toString(x)).join(),
+            r.borrowedAmounts.map(x => BalanceUtils.toString(x)).join(),
+            r.spentCollateral.toString()
+          ].join("\n");
+          const expected = [
+            [
+              parseUnits("290", 18), // dai
+              parseUnits("300", 6), // usdc
+              parseUnits("315", 6), // usdt
+            ].map(x => BalanceUtils.toString(x)).join(),
+            borrowAmounts.map(x => BalanceUtils.toString(x)).join(),
+            parseUnits("600", 6).toString()
+          ].join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("Gas estimation @skip-on-coverage", async () => {
+          const inputAmount = parseUnits("900", 6);
+          const borrowAmounts = [
+            parseUnits("290", 18), // dai
+            parseUnits("0", 6), // usdc, not used
+            parseUnits("315", 6), // usdt
+          ];
+          const r = await makeBeforeDepositTest(inputAmount, borrowAmounts);
+          controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
       });
     });
     describe("Bad paths", () => {
