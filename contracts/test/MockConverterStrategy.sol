@@ -130,4 +130,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ) external {
     return _afterDeposit(tokens_, indexAsset_, amountsConsumed_, borrowed_, collateral_);
   }
+
+  function setBaseAmountAccess(address token_, uint amount_) external {
+    baseAmounts[token_] = amount_;
+  }
 }

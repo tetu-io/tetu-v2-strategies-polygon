@@ -193,7 +193,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _decreaseBaseAmount(tokens_[i], collateral_);
       } else {
         if (borrowed_[i] >= amountsConsumed_[i]) {
-          _increaseBaseAmount(tokens_[i], borrowed_[i] - amountsConsumed_[i], 0);
+          _increaseBaseAmount(tokens_[i], borrowed_[i] - amountsConsumed_[i], _balance(tokens_[i]));
         } else {
           _decreaseBaseAmount(tokens_[i], amountsConsumed_[i] - borrowed_[i]);
         }
@@ -297,10 +297,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     );
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) {
-        _increaseBaseAmount(_asset, collateralOut + withdrawnAmounts[indexAsset], 0);
+        _increaseBaseAmount(_asset, collateralOut + withdrawnAmounts[indexAsset], _balance(_asset));
       } else {
         if (withdrawnAmounts[i] > repaidAmounts[i]) {
-          _increaseBaseAmount(tokens[i], withdrawnAmounts[i] - repaidAmounts[i], 0);
+          _increaseBaseAmount(tokens[i], withdrawnAmounts[i] - repaidAmounts[i], _balance(tokens[i]));
         } else {
           _decreaseBaseAmount(tokens[i], repaidAmounts[i] - withdrawnAmounts[i]);
         }

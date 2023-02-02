@@ -19,6 +19,7 @@ import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {expect} from "chai";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
+  GAS_CONVERTER_STRATEGY_BASE_AFTER_DEPOSIT,
   GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT,
 } from "../../baseUT/GasLimits";
 
@@ -132,69 +133,74 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
 //region Unit tests
   describe("_beforeDeposit", () => {
+    interface IBeforeDepositTestResults {
+      tokenAmounts: BigNumber[];
+      borrowedAmounts: BigNumber[];
+      spentCollateral: BigNumber;
+      gasUsed: BigNumber;
+    }
+    async function makeBeforeDepositTest(
+      inputAmount: BigNumber,
+      borrowAmounts: BigNumber[],
+      initialStrategyBalances?: BigNumber[]
+    ) : Promise<IBeforeDepositTestResults> {
+      // Set up Tetu Converter mock
+      // we assume, that inputAmount will be divided on 3 equal parts
+      const converter = ethers.Wallet.createRandom().address;
+      for (let i = 0; i < depositorTokens.length; ++i) {
+        if (initialStrategyBalances && initialStrategyBalances[i].gt(0)) {
+          await depositorTokens[i].mint(tetuConverter.address, initialStrategyBalances[i]);
+        }
+
+        if (i === indexAsset) continue;
+        await tetuConverter.setFindBorrowStrategyOutputParams(
+          converter,
+          borrowAmounts[i],
+          parseUnits("1", 18),
+          usdc.address,
+          inputAmount.div(3),
+          depositorTokens[i].address,
+          1
+        );
+        await tetuConverter.setBorrowParams(
+          converter,
+          usdc.address,
+          inputAmount.div(3),
+          depositorTokens[i].address,
+          borrowAmounts[i],
+          strategy.address,
+          borrowAmounts[i],
+        );
+        await depositorTokens[i].mint(tetuConverter.address, borrowAmounts[i]);
+      }
+
+      // Set up balances
+      await usdc.mint(strategy.address, inputAmount);
+
+      // call beforeDeposit
+      const r = await strategy.callStatic._beforeDepositAccess(
+        tetuConverter.address,
+        inputAmount,
+        depositorTokens.map(x => x.address),
+        indexAsset
+      );
+      const tx = await strategy._beforeDepositAccess(
+        tetuConverter.address,
+        inputAmount,
+        depositorTokens.map(x => x.address),
+        indexAsset
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      return {
+        borrowedAmounts: r.borrowedAmounts,
+        spentCollateral: r.spentCollateral,
+        tokenAmounts: r.tokenAmounts,
+        gasUsed
+      }
+    }
     describe("Good paths", () => {
       describe("No dai and usdt on the strategy balance", () => {
-        interface IBeforeDepositTestResults {
-          tokenAmounts: BigNumber[];
-          borrowedAmounts: BigNumber[];
-          spentCollateral: BigNumber;
-          gasUsed: BigNumber;
-        }
-        async function makeBeforeDepositTest(
-          inputAmount: BigNumber,
-          borrowAmounts: BigNumber[]
-        ) : Promise<IBeforeDepositTestResults> {
-          // Set up Tetu Converter mock
-          // we assume, that inputAmount will be divided on 3 equal parts
-          const converter = ethers.Wallet.createRandom().address;
-          for (let i = 0; i < depositorTokens.length; ++i) {
-            if (i === indexAsset) continue;
-            await tetuConverter.setFindBorrowStrategyOutputParams(
-              converter,
-              borrowAmounts[i],
-              parseUnits("1", 18),
-              usdc.address,
-              inputAmount.div(3),
-              depositorTokens[i].address,
-              1
-            );
-            await tetuConverter.setBorrowParams(
-              converter,
-              usdc.address,
-              inputAmount.div(3),
-              depositorTokens[i].address,
-              borrowAmounts[i],
-              strategy.address,
-              borrowAmounts[i],
-            );
-            await depositorTokens[i].mint(tetuConverter.address, borrowAmounts[i]);
-          }
-
-          // Set up balances
-          await usdc.mint(strategy.address, inputAmount);
-
-          // call beforeDeposit
-          const r = await strategy.callStatic._beforeDepositAccess(
-            tetuConverter.address,
-            inputAmount,
-            depositorTokens.map(x => x.address),
-            indexAsset
-          );
-          const tx = await strategy._beforeDepositAccess(
-            tetuConverter.address,
-            inputAmount,
-            depositorTokens.map(x => x.address),
-            indexAsset
-          );
-          const gasUsed = (await tx.wait()).gasUsed;
-
-          return {
-            borrowedAmounts: r.borrowedAmounts,
-            spentCollateral: r.spentCollateral,
-            tokenAmounts: r.tokenAmounts,
-            gasUsed
-          }
-        }
         it("should return expected values", async () => {
           const inputAmount = parseUnits("900", 6);
           const borrowAmounts = [
@@ -221,25 +227,182 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
           expect(ret).eq(expected);
         });
-        it("Gas estimation @skip-on-coverage", async () => {
-          const inputAmount = parseUnits("900", 6);
-          const borrowAmounts = [
-            parseUnits("290", 18), // dai
-            parseUnits("0", 6), // usdc, not used
-            parseUnits("315", 6), // usdt
-          ];
-          const r = await makeBeforeDepositTest(inputAmount, borrowAmounts);
-          controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT, (u, t) => {
-            expect(u).to.be.below(t + 1);
-          });
+      });
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should not exceed the gas limit", async () => {
+        const inputAmount = parseUnits("900", 6);
+        const borrowAmounts = [
+          parseUnits("290", 18), // dai
+          parseUnits("0", 6), // usdc, not used
+          parseUnits("315", 6), // usdt
+        ];
+        const r = await makeBeforeDepositTest(inputAmount, borrowAmounts);
+        controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT, (u, t) => {
+          expect(u).to.be.below(t + 1);
         });
       });
     });
-    describe("Bad paths", () => {
+  });
 
+  describe("_afterDeposit", () => {
+    interface IAfterDepositTestResults {
+      resultBaseAmounts: BigNumber[];
+      gasUsed: BigNumber;
+    }
+    async function makeAfterDepositTest(
+      initialBaseAmounts: BigNumber[],
+      amountsConsumed: BigNumber[],
+      borrowed: BigNumber[],
+      collateral: BigNumber,
+      balanceStrategy: BigNumber[]
+    ) : Promise<IAfterDepositTestResults> {
+      for (let i = 0; i < depositorTokens.length; ++i) {
+        await strategy.setBaseAmountAccess(depositorTokens[i].address, initialBaseAmounts[i]);
+        await depositorTokens[i].mint(strategy.address, balanceStrategy[i]);
+      }
+
+      await strategy.callStatic._afterDepositAccess(
+        depositorTokens.map(x => x.address),
+        indexAsset,
+        amountsConsumed,
+        borrowed,
+        collateral
+      );
+      const tx = await strategy._afterDepositAccess(
+        depositorTokens.map(x => x.address),
+        indexAsset,
+        amountsConsumed,
+        borrowed,
+        collateral
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const resultBaseAmounts = await Promise.all(
+        depositorTokens.map(
+          async x => strategy.baseAmounts(x.address)
+        )
+      );
+
+      return {
+        resultBaseAmounts,
+        gasUsed
+      }
+    }
+    describe("Good paths", () => {
+      describe("Borrowed => consumed", () => {
+        it("should return expected values", async () => {
+          const initialBaseAmounts = [
+            parseUnits("100", 18),
+            parseUnits("1000", 6),
+            parseUnits("50", 6),
+          ];
+          const amountsConsumed = [
+            parseUnits("200", 18),
+            parseUnits("210", 6),
+            parseUnits("190", 6),
+          ];
+          const borrowed = [
+            parseUnits("251", 18),
+            parseUnits("0", 6),
+            parseUnits("214", 6),
+          ];
+          const collateral = parseUnits("900", 6);
+          const balanceStrategy = [
+            parseUnits("151", 18), // 100 + 251 - 200
+            parseUnits("100", 6), // 1000 - 900
+            parseUnits("74", 6), // 50 + 214 - 190
+          ];
+
+          const r = await makeAfterDepositTest(
+            initialBaseAmounts,
+            amountsConsumed,
+            borrowed,
+            collateral,
+            balanceStrategy
+          );
+
+          const ret = r.resultBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = balanceStrategy.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
+      describe("Borrowed < consumed", () => {
+        it("should return expected values", async () => {
+          const initialBaseAmounts = [
+            parseUnits("100", 18),
+            parseUnits("1000", 6),
+            parseUnits("50", 6),
+          ];
+          const amountsConsumed = [
+            parseUnits("200", 18),
+            parseUnits("210", 6),
+            parseUnits("190", 6),
+          ];
+          const borrowed = [
+            parseUnits("190", 18),
+            parseUnits("0", 6),
+            parseUnits("170", 6),
+          ];
+          const collateral = parseUnits("900", 6);
+          const balanceStrategy = [
+            parseUnits("90", 18), // 100 + 190 - 200
+            parseUnits("100", 6), // 1000 - 900
+            parseUnits("30", 6), // 50 + 170 - 190
+          ];
+
+          const r = await makeAfterDepositTest(
+            initialBaseAmounts,
+            amountsConsumed,
+            borrowed,
+            collateral,
+            balanceStrategy
+          );
+
+          const ret = r.resultBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = balanceStrategy.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
     });
     describe("Gas estimation @skip-on-coverage", () => {
+      it("should not exceed the gas limit", async () => {
+        const initialBaseAmounts = [
+          parseUnits("100", 18),
+          parseUnits("1000", 6),
+          parseUnits("50", 6),
+        ];
+        const amountsConsumed = [
+          parseUnits("200", 18),
+          parseUnits("210", 6),
+          parseUnits("190", 6),
+        ];
+        const borrowed = [
+          parseUnits("251", 18),
+          parseUnits("0", 6),
+          parseUnits("214", 6),
+        ];
+        const collateral = parseUnits("900", 6);
+        const balanceStrategy = [
+          parseUnits("151", 18), // 100 + 251 - 200
+          parseUnits("100", 6), // 1000 - 900
+          parseUnits("74", 6), // 50 + 214 - 190
+        ];
 
+        const r = await makeAfterDepositTest(
+          initialBaseAmounts,
+          amountsConsumed,
+          borrowed,
+          collateral,
+          balanceStrategy
+        );
+
+        controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_AFTER_DEPOSIT, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
     });
   });
 //endregion Unit tests
