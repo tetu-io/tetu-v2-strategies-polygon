@@ -530,14 +530,29 @@ contract MockTetuConverter is ITetuConverter {
   //////////////////////////////////////////////////////////
   ///  claimRewards
   //////////////////////////////////////////////////////////
-  function claimRewards(address receiver_) external pure returns (
+  struct ClaimRewardsParams {
+    address[] rewardTokensOut;
+    uint[] amountsOut;
+  }
+  ClaimRewardsParams private claimRewardsParams;
+
+  function claimRewards(address receiver_) external returns (
     address[] memory rewardTokensOut,
     uint[] memory amountsOut
   ) {
-    receiver_;
-    rewardTokensOut;
-    amountsOut;
-    revert ("not implemented");
+    for (uint i = 0; i < claimRewardsParams.rewardTokensOut.length; ++i) {
+      uint balance = IERC20Extended(claimRewardsParams.rewardTokensOut[i]).balanceOf(address(this));
+      console.log("claimRewards asset, balance, amountOut", claimRewardsParams.rewardTokensOut[i], balance, claimRewardsParams.amountsOut[i]);
+      IERC20Extended(claimRewardsParams.rewardTokensOut[i]).transfer(receiver_, claimRewardsParams.amountsOut[i]);
+    }
+    return (claimRewardsParams.rewardTokensOut, claimRewardsParams.amountsOut);
+  }
+
+  function setClaimRewards(address[] memory rewardTokensOut, uint[] memory amountsOut) external {
+    claimRewardsParams = ClaimRewardsParams({
+      rewardTokensOut: rewardTokensOut,
+      amountsOut: amountsOut
+    });
   }
 
 }

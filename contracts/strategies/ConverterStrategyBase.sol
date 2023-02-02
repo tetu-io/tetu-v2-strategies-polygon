@@ -413,36 +413,41 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // get rewards from the Depositor
     (address[] memory rewardTokens, uint[] memory amounts) = _depositorClaimRewards();
 
-    _processClaims(
+    (address[] memory tokensOut, uint[] memory amountsOut) = _prepareRewardsList(
       tetuConverter,
       rewardTokens,
       amounts
     );
+
+    if (tokensOut.length > 0) {
+      _recycle(tokensOut, amountsOut);
+    }
   }
 
-  /// @notice Claim rewards from tetuConverter, make list of all available rewards, do post-processing
+  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards
   /// @dev The post-processing is rewards conversion to the main asset
   /// @param tokens_ List of rewards claimed from the internal pool
   /// @param amounts_ Amounts of rewards claimed from the internal pool
-  function _processClaims(
+  /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
+  /// @param amountsOut Amounts of available rewards
+  function _prepareRewardsList(
     ITetuConverter tetuConverter_,
     address[] memory tokens_,
     uint[] memory amounts_
-  ) internal {
+  ) internal returns(
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
     // Rewards from TetuConverter
     (address[] memory tokens2, uint[] memory amounts2) = tetuConverter_.claimRewards(address(this));
 
     // Join arrays and recycle tokens
-    (address[] memory tokens, uint[] memory amounts) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
+    (tokensOut, amountsOut) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
 
     // {amounts} contain just received values, but probably we already had some tokens on balance
-    uint len = tokens.length;
+    uint len = tokensOut.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amounts[i] = IERC20(tokens[i]).balanceOf(address(this)) - baseAmounts[tokens[i]];
-    }
-
-    if (len > 0) {
-      _recycle(tokens, amounts);
+      amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - baseAmounts[tokensOut[i]];
     }
   }
 

@@ -155,4 +155,15 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function setBaseAmountAccess(address token_, uint amount_) external {
     baseAmounts[token_] = amount_;
   }
+
+  function _prepareRewardsListAccess(
+    ITetuConverter tetuConverter_,
+    address[] memory tokens_,
+    uint[] memory amounts_
+  ) external returns(
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
+    return _prepareRewardsList(tetuConverter_, tokens_, amounts_);
+  }
 }
