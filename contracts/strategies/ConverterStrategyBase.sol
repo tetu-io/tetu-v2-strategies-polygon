@@ -205,13 +205,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                     Withdraw from the pool
   /////////////////////////////////////////////////////////////////////
 
-  function _getExpectedWithdrawnAmountUSD(uint liquidityAmount) internal view returns (
+  function _getExpectedWithdrawnAmountUSD(
+    address[] memory tokens_,
+    uint liquidityAmount
+  ) internal view returns (
     uint investedAssetsUSD,
     uint assetPrice
   ) {
     // predict expected amount to be withdrawn (in USD)
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
-      _depositorPoolAssets(),
+      tokens_,
       _depositorPoolReserves(),
       asset,
       liquidityAmount,
@@ -232,11 +235,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         * amount / _investedAssets // a part of amount that we are going to withdraw
         / 100; // .. add 1% on top
 
-      (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
-      uint collateralOut = _withdrawFromPoolUniversal(liquidityAmount, false, false);
+      address[] memory tokens = _depositorPoolAssets();
+      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+
+      (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(tokens, liquidityAmount);
+      uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
+
+      // convert amounts to main asset and update base amounts
+      (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
+      _afterWithdrawUpdateBaseAmounts(tokens, indexAsset, withdrawnAmounts, collateralOut, repaidAmounts);
 
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
       investedAssetsUSD += collateralOut * assetPrice / 1e18;
+
+      // adjust _investedAssets
+      _updateInvestedAssets();
     }
 
     return (investedAssetsUSD, assetPrice);
@@ -250,70 +263,95 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint liquidityAmount = _depositorLiquidity();
 
     // predict expected amount to be withdrawn (in USD)
-    (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(liquidityAmount);
-    uint collateralOut = _withdrawFromPoolUniversal(liquidityAmount, false, true);
+    address[] memory tokens = _depositorPoolAssets();
+    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+
+    (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(tokens, liquidityAmount);
+    uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
+
+    // convert amounts to main asset and update base amounts
+    (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
+    _afterWithdrawUpdateBaseAmounts(tokens, indexAsset, withdrawnAmounts, collateralOut, repaidAmounts);
 
     // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
     investedAssetsUSD += collateralOut * assetPrice / 1e18;
+
+    // adjust _investedAssets
+    _updateInvestedAssets();
   }
 
   /// @notice If pool support emergency withdraw need to call it for emergencyExit()
   function _emergencyExitFromPool() override internal virtual {
-    _withdrawFromPoolUniversal(0, true, true);
-  }
-
-  /// @param repayAll_ After withdraw convert (all available on balance OR withdrawn only) amounts to the main asset
-  function _withdrawFromPoolUniversal(uint liquidityAmount_, bool emergency_, bool repayAll_) internal returns (
-    uint collateralOut
-  ) {
-    address _asset = asset; //gas saving
-    // withdraw the amount from the depositor to balance of the strategy
-    uint[] memory withdrawnAmounts = emergency_
-      ? _depositorEmergencyExit()
-      : _depositorExit(liquidityAmount_);
+    uint[] memory withdrawnAmounts = _depositorEmergencyExit();
 
     address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, _asset);
-    uint len = tokens.length;
+    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
-    // get amounts that should be converted to the main asset
-    uint[] memory amountsToConvert;
-    if (repayAll_) {
-      amountsToConvert = new uint[](len);
-      for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-        if (i == indexAsset) continue;
-        amountsToConvert[i] = _balance(tokens[i]);
-      }
-    } else {
-      amountsToConvert = withdrawnAmounts;
-    }
+    // convert amounts to main asset and update base amounts
+    (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
+    _afterWithdrawUpdateBaseAmounts(tokens, indexAsset, withdrawnAmounts, collateralOut, repaidAmounts);
 
-    // convert amounts to the main asset
-    uint[] memory repaidAmounts;
-    (collateralOut, repaidAmounts) = _afterWithdraw(
-      tokens,
-      indexAsset,
-      amountsToConvert
-    );
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) {
-        _increaseBaseAmount(_asset, collateralOut + withdrawnAmounts[indexAsset], _balance(_asset));
-      } else {
-        if (withdrawnAmounts[i] > repaidAmounts[i]) {
-          _increaseBaseAmount(tokens[i], withdrawnAmounts[i] - repaidAmounts[i], _balance(tokens[i]));
-        } else {
-          _decreaseBaseAmount(tokens[i], repaidAmounts[i] - withdrawnAmounts[i]);
-        }
-      }
-    }
+    // adjust _investedAssets
     _updateInvestedAssets();
   }
 
-  /// @notice Convert given amounts to the main {asset}
+  /// @notice Update base amounts after withdraw
+  /// @param indexAsset_ Index of the main asset in {tokens_}
+  /// @param withdrawnAmounts_ Amounts received from the internal pool
+  /// @param collateral_ Collateral received after conversion {withdrawnAmounts_}/all amounts to the main asset
+  /// @param repaidAmounts_ Amounts spend during conversion of {withdrawnAmounts_}/all amounts to the main asset
+  function _afterWithdrawUpdateBaseAmounts(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory withdrawnAmounts_,
+    uint collateral_,
+    uint[] memory repaidAmounts_
+  ) internal {
+    uint len = tokens_.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset_) {
+        _increaseBaseAmount(
+          tokens_[indexAsset_],
+          collateral_ + withdrawnAmounts_[indexAsset_],
+          _balance(tokens_[indexAsset_])
+        );
+      } else {
+        if (withdrawnAmounts_[i] > repaidAmounts_[i]) {
+          _increaseBaseAmount(tokens_[i], withdrawnAmounts_[i] - repaidAmounts_[i], _balance(tokens_[i]));
+        } else {
+          _decreaseBaseAmount(tokens_[i], repaidAmounts_[i] - withdrawnAmounts_[i]);
+        }
+      }
+    }
+  }
+
+  /// @notice Convert all available amounts of {tokens_} to the main {asset}
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
   /// @return collateralOut Total amount of collateral returned after closing positions
-  function _afterWithdraw(
+  /// @return repaidAmounts What amounts were spent in exchange of the {collateralOut}
+  function _convertAfterWithdrawAll(address[] memory tokens_, uint indexAsset_) internal returns (
+    uint collateralOut,
+    uint[] memory repaidAmounts
+  ){
+    uint len = tokens_.length;
+    uint[] memory amountsToConvert;
+    amountsToConvert = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset_) continue;
+      amountsToConvert[i] = _balance(tokens_[i]);
+    }
+
+    // convert amounts to the main asset
+    (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert);
+  }
+
+  /// @notice Convert {amountsToConvert_} to the main {asset}
+  /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
+  /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @return collateralOut Total amount of collateral returned after closing positions
+  /// @return repaidAmountsOut What amounts were spent in exchange of the {collateralOut}
+  function _convertAfterWithdraw(
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory amountsToConvert_

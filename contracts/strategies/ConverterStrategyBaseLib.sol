@@ -261,4 +261,18 @@ library ConverterStrategyBaseLib {
     }
     return type(uint).max;
   }
+
+  /// @notice Get amounts to convert = all available amounts of all depositor assets except main one
+  function getAvailableAmountsToConvert(
+    address[] memory tokens_,
+    uint indexAsset
+  ) internal view returns (uint[] memory) {
+    uint len = tokens_.length;
+    uint[] memory amountsToConvert = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset) continue;
+      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this));
+    }
+    return amountsToConvert;
+  }
 }

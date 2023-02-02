@@ -14,12 +14,12 @@ import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {parseUnits} from "ethers/lib/utils";
-import {BigNumber, BigNumberish} from "ethers";
+import {BigNumber} from "ethers";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {expect} from "chai";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GAS_CONVERTER_STRATEGY_BASE_AFTER_DEPOSIT,
+  GAS_CONVERTER_STRATEGY_BASE_AFTER_DEPOSIT, GAS_CONVERTER_STRATEGY_BASE_AFTER_WITHDRAW_UPDATE_BASE_AMOUNTS,
   GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT,
 } from "../../baseUT/GasLimits";
 
@@ -405,5 +405,166 @@ describe("ConverterStrategyBaseAccessTest", () => {
       });
     });
   });
+
+  describe("_afterWithdrawUpdateBaseAmounts", () => {
+    interface IAfterWithdrawUpdateBaseAmountsTestResults {
+      resultBaseAmounts: BigNumber[];
+      gasUsed: BigNumber;
+    }
+    async function makeAfterWithdrawUpdateBaseAmountsTest(
+      initialBaseAmounts: BigNumber[],
+      withdrawnAmounts: BigNumber[],
+      collateral: BigNumber,
+      repaidAmounts: BigNumber[],
+      balanceStrategy: BigNumber[]
+    ) : Promise<IAfterWithdrawUpdateBaseAmountsTestResults> {
+      for (let i = 0; i < depositorTokens.length; ++i) {
+        await strategy.setBaseAmountAccess(depositorTokens[i].address, initialBaseAmounts[i]);
+        await depositorTokens[i].mint(strategy.address, balanceStrategy[i]);
+      }
+
+      await strategy.callStatic._afterWithdrawUpdateBaseAmountsAccess(
+        depositorTokens.map(x => x.address),
+        indexAsset,
+        withdrawnAmounts,
+        collateral,
+        repaidAmounts
+      );
+      const tx = await strategy._afterWithdrawUpdateBaseAmountsAccess(
+        depositorTokens.map(x => x.address),
+        indexAsset,
+        withdrawnAmounts,
+        collateral,
+        repaidAmounts
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const resultBaseAmounts = await Promise.all(
+        depositorTokens.map(
+          async x => strategy.baseAmounts(x.address)
+        )
+      );
+
+      return {
+        resultBaseAmounts,
+        gasUsed
+      }
+    }
+    describe("Good paths", () => {
+      describe("withdrawnAmounts_ => repaidAmounts_", () => {
+        it("should return expected values", async () => {
+          const initialBaseAmounts = [
+            parseUnits("100", 18),
+            parseUnits("1000", 6),
+            parseUnits("50", 6),
+          ];
+          const withdrawnAmounts = [
+            parseUnits("400", 18),
+            parseUnits("210", 6),
+            parseUnits("490", 6),
+          ];
+          const repaidAmounts = [
+            parseUnits("251", 18),
+            parseUnits("0", 6),
+            parseUnits("214", 6),
+          ];
+          const collateral = parseUnits("900", 6);
+          const balanceStrategy = [
+            parseUnits("249", 18), // 100 + 400 - 251
+            parseUnits("2110", 6), // 1000 + 900 + 210
+            parseUnits("326", 6), // 50 + 490 - 214
+          ];
+
+          const r = await makeAfterWithdrawUpdateBaseAmountsTest(
+            initialBaseAmounts,
+            withdrawnAmounts,
+            collateral,
+            repaidAmounts,
+            balanceStrategy
+          );
+
+          const ret = r.resultBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = balanceStrategy.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
+      describe("withdrawnAmounts_ < repaidAmounts_", () => {
+        it("should return expected values", async () => {
+          const initialBaseAmounts = [
+            parseUnits("100", 18),
+            parseUnits("1000", 6),
+            parseUnits("50", 6),
+          ];
+          const withdrawnAmounts = [
+            parseUnits("200", 18),
+            parseUnits("210", 6),
+            parseUnits("190", 6),
+          ];
+          const repaidAmounts = [
+            parseUnits("251", 18),
+            parseUnits("0", 6),
+            parseUnits("214", 6),
+          ];
+          const collateral = parseUnits("900", 6);
+          const balanceStrategy = [
+            parseUnits("49", 18), // 100 + 200 - 251
+            parseUnits("2110", 6), // 1000 + 900 + 210
+            parseUnits("26", 6), // 50 + 190 - 214
+          ];
+
+          const r = await makeAfterWithdrawUpdateBaseAmountsTest(
+            initialBaseAmounts,
+            withdrawnAmounts,
+            collateral,
+            repaidAmounts,
+            balanceStrategy
+          );
+
+          const ret = r.resultBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = balanceStrategy.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should return expected values", async () => {
+        const initialBaseAmounts = [
+          parseUnits("100", 18),
+          parseUnits("1000", 6),
+          parseUnits("50", 6),
+        ];
+        const withdrawnAmounts = [
+          parseUnits("400", 18),
+          parseUnits("210", 6),
+          parseUnits("490", 6),
+        ];
+        const repaidAmounts = [
+          parseUnits("251", 18),
+          parseUnits("0", 6),
+          parseUnits("214", 6),
+        ];
+        const collateral = parseUnits("900", 6);
+        const balanceStrategy = [
+          parseUnits("249", 18), // 100 + 400 - 251
+          parseUnits("2110", 6), // 1000 + 900 + 210
+          parseUnits("326", 6),  // 50 + 490 - 214
+        ];
+
+        const r = await makeAfterWithdrawUpdateBaseAmountsTest(
+          initialBaseAmounts,
+          withdrawnAmounts,
+          collateral,
+          repaidAmounts,
+          balanceStrategy
+        );
+        controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_AFTER_WITHDRAW_UPDATE_BASE_AMOUNTS, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
+    });
+  });
+
 //endregion Unit tests
 });

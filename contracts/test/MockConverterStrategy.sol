@@ -39,6 +39,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
   function getExpectedWithdrawnAmountUSDTestAccess(
+    address[] memory tokens_,
     uint liquidityAmount_,
     uint totalSupply_,
     address priceOracle_
@@ -47,7 +48,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint assetPrice
   ) {
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
-      _depositorPoolAssets(),
+      tokens_,
       _depositorPoolReserves(),
       asset,
       liquidityAmount_,
@@ -56,7 +57,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-  function _afterWithdrawAccess(
+  function _afterWithdrawUpdateBaseAmountsAccess(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory withdrawnAmounts_,
+    uint collateral_,
+    uint[] memory repaidAmounts_
+  ) external {
+    return _afterWithdrawUpdateBaseAmounts(tokens_, indexAsset_, withdrawnAmounts_, collateral_, repaidAmounts_);
+  }
+
+  function _convertAfterWithdrawAccess(
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory amountsToConvert_
@@ -64,7 +75,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
-    return _afterWithdraw(tokens_, indexAsset_, amountsToConvert_);
+    return _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert_);
+  }
+
+  function _convertAfterWithdrawAllAccess(
+    address[] memory tokens_,
+    uint indexAsset_
+  ) external returns (
+    uint collateralOut,
+    uint[] memory repaidAmountsOut
+  ) {
+    return _convertAfterWithdrawAll(tokens_, indexAsset_);
   }
 
   function borrowPositionTestAccess(address collateralAsset, uint collateralAmount, address borrowAsset) external returns (
