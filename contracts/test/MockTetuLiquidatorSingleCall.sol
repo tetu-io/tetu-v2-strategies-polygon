@@ -49,7 +49,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
         route[0].swapper = p.swapper;
         return (route, errorMessage);
       } else {
-        console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found");
+        console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found", tokenIn, tokenOut);
         return (route, "route not found");
       }
     }
@@ -61,6 +61,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     address swapper,
     string memory errorMessage
   ) external {
+    console.log("setBuildRoute", tokenIn, tokenOut);
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut));
     buildRouteParams[key] = BuildRouteParams({
       errorMessage: errorMessage,
