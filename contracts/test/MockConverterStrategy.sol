@@ -57,14 +57,14 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-  function _afterWithdrawUpdateBaseAmountsAccess(
+  function _updateBaseAmountsAccess(
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory withdrawnAmounts_,
-    uint collateral_,
-    uint[] memory repaidAmounts_
+    uint[] memory receivedAmounts_,
+    uint[] memory spentAmounts_,
+    int assetAmount_
   ) external {
-    return _afterWithdrawUpdateBaseAmounts(tokens_, indexAsset_, withdrawnAmounts_, collateral_, repaidAmounts_);
+    return _updateBaseAmounts(tokens_, indexAsset_, receivedAmounts_, spentAmounts_, assetAmount_);
   }
 
   function _convertAfterWithdrawAccess(
@@ -140,16 +140,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint spentCollateral
   ) {
     return _beforeDeposit(tetuConverter_, amount_, tokens_, indexAsset_);
-  }
-
-  function _afterDepositAccess(
-    address[] memory tokens_,
-    uint indexAsset_,
-    uint[] memory amountsConsumed_,
-    uint[] memory borrowed_,
-    uint collateral_
-  ) external {
-    return _afterDeposit(tokens_, indexAsset_, amountsConsumed_, borrowed_, collateral_);
   }
 
   function setBaseAmountAccess(address token_, uint amount_) external {

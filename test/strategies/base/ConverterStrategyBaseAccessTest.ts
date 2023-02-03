@@ -1,23 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {
-  IController,
-  IStrategyV2,
-  MockConverterStrategy,
-  MockConverterStrategy__factory,
-  MockTetuConverterController,
-  MockTetuConverter,
-  MockToken,
-  PriceOracleMock,
-  StrategySplitterV2,
-  StrategySplitterV2__factory,
-  TetuVaultV2,
-  MockTetuLiquidatorSingleCall,
-  ControllerV2__factory,
-  IERC20__factory,
-  IERC20Metadata__factory,
-  IForwarder,
-  MockForwarder, StrategyBaseV2__factory, IController__factory
-} from "../../../typechain";
+import {IController, IStrategyV2, MockConverterStrategy, MockConverterStrategy__factory, MockTetuConverterController, MockTetuConverter, MockToken, PriceOracleMock, StrategySplitterV2, StrategySplitterV2__factory, TetuVaultV2, MockTetuLiquidatorSingleCall, ControllerV2__factory, IERC20Metadata__factory, MockForwarder} from "../../../typechain";
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
@@ -275,7 +257,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
     });
   });
 
-  describe("_afterDeposit", () => {
+  describe("_updateBaseAmounts - after deposit", () => {
     interface IAfterDepositTestResults {
       resultBaseAmounts: BigNumber[];
       gasUsed: BigNumber;
@@ -292,19 +274,19 @@ describe("ConverterStrategyBaseAccessTest", () => {
         await depositorTokens[i].mint(strategy.address, balanceStrategy[i]);
       }
 
-      await strategy.callStatic._afterDepositAccess(
+      await strategy.callStatic._updateBaseAmountsAccess(
         depositorTokens.map(x => x.address),
         indexAsset,
-        amountsConsumed,
         borrowed,
-        collateral
+        amountsConsumed,
+        -collateral
       );
-      const tx = await strategy._afterDepositAccess(
+      const tx = await strategy._updateBaseAmountsAccess(
         depositorTokens.map(x => x.address),
         indexAsset,
-        amountsConsumed,
         borrowed,
-        collateral
+        amountsConsumed,
+        -collateral
       );
       const gasUsed = (await tx.wait()).gasUsed;
 
@@ -436,7 +418,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
     });
   });
 
-  describe("_afterWithdrawUpdateBaseAmounts", () => {
+  describe("_updateBaseAmounts - after withdraw", () => {
     interface IAfterWithdrawUpdateBaseAmountsTestResults {
       resultBaseAmounts: BigNumber[];
       gasUsed: BigNumber;
@@ -453,19 +435,19 @@ describe("ConverterStrategyBaseAccessTest", () => {
         await depositorTokens[i].mint(strategy.address, balanceStrategy[i]);
       }
 
-      await strategy.callStatic._afterWithdrawUpdateBaseAmountsAccess(
+      await strategy.callStatic._updateBaseAmountsAccess(
         depositorTokens.map(x => x.address),
         indexAsset,
         withdrawnAmounts,
-        collateral,
-        repaidAmounts
+        repaidAmounts,
+        collateral.add(withdrawnAmounts[indexAsset])
       );
-      const tx = await strategy._afterWithdrawUpdateBaseAmountsAccess(
+      const tx = await strategy._updateBaseAmountsAccess(
         depositorTokens.map(x => x.address),
         indexAsset,
         withdrawnAmounts,
-        collateral,
-        repaidAmounts
+        repaidAmounts,
+        collateral.add(withdrawnAmounts[indexAsset])
       );
       const gasUsed = (await tx.wait()).gasUsed;
 

@@ -33,10 +33,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
 
   uint private constant REINVEST_THRESHOLD_PERCENT_DENOMINATOR = 100_000;
+
   /////////////////////////////////////////////////////////////////////
   //                        VARIABLES
   //                Keep names and ordering!
-  //                 Add only in the bottom.
+  // Add only in the bottom and don't forget to decrease gap variable
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Amount of underlying assets invested to the pool.
@@ -115,7 +116,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
 
       // adjust base-amounts
-      _afterDeposit(tokens, indexAsset, consumedAmounts, borrowedAmounts, collateral);
+      _updateBaseAmounts(
+        tokens,
+        indexAsset,
+        borrowedAmounts,
+        consumedAmounts,
+        -int(collateral)
+      );
 
       // adjust _investedAssets
       _updateInvestedAssets();
@@ -173,34 +180,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 
-  /// @notice Update base amounts after deposit
-  /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
-  /// @param indexAsset_ Index of main {asset} in {tokens}
-  /// @param amountsConsumed_ Amounts deposited to the internal pool
-  /// @param borrowed_ Amounts borrowed before the deposit
-  /// @param collateral_ Amount of main {asset} spent to get {borrowed} amounts
-  function _afterDeposit(
-    address[] memory tokens_,
-    uint indexAsset_,
-    uint[] memory amountsConsumed_,
-    uint[] memory borrowed_,
-    uint collateral_
-  ) internal {
-    // update base-amounts
-    uint len = tokens_.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset_) {
-        _decreaseBaseAmount(tokens_[i], collateral_);
-      } else {
-        if (borrowed_[i] >= amountsConsumed_[i]) {
-          _increaseBaseAmount(tokens_[i], borrowed_[i] - amountsConsumed_[i], _balance(tokens_[i]));
-        } else {
-          _decreaseBaseAmount(tokens_[i], amountsConsumed_[i] - borrowed_[i]);
-        }
-      }
-    }
-  }
-
   /////////////////////////////////////////////////////////////////////
   ///                     Withdraw from the pool
   /////////////////////////////////////////////////////////////////////
@@ -243,7 +222,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // convert amounts to main asset and update base amounts
       (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
-      _afterWithdrawUpdateBaseAmounts(tokens, indexAsset, withdrawnAmounts, collateralOut, repaidAmounts);
+      _updateBaseAmounts(
+        tokens,
+        indexAsset,
+        withdrawnAmounts,
+        repaidAmounts,
+        int(collateralOut + withdrawnAmounts[indexAsset])
+      );
 
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
       investedAssetsUSD += collateralOut * assetPrice / 1e18;
@@ -271,7 +256,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // convert amounts to main asset and update base amounts
     (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
-    _afterWithdrawUpdateBaseAmounts(tokens, indexAsset, withdrawnAmounts, collateralOut, repaidAmounts);
+    _updateBaseAmounts(
+      tokens,
+      indexAsset,
+      withdrawnAmounts,
+      repaidAmounts,
+      int(collateralOut + withdrawnAmounts[indexAsset])
+    );
 
     // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
     investedAssetsUSD += collateralOut * assetPrice / 1e18;
@@ -289,7 +280,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // convert amounts to main asset and update base amounts
     (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
-    _afterWithdrawUpdateBaseAmounts(tokens, indexAsset, withdrawnAmounts, collateralOut, repaidAmounts);
+    _updateBaseAmounts(
+      tokens,
+      indexAsset,
+      withdrawnAmounts,
+      repaidAmounts,
+      int(collateralOut + withdrawnAmounts[indexAsset])
+    );
 
     // adjust _investedAssets
     _updateInvestedAssets();
@@ -297,29 +294,29 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Update base amounts after withdraw
   /// @param indexAsset_ Index of the main asset in {tokens_}
-  /// @param withdrawnAmounts_ Amounts received from the internal pool
-  /// @param collateral_ Collateral received after conversion {withdrawnAmounts_}/all amounts to the main asset
-  /// @param repaidAmounts_ Amounts spend during conversion of {withdrawnAmounts_}/all amounts to the main asset
-  function _afterWithdrawUpdateBaseAmounts(
+  /// @param receivedAmounts_ Received amounts of not main-asset
+  /// @param spentAmounts_ Spent amounts of not main-asset
+  /// @param assetAmount_ Spent (negative) or received (positive) amount of main asset
+  function _updateBaseAmounts(
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory withdrawnAmounts_,
-    uint collateral_,
-    uint[] memory repaidAmounts_
+    uint[] memory receivedAmounts_,
+    uint[] memory spentAmounts_,
+    int assetAmount_
   ) internal {
     uint len = tokens_.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset_) {
-        _increaseBaseAmount(
-          tokens_[indexAsset_],
-          collateral_ + withdrawnAmounts_[indexAsset_],
-          _balance(tokens_[indexAsset_])
-        );
-      } else {
-        if (withdrawnAmounts_[i] > repaidAmounts_[i]) {
-          _increaseBaseAmount(tokens_[i], withdrawnAmounts_[i] - repaidAmounts_[i], _balance(tokens_[i]));
+        if (assetAmount_ > 0) {
+          _increaseBaseAmount(tokens_[indexAsset_], uint(assetAmount_), _balance(tokens_[indexAsset_]));
         } else {
-          _decreaseBaseAmount(tokens_[i], repaidAmounts_[i] - withdrawnAmounts_[i]);
+          _decreaseBaseAmount(tokens_[indexAsset_], uint(- assetAmount_));
+        }
+      } else {
+        if (receivedAmounts_[i] > spentAmounts_[i]) {
+          _increaseBaseAmount(tokens_[i], receivedAmounts_[i] - spentAmounts_[i], _balance(tokens_[i]));
+        } else {
+          _decreaseBaseAmount(tokens_[i], spentAmounts_[i] - receivedAmounts_[i]);
         }
       }
     }
