@@ -59,12 +59,15 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
 
   function _updateBaseAmountsAccess(
     address[] memory tokens_,
-    uint indexAsset_,
     uint[] memory receivedAmounts_,
     uint[] memory spentAmounts_,
-    int assetAmount_
+    uint indexToExclude_
   ) external {
-    return _updateBaseAmounts(tokens_, indexAsset_, receivedAmounts_, spentAmounts_, assetAmount_);
+    return _updateBaseAmounts(tokens_, receivedAmounts_, spentAmounts_, indexToExclude_);
+  }
+
+  function _updateBaseAmountsForAssetAccesss(address asset_, uint amount_, bool increased_) external {
+    return _updateBaseAmountsForAsset(asset_, amount_, increased_);
   }
 
   function _convertAfterWithdrawAccess(
@@ -125,7 +128,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _handleRewards();
   }
 
-  function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual {
+  function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual returns(
+    uint[] memory receivedAmounts,
+    uint[] memory spentAmounts,
+    uint assetAmountOut
+  ) {
     return _recycle(tokens, amounts);
   }
 

@@ -16,9 +16,17 @@ import "./DepositorBase.sol";
 
 //!! import "hardhat/console.sol";
 
+/////////////////////////////////////////////////////////////////////
+///                        TERMS
+///  Main asset: the asset deposited to the vault by users
+///  Secondary assets: all assets deposited to the internal pool except the main asset
+///  Base amounts: not rewards; amounts deposited to vault, amounts deposited after compound
+///                Base amounts can be converter one to another
+/////////////////////////////////////////////////////////////////////
+
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
-/// @author bogdoslav
+/// @author bogdoslav, dvpublic
 abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV2 {
   using SafeERC20 for IERC20;
 
@@ -116,18 +124,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
 
       // adjust base-amounts
-      _updateBaseAmounts(
-        tokens,
-        indexAsset,
-        borrowedAmounts,
-        consumedAmounts,
-        -int(collateral)
-      );
+      _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset);
+      _updateBaseAmountsForAsset(tokens[indexAsset], collateral, false);
 
       // adjust _investedAssets
       _updateInvestedAssets();
     }
   }
+
+  /////////////////////////////////////////////////////////////////////
+  ///               Convert amounts before deposit
+  /////////////////////////////////////////////////////////////////////
 
   /// @notice Prepare {tokenAmounts} to be passed to depositorEnter
   /// @param amount_ The amount of main asset that should be invested
@@ -222,13 +229,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // convert amounts to main asset and update base amounts
       (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
-      _updateBaseAmounts(
-        tokens,
-        indexAsset,
-        withdrawnAmounts,
-        repaidAmounts,
-        int(collateralOut + withdrawnAmounts[indexAsset])
-      );
+      _updateBaseAmounts(tokens, withdrawnAmounts, repaidAmounts, indexAsset);
+      _updateBaseAmountsForAsset(tokens[indexAsset], collateralOut + withdrawnAmounts[indexAsset], true);
 
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
       investedAssetsUSD += collateralOut * assetPrice / 1e18;
@@ -256,13 +258,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // convert amounts to main asset and update base amounts
     (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
-    _updateBaseAmounts(
-      tokens,
-      indexAsset,
-      withdrawnAmounts,
-      repaidAmounts,
-      int(collateralOut + withdrawnAmounts[indexAsset])
-    );
+    _updateBaseAmounts(tokens, withdrawnAmounts, repaidAmounts, indexAsset);
+    _updateBaseAmountsForAsset(tokens[indexAsset], collateralOut + withdrawnAmounts[indexAsset], true);
 
     // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
     investedAssetsUSD += collateralOut * assetPrice / 1e18;
@@ -280,47 +277,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // convert amounts to main asset and update base amounts
     (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
-    _updateBaseAmounts(
-      tokens,
-      indexAsset,
-      withdrawnAmounts,
-      repaidAmounts,
-      int(collateralOut + withdrawnAmounts[indexAsset])
-    );
+    _updateBaseAmounts(tokens, withdrawnAmounts, repaidAmounts, indexAsset);
+    _updateBaseAmountsForAsset(tokens[indexAsset], collateralOut + withdrawnAmounts[indexAsset], true);
 
     // adjust _investedAssets
     _updateInvestedAssets();
   }
 
-  /// @notice Update base amounts after withdraw
-  /// @param indexAsset_ Index of the main asset in {tokens_}
-  /// @param receivedAmounts_ Received amounts of not main-asset
-  /// @param spentAmounts_ Spent amounts of not main-asset
-  /// @param assetAmount_ Spent (negative) or received (positive) amount of main asset
-  function _updateBaseAmounts(
-    address[] memory tokens_,
-    uint indexAsset_,
-    uint[] memory receivedAmounts_,
-    uint[] memory spentAmounts_,
-    int assetAmount_
-  ) internal {
-    uint len = tokens_.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset_) {
-        if (assetAmount_ > 0) {
-          _increaseBaseAmount(tokens_[indexAsset_], uint(assetAmount_), _balance(tokens_[indexAsset_]));
-        } else {
-          _decreaseBaseAmount(tokens_[indexAsset_], uint(- assetAmount_));
-        }
-      } else {
-        if (receivedAmounts_[i] > spentAmounts_[i]) {
-          _increaseBaseAmount(tokens_[i], receivedAmounts_[i] - spentAmounts_[i], _balance(tokens_[i]));
-        } else {
-          _decreaseBaseAmount(tokens_[i], spentAmounts_[i] - receivedAmounts_[i]);
-        }
-      }
-    }
-  }
+  /////////////////////////////////////////////////////////////////////
+  ///               Convert amounts after withdraw
+  /////////////////////////////////////////////////////////////////////
 
   /// @notice Convert all available amounts of {tokens_} to the main {asset}
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
@@ -402,6 +368,45 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /////////////////////////////////////////////////////////////////////
+  ///                 Update base amounts
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Update base amounts after withdraw
+  /// @param receivedAmounts_ Received amounts of not main-asset
+  /// @param spentAmounts_ Spent amounts of not main-asset
+  /// @param indexToExclude_ Index of the asset in {tokens_} that should be excluded from update
+  function _updateBaseAmounts(
+    address[] memory tokens_,
+    uint[] memory receivedAmounts_,
+    uint[] memory spentAmounts_,
+    uint indexToExclude_
+  ) internal {
+    uint len = tokens_.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexToExclude_) continue;
+
+      bool inc = receivedAmounts_[i] > spentAmounts_[i];
+      _updateBaseAmountsForAsset(
+        tokens_[i],
+        inc
+          ? receivedAmounts_[i] - spentAmounts_[i]
+          : spentAmounts_[i] - receivedAmounts_[i],
+        inc
+      );
+    }
+  }
+
+  function _updateBaseAmountsForAsset(address asset_, uint amount_, bool increased_) internal {
+    if (amount_ != 0) {
+      if (increased_) {
+        _increaseBaseAmount(asset_, amount_, _balance(asset_));
+      } else {
+        _decreaseBaseAmount(asset_, amount_);
+      }
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////
   ///                 Claim rewards
   /////////////////////////////////////////////////////////////////////
 
@@ -417,7 +422,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     );
 
     if (tokensOut.length > 0) {
-      _recycle(tokensOut, amountsOut);
+      (uint[] memory received, uint[] memory spent, uint assetAmountOut) = _recycle(tokensOut, amountsOut);
+      _updateBaseAmounts(tokensOut, received, spent, type(uint).max); // we don't need to exclude any asset here
+      _updateBaseAmountsForAsset(asset, assetAmountOut, true);
     }
   }
 
@@ -457,7 +464,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
   /// All forwarder-parts are just transferred to the forwarder.
-  function _recycle(address[] memory tokens, uint[] memory amounts) internal {
+  /// @param receivedAmounts Received amounts of the tokens
+  /// @param spentAmounts Spent amounts of the tokens
+  /// @param receivedAssetAmountOut Received amount of the main asset
+  function _recycle(address[] memory tokens, uint[] memory amounts) internal returns (
+    uint[] memory receivedAmounts,
+    uint[] memory spentAmounts,
+    uint receivedAssetAmountOut
+  ) {
     require(tokens.length == amounts.length, "SB: Arrays mismatch");
     address _asset = asset; // gas saving
     uint _compoundRatio = compoundRatio; // gas saving
@@ -466,6 +480,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint len = tokens.length;
     uint[] memory amountsToForward = new uint[](len);
     uint liquidationThreshold = liquidationThresholds[_asset];
+
+    receivedAmounts = new uint[](len);
+    spentAmounts = new uint[](len);
 
     // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
@@ -482,7 +499,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           // 1) The asset is in the list of depositor's assets.
           // 2) The asset is not in the list, but its amount is less then the threshold.
           // In both cases, a liquidation is forbidden, so we have just to account this amount in base amounts
-          _increaseBaseAmount(token, amountToCompound, _balance(token));
+          receivedAmounts[i] += amountToCompound;
         } else {
           // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
           // We assume here, that {token} cannot be equal to {_asset}
@@ -499,12 +516,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
           // Adjust amounts after liquidation
           if (receivedAmountOut > 0) {
-            _increaseBaseAmount(_asset, receivedAmountOut, _balance(_asset));
+            receivedAssetAmountOut += receivedAmountOut;
           }
           if (spentAmountIn > amountToCompound) {
-            _decreaseBaseAmount(token, spentAmountIn - amountToCompound);
+            spentAmounts[i] += spentAmountIn - amountToCompound;
           } else {
-            _increaseBaseAmount(token, amountToCompound - baseAmountIn, _balance(token));
+            receivedAmounts[i] += amountToCompound - baseAmountIn;
           }
         }
       }
@@ -515,6 +532,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
 
     forwarder.registerIncome(tokens, amountsToForward, ISplitter(splitter).vault(), true);
+    return (receivedAmounts, spentAmounts, receivedAssetAmountOut);
   }
 
   /////////////////////////////////////////////////////////////////////
