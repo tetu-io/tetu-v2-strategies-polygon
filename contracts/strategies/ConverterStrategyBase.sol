@@ -124,8 +124,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
 
       // adjust base-amounts
-      _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset);
-      _updateBaseAmountsForAsset(tokens[indexAsset], collateral, false);
+      _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
 
       // adjust _investedAssets
       _updateInvestedAssets();
@@ -228,12 +227,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
 
       // convert amounts to main asset and update base amounts
-      (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
-      _updateBaseAmounts(tokens, withdrawnAmounts, repaidAmounts, indexAsset);
-      _updateBaseAmountsForAsset(tokens[indexAsset], collateralOut + withdrawnAmounts[indexAsset], true);
+      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
+      _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral + withdrawnAmounts[indexAsset]));
 
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
-      investedAssetsUSD += collateralOut * assetPrice / 1e18;
+      investedAssetsUSD += collateral * assetPrice / 1e18;
 
       // adjust _investedAssets
       _updateInvestedAssets();
@@ -257,12 +255,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
 
     // convert amounts to main asset and update base amounts
-    (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
-    _updateBaseAmounts(tokens, withdrawnAmounts, repaidAmounts, indexAsset);
-    _updateBaseAmountsForAsset(tokens[indexAsset], collateralOut + withdrawnAmounts[indexAsset], true);
+    (uint collateral, uint[] memory repaid) = _convertAfterWithdrawAll(tokens, indexAsset);
+    _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral + withdrawnAmounts[indexAsset]));
 
     // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
-    investedAssetsUSD += collateralOut * assetPrice / 1e18;
+    investedAssetsUSD += collateral * assetPrice / 1e18;
 
     // adjust _investedAssets
     _updateInvestedAssets();
@@ -276,9 +273,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
     // convert amounts to main asset and update base amounts
-    (uint collateralOut, uint[] memory repaidAmounts) = _convertAfterWithdrawAll(tokens, indexAsset);
-    _updateBaseAmounts(tokens, withdrawnAmounts, repaidAmounts, indexAsset);
-    _updateBaseAmountsForAsset(tokens[indexAsset], collateralOut + withdrawnAmounts[indexAsset], true);
+    (uint collateral, uint[] memory repaid) = _convertAfterWithdrawAll(tokens, indexAsset);
+    _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral + withdrawnAmounts[indexAsset]));
 
     // adjust _investedAssets
     _updateInvestedAssets();
@@ -374,25 +370,34 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Update base amounts after withdraw
   /// @param receivedAmounts_ Received amounts of not main-asset
   /// @param spentAmounts_ Spent amounts of not main-asset
-  /// @param indexToExclude_ Index of the asset in {tokens_} that should be excluded from update
+  /// @param indexAsset_ Index of the asset in {tokens_} with different update logic (using {amountAsset_})
+  /// @param amountAsset_ Base amount of the asset with index indexAsset_ should be adjusted to {amountAsset_}
   function _updateBaseAmounts(
     address[] memory tokens_,
     uint[] memory receivedAmounts_,
     uint[] memory spentAmounts_,
-    uint indexToExclude_
+    uint indexAsset_,
+    int amountAsset_
   ) internal {
     uint len = tokens_.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexToExclude_) continue;
-
-      bool inc = receivedAmounts_[i] > spentAmounts_[i];
-      _updateBaseAmountsForAsset(
-        tokens_[i],
-        inc
-          ? receivedAmounts_[i] - spentAmounts_[i]
-          : spentAmounts_[i] - receivedAmounts_[i],
-        inc
-      );
+      if (i == indexAsset_) {
+        _updateBaseAmountsForAsset(
+          tokens_[indexAsset_],
+          amountAsset_ > 0
+            ? uint(amountAsset_)
+            : uint(-amountAsset_),
+            amountAsset_ > 0
+        );
+      } else {
+        _updateBaseAmountsForAsset(
+          tokens_[i],
+          receivedAmounts_[i] > spentAmounts_[i]
+            ? receivedAmounts_[i] - spentAmounts_[i]
+            : spentAmounts_[i] - receivedAmounts_[i],
+          receivedAmounts_[i] > spentAmounts_[i]
+        );
+      }
     }
   }
 
@@ -423,8 +428,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     if (tokensOut.length > 0) {
       (uint[] memory received, uint[] memory spent, uint assetAmountOut) = _recycle(tokensOut, amountsOut);
-      _updateBaseAmounts(tokensOut, received, spent, type(uint).max); // we don't need to exclude any asset here
-      _updateBaseAmountsForAsset(asset, assetAmountOut, true);
+      _updateBaseAmounts(tokensOut, received, spent, type(uint).max, 0); // we don't need to exclude any asset here
+      _updateBaseAmountsForAsset(asset, assetAmountOut, true); // tokensOut can not include main asset
     }
   }
 

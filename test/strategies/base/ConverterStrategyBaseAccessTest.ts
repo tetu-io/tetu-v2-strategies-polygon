@@ -278,15 +278,10 @@ describe("ConverterStrategyBaseAccessTest", () => {
         depositorTokens.map(x => x.address),
         borrowed,
         amountsConsumed,
-        indexAsset
+        indexAsset,
+        -collateral
       );
-      const gasUsed1 = (await tx.wait()).gasUsed;
-      const tx2 = await strategy._updateBaseAmountsForAssetAccesss(
-        depositorTokens[indexAsset].address,
-        collateral,
-        false
-      );
-      const gasUsed2 = (await tx2.wait()).gasUsed;
+      const gasUsed = (await tx.wait()).gasUsed;
 
       const resultBaseAmounts = await Promise.all(
         depositorTokens.map(
@@ -296,7 +291,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
       return {
         resultBaseAmounts,
-        gasUsed: gasUsed1.add(gasUsed2)
+        gasUsed
       }
     }
     describe("Good paths", () => {
@@ -438,14 +433,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
         withdrawnAmounts,
         repaidAmounts,
         indexAsset,
+        collateral.add(withdrawnAmounts[indexAsset])
       );
-      const gasUsed1 = (await tx.wait()).gasUsed;
-      const tx2 = await strategy._updateBaseAmountsForAssetAccesss(
-        depositorTokens[indexAsset].address,
-        collateral.add(withdrawnAmounts[indexAsset]),
-        true
-      );
-      const gasUsed2 = (await tx2.wait()).gasUsed;
+      const gasUsed = (await tx.wait()).gasUsed;
 
       const resultBaseAmounts = await Promise.all(
         depositorTokens.map(
@@ -455,7 +445,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
       return {
         resultBaseAmounts,
-        gasUsed: gasUsed1.add(gasUsed2)
+        gasUsed
       }
     }
     describe("Good paths", () => {

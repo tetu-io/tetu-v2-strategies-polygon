@@ -61,9 +61,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address[] memory tokens_,
     uint[] memory receivedAmounts_,
     uint[] memory spentAmounts_,
-    uint indexToExclude_
+    uint indexAsset_,
+    int amountAsset_
   ) external {
-    return _updateBaseAmounts(tokens_, receivedAmounts_, spentAmounts_, indexToExclude_);
+    return _updateBaseAmounts(tokens_, receivedAmounts_, spentAmounts_, indexAsset_, amountAsset_);
   }
 
   function _updateBaseAmountsForAssetAccesss(address asset_, uint amount_, bool increased_) external {
