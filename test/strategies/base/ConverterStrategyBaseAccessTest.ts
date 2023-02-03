@@ -1781,5 +1781,68 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
     });
   });
+
+  describe("_doHardWork", () => {
+    describe("Good paths", () => {
+      it("should return expected values, positive reinvest", async () => {
+        const assetProvider = ethers.Wallet.createRandom();
+        await usdc.mint(assetProvider.address, parseUnits("1000", 6));
+        await usdc.connect(await Misc.impersonate(assetProvider.address)).approve(strategy.address, Misc.MAX_UINT);
+
+        await strategy.setMockedDepositToPool(
+          parseUnits("8", 6),
+          assetProvider.address
+        );
+
+        await strategy.setMockedHandleRewardsResults(
+          parseUnits("7", 6),
+          parseUnits("14", 6),
+          parseUnits("17", 6),
+          assetProvider.address
+        );
+
+        const r = await strategy.callStatic._doHardWorkAccess(true);
+        const ret = [
+          r.earned.toString(),
+          r.lost.toString()
+        ].join();
+        const expected = [
+          parseUnits("15", 6).toString(),
+          parseUnits("14", 6).toString() // 14 + 8
+        ].join();
+
+        expect(ret).eq(expected);
+      });
+      it("should return expected values, negative reinvest", async () => {
+        const assetProvider = ethers.Wallet.createRandom();
+        await usdc.mint(assetProvider.address, parseUnits("1000", 6));
+        await usdc.connect(await Misc.impersonate(assetProvider.address)).approve(strategy.address, Misc.MAX_UINT);
+
+        await strategy.setMockedDepositToPool(
+          parseUnits("-8", 6),
+          assetProvider.address
+        );
+
+        await strategy.setMockedHandleRewardsResults(
+          parseUnits("7", 6),
+          parseUnits("14", 6),
+          parseUnits("17", 6),
+          assetProvider.address
+        );
+
+        const r = await strategy.callStatic._doHardWorkAccess(true);
+        const ret = [
+          r.earned.toString(),
+          r.lost.toString()
+        ].join();
+        const expected = [
+          parseUnits("7", 6).toString(),
+          parseUnits("22", 6).toString() // 14 + 8
+        ].join();
+
+        expect(ret).eq(expected);
+      });
+    });
+  });
 //endregion Unit tests
 });

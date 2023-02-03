@@ -125,9 +125,95 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _doHardWork(reInvest);
   }
 
+  /////////////////////////////////////////////////////////////////////////////////////
+  /// _handleRewards, mocked version + accessor
+  /////////////////////////////////////////////////////////////////////////////////////
+
+  function _handleRewards() internal override returns (uint earned, uint lost) {
+    if (handleRewardsParams.initialized) {
+      console.log("_handleRewards.mocked-version is called");
+      if (handleRewardsParams.assetBalanceChange > 0) {
+        IERC20(asset).transferFrom(
+          handleRewardsParams.providerBalanceChange,
+          address(this),
+          uint(handleRewardsParams.assetBalanceChange)
+        );
+      } else if (handleRewardsParams.assetBalanceChange < 0) {
+        IERC20(asset).transfer(
+          handleRewardsParams.providerBalanceChange,
+          uint(-handleRewardsParams.assetBalanceChange)
+        );
+      }
+      return (handleRewardsParams.earned, handleRewardsParams.lost);
+    } else {
+      return super._handleRewards();
+    }
+  }
   function _handleRewardsAccess() external virtual returns (uint earned, uint lost) {
     return _handleRewards();
   }
+
+  struct MockedHandleRewardsParams {
+    bool initialized;
+    uint earned;
+    uint lost;
+    int assetBalanceChange;
+    address providerBalanceChange;
+  }
+  MockedHandleRewardsParams private handleRewardsParams;
+  function setMockedHandleRewardsResults(
+    uint earned,
+    uint lost,
+    int assetBalanceChange,
+    address providerBalanceChange
+  ) external {
+    handleRewardsParams =  MockedHandleRewardsParams({
+      initialized: true,
+      earned: earned,
+      lost: lost,
+      assetBalanceChange: assetBalanceChange,
+      providerBalanceChange: providerBalanceChange
+    });
+  }
+
+  /////////////////////////////////////////////////////////////////////////////////////
+  /// _depositToPool mock
+  /////////////////////////////////////////////////////////////////////////////////////
+  struct MockedDepositToPoolParams {
+    bool initialized;
+    int balanceChange;
+    address providerBalanceChange;
+  }
+  MockedDepositToPoolParams public depositToPoolParams;
+  function _depositToPool(uint amount_) override internal virtual {
+    if (depositToPoolParams.initialized) {
+      console.log("_depositToPool.mocked-version is called");
+      if (depositToPoolParams.balanceChange > 0) {
+        IERC20(asset).transferFrom(
+          depositToPoolParams.providerBalanceChange,
+          address(this),
+          uint(depositToPoolParams.balanceChange)
+        );
+      } else if (depositToPoolParams.balanceChange < 0) {
+        IERC20(asset).transfer(
+          depositToPoolParams.providerBalanceChange,
+          uint(-depositToPoolParams.balanceChange)
+        );
+      }
+    } else {
+      super._depositToPool(amount_);
+    }
+  }
+  function setMockedDepositToPool(int balanceChange, address providerBalanceChange) external {
+    depositToPoolParams = MockedDepositToPoolParams({
+      initialized: true,
+      balanceChange: balanceChange,
+      providerBalanceChange: providerBalanceChange
+    });
+  }
+  /////////////////////////////////////////////////////////////////////////////////////
+  /// Others
+  /////////////////////////////////////////////////////////////////////////////////////
 
   function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual returns(
     uint[] memory receivedAmounts,

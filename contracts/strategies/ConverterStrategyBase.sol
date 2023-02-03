@@ -56,7 +56,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
 
-  uint private constant REINVEST_THRESHOLD_PERCENT_DENOMINATOR = 100_000;
+  uint private constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
 
   /////////////////////////////////////////////////////////////////////
   //                        VARIABLES
@@ -106,7 +106,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function setReinvestThresholdPercent(uint percent_) external {
     //!! console.log("setReinvestThresholdPercent", percent_, REINVEST_THRESHOLD_PERCENT_DENOMINATOR);
     _onlyOperators();
-    require(percent_ <= REINVEST_THRESHOLD_PERCENT_DENOMINATOR, AppErrors.WRONG_VALUE);
+    require(percent_ <= REINVEST_THRESHOLD_DENOMINATOR, AppErrors.WRONG_VALUE);
 
     reinvestThresholdPercent = percent_;
     emit ReinvestThresholdPercentChanged(percent_);
@@ -124,7 +124,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount_) override internal virtual {
     // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR) {
+    if (amount_ > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
@@ -601,24 +601,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
     _preHardWork(reInvest);
+
     (earned, lost) = _handleRewards();
     uint assetBalance = _balance(asset);
 
     // re-invest income
-    if (reInvest
-      && assetBalance > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_PERCENT_DENOMINATOR
-    ) {
-      uint investedBefore = _investedAssets;
+    if (reInvest && assetBalance > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+
+      uint assetInUseBefore = _investedAssets + assetBalance;
       _depositToPool(assetBalance);
-      uint investedAfter = _investedAssets;
-      uint assetBalanceAfterDeposit = _balance(asset);
+      uint assetInUseAfter = _investedAssets + _balance(asset);
 
-      int delta = (int(assetBalanceAfterDeposit) + int(investedAfter)) - (int(assetBalance) + int(investedBefore));
-
-      if (delta > 0) {
-        earned += uint(delta);
+      if (assetInUseAfter > assetInUseBefore) {
+        earned += assetInUseAfter - assetInUseBefore;
       } else {
-        lost -= uint(-delta);
+        lost += assetInUseBefore - assetInUseAfter;
       }
     }
 
