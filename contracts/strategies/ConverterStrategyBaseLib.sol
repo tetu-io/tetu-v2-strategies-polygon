@@ -209,6 +209,8 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
+  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
+  /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
   function liquidate(
     ITetuLiquidator liquidator_,
     address tokenIn_,

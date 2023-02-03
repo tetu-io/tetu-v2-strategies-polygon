@@ -7,11 +7,12 @@ contract MockForwarder is IForwarder {
   address[] private lastRegisterIncomeTokens;
   uint[] private lastRegisterIncomeAmounts;
 
-  function tokenPerDestinationLength(address destination) external view returns (uint) {
+  function tokenPerDestinationLength(address destination) external pure returns (uint) {
+    destination;
     return 0;
   }
 
-  function tokenPerDestinationAt(address destination, uint i) external view returns (address) {
+  function tokenPerDestinationAt(address destination, uint i) external pure returns (address) {
     destination;
     i;
 
@@ -53,7 +54,7 @@ contract MockForwarder is IForwarder {
     value;
   }
 
-  function supportsInterface(bytes4) public view returns (bool) {
+  function supportsInterface(bytes4) public pure returns (bool) {
     return true;
   }
 }

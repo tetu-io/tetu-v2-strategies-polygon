@@ -31,6 +31,22 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   using SafeERC20 for IERC20;
 
   /////////////////////////////////////////////////////////////////////
+  ///                        DATA TYPES
+  /////////////////////////////////////////////////////////////////////
+  /// @notice Local vars for {_recycle}, workaround for stack too deep
+  struct RecycleLocalParams {
+    address asset;
+    uint compoundRatio;
+    IForwarder forwarder;
+    uint[] amountsToForward;
+    uint liquidationThreshold;
+    uint amountToCompound;
+    uint amountToForward;
+    address rewardToken;
+    address[] tokens;
+  }
+
+  /////////////////////////////////////////////////////////////////////
   ///                        CONSTANTS
   /////////////////////////////////////////////////////////////////////
 
@@ -415,24 +431,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                 Claim rewards
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Claim all possible rewards.
-  function _claim() override internal virtual {
-    // get rewards from the Depositor
-    (address[] memory rewardTokens, uint[] memory amounts) = _depositorClaimRewards();
-
-    (address[] memory tokensOut, uint[] memory amountsOut) = _prepareRewardsList(
-      tetuConverter,
-      rewardTokens,
-      amounts
-    );
-
-    if (tokensOut.length > 0) {
-      (uint[] memory received, uint[] memory spent, uint assetAmountOut) = _recycle(tokensOut, amountsOut);
-      _updateBaseAmounts(tokensOut, received, spent, type(uint).max, 0); // we don't need to exclude any asset here
-      _updateBaseAmountsForAsset(asset, assetAmountOut, true); // tokensOut can not include main asset
-    }
-  }
-
   /// @notice Claim rewards from tetuConverter, generate result list of all available rewards
   /// @dev The post-processing is rewards conversion to the main asset
   /// @param tokens_ List of rewards claimed from the internal pool
@@ -460,6 +458,24 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
   }
 
+  /// @notice Claim all possible rewards.
+  function _claim() override internal virtual {
+    // get rewards from the Depositor
+    (address[] memory rewardTokens, uint[] memory amounts) = _depositorClaimRewards();
+
+    (address[] memory tokensOut, uint[] memory amountsOut) = _prepareRewardsList(
+      tetuConverter,
+      rewardTokens,
+      amounts
+    );
+
+    if (tokensOut.length > 0) {
+      (uint[] memory received, uint[] memory spent, uint assetAmountOut) = _recycle(tokensOut, amountsOut);
+      _updateBaseAmounts(tokensOut, received, spent, type(uint).max, 0); // we don't need to exclude any asset here
+      _updateBaseAmountsForAsset(asset, assetAmountOut, true); // tokensOut can not include main asset
+    }
+  }
+
   /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
   /// We have two kinds of rewards:
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
@@ -472,71 +488,76 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param receivedAmounts Received amounts of the tokens
   /// @param spentAmounts Spent amounts of the tokens
   /// @param receivedAssetAmountOut Received amount of the main asset
-  function _recycle(address[] memory tokens, uint[] memory amounts) internal returns (
+  function _recycle(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal returns (
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
     uint receivedAssetAmountOut
   ) {
-    require(tokens.length == amounts.length, "SB: Arrays mismatch");
-    address _asset = asset; // gas saving
-    uint _compoundRatio = compoundRatio; // gas saving
-    IForwarder forwarder = IForwarder(IController(controller()).forwarder());
+    RecycleLocalParams memory p;
 
-    uint len = tokens.length;
-    uint[] memory amountsToForward = new uint[](len);
-    uint liquidationThreshold = liquidationThresholds[_asset];
+    console.log("_recycle");
+    require(rewardTokens_.length == rewardAmounts_.length, "SB: Arrays mismatch");
+    p.asset = asset; // gas saving
+    p.compoundRatio = compoundRatio; // gas saving
+    p.forwarder = IForwarder(IController(controller()).forwarder());
+    p.tokens = _depositorPoolAssets();
+
+    uint len = rewardTokens_.length;
+    p.amountsToForward = new uint[](len);
+    p.liquidationThreshold = liquidationThresholds[p.asset];
 
     receivedAmounts = new uint[](len);
     spentAmounts = new uint[](len);
 
     // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      address token = tokens[i];
+      p.rewardToken = rewardTokens_[i];
+      p.amountToCompound = rewardAmounts_[i] * p.compoundRatio / COMPOUND_DENOMINATOR;
 
-      uint amountToCompound = amounts[i] * _compoundRatio / COMPOUND_DENOMINATOR;
-
-      if (amountToCompound > 0) {
-        if (
-          ConverterStrategyBaseLib.getAssetIndex(tokens, token) != type(uint).max
-          || amounts[i] < liquidationThresholds[token]
-        ) {
-          // Two possible cases here:
-          // 1) The asset is in the list of depositor's assets.
-          // 2) The asset is not in the list, but its amount is less then the threshold.
-          // In both cases, a liquidation is forbidden, so we have just to account this amount in base amounts
-          receivedAmounts[i] += amountToCompound;
+      if (p.amountToCompound > 0) {
+        if (ConverterStrategyBaseLib.getAssetIndex(p.tokens, p.rewardToken) != type(uint).max) {
+          // The asset is in the list of depositor's assets, liquidation is not allowed
+          receivedAmounts[i] += p.amountToCompound;
         } else {
-          // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
-          // We assume here, that {token} cannot be equal to {_asset}
-          // because the {_asset} is always included to the list of depositor's assets
-          uint baseAmountIn = baseAmounts[token];
-          (uint spentAmountIn, uint receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
-            ITetuLiquidator(IController(controller()).liquidator()),
-            token,
-            _asset,
-            amountToCompound,
-            _REWARD_LIQUIDATION_SLIPPAGE,
-            liquidationThreshold
-          );
+          uint baseAmountIn = baseAmounts[p.rewardToken];
+          uint totalRewardAmounts = p.amountToCompound + baseAmountIn; // total amount that can be liquidated
 
-          // Adjust amounts after liquidation
-          if (receivedAmountOut > 0) {
-            receivedAssetAmountOut += receivedAmountOut;
-          }
-          if (spentAmountIn > amountToCompound) {
-            spentAmounts[i] += spentAmountIn - amountToCompound;
+          if (totalRewardAmounts < liquidationThresholds[p.rewardToken]) {
+            // amount is too small, liquidation is not allowed
+            receivedAmounts[i] += p.amountToCompound;
           } else {
-            receivedAmounts[i] += amountToCompound - baseAmountIn;
+            // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
+            // We assume here, that {token} cannot be equal to {_asset}
+            // because the {_asset} is always included to the list of depositor's assets
+            (uint spentAmountIn, uint receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
+              ITetuLiquidator(IController(controller()).liquidator()),
+              p.rewardToken,
+              p.asset,
+              totalRewardAmounts,
+              _REWARD_LIQUIDATION_SLIPPAGE,
+              p.liquidationThreshold
+            );
+
+            // Adjust amounts after liquidation
+            if (receivedAmountOut > 0) {
+              receivedAssetAmountOut += receivedAmountOut;
+            }
+            if (spentAmountIn == 0) {
+              receivedAmounts[i] += p.amountToCompound;
+            } else {
+              require(spentAmountIn == p.amountToCompound + baseAmountIn, AppErrors.WRONG_VALUE);
+              spentAmounts[i] += baseAmountIn;
+            }
           }
         }
       }
 
-      uint amountToForward = amounts[i] - amountToCompound;
-      amountsToForward[i] = amountToForward;
-      AppLib.approveIfNeeded(token, amountToForward, address(forwarder));
+      p.amountToForward = rewardAmounts_[i] - p.amountToCompound;
+      p.amountsToForward[i] = p.amountToForward;
+      AppLib.approveIfNeeded(p.rewardToken, p.amountToForward, address(p.forwarder));
     }
 
-    forwarder.registerIncome(tokens, amountsToForward, ISplitter(splitter).vault(), true);
+    p.forwarder.registerIncome(rewardTokens_, p.amountsToForward, ISplitter(splitter).vault(), true);
     return (receivedAmounts, spentAmounts, receivedAssetAmountOut);
   }
 
