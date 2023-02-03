@@ -38,19 +38,19 @@ contract MockForwarder is IForwarder {
     return (lastRegisterIncomeTokens, lastRegisterIncomeAmounts);
   }
 
-  function distributeAll(address destination) external {
+  function distributeAll(address destination) external pure {
     destination;
   }
 
-  function distribute(address token) external {
+  function distribute(address token) external pure {
     token;
   }
 
-  function setInvestFundRatio(uint value) external {
+  function setInvestFundRatio(uint value) external pure {
     value;
   }
 
-  function setGaugesRatio(uint value) external {
+  function setGaugesRatio(uint value) external pure {
     value;
   }
 

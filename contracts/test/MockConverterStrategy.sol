@@ -218,7 +218,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual returns(
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
-    uint receivedAssetAmountOut
+    uint[] memory amountsToForward
   ) {
     return _recycle(tokens, amounts);
   }

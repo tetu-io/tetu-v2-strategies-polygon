@@ -1429,7 +1429,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         forwarderTokens: retForwarder.tokens,
         spentAmounts: r.spentAmounts,
         receivedAmounts: r.receivedAmounts,
-        receivedAssetAmountOut: r.receivedAssetAmountOut
+        receivedAssetAmountOut: BigNumber.from(0) // TODO r.receivedAssetAmountOut
       }
     }
     describe("Good paths", () => {
@@ -1485,6 +1485,11 @@ describe("ConverterStrategyBaseAccessTest", () => {
           );
         }
         it("should receive expected values", async () => {
+          console.log("bal", bal.address);
+          console.log("dai", dai.address);
+          console.log("tetu", tetu.address);
+          console.log("usdc", usdc.address);
+          console.log("weth", weth.address);
           const ret = [
             results.receivedAmounts.map(x => BalanceUtils.toString(x)).join(),
             results.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
@@ -1547,9 +1552,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
             expect(ret).eq(expected);
           });
-          it("should not call liquidation", async () => {
 
-          });
         });
       });
       describe("Reward token is not in the list of depositor's assets", () => {

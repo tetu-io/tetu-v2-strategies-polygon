@@ -97,7 +97,7 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function getAssetIndex(address[] memory tokens_, address asset_) external view returns (uint) {
+  function getAssetIndex(address[] memory tokens_, address asset_) external pure returns (uint) {
     return ConverterStrategyBaseLib.getAssetIndex(tokens_, asset_);
   }
 }

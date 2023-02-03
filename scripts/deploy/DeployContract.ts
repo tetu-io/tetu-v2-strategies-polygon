@@ -13,6 +13,8 @@ const libraries = new Map<string, string>([
   ['VeTetu', 'VeTetuLogo'],
   ['BalancerComposableStableDepositorFacade', 'BalancerLogicLib'],
   ['BalancerComposableStableStrategy', 'BalancerLogicLib'],
+  ['BalancerComposableStableStrategy', 'ConverterStrategyBaseLib'],
+  ['MockConverterStrategy', 'ConverterStrategyBaseLib'],
 ]);
 
 export async function deployContract<T extends ContractFactory>(

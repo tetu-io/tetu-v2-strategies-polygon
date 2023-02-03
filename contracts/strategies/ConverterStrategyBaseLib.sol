@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
@@ -16,8 +17,44 @@ import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
-  // approx one month for average block time 2 sec
+
+  /////////////////////////////////////////////////////////////////////
+  ///                        DATA TYPES
+  /////////////////////////////////////////////////////////////////////
+  /// @notice Local vars for {_recycle}, workaround for stack too deep
+  struct RecycleLocalParams {
+    uint amountToCompound;
+    uint amountToForward;
+    address rewardToken;
+    uint liquidationThresholdAsset;
+    uint len;
+    uint baseAmountIn;
+    uint totalRewardAmounts;
+  }
+
+  struct RecycleInputParams {
+    address asset;
+    uint compoundRatio;
+    address[] tokens;
+    ITetuLiquidator liquidator;
+    uint[] liquidationThresholds;
+    uint[] baseAmounts;
+    address[] rewardTokens;
+    uint[] rewardAmounts;
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                        Constants
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice approx one month for average block time 2 sec
   uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
+  uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
+  uint private constant COMPOUND_DENOMINATOR = 100_000;
+
+  /////////////////////////////////////////////////////////////////////
+  ///                        Functions
+  /////////////////////////////////////////////////////////////////////
 
   /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset_}
   ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
@@ -38,7 +75,7 @@ library ConverterStrategyBaseLib {
     uint liquidityAmount_,
     uint totalSupply_,
     IPriceOracle priceOracle_
-  ) internal view returns (
+  ) external view returns (
     uint investedAssetsUSD,
     uint assetPrice
   ) {
@@ -80,16 +117,9 @@ library ConverterStrategyBaseLib {
     uint totalWeight_,
     uint indexAsset_,
     IPriceOracle priceOracle
-  ) internal view returns (
+  ) external view returns (
     uint[] memory tokenAmountsOut
   ) {
-    console.log("getCollaterals.1");
-    console.log("priceOracle", address(priceOracle));
-    console.log("amount_", amount_);
-    console.log("totalWeight_", totalWeight_);
-    console.log("indexAsset_", indexAsset_);
-    console.log("tokens_", tokens_[0], tokens_[1], tokens_[2]);
-    console.log("weights_", weights_[0], weights_[1], weights_[2]);
     uint len = tokens_.length;
     tokenAmountsOut = new uint[](len);
 
@@ -123,8 +153,6 @@ library ConverterStrategyBaseLib {
         }
       }
     }
-
-    console.log("getCollaterals.end");
   }
 
   /// @notice Borrow max available amount of {borrowAsset} using {collateralAmount} of {collateralAsset} as collateral
@@ -134,8 +162,6 @@ library ConverterStrategyBaseLib {
     uint collateralAmount_,
     address borrowAsset_
   ) internal returns (uint borrowedAmountOut) {
-    //!! console.log('_borrowPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
-
     AppLib.approveIfNeeded(collateralAsset_, collateralAmount_, address(tetuConverter_));
     (address converter, uint maxTargetAmount, /*int apr18*/) = tetuConverter_.findBorrowStrategy(
       collateralAsset_,
@@ -143,7 +169,6 @@ library ConverterStrategyBaseLib {
       borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
-    //!! console.log('converter, maxTargetAmount', converter, maxTargetAmount);
 
     if (converter == address(0) || maxTargetAmount == 0) {
       borrowedAmountOut = 0;
@@ -268,7 +293,7 @@ library ConverterStrategyBaseLib {
   function getAvailableAmountsToConvert(
     address[] memory tokens_,
     uint indexAsset
-  ) internal view returns (uint[] memory) {
+  ) external view returns (uint[] memory) {
     uint len = tokens_.length;
     uint[] memory amountsToConvert = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
@@ -277,4 +302,123 @@ library ConverterStrategyBaseLib {
     }
     return amountsToConvert;
   }
+
+  /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
+  /// We have two kinds of rewards:
+  /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
+  /// 2) any other rewards
+  /// All received rewards are immediately "recycled".
+  /// It means, they are divided on two parts: to forwarder, to compound
+  ///   Compound-part of Rewards-2 can be liquidated
+  ///   Compound part of Rewards-1 should be just added to baseAmounts
+  /// All forwarder-parts are just transferred to the forwarder.
+  /// @param tokens_ tokens received from _depositorPoolAssets
+  /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
+  ///         This array has +1 item at the end: liquidation threshold for the main asset
+  ///                                            there is no possibility to use special var for it, stack too deep
+  /// @return receivedAmounts Received amounts of the tokens
+  ///         This array has +1 item at the end: received amount of the main asset
+  ///                                            there is no possibility to use special var for it, stack too deep
+  /// @return spentAmounts Spent amounts of the tokens
+  /// @return amountsToForward Amounts to be sent to forwarder
+  function recycle(
+    address asset_,
+    uint compoundRatio_,
+    address[] memory tokens_,
+    ITetuLiquidator liquidator_,
+    uint[] memory liquidationThresholds_,
+    uint[] memory baseAmounts_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
+  ) external returns (
+    uint[] memory receivedAmounts,
+    uint[] memory spentAmounts,
+    uint[] memory amountsToForward
+  ) {
+    RecycleInputParams memory p = RecycleInputParams({
+      asset: asset_,
+      compoundRatio: compoundRatio_,
+      tokens: tokens_,
+      liquidator: liquidator_,
+      liquidationThresholds: liquidationThresholds_,
+      baseAmounts: baseAmounts_,
+      rewardTokens: rewardTokens_,
+      rewardAmounts: rewardAmounts_
+    });
+    (receivedAmounts, spentAmounts, amountsToForward) = _recycle(p);
+  }
+
+  function _recycle(RecycleInputParams memory params) internal returns (
+    uint[] memory receivedAmounts,
+    uint[] memory spentAmounts,
+    uint[] memory amountsToForward
+  ) {
+    RecycleLocalParams memory p;
+
+    require(params.rewardTokens.length == params.rewardAmounts.length, "SB: Arrays mismatch");
+
+    p.len = params.rewardTokens.length;
+    p.liquidationThresholdAsset = params.liquidationThresholds[p.len];
+
+    amountsToForward = new uint[](p.len);
+    receivedAmounts = new uint[](p.len + 1);
+    spentAmounts = new uint[](p.len);
+
+    // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
+    for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
+      p.rewardToken = params.rewardTokens[i];
+      p.amountToCompound = params.rewardAmounts[i] * params.compoundRatio / COMPOUND_DENOMINATOR;
+
+      if (p.amountToCompound > 0) {
+        if (ConverterStrategyBaseLib.getAssetIndex(params.tokens, p.rewardToken) != type(uint).max) {
+          // The asset is in the list of depositor's assets, liquidation is not allowed
+          receivedAmounts[i] += p.amountToCompound;
+        } else {
+          p.baseAmountIn = params.baseAmounts[i];
+          p.totalRewardAmounts = p.amountToCompound + p.baseAmountIn; // total amount that can be liquidated
+
+          console.log("totalRewardAmounts", p.totalRewardAmounts);
+          console.log("p.rewardToken", p.rewardToken);
+          console.log("params.asset", params.asset);
+          console.log("params.liquidationThresholds[i]", params.liquidationThresholds[i]);
+          console.log("p.liquidationThresholdAsset", p.liquidationThresholdAsset);
+          if (p.totalRewardAmounts < params.liquidationThresholds[i]) {
+            // amount is too small, liquidation is not allowed
+            receivedAmounts[i] += p.amountToCompound;
+          } else {
+
+            // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
+            // We assume here, that {token} cannot be equal to {_asset}
+            // because the {_asset} is always included to the list of depositor's assets
+            (uint spentAmountIn, uint receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
+              params.liquidator,
+              p.rewardToken,
+              params.asset,
+              p.totalRewardAmounts,
+              _REWARD_LIQUIDATION_SLIPPAGE,
+              p.liquidationThresholdAsset
+            );
+
+            // Adjust amounts after liquidation
+            if (receivedAmountOut > 0) {
+              receivedAmounts[p.len] += receivedAmountOut;
+            }
+            if (spentAmountIn == 0) {
+              receivedAmounts[i] += p.amountToCompound;
+            } else {
+              require(spentAmountIn == p.amountToCompound + p.baseAmountIn, AppErrors.WRONG_VALUE);
+              spentAmounts[i] += p.baseAmountIn;
+            }
+          }
+        }
+      }
+
+      p.amountToForward = params.rewardAmounts[i] - p.amountToCompound;
+      amountsToForward[i] = p.amountToForward;
+    }
+
+    return (receivedAmounts, spentAmounts, amountsToForward);
+  }
+
+
 }
