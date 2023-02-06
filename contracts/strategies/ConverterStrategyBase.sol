@@ -220,7 +220,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function _withdrawUniversal(uint amount, bool all) internal returns (uint investedAssetsUSD, uint assetPrice) {
-    console.log("_withdrawUniversal.1", all, _investedAssets);
+    console.log("_withdrawUniversal.1", all, _investedAssets, amount);
     uint liquidityAmount = all
       ? _depositorLiquidity()  // total amount of LP-tokens deposited by the strategy
       : amount == 0 || _investedAssets == 0
@@ -234,6 +234,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
+      console.log("liquidityAmount, _depositorTotalSupply", liquidityAmount, _depositorTotalSupply());
       (investedAssetsUSD, assetPrice) = ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
         tokens,
         _depositorPoolReserves(),
@@ -244,6 +245,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       );
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
       console.log("withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
+      console.log("investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
 
       // convert amounts to main asset and update base amounts
       (uint collateral, uint[] memory repaid) = all

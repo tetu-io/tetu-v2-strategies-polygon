@@ -2360,6 +2360,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
       investedAssetsUSD: BigNumber;
       assetPrice: BigNumber;
+
+      investedAssetsValueBefore: BigNumber;
+      investedAssetsValueAfter: BigNumber;
     }
     async function setupInvestedAssets(
       liquidityAmount: BigNumber,
@@ -2477,6 +2480,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         withdrawnAmounts
       );
 
+      const investedAssetsValueBefore = await strategy.investedAssets();
       const r: {investedAssetsUSD: BigNumber, assetPrice: BigNumber} = params?.emergency
         ? {investedAssetsUSD: BigNumber.from(0), assetPrice: BigNumber.from(0)}
         : amount
@@ -2503,7 +2507,10 @@ describe("ConverterStrategyBaseAccessTest", () => {
         baseAmounts,
 
         assetPrice: r.assetPrice,
-        investedAssetsUSD: r.investedAssetsUSD
+        investedAssetsUSD: r.investedAssetsUSD,
+
+        investedAssetsValueBefore,
+        investedAssetsValueAfter: await strategy.investedAssets()
       }
     }
     describe("Good paths", () => {
@@ -2513,19 +2520,19 @@ describe("ConverterStrategyBaseAccessTest", () => {
         before(async function () {
           snapshotLocal = await TimeUtils.snapshot();
           results = await makeWithdrawTest(
-            parseUnits("6", 18), // total liquidity of the user
+            parseUnits("6", 6), // total liquidity of the user
             [
-              parseUnits("100", 18), // dai
-              parseUnits("200", 6), // usdc
-              parseUnits("150", 6), // usdt
+              parseUnits("1000", 18), // dai
+              parseUnits("2000", 6), // usdc
+              parseUnits("3000", 6), // usdt
             ],
-            parseUnits("6000", 18), // total supply
+            parseUnits("6000", 6), // total supply
             [
               parseUnits("980", 18),
               parseUnits("950", 6),
               parseUnits("930", 6),
             ],
-            parseUnits("3", 18), // amount to withdraw
+            parseUnits("3", 6), // amount to withdraw
             {
               investedAssets: parseUnits("6", 6), // total invested amount
               baseAmounts: [
@@ -2584,6 +2591,21 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
           expect(ret).eq(expected);
         });
+        it("should return expected investedAssetsUSD", async () => {
+          const ret = [
+            results.investedAssetsUSD,
+            results.assetPrice
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = [
+            parseUnits("3913.03", 6), // (((1000 + 2000 + 3000) * 3/6 * 6/6000) * 101/100  + (1980 + 1930))
+            parseUnits("1", 18) // for simplicity, all prices are equal to 1
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should call _updateInvestedAssets", async () => {
+          expect(results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)).eq(false);
+        });
         it("Gas estimation @skip-on-coverage", async () => {
           controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, (u, t) => {
             expect(u).to.be.below(t + 1);
@@ -2596,13 +2618,13 @@ describe("ConverterStrategyBaseAccessTest", () => {
         before(async function () {
           snapshotLocal = await TimeUtils.snapshot();
           results = await makeWithdrawTest(
-            parseUnits("6", 18), // total liquidity of the user
+            parseUnits("6", 6), // total liquidity of the user
             [
-              parseUnits("100", 18), // dai
-              parseUnits("200", 6), // usdc
-              parseUnits("150", 6), // usdt
+              parseUnits("1000", 18), // dai
+              parseUnits("2000", 6), // usdc
+              parseUnits("3000", 6), // usdt
             ],
-            parseUnits("6000", 18), // total supply
+            parseUnits("6000", 6), // total supply
             [
               parseUnits("980", 18),
               parseUnits("950", 6),
@@ -2666,6 +2688,21 @@ describe("ConverterStrategyBaseAccessTest", () => {
           const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
 
           expect(ret).eq(expected);
+        });
+        it("should return expected investedAssetsUSD", async () => {
+          const ret = [
+            results.investedAssetsUSD,
+            results.assetPrice
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = [
+            parseUnits("3916", 6), // (((1000 + 2000 + 3000) * 6/6 * 6/6000) + (1980 + 1930))
+            parseUnits("1", 18) // for simplicity, all prices are equal to 1
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should call _updateInvestedAssets", async () => {
+          expect(results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)).eq(false);
         });
         it("Gas estimation @skip-on-coverage", async () => {
           controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_ALL, (u, t) => {
@@ -2750,6 +2787,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
           const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
 
           expect(ret).eq(expected);
+        });
+        it("should call _updateInvestedAssets", async () => {
+          expect(results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)).eq(false);
         });
         it("Gas estimation @skip-on-coverage", async () => {
           controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_EMERGENCY, (u, t) => {
