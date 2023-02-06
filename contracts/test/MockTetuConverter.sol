@@ -368,7 +368,8 @@ contract MockTetuConverter is ITetuConverter {
     uint amountToRepay;
     uint collateralAmountOut;
   }
-  QuoteRepayParams public quoteRepayParams;
+  /// @notice keccak256(collateralAsset_, borrowAsset_, amountToRepay_) => results
+  mapping(bytes32 => QuoteRepayParams) public quoteRepayParams;
 
   function quoteRepay(
     address user_,
@@ -379,23 +380,13 @@ contract MockTetuConverter is ITetuConverter {
     uint collateralAmountOut
   ) {
     console.log("MockTetuConverterSingleCall.quoteRepay collateral,borrow,amount", collateralAsset_, borrowAsset_, amountToRepay_);
-    console.log("MockTetuConverterSingleCall.quoteRepay user_", user_);
 
-    if (
-      quoteRepayParams.user == user_
-    && quoteRepayParams.collateralAsset == collateralAsset_
-    && quoteRepayParams.borrowAsset == borrowAsset_
-    && quoteRepayParams.amountToRepay == amountToRepay_
-    ) {
-      console.log("MockTetuConverterSingleCall.quoteRepay collateralAmountOut", quoteRepayParams.collateralAmountOut);
-      return quoteRepayParams.collateralAmountOut;
+    bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
+    QuoteRepayParams memory p = quoteRepayParams[key];
+    if (p.collateralAsset == collateralAsset_) {
+      return p.collateralAmountOut;
     } else {
-      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.user == user_", quoteRepayParams.user == user_);
-      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.collateralAsset == collateralAsset_", quoteRepayParams.collateralAsset == collateralAsset_);
-      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.borrowAsset == borrowAsset_", quoteRepayParams.borrowAsset == borrowAsset_);
-      console.log("MockTetuConverterSingleCall.quoteRepay.quoteRepayParams.amountToRepay == amountToRepay_", quoteRepayParams.amountToRepay == amountToRepay_);
-      console.log("MockTetuConverterSingleCall.quoteRepay.missed collateralAsset,borrowAsset", quoteRepayParams.collateralAsset, quoteRepayParams.borrowAsset);
-      console.log("MockTetuConverterSingleCall.quoteRepay.missed amountToRepay_,user,collateralAmountOut", quoteRepayParams.amountToRepay, quoteRepayParams.user, quoteRepayParams.collateralAmountOut);
+      console.log("MockTetuConverterSingleCall.quoteRepay.missed amountToRepay_,collateralAsset_,borrowAsset_", amountToRepay_, collateralAsset_, borrowAsset_);
       return 0;
     }
   }
@@ -406,11 +397,14 @@ contract MockTetuConverter is ITetuConverter {
     uint amountToRepay_,
     uint collateralAmountOut
   ) external {
-    quoteRepayParams.user = user_;
-    quoteRepayParams.collateralAsset = collateralAsset_;
-    quoteRepayParams.borrowAsset = borrowAsset_;
-    quoteRepayParams.amountToRepay = amountToRepay_;
-    quoteRepayParams.collateralAmountOut = collateralAmountOut;
+    bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
+    quoteRepayParams[key] = QuoteRepayParams({
+      user: user_,
+      collateralAsset: collateralAsset_,
+      borrowAsset: borrowAsset_,
+      amountToRepay: amountToRepay_,
+      collateralAmountOut: collateralAmountOut
+    });
   }
 
   //////////////////////////////////////////////////////////

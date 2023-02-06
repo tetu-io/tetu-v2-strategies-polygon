@@ -257,4 +257,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _claimAccess() external {
     _claim();
   }
+
+  function _emergencyExitFromPoolAccess() external {
+    _emergencyExitFromPool();
+  }
 }

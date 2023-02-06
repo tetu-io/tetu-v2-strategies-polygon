@@ -37,8 +37,11 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_DEPOSIT_TO_POOL,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_RECYCLE,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_ALL,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_EMERGENCY,
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
+import {PromiseOrValue} from "../../../typechain/common";
 
 //region Data types
 interface ILiquidationParams {
@@ -57,6 +60,13 @@ interface IBorrowParams {
   borrowAsset: MockToken;
   converter: string;
   maxTargetAmount: BigNumber;
+}
+interface IRepayParams {
+  collateralAsset: MockToken;
+  borrowAsset: MockToken;
+  totalDebtAmountOut: BigNumber;
+  totalCollateralAmountOut: BigNumber;
+  amountRepay: BigNumber;
 }
 //endregion Data types
 
@@ -2155,7 +2165,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
     }
     async function makeDepositToPoolTest(
       amount: BigNumber,
-      reinvestThresholdPercent: BigNumberish,
+      reinvestThresholdPercent: BigNumberish, // TODO use it
       desiredAmounts: BigNumber[],
       consumedAmounts: BigNumber[],
       liquidityOut: BigNumber,
@@ -2333,14 +2343,423 @@ describe("ConverterStrategyBaseAccessTest", () => {
     });
   });
 
-  describe("_withdrawFromPool", () => {
-    describe("Good paths", () => {
-      it("should return expected values", async () => {
+  describe("withdraw", () => {
+    interface IWithdrawTestParams {
+      investedAssets: BigNumber;
+      liquidations?: ILiquidationParams[];
+      baseAmounts?: ITokenAmount[];
+      initialBalances?: ITokenAmount[];
+      repayments?: IRepayParams[];
+      emergency?: boolean;
+    }
+    interface IWithdrawTestResults {
+      gasUsed: BigNumber;
 
+      baseAmounts: BigNumber[];
+      strategyBalances: BigNumber[];
+
+      investedAssetsUSD: BigNumber;
+      assetPrice: BigNumber;
+    }
+    async function setupInvestedAssets(
+      liquidityAmount: BigNumber,
+      investedAssetsValue: BigNumber
+    ) {
+      await strategy.setDepositorQuoteExit(
+        liquidityAmount,
+        [
+          0, // dai
+          investedAssetsValue, // usdc
+          0 // usdt
+        ]
+      );
+      await tetuConverter.setQuoteRepay(
+        strategy.address,
+        usdc.address,
+        dai.address,
+        0,
+        0
+      );
+      await tetuConverter.setQuoteRepay(
+        strategy.address,
+        usdc.address,
+        usdt.address,
+        0,
+        0
+      );
+      await strategy.updateInvestedAssetsTestAccess();
+      console.log("_investedAssets", await strategy.investedAssets(), investedAssetsValue);
+    }
+    async function makeWithdrawTest(
+      depositorLiquidity: BigNumber,
+      depositorPoolReserves: BigNumber[],
+      depositorTotalSupply: BigNumber,
+      withdrawnAmounts: BigNumber[],
+      amount?: BigNumber,
+      params?: IWithdrawTestParams
+    ) : Promise<IWithdrawTestResults> {
+      if (params?.baseAmounts) {
+        for (const tokenAmount of params?.baseAmounts) {
+          await strategy.setBaseAmountAccess(tokenAmount.token.address, tokenAmount.amount);
+        }
+      }
+      if (params?.initialBalances) {
+        for (const tokenAmount of params?.initialBalances) {
+          await tokenAmount.token.mint(strategy.address, tokenAmount.amount);
+        }
+      }
+      if (params?.liquidations) {
+        for (const liquidation of params?.liquidations) {
+          const pool = ethers.Wallet.createRandom().address;
+          const swapper = ethers.Wallet.createRandom().address;
+          await liquidator.setBuildRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            ""
+          );
+          await liquidator.setGetPriceForRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidator.setLiquidateWithRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidation.tokenOut.mint(liquidator.address, liquidation.amountOut);
+        }
+      }
+      if (params?.repayments) {
+        for (const repayment of params.repayments) {
+          await tetuConverter.setGetDebtAmountCurrent(
+            strategy.address,
+            repayment.collateralAsset.address,
+            repayment.borrowAsset.address,
+            repayment.totalDebtAmountOut,
+            repayment.totalCollateralAmountOut
+          );
+          await tetuConverter.setRepay(
+            repayment.collateralAsset.address,
+            repayment.borrowAsset.address,
+            repayment.amountRepay,
+            strategy.address,
+            repayment.totalCollateralAmountOut,
+            0,
+            0,
+            0
+          );
+          await repayment.collateralAsset.mint(tetuConverter.address, repayment.totalCollateralAmountOut);
+        }
+      }
+
+      await strategy.setDepositorLiquidity(depositorLiquidity);
+      await strategy.setDepositorPoolReserves(depositorPoolReserves);
+      await strategy.setTotalSupply(depositorTotalSupply);
+
+      if (params?.investedAssets) {
+        await setupInvestedAssets(depositorLiquidity, params.investedAssets);
+      }
+      const investedAssets = await strategy.investedAssets();
+
+      await strategy.setDepositorExit(
+        amount
+          ? depositorLiquidity.mul(101).mul(amount).div(100).div(investedAssets)
+          : depositorLiquidity, // withdraw all
+        withdrawnAmounts
+      );
+
+      const r: {investedAssetsUSD: BigNumber, assetPrice: BigNumber} = params?.emergency
+        ? {investedAssetsUSD: BigNumber.from(0), assetPrice: BigNumber.from(0)}
+        : amount
+          ? await strategy.callStatic.withdrawFromPoolTestAccess(amount)
+          : await strategy.callStatic._withdrawAllFromPoolTestAccess();
+      const tx = params?.emergency
+        ? await strategy._emergencyExitFromPoolAccess()
+        : amount
+          ? await strategy.withdrawFromPoolTestAccess(amount)
+          : await strategy._withdrawAllFromPoolTestAccess();
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const baseAmounts = await Promise.all(depositorTokens.map(
+        async token => strategy.baseAmounts(token.address)
+      ));
+      const strategyBalances = await Promise.all(depositorTokens.map(
+        async token => IERC20__factory.connect(token.address, signer).balanceOf(strategy.address)
+      ));
+
+      return {
+        gasUsed,
+
+        strategyBalances,
+        baseAmounts,
+
+        assetPrice: r.assetPrice,
+        investedAssetsUSD: r.investedAssetsUSD
+      }
+    }
+    describe("Good paths", () => {
+      describe("Withdraw a given amount", () => {
+        let results: IWithdrawTestResults;
+        let snapshotLocal: string;
+        before(async function () {
+          snapshotLocal = await TimeUtils.snapshot();
+          results = await makeWithdrawTest(
+            parseUnits("6", 18), // total liquidity of the user
+            [
+              parseUnits("100", 18), // dai
+              parseUnits("200", 6), // usdc
+              parseUnits("150", 6), // usdt
+            ],
+            parseUnits("6000", 18), // total supply
+            [
+              parseUnits("980", 18),
+              parseUnits("950", 6),
+              parseUnits("930", 6),
+            ],
+            parseUnits("3", 18), // amount to withdraw
+            {
+              investedAssets: parseUnits("6", 6), // total invested amount
+              baseAmounts: [
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+              ],
+              initialBalances: [
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+              ],
+              repayments: [
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  totalDebtAmountOut: parseUnits("980", 18),
+                  amountRepay: parseUnits("980", 18),
+                  totalCollateralAmountOut: parseUnits("1980", 6),
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalDebtAmountOut: parseUnits("930", 6),
+                  amountRepay: parseUnits("930", 6),
+                  totalCollateralAmountOut: parseUnits("1930", 6),
+                },
+              ]
+            }
+          )
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+        it("should update base amounts", async () => {
+          const expectedBaseAmounts = [
+            parseUnits("3000", 18), // dai == 3000 + 980 - 980
+            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("2000", 6), // usdt = 2000 + 930 - 930
+          ];
+
+          const ret = results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should update strategy balances", async () => {
+          const expectedStrategyBalances = [
+            parseUnits("3000", 18), // dai == 3000 + 980 - 980
+            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("2000", 6), // usdt = 2000 + 930 - 930
+          ];
+
+          const ret = results.strategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("Gas estimation @skip-on-coverage", async () => {
+          controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+      });
+      describe("Withdraw all", () => {
+        let results: IWithdrawTestResults;
+        let snapshotLocal: string;
+        before(async function () {
+          snapshotLocal = await TimeUtils.snapshot();
+          results = await makeWithdrawTest(
+            parseUnits("6", 18), // total liquidity of the user
+            [
+              parseUnits("100", 18), // dai
+              parseUnits("200", 6), // usdc
+              parseUnits("150", 6), // usdt
+            ],
+            parseUnits("6000", 18), // total supply
+            [
+              parseUnits("980", 18),
+              parseUnits("950", 6),
+              parseUnits("930", 6),
+            ],
+            undefined, // withdraw all
+            {
+              investedAssets: parseUnits("6", 6), // total invested amount (not used)
+              baseAmounts: [
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+              ],
+              initialBalances: [
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+              ],
+              repayments: [
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  totalDebtAmountOut: parseUnits("3980", 18),
+                  amountRepay: parseUnits("3980", 18),
+                  totalCollateralAmountOut: parseUnits("1980", 6),
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalDebtAmountOut: parseUnits("2930", 6),
+                  amountRepay: parseUnits("2930", 6),
+                  totalCollateralAmountOut: parseUnits("1930", 6),
+                },
+              ]
+            }
+          )
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+        it("should update base amounts", async () => {
+          const expectedBaseAmounts = [
+            parseUnits("0", 18), // dai
+            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("0", 6), // usdt
+          ];
+
+          const ret = results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should update strategy balances", async () => {
+          const expectedStrategyBalances = [
+            parseUnits("0", 18), // dai
+            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("0", 6), // usdt
+          ];
+
+          const ret = results.strategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("Gas estimation @skip-on-coverage", async () => {
+          controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_ALL, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+      });
+      describe("_emergencyExitFromPool", () => {
+        let results: IWithdrawTestResults;
+        let snapshotLocal: string;
+        before(async function () {
+          snapshotLocal = await TimeUtils.snapshot();
+          results = await makeWithdrawTest(
+            parseUnits("6", 18), // total liquidity of the user
+            [
+              parseUnits("100", 18), // dai
+              parseUnits("200", 6), // usdc
+              parseUnits("150", 6), // usdt
+            ],
+            parseUnits("6000", 18), // total supply
+            [
+              parseUnits("980", 18),
+              parseUnits("950", 6),
+              parseUnits("930", 6),
+            ],
+            undefined, // withdraw all
+            {
+              emergency: true,
+              investedAssets: parseUnits("6", 6), // total invested amount (not used)
+              baseAmounts: [
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+              ],
+              initialBalances: [
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+              ],
+              repayments: [
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  totalDebtAmountOut: parseUnits("3980", 18),
+                  amountRepay: parseUnits("3980", 18),
+                  totalCollateralAmountOut: parseUnits("1980", 6),
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalDebtAmountOut: parseUnits("2930", 6),
+                  amountRepay: parseUnits("2930", 6),
+                  totalCollateralAmountOut: parseUnits("1930", 6),
+                },
+              ]
+            }
+          )
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+        it("should update base amounts", async () => {
+          const expectedBaseAmounts = [
+            parseUnits("0", 18), // dai
+            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("0", 6), // usdt
+          ];
+
+          const ret = results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should update strategy balances", async () => {
+          const expectedStrategyBalances = [
+            parseUnits("0", 18), // dai
+            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("0", 6), // usdt
+          ];
+
+          const ret = results.strategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("Gas estimation @skip-on-coverage", async () => {
+          controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_EMERGENCY, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
       });
     });
     describe("Bad paths", () => {
-
+// TODO
     });
     describe("Gas estimation @skip-on-coverage", () => {
 

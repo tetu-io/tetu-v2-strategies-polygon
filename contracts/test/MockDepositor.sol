@@ -94,6 +94,10 @@ contract MockDepositor is DepositorBase, Initializable {
     }
   }
 
+  function setDepositorPoolReserves(uint[] memory depositorReserves_) external {
+    _depositorReserves = depositorReserves_;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                   _depositorEnter
   /////////////////////////////////////////////////////////////////////
@@ -160,6 +164,7 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   function setDepositorExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
+    console.log("MockDepositor.setDepositorExit liquidityAmount", liquidityAmount_);
     depositorExitParams.liquidityAmount = liquidityAmount_;
     depositorExitParams.amountsOut = new uint[](amountsOut_.length);
     for (uint i = 0; i < amountsOut_.length; ++i) {
@@ -174,7 +179,7 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Quotes output for given lp amount from the pool.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
-    console.log("_depositorQuoteExit liquidityAmount", liquidityAmount);
+    console.log("_depositorQuoteExit liquidityAmount", liquidityAmount, depositorQuoteExitParams.liquidityAmount);
     require(liquidityAmount == depositorQuoteExitParams.liquidityAmount, "_depositorQuoteExit input params");
 
     uint len = _depositorAssets.length;
@@ -185,6 +190,7 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   function setDepositorQuoteExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
+    console.log("setDepositorQuoteExit, liquidityAmount_", liquidityAmount_);
     depositorQuoteExitParams.liquidityAmount = liquidityAmount_;
     depositorQuoteExitParams.amountsOut = new uint[](amountsOut_.length);
     for (uint i = 0; i < amountsOut_.length; ++i) {

@@ -120,14 +120,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount_) override internal virtual {
-    console.log("_depositToPool.1");
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
-      console.log("_depositToPool.2");
       address[] memory tokens = _depositorPoolAssets();
-      console.log("_depositToPool.3");
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
-      console.log("_depositToPool.4");
 
       // prepare array of amounts ready to deposit, borrow missed amounts
       (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
@@ -136,23 +132,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         tokens,
         indexAsset
       );
-      console.log("_depositToPool.5 collateral", collateral);
-      console.log("_depositToPool.5 borrowedAmounts", borrowedAmounts[0], borrowedAmounts[1], borrowedAmounts[2]);
-      console.log("_depositToPool.5 amounts", amounts[0], amounts[1], amounts[2]);
-      console.log("_depositToPool.5 balances",
-        IERC20(tokens[0]).balanceOf(address(this)),
-        IERC20(tokens[1]).balanceOf(address(this)),
-        IERC20(tokens[2]).balanceOf(address(this))
-      );
 
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
-      console.log("_depositToPool.6 consumedAmounts", consumedAmounts[0], consumedAmounts[1], consumedAmounts[2]);
-      console.log("_depositToPool.6 balances",
-        IERC20(tokens[0]).balanceOf(address(this)),
-        IERC20(tokens[1]).balanceOf(address(this)),
-        IERC20(tokens[2]).balanceOf(address(this))
-      );
 
       // adjust base-amounts
       _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
@@ -238,15 +220,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function _withdrawUniversal(uint amount, bool all) internal returns (uint investedAssetsUSD, uint assetPrice) {
-    require(_investedAssets != 0, "CSB: no investments");
-    if (amount != 0 && _investedAssets != 0) {
-      uint liquidityAmount = all
-        ? _depositorLiquidity()  // total amount of LP-tokens deposited by the strategy
+    console.log("_withdrawUniversal.1", all, _investedAssets);
+    uint liquidityAmount = all
+      ? _depositorLiquidity()  // total amount of LP-tokens deposited by the strategy
+      : amount == 0 || _investedAssets == 0
+        ? 0
         : _depositorLiquidity()
           * 101 // add 1% on top...
           * amount / _investedAssets // a part of amount that we are going to withdraw
           / 100; // .. add 1% on top
 
+    if (liquidityAmount != 0) {
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
@@ -259,11 +243,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
       );
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
+      console.log("withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
 
       // convert amounts to main asset and update base amounts
       (uint collateral, uint[] memory repaid) = all
         ? _convertAfterWithdrawAll(tokens, indexAsset)
         : _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
+      console.log("repaid", repaid[0], repaid[1], repaid[2]);
+      console.log("collateral", collateral);
       _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
@@ -615,6 +602,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
     }
 
+    console.log("estimatedAssets", estimatedAssets);
     return estimatedAssets;
   }
 
