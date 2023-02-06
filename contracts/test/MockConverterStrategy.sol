@@ -250,4 +250,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ) {
     return _prepareRewardsList(tetuConverter_, tokens_, amounts_);
   }
+
+  function _claimAccess() external {
+    _claim();
+  }
 }

@@ -15,7 +15,7 @@ import {
   ControllerV2__factory,
   IERC20Metadata__factory,
   MockForwarder,
-  BalancerComposableStableStrategy__factory
+  BalancerComposableStableStrategy__factory, IERC20__factory
 } from "../../../typechain";
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
@@ -32,7 +32,7 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_AFTER_WITHDRAW_UPDATE_BASE_AMOUNTS,
   GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW,
-  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW_ALL,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW_ALL, GAS_CONVERTER_STRATEGY_BASE_CONVERT_CLAIM,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_RECYCLE,
 } from "../../baseUT/GasLimits";
@@ -1744,38 +1744,6 @@ describe("ConverterStrategyBaseAccessTest", () => {
           });
         });
       });
-
-      it("should send expected values to forwarder", async () => {
-        const tokens = [usdc, bal];
-        const amounts = [parseUnits("10", 6), parseUnits("20", 18)];
-        const compoundRate = BigNumber.from(30_000); // 30%
-
-        const r = await makeRecycleTest(
-          compoundRate,
-          tokens,
-          amounts,
-          {
-            liquidations: [{
-              tokenIn: bal,
-              tokenOut: usdc,
-              amountIn: parseUnits("6", 18),
-              amountOut: parseUnits("100", 6)
-            }]
-          }
-        );
-
-        const ret = [
-          r.forwarderTokens.join(),
-          r.forwarderAmounts.map(x => BalanceUtils.toString(x)).join()
-        ].join("\n");
-
-        const expected = [
-          tokens.map(x => x.address).join(),
-          [parseUnits("7", 6), parseUnits("14", 18)].map(x => BalanceUtils.toString(x)).join()
-        ].join("\n");
-
-        expect(ret).eq(expected);
-      });
     });
     describe("Bad paths", () => {
     // TODO
@@ -1845,6 +1813,291 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
         expect(ret).eq(expected);
       });
+    });
+  });
+
+  describe("_claim", () => {
+    interface ILiquidationParams {
+      tokenIn: MockToken;
+      tokenOut: MockToken;
+      amountIn: BigNumber;
+      amountOut: BigNumber;
+    }
+    interface ITokenAmount {
+      token: MockToken;
+      amount: BigNumber;
+    }
+    interface IClaimTestParams {
+      liquidations?: ILiquidationParams[];
+      thresholds?: ITokenAmount[];
+      baseAmounts?: ITokenAmount[];
+      initialBalances?: ITokenAmount[];
+    }
+    interface IClaimTestResults {
+      gasUsed: BigNumber;
+
+      /** Full list of all reward tokens === distinct(depositorRewardTokens + tetuConverterRewardTokens) */
+      rewardTokens: string[];
+
+      baseAmounts: BigNumber[];
+      strategyBalances: BigNumber[];
+      forwarderBalances: BigNumber[];
+    }
+    async function makeClaimTest(
+      compoundRate: BigNumberish,
+      depositorRewardTokens: MockToken[],
+      depositorRewardAmounts: BigNumber[],
+      tetuConverterRewardTokens: MockToken[],
+      tetuConverterRewardAmounts: BigNumber[],
+      params?: IClaimTestParams
+    ) : Promise<IClaimTestResults> {
+      await strategy.setDepositorClaimRewards(
+        depositorRewardTokens.map(x => x.address),
+        depositorRewardAmounts
+      );
+      await tetuConverter.setClaimRewards(
+        tetuConverterRewardTokens.map(x => x.address),
+        tetuConverterRewardAmounts
+      );
+      for (let i = 0; i < tetuConverterRewardTokens.length; ++i) {
+        await tetuConverterRewardTokens[i].mint(tetuConverter.address, tetuConverterRewardAmounts[i]);
+      }
+
+      await strategy.connect(await Misc.impersonate(await controller.platformVoter())).setCompoundRatio(compoundRate);
+
+      if (params?.baseAmounts) {
+        for (const tokenAmount of params?.baseAmounts) {
+          await strategy.setBaseAmountAccess(tokenAmount.token.address, tokenAmount.amount);
+        }
+      }
+      if (params?.initialBalances) {
+        for (const tokenAmount of params?.initialBalances) {
+          await tokenAmount.token.mint(strategy.address, tokenAmount.amount);
+        }
+      }
+      if (params?.liquidations) {
+        for (const liquidation of params?.liquidations) {
+          const pool = ethers.Wallet.createRandom().address;
+          const swapper = ethers.Wallet.createRandom().address;
+          await liquidator.setBuildRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            ""
+          );
+          await liquidator.setGetPriceForRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidator.setLiquidateWithRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidation.tokenOut.mint(liquidator.address, liquidation.amountOut);
+        }
+      }
+      if (params?.thresholds) {
+        const operators = await ControllerV2__factory.connect(controller.address, signer).operatorsList();
+        const strategyAsOperator = await BalancerComposableStableStrategy__factory.connect(
+          strategy.address,
+          await Misc.impersonate(operators[0])
+        );
+        for (const threshold of params?.thresholds) {
+          await strategyAsOperator.setLiquidationThreshold(threshold.token.address, threshold.amount);
+        }
+      }
+
+      // get list of all reward tokens
+      const allAddresses = [
+        ...depositorRewardTokens.map(x => x.address),
+        ...tetuConverterRewardTokens.map(x => x.address)
+      ];
+      const rewardTokenAddresses = [
+        ...new Set(// use Set to exclude duplicates, see https://stackoverflow.com/questions/1960473/get-all-unique-values-in-a-javascript-array-remove-duplicates
+          allAddresses
+        )
+      ];
+
+      // sort the list by token names
+      const rewardTokensWithNames = (await Promise.all(
+        rewardTokenAddresses.map(
+          async rewardTokenAddress => ({
+            tokenAddress: rewardTokenAddress,
+            tokenName: await IERC20Metadata__factory.connect(rewardTokenAddress, signer).name()
+          })
+        )
+      )).sort(
+        (t1, t2) => t1.tokenName.localeCompare(t2.tokenName)
+      );
+      console.log("rewardTokensWithNames", rewardTokensWithNames);
+
+      const rewardTokensOrderedByNames = rewardTokensWithNames.map(x => x.tokenAddress);
+
+
+      const tx = await strategy.claim();
+      const gasUsed = (await tx.wait()).gasUsed;
+
+
+      const baseAmounts = await Promise.all(rewardTokensOrderedByNames.map(
+        async rewardToken => strategy.baseAmounts(rewardToken)
+      ));
+      const forwarderBalances = await Promise.all(rewardTokensOrderedByNames.map(
+        async rewardToken => IERC20__factory.connect(rewardToken, signer).balanceOf(forwarder.address)
+      ));
+      const strategyBalances = await Promise.all(rewardTokensOrderedByNames.map(
+        async rewardToken => IERC20__factory.connect(rewardToken, signer).balanceOf(strategy.address)
+      ));
+
+      return {
+        gasUsed,
+        rewardTokens: rewardTokensOrderedByNames,
+        forwarderBalances,
+        strategyBalances,
+        baseAmounts
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("All cases", () => {
+        let results: IClaimTestResults;
+        let snapshotLocal: string;
+        before(async function () {
+          snapshotLocal = await TimeUtils.snapshot();
+
+          const depositorRewardTokens = [usdc, usdt, dai, tetu];
+          const depositorRewardAmounts = [
+            parseUnits("1", 6), // usdc
+            parseUnits("40", 6), // usdt
+            parseUnits("4", 18), // dai
+            parseUnits("4", 18), // tetu
+          ]
+          const tetuConverterRewardTokens = [usdc, tetu, bal, weth];
+          const tetuConverterRewardAmounts = [
+            parseUnits("19", 6), // usdc
+            parseUnits("6", 18), // tetu
+            parseUnits("20", 18), // bal
+            parseUnits("30", 8), // weth
+          ]
+
+          results = await makeClaimTest(
+            40_000, // compound ratio
+            depositorRewardTokens,
+            depositorRewardAmounts,
+            tetuConverterRewardTokens,
+            tetuConverterRewardAmounts,
+            {
+              baseAmounts: [
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: tetu, amount: parseUnits("1000", 18)}, // (!) airdrops
+                {token: bal, amount: parseUnits("5000", 18)},
+                {token: weth, amount: parseUnits("6000", 8)},
+              ],
+              initialBalances: [
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("2000", 6)},
+                {token: dai, amount: parseUnits("3000", 18)},
+                {token: tetu, amount: parseUnits("5000", 18)},
+                {token: bal, amount: parseUnits("5000", 18)},
+                {token: weth, amount: parseUnits("6000", 8)},
+              ],
+              liquidations: [
+                {tokenIn: bal, tokenOut: usdc, amountIn:  parseUnits("5008", 18),  amountOut: parseUnits("17", 6)},
+                {tokenIn: tetu, tokenOut: usdc, amountIn:  parseUnits("2604", 18),  amountOut: parseUnits("23", 6)},
+                {tokenIn: weth, tokenOut: usdc, amountIn:  parseUnits("6012", 8),  amountOut: parseUnits("41", 6)},
+              ]
+            }
+          );
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+        it("should send expected values to forwarder", async () => {
+          const expectedRewardTokens = [bal, dai, tetu, usdc, usdt, weth]; // ordered by names
+          const expectedForwarderBalances = [
+            parseUnits("12", 18), // bal
+            parseUnits("2.4", 18), // dai
+            parseUnits("2406", 18), // tetu
+            parseUnits("12", 6), // usdc
+            parseUnits("24", 6), // usdt
+            parseUnits("18", 8), // weth
+          ];
+          const ret = [
+            results.rewardTokens.join(),
+            results.forwarderBalances.map(x => BalanceUtils.toString(x))
+          ].join("\n");
+
+          const expected = [
+            expectedRewardTokens.map(x => x.address).join(),
+            expectedForwarderBalances.map(x => BalanceUtils.toString(x))
+          ].join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should update base amounts", async () => {
+          const expectedRewardTokens = [bal, dai, tetu, usdc, usdt, weth]; // ordered by names
+          const expectedBaseAmounts = [
+            parseUnits("0", 18), // bal
+            parseUnits("3001.6", 18), // dai
+            parseUnits("0", 18), // tetu
+            parseUnits("1089", 6), // usdc
+            parseUnits("2016", 6), // usdt
+            parseUnits("0", 8), // weth
+          ];
+          const ret = [
+            results.rewardTokens.join(),
+            results.baseAmounts.map(x => BalanceUtils.toString(x))
+          ].join("\n");
+
+          const expected = [
+            expectedRewardTokens.map(x => x.address).join(),
+            expectedBaseAmounts.map(x => BalanceUtils.toString(x))
+          ].join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should update strategy balances in proper way", async () => {
+          const expectedRewardTokens = [bal, dai, tetu, usdc, usdt, weth]; // ordered by names
+          const expectedStrategyBalances = [
+            parseUnits("0", 18), // bal
+            parseUnits("3001.6", 18), // dai
+            parseUnits("0", 18), // tetu
+            parseUnits("1089", 6), // usdc
+            parseUnits("2016", 6), // usdt
+            parseUnits("0", 8), // weth
+          ];
+          const ret = [
+            results.rewardTokens.join(),
+            results.strategyBalances.map(x => BalanceUtils.toString(x))
+          ].join("\n");
+
+          const expected = [
+            expectedRewardTokens.map(x => x.address).join(),
+            expectedStrategyBalances.map(x => BalanceUtils.toString(x))
+          ].join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("Gas estimation @skip-on-coverage", async () => {
+          controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_CLAIM, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+
+      });
+    });
+    describe("Bad paths", () => {
+// TODO
     });
   });
 //endregion Unit tests

@@ -32,7 +32,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     PoolData[] memory route,
     string memory errorMessage
   ) {
-    console.log("MockTetuLiquidatorSingleCall.buildRoute");
+    console.log("MockTetuLiquidatorSingleCall.buildRoute", tokenIn, tokenOut);
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut));
     BuildRouteParams memory p = buildRouteParams[key];
 
@@ -41,7 +41,6 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       return (route, p.errorMessage);
     } else {
       if (tokenIn == p.tokenIn && tokenOut == p.tokenOut) {
-        console.log("MockTetuLiquidatorSingleCall.buildRoute.data");
         route = new PoolData[](1);
         route[0].tokenIn = p.tokenIn;
         route[0].tokenOut = p.tokenOut;
@@ -87,15 +86,15 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   mapping(bytes32 => GetPriceForRouteParams) public getPriceForRouteParams;
 
   function getPriceForRoute(PoolData[] memory route, uint amount) external view override returns (uint) {
-    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute amount route.length", amount, route.length);
-    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute tokenIn, tokenOut", route[0].tokenIn, route[0].tokenOut);
-    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute pool, swapper", route[0].pool, route[0].swapper);
+    //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute amount route.length", amount, route.length);
+    //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute tokenIn, tokenOut", route[0].tokenIn, route[0].tokenOut);
+    //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute pool, swapper", route[0].pool, route[0].swapper);
 
     bytes32 key = keccak256(abi.encodePacked(route[0].tokenIn, route[0].tokenOut, route[0].pool, route[0].swapper, amount));
     GetPriceForRouteParams memory p = getPriceForRouteParams[key];
 
     if (route.length == 1 && route[0].tokenOut == p.tokenOut) {
-      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.data");
+      //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.data");
       return p.priceOut;
     } else {
       console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed amount", amount);
@@ -141,7 +140,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     uint amount,
     uint /*slippage*/
   ) external override {
-    console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute");
+    //console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute");
 
     bytes32 key = keccak256(abi.encodePacked(route[0].tokenIn, route[0].tokenOut, route[0].pool, route[0].swapper, amount));
     LiquidateWithRouteParams memory p = liquidateWithRouteParams[key];

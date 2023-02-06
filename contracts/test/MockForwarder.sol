@@ -2,6 +2,8 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "hardhat/console.sol";
 
 contract MockForwarder is IForwarder {
   address[] private lastRegisterIncomeTokens;
@@ -25,10 +27,16 @@ contract MockForwarder is IForwarder {
     address vault,
     bool isDistribute
   ) external {
+    console.log("registerIncome", gasleft());
     lastRegisterIncomeTokens = tokens;
     lastRegisterIncomeAmounts = amounts;
+    // move all tokens to the balance of the IForwarder
+    for (uint i = 0; i < tokens.length; ++i) {
+      IERC20(tokens[i]).transferFrom(msg.sender, address(this), amounts[i]);
+    }
     vault;
     isDistribute;
+    console.log("registerIncome.end", gasleft());
   }
 
   function getLastRegisterIncomeResults() external view returns (

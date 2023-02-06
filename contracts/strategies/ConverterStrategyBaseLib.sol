@@ -13,7 +13,7 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-// import "hardhat/console.sol";
+//import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -311,9 +311,12 @@ library ConverterStrategyBaseLib {
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
   /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
-  /// @param tokens_ tokens received from _depositorPoolAssets
+  /// @param tokens_ tokens received from {_depositorPoolAssets}
+  /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
+  /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
   /// @param baseAmounts_ Base amounts for rewards tokens
+  ///                     The base amounts allow to separate just received and previously received rewards.
   /// @return receivedAmounts Received amounts of the tokens
   ///         This array has +1 item at the end: received amount of the main asset
   ///                                            there was no possibility to use separate var for it, stack too deep

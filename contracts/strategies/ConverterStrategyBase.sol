@@ -14,6 +14,8 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
+import "hardhat/console.sol";
+
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -436,26 +438,29 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual {
     // get rewards from the Depositor
-    (address[] memory rewardTokens, uint[] memory amounts) = _depositorClaimRewards();
+    (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts) = _depositorClaimRewards();
 
-    (address[] memory tokensOut, uint[] memory amountsOut) = _prepareRewardsList(
+    (address[] memory rewardTokens, uint[] memory amounts) = _prepareRewardsList(
       tetuConverter,
-      rewardTokens,
-      amounts
+      depositorRewardTokens,
+      depositorRewardAmounts
     );
 
-    uint len = tokensOut.length;
+    uint len = rewardTokens.length;
     if (len > 0) {
-      (uint[] memory received, uint[] memory spent, uint[] memory amountsToForward) = _recycle(tokensOut, amountsOut);
+      (uint[] memory received, uint[] memory spent, uint[] memory amountsToForward) = _recycle(rewardTokens, amounts);
 
-      _updateBaseAmounts(tokensOut, received, spent, type(uint).max, 0); // we don't need to exclude any asset here
-      _updateBaseAmountsForAsset(asset, received[len], true); // tokensOut can not include main asset
+      _updateBaseAmounts(rewardTokens, received, spent, type(uint).max, 0); // max - we don't need to exclude any asset
+      // received has a length equal to rewardTokens.length + 1
+      // last item contains amount of the {asset} received after swapping
+      _updateBaseAmountsForAsset(asset, received[len], true);
 
+      // send forwarder-part of the rewards to the forwarder
       IForwarder forwarder = IForwarder(IController(controller()).forwarder());
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        AppLib.approveIfNeeded(tokensOut[i], amountsToForward[i], address(forwarder));
+        AppLib.approveIfNeeded(rewardTokens[i], amountsToForward[i], address(forwarder));
       }
-      forwarder.registerIncome(tokensOut, amountsToForward, ISplitter(splitter).vault(), true);
+      forwarder.registerIncome(rewardTokens, amountsToForward, ISplitter(splitter).vault(), true);
     }
   }
 
@@ -463,14 +468,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// We have two kinds of rewards:
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
   /// 2) any other rewards
-  /// All received rewards are immediately "recycled".
-  /// It means, they are divided on two parts: to forwarder, to compound
+  /// All received rewards divided on two parts: to forwarder, to compound
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
   /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
-  /// @param tokens_ tokens received from _depositorPoolAssets
-  /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
-  /// @param baseAmounts_ Base amounts for rewards tokens
+  /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
+  /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
+  /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @return receivedAmounts Received amounts of the tokens
   ///         This array has +1 item at the end: received amount of the main asset
   ///                                            there was no possibility to use separate var for it, stack too deep
