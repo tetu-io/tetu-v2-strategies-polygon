@@ -32,11 +32,33 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_AFTER_WITHDRAW_UPDATE_BASE_AMOUNTS,
   GAS_CONVERTER_STRATEGY_BASE_BEFORE_DEPOSIT,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW,
-  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW_ALL, GAS_CONVERTER_STRATEGY_BASE_CONVERT_CLAIM,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW_ALL,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_CLAIM,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_DEPOSIT_TO_POOL,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_RECYCLE,
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
+
+//region Data types
+interface ILiquidationParams {
+  tokenIn: MockToken;
+  tokenOut: MockToken;
+  amountIn: BigNumber;
+  amountOut: BigNumber;
+}
+interface ITokenAmount {
+  token: MockToken;
+  amount: BigNumber;
+}
+interface IBorrowParams {
+  collateralAsset: MockToken;
+  collateralAmount: BigNumber;
+  borrowAsset: MockToken;
+  converter: string;
+  maxTargetAmount: BigNumber;
+}
+//endregion Data types
 
 /**
  * Test of ConverterStrategyBase
@@ -88,9 +110,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
     indexAsset = depositorTokens.findIndex(x => x.address === usdc.address);
     depositorWeights = [1, 1, 1];
     depositorReserves = [
-      parseUnits("1000", 18),
-      parseUnits("1000", 6),
-      parseUnits("1000", 6)
+      parseUnits("1000", 18), // dai
+      parseUnits("1000", 6),  // usdc
+      parseUnits("1000", 6)   // usdt
     ];
 
     controller = await DeployerUtilsLocal.getController(signer);
@@ -318,7 +340,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         it("should return expected values", async () => {
           const initialBaseAmounts = [
             parseUnits("100", 18),
-            parseUnits("1000", 6),
+            parseUnits("1210", 6),
             parseUnits("50", 6),
           ];
           const amountsConsumed = [
@@ -334,7 +356,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
           const collateral = parseUnits("900", 6);
           const balanceStrategy = [
             parseUnits("151", 18), // 100 + 251 - 200
-            parseUnits("100", 6), // 1000 - 900
+            parseUnits("100", 6), // 1210 - 900 - 210
             parseUnits("74", 6), // 50 + 214 - 190
           ];
 
@@ -356,7 +378,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         it("should return expected values", async () => {
           const initialBaseAmounts = [
             parseUnits("100", 18),
-            parseUnits("1000", 6),
+            parseUnits("1210", 6),
             parseUnits("50", 6),
           ];
           const amountsConsumed = [
@@ -372,8 +394,46 @@ describe("ConverterStrategyBaseAccessTest", () => {
           const collateral = parseUnits("900", 6);
           const balanceStrategy = [
             parseUnits("90", 18), // 100 + 190 - 200
-            parseUnits("100", 6), // 1000 - 900
+            parseUnits("100", 6), // 1210 - 900 - 210
             parseUnits("30", 6), // 50 + 170 - 190
+          ];
+
+          const r = await makeAfterDepositTest(
+            initialBaseAmounts,
+            amountsConsumed,
+            borrowed,
+            collateral,
+            balanceStrategy
+          );
+
+          const ret = r.resultBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = balanceStrategy.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
+      describe("Real case", () => {
+        it("should return expected values", async () => {
+          const initialBaseAmounts = [
+            parseUnits("0", 18),
+            parseUnits("3000", 6),
+            parseUnits("0", 6),
+          ];
+          const amountsConsumed = [
+            parseUnits("830", 18),
+            parseUnits("730", 6),
+            parseUnits("910", 6),
+          ];
+          const borrowed = [
+            parseUnits("850", 18),
+            parseUnits("0", 6),
+            parseUnits("950", 6),
+          ];
+          const collateral = parseUnits("2000", 6);
+          const balanceStrategy = [
+            parseUnits("20", 18),
+            parseUnits("270", 6),
+            parseUnits("40", 6),
           ];
 
           const r = await makeAfterDepositTest(
@@ -395,7 +455,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
       it("should not exceed the gas limit", async () => {
         const initialBaseAmounts = [
           parseUnits("100", 18),
-          parseUnits("1000", 6),
+          parseUnits("1210", 6),
           parseUnits("50", 6),
         ];
         const amountsConsumed = [
@@ -411,7 +471,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         const collateral = parseUnits("900", 6);
         const balanceStrategy = [
           parseUnits("151", 18), // 100 + 251 - 200
-          parseUnits("100", 6), // 1000 - 900
+          parseUnits("100", 6), // 1210 - 900 - 210
           parseUnits("74", 6), // 50 + 214 - 190
         ];
 
@@ -452,7 +512,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         withdrawnAmounts,
         repaidAmounts,
         indexAsset,
-        collateral.add(withdrawnAmounts[indexAsset])
+        collateral
       );
       const gasUsed = (await tx.wait()).gasUsed;
 
@@ -1321,16 +1381,6 @@ describe("ConverterStrategyBaseAccessTest", () => {
   });
 
   describe("_recycle", () => {
-    interface ILiquidationParams {
-      tokenIn: MockToken;
-      tokenOut: MockToken;
-      amountIn: BigNumber;
-      amountOut: BigNumber;
-    }
-    interface ITokenAmount {
-      token: MockToken;
-      amount: BigNumber;
-    }
     interface IRecycleTestParams {
       liquidations?: ILiquidationParams[];
       thresholds?: ITokenAmount[];
@@ -1817,16 +1867,6 @@ describe("ConverterStrategyBaseAccessTest", () => {
   });
 
   describe("_claim", () => {
-    interface ILiquidationParams {
-      tokenIn: MockToken;
-      tokenOut: MockToken;
-      amountIn: BigNumber;
-      amountOut: BigNumber;
-    }
-    interface ITokenAmount {
-      token: MockToken;
-      amount: BigNumber;
-    }
     interface IClaimTestParams {
       liquidations?: ILiquidationParams[];
       thresholds?: ITokenAmount[];
@@ -2093,11 +2133,217 @@ describe("ConverterStrategyBaseAccessTest", () => {
             expect(u).to.be.below(t + 1);
           });
         });
-
       });
     });
     describe("Bad paths", () => {
 // TODO
+    });
+  });
+
+  describe("_depositToPool", () => {
+    interface IDepositToPoolTestParams {
+      liquidations?: ILiquidationParams[];
+      baseAmounts?: ITokenAmount[];
+      initialBalances?: ITokenAmount[];
+      borrows?: IBorrowParams[];
+    }
+    interface IDepositToPoolTestResults {
+      gasUsed: BigNumber;
+
+      baseAmounts: BigNumber[];
+      strategyBalances: BigNumber[];
+    }
+    async function makeDepositToPoolTest(
+      amount: BigNumber,
+      reinvestThresholdPercent: BigNumberish,
+      desiredAmounts: BigNumber[],
+      consumedAmounts: BigNumber[],
+      liquidityOut: BigNumber,
+      params?: IDepositToPoolTestParams
+    ) : Promise<IDepositToPoolTestResults> {
+      if (params?.baseAmounts) {
+        for (const tokenAmount of params?.baseAmounts) {
+          await strategy.setBaseAmountAccess(tokenAmount.token.address, tokenAmount.amount);
+        }
+      }
+      if (params?.initialBalances) {
+        for (const tokenAmount of params?.initialBalances) {
+          await tokenAmount.token.mint(strategy.address, tokenAmount.amount);
+        }
+      }
+      if (params?.liquidations) {
+        for (const liquidation of params?.liquidations) {
+          const pool = ethers.Wallet.createRandom().address;
+          const swapper = ethers.Wallet.createRandom().address;
+          await liquidator.setBuildRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            ""
+          );
+          await liquidator.setGetPriceForRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidator.setLiquidateWithRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidation.tokenOut.mint(liquidator.address, liquidation.amountOut);
+        }
+      }
+      if (params?.borrows) {
+        for (const borrow of params.borrows) {
+          await tetuConverter.setFindBorrowStrategyOutputParams(
+            borrow.converter,
+            borrow.maxTargetAmount,
+            1, // apr18
+            borrow.collateralAsset.address,
+            borrow.collateralAmount,
+            borrow.borrowAsset.address,
+            1 // period
+          );
+          await tetuConverter.setBorrowParams(
+            borrow.converter,
+            borrow.collateralAsset.address,
+            borrow.collateralAmount,
+            borrow.borrowAsset.address,
+            borrow.maxTargetAmount,
+            strategy.address,
+            borrow.maxTargetAmount
+          );
+          await borrow.borrowAsset.mint(tetuConverter.address, borrow.maxTargetAmount);
+        }
+      }
+
+      await depositorTokens[indexAsset].mint(strategy.address, amount);
+      await strategy.setDepositorEnter(
+        desiredAmounts,
+        consumedAmounts,
+        liquidityOut
+      );
+
+      const tx = await strategy._depositToPoolAccess(amount);
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const baseAmounts = await Promise.all(depositorTokens.map(
+        async token => strategy.baseAmounts(token.address)
+      ));
+      const strategyBalances = await Promise.all(depositorTokens.map(
+        async token => IERC20__factory.connect(token.address, signer).balanceOf(strategy.address)
+      ));
+
+      return {
+        gasUsed,
+        strategyBalances,
+        baseAmounts
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("All cases", () => {
+        let results: IDepositToPoolTestResults;
+        let snapshotLocal: string;
+        before(async function () {
+          snapshotLocal = await TimeUtils.snapshot();
+          results = await makeDepositToPoolTest(
+            parseUnits("3000", 6),
+            0,
+            [
+              parseUnits("850", 18), // dai
+              parseUnits("1000", 6), // usdc
+              parseUnits("950", 6), // usdt
+            ],
+            [
+              parseUnits("830", 18),
+              parseUnits("730", 6),
+              parseUnits("910", 6),
+            ],
+            parseUnits("1", 18), // liquidity
+            {
+              baseAmounts: [
+                {token: dai, amount: parseUnits("0", 18)},
+                {token: usdc, amount: parseUnits("3000", 6)},
+                {token: usdt, amount: parseUnits("0", 6)},
+              ],
+              borrows: [
+                {
+                  collateralAsset: usdc,
+                  collateralAmount: parseUnits("1000", 6),
+                  borrowAsset: dai,
+                  maxTargetAmount: parseUnits("850", 18),
+                  converter: ethers.Wallet.createRandom().address
+                },
+                {
+                  collateralAsset: usdc,
+                  collateralAmount: parseUnits("1000", 6),
+                  borrowAsset: usdt,
+                  maxTargetAmount: parseUnits("950", 6),
+                  converter: ethers.Wallet.createRandom().address
+                },
+              ]
+            }
+          )
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+        it("should update base amounts", async () => {
+          const expectedBaseAmounts = [
+            parseUnits("20", 18), // dai == 850 - 830
+            parseUnits("270", 6), // usdc == (1000 - 730)
+            parseUnits("40", 6), // usdt = 950 - 910
+          ];
+
+          const ret = results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("should update strategy balances", async () => {
+          const expectedBalances = [
+            parseUnits("20", 18), // dai == 850 - 830
+            parseUnits("270", 6), // usdc == (1000 - 730)
+            parseUnits("40", 6), // usdt = 950 - 910
+          ];
+
+          const ret = results.strategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+          const expected = expectedBalances.map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+        it("Gas estimation @skip-on-coverage", async () => {
+          controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_DEPOSIT_TO_POOL, (u, t) => {
+            expect(u).to.be.below(t + 1);
+          });
+        });
+      });
+    });
+    describe("Bad paths", () => {
+// TODO
+    });
+  });
+
+  describe("_withdrawFromPool", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+
     });
   });
 //endregion Unit tests

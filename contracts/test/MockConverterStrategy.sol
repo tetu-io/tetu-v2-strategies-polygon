@@ -185,6 +185,9 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address providerBalanceChange;
   }
   MockedDepositToPoolParams public depositToPoolParams;
+  function _depositToPoolAccess(uint amount_) external {
+    return _depositToPool(amount_);
+  }
   function _depositToPool(uint amount_) override internal virtual {
     if (depositToPoolParams.initialized) {
       console.log("_depositToPool.mocked-version is called");

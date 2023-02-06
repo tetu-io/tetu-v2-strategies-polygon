@@ -120,10 +120,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount_) override internal virtual {
+    console.log("_depositToPool.1");
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+      console.log("_depositToPool.2");
       address[] memory tokens = _depositorPoolAssets();
+      console.log("_depositToPool.3");
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+      console.log("_depositToPool.4");
 
       // prepare array of amounts ready to deposit, borrow missed amounts
       (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
@@ -132,9 +136,23 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         tokens,
         indexAsset
       );
+      console.log("_depositToPool.5 collateral", collateral);
+      console.log("_depositToPool.5 borrowedAmounts", borrowedAmounts[0], borrowedAmounts[1], borrowedAmounts[2]);
+      console.log("_depositToPool.5 amounts", amounts[0], amounts[1], amounts[2]);
+      console.log("_depositToPool.5 balances",
+        IERC20(tokens[0]).balanceOf(address(this)),
+        IERC20(tokens[1]).balanceOf(address(this)),
+        IERC20(tokens[2]).balanceOf(address(this))
+      );
 
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+      console.log("_depositToPool.6 consumedAmounts", consumedAmounts[0], consumedAmounts[1], consumedAmounts[2]);
+      console.log("_depositToPool.6 balances",
+        IERC20(tokens[0]).balanceOf(address(this)),
+        IERC20(tokens[1]).balanceOf(address(this)),
+        IERC20(tokens[2]).balanceOf(address(this))
+      );
 
       // adjust base-amounts
       _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
@@ -246,7 +264,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (uint collateral, uint[] memory repaid) = all
         ? _convertAfterWithdrawAll(tokens, indexAsset)
         : _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
-      _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral + withdrawnAmounts[indexAsset]));
+      _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
       investedAssetsUSD += collateral * assetPrice / 1e18;
@@ -267,7 +285,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // convert amounts to main asset and update base amounts
     (uint collateral, uint[] memory repaid) = _convertAfterWithdrawAll(tokens, indexAsset);
-    _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral + withdrawnAmounts[indexAsset]));
+    _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
     // adjust _investedAssets
     _updateInvestedAssets();
@@ -375,12 +393,20 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint len = tokens_.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset_) {
+        uint receivedAmount = receivedAmounts_[i];
+        uint spentAmount = spentAmounts_[i];
+        if (amountAsset_ > 0) {
+          receivedAmount += uint(amountAsset_);
+        } else {
+          spentAmount += uint(-amountAsset_);
+        }
+
         _updateBaseAmountsForAsset(
           tokens_[indexAsset_],
-          amountAsset_ > 0
-            ? uint(amountAsset_)
-            : uint(-amountAsset_),
-            amountAsset_ > 0
+          receivedAmount > spentAmount
+            ? receivedAmount - spentAmount
+            : spentAmount - receivedAmount,
+          receivedAmount > spentAmount
         );
       } else {
         _updateBaseAmountsForAsset(
