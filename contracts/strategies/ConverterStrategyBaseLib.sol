@@ -13,7 +13,7 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -32,13 +32,12 @@ library ConverterStrategyBaseLib {
     uint totalRewardAmounts;
   }
 
+  /// @notice Input params for {_recycle}, workaround for stack too deep
   struct RecycleInputParams {
     address asset;
     uint compoundRatio;
     address[] tokens;
     ITetuLiquidator liquidator;
-    uint[] liquidationThresholds;
-    uint[] baseAmounts;
     address[] rewardTokens;
     uint[] rewardAmounts;
   }
@@ -311,14 +310,13 @@ library ConverterStrategyBaseLib {
   /// It means, they are divided on two parts: to forwarder, to compound
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
-  /// All forwarder-parts are just transferred to the forwarder.
+  /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
   /// @param tokens_ tokens received from _depositorPoolAssets
   /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
-  ///         This array has +1 item at the end: liquidation threshold for the main asset
-  ///                                            there is no possibility to use special var for it, stack too deep
+  /// @param baseAmounts_ Base amounts for rewards tokens
   /// @return receivedAmounts Received amounts of the tokens
   ///         This array has +1 item at the end: received amount of the main asset
-  ///                                            there is no possibility to use special var for it, stack too deep
+  ///                                            there was no possibility to use separate var for it, stack too deep
   /// @return spentAmounts Spent amounts of the tokens
   /// @return amountsToForward Amounts to be sent to forwarder
   function recycle(
@@ -326,8 +324,8 @@ library ConverterStrategyBaseLib {
     uint compoundRatio_,
     address[] memory tokens_,
     ITetuLiquidator liquidator_,
-    uint[] memory liquidationThresholds_,
-    uint[] memory baseAmounts_,
+    mapping(address => uint) storage liquidationThresholds_,
+    mapping(address => uint) storage baseAmounts_,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
@@ -340,15 +338,18 @@ library ConverterStrategyBaseLib {
       compoundRatio: compoundRatio_,
       tokens: tokens_,
       liquidator: liquidator_,
-      liquidationThresholds: liquidationThresholds_,
-      baseAmounts: baseAmounts_,
       rewardTokens: rewardTokens_,
       rewardAmounts: rewardAmounts_
     });
-    (receivedAmounts, spentAmounts, amountsToForward) = _recycle(p);
+    (receivedAmounts, spentAmounts, amountsToForward) = _recycle(p, liquidationThresholds_, baseAmounts_);
   }
 
-  function _recycle(RecycleInputParams memory params) internal returns (
+  /// @dev Implementation of {recycle}, input params are packed to a struct to avoid stack too deep.
+  function _recycle(
+    RecycleInputParams memory params,
+    mapping(address => uint) storage liquidationThresholds,
+    mapping(address => uint) storage baseAmounts
+  ) internal returns (
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
@@ -358,7 +359,7 @@ library ConverterStrategyBaseLib {
     require(params.rewardTokens.length == params.rewardAmounts.length, "SB: Arrays mismatch");
 
     p.len = params.rewardTokens.length;
-    p.liquidationThresholdAsset = params.liquidationThresholds[p.len];
+    p.liquidationThresholdAsset = liquidationThresholds[params.asset];
 
     amountsToForward = new uint[](p.len);
     receivedAmounts = new uint[](p.len + 1);
@@ -374,15 +375,10 @@ library ConverterStrategyBaseLib {
           // The asset is in the list of depositor's assets, liquidation is not allowed
           receivedAmounts[i] += p.amountToCompound;
         } else {
-          p.baseAmountIn = params.baseAmounts[i];
+          p.baseAmountIn = baseAmounts[p.rewardToken];
           p.totalRewardAmounts = p.amountToCompound + p.baseAmountIn; // total amount that can be liquidated
 
-          console.log("totalRewardAmounts", p.totalRewardAmounts);
-          console.log("p.rewardToken", p.rewardToken);
-          console.log("params.asset", params.asset);
-          console.log("params.liquidationThresholds[i]", params.liquidationThresholds[i]);
-          console.log("p.liquidationThresholdAsset", p.liquidationThresholdAsset);
-          if (p.totalRewardAmounts < params.liquidationThresholds[i]) {
+          if (p.totalRewardAmounts < liquidationThresholds[p.rewardToken]) {
             // amount is too small, liquidation is not allowed
             receivedAmounts[i] += p.amountToCompound;
           } else {

@@ -51,7 +51,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.0.0";
 
-  uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
 
   uint private constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
@@ -448,6 +447,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint len = tokensOut.length;
     if (len > 0) {
       (uint[] memory received, uint[] memory spent, uint[] memory amountsToForward) = _recycle(tokensOut, amountsOut);
+
       _updateBaseAmounts(tokensOut, received, spent, type(uint).max, 0); // we don't need to exclude any asset here
       _updateBaseAmountsForAsset(asset, received[len], true); // tokensOut can not include main asset
 
@@ -467,36 +467,27 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// It means, they are divided on two parts: to forwarder, to compound
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
-  /// All forwarder-parts are just transferred to the forwarder.
-  /// @param receivedAmounts Received amounts of the tokens
-  /// @param spentAmounts Spent amounts of the tokens
-  /// param receivedAssetAmountOut Received amount of the main asset
+  /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
+  /// @param tokens_ tokens received from _depositorPoolAssets
+  /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
+  /// @param baseAmounts_ Base amounts for rewards tokens
+  /// @return receivedAmounts Received amounts of the tokens
+  ///         This array has +1 item at the end: received amount of the main asset
+  ///                                            there was no possibility to use separate var for it, stack too deep
+  /// @return spentAmounts Spent amounts of the tokens
+  /// @return amountsToForward Amounts to be sent to forwarder
   function _recycle(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal returns (
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    address _asset = asset;
-    uint[] memory _liquidationThresholds;
-    uint[] memory _baseAmounts;
-    {
-      uint len = rewardTokens_.length;
-      _liquidationThresholds = new uint[](len + 1);
-      _baseAmounts = new uint[](len);
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        _liquidationThresholds[i] = liquidationThresholds[rewardTokens_[i]];
-        _baseAmounts[i] = baseAmounts[rewardTokens_[i]];
-      }
-      _liquidationThresholds[len] = liquidationThresholds[_asset];
-    }
-
     return ConverterStrategyBaseLib.recycle(
-      _asset,
+      asset,
       compoundRatio,
       _depositorPoolAssets(),
       ITetuLiquidator(IController(controller()).liquidator()),
-      _liquidationThresholds,
-      _baseAmounts,
+      liquidationThresholds,
+      baseAmounts,
       rewardTokens_,
       rewardAmounts_
     );

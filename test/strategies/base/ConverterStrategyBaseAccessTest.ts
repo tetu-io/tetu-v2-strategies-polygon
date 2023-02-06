@@ -1428,8 +1428,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
         forwarderAmounts: retForwarder.amounts,
         forwarderTokens: retForwarder.tokens,
         spentAmounts: r.spentAmounts,
-        receivedAmounts: r.receivedAmounts,
-        receivedAssetAmountOut: BigNumber.from(0) // TODO r.receivedAssetAmountOut
+        receivedAmounts: r.receivedAmounts.slice(0, -1),
+        receivedAssetAmountOut: r.receivedAmounts[r.receivedAmounts.length - 1]
       }
     }
     describe("Good paths", () => {
