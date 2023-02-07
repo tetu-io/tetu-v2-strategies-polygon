@@ -125,6 +125,7 @@ contract MockDepositor is DepositorBase, Initializable {
     }
 
     liquidityOut = depositorEnterParams.liquidityOut;
+    depositorLiquidity += liquidityOut;
   }
 
   function setDepositorEnter(uint[] memory amountsDesired_, uint[] memory amountsConsumed_, uint liquidityOut_) external {
@@ -161,6 +162,11 @@ contract MockDepositor is DepositorBase, Initializable {
       token.mint(address(this), depositorExitParams.amountsOut[i]);
       amountsOut[i] = depositorExitParams.amountsOut[i];
     }
+
+    // we need to modify depositorLiquidity for tests with _updateInvestedAssets
+    if (depositorLiquidity >= liquidityAmount) {
+      depositorLiquidity -= liquidityAmount;
+    }
   }
 
   function setDepositorExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
@@ -175,27 +181,47 @@ contract MockDepositor is DepositorBase, Initializable {
   /////////////////////////////////////////////////////////////////////
   ///                   _depositorQuoteExit
   /////////////////////////////////////////////////////////////////////
-  DepositorExitParams public depositorQuoteExitParams;
+  struct DepositorQuoteExitParams {
+    uint liquidityAmount;
+    uint[] amountsOut;
+  }
+  /// @notice keccak256(liquidityAmount + 1) => results
+  mapping(bytes32 => DepositorQuoteExitParams) public depositorQuoteExitParams;
 
   /// @dev Quotes output for given lp amount from the pool.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
-    console.log("_depositorQuoteExit liquidityAmount", liquidityAmount, depositorQuoteExitParams.liquidityAmount);
-    require(liquidityAmount == depositorQuoteExitParams.liquidityAmount, "_depositorQuoteExit input params");
+    bytes32 key = keccak256(abi.encodePacked(liquidityAmount + 1));
+    DepositorQuoteExitParams memory p = depositorQuoteExitParams[key];
+    if (p.liquidityAmount == liquidityAmount) {
+      console.log("_depositorQuoteExit liquidityAmount", liquidityAmount, p.liquidityAmount);
 
-    uint len = _depositorAssets.length;
-    amountsOut = new uint[](len);
-    for (uint i = 0; i < len; ++i) {
-      amountsOut[i] = depositorQuoteExitParams.amountsOut[i];
+      uint len = _depositorAssets.length;
+      amountsOut = new uint[](len);
+      for (uint i = 0; i < len; ++i) {
+        amountsOut[i] = p.amountsOut[i];
+      }
+    } else {
+      console.log("_depositorQuoteExit.missed liquidityAmount", liquidityAmount);
+      revert("_depositorQuoteExit.missed liquidityAmount");
     }
+
+    return amountsOut;
   }
 
   function setDepositorQuoteExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
     console.log("setDepositorQuoteExit, liquidityAmount_", liquidityAmount_);
-    depositorQuoteExitParams.liquidityAmount = liquidityAmount_;
-    depositorQuoteExitParams.amountsOut = new uint[](amountsOut_.length);
+    bytes32 key = keccak256(abi.encodePacked(liquidityAmount_ + 1));
+
+    DepositorQuoteExitParams memory p = DepositorQuoteExitParams({
+      liquidityAmount: liquidityAmount_,
+      amountsOut: new uint[](amountsOut_.length)
+    });
+
     for (uint i = 0; i < amountsOut_.length; ++i) {
-      depositorQuoteExitParams.amountsOut[i] = amountsOut_[i];
+      p.amountsOut[i] = amountsOut_[i];
     }
+
+    depositorQuoteExitParams[key] = p;
   }
 
   /////////////////////////////////////////////////////////////////////

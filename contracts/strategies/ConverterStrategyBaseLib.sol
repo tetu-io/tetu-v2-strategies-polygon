@@ -288,8 +288,8 @@ library ConverterStrategyBaseLib {
     return type(uint).max;
   }
 
-  /// @notice Get amounts to convert = all available amounts of all depositor assets except main one
-  function getAvailableAmountsToConvert(
+  /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
+  function getAvailableBalances(
     address[] memory tokens_,
     uint indexAsset
   ) external view returns (uint[] memory) {

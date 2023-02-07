@@ -41,34 +41,6 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_EMERGENCY,
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
-import {PromiseOrValue} from "../../../typechain/common";
-
-//region Data types
-interface ILiquidationParams {
-  tokenIn: MockToken;
-  tokenOut: MockToken;
-  amountIn: BigNumber;
-  amountOut: BigNumber;
-}
-interface ITokenAmount {
-  token: MockToken;
-  amount: BigNumber;
-}
-interface IBorrowParams {
-  collateralAsset: MockToken;
-  collateralAmount: BigNumber;
-  borrowAsset: MockToken;
-  converter: string;
-  maxTargetAmount: BigNumber;
-}
-interface IRepayParams {
-  collateralAsset: MockToken;
-  borrowAsset: MockToken;
-  totalDebtAmountOut: BigNumber;
-  totalCollateralAmountOut: BigNumber;
-  amountRepay: BigNumber;
-}
-//endregion Data types
 
 /**
  * Test of ConverterStrategyBase
@@ -193,6 +165,65 @@ describe("ConverterStrategyBaseAccessTest", () => {
     await TimeUtils.rollback(snapshot);
   });
 //endregion before, after
+
+//region Data types
+  interface ILiquidationParams {
+    tokenIn: MockToken;
+    tokenOut: MockToken;
+    amountIn: BigNumber;
+    amountOut: BigNumber;
+  }
+  interface ITokenAmount {
+    token: MockToken;
+    amount: BigNumber;
+  }
+  interface IBorrowParams {
+    collateralAsset: MockToken;
+    collateralAmount: BigNumber;
+    borrowAsset: MockToken;
+    converter: string;
+    maxTargetAmount: BigNumber;
+  }
+  interface IRepayParams {
+    collateralAsset: MockToken;
+    borrowAsset: MockToken;
+    totalDebtAmountOut: BigNumber;
+    totalCollateralAmountOut: BigNumber;
+    amountRepay: BigNumber;
+  }
+//endregion Data types
+
+//region Utils
+  async function setupInvestedAssets(
+    liquidityAmount: BigNumber,
+    investedAssetsValue: BigNumber
+  ) {
+    await strategy.setDepositorQuoteExit(
+      liquidityAmount,
+      [
+        0, // dai
+        investedAssetsValue, // usdc
+        0 // usdt
+      ]
+    );
+    await tetuConverter.setQuoteRepay(
+      strategy.address,
+      usdc.address,
+      dai.address,
+      0,
+      0
+    );
+    await tetuConverter.setQuoteRepay(
+      strategy.address,
+      usdc.address,
+      usdt.address,
+      0,
+      0
+    );
+    await strategy.updateInvestedAssetsTestAccess();
+    console.log("_investedAssets", await strategy.investedAssets(), investedAssetsValue);
+  }
+//endregion Utils
 
 //region Unit tests
   describe("_beforeDeposit", () => {
@@ -2162,6 +2193,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
       baseAmounts: BigNumber[];
       strategyBalances: BigNumber[];
+
+      investedAssetsValueBefore: BigNumber;
+      investedAssetsValueAfter: BigNumber;
     }
     async function makeDepositToPoolTest(
       amount: BigNumber,
@@ -2242,6 +2276,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
         liquidityOut
       );
 
+      await setupInvestedAssets(liquidityOut, parseUnits("1", 18));
+      const investedAssetsValueBefore = await strategy.investedAssets();
+
       const tx = await strategy._depositToPoolAccess(amount);
       const gasUsed = (await tx.wait()).gasUsed;
 
@@ -2255,7 +2292,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
       return {
         gasUsed,
         strategyBalances,
-        baseAmounts
+        baseAmounts,
+        investedAssetsValueBefore,
+        investedAssetsValueAfter: await strategy.investedAssets()
       }
     }
 
@@ -2331,6 +2370,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
           expect(ret).eq(expected);
         });
+        it("should call _updateInvestedAssets", async () => {
+          expect(results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)).eq(false);
+        });
         it("Gas estimation @skip-on-coverage", async () => {
           controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_DEPOSIT_TO_POOL, (u, t) => {
             expect(u).to.be.below(t + 1);
@@ -2345,7 +2387,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
   describe("withdraw", () => {
     interface IWithdrawTestParams {
-      investedAssets: BigNumber;
+      investedAssetsBeforeWithdraw: BigNumber;
+      investedAssetsAfterWithdraw: BigNumber;
       liquidations?: ILiquidationParams[];
       baseAmounts?: ITokenAmount[];
       initialBalances?: ITokenAmount[];
@@ -2363,35 +2406,6 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
       investedAssetsValueBefore: BigNumber;
       investedAssetsValueAfter: BigNumber;
-    }
-    async function setupInvestedAssets(
-      liquidityAmount: BigNumber,
-      investedAssetsValue: BigNumber
-    ) {
-      await strategy.setDepositorQuoteExit(
-        liquidityAmount,
-        [
-          0, // dai
-          investedAssetsValue, // usdc
-          0 // usdt
-        ]
-      );
-      await tetuConverter.setQuoteRepay(
-        strategy.address,
-        usdc.address,
-        dai.address,
-        0,
-        0
-      );
-      await tetuConverter.setQuoteRepay(
-        strategy.address,
-        usdc.address,
-        usdt.address,
-        0,
-        0
-      );
-      await strategy.updateInvestedAssetsTestAccess();
-      console.log("_investedAssets", await strategy.investedAssets(), investedAssetsValue);
     }
     async function makeWithdrawTest(
       depositorLiquidity: BigNumber,
@@ -2468,17 +2482,27 @@ describe("ConverterStrategyBaseAccessTest", () => {
       await strategy.setDepositorPoolReserves(depositorPoolReserves);
       await strategy.setTotalSupply(depositorTotalSupply);
 
-      if (params?.investedAssets) {
-        await setupInvestedAssets(depositorLiquidity, params.investedAssets);
+      if (params?.investedAssetsBeforeWithdraw) {
+        await setupInvestedAssets(depositorLiquidity, params.investedAssetsBeforeWithdraw);
       }
       const investedAssets = await strategy.investedAssets();
 
-      await strategy.setDepositorExit(
-        amount
+      const liquidityAmountToWithdraw = amount
           ? depositorLiquidity.mul(101).mul(amount).div(100).div(investedAssets)
-          : depositorLiquidity, // withdraw all
-        withdrawnAmounts
-      );
+          : depositorLiquidity; // withdraw all
+      await strategy.setDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
+      if (params?.investedAssetsAfterWithdraw) {
+        await strategy.setDepositorQuoteExit(
+          amount
+            ? depositorLiquidity.sub(liquidityAmountToWithdraw)
+            : BigNumber.from(0),
+          [
+            0, // dai
+            params?.investedAssetsAfterWithdraw, // usdc
+            0 // usdt
+          ]
+        );
+      }
 
       const investedAssetsValueBefore = await strategy.investedAssets();
       const r: {investedAssetsUSD: BigNumber, assetPrice: BigNumber} = params?.emergency
@@ -2534,7 +2558,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
             ],
             parseUnits("3", 6), // amount to withdraw
             {
-              investedAssets: parseUnits("6", 6), // total invested amount
+              investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount
+              investedAssetsAfterWithdraw:  parseUnits("1", 6),
               baseAmounts: [
                 {token: dai, amount: parseUnits("3000", 18)},
                 {token: usdc, amount: parseUnits("1000", 6)},
@@ -2632,7 +2657,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
             ],
             undefined, // withdraw all
             {
-              investedAssets: parseUnits("6", 6), // total invested amount (not used)
+              investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount (not used)
+              investedAssetsAfterWithdraw:  parseUnits("0", 6),
               baseAmounts: [
                 {token: dai, amount: parseUnits("3000", 18)},
                 {token: usdc, amount: parseUnits("1000", 6)},
@@ -2731,7 +2757,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
             undefined, // withdraw all
             {
               emergency: true,
-              investedAssets: parseUnits("6", 6), // total invested amount (not used)
+              investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount (not used)
+              investedAssetsAfterWithdraw:  parseUnits("0", 6),
               baseAmounts: [
                 {token: dai, amount: parseUnits("3000", 18)},
                 {token: usdc, amount: parseUnits("1000", 6)},

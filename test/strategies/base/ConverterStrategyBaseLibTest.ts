@@ -513,10 +513,10 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
     });
     describe("Bad paths", () => {
-      it("should return expected index", async () => {
+      it("should type(uint).max if the asset is not found", async () => {
         const assets = [usdc.address, tetu.address, usdt.address];
-        await expect(facade.getAssetIndex(assets, weth.address))
-          .revertedWith("TS-6 not found");
+        const ret = await facade.getAssetIndex(assets, weth.address);
+        expect(ret.eq(Misc.MAX_UINT)).eq(true);
       });
     });
   });

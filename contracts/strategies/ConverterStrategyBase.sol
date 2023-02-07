@@ -14,7 +14,7 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
+//import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -220,7 +220,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function _withdrawUniversal(uint amount, bool all) internal returns (uint investedAssetsUSD, uint assetPrice) {
-    console.log("_withdrawUniversal.1", all, _investedAssets, amount);
     uint liquidityAmount = all
       ? _depositorLiquidity()  // total amount of LP-tokens deposited by the strategy
       : amount == 0 || _investedAssets == 0
@@ -234,7 +233,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
-      console.log("liquidityAmount, _depositorTotalSupply", liquidityAmount, _depositorTotalSupply());
       (investedAssetsUSD, assetPrice) = ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
         tokens,
         _depositorPoolReserves(),
@@ -244,15 +242,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
       );
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
-      console.log("withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
-      console.log("investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
 
       // convert amounts to main asset and update base amounts
       (uint collateral, uint[] memory repaid) = all
         ? _convertAfterWithdrawAll(tokens, indexAsset)
         : _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
-      console.log("repaid", repaid[0], repaid[1], repaid[2]);
-      console.log("collateral", collateral);
       _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
@@ -293,13 +287,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint collateralOut,
     uint[] memory repaidAmounts
   ){
-    uint len = tokens_.length;
-    uint[] memory amountsToConvert;
-    amountsToConvert = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset_) continue;
-      amountsToConvert[i] = _balance(tokens_[i]);
-    }
+    uint[] memory amountsToConvert = ConverterStrategyBaseLib.getAvailableBalances(tokens_, indexAsset_);
 
     // convert amounts to the main asset
     (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert);
@@ -604,7 +592,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
     }
 
-    console.log("estimatedAssets", estimatedAssets);
     return estimatedAssets;
   }
 
