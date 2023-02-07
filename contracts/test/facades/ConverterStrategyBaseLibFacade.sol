@@ -5,7 +5,7 @@ import "../../interfaces/converter/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
-contract ConverterStrategyBaseFacade {
+contract ConverterStrategyBaseLibFacade {
   function getExpectedWithdrawnAmountUSD(
     address[] memory poolAssets_,
     uint[] memory reserves_,
@@ -83,7 +83,10 @@ contract ConverterStrategyBaseFacade {
     uint amountIn,
     uint slippage,
     uint rewardLiquidationThresholdForTokenOut
-  ) external {
+  ) external returns (
+    uint spentAmountIn,
+    uint receivedAmountOut
+  ) {
     return ConverterStrategyBaseLib.liquidate(
       liquidator_,
       tokenIn,
@@ -92,5 +95,9 @@ contract ConverterStrategyBaseFacade {
       slippage,
       rewardLiquidationThresholdForTokenOut
     );
+  }
+
+  function getAssetIndex(address[] memory tokens_, address asset_) external pure returns (uint) {
+    return ConverterStrategyBaseLib.getAssetIndex(tokens_, asset_);
   }
 }

@@ -336,6 +336,9 @@ describe('BalancerComposableStableUniversalTest', async () => {
       [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN, MaticAddresses.USDT_TOKEN],
       [112, 112, 112]
     );
+
+    // update splitter by new implementation
+
   });
 
   /** Save collected states to csv, compute profit */

@@ -7,7 +7,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "hardhat/console.sol";
 
 /// @title Mock contract for base Depositor.
-/// @author bogdoslav
 contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Version of this contract. Adjust manually on each code modification.
@@ -41,6 +40,7 @@ contract MockDepositor is DepositorBase, Initializable {
       _depositorWeights.push(depositorWeights_[i]);
       _depositorReserves.push(depositorReserves_[i]);
     }
+    console.log("__MockDepositor_init", tokensLength, _depositorAssets.length, _depositorWeights.length);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -72,11 +72,13 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory) {
+    console.log("_depositorPoolAssets");
     return _depositorAssets;
   }
 
   /// @dev Returns pool weights
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
+    console.log("_depositorPoolWeights", _depositorWeights.length);
     weights = _depositorWeights;
     uint len = weights.length;
     totalWeight = 0;
@@ -90,6 +92,10 @@ contract MockDepositor is DepositorBase, Initializable {
     for (uint i = 0; i < _depositorReserves.length; ++i) {
       reserves[i] = _depositorReserves[i];
     }
+  }
+
+  function setDepositorPoolReserves(uint[] memory depositorReserves_) external {
+    _depositorReserves = depositorReserves_;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -119,6 +125,7 @@ contract MockDepositor is DepositorBase, Initializable {
     }
 
     liquidityOut = depositorEnterParams.liquidityOut;
+    depositorLiquidity += liquidityOut;
   }
 
   function setDepositorEnter(uint[] memory amountsDesired_, uint[] memory amountsConsumed_, uint liquidityOut_) external {
@@ -155,9 +162,15 @@ contract MockDepositor is DepositorBase, Initializable {
       token.mint(address(this), depositorExitParams.amountsOut[i]);
       amountsOut[i] = depositorExitParams.amountsOut[i];
     }
+
+    // we need to modify depositorLiquidity for tests with _updateInvestedAssets
+    if (depositorLiquidity >= liquidityAmount) {
+      depositorLiquidity -= liquidityAmount;
+    }
   }
 
   function setDepositorExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
+    console.log("MockDepositor.setDepositorExit liquidityAmount", liquidityAmount_);
     depositorExitParams.liquidityAmount = liquidityAmount_;
     depositorExitParams.amountsOut = new uint[](amountsOut_.length);
     for (uint i = 0; i < amountsOut_.length; ++i) {
@@ -168,26 +181,47 @@ contract MockDepositor is DepositorBase, Initializable {
   /////////////////////////////////////////////////////////////////////
   ///                   _depositorQuoteExit
   /////////////////////////////////////////////////////////////////////
-  DepositorExitParams public depositorQuoteExitParams;
+  struct DepositorQuoteExitParams {
+    uint liquidityAmount;
+    uint[] amountsOut;
+  }
+  /// @notice keccak256(liquidityAmount + 1) => results
+  mapping(bytes32 => DepositorQuoteExitParams) public depositorQuoteExitParams;
 
   /// @dev Quotes output for given lp amount from the pool.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
-    console.log("_depositorQuoteExit liquidityAmount", liquidityAmount);
-    require(liquidityAmount == depositorQuoteExitParams.liquidityAmount, "_depositorQuoteExit input params");
+    bytes32 key = keccak256(abi.encodePacked(liquidityAmount + 1));
+    DepositorQuoteExitParams memory p = depositorQuoteExitParams[key];
+    if (p.liquidityAmount == liquidityAmount) {
+      console.log("_depositorQuoteExit liquidityAmount", liquidityAmount, p.liquidityAmount);
 
-    uint len = _depositorAssets.length;
-    amountsOut = new uint[](len);
-    for (uint i = 0; i < len; ++i) {
-      amountsOut[i] = depositorQuoteExitParams.amountsOut[i];
+      uint len = _depositorAssets.length;
+      amountsOut = new uint[](len);
+      for (uint i = 0; i < len; ++i) {
+        amountsOut[i] = p.amountsOut[i];
+      }
+    } else {
+      console.log("_depositorQuoteExit.missed liquidityAmount", liquidityAmount);
+      revert("_depositorQuoteExit.missed liquidityAmount");
     }
+
+    return amountsOut;
   }
 
   function setDepositorQuoteExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
-    depositorQuoteExitParams.liquidityAmount = liquidityAmount_;
-    depositorQuoteExitParams.amountsOut = new uint[](amountsOut_.length);
+    console.log("setDepositorQuoteExit, liquidityAmount_", liquidityAmount_);
+    bytes32 key = keccak256(abi.encodePacked(liquidityAmount_ + 1));
+
+    DepositorQuoteExitParams memory p = DepositorQuoteExitParams({
+      liquidityAmount: liquidityAmount_,
+      amountsOut: new uint[](amountsOut_.length)
+    });
+
     for (uint i = 0; i < amountsOut_.length; ++i) {
-      depositorQuoteExitParams.amountsOut[i] = amountsOut_[i];
+      p.amountsOut[i] = amountsOut_[i];
     }
+
+    depositorQuoteExitParams[key] = p;
   }
 
   /////////////////////////////////////////////////////////////////////

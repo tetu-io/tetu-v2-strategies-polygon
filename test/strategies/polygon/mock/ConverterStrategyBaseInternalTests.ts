@@ -124,7 +124,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
   describe("_borrowPosition", () => {
     describe("Good paths", () => {
       it("should return expected value", async () => {
-        const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+        const tetuConverter = await MockHelper.createMockTetuConverter(signer);
         const strategy = await setupMockedStrategy(
           usdc,
           [usdc, dai],
@@ -189,7 +189,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
     });
     describe("Bad paths", () => {
       it("should return 0 if a borrow strategy is not found", async () => {
-        const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+        const tetuConverter = await MockHelper.createMockTetuConverter(signer);
         const strategy = await setupMockedStrategy(
           usdc,
           [usdc, dai],
@@ -241,7 +241,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
         borrowAsset: MockToken,
         params: IMakeClosePositionTestInputParams
       ) : Promise<IMakeClosePositionTestResults> {
-        const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+        const tetuConverter = await MockHelper.createMockTetuConverter(signer);
         const strategy = await setupMockedStrategy(
           collateralAsset,
           [collateralAsset, borrowAsset],
@@ -453,7 +453,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
       borrowAsset: MockToken,
       params: IMakeWithdrawTestInputParams
     ) : Promise<IMakeWithdrawTestResults>{
-      const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+      const tetuConverter = await MockHelper.createMockTetuConverter(signer);
       const strategy = await setupMockedStrategy(
         collateralAsset,
         [collateralAsset, borrowAsset],
@@ -656,7 +656,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
       borrowAsset: MockToken,
       params: IMakeCalcInvestedAssetsInputParams
     ) : Promise<IMakeCalcInvestedAssetsTestResults> {
-      const tetuConverter = await MockHelper.createMockTetuConverterSingleCall(signer);
+      const tetuConverter = await MockHelper.createMockTetuConverter(signer);
       const strategy = await setupMockedStrategy(
         collateralAsset,
         [collateralAsset, borrowAsset],

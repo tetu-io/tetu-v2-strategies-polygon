@@ -1,10 +1,10 @@
 import {
   BalancerComposableStableDepositorFacade,
-  BalancerLogicLibFacade, ConverterStrategyBaseFacade,
+  BalancerLogicLibFacade, ConverterStrategyBaseLibFacade,
   MockConverterStrategy,
   MockConverterStrategy__factory, MockTetuConverterController,
-  MockTetuConverterSingleCall, MockTetuLiquidatorSingleCall,
-  PriceOracleMock, Uniswap2LibFacade
+  MockTetuConverter, MockTetuLiquidatorSingleCall,
+  PriceOracleMock, Uniswap2LibFacade, MockForwarder
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
@@ -31,11 +31,11 @@ export class MockHelper {
     )) as PriceOracleMock;
   }
 
-  public static async createMockTetuConverterSingleCall(signer: SignerWithAddress): Promise<MockTetuConverterSingleCall> {
+  public static async createMockTetuConverter(signer: SignerWithAddress): Promise<MockTetuConverter> {
     return (await DeployerUtils.deployContract(
       signer,
-      'MockTetuConverterSingleCall',
-    )) as MockTetuConverterSingleCall;
+      'MockTetuConverter',
+    )) as MockTetuConverter;
   }
 
   public static async createMockTetuLiquidatorSingleCall(signer: SignerWithAddress): Promise<MockTetuLiquidatorSingleCall> {
@@ -64,8 +64,8 @@ export class MockHelper {
     return (await DeployerUtils.deployContract(signer, 'BalancerLogicLibFacade')) as BalancerLogicLibFacade;
   }
 
-  public static async createConverterStrategyBaseFacade(signer: SignerWithAddress) : Promise<ConverterStrategyBaseFacade> {
-    return (await DeployerUtils.deployContract(signer, 'ConverterStrategyBaseFacade')) as ConverterStrategyBaseFacade;
+  public static async createConverterStrategyBaseFacade(signer: SignerWithAddress) : Promise<ConverterStrategyBaseLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'ConverterStrategyBaseLibFacade')) as ConverterStrategyBaseLibFacade;
   }
 
   public static async createBalancerComposableStableDepositorFacade(
@@ -79,5 +79,12 @@ export class MockHelper {
     )) as BalancerComposableStableDepositorFacade;
     ret.init(poolId, rewardTokens);
     return ret;
+  }
+
+  public static async createMockForwarder(signer: SignerWithAddress): Promise<MockForwarder> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'MockForwarder',
+    )) as MockForwarder;
   }
 }

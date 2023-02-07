@@ -23,7 +23,8 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     address swapper;
     string errorMessage;
   }
-  BuildRouteParams public buildRouteParams;
+  /// @notice keccak256(tokenIn, tokenOut) => results
+  mapping(bytes32 => BuildRouteParams) public buildRouteParams;
   function buildRoute(
     address tokenIn,
     address tokenOut
@@ -31,24 +32,23 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     PoolData[] memory route,
     string memory errorMessage
   ) {
-    console.log("MockTetuLiquidatorSingleCall.buildRoute");
-    if (bytes(buildRouteParams.errorMessage).length != 0) {
+    console.log("MockTetuLiquidatorSingleCall.buildRoute", tokenIn, tokenOut);
+    bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut));
+    BuildRouteParams memory p = buildRouteParams[key];
+
+    if (bytes(p.errorMessage).length != 0) {
       console.log("MockTetuLiquidatorSingleCall.buildRoute.error");
-      return (route, buildRouteParams.errorMessage);
+      return (route, p.errorMessage);
     } else {
-      if (
-        tokenIn == buildRouteParams.tokenIn
-      && tokenOut == buildRouteParams.tokenOut
-      ) {
-        console.log("MockTetuLiquidatorSingleCall.buildRoute.data");
+      if (tokenIn == p.tokenIn && tokenOut == p.tokenOut) {
         route = new PoolData[](1);
-        route[0].tokenIn = buildRouteParams.tokenIn;
-        route[0].tokenOut = buildRouteParams.tokenOut;
-        route[0].pool = buildRouteParams.pool;
-        route[0].swapper = buildRouteParams.swapper;
+        route[0].tokenIn = p.tokenIn;
+        route[0].tokenOut = p.tokenOut;
+        route[0].pool = p.pool;
+        route[0].swapper = p.swapper;
         return (route, errorMessage);
       } else {
-        console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found");
+        console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found", tokenIn, tokenOut);
         return (route, "route not found");
       }
     }
@@ -60,11 +60,15 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     address swapper,
     string memory errorMessage
   ) external {
-    buildRouteParams.errorMessage = errorMessage;
-    buildRouteParams.tokenIn = tokenIn;
-    buildRouteParams.tokenOut = tokenOut;
-    buildRouteParams.pool = pool;
-    buildRouteParams.swapper = swapper;
+    console.log("setBuildRoute", tokenIn, tokenOut);
+    bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut));
+    buildRouteParams[key] = BuildRouteParams({
+      errorMessage: errorMessage,
+      tokenIn: tokenIn,
+      tokenOut: tokenOut,
+      pool: pool,
+      swapper: swapper
+    });
   }
 
   ///////////////////////////////////////////////////
@@ -78,25 +82,22 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     uint amount;
     uint priceOut;
   }
-  GetPriceForRouteParams public getPriceForRouteParams;
+  /// @notice keccak256(tokenIn, tokenOut, pool, swapper, amount) => results
+  mapping(bytes32 => GetPriceForRouteParams) public getPriceForRouteParams;
+
   function getPriceForRoute(PoolData[] memory route, uint amount) external view override returns (uint) {
-    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute amount route.length", amount, route.length);
-    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute tokenIn, tokenOut", route[0].tokenIn, route[0].tokenOut);
-    console.log("MockTetuLiquidatorSingleCall.getPriceForRoute pool, swapper", route[0].pool, route[0].swapper);
-    if (
-      route.length == 1
-      && route[0].tokenOut == getPriceForRouteParams.tokenOut
-      && route[0].tokenIn == getPriceForRouteParams.tokenIn
-      && route[0].swapper == getPriceForRouteParams.swapper
-      && route[0].pool == getPriceForRouteParams.pool
-      && amount == getPriceForRouteParams.amount
-    ) {
-      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.data");
-      return getPriceForRouteParams.priceOut;
+    //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute amount route.length", amount, route.length);
+    //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute tokenIn, tokenOut", route[0].tokenIn, route[0].tokenOut);
+    //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute pool, swapper", route[0].pool, route[0].swapper);
+
+    bytes32 key = keccak256(abi.encodePacked(route[0].tokenIn, route[0].tokenOut, route[0].pool, route[0].swapper, amount));
+    GetPriceForRouteParams memory p = getPriceForRouteParams[key];
+
+    if (route.length == 1 && route[0].tokenOut == p.tokenOut) {
+      //console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.data");
+      return p.priceOut;
     } else {
-      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed amount", getPriceForRouteParams.amount);
-      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed tokenIn, tokenOut", getPriceForRouteParams.tokenIn, getPriceForRouteParams.tokenOut);
-      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed pool, swapper", getPriceForRouteParams.pool, getPriceForRouteParams.swapper);
+      console.log("MockTetuLiquidatorSingleCall.getPriceForRoute.missed amount", amount);
       return 0;
     }
   }
@@ -108,12 +109,15 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     uint amount,
     uint priceOut
   ) external {
-    getPriceForRouteParams.tokenIn = tokenIn;
-    getPriceForRouteParams.tokenOut = tokenOut;
-    getPriceForRouteParams.pool = pool;
-    getPriceForRouteParams.swapper = swapper;
-    getPriceForRouteParams.amount = amount;
-    getPriceForRouteParams.priceOut = priceOut;
+    bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, pool, swapper, amount));
+    getPriceForRouteParams[key] = GetPriceForRouteParams({
+      tokenIn: tokenIn,
+      tokenOut: tokenOut,
+      pool: pool,
+      swapper: swapper,
+      amount: amount,
+      priceOut: priceOut
+    });
   }
 
   ///////////////////////////////////////////////////
@@ -128,26 +132,26 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     uint slippage;
     uint amountOut;
   }
-  LiquidateWithRouteParams public liquidateWithRouteParams;
+  /// @notice keccak256(tokenIn, tokenOut, pool, swapper, amount) => results
+  mapping(bytes32 => LiquidateWithRouteParams) public liquidateWithRouteParams;
 
   function liquidateWithRoute(
     PoolData[] memory route,
     uint amount,
     uint /*slippage*/
   ) external override {
-    console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute");
-    if (
-      route.length == 1
-      && route[0].tokenOut == liquidateWithRouteParams.tokenOut
-      && route[0].tokenIn == liquidateWithRouteParams.tokenIn
-      && route[0].swapper == liquidateWithRouteParams.swapper
-      && route[0].pool == liquidateWithRouteParams.pool
-      && amount == liquidateWithRouteParams.amount
-    ) {
-      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.data.1");
+    //console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute");
+
+    bytes32 key = keccak256(abi.encodePacked(route[0].tokenIn, route[0].tokenOut, route[0].pool, route[0].swapper, amount));
+    LiquidateWithRouteParams memory p = liquidateWithRouteParams[key];
+
+    if (route.length == 1 && route[0].tokenOut == p.tokenOut) {
+      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.data.1 balanceIn amount", IERC20(route[0].tokenIn).balanceOf(msg.sender), amount);
       IERC20(route[0].tokenIn).transferFrom(msg.sender, address(this), amount);
-      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.data.2");
-      IERC20(route[0].tokenOut).transfer(msg.sender, liquidateWithRouteParams.amountOut);
+
+      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.data.2 balanceOut amount", IERC20(route[0].tokenOut).balanceOf(address(this)), p.amountOut);
+      IERC20(route[0].tokenOut).transfer(msg.sender, p.amountOut);
+
     } else {
       console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.missed");
     }
@@ -160,13 +164,16 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     uint amount,
     uint amountOut
   ) external {
-    liquidateWithRouteParams.tokenIn = tokenIn;
-    liquidateWithRouteParams.tokenOut = tokenOut;
-    liquidateWithRouteParams.pool = pool;
-    liquidateWithRouteParams.swapper = swapper;
-    liquidateWithRouteParams.amount = amount;
-    liquidateWithRouteParams.slippage = 0;
-    liquidateWithRouteParams.amountOut = amountOut;
+    bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, pool, swapper, amount));
+    liquidateWithRouteParams[key] = LiquidateWithRouteParams({
+      tokenIn: tokenIn,
+      tokenOut: tokenOut,
+      pool: pool,
+      swapper: swapper,
+      amount: amount,
+      slippage: 0,
+      amountOut: amountOut
+    });
   }
 
   ///////////////////////////////////////////////////
