@@ -379,6 +379,7 @@ contract MockTetuConverter is ITetuConverter {
   ) external view returns (
     uint collateralAmountOut
   ) {
+    user_; // hide warning
     console.log("MockTetuConverterSingleCall.quoteRepay collateral,borrow,amount", collateralAsset_, borrowAsset_, amountToRepay_);
 
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
