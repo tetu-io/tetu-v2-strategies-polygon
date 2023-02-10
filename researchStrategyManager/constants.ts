@@ -21,14 +21,12 @@ export const uniswapV3ResearchStrategyAbi = [
   "function getEstimatedBalance(address token) external view returns(uint)",
   "function needRebalance() public view returns (bool)",
   "function deposit(address token, uint amount) external",
-  "function withdraw(address token, uint amount) external",
   "function withdrawAll(address token) external",
-  "function rebalance() public",
   "function rebalanceWithTracking() public",
   "function changeTickRange(int24 newTickRange_) external",
   "function changeRebalanceTickRange(int24 newRebalanceTickRange_) external",
   "function getPrice(address tokenIn) public view returns (uint)",
-  "function tracking() public view returns (int apr,uint earned,uint rebalanceCost,uint il,uint period,uint rebalances,address trackingToken)",
+  "function tracking() public view returns (int apr,uint earned,uint il,uint period,uint rebalances,address trackingToken)",
   "function name() external view returns (string memory)",
 ]
 

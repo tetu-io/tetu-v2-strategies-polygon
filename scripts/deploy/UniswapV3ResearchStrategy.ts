@@ -9,8 +9,8 @@ async function main() {
   const poolAddress = '0xA374094527e1673A86dE625aa59517c5dE346d32';
 
   const signer = (await ethers.getSigners())[0];
-  // await deployContract(hre, signer, 'UniswapV3ResearchStrategy', poolAddress, 1200, 30, MaticAddresses.USDC_TOKEN)
-  await deployContract(hre, signer, 'UniswapV3ResearchStrategy', poolAddress, 1200, 20, MaticAddresses.USDC_TOKEN)
+  await deployContract(hre, signer, 'UniswapV3ResearchStrategy', poolAddress, 1200, 40, MaticAddresses.USDC_TOKEN)
+  // await deployContract(hre, signer, 'UniswapV3ResearchStrategy', poolAddress, 1200, 20, MaticAddresses.USDC_TOKEN)
   // await deployContract(hre, signer, 'UniswapV3ResearchStrategy', poolAddress, 400, 30, MaticAddresses.USDC_TOKEN)
 }
 

@@ -10,8 +10,9 @@ import "../integrations/uniswap/IUniswapV3MintCallback.sol";
 import "../integrations/uniswap/IUniswapV3SwapCallback.sol";
 import "../integrations/uniswap/LiquidityAmounts.sol";
 
+import "hardhat/console.sol";
 
-/// @title Uniswap V3 range moving research strategy for tracking IL, rebalance cost and earns.
+/// @title Uniswap V3 range moving fill-up research strategy for tracking IL and earns.
 /// @dev Experimental development. High gas consumption.
 /// @author a17
 contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCallback {
@@ -19,20 +20,24 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
   using TickMath for int24;
 
   IUniswapV3Pool public pool;
-  string private constant VERSION = "1.2";
+  string private constant VERSION = "2.0";
   address private _trackingToken;
   uint private _trackingStart;
   uint private _earned;
-  uint private _rebalanceCost;
   uint private _il;
   uint private _lastAmount0;
   uint private _lastAmount1;
+  uint private _lastAmount0Fillup;
+  uint private _lastAmount1Fillup;
   uint private _rebalances;
   int24 private _tickRange;
   int24 private _rebalanceTickRange;
-  int24 private lowerTick;
-  int24 private upperTick;
+  int24 private _lowerTick;
+  int24 private _upperTick;
+  int24 private _lowerTickFillup;
+  int24 private _upperTickFillup;
   uint128 private liquidity;
+  uint128 private liquidityFillup;
   address private owner;
   uint private constant TWO_96 = 2 ** 96;
   uint160 private constant MIN_SQRT_RATIO = 4295128739 + 1;
@@ -51,18 +56,22 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
     _rebalanceTickRange = rebalanceTickRange_;
     _tickRange = tickRange_;
     (, int24 tick, , , , ,) = pool.slot0();
-    lowerTick = (tick - tickRange_) / 10 * 10;
-    upperTick = (tick + tickRange_) / 10 * 10;
+    _lowerTick = (tick - tickRange_) / 10 * 10;
+    _upperTick = (tick + tickRange_) / 10 * 10;
     _trackingToken = trackingToken_;
   }
 
   // ***************** VIEW FUNCTION *****************
 
   function getEstimatedBalance(address token) public view returns(uint) {
-    (uint amount0Current, uint amount1Current) = _getLiquidityBalances();
+    (uint amount0Current, uint amount1Current) = getLiquidityBalances();
+    (uint amount0CurrentFillup, uint amount1CurrentFillup) = getLiquidityBalancesFillup();
+    (uint fee0, uint fee1) = _getFees();
+    uint total0 = amount0Current + amount0CurrentFillup + fee0;
+    uint total1 = amount1Current + amount1CurrentFillup + fee1;
     address otherToken = token == pool.token0() ? pool.token1() : pool.token0();
-    uint tokenAmountInLiquidity = token == pool.token0() ? amount0Current : amount1Current;
-    uint otherTokenAmountInLiquidity = token == pool.token0() ? amount1Current : amount0Current;
+    uint tokenAmountInLiquidity = token == pool.token0() ? total0 : total1;
+    uint otherTokenAmountInLiquidity = token == pool.token0() ? total1 : total0;
     return _balance(token) + tokenAmountInLiquidity + (_balance(otherToken) + otherTokenAmountInLiquidity) * getPrice(otherToken) / 10**IERC20Metadata(otherToken).decimals();
   }
 
@@ -92,8 +101,8 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
 
   function needRebalance() public view returns (bool) {
     (, int24 tick, , , , ,) = pool.slot0();
-    int24 halfRange = (upperTick - lowerTick) / 2;
-    int24 oldMedianTick = lowerTick + halfRange;
+    int24 halfRange = (_upperTick - _lowerTick) / 2;
+    int24 oldMedianTick = _lowerTick + halfRange;
     if (tick > oldMedianTick) {
       return tick - oldMedianTick > _rebalanceTickRange;
     }
@@ -107,7 +116,6 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
   function tracking() external view returns (
     int apr,
     uint earned,
-    uint rebalanceCost,
     uint il,
     uint period,
     uint rebalances,
@@ -122,11 +130,10 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
       earned += fee1 + fee0 * getPrice(pool.token0()) / 10**IERC20Metadata(pool.token0()).decimals();
     }
 
-    rebalanceCost = _rebalanceCost;
     il = _il;
     rebalances = _rebalances;
     trackingToken = _trackingToken;
-    int totalEarned = int(earned) - int(_rebalanceCost) - int(_il);
+    int totalEarned = int(earned) - int(_il);
     if (_trackingStart != 0) {
       period = block.timestamp - _trackingStart;
     }
@@ -141,7 +148,7 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
 
   function deposit(address token, uint amount) external {
     require(owner == msg.sender, "Denied");
-    require(amount != 0, "Zero amount");
+    require(amount != 0, "deposit: Zero amount");
     require(token == pool.token0() || token == pool.token1(), "Not pool token");
     if(needRebalance()) {
       rebalanceWithTracking();
@@ -153,65 +160,18 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
     _resetTracking();
   }
 
-  function withdraw(address token, uint amount) external {
-    require(owner == msg.sender, "Denied");
-    require(amount != 0, "Zero amount");
-    require(token == pool.token0() || token == pool.token1(), "Not pool token");
-    (uint amount0Current, uint amount1Current) = _getLiquidityBalances();
-    uint partOfLiquidity = amount / 2 * 10**10 / (token == pool.token0() ? amount0Current : amount1Current);
-    uint toRemove = partOfLiquidity * liquidity / 10**10;
-    (uint amount0Out, uint amount1Out) = _removeLiquidity(uint128(toRemove));
-    _swapExactIn(token == pool.token0() ? pool.token1() : pool.token0(), token == pool.token0() ? amount1Out : amount0Out);
-    IERC20(token).transfer(msg.sender, _balance(token));
-
-    _resetTracking();
-  }
-
   function withdrawAll(address token) external {
     require(owner == msg.sender, "Denied");
     require(token == pool.token0() || token == pool.token1(), "Not pool token");
     address otherToken = token == pool.token0() ? pool.token1() : pool.token0();
     _removeLiquidity(liquidity);
+    if (_lowerTickFillup != 0) {
+      _removeLiquidityFillup(liquidityFillup);
+    }
     _swapExactIn(otherToken, _balance(otherToken));
     IERC20(token).transfer(msg.sender, _balance(token));
-
     _resetTracking();
   }
-
-  /*function rebalance() public {
-    require(needRebalance(), "No rebalancing needed");
-
-    // console.log('rebalance: start');
-
-    if (liquidity != 0) {
-      _removeLiquidity(liquidity);
-      // console.log('rebalance amount0Out', amount0Out);
-      // console.log('rebalance amount1Out', amount1Out);
-      uint balance0 = _balance(pool.token0());
-      uint balance1 = _balance(pool.token1());
-
-      uint totalAmount0Estimate = balance0 + balance1 * getPrice(pool.token1()) / 10**IERC20Metadata(pool.token1()).decimals();
-      uint totalAmount1Estimate = balance1 + balance0 * getPrice(pool.token0()) / 10**IERC20Metadata(pool.token0()).decimals();
-      // console.log('rebalance totalAmount0Estimate', totalAmount0Estimate);
-      // console.log('rebalance totalAmount1Estimate', totalAmount1Estimate);
-
-      uint optimalAmount0 = totalAmount0Estimate / 2;
-      uint optimalAmount1 = totalAmount1Estimate / 2;
-      if (optimalAmount0 < balance0) {
-        _swapExactIn(pool.token0(), balance0 - optimalAmount0);
-      } else {
-        _swapExactIn(pool.token1(), balance1 - optimalAmount1);
-      }
-
-      _setNewTickRange();
-
-      _addLiquidity(_balance(pool.token0()), _balance(pool.token1()));
-    } else {
-      _setNewTickRange();
-    }
-
-    // console.log('rebalance: end');
-  }*/
 
   function rebalanceWithTracking() public {
     require(needRebalance(), "No rebalancing needed");
@@ -222,11 +182,15 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
       uint price1 = getPrice(pool.token1());
       uint price0 = getPrice(pool.token0());
 
-      (uint pureAmount0, uint pureAmount1) = _getPureLiquidityBalances();
+      (uint pureAmount0, uint pureAmount1) = getLiquidityBalances();
+      (uint pureAmount0Fillup, uint pureAmount1Fillup) = getLiquidityBalancesFillup();
       uint balance0Before = _balance(pool.token0());
       uint balance1Before = _balance(pool.token1());
 
       _removeLiquidity(liquidity);
+      if (liquidityFillup != 0) {
+        _removeLiquidityFillup(liquidityFillup);
+      }
 
       // console.log('rebalance amount0Out', amount0Out);
       // console.log('rebalance amount1Out', amount1Out);
@@ -234,46 +198,23 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
       uint balance1 = _balance(pool.token1());
 
       if (_trackingToken == pool.token0()) {
-        _earned += balance0 - pureAmount0 - balance0Before + (balance1 - pureAmount1 - balance1Before) * price1 / 10**IERC20Metadata(pool.token1()).decimals();
+        _earned += balance0 - pureAmount0 - pureAmount0Fillup - balance0Before + (balance1 - pureAmount1 - pureAmount1Fillup - balance1Before) * price1 / 10**IERC20Metadata(pool.token1()).decimals();
+        _il += _lastAmount0 + _lastAmount0Fillup + (_lastAmount1 + _lastAmount1Fillup) * price1 / 10**IERC20Metadata(pool.token1()).decimals();
+        _il -= pureAmount0 + pureAmount0Fillup + (pureAmount1 + pureAmount1Fillup) * price1 / 10**IERC20Metadata(pool.token1()).decimals();
       } else {
-        _earned += balance1 - pureAmount1 - balance1Before + (balance0 - pureAmount0 - balance0Before) * price0 / 10**IERC20Metadata(pool.token0()).decimals();
-      }
-
-      uint totalAmount0Estimate = balance0 + balance1 * price1 / 10**IERC20Metadata(pool.token1()).decimals();
-      uint totalAmount1Estimate = balance1 + balance0 * price0 / 10**IERC20Metadata(pool.token0()).decimals();
-      // console.log('rebalance totalAmount0Estimate', totalAmount0Estimate);
-      // console.log('rebalance totalAmount1Estimate', totalAmount1Estimate);
-
-//      uint optimalAmount0 = totalAmount0Estimate / 2;
-//      uint optimalAmount1 = totalAmount1Estimate / 2;
-      if (totalAmount0Estimate / 2 < balance0) {
-        // console.log('swap token0 amount', balance0 - optimalAmount0);
-        _swapExactIn(pool.token0(), balance0 - totalAmount0Estimate / 2);
-      } else {
-         // console.log('swap token1 amount', balance1 - optimalAmount1);
-        _swapExactIn(pool.token1(), balance1 - totalAmount1Estimate / 2);
+        _earned += balance1 - pureAmount1 - pureAmount1Fillup - balance1Before + (balance0 - pureAmount0 - pureAmount0Fillup - balance0Before) * price0 / 10**IERC20Metadata(pool.token0()).decimals();
+        _il += _lastAmount1 + _lastAmount1Fillup + (_lastAmount0 + _lastAmount0Fillup) * price0 / 10**IERC20Metadata(pool.token0()).decimals();
+        _il -= pureAmount1 + pureAmount1Fillup + (pureAmount0 + pureAmount0Fillup) * price0 / 10**IERC20Metadata(pool.token0()).decimals();
       }
 
       _setNewTickRange();
 
       _addLiquidity(_balance(pool.token0()), _balance(pool.token1()));
 
-      (uint pureAmount0New, uint pureAmount1new) = _getPureLiquidityBalances();
-      uint totalAmount0 = pureAmount0New + _balance(pool.token0());
-      uint totalAmount1 = pureAmount1new + _balance(pool.token1());
+      _addFillup();
 
-      if (_trackingToken == pool.token0()) {
-        _rebalanceCost += totalAmount0Estimate - totalAmount0 - totalAmount1 * price1 / 10**IERC20Metadata(pool.token1()).decimals();
-        _il += _lastAmount0 + _lastAmount1 * price1 / 10**IERC20Metadata(pool.token1()).decimals();
-        _il -= (pureAmount0 + balance0Before) + (pureAmount1 + balance1Before) * price1 / 10**IERC20Metadata(pool.token1()).decimals();
-      } else {
-        _rebalanceCost += totalAmount1Estimate - totalAmount1 - totalAmount0 * price0 / 10**IERC20Metadata(pool.token0()).decimals();
-        _il += _lastAmount1 + _lastAmount0 * price0 / 10**IERC20Metadata(pool.token0()).decimals();
-        _il -= (pureAmount1 + balance1Before) + (pureAmount0 + balance0Before) * price0 / 10**IERC20Metadata(pool.token0()).decimals();
-      }
-
-      _lastAmount0 = totalAmount0;
-      _lastAmount1 = totalAmount1;
+      (_lastAmount0, _lastAmount1) = getLiquidityBalances();
+      (_lastAmount0Fillup, _lastAmount1Fillup) = getLiquidityBalancesFillup();
 
       _rebalances++;
     } else {
@@ -283,17 +224,29 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
     // console.log('rebalanceWithTracking: end');
   }
 
+  function _addFillup() internal {
+    // console.log('_addFillup');
+    // console.log('_balance(pool.token0()', _balance(pool.token0()));
+    // console.log('_balance(pool.token1()', _balance(pool.token1()));
+    (, int24 tick, , , , ,) = pool.slot0();
+    if (_balance(pool.token0()) > _balance(pool.token1()) * getPrice(pool.token1()) / 10**IERC20Metadata(pool.token1()).decimals()) {
+      // add token0 to half range
+      _lowerTickFillup = tick / 10 * 10 + 10;
+      _upperTickFillup = _upperTick;
+      _addLiquidityFillup(_balance(pool.token0()), 0);
+    } else {
+      _lowerTickFillup = _lowerTick;
+      _upperTickFillup = tick / 10 * 10 - 10;
+      _addLiquidityFillup(0, _balance(pool.token1()));
+    }
+  }
+
   function changeTickRange(int24 newTickRange_) external {
     require(owner == msg.sender, "Denied");
     require(newTickRange_ != 0, "Zero range");
     _tickRange = newTickRange_;
     // range will be changed at next rebalance
-    _earned = 0;
-    _rebalanceCost = 0;
-    _il = 0;
-    (_lastAmount0, _lastAmount1) = _getPureLiquidityBalances();
-    _lastAmount0 += _balance(pool.token0());
-    _lastAmount1 += _balance(pool.token1());
+    _resetTracking();
   }
 
   function changeRebalanceTickRange(int24 newRebalanceTickRange_) external {
@@ -301,12 +254,7 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
     require(newRebalanceTickRange_ != 0, "Zero range");
     _rebalanceTickRange = newRebalanceTickRange_;
     // range will be changed at next rebalance
-    _earned = 0;
-    _rebalanceCost = 0;
-    _il = 0;
-    (_lastAmount0, _lastAmount1) = _getPureLiquidityBalances();
-    _lastAmount0 += _balance(pool.token0());
-    _lastAmount1 += _balance(pool.token1());
+    _resetTracking();
   }
 
   // ***************** UNISWAP V3 callbacks *****************
@@ -336,80 +284,111 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
   }
 
   function _resetTracking() internal {
-    if (liquidity != 0) {
-      (_lastAmount0, _lastAmount1) = _getPureLiquidityBalances();
-    } else {
-      _lastAmount0 = 0;
-      _lastAmount1 = 0;
-    }
-    _lastAmount0 += _balance(pool.token0());
-    _lastAmount1 += _balance(pool.token1());
+    (_lastAmount0, _lastAmount1) = getLiquidityBalances();
+    (_lastAmount0Fillup, _lastAmount1Fillup) = getLiquidityBalancesFillup();
     _rebalances = 0;
     _trackingStart = block.timestamp;
+    _earned = 0;
+    _il = 0;
   }
 
-  function _getLiquidityBalances() internal view returns (uint amount0Current, uint amount1Current) {
-    (uint160 sqrtRatioX96, int24 tick, , , , ,) = pool.slot0();
-    (, uint feeGrowthInside0Last, uint feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
-
-    // compute current holdings from liquidity
-    (amount0Current, amount1Current) = LiquidityAmounts.getAmountsForLiquidity(
-      sqrtRatioX96,
-      lowerTick.getSqrtRatioAtTick(),
-      upperTick.getSqrtRatioAtTick(),
-      liquidity
-    );
-
-    // compute current fees earned
-    uint fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick) + uint(tokensOwed0);
-    uint fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick) + uint(tokensOwed1);
-
-    // add any leftover in contract to current holdings
-    amount0Current += fee0;
-    amount1Current += fee1;
-  }
-
-  function _getPureLiquidityBalances() internal view returns (uint amount0Current, uint amount1Current) {
+  function getLiquidityBalances() public view returns (uint amount0Current, uint amount1Current) {
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
     (amount0Current, amount1Current) = LiquidityAmounts.getAmountsForLiquidity(
       sqrtRatioX96,
-      lowerTick.getSqrtRatioAtTick(),
-      upperTick.getSqrtRatioAtTick(),
+      _lowerTick.getSqrtRatioAtTick(),
+      _upperTick.getSqrtRatioAtTick(),
       liquidity
+    );
+  }
+
+  function getLiquidityBalancesFillup() public view returns (uint amount0Current, uint amount1Current) {
+    (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
+    (amount0Current, amount1Current) = LiquidityAmounts.getAmountsForLiquidity(
+      sqrtRatioX96,
+      _lowerTickFillup.getSqrtRatioAtTick(),
+      _upperTickFillup.getSqrtRatioAtTick(),
+      liquidityFillup
     );
   }
 
   function _addLiquidity(uint amount0Desired_, uint amount1Desired_) internal returns (uint amount0Consumed, uint amount1Consumed, uint128 liquidityOut) {
-    require(amount0Desired_ != 0 || amount1Desired_ != 0, "Zero amount");
+    require(amount0Desired_ != 0 || amount1Desired_ != 0, "_addLiquidity: Zero amount");
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
     liquidityOut = LiquidityAmounts.getLiquidityForAmounts(
       sqrtRatioX96,
-      lowerTick.getSqrtRatioAtTick(),
-      upperTick.getSqrtRatioAtTick(),
+      _lowerTick.getSqrtRatioAtTick(),
+      _upperTick.getSqrtRatioAtTick(),
       amount0Desired_,
       amount1Desired_
     );
     (amount0Consumed, amount1Consumed) = LiquidityAmounts.getAmountsForLiquidity(
       sqrtRatioX96,
-      lowerTick.getSqrtRatioAtTick(),
-      upperTick.getSqrtRatioAtTick(),
+      _lowerTick.getSqrtRatioAtTick(),
+      _upperTick.getSqrtRatioAtTick(),
         liquidityOut
     );
-    pool.mint(address(this), lowerTick, upperTick, liquidityOut, "");
+    pool.mint(address(this), _lowerTick, _upperTick, liquidityOut, "");
     liquidity += liquidityOut;
   }
 
-  function _removeLiquidity(uint128 liquidityAmount) internal returns (uint amount0Out, uint amount1Out) {
-    require (liquidityAmount != 0, "Zero amount");
-    (amount0Out, amount1Out) = pool.burn(lowerTick, upperTick, liquidityAmount);
+  function _addLiquidityFillup(uint amount0Desired_, uint amount1Desired_) internal returns (uint amount0Consumed, uint amount1Consumed, uint128 liquidityOut) {
+    require(amount0Desired_ != 0 || amount1Desired_ != 0, "_addLiquidityFillup: Zero amount");
+    (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
+    liquidityOut = LiquidityAmounts.getLiquidityForAmounts(
+      sqrtRatioX96,
+      _lowerTickFillup.getSqrtRatioAtTick(),
+      _upperTickFillup.getSqrtRatioAtTick(),
+      amount0Desired_,
+      amount1Desired_
+    );
+    (amount0Consumed, amount1Consumed) = LiquidityAmounts.getAmountsForLiquidity(
+      sqrtRatioX96,
+      _lowerTickFillup.getSqrtRatioAtTick(),
+      _upperTickFillup.getSqrtRatioAtTick(),
+      liquidityOut
+    );
+    pool.mint(address(this), _lowerTickFillup, _upperTickFillup, liquidityOut, "");
+    liquidityFillup += liquidityOut;
+  }
+
+  function _zeroBurn() internal returns (uint amount0Out, uint amount1Out) {
+    pool.burn(_lowerTick, _upperTick, 0);
     pool.collect(
       address(this),
-      lowerTick,
-      upperTick,
+      _lowerTick,
+      _upperTick,
+      type(uint128).max,
+      type(uint128).max
+    );
+    amount0Out = _balance(pool.token0());
+    amount1Out = _balance(pool.token1());
+  }
+
+  function _removeLiquidity(uint128 liquidityAmount) internal returns (uint amount0Out, uint amount1Out) {
+    require (liquidityAmount != 0, "_removeLiquidity: Zero amount");
+    (amount0Out, amount1Out) = pool.burn(_lowerTick, _upperTick, liquidityAmount);
+    pool.collect(
+      address(this),
+      _lowerTick,
+      _upperTick,
       type(uint128).max,
       type(uint128).max
     );
     liquidity -= liquidityAmount;
+  }
+
+  function _removeLiquidityFillup(uint128 liquidityAmount) internal returns (uint amount0Out, uint amount1Out) {
+    require (liquidityAmount != 0, "_removeLiquidityFillup: Zero amount");
+    (amount0Out, amount1Out) = pool.burn(_lowerTickFillup, _upperTickFillup, liquidityAmount);
+    pool.collect(
+      address(this),
+      _lowerTickFillup,
+      _upperTickFillup,
+      type(uint128).max,
+      type(uint128).max
+    );
+    liquidityFillup -= liquidityAmount;
   }
 
   function _swapExactIn(address tokenIn, uint amount) internal {
@@ -425,12 +404,16 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
 
   function _setNewTickRange() internal {
     (, int24 tick, , , , ,) = pool.slot0();
-    lowerTick = (tick - _tickRange) / 10 * 10;
-    upperTick = (tick + _tickRange) / 10 * 10;
+    _lowerTick = (tick - _tickRange) / 10 * 10;
+    _upperTick = (tick + _tickRange) / 10 * 10;
   }
 
   function _getPositionID() internal view returns (bytes32 positionID) {
-    return keccak256(abi.encodePacked(address(this), lowerTick, upperTick));
+    return keccak256(abi.encodePacked(address(this), _lowerTick, _upperTick));
+  }
+
+  function _getPositionIDFullup() internal view returns (bytes32 positionID) {
+    return keccak256(abi.encodePacked(address(this), _lowerTickFillup, _upperTickFillup));
   }
 
   function _computeFeesEarned(bool isZero, uint feeGrowthInsideLast, int24 tick) internal view returns (uint fee) {
@@ -439,18 +422,18 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
     uint feeGrowthGlobal;
     if (isZero) {
       feeGrowthGlobal = pool.feeGrowthGlobal0X128();
-      (,, feeGrowthOutsideLower,,,,,) = pool.ticks(lowerTick);
-      (,, feeGrowthOutsideUpper,,,,,) = pool.ticks(upperTick);
+      (,, feeGrowthOutsideLower,,,,,) = pool.ticks(_lowerTick);
+      (,, feeGrowthOutsideUpper,,,,,) = pool.ticks(_upperTick);
     } else {
       feeGrowthGlobal = pool.feeGrowthGlobal1X128();
-      (,,, feeGrowthOutsideLower,,,,) = pool.ticks(lowerTick);
-      (,,, feeGrowthOutsideUpper,,,,) = pool.ticks(upperTick);
+      (,,, feeGrowthOutsideLower,,,,) = pool.ticks(_lowerTick);
+      (,,, feeGrowthOutsideUpper,,,,) = pool.ticks(_upperTick);
     }
 
   unchecked {
     // calculate fee growth below
     uint feeGrowthBelow;
-    if (tick >= lowerTick) {
+    if (tick >= _lowerTick) {
       feeGrowthBelow = feeGrowthOutsideLower;
     } else {
       feeGrowthBelow = feeGrowthGlobal - feeGrowthOutsideLower;
@@ -458,7 +441,7 @@ contract UniswapV3ResearchStrategy is IUniswapV3MintCallback, IUniswapV3SwapCall
 
     // calculate fee growth above
     uint feeGrowthAbove;
-    if (tick < upperTick) {
+    if (tick < _upperTick) {
       feeGrowthAbove = feeGrowthOutsideUpper;
     } else {
       feeGrowthAbove = feeGrowthGlobal - feeGrowthOutsideUpper;

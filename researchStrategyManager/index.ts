@@ -99,7 +99,7 @@ async function showStrategyTracking(strategyAddress: string) {
   periodStr += `${periodMins - periodHours*60}m`
 
   const assetsAmount = await strategyContract.getEstimatedBalance(asset.address)
-  console.log(`${namesCache[strategyAddress]}\tAPR: ${formatUnits(tracking.apr, 2)}%\tPeriod: ${periodStr}, Rebalances: ${tracking.rebalances.toString()}, Earned: ${tracking.earned.toString()}, IL: ${tracking.il.toString()}, RebalanceCost: ${tracking.rebalanceCost.toString()}, Assets: ${formatUnits(assetsAmount, asset.decimals)} USDC.`)
+  console.log(`${namesCache[strategyAddress]}\tAPR: ${formatUnits(tracking.apr, 2)}%\tPeriod: ${periodStr}, Rebalances: ${tracking.rebalances.toString()}, Earned: ${tracking.earned.toString()}, IL: ${tracking.il.toString()}, Assets: ${formatUnits(assetsAmount, asset.decimals)} USDC.`)
 }
 
 async function showPoolPrice(strategyAddress) {
@@ -126,11 +126,12 @@ async function main() {
   console.log(`Network: ${network.name} [${network.chainId}]`)
 
   const strategies = [
-    '0xda3e33fbc53FC9DB1dB06b4E8d9D97Cd216b4e28', // RESEARCH_1.2_WMATIC-USDC-0.05%_1200_40
-    '0xE8c528A94876D4A98C6a052DEB67F56Bc7CccA7C', // RESEARCH_1.2_WMATIC-USDC-0.05%_1800_50
-    '0x4BFcfC83316C910FCC72f12d3C305Bba7f249f5D', // RESEARCH_1.2_WMATIC-USDC-0.05%_2400_60
+    // '0xda3e33fbc53FC9DB1dB06b4E8d9D97Cd216b4e28', // RESEARCH_1.2_WMATIC-USDC-0.05%_1200_40
+    // '0xE8c528A94876D4A98C6a052DEB67F56Bc7CccA7C', // RESEARCH_1.2_WMATIC-USDC-0.05%_1800_50
+    // '0x4BFcfC83316C910FCC72f12d3C305Bba7f249f5D', // RESEARCH_1.2_WMATIC-USDC-0.05%_2400_60
     // '0xE480Ef76af652f8D9558fB911981D01FB8d609f3', // RESEARCH_1.2_WMATIC-USDC-0.05%_1200_30
     // '0xB7165A9BA0bAf0b74a2023Dc8F24a1e3e7085E53', // RESEARCH_1.2_WMATIC-USDC-0.05%_1200-20
+    '0x84CB5D0f086ED88a60229c86EBeb9AF37344bFc3', // RESEARCH_2.0_WMATIC-USDC-0.05%_1200_40
   ]
 
 
@@ -154,12 +155,10 @@ async function main() {
     await withdrawAll(strategyAddress)
   }*/
 
-  // return
-
 
   while (1) {
     console.log('')
-    console.log('Uniswap V3 range moving strategy research')
+    console.log('Uniswap V3 range moving fill up strategy research')
     // await showPoolPrice(strategies[0])
     for (const strategyAddress of strategies) {
       await showStrategyTracking(strategyAddress)

@@ -86,10 +86,10 @@ describe('UniswapV3ResearchStrategyTests', function() {
       await strategy.deposit(tokenIn, depositAmount)
       expect(await strategy.needRebalance()).eq(false)
 
-      await expect(strategy.connect(signer2).withdraw(tokenIn, 100)).to.be.revertedWith('Denied')
+      // await expect(strategy.connect(signer2).withdraw(tokenIn, 100)).to.be.revertedWith('Denied')
       await expect(strategy.connect(signer2).withdrawAll(tokenIn)).to.be.revertedWith('Denied')
 
-      await strategy.withdraw(tokenIn, 1000)
+      // await strategy.withdraw(tokenIn, 1000)
 
       await strategy.withdrawAll(tokenIn)
       expect(balanceBefore.sub(await TokenUtils.balanceOf(tokenIn, signer.address))).lt(depositAmount.div(2000)) // 0.05% fee
@@ -100,7 +100,7 @@ describe('UniswapV3ResearchStrategyTests', function() {
       await expect(strategy.connect(signer2).changeRebalanceTickRange(100)).to.be.revertedWith('Denied')
     })*/
 
-    it('Rebalance cost', async () => {
+    it('Simulation', async () => {
       console.log(await strategy.name())
 
       // console.log(await ethers.provider.getBlock(await ethers.provider.getBlockNumber()))
@@ -108,9 +108,9 @@ describe('UniswapV3ResearchStrategyTests', function() {
       const tokenIn = MaticAddresses.USDC_TOKEN
       const depositAmount = _1
       const priceMoveAmount = parseUnits('50000', 6)
-      const priceMoveIterations = 2
+      const priceMoveIterations = 4
       const priceMoveAmount2 = parseUnits('20000', 6)
-      const priceMoveIterations2 = 2
+      const priceMoveIterations2 = 4
       let rebalances = 0
       const boughtAmounts = []
       await TokenUtils.getToken(tokenIn, signer.address, depositAmount);
@@ -119,8 +119,6 @@ describe('UniswapV3ResearchStrategyTests', function() {
       await strategy.deposit(tokenIn, depositAmount)
       const estimatedBefore = await strategy.getEstimatedBalance(tokenIn)
       const priceStart = await swapper.getPrice(await strategy.pool(), MaticAddresses.WMATIC_TOKEN, MaticAddresses.ZERO_ADDRESS, 0);
-
-      console.log(await strategy.tracking())
 
       for(let i = 0; i < priceMoveIterations; i++) {
         const bought = await movePriceUp(signer, strategy.address, priceMoveAmount)
@@ -212,18 +210,15 @@ describe('UniswapV3ResearchStrategyTests', function() {
 
       const loss = estimatedBefore.sub(await strategy.getEstimatedBalance(tokenIn))
 
+      const tracking = await strategy.tracking()
       console.log('RESULTS')
       console.log(`Strategy: ${await strategy.name()}`)
       console.log(`Price moving: ${priceStart} -> ${priceMax} -> ${priceMin}-> ${priceEnd}`)
       console.log(`Rebalances: ${rebalances}`)
-      // console.log('Earned', (await strategy.earned()).toString())
-      // console.log('Rebalance cost', (await strategy.rebalanceCost()).toString())
-      // console.log('Impermanent loss', (await strategy.il()).toString())
-      console.log(await strategy.tracking())
+      console.log('Earned', tracking.earned.toString())
+      console.log('Impermanent loss', tracking.il.toString())
       console.log(`Total loss estimate: ${loss} (${formatUnits(loss.mul(10**10).div(estimatedBefore).div(10**4), 4)}%)`)
-
       console.log(`-------------------------------------`)
-      console.log(await ethers.provider.getBlock(await ethers.provider.getBlockNumber()))
     })
 
   })
