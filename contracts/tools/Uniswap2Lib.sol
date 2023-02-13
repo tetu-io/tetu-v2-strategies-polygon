@@ -14,7 +14,7 @@ library Uniswap2Lib {
   /// @dev The implementation is made on the base of DystRouter01.quoteRemoveLiquidity
   function quoteRemoveLiquidity(
     IUniswapV2Router02 router_,
-    address user_,
+    address /*user_*/,
     address tokenA_,
     address tokenB_,
     uint liquidity_
