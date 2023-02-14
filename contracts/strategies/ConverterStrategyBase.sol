@@ -342,10 +342,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
             _ASSET_LIQUIDATION_SLIPPAGE,
             liquidationThreshold
           );
-          if (receivedAmountOut > 0) {
+          if (receivedAmountOut != 0) {
             collateralOut += receivedAmountOut;
           }
-          if (spentAmountIn > 0) {
+          if (spentAmountIn != 0) {
             repaidAmountsOut[i] += spentAmountIn;
           }
         }

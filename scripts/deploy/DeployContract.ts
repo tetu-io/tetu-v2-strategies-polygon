@@ -9,13 +9,12 @@ const log: Logger = new Logger(logSettings);
 
 export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 
-const libraries = new Map<string, string>([
-  ['VeTetu', 'VeTetuLogo'],
-  ['BalancerComposableStableDepositorFacade', 'BalancerLogicLib'],
-  ['BalancerComposableStableStrategy', 'BalancerLogicLib'],
-  ['BalancerComposableStableStrategy', 'ConverterStrategyBaseLib'],
-  ['MockConverterStrategy', 'ConverterStrategyBaseLib'],
-  ['ConverterStrategyBaseLibFacade', 'ConverterStrategyBaseLib'],
+const libraries = new Map<string, string[]>([
+  ['VeTetu', ['VeTetuLogo']],
+  ['BalancerComposableStableDepositorFacade', ['BalancerLogicLib']],
+  ['BalancerComposableStableStrategy', ['ConverterStrategyBaseLib', 'BalancerLogicLib']],
+  ['MockConverterStrategy', ['ConverterStrategyBaseLib']],
+  ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(
@@ -26,19 +25,23 @@ export async function deployContract<T extends ContractFactory>(
   // tslint:disable-next-line:no-any
   ...args: any[]
 ) {
+  await hre.run("compile")
+  const web3 = hre.web3;
   const ethers = hre.ethers;
   log.info(`Deploying ${name}`);
   log.info("Account balance: " + utils.formatUnits(await signer.getBalance(), 18));
 
-  const gasPrice = await ethers.provider.getGasPrice();
+  const gasPrice = await web3.eth.getGasPrice();
   log.info("Gas price: " + formatUnits(gasPrice, 9));
-  const lib: string | undefined = libraries.get(name);
+  const libs: string[]|undefined = libraries.get(name);
   let _factory;
-  if (lib) {
-    log.info('DEPLOY LIBRARY', lib, 'for', name);
-    const libAddress = (await deployContract(hre, signer, lib)).address;
+  if (libs) {
     const librariesObj: Libraries = {};
-    librariesObj[lib] = libAddress;
+    for (const lib of libs) {
+      log.info('DEPLOY LIBRARY', lib, 'for', name);
+      librariesObj[lib] = (await deployContract(hre, signer, lib)).address;
+    }
+
     _factory = (await ethers.getContractFactory(
       name,
       {
@@ -52,22 +55,22 @@ export async function deployContract<T extends ContractFactory>(
       signer
     )) as T;
   }
-  let gas = 5_000_000;
-  if (hre.network.name === 'hardhat') {
-    gas = 999_999_999;
-  } else if (hre.network.name === 'mumbai') {
-    gas = 5_000_000;
-  }
-  const instance = await _factory.deploy(...args, {gasPrice: Math.floor(+gasPrice * 1.1)});
-  // const instance = await _factory.deploy(...args);
+  // let gas = 5_000_000;
+  // if (hre.network.name === 'hardhat') {
+  //   gas = 999_999_999;
+  // } else if (hre.network.name === 'mumbai') {
+  //   gas = 5_000_000;
+  // }
+  // const instance = await _factory.deploy(...args, {gasLimit: gas, gasPrice: Math.floor(+gasPrice * 1.1)});
+  const instance = await _factory.deploy(...args, {gasLimit: 9_000_000, gasPrice: Math.floor(+gasPrice * 1.1)});
   log.info('Deploy tx:', instance.deployTransaction.hash);
   await instance.deployed();
 
   const receipt = await ethers.provider.getTransactionReceipt(instance.deployTransaction.hash);
   console.log('DEPLOYED: ', name, receipt.contractAddress);
 
-  if (hre.network.name !== 'hardhat') {
-    await wait(hre, WAIT_BLOCKS_BETWEEN_DEPLOY);
+  if (hre.network.name !== 'hardhat' && hre.network.name !== 'zktest') {
+    await wait(hre, 10);
     if (args.length === 0) {
       await verify(hre, receipt.contractAddress);
     } else {

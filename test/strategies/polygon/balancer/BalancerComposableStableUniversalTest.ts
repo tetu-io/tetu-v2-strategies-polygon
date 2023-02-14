@@ -14,7 +14,7 @@ import {
   ISplitter__factory,
   IStrategyV2,
   ITetuConverter__factory,
-  StrategyBaseV2__factory
+  StrategyBaseV2__factory, VaultFactory__factory
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
@@ -310,6 +310,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
 
   const deployInfo: DeployInfo = new DeployInfo();
   const states: IState[] = [];
+  const core = Addresses.getCore();
 
   before(async function () {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
@@ -337,8 +338,11 @@ describe('BalancerComposableStableUniversalTest', async () => {
       [112, 112, 112]
     );
 
-    // update splitter by new implementation
-
+    const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2')
+    await VaultFactory__factory.connect(
+      core.vaultFactory,
+      await DeployerUtilsLocal.getControllerGovernance(signer)
+    ).setSplitterImpl(splitterImpl.address);
   });
 
   /** Save collected states to csv, compute profit */
@@ -352,7 +356,6 @@ describe('BalancerComposableStableUniversalTest', async () => {
   const assetName = 'USDC';
   const asset = PolygonAddresses.USDC_TOKEN;
   const vaultName = 'tetu' + assetName;
-  const core = Addresses.getCore();
   const params: IUniversalStrategyInputParams = {
     ppfsDecreaseAllowed: false,
     balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
