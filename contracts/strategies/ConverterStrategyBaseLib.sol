@@ -52,7 +52,7 @@ library ConverterStrategyBaseLib {
   uint private constant COMPOUND_DENOMINATOR = 100_000;
 
   /////////////////////////////////////////////////////////////////////
-  ///                        Functions
+  ///                      View functions
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset_}
@@ -154,26 +154,63 @@ library ConverterStrategyBaseLib {
     }
   }
 
-  /// @notice Borrow max available amount of {borrowAsset} using {collateralAmount} of {collateralAsset} as collateral
-  function borrowPosition(
+  /// @notice Find index of the given {asset_} in array {tokens_}, return type(uint).max if not found
+  function getAssetIndex(address[] memory tokens_, address asset_) internal pure returns (uint) {
+    uint len = tokens_.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (tokens_[i] == asset_) {
+        return i;
+      }
+    }
+    return type(uint).max;
+  }
+
+  /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
+  function getAvailableBalances(
+    address[] memory tokens_,
+    uint indexAsset
+  ) external view returns (uint[] memory) {
+    uint len = tokens_.length;
+    uint[] memory amountsToConvert = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset) continue;
+      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this));
+    }
+    return amountsToConvert;
+  }
+
+
+  /////////////////////////////////////////////////////////////////////
+  ///                   Borrow and close positions
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Make borrow according to {entryData_}
+  ///         Max possible collateral should be approved before calling of this function.
+  /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
+  ///                   See TetuConverter\EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
+  ///                   0 or empty: Amount of collateral {amountIn_} is fixed, amount of borrow should be max possible.
+  /// @param amountIn_ Meaning depends on {entryData_}.
+  function openPosition(
     ITetuConverter tetuConverter_,
+    bytes memory entryData_,
     address collateralAsset_,
-    uint collateralAmount_,
-    address borrowAsset_
-  ) internal returns (uint borrowedAmountOut) {
-    AppLib.approveIfNeeded(collateralAsset_, collateralAmount_, address(tetuConverter_));
+    address borrowAsset_,
+    uint amountIn_
+  ) internal returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
     (address converter, uint collateralRequired, uint amountToBorrow,) = tetuConverter_.findBorrowStrategy(
-      "", // entry kind = 0, TODO
+      entryData_,
       collateralAsset_,
-      collateralAmount_,
+      amountIn_,
       borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
 
-    if (converter == address(0) || amountToBorrow == 0) {
-      borrowedAmountOut = 0;
-    } else {
-      // we need to approve collateralAmount before the borrow-call but we already made the approval above
+    if (converter != address(0) && amountToBorrow != 0) {
+      // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
       borrowedAmountOut = tetuConverter_.borrow(
         converter,
         collateralAsset_,
@@ -182,10 +219,12 @@ library ConverterStrategyBaseLib {
         amountToBorrow,
         address(this)
       );
+      collateralAmountOut = collateralRequired;
     }
 
     //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
     //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
+    return (collateralAmountOut, borrowedAmountOut);
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -233,6 +272,10 @@ library ConverterStrategyBaseLib {
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ///                         Liquidation
+  /////////////////////////////////////////////////////////////////////
+
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
@@ -278,30 +321,10 @@ library ConverterStrategyBaseLib {
     return (spentAmountIn, receivedAmountOut);
   }
 
-  /// @notice Find index of the given {asset_} in array {tokens_}, return type(uint).max if not found
-  function getAssetIndex(address[] memory tokens_, address asset_) internal pure returns (uint) {
-    uint len = tokens_.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (tokens_[i] == asset_) {
-        return i;
-      }
-    }
-    return type(uint).max;
-  }
 
-  /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
-  function getAvailableBalances(
-    address[] memory tokens_,
-    uint indexAsset
-  ) external view returns (uint[] memory) {
-    uint len = tokens_.length;
-    uint[] memory amountsToConvert = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) continue;
-      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this));
-    }
-    return amountsToConvert;
-  }
+  /////////////////////////////////////////////////////////////////////
+  ///                      Recycle rewards
+  /////////////////////////////////////////////////////////////////////
 
   /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
   /// We have two kinds of rewards:

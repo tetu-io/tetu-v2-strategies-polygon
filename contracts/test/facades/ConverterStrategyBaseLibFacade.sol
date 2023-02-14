@@ -45,17 +45,22 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function borrowPosition(
+  function openPosition(
     ITetuConverter tetuConverter_,
-    address collateralAsset,
-    uint collateralAmount,
-    address borrowAsset
-  ) external returns (uint borrowedAmountOut) {
-    return ConverterStrategyBaseLib.borrowPosition(
+    bytes memory entryData_,
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountIn_
+  ) external returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    return ConverterStrategyBaseLib.openPosition(
       tetuConverter_,
-      collateralAsset,
-      collateralAmount,
-      borrowAsset
+      entryData_,
+      collateralAsset_,
+      borrowAsset_,
+      amountIn_
     );
   }
 

@@ -185,13 +185,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       if (i == indexAsset_) continue;
 
       if (tokenAmounts[i] > 0) {
-        borrowedAmounts[i] = ConverterStrategyBaseLib.borrowPosition(
+        uint collateral;
+        AppLib.approveIfNeeded(tokens_[indexAsset_], tokenAmounts[i], address(tetuConverter_));
+        (collateral, borrowedAmounts[i]) = ConverterStrategyBaseLib.openPosition(
           tetuConverter_,
+          "", // fixed collateral amount, max possible borrow amount
           tokens_[indexAsset_],
-          tokenAmounts[i],
-          tokens_[i]
+          tokens_[i],
+          tokenAmounts[i]
         );
-        spentCollateral += tokenAmounts[i];
+        // collateral should be equal to tokenAmounts[i] here because we use default entry kind
+        spentCollateral += collateral;
       }
       tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(address(this));
     }

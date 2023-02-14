@@ -92,10 +92,22 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _convertAfterWithdrawAll(tokens_, indexAsset_);
   }
 
-  function borrowPositionTestAccess(address collateralAsset, uint collateralAmount, address borrowAsset) external returns (
+  function openPositionTestAccess(
+    bytes memory entryData_,
+    address collateralAsset,
+    address borrowAsset,
+    uint collateralAmount
+  ) external returns (
+    uint collateralAmountOut,
     uint borrowedAmount
   ) {
-    return ConverterStrategyBaseLib.borrowPosition(tetuConverter, collateralAsset, collateralAmount, borrowAsset);
+    return ConverterStrategyBaseLib.openPosition(
+      tetuConverter,
+      entryData_,
+      collateralAsset,
+      borrowAsset,
+      collateralAmount
+    );
   }
 
   function closePositionTestAccess(address collateralAsset, address borrowAsset, uint amountToRepay) external returns (
