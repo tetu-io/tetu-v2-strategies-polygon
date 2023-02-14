@@ -338,11 +338,11 @@ describe('BalancerComposableStableUniversalTest', async () => {
       [112, 112, 112]
     );
 
-    const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2')
-    await VaultFactory__factory.connect(
-      core.vaultFactory,
-      await DeployerUtilsLocal.getControllerGovernance(signer)
-    ).setSplitterImpl(splitterImpl.address);
+    // const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2')
+    // await VaultFactory__factory.connect(
+    //   core.vaultFactory,
+    //   await DeployerUtilsLocal.getControllerGovernance(signer)
+    // ).setSplitterImpl(splitterImpl.address);
   });
 
   /** Save collected states to csv, compute profit */

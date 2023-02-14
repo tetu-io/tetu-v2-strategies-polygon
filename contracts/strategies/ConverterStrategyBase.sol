@@ -14,7 +14,7 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
-//import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -444,30 +444,38 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual {
+    console.log("_claim.1");
     // get rewards from the Depositor
     (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts) = _depositorClaimRewards();
+    console.log("_claim.2");
 
     (address[] memory rewardTokens, uint[] memory amounts) = _prepareRewardsList(
       tetuConverter,
       depositorRewardTokens,
       depositorRewardAmounts
     );
+    console.log("_claim.3");
 
     uint len = rewardTokens.length;
     if (len > 0) {
       (uint[] memory received, uint[] memory spent, uint[] memory amountsToForward) = _recycle(rewardTokens, amounts);
+      console.log("_claim.4");
 
       _updateBaseAmounts(rewardTokens, received, spent, type(uint).max, 0); // max - we don't need to exclude any asset
       // received has a length equal to rewardTokens.length + 1
       // last item contains amount of the {asset} received after swapping
       _updateBaseAmountsForAsset(asset, received[len], true);
+      console.log("_claim.5");
 
       // send forwarder-part of the rewards to the forwarder
       IForwarder forwarder = IForwarder(IController(controller()).forwarder());
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         AppLib.approveIfNeeded(rewardTokens[i], amountsToForward[i], address(forwarder));
       }
-      forwarder.registerIncome(rewardTokens, amountsToForward, ISplitter(splitter).vault(), true);
+      console.log("_claim.6");
+
+    forwarder.registerIncome(rewardTokens, amountsToForward, ISplitter(splitter).vault(), true);
+      console.log("_claim.7");
     }
   }
 
@@ -527,10 +535,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
   function _handleRewards() internal virtual returns (uint earned, uint lost) {
+    console.log("_handleRewards.1");
     uint assetBalanceBefore = _balance(asset);
     _claim();
     uint assetBalanceAfterClaim = _balance(asset);
-
+    console.log("_handleRewards.2");
     if (assetBalanceAfterClaim > assetBalanceBefore) {
       earned = assetBalanceAfterClaim - assetBalanceBefore;
     } else {
@@ -543,13 +552,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    console.log("_doHardWork.1");
     _preHardWork(reInvest);
 
     (earned, lost) = _handleRewards();
     uint assetBalance = _balance(asset);
+    console.log("_doHardWork.2");
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+      console.log("_doHardWork.3");
 
       uint assetInUseBefore = _investedAssets + assetBalance;
       _depositToPool(assetBalance);
