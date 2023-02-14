@@ -8,38 +8,51 @@ interface ITetuConverter {
   function controller() external view returns (address);
 
   /// @notice Find best borrow strategy and provide "cost of money" as interest for the period
-  /// @param sourceAmount_ Amount to be converted
+  /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
+  ///                   See EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
+  ///                   0 is used by default
+  /// @param sourceAmount_ Max amount that can be converted.
   /// @param periodInBlocks_ Estimated period to keep target amount. It's required to compute APR
   /// @return converter Result contract that should be used for conversion; it supports IConverter
   ///                   This address should be passed to borrow-function during conversion.
-  /// @return maxTargetAmount Max available amount of target tokens that we can get after conversion
+  /// @return collateralAmountOut Amount that should be provided as a collateral
+  /// @return amountToBorrowOut Amount that should be borrowed
   /// @return apr18 Interest on the use of {outMaxTargetAmount} during the given period, decimals 18
   function findBorrowStrategy(
+    bytes memory entryData_,
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_,
     uint periodInBlocks_
   ) external view returns (
     address converter,
-    uint maxTargetAmount,
+    uint collateralAmountOut,
+    uint amountToBorrowOut,
     int apr18
   );
 
   /// @notice Find best swap strategy and provide "cost of money" as interest for the period
   /// @dev This is writable function with read-only behavior.
   ///      It should be writable to be able to simulate real swap and get a real APR.
-  /// @param sourceAmount_ Amount to be converted
-  ///                     This amount must be approved to TetuConverter before the call.
+  /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
+  ///                   See EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
+  ///                   0 is used by default
+  /// @param sourceAmount_ Max amount that can be swapped.
+  ///                      This amount must be approved to TetuConverter before the call.
   /// @return converter Result contract that should be used for conversion to be passed to borrow()
-  /// @return maxTargetAmount Max available amount of target tokens that we can get after conversion
+  /// @return sourceAmountOut Amount of {sourceToken_} that should be swapped to get {targetToken_}
+  ///                         It can be different from the {sourceAmount_} for some entry kinds.
+  /// @return targetAmountOut Result amount of {targetToken_} after swap
   /// @return apr18 Interest on the use of {outMaxTargetAmount} during the given period, decimals 18
   function findSwapStrategy(
+    bytes memory entryData_,
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_
   ) external returns (
     address converter,
-    uint maxTargetAmount,
+    uint sourceAmountOut,
+    uint targetAmountOut,
     int apr18
   );
 
@@ -47,20 +60,27 @@ interface ITetuConverter {
   ///         It calls both findBorrowStrategy and findSwapStrategy and selects a best strategy.
   /// @dev This is writable function with read-only behavior.
   ///      It should be writable to be able to simulate real swap and get a real APR for swapping.
-  /// @param sourceAmount_ Amount to be converted
+  /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
+  ///                   See EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
+  ///                   0 is used by default
+  /// @param sourceAmount_ Max amount of {sourceToken_} that can be converted.
   ///        The amount must be approved to TetuConverter before calling this function.
   /// @param periodInBlocks_ Estimated period to keep target amount. It's required to compute APR
   /// @return converter Result contract that should be used for conversion to be passed to borrow().
-  /// @return maxTargetAmount Max available amount of target tokens that we can get after conversion
+  /// @return collateralAmountOut Amount of {sourceToken_} that should be swapped to get {targetToken_}
+  ///                             It can be different from the {sourceAmount_} for some entry kinds.
+  /// @return amountToBorrowOut Result amount of {targetToken_} after conversion
   /// @return apr18 Interest on the use of {outMaxTargetAmount} during the given period, decimals 18
   function findConversionStrategy(
+    bytes memory entryData_,
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_,
     uint periodInBlocks_
   ) external returns (
     address converter,
-    uint maxTargetAmount,
+    uint collateralAmountOut,
+    uint amountToBorrowOut,
     int apr18
   );
 
@@ -68,7 +88,7 @@ interface ITetuConverter {
   ///         Target amount will be transferred to {receiver_}. No re-balancing here.
   /// @dev Transferring of {collateralAmount_} by TetuConverter-contract must be approved by the caller before the call
   /// @param converter_ A converter received from findBestConversionStrategy.
-  /// @param collateralAmount_ Amount of {collateralAsset_}.
+  /// @param collateralAmount_ Amount of {collateralAsset_} to be converted.
   ///                          This amount must be approved to TetuConverter before the call.
   /// @param amountToBorrow_ Amount of {borrowAsset_} to be borrowed and sent to {receiver_}
   /// @param receiver_ A receiver of borrowed amount
@@ -183,4 +203,33 @@ interface ITetuConverter {
     address[] memory rewardTokensOut,
     uint[] memory amountsOut
   );
+
+  /// @notice Swap {amountIn_} of {assetIn_} to {assetOut_} and send result amount to {receiver_}
+  ///         The swapping is made using TetuLiquidator with checking price impact using embedded price oracle.
+  /// @param amountIn_ Amount of {assetIn_} to be swapped.
+  ///                      It should be transferred on balance of the TetuConverter before the function call
+  /// @param receiver_ Result amount will be sent to this address
+  /// @param priceImpactToleranceSource_ Price impact tolerance for liquidate-call, decimals = 100_000
+  /// @param priceImpactToleranceTarget_ Price impact tolerance for price-oracle-check, decimals = 100_000
+  /// @return amountOut The amount of {assetOut_} that has been sent to the receiver
+  function safeLiquidate(
+    address assetIn_,
+    uint amountIn_,
+    address assetOut_,
+    address receiver_,
+    uint priceImpactToleranceSource_,
+    uint priceImpactToleranceTarget_
+  ) external returns (
+    uint amountOut
+  );
+
+  /// @notice Check if {amountOut_} is too different from the value calculated directly using price oracle prices
+  /// @return Price difference is ok for the given {priceImpactTolerance_}
+  function isConversionValid(
+    address assetIn_,
+    uint amountIn_,
+    address assetOut_,
+    uint amountOut_,
+    uint priceImpactTolerance_
+  ) external view returns (bool);
 }

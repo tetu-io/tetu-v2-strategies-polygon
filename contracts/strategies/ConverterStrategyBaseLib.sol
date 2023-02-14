@@ -162,23 +162,24 @@ library ConverterStrategyBaseLib {
     address borrowAsset_
   ) internal returns (uint borrowedAmountOut) {
     AppLib.approveIfNeeded(collateralAsset_, collateralAmount_, address(tetuConverter_));
-    (address converter, uint maxTargetAmount, /*int apr18*/) = tetuConverter_.findBorrowStrategy(
+    (address converter, uint collateralRequired, uint amountToBorrow,) = tetuConverter_.findBorrowStrategy(
+      "", // entry kind = 0, TODO
       collateralAsset_,
       collateralAmount_,
       borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
 
-    if (converter == address(0) || maxTargetAmount == 0) {
+    if (converter == address(0) || amountToBorrow == 0) {
       borrowedAmountOut = 0;
     } else {
       // we need to approve collateralAmount before the borrow-call but we already made the approval above
       borrowedAmountOut = tetuConverter_.borrow(
         converter,
         collateralAsset_,
-        collateralAmount_,
+        collateralRequired,
         borrowAsset_,
-        maxTargetAmount,
+        amountToBorrow,
         address(this)
       );
     }

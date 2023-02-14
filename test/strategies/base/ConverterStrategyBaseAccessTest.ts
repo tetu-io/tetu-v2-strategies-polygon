@@ -248,7 +248,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
         if (i === indexAsset) continue;
         await tetuConverter.setFindBorrowStrategyOutputParams(
+          "0x",
           converter,
+          inputAmount.div(3),
           borrowAmounts[i],
           parseUnits("1", 18),
           usdc.address,
@@ -2248,7 +2250,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
       if (params?.borrows) {
         for (const borrow of params.borrows) {
           await tetuConverter.setFindBorrowStrategyOutputParams(
+            "0x",
             borrow.converter,
+            borrow.collateralAmount,
             borrow.maxTargetAmount,
             1, // apr18
             borrow.collateralAsset.address,

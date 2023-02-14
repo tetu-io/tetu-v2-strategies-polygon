@@ -521,18 +521,5 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
   });
 
-  describe("processClaims", () => {
-    describe("Good paths", () => {
-      it("should return expected values", async () => {
-
-      });
-    });
-    describe("Bad paths", () => {
-
-    });
-    describe("Gas estimation @skip-on-coverage", () => {
-
-    });
-  });
 //endregion Unit tests
 });
