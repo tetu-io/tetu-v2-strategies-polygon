@@ -35,7 +35,6 @@
     "@nomiclabs/hardhat-etherscan": "^3.1.3",
     "@nomiclabs/hardhat-solhint": "^2.0.1",
     "@nomiclabs/hardhat-waffle": "^2.0.3",
-    "@nomiclabs/hardhat-web3": "^2.0.0",
     "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git#master",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.5",
@@ -71,5 +70,9 @@
   },
   "engines": {
     "node": "^14.18.1"
+  },
+  "devDependencies": {
+    "@nomiclabs/hardhat-web3": "^2.0.0",
+    "web3": "^1.8.2"
   }
 }
