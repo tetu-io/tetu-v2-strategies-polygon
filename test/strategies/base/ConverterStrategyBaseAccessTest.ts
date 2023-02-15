@@ -325,6 +325,19 @@ describe("ConverterStrategyBaseAccessTest", () => {
         });
       });
     });
+    describe("Bad paths", () => {
+      it("should revert if borrowed amount is zero", async () => {
+        const inputAmount = parseUnits("900", 6);
+        const borrowAmounts = [
+          parseUnits("0", 18), // dai (!) convertor is not able to borrow DAI
+          parseUnits("0", 6), // usdc, not used
+          parseUnits("315", 6), // usdt
+        ];
+        await expect(
+          makeBeforeDepositTest(inputAmount, borrowAmounts)
+        ).revertedWith("TS-10 zero borrowed amount"); // ZERO_AMOUNT_BORROWED
+      });
+    });
     describe("Gas estimation @skip-on-coverage", () => {
       it("should not exceed the gas limit", async () => {
         const inputAmount = parseUnits("900", 6);

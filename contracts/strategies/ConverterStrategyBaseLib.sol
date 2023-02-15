@@ -208,11 +208,16 @@ library ConverterStrategyBaseLib {
       borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
+    console.log("findBorrowStrategy collateralAsset_=", collateralAsset_);
+    console.log("findBorrowStrategy borrowAsset_=", borrowAsset_);
+    console.log("findBorrowStrategy amountIn_=", amountIn_);
+    console.log("findBorrowStrategy _LOAN_PERIOD_IN_BLOCKS=", _LOAN_PERIOD_IN_BLOCKS);
     console.log("findBorrowStrategy converter=", converter);
     console.log("findBorrowStrategy collateralRequired=", collateralRequired);
     console.log("findBorrowStrategy amountToBorrow=", amountToBorrow);
 
     if (converter != address(0) && amountToBorrow != 0) {
+      console.log("borrow", collateralRequired, amountToBorrow);
       // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
       borrowedAmountOut = tetuConverter_.borrow(
         converter,
@@ -223,6 +228,7 @@ library ConverterStrategyBaseLib {
         address(this)
       );
       collateralAmountOut = collateralRequired;
+      console.log("borrow.done", borrowedAmountOut);
     }
 
     //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);

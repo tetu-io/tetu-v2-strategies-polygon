@@ -165,6 +165,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory borrowedAmounts,
     uint spentCollateral
   ) {
+    console.log("_beforeDeposit amount_", amount_);
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     // save to tokenAmounts[indexAsset_] already correct value
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
@@ -185,6 +186,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       if (i == indexAsset_) continue;
 
       if (tokenAmounts[i] > 0) {
+        console.log("_beforeDeposit.2 tokenAmounts[i]", tokenAmounts[i]);
+        console.log("_beforeDeposit.2 collateral token", tokens_[indexAsset_]);
+        console.log("_beforeDeposit.2 borrow token", tokens_[i]);
+
         uint collateral;
         AppLib.approveIfNeeded(tokens_[indexAsset_], tokenAmounts[i], address(tetuConverter_));
         (collateral, borrowedAmounts[i]) = ConverterStrategyBaseLib.openPosition(
@@ -196,6 +201,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         );
         // collateral should be equal to tokenAmounts[i] here because we use default entry kind
         spentCollateral += collateral;
+
+        // zero amount are possible (conversion is not available) but it's not suitable for depositor
+        require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
       }
       tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(address(this));
     }
@@ -253,8 +261,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         : _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
       _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
+      console.log("investedAssetsUSD.1 investedAssetsUSD, collateral", investedAssetsUSD, collateral);
       // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
       investedAssetsUSD += collateral * assetPrice / 1e18;
+      console.log("investedAssetsUSD.2", investedAssetsUSD);
 
       // adjust _investedAssets
       _updateInvestedAssets();

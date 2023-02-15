@@ -14,13 +14,18 @@ import {
   ISplitter__factory,
   IStrategyV2,
   ITetuConverter__factory,
-  StrategyBaseV2__factory, VaultFactory__factory
+  StrategyBaseV2__factory
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {getConverterAddress, Misc} from '../../../../scripts/utils/Misc';
+import {
+  getConverterAddress,
+  getDForcePlatformAdapter,
+  getHundredFinancePlatformAdapter,
+  Misc
+} from '../../../../scripts/utils/Misc';
 import {BigNumber} from "ethers";
 import {DoHardWorkLoopBase} from "../../../baseUT/utils/DoHardWorkLoopBase";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
@@ -386,7 +391,10 @@ describe('BalancerComposableStableUniversalTest', async () => {
       );
 
       // Disable DForce (as it reverts on repay after block advance)
-      await ConverterUtils.disableDForce(signer);
+      await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+
+      // Disable Hundred Finance (no liquidity)
+      await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
 
       return strategy as unknown as IStrategyV2;
     }

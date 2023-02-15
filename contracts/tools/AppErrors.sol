@@ -24,4 +24,7 @@ library AppErrors {
   string public constant ZERO_PRICE = "TS-8 zero price";
 
   string public constant WRONG_VALUE = "TS-9 wrong value";
+
+  /// @notice TetuConvertor wasn't able to make borrow, i.e. borrow-strategy wasn't found
+  string public constant ZERO_AMOUNT_BORROWED = "TS-10 zero borrowed amount";
 }
