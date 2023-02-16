@@ -13,6 +13,8 @@ import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
+import "hardhat/console.sol";
+
 /// @notice Functions of BalancerComposableStableDepositor
 /// @dev Many of functions are declared as external to reduce contract size
 library BalancerLogicLib {
@@ -407,6 +409,7 @@ library BalancerLogicLib {
 
       // we can make at most 2 attempts to withdraw amounts from the balanceR pool
       for (uint i = 0; i < 2; ++i) {
+        console.log("depositorExitFull", i);
         vault_.exitPool(
           poolId_,
           address(this),
@@ -423,6 +426,7 @@ library BalancerLogicLib {
           })
         );
         liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
+        console.log("depositorExitFull liquidityAmount", liquidityAmount);
         if (liquidityAmount < liquidityThreshold || i == 1) {
           break;
         }
@@ -453,6 +457,7 @@ library BalancerLogicLib {
             amountIn,
             funds
           );
+          console.log("depositorExitFull amountsOut[k]", amountsOut[k]);
         }
         ++k;
       }
@@ -527,6 +532,8 @@ library BalancerLogicLib {
       amountsOut[k] = assetDeltas[2 * k] < 0
         ? uint256(-assetDeltas[2 * k])
         : 0;
+      console.log("depositorQuoteExit amountsOut[k] k", amountsOut[k], k);
+
       ++k;
     }
   }  

@@ -39,21 +39,23 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
   function getExpectedWithdrawnAmountUSDTestAccess(
-    address[] memory tokens_,
+    uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_,
-    address priceOracle_
+    uint[] memory prices_,
+    uint[] memory decimals_,
+    uint indexAsset_
   ) external view returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+    uint investedAssetsUsdSecondary,
+    uint investedAssetsUsdMain
   ) {
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
-      tokens_,
-      _depositorPoolReserves(),
-      asset,
+      reserves_,
       liquidityAmount_,
       totalSupply_,
-      IPriceOracle(priceOracle_)
+      prices_,
+      decimals_,
+      indexAsset_
     );
   }
 

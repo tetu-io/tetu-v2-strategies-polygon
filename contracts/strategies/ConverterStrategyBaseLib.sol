@@ -61,22 +61,25 @@ library ConverterStrategyBaseLib {
   ///         This function doesn't take into account swap/lending difference,
   ///         so result {investedAssetsUSD} doesn't take into account possible collateral
   ///         that can be returned after closing positions.
-  /// @param poolAssets_ Any number of assets, one of them should be {asset_}
   /// @param reserves_ Reserves of the {poolAssets_}, same order, same length (we don't check it)
+  ///                  The order of tokens should be same as in {_depositorPoolAssets()},
+  ///                  one of assets must be {asset_}
   /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
   /// @param totalSupply_ Total amount of LP tokens in the depositor
-  /// @return investedAssetsUSD Amount of USD that we expect to receive after withdrawing, decimals of {asset_}
-  /// @return assetPrice Price of {asset}, decimals 18
+  /// @return investedAssetsUsdSecondary Amount of USD that we expect to receive after withdrawing
+  ///                                    of all not main assets, decimals of {asset_}
+  /// @return investedAssetsUsdMain Amount of USD that we expect to receive after withdrawing
+  ///                                 main asset, decimals of {asset_}
   function getExpectedWithdrawnAmountUSD(
-    address[] memory poolAssets_,
     uint[] memory reserves_,
-    address asset_,
     uint liquidityAmount_,
     uint totalSupply_,
-    IPriceOracle priceOracle_
+    uint[] memory prices_,
+    uint[] memory decimals_,
+    uint indexAsset_
   ) external view returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+    uint investedAssetsUsdSecondary,
+    uint investedAssetsUsdMain
   ) {
     uint ratio = totalSupply_ == 0
       ? 0
@@ -84,25 +87,78 @@ library ConverterStrategyBaseLib {
         ? 1e18
         : 1e18 * liquidityAmount_ / totalSupply_
     ); // we need brackets here for npm.run.coverage
+    console.log("getExpectedWithdrawnAmountUSD");
+    console.log("getExpectedWithdrawnAmountUSD totalSupply_", totalSupply_);
+    console.log("getExpectedWithdrawnAmountUSD liquidityAmount_", liquidityAmount_);
 
-    uint degreeTargetDecimals = 10**IERC20Metadata(asset_).decimals();
-
-    uint len = poolAssets_.length;
+    uint len = reserves_.length;
     for (uint i = 0; i < len; ++i) {
-      uint price = priceOracle_.getAssetPrice(poolAssets_[i]);
-      require(price != 0, AppErrors.ZERO_PRICE);
-
-      if (asset_ == poolAssets_[i]) {
-        investedAssetsUSD += reserves_[i] * price / 1e18;
-        assetPrice = price;
+      if (i == indexAsset_) {
+        console.log("getExpectedWithdrawnAmountUSD.1 reserves_[i]", reserves_[i]);
+        investedAssetsUsdMain += reserves_[i] * prices_[i] / 1e18;
+        console.log("getExpectedWithdrawnAmountUSD.1 investedAssetsUsdMain", investedAssetsUsdMain);
       } else {
-        investedAssetsUSD += reserves_[i] * price
-          * degreeTargetDecimals / 10**IERC20Metadata(poolAssets_[i]).decimals()
+        console.log("getExpectedWithdrawnAmountUSD.2 reserves_[i]", reserves_[i]);
+        investedAssetsUsdSecondary += reserves_[i] * prices_[i]
+          * 10**decimals_[indexAsset_] / 10**decimals_[i]
           / 1e18;
+        console.log("getExpectedWithdrawnAmountUSD.2 investedAssetsUsdSecondary", investedAssetsUsdSecondary);
       }
     }
 
-    return (investedAssetsUSD * ratio / 1e18, assetPrice);
+    console.log("getExpectedWithdrawnAmountUSD investedAssetsUsdSecondary", investedAssetsUsdSecondary * ratio / 1e18);
+    console.log("getExpectedWithdrawnAmountUSD investedAssetsUsdMain", investedAssetsUsdMain * ratio / 1e18);
+    return (investedAssetsUsdSecondary * ratio / 1e18, investedAssetsUsdMain * ratio / 1e18);
+  }
+
+  /// @notice Calculate investedAssetsUSD as USDC1 + Collateral1, see explanation below.
+  ///         We have secondary and main assets in the pool, i.e. DAI1+USDT1 and USDC1
+  ///         We estimate total price of available assets in USD:
+  ///             DAI1+USDT1 give us {expectedInvestedAssetsUsdSecondary_}
+  ///             USDC1 give us {expectedInvestedAssetsUsdMain_}
+  ///         After withdraw, we receive real amounts: DAI2, USDT2, USDC2.
+  ///             DAI2+USDT2 give us expectedInvestedAssetsUsdSecondary2
+  ///             USDC2 give us expectedInvestedAssetsUsdMain2
+  ///         We converter DAI2, USDT2 to USDC. These assets were borrowed, so we make repayment
+  ///         and receive the USDC-collateral: Collateral2.
+  ///         So, total withdrawn amount of USDC is USDC2 + Collateral2.
+  ///         We need to be sure that this amount is not different too much from expected USDC1 + Collateral1.
+  ///         But we don't know Collateral1... we estimate it as following:
+  ///             Collateral1 = Collateral2 * (expectedInvestedAssetsUsdSecondary_ / expectedInvestedAssetsUsdSecondary2)
+  /// @param expectedInvestedAssetsUsdSecondary_ Total estimated amounts-to-be-withdrawn of secondary assets in USD
+  /// @param expectedInvestedAssetsUsdMain_ Estimated amount-to-be-withdrawn of main asset in USD
+  /// @param prices_ Prices of all assets, the order of tokens is the same to {_depositorPoolAssets}
+  /// @param indexAsset_ Index of the main asset in {prices_} and {withdrawnAmounts_}
+  /// @param withdrawnAmounts_ Actually withdrawn amounts of all assets, the order of tokens is the same to {poolAssets_}
+  /// @param receivedCollateral_ Amount of collateral actually received after conversion of the withdrawn
+  ///                            amounts of the secondary assets.
+  function getExpectedInvestedAssetsUSD(
+    uint expectedInvestedAssetsUsdSecondary_,
+    uint expectedInvestedAssetsUsdMain_,
+    uint[] memory prices_,
+    uint[] memory decimals_,
+    uint indexAsset_,
+    uint[] memory withdrawnAmounts_,
+    uint receivedCollateral_
+  ) external view returns (
+    uint investedAssetsUsdOut
+  ){
+    uint expectedInvestedAssetsUsdSecondary2;
+    uint expectedInvestedAssetsUsdMain2;
+    uint len = withdrawnAmounts_.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset_) {
+        expectedInvestedAssetsUsdMain2 = withdrawnAmounts_[i] * prices_[i] / 1e18;
+      } else {
+        expectedInvestedAssetsUsdSecondary2 += withdrawnAmounts_[i] * prices_[i]
+          * 10**decimals_[indexAsset_] / 10**decimals_[i]
+          / 1e18;
+      }
+    }
+    require(expectedInvestedAssetsUsdSecondary2 != 0, AppErrors.WRONG_VALUE);
+    uint collateral1 = receivedCollateral_ * expectedInvestedAssetsUsdSecondary_ / expectedInvestedAssetsUsdSecondary2;
+
+    investedAssetsUsdOut = (expectedInvestedAssetsUsdMain_ + collateral1) * prices_[indexAsset_] / 1e18;
   }
 
   /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.

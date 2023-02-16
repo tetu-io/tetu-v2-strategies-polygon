@@ -8,9 +8,11 @@ import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
+  GET_EXPECTED_INVESTED_ASSETS_USD,
   GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, GET_GET_COLLATERALS
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
+import {decimalString} from "hardhat/internal/core/config/config-validation";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -58,69 +60,52 @@ describe("ConverterStrategyBaseLibTest", () => {
   describe("getExpectedWithdrawnAmountUSD", () => {
     describe("Good paths", () => {
       describe("Two assets", () => {
-        describe("The asset is first in _depositorPoolAssets", async () => {
-          it("should return expected values for USDC", async () => {
-            const priceOracle = (await DeployerUtils.deployContract(
-              signer,
-              'PriceOracleMock',
-              [usdc.address, dai.address],
-              [parseUnits("4", 18), parseUnits("2", 18)]
-            )) as PriceOracleMock;
-
+        describe("The asset is first in _depositorPoolAssets, USDC, DAI", async () => {
+          it("should return expected values, USDC is main", async () => {
             const ret = await facade.getExpectedWithdrawnAmountUSD(
-              [usdc.address, dai.address],
               [
-                parseUnits("200000", 6),
-                parseUnits("100000", 18),
+                parseUnits("200000", 6), // usdc
+                parseUnits("100000", 18), // dai
               ],
-              usdc.address, // first asset in the list
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              priceOracle.address
+              [parseUnits("4", 18), parseUnits("2", 18)],
+              [6, 18],
+              0 // index of USDC
             );
 
-            const expectedInvestedAssetsUSDNum = 200_000 * 4 * 1000 / 50_000 + 100_000 * 2 * 1000 / 50_000;
-
             const sret = [
-              ret.investedAssetsUSD.toString(),
-              ret.assetPrice.toString()
+              ret.investedAssetsUsdMain.toString(),
+              ret.investedAssetsUsdSecondary.toString(),
             ].join();
             const sexpected = [
-              parseUnits(expectedInvestedAssetsUSDNum.toString(), 6),
-              parseUnits("4", 18).toString()
+              parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6), // decimals of main asset
+              parseUnits((100_000 * 2 * 1000 / 50_000).toString(), 6), // decimals of main asset
             ].join();
 
             expect(sret).eq(sexpected);
           });
-          it("should return expected values for DAI", async () => {
-            const priceOracle = (await DeployerUtils.deployContract(
-              signer,
-              'PriceOracleMock',
-              [usdc.address, dai.address],
-              [parseUnits("2", 18), parseUnits("4", 18)]
-            )) as PriceOracleMock;
-
+          it("should return expected values, DAI is main", async () => {
+            // DAI, USDC
             const ret = await facade.getExpectedWithdrawnAmountUSD(
-              [dai.address, usdc.address],
               [
-                parseUnits("100000", 18),
-                parseUnits("200000", 6),
+                parseUnits("100000", 18), // dai
+                parseUnits("200000", 6), // usdc
               ],
-              dai.address, // first asset in the list
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              priceOracle.address
+              [parseUnits("4", 18), parseUnits("2", 18)],
+              [18, 6],
+              0
             );
 
-            const expectedInvestedAssetsUSDNum = 100_000 * 4 * 1000 / 50_000 + 200_000 * 2 * 1000 / 50_000;
-
             const sret = [
-              ret.investedAssetsUSD.toString(),
-              ret.assetPrice.toString()
+              ret.investedAssetsUsdMain.toString(),
+              ret.investedAssetsUsdSecondary.toString(),
             ].join();
             const sexpected = [
-              parseUnits(expectedInvestedAssetsUSDNum.toString(), 18),
-              parseUnits("4", 18).toString()
+              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18), // decimals of main asset
+              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 18), // decimals of main asset
             ].join();
 
             expect(sret).eq(sexpected);
@@ -128,34 +113,25 @@ describe("ConverterStrategyBaseLibTest", () => {
         });
         describe("The asset is second in _depositorPoolAssets", async () => {
           it("should return expected values for USDC", async () => {
-            const priceOracle = (await DeployerUtils.deployContract(
-              signer,
-              'PriceOracleMock',
-              [usdc.address, dai.address],
-              [parseUnits("4", 18), parseUnits("2", 18)]
-            )) as PriceOracleMock;
-
             const ret = await facade.getExpectedWithdrawnAmountUSD(
-              [dai.address, usdc.address],
               [
-                parseUnits("100000", 18),
-                parseUnits("200000", 6),
+                parseUnits("100000", 18), // dai
+                parseUnits("200000", 6), // usdc
               ],
-              usdc.address, // (!) second asset in the list
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              priceOracle.address
+              [parseUnits("4", 18), parseUnits("2", 18)],
+              [18, 6],
+              1 // usdc
             );
 
-            const expectedInvestedAssetsUSDNum = 200_000 * 4 * 1000 / 50_000 + 100_000 * 2 * 1000 / 50_000;
-
             const sret = [
-              ret.investedAssetsUSD.toString(),
-              ret.assetPrice.toString()
+              ret.investedAssetsUsdMain.toString(),
+              ret.investedAssetsUsdSecondary.toString(),
             ].join();
             const sexpected = [
-              parseUnits(expectedInvestedAssetsUSDNum.toString(), 6),
-              parseUnits("4", 18).toString()
+              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 6), // decimals of main asset
+              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6), // decimals of main asset
             ].join();
 
             expect(sret).eq(sexpected);
@@ -169,26 +145,24 @@ describe("ConverterStrategyBaseLibTest", () => {
             )) as PriceOracleMock;
 
             const ret = await facade.getExpectedWithdrawnAmountUSD(
-              [usdc.address, dai.address],
               [
-                parseUnits("200000", 6),
-                parseUnits("100000", 18),
+                parseUnits("200000", 6), // usdc
+                parseUnits("100000", 18), // dai
               ],
-              dai.address, // (!) second asset in the list
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              priceOracle.address
+              [parseUnits("2", 18), parseUnits("4", 18)],
+              [6, 18],
+              1 // dai
             );
 
-            const expectedInvestedAssetsUSDNum = 100_000 * 2 * 1000 / 50_000 + 200_000 * 4 * 1000 / 50_000;
-
             const sret = [
-              ret.investedAssetsUSD.toString(),
-              ret.assetPrice.toString()
+              ret.investedAssetsUsdMain.toString(),
+              ret.investedAssetsUsdSecondary.toString(),
             ].join();
             const sexpected = [
-              parseUnits(expectedInvestedAssetsUSDNum.toString(), 18),
-              parseUnits("2", 18).toString()
+              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 18), // decimals of main asset
+              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18), // decimals of main asset
             ].join();
 
             expect(sret).eq(sexpected);
@@ -197,42 +171,30 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
       describe("Three assets", () => {
         it("should return expected values", async () => {
-          const priceOracle = (await DeployerUtils.deployContract(
-            signer,
-            'PriceOracleMock',
-            [usdc.address, dai.address, weth.address],
+          const ret = await facade.getExpectedWithdrawnAmountUSD(
+            [
+              parseUnits("200000", 6), // usdc
+              parseUnits("100000", 18), // dai
+              parseUnits("800000", 8), // weth
+            ],
+            parseUnits("1000", 33), // decimals of the values don't matter here
+            parseUnits("50000", 33), // only values ratio is important
             [
               parseUnits("4", 18),
               parseUnits("2", 18),
               parseUnits("8", 18)
-            ]
-          )) as PriceOracleMock;
-
-          const ret = await facade.getExpectedWithdrawnAmountUSD(
-            [usdc.address, dai.address, weth.address],
-            [
-              parseUnits("200000", 6),
-              parseUnits("100000", 18),
-              parseUnits("800000", 8),
             ],
-            usdc.address, // first asset in the list
-            parseUnits("1000", 33), // decimals of the values don't matter here
-            parseUnits("50000", 33), // only values ratio is important
-            priceOracle.address
+            [6, 18, 8],
+            0
           );
 
-          const expectedInvestedAssetsUSDNum =
-              200_000 * 4 * 1000 / 50_000
-            + 100_000 * 2 * 1000 / 50_000
-            + 800_000 * 8 * 1000 / 50_000;
-
           const sret = [
-            ret.investedAssetsUSD.toString(),
-            ret.assetPrice.toString()
+            ret.investedAssetsUsdMain.toString(),
+            ret.investedAssetsUsdSecondary.toString(),
           ].join();
           const sexpected = [
-            parseUnits(expectedInvestedAssetsUSDNum.toString(), 6),
-            parseUnits("4", 18).toString()
+            parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6), // decimals of main asset
+            parseUnits((100_000 * 2 * 1000 / 50_000 + 800_000 * 8 * 1000 / 50_000).toString(), 6), // decimals of main asset
           ].join();
 
           expect(sret).eq(sexpected);
@@ -241,109 +203,84 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
     describe("Bad paths", () => {
       it("should return zero values if total supply is zero", async () => {
-        const priceOracle = (await DeployerUtils.deployContract(
-          signer,
-          'PriceOracleMock',
-          [usdc.address, dai.address],
-          [parseUnits("4", 18), parseUnits("2", 18)]
-        )) as PriceOracleMock;
-
         const ret = await facade.getExpectedWithdrawnAmountUSD(
-          [usdc.address, dai.address],
           [
-            parseUnits("200000", 6),
-            parseUnits("100000", 18),
+            parseUnits("200000", 6), // usdc
+            parseUnits("100000", 18), // dai
           ],
-          dai.address, // (!) second asset in the list
           parseUnits("1000", 33), // decimals of the values don't matter here
           parseUnits("0", 33), // (!) total supply is zero
-          priceOracle.address
+          [parseUnits("4", 18), parseUnits("2", 18)],
+          [6, 18],
+          1 // dai
         );
         const sret = [
-          ret.investedAssetsUSD.toString(),
-          ret.assetPrice.toString()
+          ret.investedAssetsUsdMain.toString(),
+          ret.investedAssetsUsdSecondary.toString(),
         ].join();
         const sexpected = [
-          parseUnits("0".toString(), 6),
-          parseUnits("2", 18).toString()
+          parseUnits("0", 18),
+          parseUnits("0", 18),
         ].join();
 
         expect(sret).eq(sexpected);
       });
       it("should revert if main asset price is zero", async () => {
-        const priceOracle = await MockHelper.createPriceOracle(
-          signer,
-          [usdc.address, dai.address],
-          [
-            parseUnits("0", 18), // (!) usdc price is zero
-            parseUnits("2", 18)
-          ]
-        );
         await expect(
           facade.getExpectedWithdrawnAmountUSD(
-            [usdc.address, dai.address],
             [
-              parseUnits("200000", 6),
-              parseUnits("100000", 18),
+              parseUnits("200000", 6), // usdc
+              parseUnits("100000", 18), // dai
             ],
-            usdc.address,
             parseUnits("1000", 33), // decimals of the values don't matter here
             parseUnits("5000", 33), // total supply
-            priceOracle.address
+            [
+              parseUnits("0", 18), // (!) usdc price is zero
+              parseUnits("2", 18)
+            ],
+            [6, 18],
+            0 // usdc
           )
         ).revertedWith("TS-8 zero price");
       });
-      it("should revert if main asset price is zero", async () => {
-        const priceOracle = await MockHelper.createPriceOracle(
-          signer,
-          [usdc.address, dai.address],
-          [
-            parseUnits("2", 6),
-            parseUnits("0", 18), // (!) dai price is zero
-          ]
-        );
+      it("should revert if secondary asset price is zero", async () => {
         await expect(
           facade.getExpectedWithdrawnAmountUSD(
-            [usdc.address, dai.address],
             [
               parseUnits("200000", 6),
               parseUnits("100000", 18),
             ],
-            usdc.address,
             parseUnits("1000", 33), // decimals of the values don't matter here
             parseUnits("5000", 33), // total supply
-            priceOracle.address
+            [
+              parseUnits("2", 6),
+              parseUnits("0", 18), // (!) dai price is zero
+            ],
+            [6, 18],
+            1 // dai
           )
         ).revertedWith("TS-8 zero price");
       });
       it("should use ratio 1 if liquidityAmount > totalSupply", async () => {
-        const priceOracle = (await DeployerUtils.deployContract(
-          signer,
-          'PriceOracleMock',
-          [usdc.address, dai.address],
-          [parseUnits("4", 18), parseUnits("2", 18)]
-        )) as PriceOracleMock;
-
         const ret = await facade.getExpectedWithdrawnAmountUSD(
-          [usdc.address, dai.address],
           [
             parseUnits("200000", 6),
             parseUnits("100000", 18),
           ],
-          usdc.address,
           parseUnits("5000", 33), // (!) liquidity is greater than total supply
           parseUnits("1000", 33), // (!) total supply
-          priceOracle.address
+          [parseUnits("2", 18), parseUnits("4", 18)],
+          [6, 18],
+          0 // usdc
         );
 
-        const expectedInvestedAssetsUSDNum = 200_000 * 4  +  100_000 * 2; // ratio is 1
         const sret = [
-          ret.investedAssetsUSD.toString(),
-          ret.assetPrice.toString()
+          ret.investedAssetsUsdMain.toString(),
+          ret.investedAssetsUsdSecondary.toString(),
         ].join();
         const sexpected = [
-          parseUnits(expectedInvestedAssetsUSDNum.toString(), 6),
-          parseUnits("4", 18).toString()
+          parseUnits((200_000 * 2).toString(), 6), // ratio == 1
+          parseUnits((100_000 * 4).toString(), 6), // ratio == 1
         ].join();
 
         expect(sret).eq(sexpected);
@@ -351,30 +288,124 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
     describe("Gas estimation @skip-on-coverage", () => {
       it("should not exceed gas limits @skip-on-coverage", async () => {
-        const priceOracle = (await DeployerUtils.deployContract(
-          signer,
-          'PriceOracleMock',
-          [usdc.address, dai.address, weth.address],
-          [
-            parseUnits("4", 18),
-            parseUnits("2", 18),
-            parseUnits("8", 18)
-          ]
-        )) as PriceOracleMock;
-
         const gasUsed = await facade.estimateGas.getExpectedWithdrawnAmountUSD(
-          [usdc.address, dai.address, weth.address],
           [
             parseUnits("200000", 6),
             parseUnits("100000", 18),
             parseUnits("800000", 8),
           ],
-          usdc.address, // first asset in the list
           parseUnits("1000", 33), // decimals of the values don't matter here
           parseUnits("50000", 33), // only values ratio is important
-          priceOracle.address
+          [
+            parseUnits("4", 18),
+            parseUnits("2", 18),
+            parseUnits("8", 18)
+          ],
+          [6, 18, 8],
+          0
         );
         controlGasLimitsEx(gasUsed, GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
+    });
+  });
+
+  describe("getExpectedInvestedAssetsUSD", () => {
+    describe("Good paths", () => {
+      it("should return expected values, main asset is USDC", async () => {
+        // dai, usdc, usdt
+        // main asset is USDC
+        const r = await facade.getExpectedInvestedAssetsUSD(
+          parseUnits("360", 6),
+          parseUnits("371", 6),
+          [
+            parseUnits("3", 18), // dai
+            parseUnits("7", 18), // usdc
+            parseUnits("5", 18) // usdt
+          ],
+          [18, 6, 6],
+          1, // usdc
+          [
+            parseUnits("10", 18), // dai => $30
+            parseUnits("20", 6), // usdc = $140
+            parseUnits("30", 6) // usdt = $150
+          ],
+          parseUnits("400", 6), // usdc
+        )
+        const ret = r.toString();
+        // 180 USDC were received, 360 USDC were expected (for DAI + USDT)
+        // 400 USDC collateral was received => 800 USDC was expected
+        const expectedUSD = (360 / (10*3 + 30*5) * 400 + 371) * 7;
+        const expected = parseUnits(expectedUSD.toString(), 6).toString();
+        expect(ret).eq(expected);
+      });
+      it("should return expected values, main asset is DAI", async () => {
+        // dai, usdc, usdt
+        // main asset is USDC
+        const r = await facade.getExpectedInvestedAssetsUSD(
+          parseUnits("580", 18),
+          parseUnits("371", 18),
+          [
+            parseUnits("3", 18), // dai
+            parseUnits("7", 18), // usdc
+            parseUnits("5", 18) // usdt
+          ],
+          [18, 6, 6],
+          0, // dai
+          [
+            parseUnits("10", 18), // dai => $30
+            parseUnits("20", 6), // usdc = $140
+            parseUnits("30", 6) // usdt = $150
+          ],
+          parseUnits("400", 18), // dai
+        )
+        const ret = r.toString();
+        // 290 USDC were received, 580 USDC were expected (for DAI + USDT)
+        // 400 USDC collateral was received => 800 USDC was expected
+        const expectedUSD = (580 / (20*7 + 30*5) * 400 + 371) * 3;
+        const expected = parseUnits(expectedUSD.toString(), 18).toString();
+        expect(ret).eq(expected);
+      });
+    });
+    describe("Bad paths", () => {
+      it("should revert if expectedInvestedAssetsUsdSecondary2 is zero", async () => {
+        // dai, usdc, usdt
+        // main asset is USDC
+        await expect(facade.getExpectedInvestedAssetsUSD(
+          parseUnits("580", 18),
+          parseUnits("371", 18),
+          [], // (!) no assets
+          [], // (!) no assets
+          0, // dai
+          [], // (!) no assets
+          parseUnits("400", 18), // dai
+        )).revertedWith("TS-9 wrong value"); // WRONG_VALUE
+      });
+
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should not exceed gas limits", async () => {
+        // dai, usdc, usdt
+        // main asset is USDC
+        const gasUsed = await facade.estimateGas.getExpectedInvestedAssetsUSD(
+          parseUnits("580", 18),
+          parseUnits("371", 18),
+          [
+            parseUnits("3", 18), // dai
+            parseUnits("7", 18), // usdc
+            parseUnits("5", 18) // usdt
+          ],
+          [18, 6, 6],
+          0, // dai
+          [
+            parseUnits("10", 18), // dai => $30
+            parseUnits("20", 6), // usdc = $140
+            parseUnits("30", 6) // usdt = $150
+          ],
+          parseUnits("400", 18), // dai
+        )
+        controlGasLimitsEx(gasUsed, GET_EXPECTED_INVESTED_ASSETS_USD, (u, t) => {
           expect(u).to.be.below(t + 1);
         });
       });
