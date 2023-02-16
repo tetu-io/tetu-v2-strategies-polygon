@@ -179,6 +179,10 @@ export class DoHardWorkLoopBase {
     if (params.reinvestThresholdPercent) {
       await strategyAsOperator.setReinvestThresholdPercent(params.reinvestThresholdPercent); // 100_000 / 100
     }
+
+    await this.vault.connect(
+      await Misc.impersonate(await controllerAsUser.governance())
+    ).setFees(701, 501);
   }
 
   protected async initialSnapshot() {
@@ -321,8 +325,9 @@ export class DoHardWorkLoopBase {
 
   protected async userBalanceInVault(): Promise<BigNumber> {
     const userShares = await TokenUtils.balanceOf(this.vault.address, this.user.address);
+    console.log('DoHardWorkLoopBase.userBalanceInVault.userShares', userShares.toString());
     const userBalance = await this.vaultAsUser.convertToAssets(userShares);
-    console.log('userBalanceInVault', userBalance.toString());
+    console.log('DoHardWorkLoopBase.userBalanceInVault.userBalance', userBalance.toString());
     return userBalance;
   }
 

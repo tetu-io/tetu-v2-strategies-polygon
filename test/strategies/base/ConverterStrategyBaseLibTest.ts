@@ -13,6 +13,7 @@ import {
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {decimalString} from "hardhat/internal/core/config/config-validation";
+import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -57,7 +58,7 @@ describe("ConverterStrategyBaseLibTest", () => {
 //endregion before, after
 
 //region Unit tests
-  describe("getExpectedWithdrawnAmountUSD", () => {
+  describe("getExpectedWithdrawnAmounts", () => {
     describe("Good paths", () => {
       describe("Two assets", () => {
         describe("The asset is first in _depositorPoolAssets, USDC, DAI", async () => {
@@ -70,17 +71,12 @@ describe("ConverterStrategyBaseLibTest", () => {
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
               [parseUnits("4", 18), parseUnits("2", 18)],
-              [6, 18],
-              0 // index of USDC
             );
 
-            const sret = [
-              ret.investedAssetsUsdMain.toString(),
-              ret.investedAssetsUsdSecondary.toString(),
-            ].join();
+            const sret = ret.map(x => BalanceUtils.toString(x)).join("\n");
             const sexpected = [
-              parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6), // decimals of main asset
-              parseUnits((100_000 * 2 * 1000 / 50_000).toString(), 6), // decimals of main asset
+              parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6),
+              parseUnits((100_000 * 2 * 1000 / 50_000).toString(), 18),
             ].join();
 
             expect(sret).eq(sexpected);
@@ -305,107 +301,6 @@ describe("ConverterStrategyBaseLibTest", () => {
           0
         );
         controlGasLimitsEx(gasUsed, GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, (u, t) => {
-          expect(u).to.be.below(t + 1);
-        });
-      });
-    });
-  });
-
-  describe("getExpectedInvestedAssetsUSD", () => {
-    describe("Good paths", () => {
-      it("should return expected values, main asset is USDC", async () => {
-        // dai, usdc, usdt
-        // main asset is USDC
-        const r = await facade.getExpectedInvestedAssetsUSD(
-          parseUnits("360", 6),
-          parseUnits("371", 6),
-          [
-            parseUnits("3", 18), // dai
-            parseUnits("7", 18), // usdc
-            parseUnits("5", 18) // usdt
-          ],
-          [18, 6, 6],
-          1, // usdc
-          [
-            parseUnits("10", 18), // dai => $30
-            parseUnits("20", 6), // usdc = $140
-            parseUnits("30", 6) // usdt = $150
-          ],
-          parseUnits("400", 6), // usdc
-        )
-        const ret = r.toString();
-        // 180 USDC were received, 360 USDC were expected (for DAI + USDT)
-        // 400 USDC collateral was received => 800 USDC was expected
-        const expectedUSD = (360 / (10*3 + 30*5) * 400 + 371) * 7;
-        const expected = parseUnits(expectedUSD.toString(), 6).toString();
-        expect(ret).eq(expected);
-      });
-      it("should return expected values, main asset is DAI", async () => {
-        // dai, usdc, usdt
-        // main asset is USDC
-        const r = await facade.getExpectedInvestedAssetsUSD(
-          parseUnits("580", 18),
-          parseUnits("371", 18),
-          [
-            parseUnits("3", 18), // dai
-            parseUnits("7", 18), // usdc
-            parseUnits("5", 18) // usdt
-          ],
-          [18, 6, 6],
-          0, // dai
-          [
-            parseUnits("10", 18), // dai => $30
-            parseUnits("20", 6), // usdc = $140
-            parseUnits("30", 6) // usdt = $150
-          ],
-          parseUnits("400", 18), // dai
-        )
-        const ret = r.toString();
-        // 290 USDC were received, 580 USDC were expected (for DAI + USDT)
-        // 400 USDC collateral was received => 800 USDC was expected
-        const expectedUSD = (580 / (20*7 + 30*5) * 400 + 371) * 3;
-        const expected = parseUnits(expectedUSD.toString(), 18).toString();
-        expect(ret).eq(expected);
-      });
-    });
-    describe("Bad paths", () => {
-      it("should revert if expectedInvestedAssetsUsdSecondary2 is zero", async () => {
-        // dai, usdc, usdt
-        // main asset is USDC
-        await expect(facade.getExpectedInvestedAssetsUSD(
-          parseUnits("580", 18),
-          parseUnits("371", 18),
-          [], // (!) no assets
-          [], // (!) no assets
-          0, // dai
-          [], // (!) no assets
-          parseUnits("400", 18), // dai
-        )).revertedWith("TS-9 wrong value"); // WRONG_VALUE
-      });
-
-    });
-    describe("Gas estimation @skip-on-coverage", () => {
-      it("should not exceed gas limits", async () => {
-        // dai, usdc, usdt
-        // main asset is USDC
-        const gasUsed = await facade.estimateGas.getExpectedInvestedAssetsUSD(
-          parseUnits("580", 18),
-          parseUnits("371", 18),
-          [
-            parseUnits("3", 18), // dai
-            parseUnits("7", 18), // usdc
-            parseUnits("5", 18) // usdt
-          ],
-          [18, 6, 6],
-          0, // dai
-          [
-            parseUnits("10", 18), // dai => $30
-            parseUnits("20", 6), // usdc = $140
-            parseUnits("30", 6) // usdt = $150
-          ],
-          parseUnits("400", 18), // dai
-        )
-        controlGasLimitsEx(gasUsed, GET_EXPECTED_INVESTED_ASSETS_USD, (u, t) => {
           expect(u).to.be.below(t + 1);
         });
       });

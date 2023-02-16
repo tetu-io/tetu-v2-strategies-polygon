@@ -14,7 +14,7 @@ import {
   ISplitter__factory,
   IStrategyV2,
   ITetuConverter__factory,
-  StrategyBaseV2__factory
+  StrategyBaseV2__factory, VaultFactory__factory
 } from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
@@ -86,6 +86,8 @@ interface IState {
   }
   vault: {
     usdc: BigNumber;
+    userShares: BigNumber;
+    signerShares: BigNumber;
     userUsdc: BigNumber;
     signerUsdc: BigNumber;
     sharePrice: BigNumber;
@@ -140,16 +142,19 @@ async function getStates(title: string, h: DoHardWorkLoopBase) : Promise<IState>
     },
     vault: {
       usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.vault.address),
-      userUsdc: await h.vault.balanceOf(h.user.address),
-      signerUsdc: await h.vault.balanceOf(h.signer.address),
+      userShares: await h.vault.balanceOf(h.user.address),
+      signerShares: await h.vault.balanceOf(h.signer.address),
+      userUsdc: await h.vault.convertToAssets(await h.vault.balanceOf(h.user.address)),
+      signerUsdc: await h.vault.convertToAssets(await h.vault.balanceOf(h.signer.address)),
       sharePrice: await h.vault.sharePrice(),
       totalSupply: await h.vault.totalSupply(),
       totalAssets: await h.vault.totalAssets(),
     },
     insurance: {
       usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(insurance),
-    }
+    },
   }
+
 
   console.log("State", dest);
   return dest;
@@ -196,8 +201,11 @@ async function saveToCSV(pathOut: string, states: IState[]) {
   const decimals = [
     0,
     0,
+    0,
     decimalsUSDC, // signer.usdc
     decimalsUSDC, // user.usdc
+    decimalsUSDC, // vault.userShares
+    decimalsUSDC, // vault.signerShares
     decimalsUSDC, // vault.userUsdc
     decimalsUSDC, // vault.signerUsdc
     decimalsSharedPrice, // shared price
@@ -227,6 +235,8 @@ async function saveToCSV(pathOut: string, states: IState[]) {
       item.blockTimestamp,
       item.signer.usdc,
       item.user.usdc,
+      item.vault.userShares,
+      item.vault.signerShares,
       item.vault.userUsdc,
       item.vault.signerUsdc,
       item.vault.sharePrice,
@@ -343,11 +353,11 @@ describe('BalancerComposableStableUniversalTest', async () => {
       [112, 112, 112]
     );
 
-    // const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2')
-    // await VaultFactory__factory.connect(
-    //   core.vaultFactory,
-    //   await DeployerUtilsLocal.getControllerGovernance(signer)
-    // ).setSplitterImpl(splitterImpl.address);
+    const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2')
+    await VaultFactory__factory.connect(
+      core.vaultFactory,
+      await DeployerUtilsLocal.getControllerGovernance(signer)
+    ).setSplitterImpl(splitterImpl.address);
   });
 
   /** Save collected states to csv, compute profit */

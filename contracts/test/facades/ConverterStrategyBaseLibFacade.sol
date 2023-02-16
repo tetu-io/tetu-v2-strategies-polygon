@@ -6,46 +6,19 @@ import "../../strategies/ConverterStrategyBaseLib.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
-  function getExpectedWithdrawnAmountUSD(
+  function getExpectedWithdrawnAmounts(
     uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_,
-    uint[] memory prices_,
-    uint[] memory decimals_,
-    uint indexAsset_
+    uint[] memory prices_
   ) external view returns (
-    uint investedAssetsUsdSecondary,
-    uint investedAssetsUsdMain
+    uint[] memory withdrawnAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(
       reserves_,
       liquidityAmount_,
       totalSupply_,
-      prices_,
-      decimals_,
-      indexAsset_
-    );
-  }
-
-  function getExpectedInvestedAssetsUSD(
-    uint expectedInvestedAssetsUsdSecondary_,
-    uint expectedInvestedAssetsUsdMain_,
-    uint[] memory prices_,
-    uint[] memory decimals_,
-    uint indexAsset_,
-    uint[] memory withdrawnAmounts_,
-    uint receivedCollateral_
-  ) external view returns (
-    uint investedAssetsUsdOut
-  ){
-    return ConverterStrategyBaseLib.getExpectedInvestedAssetsUSD(
-      expectedInvestedAssetsUsdSecondary_,
-      expectedInvestedAssetsUsdMain_,
-      prices_,
-      decimals_,
-      indexAsset_,
-      withdrawnAmounts_,
-      receivedCollateral_
+      prices_
     );
   }
 

@@ -38,25 +38,15 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
-  function getExpectedWithdrawnAmountUSDTestAccess(
+  function getExpectedWithdrawnAmountsTestAcces(
     uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_,
-    uint[] memory prices_,
-    uint[] memory decimals_,
-    uint indexAsset_
+    uint[] memory prices_
   ) external view returns (
-    uint investedAssetsUsdSecondary,
-    uint investedAssetsUsdMain
+    uint[] memory withdrawnAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
-      reserves_,
-      liquidityAmount_,
-      totalSupply_,
-      prices_,
-      decimals_,
-      indexAsset_
-    );
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_, prices_);
   }
 
   function _updateBaseAmountsAccess(

@@ -115,6 +115,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Amount of underlying assets converted to pool assets and invested to the pool.
   function investedAssets() override public view virtual returns (uint) {
+    console.log("Strategy.investedAssets()", _investedAssets);
     return _investedAssets;
   }
 
@@ -241,42 +242,42 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           * amount / _investedAssets // a part of amount that we are going to withdraw
           / 100; // .. add 1% on top
 
-    console.log("investedAssetsUSD amount liquidityAmount all", amount, liquidityAmount, all);
+    ITetuConverter _tetuConverter = tetuConverter; // gas saving
+
+    console.log("_withdrawUniversal _depositorLiquidity", _depositorLiquidity());
+    console.log("_withdrawUniversal amount liquidityAmount all", amount, liquidityAmount, all);
     if (liquidityAmount != 0) {
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
       uint len = tokens.length;
       uint[] memory prices = new uint[](len);
-      uint[] memory decimals = new uint[](len);
-      IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
+      IPriceOracle priceOracle = IPriceOracle(IConverterController(_tetuConverter.controller()).priceOracle());
       for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
         prices[i] = priceOracle.getAssetPrice(tokens[i]);
         require(prices[i] != 0, AppErrors.ZERO_PRICE);
-        console.log("_withdrawUniversal i price", i, prices_[i]);
-        decimals[i] = IERC20Metadata(tokens[i]).decimals();
+        console.log("_withdrawUniversal i price", i, prices[i]);
+        console.log("ASSET BALANCE", i, IERC20(tokens[i]).balanceOf(address(this)));
       }
-      assetPrice = prices[indexAsset];
 
-      (uint investedAssetsUsdSecondary, uint investedAssetsUsdMain) = ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
+      uint[] memory expectedWithdrawAmounts = ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(
         _depositorPoolReserves(),
         liquidityAmount,
         _depositorTotalSupply(),
-        prices,
-        decimals,
-        indexAsset
+        prices
       );
-      console.log("investedAssetsUSD.0 assetPrice", assetPrice);
+      console.log("_withdrawUniversal.0 assetPrice", assetPrice);
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
-      console.log("investedAssetsUSD.2 liquidityAmount", liquidityAmount);
-      console.log("investedAssetsUSD.2 withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
+      console.log("_withdrawUniversal.2 liquidityAmount", liquidityAmount);
+      console.log("_withdrawUniversal.2 expectedWithdrawAmounts", expectedWithdrawAmounts[0], expectedWithdrawAmounts[1], expectedWithdrawAmounts[2]);
+      console.log("_withdrawUniversal.2 withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
 
-      uint[] memory collaterals = new uint[](len);
+      uint expectedAmountMainAsset;
       for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-        collateral[i] = i == indexAsset
-          ? withdrawnAmounts[i]
-          : tetuConverter.quoteRepay(address(this), tokens[indexAsset], tokens[i], withdrawnAmounts[i]);
-        console.log("_withdrawUniversal i collateral[i]", i, collateral[i]);
+        expectedAmountMainAsset += i == indexAsset
+          ? expectedWithdrawAmounts[i]
+          : _tetuConverter.quoteRepay(address(this), tokens[indexAsset], tokens[i], expectedWithdrawAmounts[i]);
+        console.log("_withdrawUniversal i expectedAmountMainAsset", i, expectedAmountMainAsset);
       }
 
       // convert amounts to main asset and update base amounts
@@ -285,19 +286,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         : _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
       _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
-      console.log("investedAssetsUSD.3 investedAssetsUSD, collateral", investedAssetsUSD, collateral);
-      console.log("investedAssetsUSD.3 repaid", repaid[0], repaid[1], repaid[2]);
-      // we cannot predict collateral amount that is returned after closing position, so we use actual collateral value
-      investedAssetsUSD = ConverterStrategyBaseLib.getExpectedInvestedAssetsUSD(
-        investedAssetsUsdSecondary,
-        investedAssetsUsdMain,
-        prices,
-        decimals,
-        indexAsset,
-        collateral,
-        collateral
-      );
-      console.log("investedAssetsUSD.4 investedAssetsUSD", investedAssetsUSD);
+      console.log("_withdrawUniversal.3 investedAssetsUSD, collateral", investedAssetsUSD, collateral);
+      console.log("_withdrawUniversal.3 repaid", repaid[0], repaid[1], repaid[2]);
+
+      investedAssetsUSD = expectedAmountMainAsset * prices[indexAsset] / 1e18;
+      assetPrice = prices[indexAsset];
+
+      console.log("_withdrawUniversal.4 investedAssetsUSD assetPrice", investedAssetsUSD, assetPrice);
 
       // adjust _investedAssets
       _updateInvestedAssets();
@@ -632,7 +627,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim
   function _updateInvestedAssets() internal {
+    console.log("Strategy._updateInvestedAssets().before", _investedAssets);
     _investedAssets = calcInvestedAssets();
+    console.log("Strategy._updateInvestedAssets().after", _investedAssets);
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
@@ -653,12 +650,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         estimatedAssets += _asset == borrowedToken
           ? amountsOut[i]
           : tetuConverter.quoteRepay(address(this), _asset, borrowedToken, _balance(borrowedToken) + amountsOut[i]);
-        console.log("calcInvestedAssets i amountsOut[i]", amountsOut[i]);
-        console.log("calcInvestedAssets i _balance(borrowedToken)", _balance(borrowedToken));
+        console.log("calcInvestedAssets i amountsOut[i]", i, amountsOut[i]);
+        console.log("calcInvestedAssets i _balance(borrowedToken)", i, _balance(borrowedToken));
       }
     }
 
-    console.log("calcInvestedAssets.2 estimatedAssets", estimatedAssets);
+    console.log("calcInvestedAssets.results estimatedAssets", estimatedAssets);
     return estimatedAssets;
   }
 
