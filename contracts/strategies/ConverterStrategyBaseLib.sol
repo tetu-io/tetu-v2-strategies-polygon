@@ -42,6 +42,18 @@ library ConverterStrategyBaseLib {
     uint[] rewardAmounts;
   }
 
+  /// @notice Input params for {getLiquidityAmountRatio}
+  /// @dev Workaround for stack too deep in {_withdrawUniversal}
+  struct LiquidityAmountRatioInputParams {
+    /// @notice Results of {_depositorPoolAssets}
+    address[] tokens;
+    /// @notice Index of the main asset in {tokens_}
+    uint indexAsset;
+    ITetuConverter tetuConverter;
+    /// @notice Total amount of invested assets of the strategy
+    uint investedAssets;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                        Constants
   /////////////////////////////////////////////////////////////////////
@@ -66,8 +78,7 @@ library ConverterStrategyBaseLib {
   function getExpectedWithdrawnAmounts(
     uint[] memory reserves_,
     uint liquidityAmount_,
-    uint totalSupply_,
-    uint[] memory prices_
+    uint totalSupply_
   ) external view returns (
     uint[] memory withdrawnAmountsOut
   ) {
@@ -83,8 +94,11 @@ library ConverterStrategyBaseLib {
 
     uint len = reserves_.length;
     withdrawnAmountsOut = new uint[](len);
-    for (uint i = 0; i < len; ++i) {
-      withdrawnAmountsOut[i] = reserves_[i] * prices_[i] * ratio / 1e36;
+
+    if (ratio != 0) {
+      for (uint i = 0; i < len; ++i) {
+        withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
+      }
     }
   }
 
@@ -162,6 +176,102 @@ library ConverterStrategyBaseLib {
     return amountsToConvert;
   }
 
+  /// @notice Get a ratio to calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
+  ///               liquidityAmount = _depositorLiquidity() * {liquidityRatioOut} / 1e18
+  ///         User needs to withdraw {targetAmount_} in main asset.
+  ///         There are two kinds of available liquidity:
+  ///         1) liquidity in the pool - {depositorLiquidity_}
+  ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
+  ///         To withdraw {targetAmount_} we need
+  ///         1) Reconvert converted amounts back to main asset
+  ///         2) IF result amount is not necessary - extract withdraw some liquidity from the pool
+  ///            and also convert it to the main asset.
+  /// @dev This is a writable function with read-only behavior (because of the quote-call)
+  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy
+  ///                      0 - withdraw all
+  /// @param baseAmounts_ Available balances of the converted assets
+  /// @param strategy_ Address of the strategy
+  /// @param params_ To withdraw all set params_.investedAssets to zero
+  function getLiquidityAmountRatio(
+    uint targetAmount_,
+    mapping(address => uint) storage baseAmounts_,
+    address strategy_,
+    LiquidityAmountRatioInputParams memory params_
+  ) internal returns (
+    uint liquidityRatioOut,
+    uint[] memory amountsToConvertOut
+  ) {
+    console.log("getLiquidityAmountRatio targetAmount_ params_.investedAssets", targetAmount_, params_.investedAssets);
+    bool all = targetAmount_ == 0;
+    uint investedAssets = params_.investedAssets;
+
+    uint len = params_.tokens.length;
+    amountsToConvertOut = new uint[](len);
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == params_.indexAsset) continue;
+
+      uint baseAmount = baseAmounts_[params_.tokens[i]];
+      if (baseAmount != 0) {
+        // let's estimate collateral that we received back after repaying baseAmount
+        uint expectedCollateral = params_.tetuConverter.quoteRepay(
+          strategy_,
+          params_.tokens[params_.indexAsset],
+          params_.tokens[i],
+          baseAmount
+        );
+        console.log("getLiquidityAmountRatio baseAmount", baseAmount);
+        console.log("getLiquidityAmountRatio expectedCollateral", expectedCollateral);
+
+        if (all || targetAmount_ != 0) {
+          // We always repay WHOLE available baseAmount event if it gives us much more amount then we need.
+          // We cannot repay a part of it because converter doesn't allow to know
+          // what amount should be repaid to get given amount of collateral.
+          // And it's too dangerous to assume that we can calculate this amount
+          // but reducing baseAmount proportionally to expectedCollateral/targetAmount_
+          amountsToConvertOut[i] = baseAmount;
+        }
+
+        if (targetAmount_ > expectedCollateral) {
+          targetAmount_ -= expectedCollateral;
+        } else {
+          targetAmount_ = 0;
+        }
+        console.log("getLiquidityAmountRatio targetAmount_", targetAmount_);
+
+        if (investedAssets > expectedCollateral) {
+          investedAssets -= expectedCollateral;
+        } else {
+          investedAssets = 0;
+        }
+        console.log("getLiquidityAmountRatio investedAssets", investedAssets);
+      }
+    }
+
+    require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
+
+    console.log("getLiquidityAmountRatio targetAmount_ final targetAmount_, investedAssets", targetAmount_, investedAssets);
+    liquidityRatioOut = all
+      ? 1e18
+      : targetAmount_ == 0
+        ? 0
+        : 1e18
+          * 101 // add 1% on top...
+          * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
+          / 100; // .. add 1% on top
+    console.log("liquidityRatioOut", liquidityRatioOut);
+  }
+
+  function getPrices(
+    address[] memory tokens_,
+    IPriceOracle priceOracle_
+  ) internal view returns (uint[] memory pricesOut){
+    uint len = tokens_.length;
+    pricesOut = new uint[](len);
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      pricesOut[i] = priceOracle_.getAssetPrice(tokens_[i]);
+      require(pricesOut[i] != 0, AppErrors.ZERO_PRICE);
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                   Borrow and close positions

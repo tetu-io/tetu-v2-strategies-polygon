@@ -41,12 +41,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function getExpectedWithdrawnAmountsTestAcces(
     uint[] memory reserves_,
     uint liquidityAmount_,
-    uint totalSupply_,
-    uint[] memory prices_
+    uint totalSupply_
   ) external view returns (
     uint[] memory withdrawnAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_, prices_);
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
   }
 
   function _updateBaseAmountsAccess(

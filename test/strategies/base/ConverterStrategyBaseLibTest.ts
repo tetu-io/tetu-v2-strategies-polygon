@@ -9,11 +9,12 @@ import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
   GET_EXPECTED_INVESTED_ASSETS_USD,
-  GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, GET_GET_COLLATERALS
+  GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS, GET_GET_COLLATERALS, GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {decimalString} from "hardhat/internal/core/config/config-validation";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
+import {BigNumber} from "ethers";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -63,7 +64,7 @@ describe("ConverterStrategyBaseLibTest", () => {
       describe("Two assets", () => {
         describe("The asset is first in _depositorPoolAssets, USDC, DAI", async () => {
           it("should return expected values, USDC is main", async () => {
-            const ret = await facade.getExpectedWithdrawnAmountUSD(
+            const ret = await facade.getExpectedWithdrawnAmounts(
               [
                 parseUnits("200000", 6), // usdc
                 parseUnits("100000", 18), // dai
@@ -77,13 +78,13 @@ describe("ConverterStrategyBaseLibTest", () => {
             const sexpected = [
               parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6),
               parseUnits((100_000 * 2 * 1000 / 50_000).toString(), 18),
-            ].join();
+            ].join("\n");
 
             expect(sret).eq(sexpected);
           });
           it("should return expected values, DAI is main", async () => {
             // DAI, USDC
-            const ret = await facade.getExpectedWithdrawnAmountUSD(
+            const ret = await facade.getExpectedWithdrawnAmounts(
               [
                 parseUnits("100000", 18), // dai
                 parseUnits("200000", 6), // usdc
@@ -91,25 +92,20 @@ describe("ConverterStrategyBaseLibTest", () => {
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
               [parseUnits("4", 18), parseUnits("2", 18)],
-              [18, 6],
-              0
             );
 
-            const sret = [
-              ret.investedAssetsUsdMain.toString(),
-              ret.investedAssetsUsdSecondary.toString(),
-            ].join();
+            const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
             const sexpected = [
-              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18), // decimals of main asset
-              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 18), // decimals of main asset
-            ].join();
+              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18),
+              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6),
+            ].join("\n");
 
             expect(sret).eq(sexpected);
           });
         });
         describe("The asset is second in _depositorPoolAssets", async () => {
           it("should return expected values for USDC", async () => {
-            const ret = await facade.getExpectedWithdrawnAmountUSD(
+            const ret = await facade.getExpectedWithdrawnAmounts(
               [
                 parseUnits("100000", 18), // dai
                 parseUnits("200000", 6), // usdc
@@ -117,18 +113,13 @@ describe("ConverterStrategyBaseLibTest", () => {
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
               [parseUnits("4", 18), parseUnits("2", 18)],
-              [18, 6],
-              1 // usdc
             );
 
-            const sret = [
-              ret.investedAssetsUsdMain.toString(),
-              ret.investedAssetsUsdSecondary.toString(),
-            ].join();
+            const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
             const sexpected = [
-              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 6), // decimals of main asset
-              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6), // decimals of main asset
-            ].join();
+              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18),
+              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6),
+            ].join("\n");
 
             expect(sret).eq(sexpected);
           });
@@ -140,7 +131,7 @@ describe("ConverterStrategyBaseLibTest", () => {
               [parseUnits("4", 18), parseUnits("2", 18)]
             )) as PriceOracleMock;
 
-            const ret = await facade.getExpectedWithdrawnAmountUSD(
+            const ret = await facade.getExpectedWithdrawnAmounts(
               [
                 parseUnits("200000", 6), // usdc
                 parseUnits("100000", 18), // dai
@@ -148,18 +139,13 @@ describe("ConverterStrategyBaseLibTest", () => {
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
               [parseUnits("2", 18), parseUnits("4", 18)],
-              [6, 18],
-              1 // dai
             );
 
-            const sret = [
-              ret.investedAssetsUsdMain.toString(),
-              ret.investedAssetsUsdSecondary.toString(),
-            ].join();
+            const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
             const sexpected = [
-              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 18), // decimals of main asset
-              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18), // decimals of main asset
-            ].join();
+              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6),
+              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18),
+            ].join("\n");
 
             expect(sret).eq(sexpected);
           });
@@ -167,7 +153,7 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
       describe("Three assets", () => {
         it("should return expected values", async () => {
-          const ret = await facade.getExpectedWithdrawnAmountUSD(
+          const ret = await facade.getExpectedWithdrawnAmounts(
             [
               parseUnits("200000", 6), // usdc
               parseUnits("100000", 18), // dai
@@ -180,18 +166,14 @@ describe("ConverterStrategyBaseLibTest", () => {
               parseUnits("2", 18),
               parseUnits("8", 18)
             ],
-            [6, 18, 8],
-            0
           );
 
-          const sret = [
-            ret.investedAssetsUsdMain.toString(),
-            ret.investedAssetsUsdSecondary.toString(),
-          ].join();
+          const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
           const sexpected = [
-            parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6), // decimals of main asset
-            parseUnits((100_000 * 2 * 1000 / 50_000 + 800_000 * 8 * 1000 / 50_000).toString(), 6), // decimals of main asset
-          ].join();
+            parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6),
+            parseUnits((100_000 * 2 * 1000 / 50_000 ).toString(), 18),
+            parseUnits((800_000 * 8 * 1000 / 50_000).toString(), 8),
+          ].join("\n");
 
           expect(sret).eq(sexpected);
         });
@@ -199,7 +181,7 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
     describe("Bad paths", () => {
       it("should return zero values if total supply is zero", async () => {
-        const ret = await facade.getExpectedWithdrawnAmountUSD(
+        const ret = await facade.getExpectedWithdrawnAmounts(
           [
             parseUnits("200000", 6), // usdc
             parseUnits("100000", 18), // dai
@@ -207,58 +189,49 @@ describe("ConverterStrategyBaseLibTest", () => {
           parseUnits("1000", 33), // decimals of the values don't matter here
           parseUnits("0", 33), // (!) total supply is zero
           [parseUnits("4", 18), parseUnits("2", 18)],
-          [6, 18],
-          1 // dai
         );
-        const sret = [
-          ret.investedAssetsUsdMain.toString(),
-          ret.investedAssetsUsdSecondary.toString(),
-        ].join();
+        const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
         const sexpected = [
+          parseUnits("0", 6),
           parseUnits("0", 18),
-          parseUnits("0", 18),
-        ].join();
+        ].join("\n");
 
         expect(sret).eq(sexpected);
       });
-      it("should revert if main asset price is zero", async () => {
-        await expect(
-          facade.getExpectedWithdrawnAmountUSD(
-            [
-              parseUnits("200000", 6), // usdc
-              parseUnits("100000", 18), // dai
-            ],
-            parseUnits("1000", 33), // decimals of the values don't matter here
-            parseUnits("5000", 33), // total supply
-            [
-              parseUnits("0", 18), // (!) usdc price is zero
-              parseUnits("2", 18)
-            ],
-            [6, 18],
-            0 // usdc
-          )
-        ).revertedWith("TS-8 zero price");
-      });
-      it("should revert if secondary asset price is zero", async () => {
-        await expect(
-          facade.getExpectedWithdrawnAmountUSD(
-            [
-              parseUnits("200000", 6),
-              parseUnits("100000", 18),
-            ],
-            parseUnits("1000", 33), // decimals of the values don't matter here
-            parseUnits("5000", 33), // total supply
-            [
-              parseUnits("2", 6),
-              parseUnits("0", 18), // (!) dai price is zero
-            ],
-            [6, 18],
-            1 // dai
-          )
-        ).revertedWith("TS-8 zero price");
-      });
+      // it("should revert if main asset price is zero", async () => {
+      //   await expect(
+      //     facade.getExpectedWithdrawnAmounts(
+      //       [
+      //         parseUnits("200000", 6), // usdc
+      //         parseUnits("100000", 18), // dai
+      //       ],
+      //       parseUnits("1000", 33), // decimals of the values don't matter here
+      //       parseUnits("5000", 33), // total supply
+      //       [
+      //         parseUnits("0", 18), // (!) usdc price is zero
+      //         parseUnits("2", 18)
+      //       ],
+      //     )
+      //   ).revertedWith("TS-8 zero price");
+      // });
+      // it("should revert if secondary asset price is zero", async () => {
+      //   await expect(
+      //     facade.getExpectedWithdrawnAmounts(
+      //       [
+      //         parseUnits("200000", 6),
+      //         parseUnits("100000", 18),
+      //       ],
+      //       parseUnits("1000", 33), // decimals of the values don't matter here
+      //       parseUnits("5000", 33), // total supply
+      //       [
+      //         parseUnits("2", 6),
+      //         parseUnits("0", 18), // (!) dai price is zero
+      //       ],
+      //     )
+      //   ).revertedWith("TS-8 zero price");
+      // });
       it("should use ratio 1 if liquidityAmount > totalSupply", async () => {
-        const ret = await facade.getExpectedWithdrawnAmountUSD(
+        const ret = await facade.getExpectedWithdrawnAmounts(
           [
             parseUnits("200000", 6),
             parseUnits("100000", 18),
@@ -266,25 +239,20 @@ describe("ConverterStrategyBaseLibTest", () => {
           parseUnits("5000", 33), // (!) liquidity is greater than total supply
           parseUnits("1000", 33), // (!) total supply
           [parseUnits("2", 18), parseUnits("4", 18)],
-          [6, 18],
-          0 // usdc
         );
 
-        const sret = [
-          ret.investedAssetsUsdMain.toString(),
-          ret.investedAssetsUsdSecondary.toString(),
-        ].join();
+        const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
         const sexpected = [
           parseUnits((200_000 * 2).toString(), 6), // ratio == 1
-          parseUnits((100_000 * 4).toString(), 6), // ratio == 1
-        ].join();
+          parseUnits((100_000 * 4).toString(), 18), // ratio == 1
+        ].join("\n");
 
         expect(sret).eq(sexpected);
       });
     });
     describe("Gas estimation @skip-on-coverage", () => {
       it("should not exceed gas limits @skip-on-coverage", async () => {
-        const gasUsed = await facade.estimateGas.getExpectedWithdrawnAmountUSD(
+        const gasUsed = await facade.estimateGas.getExpectedWithdrawnAmounts(
           [
             parseUnits("200000", 6),
             parseUnits("100000", 18),
@@ -297,12 +265,275 @@ describe("ConverterStrategyBaseLibTest", () => {
             parseUnits("2", 18),
             parseUnits("8", 18)
           ],
-          [6, 18, 8],
-          0
         );
-        controlGasLimitsEx(gasUsed, GET_EXPECTED_WITHDRAW_AMOUNT_USD_3_ASSETS, (u, t) => {
+        controlGasLimitsEx(gasUsed, GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS, (u, t) => {
           expect(u).to.be.below(t + 1);
         });
+      });
+    });
+  });
+
+  describe("getLiquidityAmountRatio", () => {
+    async function getTetuConverter(
+      tokens: MockToken[],
+      indexAsset: number,
+      amountsToRepay: BigNumber[],
+      amountsCollateralOut: BigNumber[]
+    ): Promise<string> {
+      const tc = await MockHelper.createMockTetuConverter(signer);
+      for (let i = 0; i < tokens.length; ++i) {
+        if (indexAsset === i) continue;
+        await tc.setQuoteRepay(
+          ethers.Wallet.createRandom().address,
+          tokens[indexAsset].address,
+          tokens[i].address,
+          amountsToRepay[i],
+          amountsCollateralOut[i]
+        );
+      }
+      return tc.address;
+    }
+
+    describe("Good paths", () => {
+      describe("partial", () => {
+        describe("zero base amounts", () => {
+          it("should return expected liquidityRatioOut and zero amounts to convert", async () => {
+            const r = await facade.callStatic.getLiquidityAmountRatio(
+              parseUnits("5", 6),
+              ethers.Wallet.createRandom().address,
+              {
+                indexAsset: 1,
+                tokens: [dai.address, usdc.address, usdt.address],
+                investedAssets: parseUnits("500", 6),
+                tetuConverter: getTetuConverter([],1, [],[])
+              }
+            )
+            const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              parseUnits("1", 18).mul(101).mul(5).div(500).div(100),
+              0,
+              0,
+              0,
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            await expect(ret).eq(expected);
+          });
+        });
+        describe("base amount of first asset is enough to get the required amount", () => {
+          it("should return expected values", async () => {
+            const tokens = [dai.address, usdc.address, usdt.address];
+            const amountsToRepay = [
+                parseUnits("17", 18),
+                parseUnits("27", 6),
+                parseUnits("37", 6),
+            ];
+            const amountsCollateralOut = [
+                parseUnits("7", 6), // 7 > 5
+                parseUnits("0", 6),
+                parseUnits("14", 6),
+            ];
+            for (let i = 0; i < tokens.length; ++ i) {
+              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+            }
+
+            const r = await facade.callStatic.getLiquidityAmountRatio(
+              parseUnits("5", 6),
+              ethers.Wallet.createRandom().address,
+              {
+                indexAsset: 1,
+                tokens,
+                investedAssets: parseUnits("500", 6),
+                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+              }
+            );
+
+            const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              0,
+              parseUnits("17", 18),
+              0,
+              0,
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            await expect(ret).eq(expected);
+
+          });
+        });
+        describe("base amount of two assets is enough to get the required amount", () => {
+          it("should return expected values", async () => {
+            const tokens = [dai.address, usdc.address, usdt.address];
+            const amountsToRepay = [
+              parseUnits("17", 18),
+              parseUnits("27", 6),
+              parseUnits("37", 6),
+            ];
+            const amountsCollateralOut = [
+              parseUnits("7", 6), // 7 < 9
+              parseUnits("24", 6), // not used
+              parseUnits("2", 6), // 2 + 7 == 9
+            ];
+            for (let i = 0; i < tokens.length; ++ i) {
+              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+            }
+
+            const r = await facade.callStatic.getLiquidityAmountRatio(
+              parseUnits("9", 6),
+              ethers.Wallet.createRandom().address,
+              {
+                indexAsset: 1,
+                tokens,
+                investedAssets: parseUnits("500", 6),
+                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+              }
+            );
+
+            const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              0,
+              parseUnits("17", 18),
+              0,
+              parseUnits("37", 6),
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            await expect(ret).eq(expected);
+
+          });
+        });
+        describe("base amount of two assets is NOT enough to get the required amount", () => {
+          it("should return expected values", async () => {
+            const tokens = [dai.address, usdc.address, usdt.address];
+            const amountsToRepay = [
+              parseUnits("17", 18),
+              parseUnits("27", 6),
+              parseUnits("37", 6),
+            ];
+            const amountsCollateralOut = [
+              parseUnits("7", 6), // 7 < 19
+              parseUnits("24", 6), // not used
+              parseUnits("2", 6), // 2 + 7 < 19
+            ];
+            for (let i = 0; i < tokens.length; ++ i) {
+              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+            }
+
+            const r = await facade.callStatic.getLiquidityAmountRatio(
+              parseUnits("19", 6),
+              ethers.Wallet.createRandom().address,
+              {
+                indexAsset: 1,
+                tokens,
+                investedAssets: parseUnits("500", 6),
+                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+              }
+            );
+
+            const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              parseUnits("1", 18).mul(101).mul(19-9).div(500).div(100),
+              parseUnits("17", 18),
+              0,
+              parseUnits("37", 6),
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            await expect(ret).eq(expected);
+
+          });
+        });
+      });
+      describe("all", () => {
+        describe("zero base amounts", () => {
+          it("should return expected liquidityRatioOut and zero amounts to convert", async () => {
+            const r = await facade.callStatic.getLiquidityAmountRatio(
+              parseUnits("0", 6),
+              ethers.Wallet.createRandom().address,
+              {
+                indexAsset: 1,
+                tokens: [dai.address, usdc.address, usdt.address],
+                investedAssets: parseUnits("500", 6),
+                tetuConverter: getTetuConverter([],1, [],[])
+              }
+            )
+            const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              parseUnits("1", 18),
+              0,
+              0,
+              0,
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            await expect(ret).eq(expected);
+          });
+        });
+        describe("base amount are not zero", () => {
+          it("should return expected values", async () => {
+            const tokens = [dai.address, usdc.address, usdt.address];
+            const amountsToRepay = [
+              parseUnits("17", 18),
+              parseUnits("27", 6),
+              parseUnits("37", 6),
+            ];
+            const amountsCollateralOut = [
+              parseUnits("7", 6), // 7 > 5
+              parseUnits("22222", 6),
+              parseUnits("14", 6),
+            ];
+            for (let i = 0; i < tokens.length; ++ i) {
+              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+            }
+
+            const r = await facade.callStatic.getLiquidityAmountRatio(
+              parseUnits("0", 6), // all
+              ethers.Wallet.createRandom().address,
+              {
+                indexAsset: 1,
+                tokens,
+                investedAssets: parseUnits("500", 6),
+                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+              }
+            );
+
+            const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              parseUnits("1", 18),
+              parseUnits("17", 18),
+              0,
+              parseUnits("37", 6),
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            await expect(ret).eq(expected);
+          });
+        });
+      });
+    });
+    describe("Bad paths", () => {
+// nothing to do
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should not exceed gas limits", async () => {
+        const tokens = [dai.address, usdc.address, usdt.address];
+        const amountsToRepay = [
+          parseUnits("17", 18),
+          parseUnits("27", 6),
+          parseUnits("37", 6),
+        ];
+        const amountsCollateralOut = [
+          parseUnits("7", 6), // 7 < 19
+          parseUnits("24", 6), // not used
+          parseUnits("2", 6), // 2 + 7 < 19
+        ];
+        for (let i = 0; i < tokens.length; ++ i) {
+          await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+        }
+
+        const gasUsed = await facade.estimateGas.getLiquidityAmountRatio(
+          parseUnits("19", 6),
+          ethers.Wallet.createRandom().address,
+          {
+            indexAsset: 1,
+            tokens,
+            investedAssets: parseUnits("500", 6),
+            tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+          }
+        );
+
+        controlGasLimitsEx(gasUsed, GET_LIQUIDITY_AMOUNT_RATIO, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+
       });
     });
   });

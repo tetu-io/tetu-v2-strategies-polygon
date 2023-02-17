@@ -27,4 +27,6 @@ library AppErrors {
 
   /// @notice TetuConvertor wasn't able to make borrow, i.e. borrow-strategy wasn't found
   string public constant ZERO_AMOUNT_BORROWED = "TS-10 zero borrowed amount";
+
+  string public constant WITHDRAW_TOO_MUCH  = "TS-11 try to withdraw too much";
 }

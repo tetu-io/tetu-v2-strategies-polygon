@@ -9,17 +9,27 @@ contract ConverterStrategyBaseLibFacade {
   function getExpectedWithdrawnAmounts(
     uint[] memory reserves_,
     uint liquidityAmount_,
-    uint totalSupply_,
-    uint[] memory prices_
+    uint totalSupply_
   ) external view returns (
     uint[] memory withdrawnAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(
-      reserves_,
-      liquidityAmount_,
-      totalSupply_,
-      prices_
-    );
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
+  }
+
+  mapping (address => uint) public baseAmounts;
+  function setBaseAmounts(address asset, uint amount) external {
+    baseAmounts[asset] = amount;
+  }
+
+  function getLiquidityAmountRatio(
+    uint targetAmount_,
+    address strategy_,
+    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory params_
+  ) external returns (
+    uint liquidityRatioOut,
+    uint[] memory amountsToConvertOut
+  ) {
+    return ConverterStrategyBaseLib.getLiquidityAmountRatio(targetAmount_, baseAmounts, strategy_, params_);
   }
 
   function getCollaterals(

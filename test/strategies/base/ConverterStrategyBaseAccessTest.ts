@@ -2411,6 +2411,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
       initialBalances?: ITokenAmount[];
       repayments?: IRepayParams[];
       emergency?: boolean;
+      liquidityAmountToWithdrawExplicit?: BigNumber;
     }
     interface IWithdrawTestResults {
       gasUsed: BigNumber;
@@ -2491,6 +2492,13 @@ describe("ConverterStrategyBaseAccessTest", () => {
             0,
             0
           );
+          await tetuConverter.setQuoteRepay(
+            strategy.address,
+            repayment.collateralAsset.address,
+            repayment.borrowAsset.address,
+            repayment.amountRepay,
+            repayment.totalCollateralAmountOut,
+          );
           await repayment.collateralAsset.mint(tetuConverter.address, repayment.totalCollateralAmountOut);
         }
       }
@@ -2504,9 +2512,11 @@ describe("ConverterStrategyBaseAccessTest", () => {
       }
       const investedAssets = await strategy.investedAssets();
 
-      const liquidityAmountToWithdraw = amount
+      const liquidityAmountToWithdraw = params?.liquidityAmountToWithdrawExplicit
+        || (amount
           ? depositorLiquidity.mul(101).mul(amount).div(100).div(investedAssets)
-          : depositorLiquidity; // withdraw all
+          : depositorLiquidity
+        ); // withdraw all
       await strategy.setDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
       if (params?.investedAssetsAfterWithdraw) {
         await strategy.setDepositorQuoteExit(
@@ -2556,101 +2566,264 @@ describe("ConverterStrategyBaseAccessTest", () => {
     }
     describe("Good paths", () => {
       describe("Withdraw a given amount", () => {
-        let results: IWithdrawTestResults;
-        let snapshotLocal: string;
-        before(async function () {
-          snapshotLocal = await TimeUtils.snapshot();
-          results = await makeWithdrawTest(
-            parseUnits("6", 6), // total liquidity of the user
-            [
-              parseUnits("1000", 18), // dai
-              parseUnits("2000", 6), // usdc
-              parseUnits("3000", 6), // usdt
-            ],
-            parseUnits("6000", 6), // total supply
-            [
-              parseUnits("980", 18),
-              parseUnits("950", 6),
-              parseUnits("930", 6),
-            ],
-            parseUnits("3", 6), // amount to withdraw
-            {
-              investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount
-              investedAssetsAfterWithdraw:  parseUnits("1", 6),
-              baseAmounts: [
-                {token: dai, amount: parseUnits("3000", 18)},
-                {token: usdc, amount: parseUnits("1000", 6)},
-                {token: usdt, amount: parseUnits("2000", 6)},
+        describe("Zero base amounts of dai and usdt (no conversion from balance)", () => {
+          let results: IWithdrawTestResults;
+          let snapshotLocal: string;
+          before(async function () {
+            snapshotLocal = await TimeUtils.snapshot();
+            results = await makeWithdrawTest(
+              parseUnits("6", 6), // total liquidity of the user
+              [
+                parseUnits("1000", 18), // dai
+                parseUnits("2000", 6), // usdc
+                parseUnits("3000", 6), // usdt
               ],
-              initialBalances: [
-                {token: dai, amount: parseUnits("3000", 18)},
-                {token: usdc, amount: parseUnits("1000", 6)},
-                {token: usdt, amount: parseUnits("2000", 6)},
+              parseUnits("6000", 6), // total supply
+              [
+                parseUnits("0.507", 18),
+                parseUnits("1.02", 6),
+                parseUnits("1.517", 6),
               ],
-              repayments: [
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  totalDebtAmountOut: parseUnits("980", 18),
-                  amountRepay: parseUnits("980", 18),
-                  totalCollateralAmountOut: parseUnits("1980", 6),
-                },
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: usdt,
-                  totalDebtAmountOut: parseUnits("930", 6),
-                  amountRepay: parseUnits("930", 6),
-                  totalCollateralAmountOut: parseUnits("1930", 6),
-                },
-              ]
-            }
-          )
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshotLocal);
-        });
-        it("should update base amounts", async () => {
-          const expectedBaseAmounts = [
-            parseUnits("3000", 18), // dai == 3000 + 980 - 980
-            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
-            parseUnits("2000", 6), // usdt = 2000 + 930 - 930
-          ];
+              parseUnits("3", 6), // amount to withdraw
+              {
+                investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount
+                investedAssetsAfterWithdraw: parseUnits("1", 6),
+                baseAmounts: [
+                  {token: dai, amount: parseUnits("0", 18)},
+                  {token: usdc, amount: parseUnits("1000", 6)},
+                  {token: usdt, amount: parseUnits("0", 6)},
+                ],
+                initialBalances: [
+                  {token: dai, amount: parseUnits("0", 18)},
+                  {token: usdc, amount: parseUnits("1000", 6)},
+                  {token: usdt, amount: parseUnits("0", 6)},
+                ],
+                repayments: [
+                  // total liquidity is 6000000
+                  // ratio is 0.505, so liquidity to withdraw is 3030000
+                  // as result, following amounts will be withdrawn: 505000000000000000 1010000 1515000
+                  // we assume, that actually withdrawn amounts are a bit different: 507000000000000000 1020000 1517000
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: dai,
+                    totalDebtAmountOut: parseUnits("0.505", 18),
+                    amountRepay: parseUnits("0.505", 18),
+                    totalCollateralAmountOut: parseUnits("1980", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: dai,
+                    totalDebtAmountOut: parseUnits("0.507", 18),
+                    amountRepay: parseUnits("0.507", 18),
+                    totalCollateralAmountOut: parseUnits("1981", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalDebtAmountOut: parseUnits("1.515", 6),
+                    amountRepay: parseUnits("1.515", 6),
+                    totalCollateralAmountOut: parseUnits("1930", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalDebtAmountOut: parseUnits("1.517", 6),
+                    amountRepay: parseUnits("1.517", 6),
+                    totalCollateralAmountOut: parseUnits("1931", 6),
+                  },
+                ]
+              }
+            )
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshotLocal);
+          });
+          it("should update base amounts", async () => {
+            const expectedBaseAmounts = [
+              parseUnits("0", 18), // dai == 0 + 980 - 980
+              parseUnits("4913.02", 6), // usdc == 1000 + 1981 + 1931 + 1.02
+              parseUnits("0", 6), // usdt = 0 + 930 - 930
+            ];
 
-          const ret = results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
-          const expected = expectedBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+            const ret = results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = expectedBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
 
-          expect(ret).eq(expected);
-        });
-        it("should update strategy balances", async () => {
-          const expectedStrategyBalances = [
-            parseUnits("3000", 18), // dai == 3000 + 980 - 980
-            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
-            parseUnits("2000", 6), // usdt = 2000 + 930 - 930
-          ];
+            expect(ret).eq(expected);
+          });
+          it("should update strategy balances", async () => {
+            const expectedStrategyBalances = [
+              parseUnits("0", 18), // dai == 0 + 980 - 980
+              parseUnits("4913.02", 6), // usdc == 1000 + 1981 + 1931 + 1.02
+              parseUnits("0", 6), // usdt = 0 + 930 - 930
+            ];
 
-          const ret = results.strategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
-          const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+            const ret = results.strategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
 
-          expect(ret).eq(expected);
-        });
-        it("should return expected investedAssetsUSD", async () => {
-          const ret = [
-            results.investedAssetsUSD,
-            results.assetPrice
-          ].map(x => BalanceUtils.toString(x)).join("\n");
-          const expected = [
-            parseUnits("3913.03", 6), // (((1000 + 2000 + 3000) * 3/6 * 6/6000) * 101/100  + (1980 + 1930))
-            parseUnits("1", 18) // for simplicity, all prices are equal to 1
-          ].map(x => BalanceUtils.toString(x)).join("\n");
+            expect(ret).eq(expected);
+          });
+          it("should return expected investedAssetsUSD", async () => {
+            const ret = [
+              results.investedAssetsUSD,
+              results.assetPrice
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              parseUnits("3911.01", 6), // ((1000 + 2000 + 3000) * 3/6 * 6/6000 * 101/100)/3 + 1980 + 1930
+              parseUnits("1", 18) // for simplicity, all prices are equal to 1
+            ].map(x => BalanceUtils.toString(x)).join("\n");
 
-          expect(ret).eq(expected);
+            expect(ret).eq(expected);
+          });
+          it("should call _updateInvestedAssets", async () => {
+            expect(results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)).eq(false);
+          });
+          it("Gas estimation @skip-on-coverage", async () => {
+            controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
+          });
         });
-        it("should call _updateInvestedAssets", async () => {
-          expect(results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)).eq(false);
-        });
-        it("Gas estimation @skip-on-coverage", async () => {
-          controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, (u, t) => {
-            expect(u).to.be.below(t + 1);
+        describe("Not zero base amounts of dai and usdt", () => {
+          let results: IWithdrawTestResults;
+          let snapshotLocal: string;
+          before(async function () {
+            snapshotLocal = await TimeUtils.snapshot();
+            results = await makeWithdrawTest(
+              parseUnits("1", 9), // total liquidity of the user = 0.1 of total supply
+              [
+                parseUnits("1000", 18), // dai
+                parseUnits("2000", 6), // usdc
+                parseUnits("3000", 6), // usdt
+              ],
+              parseUnits("1", 10), // total supply
+              [
+                parseUnits("50", 18),
+                parseUnits("101.5", 6),
+                parseUnits("152", 6),
+              ],
+              parseUnits("300", 6), // amount to withdraw
+              {
+                liquidityAmountToWithdrawExplicit: parseUnits("0.505", 9),
+                investedAssetsBeforeWithdraw: parseUnits("400", 6), // total invested amount
+                investedAssetsAfterWithdraw: parseUnits("1", 6),
+                baseAmounts: [
+                  {token: dai, amount: parseUnits("200", 18)},
+                  {token: usdc, amount: parseUnits("400", 6)},
+                  {token: usdt, amount: parseUnits("300", 6)},
+                ],
+                initialBalances: [
+                  {token: dai, amount: parseUnits("200", 18)},
+                  {token: usdc, amount: parseUnits("400", 6)},
+                  {token: usdt, amount: parseUnits("300", 6)},
+                ],
+                repayments: [
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: dai,
+                    totalDebtAmountOut: parseUnits("200", 18),
+                    amountRepay: parseUnits("200", 18),
+                    totalCollateralAmountOut: parseUnits("40", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalDebtAmountOut: parseUnits("300", 6),
+                    amountRepay: parseUnits("300", 6),
+                    totalCollateralAmountOut: parseUnits("60", 6),
+                  },
+
+                  // Total supply = 1e10, user liquidity in the pool = 1e9
+                  // invested-assets = 400+40+60=500 usdc
+                  // we are going to withdraw 300 usdc
+                  // 40+60=100 usdc we will receive by converting dai and usdt on balance
+                  // so, we need to withdraw only 200 usdc from the pool
+                  // 1e9 ~ 400 usdc
+                  // ? ~ 200 usdc
+                  // ? = 200 * 1e9 / 400 * 101/100 = 505000000
+                  // Following amounts will be withdrawn:
+                  /// 1000 * 505000000 / 1e10 = 50.5 dai
+                  /// 2000 * 505000000 / 1e10 = 101 usdc
+                  /// 3000 * 505000000 / 1e10 = 151.5 usdt
+                  /// these amounts should be converter to 71, 101, 41 usdc
+                  /// these amounts will be converter to 70, 101, 42 usdc
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: dai,
+                    totalDebtAmountOut: parseUnits("50.5", 18).add(parseUnits("200", 18)),
+                    amountRepay: parseUnits("50.5", 18).add(parseUnits("200", 18)),
+                    totalCollateralAmountOut: parseUnits("71", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: dai,
+                    totalDebtAmountOut: parseUnits("50", 18).add(parseUnits("200", 18)),
+                    amountRepay: parseUnits("50", 18).add(parseUnits("200", 18)),
+                    totalCollateralAmountOut: parseUnits("70", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalDebtAmountOut: parseUnits("151.5", 6).add(parseUnits("300", 6)),
+                    amountRepay: parseUnits("151.5", 6).add(parseUnits("300", 6)),
+                    totalCollateralAmountOut: parseUnits("41", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalDebtAmountOut: parseUnits("152", 6).add(parseUnits("300", 6)),
+                    amountRepay: parseUnits("152", 6).add(parseUnits("300", 6)),
+                    totalCollateralAmountOut: parseUnits("42", 6),
+                  },
+                ]
+              }
+            )
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshotLocal);
+          });
+          it("should update base amounts", async () => {
+            const expectedBaseAmounts = [
+              parseUnits("0", 18), // dai
+              parseUnits("613.5", 6), // usdc == 400 + 70 + 42 + 101.5
+              parseUnits("0", 6), // usdt
+            ];
+
+            const ret = results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = expectedBaseAmounts.map(x => BalanceUtils.toString(x)).join("\n");
+
+            expect(ret).eq(expected);
+          });
+          it("should update strategy balances", async () => {
+            const expectedStrategyBalances = [
+              parseUnits("0", 18), // dai
+              parseUnits("613.5", 6), // usdc == 400 + 70 + 42 + 101.5
+              parseUnits("0", 6), // usdt
+            ];
+
+            const ret = results.strategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = expectedStrategyBalances.map(x => BalanceUtils.toString(x)).join("\n");
+
+            expect(ret).eq(expected);
+          });
+          it("should return expected investedAssetsUSD", async () => {
+            const ret = [
+              results.investedAssetsUSD,
+              results.assetPrice
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+            const expected = [
+              parseUnits("213", 6), // usdc = 71 + 41 + 101
+              parseUnits("1", 18) // for simplicity, all prices are equal to 1
+            ].map(x => BalanceUtils.toString(x)).join("\n");
+
+            expect(ret).eq(expected);
+          });
+          it("should call _updateInvestedAssets", async () => {
+            expect(results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)).eq(false);
+          });
+          it("Gas estimation @skip-on-coverage", async () => {
+            controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
           });
         });
       });
@@ -2660,46 +2833,87 @@ describe("ConverterStrategyBaseAccessTest", () => {
         before(async function () {
           snapshotLocal = await TimeUtils.snapshot();
           results = await makeWithdrawTest(
-            parseUnits("6", 6), // total liquidity of the user
+            parseUnits("1", 9), // total liquidity of the user = 0.1 of total supply
             [
               parseUnits("1000", 18), // dai
               parseUnits("2000", 6), // usdc
               parseUnits("3000", 6), // usdt
             ],
-            parseUnits("6000", 6), // total supply
+            parseUnits("1", 10), // total supply
             [
-              parseUnits("980", 18),
-              parseUnits("950", 6),
-              parseUnits("930", 6),
+              parseUnits("100.5", 18),
+              parseUnits("200.5", 6),
+              parseUnits("300.5", 6),
             ],
             undefined, // withdraw all
             {
-              investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount (not used)
-              investedAssetsAfterWithdraw:  parseUnits("0", 6),
+              liquidityAmountToWithdrawExplicit: parseUnits("1", 9),
+              investedAssetsBeforeWithdraw: parseUnits("400", 6), // total invested amount
+              investedAssetsAfterWithdraw: parseUnits("0", 6),
               baseAmounts: [
-                {token: dai, amount: parseUnits("3000", 18)},
-                {token: usdc, amount: parseUnits("1000", 6)},
-                {token: usdt, amount: parseUnits("2000", 6)},
+                {token: dai, amount: parseUnits("200", 18)},
+                {token: usdc, amount: parseUnits("400", 6)},
+                {token: usdt, amount: parseUnits("300", 6)},
               ],
               initialBalances: [
-                {token: dai, amount: parseUnits("3000", 18)},
-                {token: usdc, amount: parseUnits("1000", 6)},
-                {token: usdt, amount: parseUnits("2000", 6)},
+                {token: dai, amount: parseUnits("200", 18)},
+                {token: usdc, amount: parseUnits("400", 6)},
+                {token: usdt, amount: parseUnits("300", 6)},
               ],
               repayments: [
                 {
                   collateralAsset: usdc,
                   borrowAsset: dai,
-                  totalDebtAmountOut: parseUnits("3980", 18),
-                  amountRepay: parseUnits("3980", 18),
-                  totalCollateralAmountOut: parseUnits("1980", 6),
+                  totalDebtAmountOut: parseUnits("200", 18),
+                  amountRepay: parseUnits("200", 18),
+                  totalCollateralAmountOut: parseUnits("40", 6),
                 },
                 {
                   collateralAsset: usdc,
                   borrowAsset: usdt,
-                  totalDebtAmountOut: parseUnits("2930", 6),
-                  amountRepay: parseUnits("2930", 6),
-                  totalCollateralAmountOut: parseUnits("1930", 6),
+                  totalDebtAmountOut: parseUnits("300", 6),
+                  amountRepay: parseUnits("300", 6),
+                  totalCollateralAmountOut: parseUnits("60", 6),
+                },
+
+                // Total supply = 1e10, user liquidity in the pool = 1e9
+                // invested-assets = 400+40+60=500 usdc
+                // we are going to withdraw 500 usdc
+                // 40+60=100 usdc we will receive by converting dai and usdt on balance
+                // so, we need to withdraw 400 usdc from the pool
+                // Following amounts will be withdrawn:
+                /// 1000 * 1e9 / 1e10 = 100 dai
+                /// 2000 * 1e9 / 1e10 = 200 usdc
+                /// 3000 * 1e9 / 1e10 = 300 usdt
+                /// these amounts should be converter to 71, 200, 41 usdc
+                /// these amounts will be converter to 70, 200, 42 usdc
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  totalDebtAmountOut: parseUnits("100", 18).add(parseUnits("200", 18)),
+                  amountRepay: parseUnits("100", 18).add(parseUnits("200", 18)),
+                  totalCollateralAmountOut: parseUnits("71", 6),
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  totalDebtAmountOut: parseUnits("100.5", 18).add(parseUnits("200", 18)),
+                  amountRepay: parseUnits("100.5", 18).add(parseUnits("200", 18)),
+                  totalCollateralAmountOut: parseUnits("70", 6),
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalDebtAmountOut: parseUnits("300", 6).add(parseUnits("300", 6)),
+                  amountRepay: parseUnits("300", 6).add(parseUnits("300", 6)),
+                  totalCollateralAmountOut: parseUnits("41", 6),
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalDebtAmountOut: parseUnits("300.5", 6).add(parseUnits("300", 6)),
+                  amountRepay: parseUnits("300.5", 6).add(parseUnits("300", 6)),
+                  totalCollateralAmountOut: parseUnits("42", 6),
                 },
               ]
             }
@@ -2711,7 +2925,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         it("should update base amounts", async () => {
           const expectedBaseAmounts = [
             parseUnits("0", 18), // dai
-            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("712.5", 6), // usdc == 400 + 70 + 42 + 200.5
             parseUnits("0", 6), // usdt
           ];
 
@@ -2723,7 +2937,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         it("should update strategy balances", async () => {
           const expectedStrategyBalances = [
             parseUnits("0", 18), // dai
-            parseUnits("5860", 6), // usdc == 1000 + 1980 + 1930 + 950
+            parseUnits("712.5", 6), // usdc == 400 + 70 + 42 + 200.5
             parseUnits("0", 6), // usdt
           ];
 
@@ -2738,7 +2952,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
             results.assetPrice
           ].map(x => BalanceUtils.toString(x)).join("\n");
           const expected = [
-            parseUnits("3916", 6), // (((1000 + 2000 + 3000) * 6/6 * 6/6000) + (1980 + 1930))
+            parseUnits("312", 6), // usdc = 71 + 41 + 200
             parseUnits("1", 18) // for simplicity, all prices are equal to 1
           ].map(x => BalanceUtils.toString(x)).join("\n");
 

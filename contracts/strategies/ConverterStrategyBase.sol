@@ -233,66 +233,86 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function _withdrawUniversal(uint amount, bool all) internal returns (uint investedAssetsUSD, uint assetPrice) {
-    uint liquidityAmount = all
-      ? _depositorLiquidity()  // total amount of LP-tokens deposited by the strategy
-      : amount == 0 || _investedAssets == 0
-        ? 0
-        : _depositorLiquidity()
-          * 101 // add 1% on top...
-          * amount / _investedAssets // a part of amount that we are going to withdraw
-          / 100; // .. add 1% on top
+    console.log("_withdrawUniversal, amount, all", amount, all);
+    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory vars;
+    vars.investedAssets = _investedAssets;
+    if ((all || amount != 0) && vars.investedAssets != 0) {
+      vars.tokens = _depositorPoolAssets();
+      vars.indexAsset = ConverterStrategyBaseLib.getAssetIndex(vars.tokens, asset);
+      vars.tetuConverter = tetuConverter;
+      uint len = vars.tokens.length;
 
-    ITetuConverter _tetuConverter = tetuConverter; // gas saving
-
-    console.log("_withdrawUniversal _depositorLiquidity", _depositorLiquidity());
-    console.log("_withdrawUniversal amount liquidityAmount all", amount, liquidityAmount, all);
-    if (liquidityAmount != 0) {
-      address[] memory tokens = _depositorPoolAssets();
-      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
-
-      uint len = tokens.length;
-      uint[] memory prices = new uint[](len);
-      IPriceOracle priceOracle = IPriceOracle(IConverterController(_tetuConverter.controller()).priceOracle());
-      for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-        prices[i] = priceOracle.getAssetPrice(tokens[i]);
-        require(prices[i] != 0, AppErrors.ZERO_PRICE);
-        console.log("_withdrawUniversal i price", i, prices[i]);
-        console.log("ASSET BALANCE", i, IERC20(tokens[i]).balanceOf(address(this)));
-      }
-
-      uint[] memory expectedWithdrawAmounts = ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(
-        _depositorPoolReserves(),
-        liquidityAmount,
-        _depositorTotalSupply(),
-        prices
+      // temporary save liquidityRatioOut to liquidityAmount
+      (uint liquidityAmount, uint[] memory amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmountRatio(
+        all ? 0 : amount,
+        baseAmounts,
+        address(this),
+        vars
       );
-      console.log("_withdrawUniversal.0 assetPrice", assetPrice);
-      uint[] memory withdrawnAmounts = _depositorExit(liquidityAmount);
-      console.log("_withdrawUniversal.2 liquidityAmount", liquidityAmount);
-      console.log("_withdrawUniversal.2 expectedWithdrawAmounts", expectedWithdrawAmounts[0], expectedWithdrawAmounts[1], expectedWithdrawAmounts[2]);
-      console.log("_withdrawUniversal.2 withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
-
-      uint expectedAmountMainAsset;
-      for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-        expectedAmountMainAsset += i == indexAsset
-          ? expectedWithdrawAmounts[i]
-          : _tetuConverter.quoteRepay(address(this), tokens[indexAsset], tokens[i], expectedWithdrawAmounts[i]);
-        console.log("_withdrawUniversal i expectedAmountMainAsset", i, expectedAmountMainAsset);
+      console.log("_withdrawUniversal.1, liquidityAmount _depositorLiquidity", liquidityAmount, _depositorLiquidity());
+      console.log("_withdrawUniversal.2, amountsToConvert", amountsToConvert[0], amountsToConvert[1], amountsToConvert[2]);
+      if (liquidityAmount != 0) {
+        // liquidityAmount temporary contains ratio...
+        liquidityAmount = liquidityAmount * _depositorLiquidity() / 1e18;
       }
+      console.log("_withdrawUniversal.3, liquidityAmount", liquidityAmount);
+
+      {
+        IPriceOracle priceOracle = IPriceOracle(IConverterController(vars.tetuConverter.controller()).priceOracle());
+        assetPrice = priceOracle.getAssetPrice(vars.tokens[vars.indexAsset]);
+      }
+
+      uint[] memory withdrawnAmounts;
+      uint expectedAmountMainAsset;
+      if (liquidityAmount != 0) {
+        uint[] memory expectedWithdrawAmounts = ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(
+          _depositorPoolReserves(),
+          liquidityAmount,
+          _depositorTotalSupply()
+        );
+        withdrawnAmounts = _depositorExit(liquidityAmount);
+        console.log("_withdrawUniversal.4 liquidityAmount", liquidityAmount);
+        console.log("_withdrawUniversal.4 expectedWithdrawAmounts", expectedWithdrawAmounts[0], expectedWithdrawAmounts[1], expectedWithdrawAmounts[2]);
+        console.log("_withdrawUniversal.4 withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
+        for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+          expectedAmountMainAsset += i == vars.indexAsset
+            ? expectedWithdrawAmounts[i]
+            : vars.tetuConverter.quoteRepay(
+              address(this),
+              vars.tokens[vars.indexAsset],
+              vars.tokens[i],
+              expectedWithdrawAmounts[i] + amountsToConvert[i]
+            );
+          amountsToConvert[i] += withdrawnAmounts[i];
+          console.log("_withdrawUniversal.5 i expectedAmountMainAsset", i, expectedAmountMainAsset);
+        }
+      } else {
+        withdrawnAmounts = new uint[](len);
+        // we don't need to withdraw any amounts from the pool
+        // available converted amounts are enough for us
+        for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+          if (amountsToConvert[i] == 0) continue;
+          expectedAmountMainAsset += vars.tetuConverter.quoteRepay(
+            address(this),
+            vars.tokens[vars.indexAsset],
+            vars.tokens[i],
+            amountsToConvert[i]
+          );
+          console.log("_withdrawUniversal.6 i expectedAmountMainAsset", i, expectedAmountMainAsset);
+        }
+      }
+      console.log("_withdrawUniversal.7 amountsToConvert", amountsToConvert[0], amountsToConvert[1], amountsToConvert[2]);
 
       // convert amounts to main asset and update base amounts
-      (uint collateral, uint[] memory repaid) = all
-        ? _convertAfterWithdrawAll(tokens, indexAsset)
-        : _convertAfterWithdraw(tokens, indexAsset, withdrawnAmounts);
-      _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
+      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(vars.tokens, vars.indexAsset, amountsToConvert);
+      _updateBaseAmounts(vars.tokens, withdrawnAmounts, repaid, vars.indexAsset, int(collateral));
 
-      console.log("_withdrawUniversal.3 investedAssetsUSD, collateral", investedAssetsUSD, collateral);
-      console.log("_withdrawUniversal.3 repaid", repaid[0], repaid[1], repaid[2]);
+      console.log("_withdrawUniversal.8 investedAssetsUSD, collateral", investedAssetsUSD, collateral);
+      console.log("_withdrawUniversal.9 repaid", repaid[0], repaid[1], repaid[2]);
 
-      investedAssetsUSD = expectedAmountMainAsset * prices[indexAsset] / 1e18;
-      assetPrice = prices[indexAsset];
+      investedAssetsUSD = expectedAmountMainAsset * assetPrice / 1e18;
 
-      console.log("_withdrawUniversal.4 investedAssetsUSD assetPrice", investedAssetsUSD, assetPrice);
+      console.log("_withdrawUniversal.10 investedAssetsUSD assetPrice", investedAssetsUSD, assetPrice);
 
       // adjust _investedAssets
       _updateInvestedAssets();
@@ -376,6 +396,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         if (i == indexAsset_) continue;
         if (amountsToConvert_[i] > repaidAmountsOut[i]) {
+          console.log("liquidator.amountsToConvert_[i] > repaidAmountsOut[i]", amountsToConvert_[i], repaidAmountsOut[i]);
           (uint spentAmountIn, uint receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
             liquidator,
             tokens_[i],
