@@ -3,7 +3,7 @@ import {DoHardWorkLoopBase} from "./DoHardWorkLoopBase";
 import hre from "hardhat";
 import {
   BalancerComposableStableStrategy__factory,
-  IBalancerGauge__factory,
+  IBalancerGauge__factory, IController__factory,
   IERC20__factory,
   ISplitter__factory, IStrategyV2,
   StrategyBaseV2__factory
@@ -15,6 +15,8 @@ import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/Core
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {Misc} from "../../../scripts/utils/Misc";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 
 /**
  * All balances
@@ -337,6 +339,28 @@ export class UniversalTestUtils {
         params?.withdrawFee || 500,
         params?.wait || false
       );
+    }
+  }
+
+  static async setCompoundRatio(strategy: IStrategyV2, user: SignerWithAddress, compoundRate?: number) {
+    if (compoundRate) {
+      const controller = await StrategyBaseV2__factory.connect(strategy.address, user).controller();
+      const platformVoter = await IController__factory.connect(controller, user).platformVoter();
+      const strategyAsPlatformVoter = await StrategyBaseV2__factory.connect(
+        strategy.address,
+        await Misc.impersonate(platformVoter)
+      );
+      await strategyAsPlatformVoter.setCompoundRatio(compoundRate);
+    }
+  }
+
+  /**
+   * Move all available {asset} from balance of the {user} to {liquidator}
+   */
+  static async removeExcessTokens(asset: string, user: SignerWithAddress, liquidator: string) {
+    const excessBalance = await TokenUtils.balanceOf(asset, user.address);
+    if (!excessBalance.isZero()) {
+      await TokenUtils.transfer(asset, user, liquidator, excessBalance.toString());
     }
   }
 }

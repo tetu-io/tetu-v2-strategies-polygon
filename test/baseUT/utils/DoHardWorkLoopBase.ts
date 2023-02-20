@@ -18,6 +18,8 @@ import {expect} from "chai";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
 import {MaticAddresses} from "../../../scripts/MaticAddresses";
 import {parseUnits} from "ethers/lib/utils";
+import {UniversalTestUtils} from "./UniversalTestUtils";
+import {BalancerIntTestUtils} from "../../strategies/polygon/balancer/utils/BalancerIntTestUtils";
 
 interface IBalances {
   userBalance: BigNumber;
@@ -159,30 +161,12 @@ export class DoHardWorkLoopBase {
     }
     console.log("initialBalances", this.initialBalances);
 
-    const controller = await StrategyBaseV2__factory.connect(this.strategy.address, this.user).controller();
-    const platformVoter = await IController__factory.connect(controller, this.user).platformVoter();
-    const strategyAsPlatformVoter = await StrategyBaseV2__factory.connect(
-      this.strategy.address,
-      await Misc.impersonate(platformVoter)
+    await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate);
+    await BalancerIntTestUtils.setThresholds(
+      this.strategy,
+      this.user,
+      {reinvestThresholdPercent: params?.reinvestThresholdPercent}
     );
-    if (params.compoundRate) {
-      await strategyAsPlatformVoter.setCompoundRatio(params.compoundRate);
-    }
-
-    const controllerAsUser = await ControllerV2__factory.connect(controller, this.user);
-    const operators = await controllerAsUser.operatorsList();
-    const strategyAsOperator = await BalancerComposableStableStrategy__factory.connect(
-      strategyAsPlatformVoter.address,
-      await Misc.impersonate(operators[0])
-    );
-    // await strategyAsOperator.setRewardLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits("100", 6)); // TODO
-    if (params.reinvestThresholdPercent) {
-      await strategyAsOperator.setReinvestThresholdPercent(params.reinvestThresholdPercent); // 100_000 / 100
-    }
-
-    await this.vault.connect(
-      await Misc.impersonate(await controllerAsUser.governance())
-    ).setFees(701, 501);
   }
 
   protected async initialSnapshot() {
@@ -213,14 +197,8 @@ export class DoHardWorkLoopBase {
     console.log('enterToVault: deposited for user');
 
     // remove excess tokens
-    const excessBalUser = await TokenUtils.balanceOf(this.underlying, this.user.address);
-    if (!excessBalUser.isZero()) {
-      await TokenUtils.transfer(this.underlying, this.user, this.tools.liquidator.address, excessBalUser.toString());
-    }
-    const excessBalSigner = await TokenUtils.balanceOf(this.underlying, this.signer.address);
-    if (!excessBalSigner.isZero()) {
-      await TokenUtils.transfer(this.underlying, this.signer, this.tools.liquidator.address, excessBalSigner.toString());
-    }
+    await UniversalTestUtils.removeExcessTokens(this.underlying, this.user, this.tools.liquidator.address);
+    await UniversalTestUtils.removeExcessTokens(this.underlying, this.signer, this.tools.liquidator.address);
 
     expect(await TokenUtils.balanceOf(this.underlying, this.user.address)).eq(0);
     console.log('--- Enter to vault end')

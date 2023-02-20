@@ -1,6 +1,8 @@
 import {
-  IBorrowManager__factory,
-  IConverterController__factory, ITetuConverter__factory, VaultFactory__factory
+  BalancerComposableStableStrategy__factory, ControllerV2,
+  ControllerV2__factory,
+  IBorrowManager__factory, IController__factory,
+  IConverterController__factory, IStrategyV2, ITetuConverter__factory, StrategyBaseV2__factory, VaultFactory__factory
 } from "../../../../../typechain";
 import {Misc} from "../../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../../scripts/MaticAddresses";
@@ -8,7 +10,15 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtils} from "../../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../../scripts/utils/DeployerUtilsLocal";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
+import {BigNumber} from "ethers";
 
+export interface ISetThresholdsInputParams {
+  reinvestThresholdPercent?: number;
+  rewardLiquidationThresholds?: {
+    asset: string,
+    threshold: BigNumber
+  }[];
+}
 
 /**
  * Utils for integration tests of BalancerComposableStableStrategy
@@ -51,5 +61,37 @@ export class BalancerIntTestUtils {
       core.vaultFactory,
       await DeployerUtilsLocal.getControllerGovernance(signer)
     ).setSplitterImpl(splitterImpl.address);
+  }
+
+  /**
+   * Set reinvest and reward-liquidation thresholds
+   */
+  static async setThresholds(
+    strategy: IStrategyV2,
+    user: SignerWithAddress,
+    params?: ISetThresholdsInputParams
+  ) {
+    const controller = await StrategyBaseV2__factory.connect(strategy.address, user).controller();
+    const platformVoter = await IController__factory.connect(controller, user).platformVoter();
+    const strategyAsPlatformVoter = await StrategyBaseV2__factory.connect(
+      strategy.address,
+      await Misc.impersonate(platformVoter)
+    );
+
+    const controllerAsUser = await ControllerV2__factory.connect(controller, user);
+    const operators = await controllerAsUser.operatorsList();
+    const strategyAsOperator = await BalancerComposableStableStrategy__factory.connect(
+      strategyAsPlatformVoter.address,
+      await Misc.impersonate(operators[0])
+    );
+    if (params?.rewardLiquidationThresholds) {
+      for (const p of params?.rewardLiquidationThresholds) {
+        await strategyAsOperator.setLiquidationThreshold(p.asset, p.threshold);
+      }
+    }
+
+    if (params?.reinvestThresholdPercent) {
+      await strategyAsOperator.setReinvestThresholdPercent(params.reinvestThresholdPercent); // 100_000 / 100
+    }
   }
 }
