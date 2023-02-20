@@ -13,8 +13,6 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-import "hardhat/console.sol";
-
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -88,9 +86,6 @@ library ConverterStrategyBaseLib {
         ? 1e18
         : 1e18 * liquidityAmount_ / totalSupply_
     ); // we need brackets here for npm.run.coverage
-    console.log("getExpectedWithdrawnAmountUSD");
-    console.log("getExpectedWithdrawnAmountUSD totalSupply_", totalSupply_);
-    console.log("getExpectedWithdrawnAmountUSD liquidityAmount_", liquidityAmount_);
 
     uint len = reserves_.length;
     withdrawnAmountsOut = new uint[](len);
@@ -201,7 +196,6 @@ library ConverterStrategyBaseLib {
     uint liquidityRatioOut,
     uint[] memory amountsToConvertOut
   ) {
-    console.log("getLiquidityAmountRatio targetAmount_ params_.investedAssets", targetAmount_, params_.investedAssets);
     bool all = targetAmount_ == 0;
     uint investedAssets = params_.investedAssets;
 
@@ -219,8 +213,6 @@ library ConverterStrategyBaseLib {
           params_.tokens[i],
           baseAmount
         );
-        console.log("getLiquidityAmountRatio baseAmount", baseAmount);
-        console.log("getLiquidityAmountRatio expectedCollateral", expectedCollateral);
 
         if (all || targetAmount_ != 0) {
           // We always repay WHOLE available baseAmount event if it gives us much more amount then we need.
@@ -236,20 +228,17 @@ library ConverterStrategyBaseLib {
         } else {
           targetAmount_ = 0;
         }
-        console.log("getLiquidityAmountRatio targetAmount_", targetAmount_);
 
         if (investedAssets > expectedCollateral) {
           investedAssets -= expectedCollateral;
         } else {
           investedAssets = 0;
         }
-        console.log("getLiquidityAmountRatio investedAssets", investedAssets);
       }
     }
 
     require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
 
-    console.log("getLiquidityAmountRatio targetAmount_ final targetAmount_, investedAssets", targetAmount_, investedAssets);
     liquidityRatioOut = all
       ? 1e18
       : targetAmount_ == 0
@@ -258,7 +247,6 @@ library ConverterStrategyBaseLib {
           * 101 // add 1% on top...
           * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
           / 100; // .. add 1% on top
-    console.log("liquidityRatioOut", liquidityRatioOut);
   }
 
   function getPrices(
@@ -301,16 +289,8 @@ library ConverterStrategyBaseLib {
       borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
-    console.log("findBorrowStrategy collateralAsset_=", collateralAsset_);
-    console.log("findBorrowStrategy borrowAsset_=", borrowAsset_);
-    console.log("findBorrowStrategy amountIn_=", amountIn_);
-    console.log("findBorrowStrategy _LOAN_PERIOD_IN_BLOCKS=", _LOAN_PERIOD_IN_BLOCKS);
-    console.log("findBorrowStrategy converter=", converter);
-    console.log("findBorrowStrategy collateralRequired=", collateralRequired);
-    console.log("findBorrowStrategy amountToBorrow=", amountToBorrow);
 
     if (converter != address(0) && amountToBorrow != 0) {
-      console.log("borrow", collateralRequired, amountToBorrow);
       // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
       borrowedAmountOut = tetuConverter_.borrow(
         converter,
@@ -321,7 +301,6 @@ library ConverterStrategyBaseLib {
         address(this)
       );
       collateralAmountOut = collateralRequired;
-      console.log("borrow.done", borrowedAmountOut);
     }
 
     //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
@@ -392,7 +371,6 @@ library ConverterStrategyBaseLib {
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
-    console.log("buildRoute", tokenIn_, tokenOut_);
     (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
 
     if (route.length == 0) {
@@ -401,7 +379,6 @@ library ConverterStrategyBaseLib {
 
     // calculate balance in out value for check threshold
     uint amountOut = liquidator_.getPriceForRoute(route, amountIn_);
-    console.log("getPriceForRoute", amountOut);
 
     // if the expected value is higher than threshold distribute to destinations
     if (amountOut > liquidationThresholdForTokenOut_) {
@@ -411,7 +388,6 @@ library ConverterStrategyBaseLib {
       uint balanceBefore = IERC20(tokenOut_).balanceOf(address(this));
 
       liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
-      console.log("liquidateWithRoute done");
 
       // temporary save balance of token out after  liquidation to spentAmountIn
       uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
@@ -486,7 +462,6 @@ library ConverterStrategyBaseLib {
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    console.log("_recycle.1");
     RecycleLocalParams memory p;
 
     require(params.rewardTokens.length == params.rewardAmounts.length, "SB: Arrays mismatch");
@@ -500,7 +475,6 @@ library ConverterStrategyBaseLib {
 
     // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
     for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
-      console.log("_recycle.2");
       p.rewardToken = params.rewardTokens[i];
       p.amountToCompound = params.rewardAmounts[i] * params.compoundRatio / COMPOUND_DENOMINATOR;
 
@@ -516,12 +490,6 @@ library ConverterStrategyBaseLib {
             // amount is too small, liquidation is not allowed
             receivedAmounts[i] += p.amountToCompound;
           } else {
-            console.log("_recycle.3");
-            console.log("p.rewardToken", p.rewardToken);
-            console.log("params.asset", params.asset);
-            console.log("p.totalRewardAmounts", p.totalRewardAmounts);
-            console.log("p.liquidationThresholdAsset", p.liquidationThresholdAsset);
-
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
             // because the {_asset} is always included to the list of depositor's assets
@@ -533,7 +501,6 @@ library ConverterStrategyBaseLib {
               _REWARD_LIQUIDATION_SLIPPAGE,
               p.liquidationThresholdAsset
             );
-            console.log("_recycle.4");
 
             // Adjust amounts after liquidation
             if (receivedAmountOut > 0) {

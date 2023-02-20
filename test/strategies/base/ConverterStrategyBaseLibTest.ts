@@ -71,13 +71,12 @@ describe("ConverterStrategyBaseLibTest", () => {
               ],
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              [parseUnits("4", 18), parseUnits("2", 18)],
             );
 
             const sret = ret.map(x => BalanceUtils.toString(x)).join("\n");
             const sexpected = [
-              parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6),
-              parseUnits((100_000 * 2 * 1000 / 50_000).toString(), 18),
+              parseUnits((200_000 * 1000 / 50_000).toString(), 6),
+              parseUnits((100_000 * 1000 / 50_000).toString(), 18),
             ].join("\n");
 
             expect(sret).eq(sexpected);
@@ -91,13 +90,12 @@ describe("ConverterStrategyBaseLibTest", () => {
               ],
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              [parseUnits("4", 18), parseUnits("2", 18)],
             );
 
             const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
             const sexpected = [
-              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18),
-              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6),
+              parseUnits((100_000 * 1000 / 50_000).toString(), 18),
+              parseUnits((200_000 * 1000 / 50_000).toString(), 6),
             ].join("\n");
 
             expect(sret).eq(sexpected);
@@ -112,13 +110,12 @@ describe("ConverterStrategyBaseLibTest", () => {
               ],
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              [parseUnits("4", 18), parseUnits("2", 18)],
             );
 
             const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
             const sexpected = [
-              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18),
-              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6),
+              parseUnits((100_000 * 1000 / 50_000).toString(), 18),
+              parseUnits((200_000 * 1000 / 50_000).toString(), 6),
             ].join("\n");
 
             expect(sret).eq(sexpected);
@@ -138,13 +135,12 @@ describe("ConverterStrategyBaseLibTest", () => {
               ],
               parseUnits("1000", 33), // decimals of the values don't matter here
               parseUnits("50000", 33), // only values ratio is important
-              [parseUnits("2", 18), parseUnits("4", 18)],
             );
 
             const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
             const sexpected = [
-              parseUnits((200_000 * 2 * 1000 / 50_000).toString(), 6),
-              parseUnits((100_000 * 4 * 1000 / 50_000).toString(), 18),
+              parseUnits((200_000 * 1000 / 50_000).toString(), 6),
+              parseUnits((100_000 * 1000 / 50_000).toString(), 18),
             ].join("\n");
 
             expect(sret).eq(sexpected);
@@ -161,18 +157,13 @@ describe("ConverterStrategyBaseLibTest", () => {
             ],
             parseUnits("1000", 33), // decimals of the values don't matter here
             parseUnits("50000", 33), // only values ratio is important
-            [
-              parseUnits("4", 18),
-              parseUnits("2", 18),
-              parseUnits("8", 18)
-            ],
           );
 
           const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
           const sexpected = [
-            parseUnits((200_000 * 4 * 1000 / 50_000).toString(), 6),
-            parseUnits((100_000 * 2 * 1000 / 50_000 ).toString(), 18),
-            parseUnits((800_000 * 8 * 1000 / 50_000).toString(), 8),
+            parseUnits((200_000 * 1000 / 50_000).toString(), 6),
+            parseUnits((100_000 * 1000 / 50_000 ).toString(), 18),
+            parseUnits((800_000 * 1000 / 50_000).toString(), 8),
           ].join("\n");
 
           expect(sret).eq(sexpected);
@@ -188,7 +179,6 @@ describe("ConverterStrategyBaseLibTest", () => {
           ],
           parseUnits("1000", 33), // decimals of the values don't matter here
           parseUnits("0", 33), // (!) total supply is zero
-          [parseUnits("4", 18), parseUnits("2", 18)],
         );
         const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
         const sexpected = [
@@ -198,38 +188,7 @@ describe("ConverterStrategyBaseLibTest", () => {
 
         expect(sret).eq(sexpected);
       });
-      // it("should revert if main asset price is zero", async () => {
-      //   await expect(
-      //     facade.getExpectedWithdrawnAmounts(
-      //       [
-      //         parseUnits("200000", 6), // usdc
-      //         parseUnits("100000", 18), // dai
-      //       ],
-      //       parseUnits("1000", 33), // decimals of the values don't matter here
-      //       parseUnits("5000", 33), // total supply
-      //       [
-      //         parseUnits("0", 18), // (!) usdc price is zero
-      //         parseUnits("2", 18)
-      //       ],
-      //     )
-      //   ).revertedWith("TS-8 zero price");
-      // });
-      // it("should revert if secondary asset price is zero", async () => {
-      //   await expect(
-      //     facade.getExpectedWithdrawnAmounts(
-      //       [
-      //         parseUnits("200000", 6),
-      //         parseUnits("100000", 18),
-      //       ],
-      //       parseUnits("1000", 33), // decimals of the values don't matter here
-      //       parseUnits("5000", 33), // total supply
-      //       [
-      //         parseUnits("2", 6),
-      //         parseUnits("0", 18), // (!) dai price is zero
-      //       ],
-      //     )
-      //   ).revertedWith("TS-8 zero price");
-      // });
+
       it("should use ratio 1 if liquidityAmount > totalSupply", async () => {
         const ret = await facade.getExpectedWithdrawnAmounts(
           [
@@ -238,13 +197,12 @@ describe("ConverterStrategyBaseLibTest", () => {
           ],
           parseUnits("5000", 33), // (!) liquidity is greater than total supply
           parseUnits("1000", 33), // (!) total supply
-          [parseUnits("2", 18), parseUnits("4", 18)],
         );
 
         const sret = ret.map(x => BalanceUtils.toString(x)).join("\n")
         const sexpected = [
-          parseUnits((200_000 * 2).toString(), 6), // ratio == 1
-          parseUnits((100_000 * 4).toString(), 18), // ratio == 1
+          parseUnits((200_000).toString(), 6), // ratio == 1
+          parseUnits((100_000).toString(), 18), // ratio == 1
         ].join("\n");
 
         expect(sret).eq(sexpected);
@@ -260,11 +218,6 @@ describe("ConverterStrategyBaseLibTest", () => {
           ],
           parseUnits("1000", 33), // decimals of the values don't matter here
           parseUnits("50000", 33), // only values ratio is important
-          [
-            parseUnits("4", 18),
-            parseUnits("2", 18),
-            parseUnits("8", 18)
-          ],
         );
         controlGasLimitsEx(gasUsed, GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS, (u, t) => {
           expect(u).to.be.below(t + 1);
@@ -426,7 +379,7 @@ describe("ConverterStrategyBaseLibTest", () => {
 
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
             const expected = [
-              parseUnits("1", 18).mul(101).mul(19-9).div(500).div(100),
+              parseUnits("1", 18).mul(101).mul(19-9).div(500-9).div(100),
               parseUnits("17", 18),
               0,
               parseUnits("37", 6),
