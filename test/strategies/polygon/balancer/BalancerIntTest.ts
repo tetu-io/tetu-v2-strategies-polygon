@@ -126,10 +126,19 @@ describe('BalancerIntTest', function() {
     let strategy: IStrategyV2;
     let asset: string;
     let splitter: ISplitter;
-
     let stateBeforeDeposit: IState;
-    let stateAfterSignerDeposit: IState;
-    let stateAfterDeposit: IState;
+    let initialBalances: IPutInitialAmountsoBalancesResults;
+
+    /**
+     * DEPOSIT_AMOUNT => user, DEPOSIT_AMOUNT/2 => signer, DEPOSIT_AMOUNT/2 => liquidator
+     */
+    async function enterToVault() : Promise<IState> {
+      await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
+      await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
+      await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
+      await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
+      return UniversalTestUtils.getState(signer, user, strategy, vault);
+    }
 
     before(async function () {
       [signer] = await ethers.getSigners();
@@ -163,8 +172,7 @@ describe('BalancerIntTest', function() {
         {reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT}
       );
 
-      // DEPOSIT_AMOUNT => user, DEPOSIT_AMOUNT/2 => signer, DEPOSIT_AMOUNT/2 => liquidator
-      const initialBalances = await putInitialAmountsToBalances(
+      initialBalances = await putInitialAmountsToBalances(
         asset,
         user,
         signer,
@@ -173,16 +181,6 @@ describe('BalancerIntTest', function() {
       );
 
       stateBeforeDeposit = await UniversalTestUtils.getState(signer, user, strategy, vault);
-
-      // Enter to vault
-      await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
-
-      stateAfterSignerDeposit = await UniversalTestUtils.getState(signer, user, strategy, vault);
-      await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
-      await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
-      await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-
-      stateAfterDeposit = await UniversalTestUtils.getState(signer, user, strategy, vault);
     });
 
     after(async function () {
@@ -223,7 +221,9 @@ describe('BalancerIntTest', function() {
 
     describe("State after depositing 50_000 by signer", () => {
       it("should have expected values", async () => {
-        console.log("stateAfterSignerDeposit", stateAfterSignerDeposit);
+        const stateAfterDeposit = await enterToVault();
+        const amountDeposited = parseUnits((DEPOSIT_AMOUNT / 2).toString(), 6); // usdc
+
         const ret = [
           stateAfterDeposit.signer.usdc,
           stateAfterDeposit.user.usdc,
@@ -276,11 +276,24 @@ describe('BalancerIntTest', function() {
             .mul(BUFFER)
             .div(100_000)
         ].map(x => BalanceUtils.toString(x)).join("\n");
-        exp
+
+        expect(ret).eq(expected);
+      });
+    });
 
     describe("State after deposit", () => {
       it("should have expected values", async () => {
-        console.log("stateAfterSignerDeposit", stateAfterSignerDeposit);
+        // some insurance is immediately used to recover entry-loss during the depositing
+        let recoveredLoss: BigNumber = BigNumber.from(0);
+        const tx = await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
+        console.log("TX", tx);
+        await tx.wait();
+        await expect(tx).to.emit(splitter.address, "LossCovered");
+//                        .withArgs((loss: BigNumber) => {recoveredLoss = loss; return true;});
+
+        console.log("recoveredLoss", recoveredLoss);
+
+        const stateAfterDeposit = await UniversalTestUtils.getState(signer, user, strategy, vault);
         const ret = [
           stateAfterDeposit.signer.usdc,
           stateAfterDeposit.user.usdc,
@@ -332,6 +345,7 @@ describe('BalancerIntTest', function() {
             .div(100_000)
             .mul(BUFFER)
             .div(100_000)
+            .sub(recoveredLoss)
         ].map(x => BalanceUtils.toString(x)).join("\n");
         expect(ret).eq(expected);
       });
@@ -341,6 +355,7 @@ describe('BalancerIntTest', function() {
       describe("Good paths", () => {
         describe("Withdraw immediately", () => {
           it("should return expected values", async () => {
+            const stateAfterDeposit = await enterToVault();
             await strategy.connect(
               await Misc.impersonate(splitter.address)
             ).withdrawAllToSplitter();
