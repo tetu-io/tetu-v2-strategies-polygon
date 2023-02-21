@@ -1,12 +1,11 @@
 import {BigNumber} from "ethers";
-import {DoHardWorkLoopBase} from "./DoHardWorkLoopBase";
 import hre from "hardhat";
 import {
   BalancerComposableStableStrategy__factory,
   IBalancerGauge__factory, IController__factory,
   IERC20__factory,
   ISplitter__factory, IStrategyV2,
-  StrategyBaseV2__factory
+  StrategyBaseV2__factory, TetuVaultV2
 } from "../../../typechain";
 import {MaticAddresses} from "../../../scripts/MaticAddresses";
 import {writeFileSync} from "fs";
@@ -68,71 +67,85 @@ export interface IState {
 }
 
 export interface IMakeStrategyDeployerInputParams {
+  vaultName?: string;
+
   buffer?: number;
   depositFee?: number;
   withdrawFee?: number;
   wait?: boolean;
-  vaultName?: string;
-  strategyName?: string;
 }
 
 /**
  * Utils for universal test
  */
 export class UniversalTestUtils {
-  static async getStates(title: string, h: DoHardWorkLoopBase) : Promise<IState>{
+  static async getState(
+    signer: SignerWithAddress,
+    user: SignerWithAddress,
+    strategy: IStrategyV2,
+    vault: TetuVaultV2,
+    title?: string,
+  ) : Promise<IState>{
     const gauge = "0x1c514fEc643AdD86aeF0ef14F4add28cC3425306";
     const balancerPool = "0x48e6b98ef6329f8f0a30ebb8c7c960330d648085";
     const bbAmDai = "0x178E029173417b1F9C8bC16DCeC6f697bC323746";
     const bbAmUsdc = "0xF93579002DBE8046c43FEfE86ec78b1112247BB8";
     const bbAmUsdt = "0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6";
-    const splitterAddress = await h.vault.splitter();
-    const insurance = await h.vault.insurance();
+    const splitterAddress = await vault.splitter();
+    const insurance = await vault.insurance();
     const block = await hre.ethers.provider.getBlock("latest");
 
+    // console.log("!", user.address, signer.address, balancerPool, bbAmUsdc);
+    // // await IERC20__factory.connect(bbAmUsdc, user).balanceOf(balancerPool);
+    // console.log("!!", user.address, signer.address, balancerPool, bbAmUsdt);
+    // await IERC20__factory.connect(bbAmUsdt, signer).balanceOf(balancerPool);
+    // console.log("!!!");
+    // await IERC20__factory.connect(bbAmDai, user).balanceOf(balancerPool);
+    console.log("!!!!");
+
     const dest = {
-      title,
+      title: title || "no-name",
       block: block.number,
       blockTimestamp: block.timestamp,
       signer: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.signer.address),
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(signer.address),
       },
       user: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.user.address),
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(user.address),
       },
       strategy: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.strategy.address),
-        usdt: await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, h.user).balanceOf(h.strategy.address),
-        dai: await IERC20__factory.connect(MaticAddresses.DAI_TOKEN, h.user).balanceOf(h.strategy.address),
-        bal: await IERC20__factory.connect(MaticAddresses.BAL_TOKEN, h.user).balanceOf(h.strategy.address),
-        bptPool: await IERC20__factory.connect(balancerPool, h.user).balanceOf(h.strategy.address),
-        totalAssets: await h.strategy.totalAssets(),
-        investedAssets: await StrategyBaseV2__factory.connect(h.strategy.address, h.user).investedAssets()
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(strategy.address),
+        usdt: await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, user).balanceOf(strategy.address),
+        dai: await IERC20__factory.connect(MaticAddresses.DAI_TOKEN, user).balanceOf(strategy.address),
+        bal: await IERC20__factory.connect(MaticAddresses.BAL_TOKEN, user).balanceOf(strategy.address),
+        bptPool: await IERC20__factory.connect(balancerPool, user).balanceOf(strategy.address),
+        totalAssets: await strategy.totalAssets(),
+        investedAssets: await StrategyBaseV2__factory.connect(strategy.address, user).investedAssets()
       },
       gauge: {
-        strategyBalance: await IBalancerGauge__factory.connect(gauge, h.user).balanceOf(h.strategy.address),
+        strategyBalance: await IBalancerGauge__factory.connect(gauge, user).balanceOf(strategy.address),
       },
       balancerPool: {
-        bbAmUsdc: await IERC20__factory.connect(bbAmUsdc, h.user).balanceOf(balancerPool),
-        bbAmUsdt: await IERC20__factory.connect(bbAmUsdt, h.user).balanceOf(balancerPool),
-        bbAmDai: await IERC20__factory.connect(bbAmDai, h.user).balanceOf(balancerPool),
+        bbAmUsdc: await IERC20__factory.connect(bbAmUsdc, user).balanceOf(balancerPool),
+        bbAmUsdt: await IERC20__factory.connect(bbAmUsdt, user).balanceOf(balancerPool),
+        bbAmDai: await IERC20__factory.connect(bbAmDai, user).balanceOf(balancerPool),
       },
       splitter: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(splitterAddress),
-        totalAssets: await ISplitter__factory.connect(splitterAddress, h.user).totalAssets(),
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(splitterAddress),
+        totalAssets: await ISplitter__factory.connect(splitterAddress, user).totalAssets(),
       },
       vault: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(h.vault.address),
-        userShares: await h.vault.balanceOf(h.user.address),
-        signerShares: await h.vault.balanceOf(h.signer.address),
-        userUsdc: await h.vault.convertToAssets(await h.vault.balanceOf(h.user.address)),
-        signerUsdc: await h.vault.convertToAssets(await h.vault.balanceOf(h.signer.address)),
-        sharePrice: await h.vault.sharePrice(),
-        totalSupply: await h.vault.totalSupply(),
-        totalAssets: await h.vault.totalAssets(),
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(vault.address),
+        userShares: await vault.balanceOf(user.address),
+        signerShares: await vault.balanceOf(signer.address),
+        userUsdc: await vault.convertToAssets(await vault.balanceOf(user.address)),
+        signerUsdc: await vault.convertToAssets(await vault.balanceOf(signer.address)),
+        sharePrice: await vault.sharePrice(),
+        totalSupply: await vault.totalSupply(),
+        totalAssets: await vault.totalAssets(),
       },
       insurance: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, h.user).balanceOf(insurance),
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(insurance),
       },
     }
 
@@ -315,13 +328,14 @@ export class UniversalTestUtils {
     core: CoreAddresses,
     asset: string,
     tetuConverterAddress: string,
+    strategyName: string,
     params?: IMakeStrategyDeployerInputParams
   ) : Promise<((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>)> {
     return async (signer: SignerWithAddress) => {
       const controller = DeployerUtilsLocal.getController(signer);
 
       const strategyDeployer = async (splitterAddress: string) => {
-        const strategyProxy = await DeployerUtils.deployProxy(signer, params?.strategyName || "strategy");
+        const strategyProxy = await DeployerUtils.deployProxy(signer, strategyName);
         const strategy = BalancerComposableStableStrategy__factory.connect(strategyProxy, signer);
         await strategy.init(core.controller, splitterAddress, tetuConverterAddress);
         return strategy as unknown as IStrategyV2;

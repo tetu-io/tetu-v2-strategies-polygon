@@ -113,14 +113,20 @@ describe('BalancerComposableStableUniversalTest', async () => {
       core,
       asset,
       tetuConverterAddress,
+      strategyName,
       {
-        strategyName,
         vaultName: 'tetu' + assetName
       }
     ),
     params,
     async (title, h) => {
-      states.push(await UniversalTestUtils.getStates(title, h));
+      states.push(await UniversalTestUtils.getState(
+        h.signer,
+        h.user,
+        h.strategy,
+        h.vault,
+        title
+      ));
     }
   );
 });
