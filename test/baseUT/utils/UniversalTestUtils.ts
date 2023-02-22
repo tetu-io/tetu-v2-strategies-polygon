@@ -1,4 +1,4 @@
-import {BigNumber} from "ethers";
+import {BigNumber, ContractTransaction} from "ethers";
 import hre from "hardhat";
 import {
   BalancerComposableStableStrategy__factory,
@@ -16,6 +16,7 @@ import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/Dep
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {Misc} from "../../../scripts/utils/Misc";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {VaultUtils} from "../../VaultUtils";
 
 /**
  * All balances
@@ -375,6 +376,26 @@ export class UniversalTestUtils {
     const excessBalance = await TokenUtils.balanceOf(asset, user.address);
     if (!excessBalance.isZero()) {
       await TokenUtils.transfer(asset, user, liquidator, excessBalance.toString());
+    }
+  }
+
+  /**
+   * Finds event "LossCovered(lossValue)" in {tx}, returns {lossValue}
+   */
+  static async extractLossCovered(tx: ContractTransaction, vaultAddress: string) : Promise<BigNumber | undefined> {
+    const cr = await tx.wait();
+    if (cr.events) {
+      for (const event of cr.events) {
+        if (event.address === vaultAddress) {
+          if (event.event === "LossCovered") {
+            if (event.args) {
+              console.log("vault", vaultAddress);
+              console.log("recoveredLoss", event.args[0]);
+              return event.args[0];
+            }
+          }
+        }
+      }
     }
   }
 }

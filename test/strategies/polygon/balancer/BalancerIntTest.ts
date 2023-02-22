@@ -221,8 +221,12 @@ describe('BalancerIntTest', function() {
 
     describe("State after depositing 50_000 by signer", () => {
       it("should have expected values", async () => {
-        const stateAfterDeposit = await enterToVault();
-        const amountDeposited = parseUnits((DEPOSIT_AMOUNT / 2).toString(), 6); // usdc
+        // some insurance is immediately used to recover entry-loss during the depositing
+        const recoveredLoss = await UniversalTestUtils.extractLossCovered(
+          await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner),
+          vault.address
+        ) || BigNumber.from(0);
+        const stateAfterDeposit = await UniversalTestUtils.getState(signer, user, strategy, vault);
 
         const ret = [
           stateAfterDeposit.signer.usdc,
@@ -249,7 +253,7 @@ describe('BalancerIntTest', function() {
         ].map(x => BalanceUtils.toString(x)).join("\n");
         const expected = [
           0,
-          0,
+          parseUnits(DEPOSIT_AMOUNT.toString(), 6),
 
           // strategy
           true,
@@ -267,10 +271,11 @@ describe('BalancerIntTest', function() {
           stateAfterDeposit.vault.totalSupply,
 
           // insurance and buffer
-          stateBeforeDeposit.user.usdc.add(stateBeforeDeposit.signer.usdc)
+          stateBeforeDeposit.signer.usdc
             .mul(DEPOSIT_FEE)
-            .div(100_000),
-          stateBeforeDeposit.user.usdc.add(stateBeforeDeposit.signer.usdc)
+            .div(100_000)
+            .sub(recoveredLoss),
+          stateBeforeDeposit.signer.usdc
             .mul(100_000 - DEPOSIT_FEE)
             .div(100_000)
             .mul(BUFFER)
@@ -284,16 +289,13 @@ describe('BalancerIntTest', function() {
     describe("State after deposit", () => {
       it("should have expected values", async () => {
         // some insurance is immediately used to recover entry-loss during the depositing
-        let recoveredLoss: BigNumber = BigNumber.from(0);
-        const tx = await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
-        console.log("TX", tx);
-        await tx.wait();
-        await expect(tx).to.emit(splitter.address, "LossCovered");
-//                        .withArgs((loss: BigNumber) => {recoveredLoss = loss; return true;});
+        const recoveredLoss = await UniversalTestUtils.extractLossCovered(
+          await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner),
+          vault.address
+        ) || BigNumber.from(0);
+        const stateAfterDeposit = await enterToVault();
 
-        console.log("recoveredLoss", recoveredLoss);
-
-        const stateAfterDeposit = await UniversalTestUtils.getState(signer, user, strategy, vault);
+        // const stateAfterDeposit = await UniversalTestUtils.getState(signer, user, strategy, vault);
         const ret = [
           stateAfterDeposit.signer.usdc,
           stateAfterDeposit.user.usdc,
@@ -339,13 +341,13 @@ describe('BalancerIntTest', function() {
           // insurance and buffer
           stateBeforeDeposit.user.usdc.add(stateBeforeDeposit.signer.usdc)
             .mul(DEPOSIT_FEE)
-            .div(100_000),
+            .div(100_000)
+            .sub(recoveredLoss),
           stateBeforeDeposit.user.usdc.add(stateBeforeDeposit.signer.usdc)
             .mul(100_000 - DEPOSIT_FEE)
             .div(100_000)
             .mul(BUFFER)
             .div(100_000)
-            .sub(recoveredLoss)
         ].map(x => BalanceUtils.toString(x)).join("\n");
         expect(ret).eq(expected);
       });
