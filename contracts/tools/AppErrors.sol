@@ -29,4 +29,6 @@ library AppErrors {
   string public constant ZERO_AMOUNT_BORROWED = "TS-10 zero borrowed amount";
 
   string public constant WITHDRAW_TOO_MUCH  = "TS-11 try to withdraw too much";
+
+  string public constant UNKNOWN_ENTRY_KIND = "TS-12 unknown entry kind";
 }

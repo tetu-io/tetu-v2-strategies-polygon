@@ -9,9 +9,12 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/IConverterController.sol";
+import "../interfaces/converter/EntryKinds.sol";
 import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
+
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -50,6 +53,26 @@ library ConverterStrategyBaseLib {
     ITetuConverter tetuConverter;
     /// @notice Total amount of invested assets of the strategy
     uint investedAssets;
+  }
+
+  struct OpenPositionLocal {
+    uint entryKind;
+    address[] converters;
+    uint[] collateralsRequired;
+    uint[] amountsToBorrow;
+    uint collateral;
+    uint amountToBorrow;
+  }
+  struct OpenPositionEntryKind2Local {
+    address[] converters;
+    uint[] collateralsRequired;
+    uint[] amountsToBorrow;
+    uint collateral;
+    uint amountToBorrow;
+    uint c1;
+    uint c3;
+    uint ratio;
+    uint alpha;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -265,7 +288,7 @@ library ConverterStrategyBaseLib {
   ///                   Borrow and close positions
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Make borrow according to {entryData_}
+  /// @notice Make one or several borrow necessary to supply/borrow required {amountIn_} according to {entryData_}
   ///         Max possible collateral should be approved before calling of this function.
   /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
   ///                   See TetuConverter\EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
@@ -281,8 +304,95 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    OpenPositionLocal memory vars;
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
-    (address converter, uint collateralRequired, uint amountToBorrow,) = tetuConverter_.findBorrowStrategy(
+    vars.entryKind = EntryKinds.getEntryKind(entryData_);
+    if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_PROPORTION_1) {
+      return openPositionEntryKind2(
+        tetuConverter_,
+        entryData_,
+        collateralAsset_,
+        borrowAsset_,
+        amountIn_
+      );
+    } else {
+      (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
+        entryData_,
+        collateralAsset_,
+        amountIn_,
+        borrowAsset_,
+        _LOAN_PERIOD_IN_BLOCKS
+      );
+
+      uint len = vars.converters.length;
+      if (len > 0) {
+        console.log("OpenPosition.amountIn_", amountIn_);
+        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+          console.log("OpenPosition.i", i);
+          // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
+          vars.collateral;
+          vars.amountToBorrow;
+          if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_COLLATERAL_IN_FOR_MAX_BORROW_OUT_0) {
+            // we have exact amount of total collateral amount
+            // Case ENTRY_KIND_EXACT_PROPORTION_1 is here too because we consider first platform only
+            vars.collateral = amountIn_ < vars.collateralsRequired[i]
+              ? amountIn_
+              : vars.collateralsRequired[i];
+            vars.amountToBorrow = amountIn_ < vars.collateralsRequired[i]
+              ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
+              : vars.amountsToBorrow[i];
+            amountIn_ -= vars.collateral;
+          } else {
+            // assume here that entryKind == EntryKinds.ENTRY_KIND_EXACT_BORROW_OUT_FOR_MIN_COLLATERAL_IN_2
+            // we have exact amount of total amount-to-borrow
+            vars.amountToBorrow = amountIn_ < vars.amountsToBorrow[i]
+              ? amountIn_
+              : vars.amountsToBorrow[i];
+            vars.collateral = amountIn_ < vars.amountsToBorrow[i]
+              ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
+              : vars.collateralsRequired[i];
+            console.log("OpenPosition.collateral", vars.collateral);
+            console.log("OpenPosition.amountToBorrow", vars.amountToBorrow);
+            amountIn_ -= vars.amountToBorrow;
+          }
+
+          if (vars.amountToBorrow != 0) {
+            borrowedAmountOut += tetuConverter_.borrow(
+              vars.converters[i],
+              collateralAsset_,
+              vars.collateral,
+              borrowAsset_,
+              vars.amountToBorrow,
+              address(this)
+            );
+            collateralAmountOut += vars.collateral;
+            console.log("OpenPosition.borrowedAmountOut", borrowedAmountOut);
+            console.log("OpenPosition.collateralAmountOut", collateralAmountOut);
+            console.log("OpenPosition.amountIn_", amountIn_);
+          }
+
+          if (amountIn_ == 0) break;
+        }
+      }
+
+      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
+      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
+      return (collateralAmountOut, borrowedAmountOut);
+    }
+  }
+
+  function openPositionEntryKind2(
+    ITetuConverter tetuConverter_,
+    bytes memory entryData_,
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountIn_
+  ) internal returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    OpenPositionEntryKind2Local memory vars;
+    (vars.converters, vars.collateralsRequired, vars.amountsToBorrow, ) = tetuConverter_.findBorrowStrategies(
       entryData_,
       collateralAsset_,
       amountIn_,
@@ -290,22 +400,91 @@ library ConverterStrategyBaseLib {
       _LOAN_PERIOD_IN_BLOCKS
     );
 
-    if (converter != address(0) && amountToBorrow != 0) {
-      // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
-      borrowedAmountOut = tetuConverter_.borrow(
-        converter,
-        collateralAsset_,
-        collateralRequired,
-        borrowAsset_,
-        amountToBorrow,
-        address(this)
-      );
-      collateralAmountOut = collateralRequired;
-    }
+    collateralAmountOut = 0; // hide warning
+    borrowedAmountOut = 0; // hide warning
 
-    //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
-    //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
-    return (collateralAmountOut, borrowedAmountOut);
+
+    uint len = vars.converters.length;
+    if (len > 0) {
+      // we should split amountIn on two amounts with proportions x:y
+      (, uint x, uint y) = abi.decode(entryData_, (uint, uint, uint));
+      console.log("x, y", x, y);
+      // calculate prices conversion ratio using price oracle, decimals 18
+      // i.e. alpha = 1e18 * 75e6 usdc / 25e18 matic = 3e6 usdc/matic
+      vars.alpha = _getCollateralToBorrowRatio(tetuConverter_, collateralAsset_, borrowAsset_);
+      console.log("alpha", vars.alpha);
+
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        // the lending platform allows to convert {collateralsRequired[i]} to {amountsToBorrow[i]}
+        // and give us required proportions in result
+        // C = C1 + C2, C2 => B2, B2 * alpha = C3, C1/C3 must be equal to x/y
+        // but if lending platform doesn't have enough liquidity
+        // it reduces {collateralsRequired[i]} and {amountsToBorrow[i]} proportionally to fit the limits
+        // as result, remaining C1 will be too big after conversion and we need to make another borrow
+        console.log("vars.collateralsRequired[i]", vars.collateralsRequired[i]);
+        console.log("vars.amountsToBorrow[i]", vars.amountsToBorrow[i]);
+
+        vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
+        vars.c1 = x * vars.c3 / y;
+        vars.ratio = vars.collateralsRequired[i] + vars.c3 > amountIn_
+          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c3)
+          : 1e18;
+        console.log("c3", vars.c3);
+        console.log("c1", vars.c1);
+        console.log("vars.ratio", vars.ratio);
+        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
+        vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
+        console.log("collateral", vars.collateral);
+        console.log("amountToBorrow", vars.amountToBorrow);
+
+        require(
+          tetuConverter_.borrow(
+            vars.converters[i],
+            collateralAsset_,
+            vars.collateral,
+            borrowAsset_,
+            vars.amountToBorrow,
+            address(this)
+          ) == vars.amountToBorrow,
+          AppErrors.WRONG_VALUE
+        );
+
+        borrowedAmountOut += vars.amountToBorrow;
+        collateralAmountOut += vars.collateral;
+        console.log("collateralAmountOut", collateralAmountOut);
+        console.log("borrowedAmountOut", borrowedAmountOut);
+
+        vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
+        vars.c1 = x * vars.c3 / y;
+        console.log("c3", vars.c3);
+        console.log("c1", vars.c1);
+
+        if (amountIn_ > vars.c1 + vars.collateral) {
+          console.log("amountIn_ before", amountIn_);
+          amountIn_ -= (vars.c1 + vars.collateral);
+          console.log("amountIn_", amountIn_);
+        } else {
+          break;
+        }
+      }
+
+      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
+      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
+      return (collateralAmountOut, borrowedAmountOut);
+    }
+  }
+
+  /// @notice Get ratio18 = collateral / borrow
+  function _getCollateralToBorrowRatio(
+    ITetuConverter tetuConverter_,
+    address collateralAsset_,
+    address borrowAsset_
+  ) internal view returns (uint){
+    IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle());
+    uint priceCollateral = priceOracle.getAssetPrice(collateralAsset_);
+    uint priceBorrow = priceOracle.getAssetPrice(borrowAsset_);
+    return 1e18 * priceBorrow * 10**IERC20Metadata(collateralAsset_).decimals()
+                / priceCollateral / 10**IERC20Metadata(borrowAsset_).decimals();
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result

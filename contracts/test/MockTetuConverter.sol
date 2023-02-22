@@ -28,10 +28,10 @@ contract MockTetuConverter is ITetuConverter {
   //////////////////////////////////////////////////////////
   struct FindBorrowStrategyOutputParams {
     bytes entryData;
-    address converter;
-    uint collateralAmountOut;
-    uint amountToBorrowOut;
-    int apr18;
+    address[] converters;
+    uint[] collateralAmountsOut;
+    uint[] amountsToBorrowOut;
+    int[] aprs18;
 
     address sourceToken;
     uint sourceAmount;
@@ -40,40 +40,40 @@ contract MockTetuConverter is ITetuConverter {
   }
   /// @notice keccak256(entryData, sourceToken, targetToken) => results
   mapping(bytes32 => FindBorrowStrategyOutputParams) public findBorrowStrategyOutputParams;
-  function findBorrowStrategy(
+  function findBorrowStrategies(
     bytes memory entryData_,
     address sourceToken_,
-    uint sourceAmount_,
+    uint amountIn_,
     address targetToken_,
     uint periodInBlocks_
   ) external view returns (
-    address converter,
-    uint collateralAmountOut,
-    uint amountToBorrowOut,
-    int apr18
+    address[] memory converters,
+    uint[] memory collateralAmountsOut,
+    uint[] memory amountsToBorrowOut,
+    int[] memory aprs18
   ) {
     periodInBlocks_;
-    console.log("MockTetuConverterSingleCall.findBorrowStrategy token,amount", sourceToken_, sourceAmount_);
+    console.log("MockTetuConverterSingleCall.findBorrowStrategy token,amountIn", sourceToken_, amountIn_);
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
     FindBorrowStrategyOutputParams memory p = findBorrowStrategyOutputParams[key];
     if (sourceToken_ == p.sourceToken) {
       return (
-        p.converter,
-        p.collateralAmountOut,
-        p.amountToBorrowOut,
-        p.apr18
+        p.converters,
+        p.collateralAmountsOut,
+        p.amountsToBorrowOut,
+        p.aprs18
       );
     } else {
-      console.log("findBorrowStrategy.missed", sourceToken_, sourceAmount_, targetToken_);
-      return (converter, collateralAmountOut, amountToBorrowOut, apr18);
+      console.log("findBorrowStrategy.missed", sourceToken_, amountIn_, targetToken_);
+      return (converters, collateralAmountsOut, amountsToBorrowOut, aprs18);
     }
   }
   function setFindBorrowStrategyOutputParams(
     bytes memory entryData_,
-    address converter_,
-    uint collateralAmount_,
-    uint amountToBorrow_,
-    int apr18_,
+    address[] memory converters_,
+    uint[] memory collateralAmountsOut_,
+    uint[] memory amountToBorrowsOut_,
+    int[] memory aprs18_,
     address sourceToken_,
     uint sourceAmount_,
     address targetToken_,
@@ -83,10 +83,10 @@ contract MockTetuConverter is ITetuConverter {
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
     findBorrowStrategyOutputParams[key] = FindBorrowStrategyOutputParams({
       entryData: entryData_,
-      converter: converter_,
-      collateralAmountOut: collateralAmount_,
-      amountToBorrowOut: amountToBorrow_,
-      apr18: apr18_,
+      converters: converters_,
+      collateralAmountsOut: collateralAmountsOut_,
+      amountsToBorrowOut: amountToBorrowsOut_,
+      aprs18: aprs18_,
       sourceAmount: sourceAmount_,
       sourceToken: sourceToken_,
       targetToken: targetToken_,
