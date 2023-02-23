@@ -19,15 +19,20 @@ export class ConverterUtils {
    */
   public static async disableDForce(signer: SignerWithAddress) {
     console.log('disableDForce...');
+    await this.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    console.log('disableDForce done.\n\n');
+  }
+
+  public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {
+    console.log(`disable ${platformAdapter}`);
     const tools = Addresses.getTools();
     const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
     const converterControllerAddr = await converter.controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();
     const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
-    const platformAdapterDForce = IPlatformAdapter__factory.connect(getDForcePlatformAdapter(), converterControllerGovernance);
+    const platformAdapterDForce = IPlatformAdapter__factory.connect(platformAdapter, converterControllerGovernance);
     await platformAdapterDForce.setFrozen(true);
-    console.log('disableDForce done.\n\n');
+    console.log(`disable ${platformAdapter} done.\n\n`);
   }
-
 }

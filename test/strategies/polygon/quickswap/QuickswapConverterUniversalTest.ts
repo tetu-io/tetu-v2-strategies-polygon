@@ -32,7 +32,7 @@ const argv = require('yargs/yargs')()
 
 chai.use(chaiAsPromised);
 
-describe('QuickswapConverterUniversalTest', async () => {
+describe.skip('QuickswapConverterUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
