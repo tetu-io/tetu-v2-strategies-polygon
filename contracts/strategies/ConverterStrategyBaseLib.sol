@@ -426,8 +426,8 @@ library ConverterStrategyBaseLib {
 
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
         vars.c1 = x * vars.c3 / y;
-        vars.ratio = vars.collateralsRequired[i] + vars.c3 > amountIn_
-          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c3)
+        vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
+          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
           : 1e18;
         console.log("c3", vars.c3);
         console.log("c1", vars.c1);

@@ -1003,6 +1003,24 @@ describe("ConverterStrategyBaseLibTest", () => {
 
             expect(ret).eq(expected);
           });
+          /**
+           * We are going to use collateral = $100
+           * It should be divided on two "same" parts (proportions 1:1):
+           *    $25 - remain unchanged
+           *    $75 - swapped to 50 matic ~ $25
+           * As result need to have $25 + $50 matic on our balance.
+           *
+           * First landing platform doesn't have enough liquidity, it allows to swap only $45
+           *    $15 + $45, $45 => 30 matic ~ $15
+           * Second landing platform doesn't have enough liquidity too, it allows to swap only $15
+           * So findBorrowStrategy returns (collateral $15, borrow 10 matic).
+           *    $20 + $15, $15 => 10 matic ~ $20
+           * As result we will have
+           *    used collateral = $45 + $15 = $60
+           *    borrowed amount = 30 + 10 = 40 matic ~ $20
+           *    unchanged amount = $100 - $60 = $40
+           * and incorrect result proportions.
+           */
           it("should return expected values, two borrows, platforms don't have enough amount", async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
@@ -1019,24 +1037,24 @@ describe("ConverterStrategyBaseLibTest", () => {
                   entryData: defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 1, 1]),
                   aprs18: [parseUnits("1", 18), parseUnits("2", 18)],
                   amountIn: parseUnits("100", 6),
-                  collateralAmountsOut: [parseUnits("15", 6), parseUnits("30", 6)],
-                  amountToBorrowsOut: [parseUnits("5", 18), parseUnits("10", 18)],
+                  collateralAmountsOut: [parseUnits("45", 6), parseUnits("15", 6)],
+                  amountToBorrowsOut: [parseUnits("30", 18), parseUnits("10", 18)],
                 }],
                 borrows: [{
                   collateralAsset: usdc,
-                  collateralAmount: parseUnits("15", 6),
+                  collateralAmount: parseUnits("45", 6),
                   borrowAsset: dai,
-                  amountToBorrow: parseUnits("5", 18),
+                  amountToBorrow: parseUnits("30", 18),
                   converter: converter1
                 }, {
                   collateralAsset: usdc,
-                  collateralAmount: parseUnits("30", 6),
+                  collateralAmount: parseUnits("15", 6),
                   borrowAsset: dai,
                   amountToBorrow: parseUnits("10", 18),
                   converter: converter2
                 }],
-                amountCollateralForFacade: parseUnits("45", 6),
-                amountBorrowAssetForTetuConverter: parseUnits("15", 18),
+                amountCollateralForFacade: parseUnits("60", 6),
+                amountBorrowAssetForTetuConverter: parseUnits("40", 18),
                 amountInIsCollateral: true,
                 prices: {
                   collateral: parseUnits("1", 18),
@@ -1046,10 +1064,28 @@ describe("ConverterStrategyBaseLibTest", () => {
             );
 
             const ret = [r.collateralAmountOut, r.borrowedAmountOut].map(x => BalanceUtils.toString(x)).join();
-            const expected = [parseUnits("45", 6), parseUnits("15", 18)].map(x => BalanceUtils.toString(x)).join();
+            const expected = [parseUnits("60", 6), parseUnits("40", 18)].map(x => BalanceUtils.toString(x)).join();
 
             expect(ret).eq(expected);
           });
+          /**
+           * We are going to use collateral = $100
+           * It should be divided on two "same" parts (proportions 1:1):
+           *    $25 - remain unchanged
+           *    $75 - swapped to 50 matic ~ $25
+           * As result we will have $25 + $50 matic on our balance.
+           *
+           * First landing platform doesn't have enough liquidity, it allows to swap only $45
+           *    $15 + $45, $45 => 30 matic ~ $15
+           * Second landing platform has a lot of liquidity, it allows to swap whole amount.
+           * So findBorrowStrategy returns (collateral $75, borrow 50 matic).
+           * But we need to make only partial conversion because other part has been converted using the first landing platform.
+           *    $10 + $30, $30 => 20 matic ~ $10
+           * As result we will have
+           *    used collateral = $45 + $30 = $75
+           *    borrowed amount = 30 + 20 = 50 matic
+           *    unchanged amount = $100 - $75 = $25
+           */
           it("should return expected values, two borrows, platforms have more then required liquidity", async () => {
             const converter1 = ethers.Wallet.createRandom().address;
             const converter2 = ethers.Wallet.createRandom().address;
@@ -1066,24 +1102,24 @@ describe("ConverterStrategyBaseLibTest", () => {
                   entryData: defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 1, 1]),
                   aprs18: [parseUnits("1", 18), parseUnits("2", 18)],
                   amountIn: parseUnits("100", 6),
-                  collateralAmountsOut: [parseUnits("45", 6), parseUnits("100", 6)],
-                  amountToBorrowsOut: [parseUnits("15", 18), parseUnits("30", 18)],
+                  collateralAmountsOut: [parseUnits("45", 6), parseUnits("75", 6)],
+                  amountToBorrowsOut: [parseUnits("30", 18), parseUnits("50", 18)],
                 }],
                 borrows: [{
                   collateralAsset: usdc,
                   collateralAmount: parseUnits("45", 6),
                   borrowAsset: dai,
-                  amountToBorrow: parseUnits("15", 18),
+                  amountToBorrow: parseUnits("30", 18),
                   converter: converter1
                 }, {
                   collateralAsset: usdc,
                   collateralAmount: parseUnits("30", 6),
                   borrowAsset: dai,
-                  amountToBorrow: parseUnits("9", 18), // (75 - 45) * 30 / 100
+                  amountToBorrow: parseUnits("20", 18), // (75 - 45) * 30 / 100
                   converter: converter2
                 }],
                 amountCollateralForFacade: parseUnits("75", 6),
-                amountBorrowAssetForTetuConverter: parseUnits("24", 18),
+                amountBorrowAssetForTetuConverter: parseUnits("50", 18),
                 amountInIsCollateral: true,
                 prices: {
                   collateral: parseUnits("1", 18),
@@ -1093,7 +1129,74 @@ describe("ConverterStrategyBaseLibTest", () => {
             );
 
             const ret = [r.collateralAmountOut, r.borrowedAmountOut].map(x => BalanceUtils.toString(x)).join();
-            const expected = [parseUnits("75", 6), parseUnits("24", 18)].map(x => BalanceUtils.toString(x)).join();
+            const expected = [parseUnits("75", 6), parseUnits("50", 18)].map(x => BalanceUtils.toString(x)).join();
+
+            expect(ret).eq(expected);
+          });
+        });
+        describe("proportions 1:2", () => {
+          /**
+           * We are going to use collateral = $220
+           * It should be divided on two "same" parts (proportions 2:3):
+           *    $40 - remain unchanged
+           *    $180 - swapped to 120 matic ~ $60
+           * As result we need to have $40 + $120 matic on our balance (40 : 60 = 2 : 3)
+           *
+           * First landing platform doesn't have enough liquidity, it allows to swap only $90
+           *    $20 + $90, $90 => 60 matic ~ $30
+           * Second landing platform has a lot of liquidity, it allows to swap whole amount.
+           * So findBorrowStrategy returns (collateral $180, borrow 120 matic).
+           * But we need to make only partial conversion because other part has been converted using the first landing platform.
+           *   $20 + $90, $90 => 60 matic ~ $30
+           * As result we will have
+           *    used collateral = $90 + $90 = $180
+           *    borrowed amount = 60 + 60 = 120 matic
+           *    unchanged amount = $220 - $180 = $40
+           */
+          it("should return expected values, two borrows, platforms have more then required liquidity", async () => {
+            const converter1 = ethers.Wallet.createRandom().address;
+            const converter2 = ethers.Wallet.createRandom().address;
+            const r = await makeOpenPositionTest(
+              defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 2, 3]),
+              usdc,
+              dai,
+              parseUnits("220", 6),
+              {
+                findBorrowStrategyOutputs: [{
+                  converters: [converter1, converter2],
+                  sourceToken: usdc.address,
+                  targetToken: dai.address,
+                  entryData: defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 2, 3]),
+                  aprs18: [parseUnits("1", 18), parseUnits("2", 18)],
+                  amountIn: parseUnits("220", 6),
+                  collateralAmountsOut: [parseUnits("90", 6), parseUnits("180", 6)],
+                  amountToBorrowsOut: [parseUnits("60", 18), parseUnits("120", 18)],
+                }],
+                borrows: [{
+                  collateralAsset: usdc,
+                  collateralAmount: parseUnits("90", 6),
+                  borrowAsset: dai,
+                  amountToBorrow: parseUnits("60", 18),
+                  converter: converter1
+                }, {
+                  collateralAsset: usdc,
+                  collateralAmount: parseUnits("90", 6),
+                  borrowAsset: dai,
+                  amountToBorrow: parseUnits("60", 18),
+                  converter: converter2
+                }],
+                amountCollateralForFacade: parseUnits("180", 6),
+                amountBorrowAssetForTetuConverter: parseUnits("120", 18),
+                amountInIsCollateral: true,
+                prices: {
+                  collateral: parseUnits("1", 18),
+                  borrow: parseUnits("0.5", 18)
+                }
+              }
+            );
+
+            const ret = [r.collateralAmountOut, r.borrowedAmountOut].map(x => BalanceUtils.toString(x)).join();
+            const expected = [parseUnits("180", 6), parseUnits("120", 18)].map(x => BalanceUtils.toString(x)).join();
 
             expect(ret).eq(expected);
           });
