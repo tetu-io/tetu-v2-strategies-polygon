@@ -4,37 +4,18 @@ import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTes
 import {config as dotEnvConfig} from "dotenv";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {
-  BalancerComposableStableStrategy__factory,
-  IBalancerGauge__factory, IBorrowManager__factory,
-  IConverterController__factory,
-  IERC20__factory,
-  ISplitter__factory,
-  IStrategyV2,
-  ITetuConverter__factory,
-  StrategyBaseV2__factory, VaultFactory__factory
-} from "../../../../typechain";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
   getHundredFinancePlatformAdapter,
-  Misc
 } from '../../../../scripts/utils/Misc';
-import {BigNumber} from "ethers";
-import {DoHardWorkLoopBase} from "../../../baseUT/utils/DoHardWorkLoopBase";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
-import {writeFileSync} from "fs";
-import {formatUnits} from "ethers/lib/utils";
-import hre, {ethers} from "hardhat";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
-import {IState, UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {BalancerIntTestUtils} from "./utils/BalancerIntTestUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {BalancerIntTestUtils, IState} from "./utils/BalancerIntTestUtils";
+import {ethers} from "hardhat";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -82,8 +63,8 @@ describe('BalancerComposableStableUniversalTest', async () => {
   /** Save collected states to csv, compute profit */
   after(async function() {
     const pathOut = "./tmp/ts2-snapshots.csv";
-    await UniversalTestUtils.saveListStatesToCSV(pathOut, states);
-    UniversalTestUtils.outputProfit(states);
+    await BalancerIntTestUtils.saveListStatesToCSV(pathOut, states);
+    BalancerIntTestUtils.outputProfit(states);
   });
 
   const strategyName = 'BalancerComposableStableStrategy';
@@ -120,7 +101,7 @@ describe('BalancerComposableStableUniversalTest', async () => {
     ),
     params,
     async (title, h) => {
-      states.push(await UniversalTestUtils.getState(
+      states.push(await BalancerIntTestUtils.getState(
         h.signer,
         h.user,
         h.strategy,

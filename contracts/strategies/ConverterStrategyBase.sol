@@ -537,7 +537,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
       console.log("_claim.6");
 
-    forwarder.registerIncome(rewardTokens, amountsToForward, ISplitter(splitter).vault(), true);
+      forwarder.registerIncome(rewardTokens, amountsToForward, ISplitter(splitter).vault(), true);
       console.log("_claim.7");
     }
   }
@@ -694,8 +694,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     bool isCollateral
   ) {
     address _tetuConverter = address(tetuConverter);
-    require(msg.sender == _tetuConverter, "CSB: Only TetuConverter");
-    require(collateralAsset_ == asset, 'CSB: Wrong asset');
+    require(msg.sender == _tetuConverter, AppErrors.ONLY_TETU_CONVERTER);
+    require(collateralAsset_ == asset, AppErrors.WRONG_ASSET);
 
     amountOut = 0;
     uint assetBalance = _balance(collateralAsset_);

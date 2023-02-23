@@ -31,4 +31,8 @@ library AppErrors {
   string public constant WITHDRAW_TOO_MUCH  = "TS-11 try to withdraw too much";
 
   string public constant UNKNOWN_ENTRY_KIND = "TS-12 unknown entry kind";
+
+  string public constant ONLY_TETU_CONVERTER = "TS-13 only TetuConverter";
+
+  string public constant WRONG_ASSET = "TS-14 wrong asset";
 }
