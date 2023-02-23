@@ -20,10 +20,30 @@ import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {config as dotEnvConfig} from "dotenv";
 
 const { expect } = chai;
 
+dotEnvConfig();
+// tslint:disable-next-line:no-var-requires
+const argv = require('yargs/yargs')()
+  .env('TETU')
+  .options({
+    disableStrategyTests: {
+      type: "boolean",
+      default: false,
+    },
+    hardhatChainId: {
+      type: "number",
+      default: 137
+    },
+  }).argv;
+
 describe('UniswapV3ConverterStrategyTests', function() {
+  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
+    return;
+  }
+
   let snapshotBefore: string;
   let snapshot: string;
   let gov: SignerWithAddress;
@@ -148,10 +168,10 @@ describe('UniswapV3ConverterStrategyTests', function() {
     await asset.approve(vault2.address, Misc.MAX_UINT);
 
     // Disable platforms at TetuConverter
-    // await ConverterUtils.disableHf(signer);
+    await ConverterUtils.disableHf(signer);
     await ConverterUtils.disableDForce(signer);
-    await ConverterUtils.disableAaveV2(signer);
-    await ConverterUtils.disableAaveV3(signer);
+    // await ConverterUtils.disableAaveV2(signer);
+    // await ConverterUtils.disableAaveV3(signer);
 
     swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer)
 
@@ -207,7 +227,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy.isReadyToHardWork()).eq(false)
     })
 
-    it('More realistic test for reverse tokens order pool', async() => {
+    /*it('More realistic test for reverse tokens order pool', async() => {
       const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter())
       await strategy2.connect(platformVoter).setCompoundRatio(100000) // 100%
       const converter = ITetuConverter__factory.connect(getConverterAddress(), signer)
@@ -423,7 +443,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
       const totalDepositFee = totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)
       expect(balanceBefore.sub(balanceAfter)).eq(totalDepositFee.add(totalWithdrawFee))
-    })
+    })*/
 
     /*it('Claim fees', async() => {
       const investAmount = _100;

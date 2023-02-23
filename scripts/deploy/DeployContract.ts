@@ -15,6 +15,7 @@ const libraries = new Map<string, string[]>([
   ['BalancerComposableStableStrategy', ['ConverterStrategyBaseLib', 'BalancerLogicLib']],
   ['MockConverterStrategy', ['ConverterStrategyBaseLib']],
   ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib']],
+  ['UniswapV3ConverterStrategy', ['UniswapV3Library', 'ConverterStrategyBaseLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(

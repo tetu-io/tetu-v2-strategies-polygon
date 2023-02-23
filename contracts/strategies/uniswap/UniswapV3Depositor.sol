@@ -8,8 +8,8 @@ import "../DepositorBase.sol";
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
 import "../../integrations/uniswap/TickMath.sol";
 import "../../integrations/uniswap/IUniswapV3MintCallback.sol";
-import "../../integrations/uniswap/LiquidityAmounts.sol";
 import "../../tools/AppErrors.sol";
+import "./UniswapV3Library.sol";
 
 import "hardhat/console.sol";
 
@@ -28,6 +28,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   IUniswapV3Pool public pool;
   int24 public lowerTick;
   int24 public upperTick;
+  int24 public lowerTickFillup;
+  int24 public upperTickFillup;
   int24 public rebalanceTickRange;
 
   // asset - collateral token
@@ -42,9 +44,10 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
   /// @dev Total fractional shares of Uniswap V3 position
   uint128 public totalLiquidity;
+  uint128 public totalLiquidityFillup;
 
-  uint public rebalanceEarned;
-  uint public rebalanceLost;
+  uint public rebalanceEarned0;
+  uint public rebalanceEarned1;
 
   function __UniswapV3Depositor_init(
     address asset_,
@@ -108,8 +111,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     amountsConsumed = new uint[](2);
 
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
-    uint128 newLiquidity =
-    LiquidityAmounts.getLiquidityForAmounts(
+    uint128 newLiquidity = UniswapV3Library.getLiquidityForAmounts(
       sqrtRatioX96,
       lowerTick.getSqrtRatioAtTick(),
       upperTick.getSqrtRatioAtTick(),
@@ -117,12 +119,17 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       amountsDesired_[1]
     );
     liquidityOut = uint(newLiquidity);
-    (amountsConsumed[0], amountsConsumed[1]) = LiquidityAmounts.getAmountsForLiquidity(
+    (amountsConsumed[0], amountsConsumed[1]) = UniswapV3Library.getAmountsForLiquidity(
       sqrtRatioX96,
       lowerTick.getSqrtRatioAtTick(),
       upperTick.getSqrtRatioAtTick(),
       newLiquidity
     );
+
+    console.log('_depositorEnter pool.mint before');
+    pool.mint(address(this), lowerTick, upperTick, uint128(liquidityOut), "");
+    console.log('_depositorEnter pool.mint after');
+    totalLiquidity += uint128(liquidityOut);
 
     if (_depositorSwapTokens) {
       (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
@@ -131,30 +138,71 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     // console.log('_depositorEnter amountsConsumed[0]', amountsConsumed[0]);
     // console.log('_depositorEnter amountsConsumed[1]', amountsConsumed[1]);
     // console.log('_depositorEnter liquidityOut', liquidityOut);
+  }
 
-    pool.mint(address(this), lowerTick, upperTick, uint128(liquidityOut), "");
-    totalLiquidity += uint128(liquidityOut);
+  function _addFillup() internal {
+    (, int24 tick, , , , ,) = pool.slot0();
+    if (_balance(pool.token0()) > _balance(pool.token1()) * UniswapV3Library.getPrice(pool, pool.token1()) / 10**IERC20Metadata(pool.token1()).decimals()) {
+      // add token0 to half range
+      lowerTickFillup = tick / 10 * 10 + 10;
+      upperTickFillup = upperTick;
+      _addLiquidityFillup(_balance(pool.token0()), 0);
+    } else {
+      lowerTickFillup = lowerTick;
+      upperTickFillup = tick / 10 * 10 - 10;
+      _addLiquidityFillup(0, _balance(pool.token1()));
+    }
+  }
+
+  function _addLiquidityFillup(uint amount0Desired_, uint amount1Desired_) internal returns (uint amount0Consumed, uint amount1Consumed, uint128 liquidityOut) {
+    require(amount0Desired_ != 0 || amount1Desired_ != 0, "_addLiquidityFillup: Zero amount");
+    (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
+    liquidityOut = UniswapV3Library.getLiquidityForAmounts(
+      sqrtRatioX96,
+      lowerTickFillup.getSqrtRatioAtTick(),
+      upperTickFillup.getSqrtRatioAtTick(),
+      amount0Desired_,
+      amount1Desired_
+    );
+    (amount0Consumed, amount1Consumed) = UniswapV3Library.getAmountsForLiquidity(
+      sqrtRatioX96,
+      lowerTickFillup.getSqrtRatioAtTick(),
+      upperTickFillup.getSqrtRatioAtTick(),
+      liquidityOut
+    );
+    pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOut, "");
+    totalLiquidityFillup += liquidityOut;
   }
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    // compute current fees earned
-    // todo maybe error design, also can receive all and extract fees proportional to liquidityAmount
-    (, int24 tick, , , , ,) = pool.slot0();
-    (, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
-    uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed0);
-    uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed1);
-
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, uint128(liquidityAmount));
     pool.collect(
       address(this),
       lowerTick,
       upperTick,
-      uint128(amountsOut[0]) + uint128(fee0),
-      uint128(amountsOut[1]) + uint128(fee1)
+      type(uint128).max,
+      type(uint128).max
     );
 
     totalLiquidity -= uint128(liquidityAmount);
+
+    // remove proportional part of fillup liquidity
+    if (totalLiquidityFillup != 0) {
+      uint128 toRemovefillUpAmount = totalLiquidityFillup * uint128(liquidityAmount) / totalLiquidity;
+      (uint amountsOutFillup0, uint amountsOutFillup1) = pool.burn(lowerTickFillup, upperTickFillup, toRemovefillUpAmount);
+      pool.collect(
+        address(this),
+        lowerTickFillup,
+        upperTickFillup,
+        type(uint128).max,
+        type(uint128).max
+      );
+      amountsOut[0] += amountsOutFillup0;
+      amountsOut[1] += amountsOutFillup1;
+
+      totalLiquidityFillup -= toRemovefillUpAmount;
+    }
 
     if (_depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
@@ -165,19 +213,17 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     // console.log('_depositorQuoteExit liquidityAmount', liquidityAmount);
     amountsOut = new uint[](2);
 
-    (uint160 sqrtRatioX96, int24 tick, , , , ,) = pool.slot0();
-    (, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
+    (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
 
-    (amountsOut[0], amountsOut[1]) = LiquidityAmounts.getAmountsForLiquidity(
+    (amountsOut[0], amountsOut[1]) = UniswapV3Library.getAmountsForLiquidity(
       sqrtRatioX96,
       lowerTick.getSqrtRatioAtTick(),
       upperTick.getSqrtRatioAtTick(),
       uint128(liquidityAmount)
     );
 
-    // compute current fees earned
-    uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed0);
-    uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, uint128(liquidityAmount)) + uint256(tokensOwed1);
+    UniswapV3Library.PoolPosition memory position = UniswapV3Library.PoolPosition(address(pool), lowerTick, upperTick, totalLiquidity, address(this));
+    (uint fee0, uint fee1) = UniswapV3Library.getFees(position);
     amountsOut[0] += fee0;
     amountsOut[1] += fee1;
 
@@ -198,23 +244,12 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    uint[] memory balancesBefore = new uint[](2);
-    balancesBefore[0] = _balance(tokenA);
-    balancesBefore[1] = _balance(tokenB);
-
-    (, int24 tick, , , , ,) = pool.slot0();
-    (uint128 liquidity, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
-
-    uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, liquidity) + uint256(tokensOwed0);
-    uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) + uint256(tokensOwed1);
+    (uint fee0, uint fee1) = getFees();
 
     console.log('_depositorClaimRewards fee0', fee0);
     console.log('_depositorClaimRewards fee1', fee1);
 
     amountsOut = new uint[](2);
-    tokensOut = new address[](2);
-    tokensOut[0] = tokenA;
-    tokensOut[1] = tokenB;
 
     if (fee0 > 0 || fee1 > 0) {
       pool.burn(lowerTick, upperTick, 0);
@@ -225,20 +260,20 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
         type(uint128).max,
         type(uint128).max
       );
-
-      if (_depositorSwapTokens) {
-        (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
-      }
     }
 
-    if (rebalanceEarned != 0) {
-      console.log('_depositorClaimRewards() rebalanceEarned', rebalanceEarned);
-      amountsOut[0] += rebalanceEarned;
-      rebalanceEarned = 0;
+    amountsOut[0] += rebalanceEarned0;
+    amountsOut[1] += rebalanceEarned1;
+    rebalanceEarned0 = 0;
+    rebalanceEarned1 = 0;
+
+    if (_depositorSwapTokens) {
+      (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
 
-    console.log('_depositorClaimRewards() amountsOut[0]', amountsOut[0]);
-    console.log('_depositorClaimRewards() amountsOut[1]', amountsOut[1]);
+    tokensOut = new address[](2);
+    tokensOut[0] = tokenA;
+    tokensOut[1] = tokenB;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -253,6 +288,15 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       return tick - oldMedianTick > rebalanceTickRange;
     }
     return oldMedianTick - tick > rebalanceTickRange;
+  }
+
+  function getFees() public view returns (uint fee0, uint fee1) {
+    UniswapV3Library.PoolPosition memory position = UniswapV3Library.PoolPosition(address(pool), lowerTick, upperTick, totalLiquidity, address(this));
+    (fee0, fee1) = UniswapV3Library.getFees(position);
+    UniswapV3Library.PoolPosition memory positionFillup = UniswapV3Library.PoolPosition(address(pool), lowerTickFillup, upperTickFillup, totalLiquidityFillup, address(this));
+    (uint fee0Fillup, uint fee1Fillup) = UniswapV3Library.getFees(positionFillup);
+    fee0 += fee0Fillup;
+    fee1 += fee1Fillup;
   }
 
   /// @notice Returns pool assets
@@ -286,77 +330,41 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   }
 
   function getUnderlyingBalances() public view returns (uint256 amount0Current, uint256 amount1Current) {
-    (uint160 sqrtRatioX96, int24 tick, , , , ,) = pool.slot0();
-    return _getUnderlyingBalances(sqrtRatioX96, tick);
+    (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
+    return _getUnderlyingBalances(sqrtRatioX96);
   }
 
-  function _getUnderlyingBalances(uint160 sqrtRatioX96, int24 tick) internal view returns (uint256 amount0Current, uint256 amount1Current) {
-    (uint128 liquidity, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = pool.positions(_getPositionID());
-
+  function _getUnderlyingBalances(uint160 sqrtRatioX96) internal view returns (uint256 amount0Current, uint256 amount1Current) {
     // compute current holdings from liquidity
-    (amount0Current, amount1Current) = LiquidityAmounts.getAmountsForLiquidity(
+    (amount0Current, amount1Current) = UniswapV3Library.getAmountsForLiquidity(
       sqrtRatioX96,
       lowerTick.getSqrtRatioAtTick(),
       upperTick.getSqrtRatioAtTick(),
-      liquidity
+      totalLiquidity
     );
 
-    // compute current fees earned
-    uint256 fee0 = _computeFeesEarned(true, feeGrowthInside0Last, tick, liquidity) + uint256(tokensOwed0);
-    uint256 fee1 = _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) + uint256(tokensOwed1);
+    (uint amount0CurrentFillup, uint amount1CurrentFillup) = UniswapV3Library.getAmountsForLiquidity(
+      sqrtRatioX96,
+      lowerTickFillup.getSqrtRatioAtTick(),
+      upperTickFillup.getSqrtRatioAtTick(),
+      totalLiquidityFillup
+    );
+
+    UniswapV3Library.PoolPosition memory position = UniswapV3Library.PoolPosition(address(pool), lowerTick, upperTick, totalLiquidity, address(this));
+    (uint fee0, uint fee1) = UniswapV3Library.getFees(position);
+    UniswapV3Library.PoolPosition memory positionFillup = UniswapV3Library.PoolPosition(address(pool), lowerTickFillup, upperTickFillup, totalLiquidityFillup, address(this));
+    (uint fee0Fillup, uint fee1Fillup) = UniswapV3Library.getFees(positionFillup);
 
     // add any leftover in contract to current holdings
-    amount0Current += fee0 + _balance(_depositorSwapTokens ? tokenB : tokenA);
-    amount1Current += fee1 + _balance(_depositorSwapTokens ? tokenA : tokenB);
+    amount0Current += amount0CurrentFillup + fee0 + fee0Fillup + _balance(_depositorSwapTokens ? tokenB : tokenA);
+    amount1Current += amount1CurrentFillup + fee1 + fee1Fillup + _balance(_depositorSwapTokens ? tokenA : tokenB);
   }
 
   function _getPositionID() internal view returns (bytes32 positionID) {
     return keccak256(abi.encodePacked(address(this), lowerTick, upperTick));
   }
 
-  function _computeFeesEarned(
-    bool isZero,
-    uint256 feeGrowthInsideLast,
-    int24 tick,
-    uint128 liquidity
-  ) internal view returns (uint256 fee) {
-    uint256 feeGrowthOutsideLower;
-    uint256 feeGrowthOutsideUpper;
-    uint256 feeGrowthGlobal;
-    if (isZero) {
-      feeGrowthGlobal = pool.feeGrowthGlobal0X128();
-      (,, feeGrowthOutsideLower,,,,,) = pool.ticks(lowerTick);
-      (,, feeGrowthOutsideUpper,,,,,) = pool.ticks(upperTick);
-    } else {
-      feeGrowthGlobal = pool.feeGrowthGlobal1X128();
-      (,,, feeGrowthOutsideLower,,,,) = pool.ticks(lowerTick);
-      (,,, feeGrowthOutsideUpper,,,,) = pool.ticks(upperTick);
-    }
-
-  unchecked {
-    // calculate fee growth below
-    uint256 feeGrowthBelow;
-    if (tick >= lowerTick) {
-      feeGrowthBelow = feeGrowthOutsideLower;
-    } else {
-      feeGrowthBelow = feeGrowthGlobal - feeGrowthOutsideLower;
-    }
-
-    // calculate fee growth above
-    uint256 feeGrowthAbove;
-    if (tick < upperTick) {
-      feeGrowthAbove = feeGrowthOutsideUpper;
-    } else {
-      feeGrowthAbove = feeGrowthGlobal - feeGrowthOutsideUpper;
-    }
-
-    uint256 feeGrowthInside =
-    feeGrowthGlobal - feeGrowthBelow - feeGrowthAbove;
-    fee = FullMath.mulDiv(
-      liquidity,
-      feeGrowthInside - feeGrowthInsideLast,
-      0x100000000000000000000000000000000
-    );
-  }
+  function _getPositionIDFillup() internal view returns (bytes32 positionID) {
+    return keccak256(abi.encodePacked(address(this), lowerTickFillup, upperTickFillup));
   }
 }

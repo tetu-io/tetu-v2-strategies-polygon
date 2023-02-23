@@ -7,10 +7,8 @@ import {
   ITetuConverter__factory
 } from "../../../typechain";
 import {
-  getAaveV2PlatformAdapter,
-  getAaveV3PlatformAdapter,
   getConverterAddress,
-  getDForcePlatformAdapter, getHFPlatformAdapter
+  getDForcePlatformAdapter, getHundredFinancePlatformAdapter
 } from "../../../scripts/utils/Misc";
 
 export class ConverterUtils {
@@ -28,6 +26,12 @@ export class ConverterUtils {
     console.log('disableDForce done.\n\n');
   }
 
+  public static async disableHf(signer: SignerWithAddress) {
+    console.log('disableHf...');
+    await this.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
+    console.log('disableHf done.\n\n');
+  }
+
   public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {
     console.log(`disable ${platformAdapter}`);
     const tools = Addresses.getTools();
@@ -41,7 +45,7 @@ export class ConverterUtils {
     console.log(`disable ${platformAdapter} done.\n\n`);
   }
 
-  public static async disableAaveV2(signer: SignerWithAddress) {
+/*  public static async disableAaveV2(signer: SignerWithAddress) {
     console.log('disableAaveV2...');
     const tools = Addresses.getTools();
     const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
@@ -65,18 +69,5 @@ export class ConverterUtils {
     const platformAdapterDForce = IPlatformAdapter__factory.connect(getAaveV3PlatformAdapter(), converterControllerGovernance);
     await platformAdapterDForce.setFrozen(true);
     console.log('disableAaveV3 done.\n\n');
-  }
-
-  public static async disableHf(signer: SignerWithAddress) {
-    console.log('disableHf...');
-    const tools = Addresses.getTools();
-    const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
-    const converterControllerAddr = await converter.controller();
-    const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
-    const converterControllerGovernanceAddr = await converterController.governance();
-    const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
-    const platformAdapterDForce = IPlatformAdapter__factory.connect(getHFPlatformAdapter(), converterControllerGovernance);
-    await platformAdapterDForce.setFrozen(true);
-    console.log('disableHf done.\n\n');
-  }
+  }*/
 }
