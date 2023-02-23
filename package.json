@@ -34,9 +34,7 @@
     "@nomiclabs/hardhat-ethers": "^2.2.1",
     "@nomiclabs/hardhat-etherscan": "^3.1.3",
     "@nomiclabs/hardhat-solhint": "^2.0.1",
-    "@nomiclabs/hardhat-waffle": "^2.0.3",
-    "@nomiclabs/hardhat-web3": "^2.0.0",
-    "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git#dev-dvpublic",
+    "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git#master",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.5",
     "@types/chai": "^4.3.4",
@@ -49,7 +47,6 @@
     "chai-as-promised": "^7.1.1",
     "csv-stringify": "^6.2.3",
     "dotenv": "^16.0.3",
-    "ethereum-waffle": "^3.4.4",
     "ethereumjs-tx": "^2.1.2",
     "ethers": "^5.7.2",
     "hardhat": "^2.12.4",
@@ -71,5 +68,10 @@
   },
   "engines": {
     "node": "^14.18.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.6",
+    "@nomiclabs/hardhat-web3": "^2.0.0",
+    "web3": "^1.8.2"
   }
 }

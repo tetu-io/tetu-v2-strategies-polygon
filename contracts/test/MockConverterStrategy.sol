@@ -38,23 +38,14 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
-  function getExpectedWithdrawnAmountUSDTestAccess(
-    address[] memory tokens_,
+  function getExpectedWithdrawnAmountsTestAcces(
+    uint[] memory reserves_,
     uint liquidityAmount_,
-    uint totalSupply_,
-    address priceOracle_
+    uint totalSupply_
   ) external view returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+    uint[] memory withdrawnAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
-      tokens_,
-      _depositorPoolReserves(),
-      asset,
-      liquidityAmount_,
-      totalSupply_,
-      IPriceOracle(priceOracle_)
-    );
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
   }
 
   function _updateBaseAmountsAccess(
@@ -92,10 +83,22 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _convertAfterWithdrawAll(tokens_, indexAsset_);
   }
 
-  function borrowPositionTestAccess(address collateralAsset, uint collateralAmount, address borrowAsset) external returns (
+  function openPositionTestAccess(
+    bytes memory entryData_,
+    address collateralAsset,
+    address borrowAsset,
+    uint collateralAmount
+  ) external returns (
+    uint collateralAmountOut,
     uint borrowedAmount
   ) {
-    return ConverterStrategyBaseLib.borrowPosition(tetuConverter, collateralAsset, collateralAmount, borrowAsset);
+    return ConverterStrategyBaseLib.openPosition(
+      tetuConverter,
+      entryData_,
+      collateralAsset,
+      borrowAsset,
+      collateralAmount
+    );
   }
 
   function closePositionTestAccess(address collateralAsset, address borrowAsset, uint amountToRepay) external returns (

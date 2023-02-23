@@ -15,8 +15,6 @@ import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
-//!! import "hardhat/console.sol";
-
 /// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Aave USD"
 /// @dev See https://app.balancer.fi/#/polygon/pool/0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
 ///            bb-am-DAI (DAI + amDAI) + bb-am-USDC (USDC + amUSDC) + bb-am-USDT (USDT + amUSDT)
@@ -92,7 +90,6 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   function _depositorLiquidity() override internal virtual view returns (uint liquidityOut) {
     liquidityOut = _gauge.balanceOf(address(this))
       + IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this));
-    //!! console.log("_depositorLiquidity: liquidityOut=gauge+depositor balance", liquidityOut, _gauge.balanceOf(address(this)), IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this)));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
@@ -157,21 +154,17 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     // we can have pool-BPTs on depositor's balance after previous exit, see BalancerLogicLib.depositorExit
     uint depositorBalance = pool.balanceOf(address(this));
     uint gaugeBalance = __gauge.balanceOf(address(this));
-    //!! console.log("_depositorExit.1 liquidityAmount_, gaugeBalance, depositorBalance", liquidityAmount_, gaugeBalance, depositorBalance);
 
     uint liquidityToWithdraw = liquidityAmount_ > depositorBalance
       ? liquidityAmount_ - depositorBalance
       : 0;
-    //!! console.log("_depositorExit.2 liquidityToWithdraw", liquidityToWithdraw);
 
     // calculate how much pool-BPTs we should withdraw from the gauge
     if (liquidityToWithdraw > 0) {
       if (liquidityToWithdraw > gaugeBalance) {
-        //!! console.log("_depositorExit.3 liquidityToWithdraw", liquidityToWithdraw);
         liquidityToWithdraw = gaugeBalance;
       }
     }
-    //!! console.log("_depositorExit.4 liquidityToWithdraw", liquidityToWithdraw);
 
     // un-stake required pool-BPTs from the gauge
     if (liquidityToWithdraw > 0) {
@@ -180,13 +173,10 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
 
     // withdraw the liquidity from the pool
     if (liquidityAmount_ >= depositorBalance + gaugeBalance) {
-      //!! console.log("_depositorExit.5 Full exit, liquidityAmount_", liquidityAmount_);
       amountsOut = BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId);
     } else {
-      //!! console.log("_depositorExit.6 Partial exit liquidityToWithdraw", liquidityToWithdraw);
       amountsOut = BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
     }
-    //!! console.log("_depositorExit.7 gaugeBalance, depositorBalance", __gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.

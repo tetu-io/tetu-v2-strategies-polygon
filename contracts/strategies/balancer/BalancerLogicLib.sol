@@ -527,6 +527,7 @@ library BalancerLogicLib {
       amountsOut[k] = assetDeltas[2 * k] < 0
         ? uint256(-assetDeltas[2 * k])
         : 0;
+
       ++k;
     }
   }  

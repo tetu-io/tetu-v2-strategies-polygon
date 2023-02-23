@@ -6,25 +6,30 @@ import "../../strategies/ConverterStrategyBaseLib.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
-  function getExpectedWithdrawnAmountUSD(
-    address[] memory poolAssets_,
+  function getExpectedWithdrawnAmounts(
     uint[] memory reserves_,
-    address asset_,
     uint liquidityAmount_,
-    uint totalSupply_,
-    IPriceOracle priceOracle_
+    uint totalSupply_
   ) external view returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+    uint[] memory withdrawnAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmountUSD(
-      poolAssets_,
-      reserves_,
-      asset_,
-      liquidityAmount_,
-      totalSupply_,
-      priceOracle_
-    );
+    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
+  }
+
+  mapping (address => uint) public baseAmounts;
+  function setBaseAmounts(address asset, uint amount) external {
+    baseAmounts[asset] = amount;
+  }
+
+  function getLiquidityAmountRatio(
+    uint targetAmount_,
+    address strategy_,
+    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory params_
+  ) external returns (
+    uint liquidityRatioOut,
+    uint[] memory amountsToConvertOut
+  ) {
+    return ConverterStrategyBaseLib.getLiquidityAmountRatio(targetAmount_, baseAmounts, strategy_, params_);
   }
 
   function getCollaterals(
@@ -45,17 +50,22 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function borrowPosition(
+  function openPosition(
     ITetuConverter tetuConverter_,
-    address collateralAsset,
-    uint collateralAmount,
-    address borrowAsset
-  ) external returns (uint borrowedAmountOut) {
-    return ConverterStrategyBaseLib.borrowPosition(
+    bytes memory entryData_,
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountIn_
+  ) external returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    return ConverterStrategyBaseLib.openPosition(
       tetuConverter_,
-      collateralAsset,
-      collateralAmount,
-      borrowAsset
+      entryData_,
+      collateralAsset_,
+      borrowAsset_,
+      amountIn_
     );
   }
 

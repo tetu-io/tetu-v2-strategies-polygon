@@ -9,11 +9,10 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/IConverterController.sol";
+import "../interfaces/converter/EntryKinds.sol";
 import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
-
-//import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -42,6 +41,38 @@ library ConverterStrategyBaseLib {
     uint[] rewardAmounts;
   }
 
+  /// @notice Input params for {getLiquidityAmountRatio}
+  /// @dev Workaround for stack too deep in {_withdrawUniversal}
+  struct LiquidityAmountRatioInputParams {
+    /// @notice Results of {_depositorPoolAssets}
+    address[] tokens;
+    /// @notice Index of the main asset in {tokens_}
+    uint indexAsset;
+    ITetuConverter tetuConverter;
+    /// @notice Total amount of invested assets of the strategy
+    uint investedAssets;
+  }
+
+  struct OpenPositionLocal {
+    uint entryKind;
+    address[] converters;
+    uint[] collateralsRequired;
+    uint[] amountsToBorrow;
+    uint collateral;
+    uint amountToBorrow;
+  }
+  struct OpenPositionEntryKind2Local {
+    address[] converters;
+    uint[] collateralsRequired;
+    uint[] amountsToBorrow;
+    uint collateral;
+    uint amountToBorrow;
+    uint c1;
+    uint c3;
+    uint ratio;
+    uint alpha;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                        Constants
   /////////////////////////////////////////////////////////////////////
@@ -52,31 +83,23 @@ library ConverterStrategyBaseLib {
   uint private constant COMPOUND_DENOMINATOR = 100_000;
 
   /////////////////////////////////////////////////////////////////////
-  ///                        Functions
+  ///                      View functions
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset_}
+  /// @notice Get amount of assets that we expect to receive after withdrawing
   ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
-  ///         investedAssetsUSD = reserve0 * ratio * price0 + reserve1 * ratio * price1 (+ set correct decimals)
-  ///         This function doesn't take into account swap/lending difference,
-  ///         so result {investedAssetsUSD} doesn't take into account possible collateral
-  ///         that can be returned after closing positions.
-  /// @param poolAssets_ Any number of assets, one of them should be {asset_}
   /// @param reserves_ Reserves of the {poolAssets_}, same order, same length (we don't check it)
+  ///                  The order of tokens should be same as in {_depositorPoolAssets()},
+  ///                  one of assets must be {asset_}
   /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
   /// @param totalSupply_ Total amount of LP tokens in the depositor
-  /// @return investedAssetsUSD Amount of USD that we expect to receive after withdrawing, decimals of {asset_}
-  /// @return assetPrice Price of {asset}, decimals 18
-  function getExpectedWithdrawnAmountUSD(
-    address[] memory poolAssets_,
+  /// @return withdrawnAmountsOut Expected withdrawn amounts (decimals == decimals of the tokens)
+  function getExpectedWithdrawnAmounts(
     uint[] memory reserves_,
-    address asset_,
     uint liquidityAmount_,
-    uint totalSupply_,
-    IPriceOracle priceOracle_
+    uint totalSupply_
   ) external view returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+    uint[] memory withdrawnAmountsOut
   ) {
     uint ratio = totalSupply_ == 0
       ? 0
@@ -85,24 +108,14 @@ library ConverterStrategyBaseLib {
         : 1e18 * liquidityAmount_ / totalSupply_
     ); // we need brackets here for npm.run.coverage
 
-    uint degreeTargetDecimals = 10**IERC20Metadata(asset_).decimals();
+    uint len = reserves_.length;
+    withdrawnAmountsOut = new uint[](len);
 
-    uint len = poolAssets_.length;
-    for (uint i = 0; i < len; ++i) {
-      uint price = priceOracle_.getAssetPrice(poolAssets_[i]);
-      require(price != 0, AppErrors.ZERO_PRICE);
-
-      if (asset_ == poolAssets_[i]) {
-        investedAssetsUSD += reserves_[i] * price / 1e18;
-        assetPrice = price;
-      } else {
-        investedAssetsUSD += reserves_[i] * price
-          * degreeTargetDecimals / 10**IERC20Metadata(poolAssets_[i]).decimals()
-          / 1e18;
+    if (ratio != 0) {
+      for (uint i = 0; i < len; ++i) {
+        withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
       }
     }
-
-    return (investedAssetsUSD * ratio / 1e18, assetPrice);
   }
 
   /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.
@@ -154,37 +167,299 @@ library ConverterStrategyBaseLib {
     }
   }
 
-  /// @notice Borrow max available amount of {borrowAsset} using {collateralAmount} of {collateralAsset} as collateral
-  function borrowPosition(
+  /// @notice Find index of the given {asset_} in array {tokens_}, return type(uint).max if not found
+  function getAssetIndex(address[] memory tokens_, address asset_) internal pure returns (uint) {
+    uint len = tokens_.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (tokens_[i] == asset_) {
+        return i;
+      }
+    }
+    return type(uint).max;
+  }
+
+  /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
+  function getAvailableBalances(
+    address[] memory tokens_,
+    uint indexAsset
+  ) external view returns (uint[] memory) {
+    uint len = tokens_.length;
+    uint[] memory amountsToConvert = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset) continue;
+      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this));
+    }
+    return amountsToConvert;
+  }
+
+  /// @notice Get a ratio to calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
+  ///               liquidityAmount = _depositorLiquidity() * {liquidityRatioOut} / 1e18
+  ///         User needs to withdraw {targetAmount_} in main asset.
+  ///         There are two kinds of available liquidity:
+  ///         1) liquidity in the pool - {depositorLiquidity_}
+  ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
+  ///         To withdraw {targetAmount_} we need
+  ///         1) Reconvert converted amounts back to main asset
+  ///         2) IF result amount is not necessary - extract withdraw some liquidity from the pool
+  ///            and also convert it to the main asset.
+  /// @dev This is a writable function with read-only behavior (because of the quote-call)
+  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy
+  ///                      0 - withdraw all
+  /// @param baseAmounts_ Available balances of the converted assets
+  /// @param strategy_ Address of the strategy
+  /// @param params_ To withdraw all set params_.investedAssets to zero
+  function getLiquidityAmountRatio(
+    uint targetAmount_,
+    mapping(address => uint) storage baseAmounts_,
+    address strategy_,
+    LiquidityAmountRatioInputParams memory params_
+  ) internal returns (
+    uint liquidityRatioOut,
+    uint[] memory amountsToConvertOut
+  ) {
+    bool all = targetAmount_ == 0;
+    uint investedAssets = params_.investedAssets;
+
+    uint len = params_.tokens.length;
+    amountsToConvertOut = new uint[](len);
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == params_.indexAsset) continue;
+
+      uint baseAmount = baseAmounts_[params_.tokens[i]];
+      if (baseAmount != 0) {
+        // let's estimate collateral that we received back after repaying baseAmount
+        uint expectedCollateral = params_.tetuConverter.quoteRepay(
+          strategy_,
+          params_.tokens[params_.indexAsset],
+          params_.tokens[i],
+          baseAmount
+        );
+
+        if (all || targetAmount_ != 0) {
+          // We always repay WHOLE available baseAmount event if it gives us much more amount then we need.
+          // We cannot repay a part of it because converter doesn't allow to know
+          // what amount should be repaid to get given amount of collateral.
+          // And it's too dangerous to assume that we can calculate this amount
+          // but reducing baseAmount proportionally to expectedCollateral/targetAmount_
+          amountsToConvertOut[i] = baseAmount;
+        }
+
+        if (targetAmount_ > expectedCollateral) {
+          targetAmount_ -= expectedCollateral;
+        } else {
+          targetAmount_ = 0;
+        }
+
+        if (investedAssets > expectedCollateral) {
+          investedAssets -= expectedCollateral;
+        } else {
+          investedAssets = 0;
+        }
+      }
+    }
+
+    require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
+
+    liquidityRatioOut = all
+      ? 1e18
+      : targetAmount_ == 0
+        ? 0
+        : 1e18
+          * 101 // add 1% on top...
+          * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
+          / 100; // .. add 1% on top
+  }
+
+  function getPrices(
+    address[] memory tokens_,
+    IPriceOracle priceOracle_
+  ) internal view returns (uint[] memory pricesOut){
+    uint len = tokens_.length;
+    pricesOut = new uint[](len);
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      pricesOut[i] = priceOracle_.getAssetPrice(tokens_[i]);
+      require(pricesOut[i] != 0, AppErrors.ZERO_PRICE);
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                   Borrow and close positions
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Make one or several borrow necessary to supply/borrow required {amountIn_} according to {entryData_}
+  ///         Max possible collateral should be approved before calling of this function.
+  /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
+  ///                   See TetuConverter\EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
+  ///                   0 or empty: Amount of collateral {amountIn_} is fixed, amount of borrow should be max possible.
+  /// @param amountIn_ Meaning depends on {entryData_}.
+  function openPosition(
     ITetuConverter tetuConverter_,
+    bytes memory entryData_,
     address collateralAsset_,
-    uint collateralAmount_,
-    address borrowAsset_
-  ) internal returns (uint borrowedAmountOut) {
-    AppLib.approveIfNeeded(collateralAsset_, collateralAmount_, address(tetuConverter_));
-    (address converter, uint maxTargetAmount, /*int apr18*/) = tetuConverter_.findBorrowStrategy(
+    address borrowAsset_,
+    uint amountIn_
+  ) internal returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    OpenPositionLocal memory vars;
+    // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
+    vars.entryKind = EntryKinds.getEntryKind(entryData_);
+    if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_PROPORTION_1) {
+      return openPositionEntryKind2(
+        tetuConverter_,
+        entryData_,
+        collateralAsset_,
+        borrowAsset_,
+        amountIn_
+      );
+    } else {
+      (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
+        entryData_,
+        collateralAsset_,
+        amountIn_,
+        borrowAsset_,
+        _LOAN_PERIOD_IN_BLOCKS
+      );
+
+      uint len = vars.converters.length;
+      if (len > 0) {
+        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+          // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
+          vars.collateral;
+          vars.amountToBorrow;
+          if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_COLLATERAL_IN_FOR_MAX_BORROW_OUT_0) {
+            // we have exact amount of total collateral amount
+            // Case ENTRY_KIND_EXACT_PROPORTION_1 is here too because we consider first platform only
+            vars.collateral = amountIn_ < vars.collateralsRequired[i]
+              ? amountIn_
+              : vars.collateralsRequired[i];
+            vars.amountToBorrow = amountIn_ < vars.collateralsRequired[i]
+              ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
+              : vars.amountsToBorrow[i];
+            amountIn_ -= vars.collateral;
+          } else {
+            // assume here that entryKind == EntryKinds.ENTRY_KIND_EXACT_BORROW_OUT_FOR_MIN_COLLATERAL_IN_2
+            // we have exact amount of total amount-to-borrow
+            vars.amountToBorrow = amountIn_ < vars.amountsToBorrow[i]
+              ? amountIn_
+              : vars.amountsToBorrow[i];
+            vars.collateral = amountIn_ < vars.amountsToBorrow[i]
+              ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
+              : vars.collateralsRequired[i];
+            amountIn_ -= vars.amountToBorrow;
+          }
+
+          if (vars.amountToBorrow != 0) {
+            borrowedAmountOut += tetuConverter_.borrow(
+              vars.converters[i],
+              collateralAsset_,
+              vars.collateral,
+              borrowAsset_,
+              vars.amountToBorrow,
+              address(this)
+            );
+            collateralAmountOut += vars.collateral;
+          }
+
+          if (amountIn_ == 0) break;
+        }
+      }
+
+      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
+      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
+      return (collateralAmountOut, borrowedAmountOut);
+    }
+  }
+
+  function openPositionEntryKind2(
+    ITetuConverter tetuConverter_,
+    bytes memory entryData_,
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountIn_
+  ) internal returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    OpenPositionEntryKind2Local memory vars;
+    (vars.converters, vars.collateralsRequired, vars.amountsToBorrow, ) = tetuConverter_.findBorrowStrategies(
+      entryData_,
       collateralAsset_,
-      collateralAmount_,
+      amountIn_,
       borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
 
-    if (converter == address(0) || maxTargetAmount == 0) {
-      borrowedAmountOut = 0;
-    } else {
-      // we need to approve collateralAmount before the borrow-call but we already made the approval above
-      borrowedAmountOut = tetuConverter_.borrow(
-        converter,
-        collateralAsset_,
-        collateralAmount_,
-        borrowAsset_,
-        maxTargetAmount,
-        address(this)
-      );
-    }
+    collateralAmountOut = 0; // hide warning
+    borrowedAmountOut = 0; // hide warning
 
-    //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
-    //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
+
+    uint len = vars.converters.length;
+    if (len > 0) {
+      // we should split amountIn on two amounts with proportions x:y
+      (, uint x, uint y) = abi.decode(entryData_, (uint, uint, uint));
+      // calculate prices conversion ratio using price oracle, decimals 18
+      // i.e. alpha = 1e18 * 75e6 usdc / 25e18 matic = 3e6 usdc/matic
+      vars.alpha = _getCollateralToBorrowRatio(tetuConverter_, collateralAsset_, borrowAsset_);
+
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        // the lending platform allows to convert {collateralsRequired[i]} to {amountsToBorrow[i]}
+        // and give us required proportions in result
+        // C = C1 + C2, C2 => B2, B2 * alpha = C3, C1/C3 must be equal to x/y
+        // but if lending platform doesn't have enough liquidity
+        // it reduces {collateralsRequired[i]} and {amountsToBorrow[i]} proportionally to fit the limits
+        // as result, remaining C1 will be too big after conversion and we need to make another borrow
+        vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
+        vars.c1 = x * vars.c3 / y;
+        vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
+          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
+          : 1e18;
+        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
+        vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
+
+        require(
+          tetuConverter_.borrow(
+            vars.converters[i],
+            collateralAsset_,
+            vars.collateral,
+            borrowAsset_,
+            vars.amountToBorrow,
+            address(this)
+          ) == vars.amountToBorrow,
+          AppErrors.WRONG_VALUE
+        );
+
+        borrowedAmountOut += vars.amountToBorrow;
+        collateralAmountOut += vars.collateral;
+
+        vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
+        vars.c1 = x * vars.c3 / y;
+
+        if (amountIn_ > vars.c1 + vars.collateral) {
+          amountIn_ -= (vars.c1 + vars.collateral);
+        } else {
+          break;
+        }
+      }
+
+      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
+      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
+      return (collateralAmountOut, borrowedAmountOut);
+    }
+  }
+
+  /// @notice Get ratio18 = collateral / borrow
+  function _getCollateralToBorrowRatio(
+    ITetuConverter tetuConverter_,
+    address collateralAsset_,
+    address borrowAsset_
+  ) internal view returns (uint){
+    IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle());
+    uint priceCollateral = priceOracle.getAssetPrice(collateralAsset_);
+    uint priceBorrow = priceOracle.getAssetPrice(borrowAsset_);
+    return 1e18 * priceBorrow * 10**IERC20Metadata(collateralAsset_).decimals()
+                / priceCollateral / 10**IERC20Metadata(borrowAsset_).decimals();
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -232,6 +507,10 @@ library ConverterStrategyBaseLib {
     require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ///                         Liquidation
+  /////////////////////////////////////////////////////////////////////
+
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
@@ -277,30 +556,10 @@ library ConverterStrategyBaseLib {
     return (spentAmountIn, receivedAmountOut);
   }
 
-  /// @notice Find index of the given {asset_} in array {tokens_}, return type(uint).max if not found
-  function getAssetIndex(address[] memory tokens_, address asset_) internal pure returns (uint) {
-    uint len = tokens_.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (tokens_[i] == asset_) {
-        return i;
-      }
-    }
-    return type(uint).max;
-  }
 
-  /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
-  function getAvailableBalances(
-    address[] memory tokens_,
-    uint indexAsset
-  ) external view returns (uint[] memory) {
-    uint len = tokens_.length;
-    uint[] memory amountsToConvert = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) continue;
-      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this));
-    }
-    return amountsToConvert;
-  }
+  /////////////////////////////////////////////////////////////////////
+  ///                      Recycle rewards
+  /////////////////////////////////////////////////////////////////////
 
   /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
   /// We have two kinds of rewards:
@@ -385,7 +644,6 @@ library ConverterStrategyBaseLib {
             // amount is too small, liquidation is not allowed
             receivedAmounts[i] += p.amountToCompound;
           } else {
-
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
             // because the {_asset} is always included to the list of depositor's assets

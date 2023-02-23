@@ -134,7 +134,14 @@ async function universalStrategyTest(
         vault,
         strategy,
         params.balanceTolerance,
-      ).start(userBalance, params.loops, params.loopValue, params.advanceBlocks, params.hwParams, stateRegistrar);
+      ).start(
+        userBalance,
+        params.loops,
+        params.loopValue,
+        params.advanceBlocks,
+        params.hwParams,
+        stateRegistrar
+      );
     });
 
     it("common test should be ok", async () => {
