@@ -3,7 +3,6 @@ import chaiAsPromised from "chai-as-promised";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {IState, UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
