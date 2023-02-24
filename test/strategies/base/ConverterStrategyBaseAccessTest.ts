@@ -711,6 +711,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
       swappedLeftoverBorrowOut?: BigNumber[];
       priceOut?: BigNumber[];
       initialStrategyBalances?: BigNumber[];
+      isConversionValid?: boolean;
     }
     async function makeConvertAfterWithdrawTest(
       amountsToConvert: BigNumber[],
@@ -774,6 +775,16 @@ describe("ConverterStrategyBaseAccessTest", () => {
             params.priceOut[i]
           );
           await usdc.mint(liquidator.address, params.priceOut[i]);
+
+          await tetuConverter.setIsConversionValid(
+            depositorTokens[i].address,
+            amountsToConvert[i].sub(debts[i]),
+            usdc.address,
+            params.priceOut[i],
+            params.isConversionValid === undefined
+              ? true
+              : params.isConversionValid
+          );
         }
       }
 
@@ -962,7 +973,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
                   parseUnits("717", 6),
                   parseUnits("0", 6),
                   parseUnits("999", 6),
-                ]
+                ],
+                isConversionValid: false
               }
             )
           ).revertedWith("TS-16 price impact"); // PRICE_IMPACT
@@ -1011,6 +1023,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
       swappedLeftoverCollateralOut?: BigNumber[];
       swappedLeftoverBorrowOut?: BigNumber[];
       priceOut?: BigNumber[];
+      isConversionValid?: boolean;
     }
     async function makeConvertAfterWithdrawTest(
       strategyBalances: BigNumber[],
@@ -1071,6 +1084,16 @@ describe("ConverterStrategyBaseAccessTest", () => {
             params.priceOut[i]
           );
           await usdc.mint(liquidator.address, params.priceOut[i]);
+
+          await tetuConverter.setIsConversionValid(
+            depositorTokens[i].address,
+            strategyBalances[i].sub(debts[i]),
+            usdc.address,
+            params.priceOut[i],
+            params.isConversionValid === undefined
+              ? true
+              : params.isConversionValid
+          );
         }
       }
 

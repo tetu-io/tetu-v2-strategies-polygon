@@ -71,6 +71,10 @@ describe('ConverterStrategyBaseInternalTests', function() {
 //endregion before, after
 
 //region Utils
+  interface ISetupMockedStrategyResults {
+    strategy: MockConverterStrategy;
+    depositorReserves: BigNumber[];
+  }
   /**
    * Set up a vault for the given asset.
    * Set up a strategy with given set of the tokens and given values of the resources.
@@ -81,7 +85,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
     depositorTokens: MockToken[],
     depositorReservesNum: number[],
     tetuConverterAddress?: string
-  ) : Promise<MockConverterStrategy> {
+  ) : Promise<ISetupMockedStrategyResults> {
     // create a vault
     const vault = await DeployerUtils.deployTetuVaultV2(
       signer,
@@ -117,106 +121,9 @@ describe('ConverterStrategyBaseInternalTests', function() {
     );
 
     await splitterNotInitialized.addStrategies([strategy.address], [0]);
-    return strategy;
+    return {strategy, depositorReserves};
   }
 //endregion Utils
-
-  describe("_borrowPosition", () => {
-    describe("Good paths", () => {
-      it("should return expected value", async () => {
-        const tetuConverter = await MockHelper.createMockTetuConverter(signer);
-        const strategy = await setupMockedStrategy(
-          usdc,
-          [usdc, dai],
-          [100_000, 200_000],
-          tetuConverter.address
-        );
-        const collateralAmount = parseUnits("1000", 6);
-        const borrowAmount = parseUnits("500", 18);
-        const converter = ethers.Wallet.createRandom().address;
-        const user = ethers.Wallet.createRandom().address;
-
-        // prepare tetu converter mock
-        await tetuConverter.setFindBorrowStrategyOutputParams(
-          converter,
-          borrowAmount,
-          0, // apr is not used
-          usdc.address,
-          collateralAmount,
-          dai.address,
-          1 // we can use any period for mock
-        );
-        await tetuConverter.setBorrowParams(
-          converter,
-          usdc.address,
-          collateralAmount,
-          dai.address,
-          borrowAmount,
-          user,
-          borrowAmount
-        );
-        // put collateral on the balance of the strategy
-        await usdc.transfer(strategy.address, collateralAmount);
-        // provide the amount to be borrowed by the strategy
-        await dai.transfer(tetuConverter.address, borrowAmount);
-
-        const balanceUsdcBefore = await usdc.balanceOf(strategy.address);
-        const balanceDaiBefore = await dai.balanceOf(strategy.address);
-        const ret = await strategy.callStatic.borrowPositionTestAccess(usdc.address, collateralAmount, dai.address);
-        await strategy.borrowPositionTestAccess(usdc.address, collateralAmount, dai.address);
-        const balanceUsdcAfter = await usdc.balanceOf(strategy.address);
-        const balanceDaiAfter = await dai.balanceOf(strategy.address);
-
-        const sret = [
-          // should return expected value
-          ret.toString(),
-
-          // should receive expected amount on balance
-          balanceUsdcBefore.sub(balanceUsdcAfter).toString(),
-          balanceDaiAfter.sub(balanceDaiBefore).toString(),
-        ].join();
-        const sexpected = [
-          borrowAmount.toString(),
-          collateralAmount.toString(),
-          borrowAmount.toString()
-        ].join();
-
-        expect(sret).eq(sexpected);
-      });
-      it("should receive expected debt in tetuConverter", async () => {
-// TODO
-      });
-    });
-    describe("Bad paths", () => {
-      it("should return 0 if a borrow strategy is not found", async () => {
-        const tetuConverter = await MockHelper.createMockTetuConverter(signer);
-        const strategy = await setupMockedStrategy(
-          usdc,
-          [usdc, dai],
-          [100_000, 200_000],
-          tetuConverter.address
-        );
-        const collateralAmount = parseUnits("1000", 6);
-
-        // prepare tetu converter mock
-        await tetuConverter.setFindBorrowStrategyOutputParams(
-          Misc.ZERO_ADDRESS, // (!) the borrow strategy not found
-          0,
-          0, // apr is not used
-          usdc.address,
-          collateralAmount,
-          dai.address,
-          1 // we can use any period for mock
-        );
-        // put collateral on the balance of the strategy
-        await usdc.transfer(strategy.address, collateralAmount);
-
-        const ret = await strategy.callStatic.borrowPositionTestAccess(usdc.address, collateralAmount, dai.address);
-
-        expect(ret.toString()).eq("0");
-      });
-    });
-  });
 
   describe("_closePosition", () => {
     describe("Good paths", () => {
@@ -242,12 +149,12 @@ describe('ConverterStrategyBaseInternalTests', function() {
         params: IMakeClosePositionTestInputParams
       ) : Promise<IMakeClosePositionTestResults> {
         const tetuConverter = await MockHelper.createMockTetuConverter(signer);
-        const strategy = await setupMockedStrategy(
+        const strategy = (await setupMockedStrategy(
           collateralAsset,
           [collateralAsset, borrowAsset],
           [100_000, 200_000],
           tetuConverter.address
-        );
+        )).strategy;
         const collateralAmount = parseUnits(params.collateralAmountNum.toString(), await collateralAsset.decimals());
 
         const borrowAssetDecimals = await borrowAsset.decimals();
@@ -322,7 +229,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
         await strategy.closePositionTestAccess(collateralAsset.address, borrowAsset.address, amountToRepay);
 
         return {
-          retRepay,
+          retRepay: retRepay.returnedAssetAmount,
           balanceBorrowAssetStrategyBefore,
           balanceCollateralStrategyBefore,
           balanceBorrowAssetStrategyAfter: await borrowAsset.balanceOf(strategy.address),
@@ -362,7 +269,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
           });
         });
         describe("amountToRepay > needToRepay", () => {
-          it("should swap (amountToRepay-needToRepay) and return expected collateral value", async () => {
+          it("should reqpay only needToRepay amount and leave leftovers for swap", async () => {
             const collateralAmountNum = 2000;
             const borrowedAmountNum = 1000;
             const delta = 100;
@@ -387,10 +294,10 @@ describe('ConverterStrategyBaseInternalTests', function() {
               r.balanceCollateralStrategyAfter.sub(r.balanceCollateralStrategyBefore).toString()
             ].join("\n");
             const sexpected = [
-              parseUnits((collateralAmountNum + deltaPriceOut).toString(), await usdc.decimals()),
+              parseUnits((collateralAmountNum).toString(), await usdc.decimals()),
 
-              parseUnits(borrowedAmountNum.toString(), await dai.decimals()),
-              parseUnits((collateralAmountNum + deltaPriceOut).toString(), await usdc.decimals()),
+              parseUnits((borrowedAmountNum - delta).toString(), await dai.decimals()),
+              parseUnits((collateralAmountNum).toString(), await usdc.decimals()),
             ].join("\n");
 
             expect(sret).eq(sexpected);
@@ -422,223 +329,6 @@ describe('ConverterStrategyBaseInternalTests', function() {
     });
   });
 
-  describe("_withdrawFromPoolXXX - check investedAssetsUSD and assetPrice", () => {
-    interface IMakeWithdrawTestInputParams {
-      collateralAmountNum: number;
-      amountToRepayNum: number;
-      needToRepayNum: number;
-      amountRepaidNum: number;
-      depositorLiquidity: BigNumber;
-      totalSupply: BigNumber;
-      investedAssetNum: number;
-      amountToWithdrawNum: number | undefined; // use undefined to withdraw all
-      collateralDepositorAmountOutNum: number;
-      borrowAssetDepositorAmountOutNum: number;
-    }
-    interface IMakeWithdrawTestResults {
-      ret: {
-        investedAssetsUSD: BigNumber;
-        assetPrice: BigNumber;
-      },
-      expected: {
-        investedAssetsUSD: BigNumber;
-        assetPrice: BigNumber;
-      },
-      depositorLiquidity: BigNumber;
-      investedAssets: BigNumber;
-      amountToWithdraw: BigNumber | undefined;
-    }
-    async function makeWithdrawTest(
-      collateralAsset: MockToken,
-      borrowAsset: MockToken,
-      params: IMakeWithdrawTestInputParams
-    ) : Promise<IMakeWithdrawTestResults>{
-      const tetuConverter = await MockHelper.createMockTetuConverter(signer);
-      const strategy = await setupMockedStrategy(
-        collateralAsset,
-        [collateralAsset, borrowAsset],
-        [100_000, 200_000],
-        tetuConverter.address
-      );
-      const collateralAmount = parseUnits(params.collateralAmountNum.toString(), await collateralAsset.decimals());
-
-      const collateralAssetDecimals = await collateralAsset.decimals();
-      const borrowAssetDecimals = await borrowAsset.decimals();
-
-      const amountToRepay = parseUnits(params.amountToRepayNum.toString(), borrowAssetDecimals);
-      const needToRepay = parseUnits(params.needToRepayNum.toString(), borrowAssetDecimals);
-      const amountRepaid = parseUnits(params.amountRepaidNum.toString(), borrowAssetDecimals);
-      console.log("makeClosePositionTest.amountToRepay", amountToRepay);
-      console.log("makeClosePositionTest.needToRepay", needToRepay);
-      console.log("makeClosePositionTest.amountRepaid", amountRepaid);
-
-      await strategy.setDepositorLiquidity(params.depositorLiquidity);
-      await strategy.setTotalSupply(params.totalSupply);
-
-      const priceOracle = (await DeployerUtils.deployContract(
-        signer,
-        'PriceOracleMock',
-        [usdc.address, dai.address],
-        [parseUnits("1", 18), parseUnits("1", 18)]
-      )) as PriceOracleMock;
-      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
-      await tetuConverter.setController(tetuConverterController.address);
-
-      const amountToWithdraw = params.amountToWithdrawNum
-        ? parseUnits(params.amountToWithdrawNum.toString(), await collateralAsset.decimals())
-        : undefined;
-
-      // Prepare balances
-      // put collateral on the balance of the tetuConverter
-      await collateralAsset.transfer(tetuConverter.address, collateralAmount);
-      // put borrowed amount to the balance of the strategy
-      await borrowAsset.transfer(strategy.address, amountToRepay);
-
-      // set _investedAssets to predefined value
-      const depositorAmountsOut = [
-        parseUnits(params.collateralDepositorAmountOutNum.toString(), collateralAssetDecimals),
-        parseUnits(params.borrowAssetDepositorAmountOutNum.toString(), borrowAssetDecimals),
-      ];
-      await strategy.setDepositorQuoteExit(params.depositorLiquidity, depositorAmountsOut);
-
-      const expectedInvestedAssets = parseUnits(
-        (params.collateralDepositorAmountOutNum + params.investedAssetNum).toString(),
-        collateralAssetDecimals
-      );
-      const expectedLiquidityAmount = amountToWithdraw
-        ? params.depositorLiquidity
-          .mul(101)
-          .mul(amountToWithdraw)
-          .div(expectedInvestedAssets)
-          .div(100)
-        : params.depositorLiquidity;
-
-      await strategy.setDepositorExit(expectedLiquidityAmount, depositorAmountsOut);
-      await tetuConverter.setQuoteRepay(
-        strategy.address,
-        collateralAsset.address,
-        borrowAsset.address,
-        amountToRepay.add(depositorAmountsOut[1]),
-        parseUnits(params.investedAssetNum.toString(), await collateralAsset.decimals())
-      );
-      await strategy.updateInvestedAssetsTestAccess(); // tetuConverter.quoteRepay is called internally
-
-      // we need a liquidator to avoid revert
-      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      await controller.setLiquidator(liquidator.address);
-      await liquidator.setBuildRoute(
-        borrowAsset.address,
-        collateralAsset.address,
-        ethers.Wallet.createRandom().address,
-        ethers.Wallet.createRandom().address,
-        ""
-      );
-
-      // make test
-      const depositorLiquidity = await strategy.depositorLiquidityTestAccess();
-      const investedAssets = await strategy.investedAssets();
-
-
-      const liquidityAmount = amountToWithdraw
-        ? depositorLiquidity
-          .mul(101)
-          .mul(amountToWithdraw)
-          .div(investedAssets)
-          .div(100)
-        : depositorLiquidity;
-      const ret = amountToWithdraw
-        ? await strategy.callStatic.withdrawFromPoolTestAccess(amountToWithdraw)
-        : await strategy.callStatic._withdrawAllFromPoolTestAccess();
-
-      // expected liquidity amount, see _withdrawFromPool implementation
-      const expected = await strategy.getExpectedWithdrawnAmountUSDTestAccess(
-        liquidityAmount,
-        params.totalSupply,
-        priceOracle.address
-      );
-
-      return {
-        ret,
-        expected,
-        depositorLiquidity,
-        investedAssets,
-        amountToWithdraw,
-      }
-    }
-    describe("Good paths", () => {
-      describe("_withdrawFromPool", () => {
-        it("should calculate liquidityAmount in expected way", async () => {
-          const r = await makeWithdrawTest(
-            usdc,
-            dai,
-            {
-              collateralAmountNum: 1000,
-              amountToWithdrawNum: 500,
-              investedAssetNum: 10_000,
-
-              depositorLiquidity: parseUnits("8000", 6),
-              totalSupply: parseUnits("20000", 6),
-
-              amountToRepayNum: 900,
-              amountRepaidNum: 900,
-              needToRepayNum: 900,
-
-              collateralDepositorAmountOutNum: 1999,
-              borrowAssetDepositorAmountOutNum: 173
-            }
-          );
-          console.log(r);
-          const sret = [
-            r.ret.assetPrice.toString(),
-            r.ret.investedAssetsUSD.toString()
-          ].join();
-          const sexpected = [
-            r.expected.assetPrice.toString(),
-            r.expected.investedAssetsUSD.toString()
-          ].join();
-          expect(sret).eq(sexpected);
-        });
-      });
-      describe("_withdrawAllFromPool", () => {
-        it("should use liquidityAmount equal to _depositorLiquidity()", async () => {
-          const r = await makeWithdrawTest(
-            usdc,
-            dai,
-            {
-              collateralAmountNum: 1000,
-              amountToWithdrawNum: undefined,
-              investedAssetNum: 10_000,
-
-              depositorLiquidity: parseUnits("8000", 6),
-              totalSupply: parseUnits("20000", 6),
-
-              amountToRepayNum: 900,
-              amountRepaidNum: 900,
-              needToRepayNum: 900,
-
-              collateralDepositorAmountOutNum: 1999,
-              borrowAssetDepositorAmountOutNum: 173
-
-            }
-          );
-          console.log(r);
-          const sret = [
-            r.ret.assetPrice.toString(),
-            r.ret.investedAssetsUSD.toString()
-          ].join();
-          const sexpected = [
-            r.expected.assetPrice.toString(),
-            r.expected.investedAssetsUSD.toString()
-          ].join();
-          expect(sret).eq(sexpected);
-        });
-      });
-    });
-    describe("Bad paths", () => {
-      // amount == 0
-    });
-  });
-
   describe("calcInvestedAssets", () => {
     interface IMakeCalcInvestedAssetsInputParams {
       amountCollateralOnStrategyBalanceNum: number;
@@ -657,12 +347,12 @@ describe('ConverterStrategyBaseInternalTests', function() {
       params: IMakeCalcInvestedAssetsInputParams
     ) : Promise<IMakeCalcInvestedAssetsTestResults> {
       const tetuConverter = await MockHelper.createMockTetuConverter(signer);
-      const strategy = await setupMockedStrategy(
+      const strategy = (await setupMockedStrategy(
         collateralAsset,
         [collateralAsset, borrowAsset],
         [100_000, 200_000],
         tetuConverter.address
-      );
+      )).strategy;
 
       const collateralDecimals = await collateralAsset.decimals();
       const borrowDecimals = await borrowAsset.decimals();
@@ -719,17 +409,4 @@ describe('ConverterStrategyBaseInternalTests', function() {
      });
     });
   });
-
-  // describe("_convertDepositorPoolAssets", () => {
-  //   describe("Good paths", () => {
-  //     describe("amountToRepay <= needToRepay", () => {
-  //       it("should call _closePosition() for borrowed token", async () => {
-  //
-  //       });
-  //       it("should updated _investedAssets", async () => {
-  //
-  //       });
-  //     });
-  //   });
-  // });
 });

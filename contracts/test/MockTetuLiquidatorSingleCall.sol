@@ -183,7 +183,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     tokenIn;
     tokenOut;
     amount;
-    revert("not implemented");
+    revert("get Price is not implemented");
   }
 
   ///////////////////////////////////////////////////
@@ -199,7 +199,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     tokenOut;
     slippage;
     IERC20(tokenOut).transfer(msg.sender, amount);
-    revert("not implemented");
+    revert("liquidate is not implemented");
   }
 
   ///////////////////////////////////////////////////
@@ -208,7 +208,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   function isRouteExist(address tokenIn, address tokenOut) external pure override returns (bool) {
     tokenIn;
     tokenOut;
-    revert("not implemented");
+    revert("isRouteExist is not implemented");
   }
 
   ///////////////////////////////////////////////////
@@ -216,7 +216,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   ///////////////////////////////////////////////////
   function addLargestPools(PoolData[] memory /*_pools*/, bool /*rewrite*/) external pure {
     // noop
-    revert("not implemented");
+    revert("addLargestPools is not implemented");
   }
 
   ///////////////////////////////////////////////////
@@ -224,7 +224,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   ///////////////////////////////////////////////////
   function addBlueChipsPools(PoolData[] memory /*_pools*/, bool /*rewrite*/) external pure {
     // noop
-    revert("not implemented");
+    revert("addBlueChipsPools is not implemented");
   }
 
 }

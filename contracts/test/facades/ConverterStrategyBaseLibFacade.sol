@@ -110,4 +110,11 @@ contract ConverterStrategyBaseLibFacade {
   function getAssetIndex(address[] memory tokens_, address asset_) external pure returns (uint) {
     return ConverterStrategyBaseLib.getAssetIndex(tokens_, asset_);
   }
+
+  function getAvailableBalances(
+    address[] memory tokens_,
+    uint indexAsset
+  ) external view returns (uint[] memory) {
+    return ConverterStrategyBaseLib.getAvailableBalances(tokens_, indexAsset);
+  }
 }

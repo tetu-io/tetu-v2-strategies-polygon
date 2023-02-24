@@ -39,4 +39,7 @@ library AppErrors {
   string public constant NO_LIQUIDATION_ROUTE = "TS-15 No liquidation route";
 
   string public constant PRICE_IMPACT = "TS-16 price impact";
+
+  /// @notice tetuConverter_.repay makes swap internally. It's not efficient and not allowed
+  string public constant REPAY_MAKES_SWAP = "TS-17 can not convert back";
 }

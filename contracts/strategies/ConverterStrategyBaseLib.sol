@@ -550,7 +550,7 @@ library ConverterStrategyBaseLib {
       ? balanceBefore - balanceAfter
       : 0;
 
-    require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
+    require(returnedBorrowAmountOut == 0, AppErrors.REPAY_MAKES_SWAP);
   }
 
   /////////////////////////////////////////////////////////////////////

@@ -38,7 +38,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
-  function getExpectedWithdrawnAmountsTestAcces(
+  function getExpectedWithdrawnAmountsTestAccess(
     uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_

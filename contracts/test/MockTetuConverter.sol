@@ -554,7 +554,7 @@ contract MockTetuConverter is ITetuConverter {
     borrowAsset_;
     borrowAssetAmount;
     unobtainableCollateralAssetAmount;
-    revert ("not implemented");
+    revert ("estimateRepay is not implemented");
   }
 
   //////////////////////////////////////////////////////////
@@ -605,21 +605,52 @@ contract MockTetuConverter is ITetuConverter {
     priceImpactToleranceSource_;
     priceImpactToleranceTarget_;
     amountOut;
-    revert("not implemented");
+    revert("safeLiquidate is not implemented");
   }
 
+  struct IsConversionValidParams {
+    address assetIn;
+    uint amountIn;
+    address assetOut;
+    uint amountOut;
+    bool result;
+  }
+  /// @notice keccak256(assetIn_, amountIn_, assetOut_, amountOut_) => results
+  mapping(bytes32 => IsConversionValidParams) public isConversionValidParams;
   function isConversionValid(
     address assetIn_,
     uint amountIn_,
     address assetOut_,
     uint amountOut_,
     uint priceImpactTolerance_
-  ) external pure returns (bool) {
-    assetIn_;
-    amountIn_;
-    assetOut_;
-    amountOut_;
+  ) external view returns (bool) {
+    bytes32 key = keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_, amountOut_));
     priceImpactTolerance_;
-    revert("not implemented");
+    IsConversionValidParams memory p = isConversionValidParams[key];
+    if (p.assetIn == assetIn_) {
+      return p.result;
+    } else {
+      console.log("isConversionValid assetIn", assetIn_, amountIn_);
+      console.log("isConversionValid assetOut", assetOut_, amountOut_);
+      revert("isConversionValid is missed");
+    }
+  }
+  function setIsConversionValid(
+    address assetIn_,
+    uint amountIn_,
+    address assetOut_,
+    uint amountOut_,
+    bool result_
+  ) external {
+    console.log("setIsConversionValid assetIn", assetIn_, amountIn_);
+    console.log("setIsConversionValid assetOut", assetOut_, amountOut_);
+    bytes32 key = keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_, amountOut_));
+    isConversionValidParams[key] = IsConversionValidParams({
+      assetIn: assetIn_,
+      amountIn: amountIn_,
+      assetOut: assetOut_,
+      amountOut: amountOut_,
+      result: result_
+    });
   }
 }

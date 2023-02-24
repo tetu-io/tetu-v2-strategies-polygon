@@ -1466,5 +1466,29 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
     });
   });
+
+  describe("getAvailableBalances", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+        const assets = [dai, tetu, usdc, usdt];
+        const balances: BigNumber[] = [];
+        for (let i = 0; i < assets.length; ++i) {
+          balances.push(parseUnits((i + 1).toString(), await assets[i].decimals()));
+          await assets[i].mint(facade.address, balances[i]);
+        }
+
+        const r: BigNumber[] = await facade.getAvailableBalances(assets.map(x => x.address), 2);
+        const ret = r.map(x => BalanceUtils.toString(x)).join();
+        const expected = [
+          parseUnits("1", await dai.decimals()),
+          parseUnits("2", await tetu.decimals()),
+          0, // balance is not calculated for the main asset
+          parseUnits("4", await usdt.decimals()),
+        ].map(x => BalanceUtils.toString(x)).join();
+
+        expect(ret).eq(expected);
+      });
+    });
+  });
 //endregion Unit tests
 });
