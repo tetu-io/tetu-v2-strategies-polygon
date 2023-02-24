@@ -246,7 +246,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    require(_investedAssets != 0, "CSB: no investments");
+    require(_investedAssets != 0, AppErrors.NO_INVESTMENTS);
     return _withdrawUniversal(amount, false);
   }
 
@@ -294,7 +294,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         withdrawnAmounts = _depositorExit(liquidityAmount);
         emit OnDepositorExit(liquidityAmount, withdrawnAmounts);
 
-        for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
           expectedAmountMainAsset += i == vars.indexAsset
             ? expectedWithdrawAmounts[i]
             : vars.tetuConverter.quoteRepay(
@@ -309,7 +309,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         withdrawnAmounts = new uint[](len);
         // we don't need to withdraw any amounts from the pool
         // available converted amounts are enough for us
-        for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
           if (amountsToConvert[i] == 0) continue;
           expectedAmountMainAsset += vars.tetuConverter.quoteRepay(
             address(this),
@@ -673,7 +673,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       address _asset = asset;
 
       uint len = tokens.length;
-      for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         address borrowedToken = tokens[i];
         estimatedAssets += _asset == borrowedToken
           ? amountsOut[i]

@@ -145,7 +145,7 @@ library ConverterStrategyBaseLib {
     withdrawnAmountsOut = new uint[](len);
 
     if (ratio != 0) {
-      for (uint i = 0; i < len; ++i) {
+      for (uint i; i < len; ++i) {
         withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
       }
     }
@@ -255,7 +255,7 @@ library ConverterStrategyBaseLib {
 
     uint len = params_.tokens.length;
     amountsToConvertOut = new uint[](len);
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == params_.indexAsset) continue;
 
       uint baseAmount = baseAmounts_[params_.tokens[i]];
@@ -697,7 +697,7 @@ library ConverterStrategyBaseLib {
     spentAmounts = new uint[](p.len);
 
     // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
-    for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
+    for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
       p.rewardToken = params.rewardTokens[i];
       p.amountToCompound = params.rewardAmounts[i] * params.compoundRatio / COMPOUND_DENOMINATOR;
 

@@ -2884,6 +2884,81 @@ describe("ConverterStrategyBaseAccessTest", () => {
             });
           });
         });
+        describe("There is enough amount to withdraw on balance", () => {
+          it("should use amounts from balance and don't make conversion", async () => {
+            const results = await makeWithdrawTest(
+              parseUnits("1", 9), // total liquidity of the user = 0.1 of total supply
+              [
+                parseUnits("1000", 18), // dai
+                parseUnits("2000", 6), // usdc
+                parseUnits("3000", 6), // usdt
+              ],
+              parseUnits("1", 10), // total supply
+              [
+                parseUnits("50", 18),
+                parseUnits("101.5", 6),
+                parseUnits("152", 6),
+              ],
+              parseUnits("100", 6), // amount to withdraw
+              {
+                liquidityAmountToWithdrawExplicit: parseUnits("0.505", 9),
+                investedAssetsBeforeWithdraw: parseUnits("400", 6), // total invested amount
+                investedAssetsAfterWithdraw: parseUnits("1", 6),
+                baseAmounts: [
+                  {token: dai, amount: parseUnits("200", 18)},
+                  {token: usdc, amount: parseUnits("400", 6)},
+                  {token: usdt, amount: parseUnits("300", 6)},
+                ],
+                initialBalances: [
+                  {token: dai, amount: parseUnits("200", 18)}, // === $40
+                  {token: usdc, amount: parseUnits("400", 6)}, // === $400
+                  {token: usdt, amount: parseUnits("300", 6)}, // === $60
+                ],
+                repayments: [
+                  // Total supply = 1e10, user liquidity in the pool = 1e9
+                  // invested-assets = 400+40+60=500 usdc
+                  // we are going to withdraw 100 usdc
+                  // 40+60=100 usdc we will receive by converting dai and usdt on balance
+                  // so, we don't need to withdraw any amounts from the pool
+
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: dai,
+                    totalDebtAmountOut: parseUnits("200", 18),
+                    amountRepay: parseUnits("200", 18),
+                    totalCollateralAmountOut: parseUnits("40", 6),
+                  },
+                  {
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalDebtAmountOut: parseUnits("300", 6),
+                    amountRepay: parseUnits("300", 6),
+                    totalCollateralAmountOut: parseUnits("60", 6),
+                  },
+                ]
+              }
+            );
+
+            const ret = [
+              results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n"),
+              results.baseAmounts.map(x => BalanceUtils.toString(x)).join("\n"),
+              results.investedAssetsUSD,
+              results.assetPrice,
+              // should call _updateInvestedAssets()
+              results.investedAssetsValueBefore.eq(results.investedAssetsValueAfter)
+            ].join("\n");
+            const expected = [
+              [0, parseUnits("500", 6), 0].map(x => BalanceUtils.toString(x)).join("\n"),
+              [0, parseUnits("500", 6), 0].map(x => BalanceUtils.toString(x)).join("\n"),
+              parseUnits("100", 6), // 40 + 60
+              parseUnits("1", 18), // for simplicity, all prices are equal to 1
+              false
+            ].join("\n");
+
+            console.log(results);
+            expect(ret).eq(expected);
+          });
+        });
       });
       describe("Withdraw all", () => {
         let results: IWithdrawTestResults;
@@ -3116,6 +3191,20 @@ describe("ConverterStrategyBaseAccessTest", () => {
     });
     describe("Bad paths", () => {
 // TODO
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+
+    });
+  });
+
+  describe("requireAmountBack", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+// todo
+      });
+    });
+    describe("Bad paths", () => {
+
     });
     describe("Gas estimation @skip-on-coverage", () => {
 

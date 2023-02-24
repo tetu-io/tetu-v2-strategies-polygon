@@ -42,4 +42,6 @@ library AppErrors {
 
   /// @notice tetuConverter_.repay makes swap internally. It's not efficient and not allowed
   string public constant REPAY_MAKES_SWAP = "TS-17 can not convert back";
+
+  string public constant NO_INVESTMENTS = "TS-18 no investments";
 }
