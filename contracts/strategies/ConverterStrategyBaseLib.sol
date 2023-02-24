@@ -131,7 +131,7 @@ library ConverterStrategyBaseLib {
     uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_
-  ) external view returns (
+  ) external pure returns (
     uint[] memory withdrawnAmountsOut
   ) {
     uint ratio = totalSupply_ == 0
@@ -295,12 +295,13 @@ library ConverterStrategyBaseLib {
 
     liquidityRatioOut = all
       ? 1e18
-      : targetAmount_ == 0
+      : ((targetAmount_ == 0)
         ? 0
         : 1e18
           * 101 // add 1% on top...
           * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-          / 100; // .. add 1% on top
+          / 100 // .. add 1% on top
+      );
   }
 
   /////////////////////////////////////////////////////////////////////

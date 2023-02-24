@@ -37,4 +37,6 @@ library AppErrors {
   string public constant WRONG_ASSET = "TS-14 wrong asset";
 
   string public constant NO_LIQUIDATION_ROUTE = "TS-15 No liquidation route";
+
+  string public constant PRICE_IMPACT = "TS-16 price impact";
 }

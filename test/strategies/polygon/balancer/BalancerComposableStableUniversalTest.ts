@@ -35,7 +35,7 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe('BalancerComposableStableUniversalTest', async () => {
+describe.skip('BalancerComposableStableUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }

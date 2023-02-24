@@ -44,6 +44,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address[] tokens;
   }
 
+  struct ConvertAfterWithdrawLocalParams {
+    address asset;
+    ITetuConverter tetuConverter;
+    ITetuLiquidator liquidator;
+    uint collateral;
+    uint spentAmountIn;
+    uint receivedAmountOut;
+    uint liquidationThreshold;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                        CONSTANTS
   /////////////////////////////////////////////////////////////////////
@@ -54,6 +64,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
 
   uint private constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
+
+  uint private constant PRICE_IMPACT_TOLERANCE = 2_000; // 2%
 
   /////////////////////////////////////////////////////////////////////
   //                        VARIABLES
@@ -369,44 +381,52 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
-    address _asset = tokens_[indexAsset_];
+    ConvertAfterWithdrawLocalParams memory vars;
+    vars.tetuConverter = tetuConverter;
+    vars.asset = tokens_[indexAsset_];
+
     uint len = tokens_.length;
     repaidAmountsOut = new uint[](len);
-    {
-      ITetuConverter _tetuConverter = tetuConverter; // gas saving
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        if (i == indexAsset_) continue;
-        uint collateral;
-        (collateral, repaidAmountsOut[i]) = ConverterStrategyBaseLib.closePosition(
-          _tetuConverter,
-          _asset,
-          tokens_[i],
-          amountsToConvert_[i]
-        );
-        collateralOut += collateral;
-      }
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset_) continue;
+      (vars.collateral, repaidAmountsOut[i]) = ConverterStrategyBaseLib.closePosition(
+        vars.tetuConverter,
+        vars.asset,
+        tokens_[i],
+        amountsToConvert_[i]
+      );
+      collateralOut += vars.collateral;
     }
 
-    { // Manually swap remain leftovers
-      ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
-      uint liquidationThreshold = liquidationThresholds[_asset];
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        if (i == indexAsset_) continue;
-        if (amountsToConvert_[i] > repaidAmountsOut[i]) {
-          (uint spentAmountIn, uint receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
-            liquidator,
-            tokens_[i],
-            _asset,
-            amountsToConvert_[i] - repaidAmountsOut[i],
-            _ASSET_LIQUIDATION_SLIPPAGE,
-            liquidationThreshold
+    // Manually swap remain leftovers
+    vars.liquidator = ITetuLiquidator(IController(controller()).liquidator());
+    vars.liquidationThreshold = liquidationThresholds[vars.asset];
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset_) continue;
+      if (amountsToConvert_[i] > repaidAmountsOut[i]) {
+        (vars.spentAmountIn, vars.receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
+          vars.liquidator,
+          tokens_[i],
+          vars.asset,
+          amountsToConvert_[i] - repaidAmountsOut[i],
+          _ASSET_LIQUIDATION_SLIPPAGE,
+          vars.liquidationThreshold
+        );
+        if (vars.receivedAmountOut != 0) {
+          collateralOut += vars.receivedAmountOut;
+        }
+        if (vars.spentAmountIn != 0) {
+          repaidAmountsOut[i] += vars.spentAmountIn;
+          require(
+            tetuConverter.isConversionValid(
+              tokens_[i],
+              vars.spentAmountIn,
+              vars.asset,
+              vars.receivedAmountOut,
+              PRICE_IMPACT_TOLERANCE
+            ),
+            AppErrors.PRICE_IMPACT
           );
-          if (receivedAmountOut != 0) {
-            collateralOut += receivedAmountOut;
-          }
-          if (spentAmountIn != 0) {
-            repaidAmountsOut[i] += spentAmountIn;
-          }
         }
       }
     }

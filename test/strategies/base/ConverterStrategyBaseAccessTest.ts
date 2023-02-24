@@ -934,6 +934,41 @@ describe("ConverterStrategyBaseAccessTest", () => {
         });
       });
     });
+    describe("Bad paths", () => {
+      describe("Liquidation of leftovers happens with too high price impact", () => {
+        it("should revert", async () => {
+          const amountsToConvert = [
+            parseUnits("200", 18), // dai
+            parseUnits("0", 6), // usdc
+            parseUnits("500", 6), // usdt
+          ];
+          const debts = [
+            parseUnits("100", 18), // dai
+            parseUnits("0", 6), // usdc
+            parseUnits("100", 6), // usdt
+          ];
+          const collaterals = [
+            parseUnits("401", 6),
+            parseUnits("0", 6),
+            parseUnits("1003", 6),
+          ];
+          await expect(
+            makeConvertAfterWithdrawTest(
+              amountsToConvert,
+              debts,
+              collaterals,
+              {
+                priceOut: [
+                  parseUnits("717", 6),
+                  parseUnits("0", 6),
+                  parseUnits("999", 6),
+                ]
+              }
+            )
+          ).revertedWith("TS-16 price impact"); // PRICE_IMPACT
+        });
+      });
+    });
     describe("Gas estimation @skip-on-coverage", () => {
       describe("Repay only, no liquidation", () => {
         it("should not exceed gas limits", async () => {
