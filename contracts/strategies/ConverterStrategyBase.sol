@@ -21,7 +21,7 @@ import "hardhat/console.sol";
 ///  Main asset: the asset deposited to the vault by users
 ///  Secondary assets: all assets deposited to the internal pool except the main asset
 ///  Base amounts: not rewards; amounts deposited to vault, amounts deposited after compound
-///                Base amounts can be converter one to another
+///                Base amounts can be converted one to another
 /////////////////////////////////////////////////////////////////////
 
 /// @title Abstract contract for base Converter strategy functionality

@@ -15,8 +15,7 @@ import {BalancerIntTestUtils, IState} from "./utils/BalancerIntTestUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {
   BalancerComposableStableStrategy, BalancerComposableStableStrategy__factory, ControllerV2__factory,
-  IERC20__factory, IForwarder,
-  ISplitter,
+  IERC20__factory, ISplitter,
   ISplitter__factory,
   IStrategyV2,
   ITetuLiquidator,
@@ -34,7 +33,7 @@ import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {
   GAS_DEPOSIT_SIGNER, GAS_EMERGENCY_EXIT,
-  GAS_FIRST_HARDWORK,
+  GAS_FIRST_HARDWORK, GAS_HARDWORK_WITH_REWARDS,
   GAS_WITHDRAW_ALL_TO_SPLITTER
 } from "../../../baseUT/GasLimits";
 import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
@@ -174,6 +173,10 @@ describe('BalancerIntTest', function() {
       strategy = data.strategy as unknown as BalancerComposableStableStrategy;
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
+      console.log("vault", vault.address);
+      console.log("strategy", strategy.address);
+      console.log("splitter", splitter.address);
+      console.log("forwarder", forwarder);
 
       await UniversalTestUtils.setCompoundRatio(strategy as unknown as IStrategyV2, user, COMPOUND_RATIO);
       await BalancerIntTestUtils.setThresholds(
@@ -682,11 +685,29 @@ describe('BalancerIntTest', function() {
         it("should return expected values", async () => {
           const stateAfterDeposit = await enterToVault();
 
+          // forbid liquidation of received BAL-rewards
+          await BalancerIntTestUtils.setThresholds(
+            strategy as unknown as IStrategyV2,
+            user,
+            {
+              rewardLiquidationThresholds: [
+                {
+                  asset: MaticAddresses.BAL_TOKEN,
+                  threshold: parseUnits("1000", 18)
+                }, {
+                  asset: MaticAddresses.USDC_TOKEN,
+                  threshold: parseUnits("1000", 6)
+                }
+              ]
+            }
+          )
+
           // wait long time, some rewards should appear
           console.log("start to advance blocks");
           await TimeUtils.advanceNBlocks(20_000);
           console.log("end to advance blocks");
 
+          // try to check forward income .. (unsuccessfully, todo)
           const tetuBefore = await IERC20__factory.connect(MaticAddresses.TETU_TOKEN, signer).balanceOf(forwarder);
 
           const tx = await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
@@ -702,6 +723,9 @@ describe('BalancerIntTest', function() {
             stateAfterDeposit.strategy.dai.gt(stateAfterHardwork.strategy.dai) || stateAfterHardwork.strategy.dai.eq(0),
             stateAfterHardwork.strategy.investedAssets.gt(stateBeforeDeposit.strategy.investedAssets),
 
+            // strategy - bal: some rewards were received, claimed but not compounded because of the high thresholds
+            stateAfterHardwork.strategy.bal.gt(0),
+
             // gauge
             stateAfterHardwork.gauge.strategyBalance.gt(stateBeforeDeposit.gauge.strategyBalance),
 
@@ -713,11 +737,14 @@ describe('BalancerIntTest', function() {
             stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
             stateAfterDeposit.baseAmounts.usdt.eq(stateAfterDeposit.strategy.usdt),
             stateAfterDeposit.baseAmounts.dai.eq(stateAfterDeposit.strategy.dai),
-            stateAfterDeposit.baseAmounts.bal.eq(0),
+            stateAfterDeposit.baseAmounts.bal.eq(stateAfterDeposit.strategy.bal),
           ].map(x => BalanceUtils.toString(x)).join("\n");
           const expected = [
             // strategy
             true, true, true, true,
+
+            // strategy - bal: some rewards were received and claimed
+            true,
 
             // gauge
             true,
@@ -739,8 +766,9 @@ describe('BalancerIntTest', function() {
           expect(ret).eq(expected);
         });
         it("should not exceed gas limits @skip-on-coverage", async () => {
+          await TimeUtils.advanceNBlocks(20_000);
           const gasUsed = await strategy.connect(await Misc.impersonate(vault.address)).estimateGas.doHardWork();
-          controlGasLimitsEx(gasUsed, GAS_FIRST_HARDWORK, (u, t) => {
+          controlGasLimitsEx(gasUsed, GAS_HARDWORK_WITH_REWARDS, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
         });

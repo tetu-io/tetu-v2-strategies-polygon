@@ -118,7 +118,9 @@ export class UniversalTestUtils {
     const dest: IDistributedInfo[] = [];
     if (cr.events) {
       for (const event of cr.events) {
+        console.log("Event", event.address, event.event);
         if (event.address === forwarder) {
+          console.log("Forwarder event", event);
           if (event.event === "Distributed") {
             if (event.args) {
               console.log("Distributed", event.args);

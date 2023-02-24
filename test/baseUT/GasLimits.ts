@@ -36,4 +36,5 @@ export const GAS_OPEN_POSITION = 198_000;
 export const GAS_DEPOSIT_SIGNER = 5_192_000;
 export const GAS_WITHDRAW_ALL_TO_SPLITTER = 60_001;
 export const GAS_FIRST_HARDWORK = 234_000;
-export const GAS_EMERGENCY_EXIT = 1;
+export const GAS_EMERGENCY_EXIT = 300_000;
+export const GAS_HARDWORK_WITH_REWARDS = 1;
