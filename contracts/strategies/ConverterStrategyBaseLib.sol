@@ -82,6 +82,51 @@ library ConverterStrategyBaseLib {
   uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant COMPOUND_DENOMINATOR = 100_000;
 
+
+  /////////////////////////////////////////////////////////////////////
+  ///                         Events
+  /////////////////////////////////////////////////////////////////////
+  /// @notice A borrow was made
+  event OpenPosition(
+    address converter,
+    address collateralAsset,
+    uint collateralAmount,
+    address borrowAsset,
+    uint borrowedAmount,
+    address recepient
+  );
+
+  /// @notice Some borrow(s) was/were repaid
+  event ClosePosition(
+    address collateralAsset,
+    address borrowAsset,
+    uint amountRepay,
+    address recepient,
+    uint returnedAssetAmountOut,
+    uint returnedBorrowAmountOut
+  );
+
+  /// @notice A liquidation was made
+  event Liquidation(
+    address tokenIn,
+    address tokenOut,
+    uint amountIn,
+    uint spentAmountIn,
+    uint receivedAmountOut
+  );
+
+  /// @notice Recycle was made
+  /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
+  /// @param receivedAmounts Received amounts of the tokens
+  ///        This array has +1 item at the end: received amount of the main asset
+  /// @param spentAmounts Spent amounts of the tokens
+  /// @param amountsToForward Amounts to be sent to forwarder
+  event Recycle(
+    address[] rewardTokens,
+    uint[] receivedAmounts,
+    uint[] spentAmounts,
+    uint[] amountsToForward
+  );
   /////////////////////////////////////////////////////////////////////
   ///                      View functions
   /////////////////////////////////////////////////////////////////////
@@ -270,18 +315,6 @@ library ConverterStrategyBaseLib {
           / 100; // .. add 1% on top
   }
 
-  function getPrices(
-    address[] memory tokens_,
-    IPriceOracle priceOracle_
-  ) internal view returns (uint[] memory pricesOut){
-    uint len = tokens_.length;
-    pricesOut = new uint[](len);
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      pricesOut[i] = priceOracle_.getAssetPrice(tokens_[i]);
-      require(pricesOut[i] != 0, AppErrors.ZERO_PRICE);
-    }
-  }
-
   /////////////////////////////////////////////////////////////////////
   ///                   Borrow and close positions
   /////////////////////////////////////////////////////////////////////
@@ -360,6 +393,14 @@ library ConverterStrategyBaseLib {
               address(this)
             );
             collateralAmountOut += vars.collateral;
+            emit OpenPosition(
+              vars.converters[i],
+              collateralAsset_,
+              vars.collateral,
+              borrowAsset_,
+              vars.amountToBorrow,
+              address(this)
+            );
           }
 
           if (amountIn_ == 0) break;
@@ -429,6 +470,14 @@ library ConverterStrategyBaseLib {
           ) == vars.amountToBorrow,
           AppErrors.WRONG_VALUE
         );
+        emit OpenPosition(
+          vars.converters[i],
+          collateralAsset_,
+          vars.collateral,
+          borrowAsset_,
+          vars.amountToBorrow,
+          address(this)
+        );
 
         borrowedAmountOut += vars.amountToBorrow;
         collateralAmountOut += vars.collateral;
@@ -497,6 +546,14 @@ library ConverterStrategyBaseLib {
       amountRepay,
       address(this)
     );
+    emit ClosePosition(
+      collateralAsset,
+      borrowAsset,
+      amountRepay,
+      address(this),
+      returnedAssetAmountOut,
+      returnedBorrowAmountOut
+    );
     uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
 
     // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (dust tokens)
@@ -527,9 +584,7 @@ library ConverterStrategyBaseLib {
   ) {
     (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
 
-    if (route.length == 0) {
-      revert('CSB: No liquidation route');
-    }
+    require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
 
     // calculate balance in out value for check threshold
     uint amountOut = liquidator_.getPriceForRoute(route, amountIn_);
@@ -551,6 +606,14 @@ library ConverterStrategyBaseLib {
         ? balanceAfter - balanceBefore
         : 0;
       spentAmountIn = amountIn_;
+
+      emit Liquidation(
+        tokenIn_,
+        tokenOut_,
+        amountIn_,
+        spentAmountIn,
+        receivedAmountOut
+      );
     }
 
     return (spentAmountIn, receivedAmountOut);
@@ -674,6 +737,12 @@ library ConverterStrategyBaseLib {
       amountsToForward[i] = p.amountToForward;
     }
 
+    emit Recycle(
+      params.rewardTokens,
+      receivedAmounts,
+      spentAmounts,
+      amountsToForward
+    );
     return (receivedAmounts, spentAmounts, amountsToForward);
   }
 

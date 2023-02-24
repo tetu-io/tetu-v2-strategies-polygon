@@ -75,8 +75,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev We need this threshold to avoid numerous conversions of small amounts
   uint public reinvestThresholdPercent;
 
+  /////////////////////////////////////////////////////////////////////
+  ///                        Events
+  /////////////////////////////////////////////////////////////////////
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
+  event ReturnMainAssetToConverter(uint amount);
+  event OnDepositorEnter(uint[] amounts, uint[] consumedAmounts);
+  event OnDepositorExit(uint liquidityAmount, uint[] withdrawnAmounts);
+  event OnDepositorEmergencyExit(uint[] withdrawnAmounts);
 
   /////////////////////////////////////////////////////////////////////
   //                Initialization and configuration
@@ -133,6 +140,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+      emit OnDepositorEnter(amounts, consumedAmounts);
 
       // adjust base-amounts
       _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
@@ -259,6 +267,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           _depositorTotalSupply()
         );
         withdrawnAmounts = _depositorExit(liquidityAmount);
+        emit OnDepositorExit(liquidityAmount, withdrawnAmounts);
+
         for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
           expectedAmountMainAsset += i == vars.indexAsset
             ? expectedWithdrawAmounts[i]
@@ -301,6 +311,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice If pool support emergency withdraw need to call it for emergencyExit()
   function _emergencyExitFromPool() override internal virtual {
     uint[] memory withdrawnAmounts = _depositorEmergencyExit();
+    emit OnDepositorEmergencyExit(withdrawnAmounts);
 
     address[] memory tokens = _depositorPoolAssets();
     uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
@@ -666,6 +677,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     IERC20(collateralAsset_).safeTransfer(_tetuConverter, amountOut);
     isCollateral = true;
+    emit ReturnMainAssetToConverter(amountOut);
   }
 
   function onTransferBorrowedAmount(
