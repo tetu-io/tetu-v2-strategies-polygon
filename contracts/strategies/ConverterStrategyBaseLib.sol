@@ -115,18 +115,6 @@ library ConverterStrategyBaseLib {
     uint receivedAmountOut
   );
 
-  /// @notice Recycle was made
-  /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
-  /// @param receivedAmounts Received amounts of the tokens
-  ///        This array has +1 item at the end: received amount of the main asset
-  /// @param spentAmounts Spent amounts of the tokens
-  /// @param amountsToForward Amounts to be sent to forwarder
-  event Recycle(
-    address[] rewardTokens,
-    uint[] receivedAmounts,
-    uint[] spentAmounts,
-    uint[] amountsToForward
-  );
   /////////////////////////////////////////////////////////////////////
   ///                      View functions
   /////////////////////////////////////////////////////////////////////
@@ -331,7 +319,7 @@ library ConverterStrategyBaseLib {
     address collateralAsset_,
     address borrowAsset_,
     uint amountIn_
-  ) internal returns (
+  ) external returns (
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
@@ -520,7 +508,7 @@ library ConverterStrategyBaseLib {
     address collateralAsset,
     address borrowAsset,
     uint amountToRepay
-  ) internal returns (
+  ) external returns (
     uint returnedAssetAmountOut,
     uint repaidAmountOut
   ) {
@@ -578,6 +566,23 @@ library ConverterStrategyBaseLib {
     uint amountIn_,
     uint slippage_,
     uint liquidationThresholdForTokenOut_ // todo Probably it worth to use threshold for amount IN? it would be more gas efficient
+  ) external returns (
+    uint spentAmountIn,
+    uint receivedAmountOut
+  ) {
+    return _liquidate(liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, liquidationThresholdForTokenOut_);
+  }
+
+  /// @notice Make liquidation if estimated amountOut exceeds the given threshold
+  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
+  /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
+  function _liquidate(
+    ITetuLiquidator liquidator_,
+    address tokenIn_,
+    address tokenOut_,
+    uint amountIn_,
+    uint slippage_,
+    uint liquidationThresholdForTokenOut_ // todo Probably it worth to use threshold for amount IN? it would be more gas efficient
   ) internal returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -603,8 +608,8 @@ library ConverterStrategyBaseLib {
 
       // assign correct values to
       receivedAmountOut = balanceAfter > balanceBefore
-        ? balanceAfter - balanceBefore
-        : 0;
+      ? balanceAfter - balanceBefore
+      : 0;
       spentAmountIn = amountIn_;
 
       emit Liquidation(
@@ -710,7 +715,7 @@ library ConverterStrategyBaseLib {
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
             // because the {_asset} is always included to the list of depositor's assets
-            (uint spentAmountIn, uint receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
+            (uint spentAmountIn, uint receivedAmountOut) = _liquidate(
               params.liquidator,
               p.rewardToken,
               params.asset,
@@ -737,12 +742,6 @@ library ConverterStrategyBaseLib {
       amountsToForward[i] = p.amountToForward;
     }
 
-    emit Recycle(
-      params.rewardTokens,
-      receivedAmounts,
-      spentAmounts,
-      amountsToForward
-    );
     return (receivedAmounts, spentAmounts, amountsToForward);
   }
 

@@ -85,6 +85,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   event OnDepositorExit(uint liquidityAmount, uint[] withdrawnAmounts);
   event OnDepositorEmergencyExit(uint[] withdrawnAmounts);
 
+  /// @notice Recycle was made
+  /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
+  /// @param receivedAmounts Received amounts of the tokens
+  ///        This array has +1 item at the end: received amount of the main asset
+  /// @param spentAmounts Spent amounts of the tokens
+  /// @param amountsToForward Amounts to be sent to forwarder
+  event Recycle(
+    address[] rewardTokens,
+    uint[] receivedAmounts,
+    uint[] spentAmounts,
+    uint[] amountsToForward
+  );
+
   /////////////////////////////////////////////////////////////////////
   //                Initialization and configuration
   /////////////////////////////////////////////////////////////////////
@@ -539,7 +552,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    return ConverterStrategyBaseLib.recycle(
+    (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
       asset,
       compoundRatio,
       _depositorPoolAssets(),
@@ -548,6 +561,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       baseAmounts,
       rewardTokens_,
       rewardAmounts_
+    );
+    emit Recycle(
+      rewardTokens_,
+      receivedAmounts,
+      spentAmounts,
+      amountsToForward
     );
   }
 
