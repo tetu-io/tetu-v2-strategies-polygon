@@ -38,16 +38,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
-  function getExpectedWithdrawnAmountsTestAccess(
-    uint[] memory reserves_,
-    uint liquidityAmount_,
-    uint totalSupply_
-  ) external view returns (
-    uint[] memory withdrawnAmountsOut
-  ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
-  }
-
   function _updateBaseAmountsAccess(
     address[] memory tokens_,
     uint[] memory receivedAmounts_,
@@ -83,24 +73,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _convertAfterWithdrawAll(tokens_, indexAsset_);
   }
 
-  function openPositionTestAccess(
-    bytes memory entryData_,
-    address collateralAsset,
-    address borrowAsset,
-    uint collateralAmount
-  ) external returns (
-    uint collateralAmountOut,
-    uint borrowedAmount
-  ) {
-    return ConverterStrategyBaseLib.openPosition(
-      tetuConverter,
-      entryData_,
-      collateralAsset,
-      borrowAsset,
-      collateralAmount
-    );
-  }
-
   function closePositionTestAccess(address collateralAsset, address borrowAsset, uint amountToRepay) external returns (
     uint returnedAssetAmount,
     uint leftover
@@ -120,10 +92,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _withdrawAllFromPool();
   }
 
-  function depositorLiquidityTestAccess() external view returns (uint) {
-    return _depositorLiquidity();
-  }
-
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
     return _doHardWork(reInvest);
   }
@@ -131,12 +99,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   /////////////////////////////////////////////////////////////////////////////////////
   /// _handleRewards, mocked version + accessor
   /////////////////////////////////////////////////////////////////////////////////////
-
   function _handleRewards() internal override returns (uint earned, uint lost) {
     if (handleRewardsParams.initialized) {
       console.log("_handleRewards.mocked-version is called");
       if (handleRewardsParams.assetBalanceChange > 0) {
-        IERC20(asset).transferFrom(
+       IERC20(asset).transferFrom(
           handleRewardsParams.providerBalanceChange,
           address(this),
           uint(handleRewardsParams.assetBalanceChange)
@@ -255,10 +222,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint[] memory amountsOut
   ) {
     return _prepareRewardsList(tetuConverter_, tokens_, amounts_);
-  }
-
-  function _claimAccess() external {
-    _claim();
   }
 
   function _emergencyExitFromPoolAccess() external {

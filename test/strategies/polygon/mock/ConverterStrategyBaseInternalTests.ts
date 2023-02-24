@@ -323,7 +323,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
                 priceOut: deltaPriceOut
               }
             )
-          ).revertedWith("CSB: Can not convert back");
+          ).revertedWith("TS-17 can not convert back"); // REPAY_MAKES_SWAP
         });
       });
     });
