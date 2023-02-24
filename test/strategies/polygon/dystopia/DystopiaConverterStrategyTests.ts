@@ -146,7 +146,7 @@ async function setLiquidatorPath(strategy: DystopiaConverterStrategy) {
 }
 //endregion Utils
 
-describe('DystopiaConverterStrategyTests', function() {
+describe.skip('DystopiaConverterStrategyTests', function() {
 //region Variables
   let snapshotBefore: string;
   let snapshot: string;

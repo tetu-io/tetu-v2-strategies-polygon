@@ -14,8 +14,6 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-import "hardhat/console.sol";
-
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -326,9 +324,7 @@ library ConverterStrategyBaseLib {
 
       uint len = vars.converters.length;
       if (len > 0) {
-        console.log("OpenPosition.amountIn_", amountIn_);
         for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-          console.log("OpenPosition.i", i);
           // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
           vars.collateral;
           vars.amountToBorrow;
@@ -351,8 +347,6 @@ library ConverterStrategyBaseLib {
             vars.collateral = amountIn_ < vars.amountsToBorrow[i]
               ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
               : vars.collateralsRequired[i];
-            console.log("OpenPosition.collateral", vars.collateral);
-            console.log("OpenPosition.amountToBorrow", vars.amountToBorrow);
             amountIn_ -= vars.amountToBorrow;
           }
 
@@ -366,9 +360,6 @@ library ConverterStrategyBaseLib {
               address(this)
             );
             collateralAmountOut += vars.collateral;
-            console.log("OpenPosition.borrowedAmountOut", borrowedAmountOut);
-            console.log("OpenPosition.collateralAmountOut", collateralAmountOut);
-            console.log("OpenPosition.amountIn_", amountIn_);
           }
 
           if (amountIn_ == 0) break;
@@ -408,11 +399,9 @@ library ConverterStrategyBaseLib {
     if (len > 0) {
       // we should split amountIn on two amounts with proportions x:y
       (, uint x, uint y) = abi.decode(entryData_, (uint, uint, uint));
-      console.log("x, y", x, y);
       // calculate prices conversion ratio using price oracle, decimals 18
       // i.e. alpha = 1e18 * 75e6 usdc / 25e18 matic = 3e6 usdc/matic
       vars.alpha = _getCollateralToBorrowRatio(tetuConverter_, collateralAsset_, borrowAsset_);
-      console.log("alpha", vars.alpha);
 
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         // the lending platform allows to convert {collateralsRequired[i]} to {amountsToBorrow[i]}
@@ -421,21 +410,13 @@ library ConverterStrategyBaseLib {
         // but if lending platform doesn't have enough liquidity
         // it reduces {collateralsRequired[i]} and {amountsToBorrow[i]} proportionally to fit the limits
         // as result, remaining C1 will be too big after conversion and we need to make another borrow
-        console.log("vars.collateralsRequired[i]", vars.collateralsRequired[i]);
-        console.log("vars.amountsToBorrow[i]", vars.amountsToBorrow[i]);
-
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
         vars.c1 = x * vars.c3 / y;
         vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
           ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
           : 1e18;
-        console.log("c3", vars.c3);
-        console.log("c1", vars.c1);
-        console.log("vars.ratio", vars.ratio);
         vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
         vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
-        console.log("collateral", vars.collateral);
-        console.log("amountToBorrow", vars.amountToBorrow);
 
         require(
           tetuConverter_.borrow(
@@ -451,18 +432,12 @@ library ConverterStrategyBaseLib {
 
         borrowedAmountOut += vars.amountToBorrow;
         collateralAmountOut += vars.collateral;
-        console.log("collateralAmountOut", collateralAmountOut);
-        console.log("borrowedAmountOut", borrowedAmountOut);
 
         vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
         vars.c1 = x * vars.c3 / y;
-        console.log("c3", vars.c3);
-        console.log("c1", vars.c1);
 
         if (amountIn_ > vars.c1 + vars.collateral) {
-          console.log("amountIn_ before", amountIn_);
           amountIn_ -= (vars.c1 + vars.collateral);
-          console.log("amountIn_", amountIn_);
         } else {
           break;
         }
