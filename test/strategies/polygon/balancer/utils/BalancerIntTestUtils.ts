@@ -402,7 +402,7 @@ export class BalancerIntTestUtils {
     console.log("final.blockTimestamp", final.blockTimestamp);
     console.log("enter.blockTimestamp", enter.blockTimestamp);
     console.log("final.getTotalUsdAmount", this.getTotalUsdAmount(final));
-    console.log("final.getTotalUsdAmount", this.getTotalUsdAmount(enter));
+    console.log("enter.getTotalUsdAmount", this.getTotalUsdAmount(enter));
     console.log("Initial amount", initialAmount);
     console.log("Final amount", initialAmount);
     console.log("Total profit", amountNum);

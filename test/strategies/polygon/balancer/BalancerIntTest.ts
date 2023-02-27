@@ -803,7 +803,7 @@ describe('BalancerIntTest', function() {
 
           console.log("resultTotalAmount", resultTotalAmount);
           console.log("initialTotalAmount", initialTotalAmount);
-          BalancerIntTestUtils.outputProfitEnterFinal(stateAfterDeposit, stateFinal);
+          BalancerIntTestUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
           expect(resultTotalAmount).gt(initialTotalAmount);
         });
       });
@@ -859,7 +859,7 @@ describe('BalancerIntTest', function() {
 
           console.log("resultTotalAmount", resultTotalAmount);
           console.log("initialTotalAmount", initialTotalAmount);
-          BalancerIntTestUtils.outputProfitEnterFinal(stateAfterDeposit, stateFinal);
+          BalancerIntTestUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
           expect(resultTotalAmount).gt(initialTotalAmount);
         });
       });
