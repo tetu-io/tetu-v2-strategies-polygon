@@ -238,25 +238,25 @@ export class DoHardWorkLoopBase {
   }
 
 //region End actions
-  /** Simplest version: single deposit, single withdrawing */
-  protected async loopEndActions(i: number, numberLoops: number) {
-    console.log("loopEndActions", i);
-    const start = Date.now();
-    // we need to enter and exit from the vault between loops for properly check all mechanic
-    if (i === numberLoops - 1) {
-      this.isUserDeposited = false;
-      console.log("!!!Withdraw all");
-      await this.withdraw(true, BigNumber.from(0));
-    // } else if (i === 0) {
-    //   this.isUserDeposited = true;
-    //   const underlyingBalance = await TokenUtils.balanceOf(this.underlying, this.user.address);
-    //   console.log("!!!Deposit", BigNumber.from(underlyingBalance));
-    //   await this.deposit(BigNumber.from(underlyingBalance));
-    }
-    Misc.printDuration('fLoopEndActions completed', start);
-  }
+//   /** Simplest version: single deposit, single withdrawing */
+//   protected async loopEndActions(i: number, numberLoops: number) {
+//     console.log("loopEndActions", i);
+//     const start = Date.now();
+//     // we need to enter and exit from the vault between loops for properly check all mechanic
+//     if (i === numberLoops - 1) {
+//       this.isUserDeposited = false;
+//       console.log("!!!Withdraw all");
+//       await this.withdraw(true, BigNumber.from(0));
+//     // } else if (i === 0) {
+//     //   this.isUserDeposited = true;
+//     //   const underlyingBalance = await TokenUtils.balanceOf(this.underlying, this.user.address);
+//     //   console.log("!!!Deposit", BigNumber.from(underlyingBalance));
+//     //   await this.deposit(BigNumber.from(underlyingBalance));
+//     }
+//     Misc.printDuration('fLoopEndActions completed', start);
+//   }
 
-  protected async loopEndActionsMain(i: number) {
+  protected async loopEndActions(i: number, numberLoops: number) {
     console.log("loopEndActions", i);
     const start = Date.now();
     // we need to enter and exit from the vault between loops for properly check all mechanic

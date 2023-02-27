@@ -38,6 +38,7 @@ import {
 } from "../../../baseUT/GasLimits";
 import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 chai.use(chaiAsPromised);
 
 //region Utils
@@ -775,8 +776,93 @@ describe('BalancerIntTest', function() {
       });
     });
 
-    describe("Deposit, hardwork, withdraw", () =>{
+    describe("Deposit, hardwork, withdraw @skip-on-coverage", () =>{
+      describe("deposit, several hardworks, withdraw", () => {
+        it("should be profitable", async () => {
+          const countLoops = 2;
+          const stepInBlocks = 20_000;
+          const stateAfterDeposit = await enterToVault();
+          console.log("stateAfterDeposit", stateAfterDeposit);
 
+          for (let i = 0; i < countLoops; ++i) {
+            await TimeUtils.advanceNBlocks(stepInBlocks);
+            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state after hardwork ${i}`, state);
+          }
+          await TimeUtils.advanceNBlocks(stepInBlocks);
+
+          await vault.connect(user).withdrawAll();
+          await vault.connect(signer).withdrawAll();
+
+          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          console.log("stateFinal", stateFinal);
+
+          const initialTotalAmount = parseUnits(DEPOSIT_AMOUNT.toString(), 6).mul(3).div(2);
+          const resultTotalAmount = BalancerIntTestUtils.getTotalUsdAmount(stateFinal);
+
+          console.log("resultTotalAmount", resultTotalAmount);
+          console.log("initialTotalAmount", initialTotalAmount);
+          BalancerIntTestUtils.outputProfitEnterFinal(stateAfterDeposit, stateFinal);
+          expect(resultTotalAmount).gt(initialTotalAmount);
+        });
+      });
+      describe("loopEndActions from DoHardWorkLoopBase", () => {
+        it("should be profitable", async () => {
+          const countLoops = 20;
+          const stepInBlocks = 5_000;
+          const stateAfterDeposit = await enterToVault();
+          console.log("stateAfterDeposit", stateAfterDeposit);
+
+          let isUserDeposited = true;
+          for (let i = 0; i < countLoops; ++i) {
+            if (isUserDeposited && i % 2 === 0) {
+              isUserDeposited = false;
+              if (i % 4 === 0) {
+                console.log("!!! withdrawAll");
+                await vault.connect(user).withdrawAll();
+              } else {
+                const userVaultBalance = await vault.balanceOf(user.address);
+                const userAssetBalance = await vault.connect(user).convertToAssets(userVaultBalance);
+                const toWithdraw = BigNumber.from(userAssetBalance).mul(95).div(100);
+                console.log("!!! withdraw", toWithdraw);
+                await vault.connect(user).withdraw(toWithdraw, user.address, user.address);
+              }
+
+            } else if (!isUserDeposited && i % 2 !== 0) {
+              isUserDeposited = true;
+              const userAssetBalance = await TokenUtils.balanceOf(asset, user.address);
+              const amountToDeposit = BigNumber.from(userAssetBalance).div(3);
+
+              console.log("!!! Deposit", amountToDeposit);
+              await IERC20__factory.connect(asset, user).approve(vault.address, amountToDeposit);
+              await vault.connect(user).deposit(amountToDeposit, user.address);
+
+              console.log("!!! Deposit", amountToDeposit);
+              await IERC20__factory.connect(asset, user).approve(vault.address, amountToDeposit);
+              await vault.connect(user).deposit(amountToDeposit, user.address);
+            }
+
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state after hardwork ${i}`, state);
+          }
+          await TimeUtils.advanceNBlocks(stepInBlocks);
+
+          await vault.connect(user).withdrawAll();
+          await vault.connect(signer).withdrawAll();
+
+          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          console.log("stateFinal", stateFinal);
+
+          const initialTotalAmount = parseUnits(DEPOSIT_AMOUNT.toString(), 6).mul(3).div(2);
+          const resultTotalAmount = BalancerIntTestUtils.getTotalUsdAmount(stateFinal);
+
+          console.log("resultTotalAmount", resultTotalAmount);
+          console.log("initialTotalAmount", initialTotalAmount);
+          BalancerIntTestUtils.outputProfitEnterFinal(stateAfterDeposit, stateFinal);
+          expect(resultTotalAmount).gt(initialTotalAmount);
+        });
+      });
     });
   });
 

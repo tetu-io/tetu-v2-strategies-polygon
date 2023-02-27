@@ -53,6 +53,9 @@ export interface IUniversalStrategyInputParams {
   strategyInit?: (strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => Promise<void>;
 }
 
+/**
+ * Tests are generated dynamically, see https://mochajs.org/#dynamically-generating-tests
+ */
 async function universalStrategyTest(
   name: string,
   deployInfo: DeployInfo,

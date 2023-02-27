@@ -384,6 +384,10 @@ export class BalancerIntTestUtils {
     const enter: IState = states[0];
     const final: IState = states[states.length - 1];
 
+    this.outputProfitEnterFinal(enter, final);
+  }
+
+  public static outputProfitEnterFinal(enter: IState, final: IState) {
     // ethereum timestamp is in seconds
     // https://ethereum.stackexchange.com/questions/7853/is-the-block-timestamp-value-in-solidity-seconds-or-milliseconds
     const timeSeconds = (final.blockTimestamp - enter.blockTimestamp);
@@ -405,6 +409,5 @@ export class BalancerIntTestUtils {
     console.log("Duration in seconds", timeSeconds);
     console.log("Duration in days", timeSeconds / (24*60*60));
     console.log("Estimated APR, %", apr);
-
   }
 }

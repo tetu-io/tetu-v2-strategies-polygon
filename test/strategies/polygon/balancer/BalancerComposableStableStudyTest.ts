@@ -15,7 +15,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {IGauge__factory} from "../../../../typechain/factories/contracts/integrations/dystopia";
 
-describe.skip("BalancerComposableStableStudyTest", () => {
+describe.skip("BalancerComposableStableStudyTest @skip-on-coverage", () => {
   let signer: SignerWithAddress;
 
   before(async function () {
