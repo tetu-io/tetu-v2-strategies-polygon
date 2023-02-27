@@ -1,11 +1,7 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
 import {
-  BalancerComposableStableStrategy__factory, ControllerV2__factory,
-  IBalancerGauge__factory, IController__factory,
-  IERC20__factory, ISplitter__factory,
-  IStrategyV2,
-  StrategyBaseV2__factory,
+  IERC20__factory, IStrategyV2,
   TetuVaultV2
 } from "../../../typechain";
 import {IToolsContractsWrapper} from "../../ToolsContractsWrapper";
@@ -16,10 +12,7 @@ import {PPFS_NO_INCREASE, VaultUtils} from "../../VaultUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {expect} from "chai";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
-import {MaticAddresses} from "../../../scripts/MaticAddresses";
-import {parseUnits} from "ethers/lib/utils";
 import {UniversalTestUtils} from "./UniversalTestUtils";
-import {BalancerIntTestUtils} from "../../strategies/polygon/balancer/utils/BalancerIntTestUtils";
 
 interface IBalances {
   userBalance: BigNumber;
@@ -29,8 +22,6 @@ interface IBalances {
 export interface IDoHardWorkLoopInputParams {
   /// 50_000 for 0.5
   compoundRate?: number;
-  /// 1000 for 1%
-  reinvestThresholdPercent?: number;
 }
 
 export class DoHardWorkLoopBase {
@@ -162,11 +153,6 @@ export class DoHardWorkLoopBase {
     console.log("initialBalances", this.initialBalances);
 
     await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate);
-    await BalancerIntTestUtils.setThresholds(
-      this.strategy,
-      this.user,
-      {reinvestThresholdPercent: params?.reinvestThresholdPercent}
-    );
   }
 
   protected async initialSnapshot() {

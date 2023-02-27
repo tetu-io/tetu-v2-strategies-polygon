@@ -16,6 +16,8 @@ import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {BalancerIntTestUtils, IState} from "./utils/BalancerIntTestUtils";
 import {ethers} from "hardhat";
+import {BalancerComposableStableStrategy, IStrategyV2, TetuVaultV2} from "../../../../typechain";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -35,7 +37,7 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe.skip('BalancerComposableStableUniversalTest', async () => {
+describe('BalancerComposableStableUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -70,6 +72,7 @@ describe.skip('BalancerComposableStableUniversalTest', async () => {
   const strategyName = 'BalancerComposableStableStrategy';
   const assetName = 'USDC';
   const asset = PolygonAddresses.USDC_TOKEN;
+  const reinvestThresholdPercent = 1_000; // 1%
   const params: IUniversalStrategyInputParams = {
     ppfsDecreaseAllowed: false,
     balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
@@ -80,7 +83,22 @@ describe.skip('BalancerComposableStableUniversalTest', async () => {
     specificTests: [],
     hwParams: {
       compoundRate: 100_000, // 50%
-      reinvestThresholdPercent: 1_000, // 1%
+    },
+    stateRegistrar: async (title, h) => {
+      states.push(await BalancerIntTestUtils.getState(
+        h.signer,
+        h.user,
+        h.strategy as unknown as BalancerComposableStableStrategy,
+        h.vault,
+        title
+      ));
+    },
+    strategyInit: async (strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
+      await BalancerIntTestUtils.setThresholds(
+        strategy as unknown as IStrategyV2,
+        user,
+        {reinvestThresholdPercent}
+      );
     }
   }
 
@@ -100,14 +118,5 @@ describe.skip('BalancerComposableStableUniversalTest', async () => {
       }
     ),
     params,
-    async (title, h) => {
-      states.push(await BalancerIntTestUtils.getState(
-        h.signer,
-        h.user,
-        h.strategy,
-        h.vault,
-        title
-      ));
-    }
   );
 });

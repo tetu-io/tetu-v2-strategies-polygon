@@ -33,7 +33,24 @@ export interface IUniversalStrategyInputParams {
   /** only for strategies where we expect PPFS fluctuations */
   ppfsDecreaseAllowed: boolean;
   specificTests: SpecificStrategyTest[];
+
+  /**
+   * Set of params to pass to DoHardWorkLoopBase
+   */
   hwParams: IDoHardWorkLoopInputParams;
+
+  /**
+   * A function to take snapshot of all available balances
+   * to be able to save the states to CSV at the end of the test.
+   * @param title A title of moment (i.e. "init", "loop step 1", "final" and so on)
+   * @param h
+   */
+  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>;
+
+  /**
+   * A function to initialize strategy after deploy, i.e. set up various thresholds
+   */
+  strategyInit?: (strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => Promise<void>;
 }
 
 async function universalStrategyTest(
@@ -50,8 +67,7 @@ async function universalStrategyTest(
     strategy: IStrategyV2,
     balanceTolerance: number
   ) => DoHardWorkLoopBase,
-  params: IUniversalStrategyInputParams,
-  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>
+  params: IUniversalStrategyInputParams
 ) {
 
   describe(name + "_Test", async function () {
@@ -101,6 +117,10 @@ async function universalStrategyTest(
         [signer.address],
       );
 
+      if (params.strategyInit) {
+        await params.strategyInit(strategy, vault, user);
+      }
+
       // display initial balances
       console.log("Balance of signer", await IERC20__factory.connect(asset, signer).balanceOf(signer.address));
       console.log("Balance of user", await IERC20__factory.connect(asset, signer).balanceOf(user.address));
@@ -140,7 +160,7 @@ async function universalStrategyTest(
         params.loopValue,
         params.advanceBlocks,
         params.hwParams,
-        stateRegistrar
+        params.stateRegistrar
       );
     });
 
