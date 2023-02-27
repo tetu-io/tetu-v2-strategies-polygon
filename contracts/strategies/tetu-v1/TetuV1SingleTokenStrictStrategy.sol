@@ -16,7 +16,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
   string public constant override PLATFORM = "TETU";
   string public constant override STRATEGY_VERSION = "1.0.0";
 
-  uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
+  uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 5000; // 5%
 
   // in this strategy TETU V1 vault is used as a pool
   ISmartVault public immutable pool;
@@ -35,7 +35,14 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
 
   // uint earned, uint lost is it in USD?
   function doHardWork() external override returns (uint earned, uint lost) {
-    uint assetBalanceBefore = _balance(asset);
+    uint strategyBalanceBefore = pool.underlyingBalanceWithInvestmentForHolder(address(this));
+
+    // if we have some asset in the strategy we need to deposit it to the pool to not liquidate it.
+    uint assetBalanceBeforeClaim = _balance(asset);
+    if (assetBalanceBeforeClaim > 0) {
+      _depositToPool(assetBalanceBeforeClaim);
+    }
+
     _claim();
     _unwrapXTetu();
     _liquidateReward();
@@ -45,10 +52,13 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
     }
     earned = 0;
     lost = 0;
-    if(assetBalance > assetBalanceBefore) {
-      earned = assetBalance - assetBalanceBefore;
+
+    uint strategyBalanceAfter = pool.underlyingBalanceWithInvestmentForHolder(address(this));
+
+    if(strategyBalanceAfter > strategyBalanceBefore) {
+      earned = strategyBalanceAfter - strategyBalanceBefore;
     } else {
-      lost = assetBalanceBefore - assetBalance;
+      lost = strategyBalanceBefore - strategyBalanceAfter;
     }
   }
 
@@ -59,7 +69,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
   /// @dev Deposit given amount to the pool.
   function _depositToPool(uint amount) internal override {
     IERC20(asset).safeIncreaseAllowance(address(pool), amount);
-    pool.deposit(amount);
+    pool.depositAndInvest(amount);
   }
 
   /// @dev Withdraw given amount from the pool.
