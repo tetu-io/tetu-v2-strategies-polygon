@@ -47,27 +47,27 @@ describe('BalancerComposableStableUniversalTest', async () => {
   const core = Addresses.getCore();
   const tetuConverterAddress = getConverterAddress();
 
-  before(async function () {
-    await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+  await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+  console.log("Liquidator", deployInfo.tools?.liquidator);
+  console.log(deployInfo.tools?.converter);
 
-    const [signer] = await ethers.getSigners();
+  const [signer] = await ethers.getSigners();
 
-    await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
-    await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, core);
+  await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
+  await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, core);
 
-    // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+  // Disable DForce (as it reverts on repay after block advance)
+  await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
 
-    // Disable Hundred Finance (no liquidity)
-    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
-  });
+  // Disable Hundred Finance (no liquidity)
+  await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
 
-  /** Save collected states to csv, compute profit */
-  after(async function() {
-    const pathOut = "./tmp/ts2-snapshots.csv";
-    await BalancerIntTestUtils.saveListStatesToCSV(pathOut, states);
-    BalancerIntTestUtils.outputProfit(states);
-  });
+  // /** Save collected states to csv, compute profit */
+  // after(async function() {
+  //   const pathOut = "./tmp/ts2-snapshots.csv";
+  //   await BalancerIntTestUtils.saveListStatesToCSV(pathOut, states);
+  //   BalancerIntTestUtils.outputProfit(states);
+  // });
 
   const strategyName = 'BalancerComposableStableStrategy';
   const assetName = 'USDC';
@@ -119,4 +119,8 @@ describe('BalancerComposableStableUniversalTest', async () => {
     ),
     params,
   );
+
+  it("dummy", async () => {
+    // nothing to do
+  });
 });
