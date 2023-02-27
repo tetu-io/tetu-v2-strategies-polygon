@@ -14,7 +14,7 @@ import {expect} from "chai";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
 import {UniversalTestUtils} from "./UniversalTestUtils";
 
-interface IBalances {
+export interface IBalances {
   userBalance: BigNumber;
   signerBalance: BigNumber;
 }

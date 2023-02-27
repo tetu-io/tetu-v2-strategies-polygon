@@ -95,7 +95,7 @@ export class BalancerIntTestUtils {
    * set min health factor 1.02
    * for dai and usdt set target health factor = 1.05
    */
-  static async setTetConverterHealthFactors(signer: SignerWithAddress, tetuConverter: string) {
+  public static async setTetConverterHealthFactors(signer: SignerWithAddress, tetuConverter: string) {
     const controllerAddress = await ITetuConverter__factory.connect(tetuConverter, signer).controller();
     const controller = IConverterController__factory.connect(controllerAddress, signer);
     const governance = await controller.governance();
@@ -121,7 +121,7 @@ export class BalancerIntTestUtils {
   /**
    * deploy own splitter to be able to add console messages to the splitter
    */
-  static async deployAndSetCustomSplitter(signer: SignerWithAddress, core: CoreAddresses) {
+  public static async deployAndSetCustomSplitter(signer: SignerWithAddress, core: CoreAddresses) {
     const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2')
     await VaultFactory__factory.connect(
       core.vaultFactory,
@@ -132,7 +132,7 @@ export class BalancerIntTestUtils {
   /**
    * Set reinvest and reward-liquidation thresholds
    */
-  static async setThresholds(
+  public static async setThresholds(
     strategy: IStrategyV2,
     user: SignerWithAddress,
     params?: ISetThresholdsInputParams
@@ -157,7 +157,7 @@ export class BalancerIntTestUtils {
     }
   }
 
-  static async getState(
+  public static async getState(
     signer: SignerWithAddress,
     user: SignerWithAddress,
     strategy: BalancerComposableStableStrategy,
@@ -238,7 +238,7 @@ export class BalancerIntTestUtils {
     return dest;
   }
 
-  static async saveListStatesToCSV(pathOut: string, states: IState[]) {
+  public static async saveListStatesToCSV(pathOut: string, states: IState[]) {
 
     const headers = [
       "title",
@@ -359,7 +359,7 @@ export class BalancerIntTestUtils {
     }
   }
 
-  static getTotalUsdAmount(state: IState) : BigNumber {
+  public static getTotalUsdAmount(state: IState) : BigNumber {
     return state.user.usdc.add(
       state.signer.usdc
     ).add(
@@ -378,7 +378,7 @@ export class BalancerIntTestUtils {
    * and final state marked as "final"
    * @param states
    */
-  static outputProfit(states: IState[]) {
+  public static outputProfit(states: IState[]) {
     if (states.length < 2) return;
 
     const enter: IState = states[0];

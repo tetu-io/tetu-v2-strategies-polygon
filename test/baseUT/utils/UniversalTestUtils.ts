@@ -41,39 +41,38 @@ export interface IDistributedInfo {
  * Utils for universal test
  */
 export class UniversalTestUtils {
-  static async makeStrategyDeployer(
+  public static async makeStrategyDeployer(
+    signer: SignerWithAddress,
     core: CoreAddresses,
     asset: string,
     tetuConverterAddress: string,
     strategyName: string,
     params?: IMakeStrategyDeployerInputParams
-  ) : Promise<((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>)> {
-    return async (signer: SignerWithAddress) => {
-      const controller = DeployerUtilsLocal.getController(signer);
+  ) : Promise<IVaultStrategyInfo> {
+    const controller = DeployerUtilsLocal.getController(signer);
 
-      const strategyDeployer = async (splitterAddress: string) => {
-        const strategyProxy = await DeployerUtils.deployProxy(signer, strategyName);
-        const strategy = BalancerComposableStableStrategy__factory.connect(strategyProxy, signer);
-        await strategy.init(core.controller, splitterAddress, tetuConverterAddress);
-        return strategy as unknown as IStrategyV2;
-      }
-
-      const governance = await DeployerUtilsLocal.getControllerGovernance(signer);
-      return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
-        asset,
-        params?.vaultName || "vault",
-        strategyDeployer,
-        controller,
-        governance,
-        params?.buffer || 100,
-        params?.depositFee || 250,
-        params?.withdrawFee || 500,
-        params?.wait || false
-      );
+    const strategyDeployer = async (splitterAddress: string) => {
+      const strategyProxy = await DeployerUtils.deployProxy(signer, strategyName);
+      const strategy = BalancerComposableStableStrategy__factory.connect(strategyProxy, signer);
+      await strategy.init(core.controller, splitterAddress, tetuConverterAddress);
+      return strategy as unknown as IStrategyV2;
     }
+
+    const governance = await DeployerUtilsLocal.getControllerGovernance(signer);
+    return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+      asset,
+      params?.vaultName || "vault",
+      strategyDeployer,
+      controller,
+      governance,
+      params?.buffer || 100,
+      params?.depositFee || 250,
+      params?.withdrawFee || 500,
+      params?.wait || false
+    );
   }
 
-  static async setCompoundRatio(strategy: IStrategyV2, user: SignerWithAddress, compoundRate?: number) {
+  public static async setCompoundRatio(strategy: IStrategyV2, user: SignerWithAddress, compoundRate?: number) {
     if (compoundRate) {
       const controller = await StrategyBaseV2__factory.connect(strategy.address, user).controller();
       const platformVoter = await IController__factory.connect(controller, user).platformVoter();
@@ -88,7 +87,7 @@ export class UniversalTestUtils {
   /**
    * Move all available {asset} from balance of the {user} to {liquidator}
    */
-  static async removeExcessTokens(asset: string, user: SignerWithAddress, liquidator: string) {
+  public static async removeExcessTokens(asset: string, user: SignerWithAddress, liquidator: string) {
     const excessBalance = await TokenUtils.balanceOf(asset, user.address);
     if (!excessBalance.isZero()) {
       await TokenUtils.transfer(asset, user, liquidator, excessBalance.toString());
@@ -98,7 +97,7 @@ export class UniversalTestUtils {
   /**
    * Finds event "LossCovered(lossValue)" in {tx}, returns {lossValue}
    */
-  static async extractLossCovered(cr: ContractReceipt, vaultAddress: string) : Promise<BigNumber | undefined> {
+  public static async extractLossCovered(cr: ContractReceipt, vaultAddress: string) : Promise<BigNumber | undefined> {
     if (cr.events) {
       for (const event of cr.events) {
         if (event.address === vaultAddress) {
@@ -114,7 +113,7 @@ export class UniversalTestUtils {
     }
   }
 
-  static async extractDistributed(cr: ContractReceipt, forwarder: string) : Promise<IDistributedInfo[]> {
+  public static async extractDistributed(cr: ContractReceipt, forwarder: string) : Promise<IDistributedInfo[]> {
     const dest: IDistributedInfo[] = [];
     if (cr.events) {
       for (const event of cr.events) {
@@ -143,7 +142,7 @@ export class UniversalTestUtils {
     return dest;
   }
 
-  static async getAnOperator(strategy: string, signer: SignerWithAddress) : Promise<SignerWithAddress> {
+  public static async getAnOperator(strategy: string, signer: SignerWithAddress) : Promise<SignerWithAddress> {
     const controller = await StrategyBaseV2__factory.connect(strategy, signer).controller();
     const controllerAsUser = await ControllerV2__factory.connect(controller, signer);
     const operators = await controllerAsUser.operatorsList();

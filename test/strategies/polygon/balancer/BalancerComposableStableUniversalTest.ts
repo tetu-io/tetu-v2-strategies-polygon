@@ -37,7 +37,7 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe('BalancerComposableStableUniversalTest', async () => {
+describe('BalancerComposableStableUniversalTest', () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -47,68 +47,65 @@ describe('BalancerComposableStableUniversalTest', async () => {
   const core = Addresses.getCore();
   const tetuConverterAddress = getConverterAddress();
 
-  await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
-  console.log("Liquidator", deployInfo.tools?.liquidator);
-  console.log(deployInfo.tools?.converter);
+  before(async function() {
+    await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+    console.log("Liquidator", deployInfo.tools?.liquidator);
+    console.log(deployInfo.tools?.converter);
 
-  const [signer] = await ethers.getSigners();
+    const [signer] = await ethers.getSigners();
 
-  await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
-  await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, core);
+    await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
+    await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, core);
+    // Disable DForce (as it reverts on repay after block advance)
+    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
 
-  // Disable DForce (as it reverts on repay after block advance)
-  await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    // Disable Hundred Finance (no liquidity)
+    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
+  });
 
-  // Disable Hundred Finance (no liquidity)
-  await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
+  /** Save collected states to csv, compute profit */
+  after(async function() {
+    const pathOut = "./tmp/ts2-snapshots.csv";
+    await BalancerIntTestUtils.saveListStatesToCSV(pathOut, states);
+    BalancerIntTestUtils.outputProfit(states);
+  });
 
-  // /** Save collected states to csv, compute profit */
-  // after(async function() {
-  //   const pathOut = "./tmp/ts2-snapshots.csv";
-  //   await BalancerIntTestUtils.saveListStatesToCSV(pathOut, states);
-  //   BalancerIntTestUtils.outputProfit(states);
-  // });
-
-  const strategyName = 'BalancerComposableStableStrategy';
-  const assetName = 'USDC';
-  const asset = PolygonAddresses.USDC_TOKEN;
-  const reinvestThresholdPercent = 1_000; // 1%
-  const params: IUniversalStrategyInputParams = {
-    ppfsDecreaseAllowed: false,
-    balanceTolerance:  0.000001, // looks like some rounding issues with 6-decimals tokens
-    deposit: 100_000,
-    loops: 4,
-    loopValue: 2000,
-    advanceBlocks: true,
-    specificTests: [],
-    hwParams: {
-      compoundRate: 100_000, // 50%
-    },
-    stateRegistrar: async (title, h) => {
-      states.push(await BalancerIntTestUtils.getState(
-        h.signer,
-        h.user,
-        h.strategy as unknown as BalancerComposableStableStrategy,
-        h.vault,
-        title
-      ));
-    },
-    strategyInit: async (strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
-      await BalancerIntTestUtils.setThresholds(
-        strategy as unknown as IStrategyV2,
-        user,
-        {reinvestThresholdPercent}
-      );
+  describe('tests', async () => {
+    const strategyName = 'BalancerComposableStableStrategy';
+    const assetName = 'USDC';
+    const asset = PolygonAddresses.USDC_TOKEN;
+    const reinvestThresholdPercent = 1_000; // 1%
+    const params: IUniversalStrategyInputParams = {
+      ppfsDecreaseAllowed: false,
+      balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
+      deposit: 100_000,
+      loops: 4,
+      loopValue: 2000,
+      advanceBlocks: true,
+      specificTests: [],
+      hwParams: {
+        compoundRate: 100_000, // 50%
+      },
+      stateRegistrar: async (title, h) => {
+        states.push(await BalancerIntTestUtils.getState(
+          h.signer,
+          h.user,
+          h.strategy as unknown as BalancerComposableStableStrategy,
+          h.vault,
+          title
+        ));
+      },
+      strategyInit: async (strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
+        await BalancerIntTestUtils.setThresholds(
+          strategy as unknown as IStrategyV2,
+          user,
+          {reinvestThresholdPercent}
+        );
+      }
     }
-  }
 
-  /* tslint:disable:no-floating-promises */
-  await startDefaultStrategyTest(
-    strategyName,
-    asset,
-    assetName,
-    deployInfo,
-    await UniversalTestUtils.makeStrategyDeployer(
+    const deployer = async (signer: SignerWithAddress) => UniversalTestUtils.makeStrategyDeployer(
+      signer,
       core,
       asset,
       tetuConverterAddress,
@@ -116,11 +113,16 @@ describe('BalancerComposableStableUniversalTest', async () => {
       {
         vaultName: 'tetu' + assetName
       }
-    ),
-    params,
-  );
+    );
 
-  it("dummy", async () => {
-    // nothing to do
+    /* tslint:disable:no-floating-promises */
+    await startDefaultStrategyTest(
+      strategyName,
+      asset,
+      assetName,
+      deployInfo,
+      deployer,
+      params,
+    );
   });
 });
