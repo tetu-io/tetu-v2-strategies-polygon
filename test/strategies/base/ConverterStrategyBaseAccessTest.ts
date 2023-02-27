@@ -41,6 +41,7 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_AMOUNT, GAS_CONVERTER_STRATEGY_BASE_CONVERT_WITHDRAW_EMERGENCY,
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
+import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 
 /**
  * Test of ConverterStrategyBase
@@ -226,6 +227,33 @@ describe("ConverterStrategyBaseAccessTest", () => {
 //endregion Utils
 
 //region Unit tests
+  describe("setReinvestThresholdPercent", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+        await strategy.connect(operator).setReinvestThresholdPercent(1012);
+        const ret = await strategy.reinvestThresholdPercent();
+
+        expect(ret).eq(1012);
+      });
+    });
+    describe("Bad paths", () => {
+      it("should revert if not operator", async () => {
+        const notOperator = await Misc.impersonate(ethers.Wallet.createRandom().address);
+        await expect(
+          strategy.connect(notOperator).setReinvestThresholdPercent(1012)
+        ).revertedWith("SB: Denied");
+      });
+      it("should revert if percent is too high", async () => {
+        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+        await expect(
+          strategy.connect(operator).setReinvestThresholdPercent(100_001)
+        ).revertedWith("TS-9 wrong value"); // WRONG_VALUE
+      });
+
+    });
+  });
+
   describe("_beforeDeposit", () => {
     interface IBeforeDepositTestResults {
       tokenAmounts: BigNumber[];
@@ -3192,22 +3220,262 @@ describe("ConverterStrategyBaseAccessTest", () => {
     describe("Bad paths", () => {
 // TODO
     });
-    describe("Gas estimation @skip-on-coverage", () => {
-
-    });
   });
 
   describe("requireAmountBack", () => {
+    interface IPrepareWithdraw {
+      investedAssetsBeforeWithdraw: BigNumber;
+      liquidations?: ILiquidationParams[];
+      baseAmounts?: ITokenAmount[];
+      initialBalances?: ITokenAmount[];
+      repayments?: IRepayParams[];
+    }
+    async function prepareWithdraw(
+      depositorLiquidity: BigNumber,
+      depositorPoolReserves: BigNumber[],
+      depositorTotalSupply: BigNumber,
+      withdrawnAmounts: BigNumber[],
+      amount: BigNumber,
+      params?: IPrepareWithdraw
+    ) {
+      if (params?.baseAmounts) {
+        for (const tokenAmount of params?.baseAmounts) {
+          await strategy.setBaseAmountAccess(tokenAmount.token.address, tokenAmount.amount);
+        }
+      }
+      if (params?.initialBalances) {
+        for (const tokenAmount of params?.initialBalances) {
+          await tokenAmount.token.mint(strategy.address, tokenAmount.amount);
+        }
+      }
+      if (params?.liquidations) {
+        for (const liquidation of params?.liquidations) {
+          const pool = ethers.Wallet.createRandom().address;
+          const swapper = ethers.Wallet.createRandom().address;
+          await liquidator.setBuildRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            ""
+          );
+          await liquidator.setGetPriceForRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidator.setLiquidateWithRoute(
+            liquidation.tokenIn.address,
+            liquidation.tokenOut.address,
+            pool,
+            swapper,
+            liquidation.amountIn,
+            liquidation.amountOut
+          );
+          await liquidation.tokenOut.mint(liquidator.address, liquidation.amountOut);
+        }
+      }
+      if (params?.repayments) {
+        for (const repayment of params.repayments) {
+          await tetuConverter.setGetDebtAmountCurrent(
+            strategy.address,
+            repayment.collateralAsset.address,
+            repayment.borrowAsset.address,
+            repayment.totalDebtAmountOut,
+            repayment.totalCollateralAmountOut
+          );
+          await tetuConverter.setRepay(
+            repayment.collateralAsset.address,
+            repayment.borrowAsset.address,
+            repayment.amountRepay,
+            strategy.address,
+            repayment.totalCollateralAmountOut,
+            0,
+            0,
+            0
+          );
+          await tetuConverter.setQuoteRepay(
+            strategy.address,
+            repayment.collateralAsset.address,
+            repayment.borrowAsset.address,
+            repayment.amountRepay,
+            repayment.totalCollateralAmountOut,
+          );
+          await repayment.collateralAsset.mint(tetuConverter.address, repayment.totalCollateralAmountOut);
+        }
+      }
+
+      await strategy.setDepositorLiquidity(depositorLiquidity);
+      await strategy.setDepositorPoolReserves(depositorPoolReserves);
+      await strategy.setTotalSupply(depositorTotalSupply);
+
+      await setupInvestedAssets(depositorLiquidity, params.investedAssetsBeforeWithdraw);
+      const investedAssets = await strategy.investedAssets();
+
+      const liquidityAmountToWithdraw = depositorLiquidity.mul(101).mul(amount).div(100).div(investedAssets);
+      console.log("liquidityAmountToWithdraw", liquidityAmountToWithdraw);
+      console.log("depositorLiquidity", depositorLiquidity);
+      console.log("amount", amount);
+      console.log("investedAssets", investedAssets);
+      await strategy.setDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
+      await strategy.setDepositorQuoteExit(
+        amount
+          ? depositorLiquidity.sub(liquidityAmountToWithdraw)
+          : BigNumber.from(0),
+        [
+          0, // dai
+          BigNumber.from("1"), // actual value is not important
+          0 // usdt
+        ]
+      );
+    }
     describe("Good paths", () => {
-      it("should return expected values", async () => {
-// todo
+      describe("There is enough main asset on the balance", () => {
+        it("should return send given amount of main asset to tetuConverter", async () => {
+          await usdc.mint(strategy.address, parseUnits("100", 6));
+          const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+          const r = await strategyAsTC.callStatic.requireAmountBack(
+            usdc.address,
+            parseUnits("99", 6),
+            dai.address,
+            parseUnits("500", 18),
+          );
+          await strategyAsTC.requireAmountBack(
+            usdc.address,
+            parseUnits("99", 6),
+            dai.address,
+            parseUnits("500", 18),
+          );
+
+          const ret = [
+            r.isCollateral,
+            r.amountOut,
+            await usdc.balanceOf(tetuConverter.address),
+            await usdc.balanceOf(strategy.address)
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          const expected = [
+            true,
+            parseUnits("99", 6),
+            parseUnits("99", 6),
+            parseUnits("1", 6)
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
+      describe("There is not enough main asset on the balance", () => {
+        it("should withdraw missed amount and send given amount to tetuConveter", async () => {
+          const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+
+          await prepareWithdraw(
+            parseUnits("6", 6), // total liquidity of the user
+            [
+              parseUnits("1000", 18), // dai
+              parseUnits("2000", 6), // usdc
+              parseUnits("3000", 6), // usdt
+            ],
+            parseUnits("6000", 6), // total supply
+            [
+              parseUnits("0.505", 18),
+              parseUnits("17", 6),
+              parseUnits("1.515", 6),
+            ],
+            parseUnits("3", 6), // amount to withdraw
+            {
+              investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount
+              baseAmounts: [
+                {token: dai, amount: parseUnits("0", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("0", 6)},
+              ],
+              initialBalances: [
+                {token: dai, amount: parseUnits("0", 18)},
+                {token: usdc, amount: parseUnits("1000", 6)},
+                {token: usdt, amount: parseUnits("0", 6)},
+              ],
+              repayments: [
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  totalDebtAmountOut: parseUnits("0.505", 18),
+                  amountRepay: parseUnits("0.505", 18),
+                  totalCollateralAmountOut: parseUnits("1980", 6),
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalDebtAmountOut: parseUnits("1.515", 6),
+                  amountRepay: parseUnits("1.515", 6),
+                  totalCollateralAmountOut: parseUnits("1930", 6),
+                },
+              ]
+            }
+          )
+
+          const r = await strategyAsTC.callStatic.requireAmountBack(
+            usdc.address,
+            parseUnits("1003", 6),
+            dai.address,
+            parseUnits("500", 18),
+          );
+          await strategyAsTC.requireAmountBack(
+            usdc.address,
+            parseUnits("1003", 6),
+            dai.address,
+            parseUnits("500", 18),
+          );
+
+          const ret = [
+            r.isCollateral,
+            r.amountOut,
+            await usdc.balanceOf(tetuConverter.address),
+            await usdc.balanceOf(strategy.address)
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          const expected = [
+            true,
+            parseUnits("1003", 6),
+            parseUnits("1003", 6), // 1003
+            parseUnits("3924", 6) // 1980+1930+17-3
+          ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          expect(ret).eq(expected);
+        });
       });
     });
     describe("Bad paths", () => {
+      it("should revert if not tetu converter", async () => {
+        await usdc.mint(strategy.address, parseUnits("100", 6));
+        const strategyAsNotTC = strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address));
+        await expect(
+          strategyAsNotTC.requireAmountBack(
+            usdc.address,
+            parseUnits("99", 6),
+            dai.address,
+            parseUnits("500", 18),
+          )
+        ).revertedWith("TS-13 only TetuConverter"); // ONLY_TETU_CONVERTER
+      });
+      it("should revert if wrong asset", async () => {
+        await usdc.mint(strategy.address, parseUnits("100", 6));
+        const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+        await expect(
+          strategyAsTC.requireAmountBack(
+            tetu.address, // (!) wrong asset, not usdc
+            parseUnits("99", 18),
+            dai.address,
+            parseUnits("500", 18),
+          )
+        ).revertedWith("TS-14 wrong asset"); // WRONG_ASSET
+      });
 
     });
     describe("Gas estimation @skip-on-coverage", () => {
-
+// todo
     });
   });
 //endregion Unit tests

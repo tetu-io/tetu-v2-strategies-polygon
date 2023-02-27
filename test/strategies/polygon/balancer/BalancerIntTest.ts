@@ -155,7 +155,8 @@ describe('BalancerIntTest', function() {
       core = await DeployerUtilsLocal.getCoreAddressesWrapper(signer);
       tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
 
-      const strategyDeployer = await UniversalTestUtils.makeStrategyDeployer(
+      const data = await UniversalTestUtils.makeStrategyDeployer(
+        signer,
         addresses,
         MAIN_ASSET,
         tetuConverterAddress,
@@ -166,7 +167,6 @@ describe('BalancerIntTest', function() {
           withdrawFee: WITHDRAW_FEE
         }
       );
-      const data = await strategyDeployer(signer);
 
       vault = data.vault;
       asset = await data.vault.asset();
