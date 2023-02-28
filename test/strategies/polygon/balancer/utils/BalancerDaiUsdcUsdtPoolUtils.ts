@@ -1,4 +1,3 @@
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {MaticHolders} from "../../../../../scripts/MaticHolders";
 import {BigNumber} from "ethers";
 import {
@@ -7,12 +6,11 @@ import {
   IBVault__factory,
   IERC20__factory
 } from "../../../../../typechain";
-import {parseUnits} from "ethers/lib/utils";
 import {MaticAddresses} from "../../../../../scripts/MaticAddresses";
 import {Misc} from "../../../../../scripts/utils/Misc";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
-export interface ISwapResults {
+export interface IBalancerSwapResults {
   poolTokensBeforeSwap: {
     tokens: string[];
     balances: BigNumber[];
@@ -37,6 +35,9 @@ export interface ISwapResults {
 
 }
 
+/**
+ * Change prices in Balancer Boosted Aave USD pool by swapping big amounts
+ */
 export class BalancerDaiUsdcUsdtPoolUtils {
   public static readonly balancerVaultAddress = "0xBA12222222228d8Ba445958a75a0704d566BF2C8";
   // Balancer Boosted Aave USD pool ID
@@ -57,17 +58,19 @@ export class BalancerDaiUsdcUsdtPoolUtils {
 
   // index of DAI in balancerVault.getPoolTokens()=>tokens
   public static readonly DAI_TOKENS_INDEX = 0;
-  public static readonly USDC_TOKENS_INDEX = 1;
+  public static readonly USDC_TOKENS_INDEX = 2;
   public static readonly USDT_TOKENS_INDEX = 3;
 
   public static async swapDaiToUsdt(
     signer: SignerWithAddress,
-    amountDAI: BigNumber,
+    approxPercentOnEachStep: number,
     countSwaps: number = 1
-  ) : Promise<ISwapResults> {
+  ) : Promise<IBalancerSwapResults> {
     const balancerVault = IBVault__factory.connect(this.balancerVaultAddress, signer);
     const poolBoosted = IBalancerBoostedAaveStablePool__factory.connect((await balancerVault.getPool(this.poolBoostedId))[0], signer);
     const poolTokensBeforeSwap = await balancerVault.getPoolTokens(this.poolBoostedId);
+    const amountDAI = poolTokensBeforeSwap.balances[this.DAI_TOKENS_INDEX].mul(approxPercentOnEachStep).div(100);
+    console.log("amountDAI", amountDAI);
 
     for (let i = 0; i < countSwaps; ++i) {
       await IERC20__factory.connect(MaticAddresses.DAI_TOKEN, await Misc.impersonate(this.holderDAI)).transfer(signer.address, amountDAI);

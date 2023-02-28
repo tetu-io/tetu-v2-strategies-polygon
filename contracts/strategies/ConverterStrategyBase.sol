@@ -14,6 +14,7 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -658,7 +659,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim
   function _updateInvestedAssets() internal {
+    console.log("_updateInvestedAssets.before", _investedAssets);
     _investedAssets = calcInvestedAssets();
+    console.log("_updateInvestedAssets.after", _investedAssets);
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool

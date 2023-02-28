@@ -55,6 +55,8 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {MaticHolders} from "../../../../scripts/MaticHolders";
 import {BalancerDaiUsdcUsdtPoolUtils} from "./utils/BalancerDaiUsdcUsdtPoolUtils";
+import {LiquidatorUtils} from "./utils/LiquidatorUtils";
+import {IPriceOracles, PriceOracleUtils} from "./utils/PriceOracleUtils";
 chai.use(chaiAsPromised);
 
 /**
@@ -73,12 +75,7 @@ describe('BalancerIntPriceChangeTest', function() {
   let tetuConverterAddress: string;
   let user: SignerWithAddress;
 
-  let daiPriceSource: Aave3AggregatorInterfaceMock;
-  let usdcPriceSource: Aave3AggregatorInterfaceMock;
-  let usdtPriceSource: Aave3AggregatorInterfaceMock;
-
-  let priceOracleAave3: IAave3PriceOracle;
-  let priceOracleInTetuConverter: IPriceOracle;
+  let priceOracles: IPriceOracles;
 
 //endregion Constants and variables
 
@@ -95,42 +92,7 @@ describe('BalancerIntPriceChangeTest', function() {
     await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
-    // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
-    await ConverterUtils.disablePlatformAdapter(signer, getAaveTwoPlatformAdapter());
-
-    //  See first event for of ACLManager (AAVE_V3_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD")
-    //  https://polygonscan.com/address/0xa72636cbcaa8f5ff95b2cc47f3cdee83f3294a0b#readContract
-    const AAVE_V3_POOL_OWNER = "0xdc9a35b16db4e126cfedc41322b3a36454b1f772";
-    const poolOwner = await Misc.impersonate(AAVE_V3_POOL_OWNER);
-
-    // Set up mocked price-source to AAVE3's price oracle
-    // Tetu converter uses same price oracle internally
-    const AAVE_V3_PRICE_ORACLE = "0xb023e699F5a33916Ea823A16485e259257cA8Bd1";
-    const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(AAVE_V3_PRICE_ORACLE, poolOwner);
-
-    const priceDai = await priceOracleAsPoolOwner.getAssetPrice(MaticAddresses.DAI_TOKEN);
-    const priceUsdc = await priceOracleAsPoolOwner.getAssetPrice(MaticAddresses.USDC_TOKEN);
-    const priceUsdt = await priceOracleAsPoolOwner.getAssetPrice(MaticAddresses.USDT_TOKEN);
-
-    daiPriceSource = await MockHelper.createAave3AggregatorInterfaceMock(signer, priceDai);
-    usdcPriceSource = await MockHelper.createAave3AggregatorInterfaceMock(signer, priceUsdc);
-    usdtPriceSource = await MockHelper.createAave3AggregatorInterfaceMock(signer, priceUsdt);
-
-    await priceOracleAsPoolOwner.setAssetSources([MaticAddresses.DAI_TOKEN], [daiPriceSource.address]);
-    await priceOracleAsPoolOwner.setAssetSources([MaticAddresses.USDC_TOKEN], [usdcPriceSource.address]);
-    await priceOracleAsPoolOwner.setAssetSources([MaticAddresses.USDT_TOKEN], [usdtPriceSource.address]);
-
-    priceOracleAave3 = priceOracleAsPoolOwner.connect(signer);
-
-    priceOracleInTetuConverter = await IPriceOracle__factory.connect(
-      await IConverterController__factory.connect(
-        await ITetuConverter__factory.connect(tetuConverterAddress, signer).controller(),
-        signer
-      ).priceOracle(),
-      signer
-    );
+    priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, tetuConverterAddress);
   });
 
   after(async function () {
@@ -177,6 +139,60 @@ describe('BalancerIntPriceChangeTest', function() {
       await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
       return BalancerIntTestUtils.getState(signer, user, strategy, vault);
+    }
+
+    interface IChangePricesResults {
+      investedAssets0: BigNumber;
+      investedAssetsAfterOracles: BigNumber;
+      investedAssetsAfterBalancer: BigNumber;
+      investedAssetsAfterLiquidatorUsdt: BigNumber;
+      investedAssetsAfterLiquidatorAll: BigNumber;
+    }
+
+    async function changePrices(
+      percent: number
+    ) : Promise<IChangePricesResults> {
+      const investedAssets0 = await strategy.callStatic.calcInvestedAssets();
+
+      // change prices ~4% in price oracles
+      await PriceOracleUtils.decPriceDai(priceOracles, 4);
+      await PriceOracleUtils.incPriceUsdt(priceOracles, 4);
+      const investedAssetsAfterOracles = await strategy.callStatic.calcInvestedAssets();
+
+      // change prices ~4% in balancer
+      await BalancerDaiUsdcUsdtPoolUtils.swapDaiToUsdt(signer, percent);
+      const investedAssetsAfterBalancer = await strategy.callStatic.calcInvestedAssets();
+
+      // change prices ~4% in liquidator
+      // add usdt to the pool, reduce USDT price
+      await LiquidatorUtils.swapToUsdc(
+        signer,
+        tools.liquidator.address,
+        MaticAddresses.USDT_TOKEN,
+        MaticHolders.HOLDER_USDT,
+        parseUnits("10000", 6),
+        percent
+      );
+      const investedAssetsAfterLiquidatorUsdt = await strategy.callStatic.calcInvestedAssets();
+
+      // remove DAI from the pool, increase DAI price
+      await LiquidatorUtils.swapUsdcTo(
+        signer,
+        tools.liquidator.address,
+        MaticAddresses.DAI_TOKEN, // dai (!)
+        MaticHolders.HOLDER_USDC, // usdC (!)
+        parseUnits("10000", 6),
+        percent
+      );
+      const investedAssetsAfterLiquidatorAll = await strategy.callStatic.calcInvestedAssets();
+
+      return {
+        investedAssets0,
+        investedAssetsAfterOracles,
+        investedAssetsAfterBalancer,
+        investedAssetsAfterLiquidatorUsdt,
+        investedAssetsAfterLiquidatorAll
+      }
     }
 
     before(async function () {
@@ -244,34 +260,34 @@ describe('BalancerIntPriceChangeTest', function() {
      * because after deposit we have either DAI or USDT not-zero amount on strategy balance
      * (but not both)
      */
-    describe("DAI and USDT price are reduced on 10%", () => {
+    describe("DAI and USDT price are reduced on 4%", () => {
       it("should change prices in AAVE3 and TC oracles", async () => {
         // prices before
-        const daiPriceAave3 = await priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceAave3 = await priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceAave3 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceAave3 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
-        const daiPriceTC = await priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceTC = await priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceTC = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceTC = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
         // reduce prices
-        const daiPrice = await daiPriceSource.price();
+        const daiPrice = await priceOracles.daiPriceSource.price();
         const daiNewPrice = daiPrice.mul(90).div(100);
-        await daiPriceSource.setPrice(daiNewPrice);
+        await priceOracles.daiPriceSource.setPrice(daiNewPrice);
         const daiPrice18 = daiPrice.mul(parseUnits("1", 10)); // see PriceOracle impl in TC
         const daiNewPrice18 = daiNewPrice.mul(parseUnits("1", 10)); // see PriceOracle impl in TC
 
-        const usdtPrice = await usdtPriceSource.price();
+        const usdtPrice = await priceOracles.usdtPriceSource.price();
         const usdtNewPrice = usdtPrice.mul(90).div(100);
-        await usdtPriceSource.setPrice(usdtNewPrice);
+        await priceOracles.usdtPriceSource.setPrice(usdtNewPrice);
         const usdtPrice18 = usdtPrice.mul(parseUnits("1", 10)); // see PriceOracle impl in TC
         const usdtNewPrice18 = usdtNewPrice.mul(parseUnits("1", 10)); // see PriceOracle impl in TC
 
         // prices after
-        const daiPriceAave31 = await priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceAave31 = await priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceAave31 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceAave31 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
-        const daiPriceTC1 = await priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceTC1 = await priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceTC1 = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceTC1 = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
         // compare
         const ret = [
@@ -288,7 +304,7 @@ describe('BalancerIntPriceChangeTest', function() {
       it("should change prices in Balancer pool", async () => {
         const r = await BalancerDaiUsdcUsdtPoolUtils.swapDaiToUsdt(
           signer,
-          parseUnits("100000", 18),
+          4, // ~ 4%
           2
         );
         const ret = [
@@ -306,42 +322,94 @@ describe('BalancerIntPriceChangeTest', function() {
       });
       describe("Deposit, reduce price, check state", () => {
         it("should return expected values", async () => {
-          // const stateAfterDeposit = await enterToVault();
+          await enterToVault();
 
           // let's put additional amounts on strategy balance to enable swap in calcInvestedAssets
-          const holderDAI = MaticHolders.HOLDER_DAI;
-          const holderUSDT = MaticHolders.HOLDER_USDT;
+          await IERC20__factory.connect(MaticAddresses.DAI_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_DAI))
+            .transfer(strategy.address, parseUnits("10000", 18));
+          await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_USDT))
+            .transfer(strategy.address, parseUnits("10000", 6));
 
-          await IERC20__factory.connect(
-            MaticAddresses.DAI_TOKEN,
-            await Misc.impersonate(holderDAI)
-          ).transfer(strategy.address, parseUnits("10000", 18));
-
-          await IERC20__factory.connect(
-            MaticAddresses.USDT_TOKEN,
-            await Misc.impersonate(holderUSDT)
-          ).transfer(strategy.address, parseUnits("10000", 6));
-
-          await strategy.calcInvestedAssets();
+          // change prices
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const r = await changePrices(6);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
-          // reduce prices
-          const daiPrice = await daiPriceSource.price();
-          const daiNewPrice = daiPrice.mul(90).div(100);
-          await daiPriceSource.setPrice(daiNewPrice);
+          // check states
+          console.log("stateBefore", stateBefore);
+          console.log("stateAfter", stateAfter);
 
-          const usdtPrice = await usdtPriceSource.price();
-          const usdtNewPrice = usdtPrice.mul(90).div(100);
-          await usdtPriceSource.setPrice(usdtNewPrice);
+          console.log("investedAssetsBefore", r.investedAssets0);
+          console.log("investedAssetsAfter1 (price oracles)", r.investedAssetsAfterOracles);
+          console.log("investedAssetsAfter2 (balancer)", r.investedAssetsAfterBalancer);
+          console.log("investedAssetsAfter3 (liquidator, usdt only)", r.investedAssetsAfterLiquidatorUsdt);
+          console.log("investedAssetsAfter4 (liquidator)", r.investedAssetsAfterLiquidatorAll);
 
-          // let's update _investedAssets
-          await strategy.calcInvestedAssets();
+          const ret = [
+            r.investedAssetsAfterOracles.eq(r.investedAssets0),
+            r.investedAssetsAfterBalancer.eq(r.investedAssetsAfterOracles),
+            r.investedAssetsAfterLiquidatorAll.eq(r.investedAssetsAfterOracles)
+          ].join();
+
+          const expected = [false, false, false].join();
+          expect(ret).eq(expected);
+        });
+      });
+    });
+
+    /**
+     * Any deposit/withdraw/hardwork operation shouldn't change sharedPrice (at least significantly)
+     */
+    describe("Ensure share price is not changed", () => {
+      describe("Deposit", () => {
+        it("should return expected values", async () => {
+          const stateBefore = await enterToVault();
+
+          // prices were changed, but calcInvestedAssets were not called
+          await changePrices(6);
+
+          // let's deposit $1 - calcInvestedAssets will be called after the deposit
+          await IERC20__factory.connect(
+            MaticAddresses.USDC_TOKEN,
+            await Misc.impersonate(MaticHolders.HOLDER_USDC)
+          ).transfer(user.address, parseUnits("1", 6));
+          await VaultUtils.deposit(user, vault, parseUnits("1", 6));
 
           const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
-          // console.log("stateAfterDeposit", stateAfterDeposit);
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          expect(ret.eq(0)).eq(true);
+        });
+      });
+      describe("Withdraw", () => {
+        it("should return expected values", async () => {
+          const stateBefore = await enterToVault();
           console.log("stateBefore", stateBefore);
-          console.log("stateAfter", stateAfter);
+
+          // prices were changed, but calcInvestedAssets were not called
+          await changePrices(6);
+
+          // we need to force vault to withdraw some amount from the strategy
+          // so let's ask to withdraw an amount greater than amount on vault's balance
+          // calcInvestedAssets will be called after the withdrawal
+          const amountToWithdraw = stateBefore.vault.usdc.add(parseUnits("1", 6));
+          await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          expect(ret.eq(0)).eq(true);
+        });
+      });
+      describe("Hardwork", () => {
+        it("should return expected values", async () => {
+// todo
         });
       });
     });
