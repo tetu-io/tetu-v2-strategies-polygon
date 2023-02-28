@@ -35,13 +35,13 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
 
   // uint earned, uint lost is it in USD?
   function doHardWork() external override returns (uint earned, uint lost) {
-    uint strategyBalanceBefore = pool.underlyingBalanceWithInvestmentForHolder(address(this));
-
     // if we have some asset in the strategy we need to deposit it to the pool to not liquidate it.
     uint assetBalanceBeforeClaim = _balance(asset);
     if (assetBalanceBeforeClaim > 0) {
       _depositToPool(assetBalanceBeforeClaim);
     }
+
+    uint strategyBalanceBefore = pool.underlyingBalanceWithInvestmentForHolder(address(this));
 
     _claim();
     _unwrapXTetu();
