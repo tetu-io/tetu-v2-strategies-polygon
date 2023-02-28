@@ -11,7 +11,7 @@ import {
   getDForcePlatformAdapter,
   getHundredFinancePlatformAdapter, Misc
 } from "../../../../scripts/utils/Misc";
-import {BalancerIntTestUtils, IState} from "./utils/BalancerIntTestUtils";
+import {BalancerIntTestUtils, IPutInitialAmountsBalancesResults, IState} from "./utils/BalancerIntTestUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {
   BalancerComposableStableStrategy, BalancerComposableStableStrategy__factory, ControllerV2__factory,
@@ -40,35 +40,6 @@ import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 chai.use(chaiAsPromised);
-
-//region Utils
-interface IPutInitialAmountsoBalancesResults {
-  balanceUser: BigNumber;
-  balanceSigner: BigNumber;
-}
-
-/**
- *  put DEPOSIT_AMOUNT => user, DEPOSIT_AMOUNT/2 => signer, DEPOSIT_AMOUNT/2 => liquidator
- */
-async function putInitialAmountsToBalances(
-  asset: string,
-  user: SignerWithAddress,
-  signer: SignerWithAddress,
-  liquidator: ITetuLiquidator,
-  amount: number
-) : Promise<IPutInitialAmountsoBalancesResults>{
-  const userBalance = await StrategyTestUtils.getUnderlying(user, asset, amount, liquidator, [signer.address]);
-
-  // put half of signer's balance to liquidator
-  const signerBalance = userBalance;
-  await IERC20__factory.connect(asset, signer).transfer(liquidator.address, signerBalance.div(2));
-  return {
-    balanceSigner: await IERC20__factory.connect(asset, signer).balanceOf(signer.address),
-    balanceUser: await IERC20__factory.connect(asset, signer).balanceOf(user.address),
-  }
-}
-
-//endregion Utils
 
 describe('BalancerIntTest', function() {
 //region Constants and variables
@@ -135,7 +106,7 @@ describe('BalancerIntTest', function() {
     let asset: string;
     let splitter: ISplitter;
     let stateBeforeDeposit: IState;
-    let initialBalances: IPutInitialAmountsoBalancesResults;
+    let initialBalances: IPutInitialAmountsBalancesResults;
     let forwarder: string;
 
     /**
@@ -186,7 +157,7 @@ describe('BalancerIntTest', function() {
         {reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT}
       );
 
-      initialBalances = await putInitialAmountsToBalances(
+      initialBalances = await BalancerIntTestUtils.putInitialAmountsToBalances(
         asset,
         user,
         signer,

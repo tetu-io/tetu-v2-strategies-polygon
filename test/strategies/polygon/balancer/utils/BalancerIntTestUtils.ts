@@ -5,7 +5,7 @@ import {
   IBorrowManager__factory,
   IConverterController__factory, IERC20__factory, ISplitter__factory,
   IStrategyV2,
-  ITetuConverter__factory,
+  ITetuConverter__factory, ITetuLiquidator,
   StrategyBaseV2__factory,
   TetuVaultV2,
   VaultFactory__factory
@@ -21,6 +21,7 @@ import hre from "hardhat";
 import {writeFileSync} from "fs";
 import {formatUnits} from "ethers/lib/utils";
 import {UniversalTestUtils} from "../../../../baseUT/utils/UniversalTestUtils";
+import {StrategyTestUtils} from "../../../../baseUT/utils/StrategyTestUtils";
 
 export interface ISetThresholdsInputParams {
   reinvestThresholdPercent?: number;
@@ -85,6 +86,10 @@ export interface IState {
   }
 }
 
+export interface IPutInitialAmountsBalancesResults {
+  balanceUser: BigNumber;
+  balanceSigner: BigNumber;
+}
 
 /**
  * Utils for integration tests of BalancerComposableStableStrategy
@@ -410,4 +415,26 @@ export class BalancerIntTestUtils {
     console.log("Duration in days", timeSeconds / (24*60*60));
     console.log("Estimated APR, %", apr);
   }
+
+  /**
+   *  put DEPOSIT_AMOUNT => user, DEPOSIT_AMOUNT/2 => signer, DEPOSIT_AMOUNT/2 => liquidator
+   */
+  public static async putInitialAmountsToBalances(
+    asset: string,
+    user: SignerWithAddress,
+    signer: SignerWithAddress,
+    liquidator: ITetuLiquidator,
+    amount: number
+  ) : Promise<IPutInitialAmountsBalancesResults>{
+    const userBalance = await StrategyTestUtils.getUnderlying(user, asset, amount, liquidator, [signer.address]);
+
+    // put half of signer's balance to liquidator
+    const signerBalance = userBalance;
+    await IERC20__factory.connect(asset, signer).transfer(liquidator.address, signerBalance.div(2));
+    return {
+      balanceSigner: await IERC20__factory.connect(asset, signer).balanceOf(signer.address),
+      balanceUser: await IERC20__factory.connect(asset, signer).balanceOf(user.address),
+    }
+  }
+
 }

@@ -333,7 +333,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return (investedAssetsUSD, assetPrice);
   }
 
-  /// @notice If pool support emergency withdraw need to call it for emergencyExit()
+  /// @notice If pool supports emergency withdraw need to call it for emergencyExit()
   function _emergencyExitFromPool() override internal virtual {
     uint[] memory withdrawnAmounts = _depositorEmergencyExit();
     emit OnDepositorEmergencyExit(withdrawnAmounts);

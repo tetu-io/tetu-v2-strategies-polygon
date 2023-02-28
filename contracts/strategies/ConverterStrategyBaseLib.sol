@@ -687,9 +687,9 @@ library ConverterStrategyBaseLib {
   ) {
     RecycleLocalParams memory p;
 
-    require(params.rewardTokens.length == params.rewardAmounts.length, "SB: Arrays mismatch");
-
     p.len = params.rewardTokens.length;
+    require(p.len == params.rewardAmounts.length, AppErrors.WRONG_LENGTHS);
+
     p.liquidationThresholdAsset = liquidationThresholds[params.asset];
 
     amountsToForward = new uint[](p.len);
