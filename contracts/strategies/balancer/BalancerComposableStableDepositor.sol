@@ -15,6 +15,8 @@ import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
 import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
+import "hardhat/console.sol";
+
 /// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Aave USD"
 /// @dev See https://app.balancer.fi/#/polygon/pool/0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
 ///            bb-am-DAI (DAI + amDAI) + bb-am-USDC (USDC + amUSDC) + bb-am-USDT (USDT + amUSDT)
@@ -113,6 +115,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
+    //! console.log("_depositorEnter amountsDesired_", amountsDesired_[0], amountsDesired_[1], amountsDesired_[2]);
     bytes32 _poolId = poolId; // gas saving
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
     //!! console.log("_depositorEnter.0 depositorBalance", pool.balanceOf(address(this)));
@@ -120,14 +123,14 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     // join to the pool, receive pool-BPTs
     (amountsConsumedOut, liquidityOut) = BalancerLogicLib.depositorEnter(BALANCER_VAULT, _poolId, amountsDesired_);
 
-    //!! console.log("_depositorEnter.1 liquidityOut", liquidityOut);
-    //!! console.log("_depositorEnter.2 amountsConsumedOut", amountsConsumedOut[0], amountsConsumedOut[1], amountsConsumedOut[2]);
-    //!! console.log("_depositorEnter.3 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
+    //! console.log("_depositorEnter.1 liquidityOut", liquidityOut);
+    //! console.log("_depositorEnter.2 amountsConsumedOut", amountsConsumedOut[0], amountsConsumedOut[1], amountsConsumedOut[2]);
+    //! console.log("_depositorEnter.3 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
 
     // stake all available pool-BPTs to the gauge
     // we can have pool-BPTs on depositor's balance after previous exit, stake them too
     _gauge.deposit(pool.balanceOf(address(this)));
-    //!! console.log("_depositorEnter.4 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
+    //! console.log("_depositorEnter.4 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
 
 //    (uint[] memory amountsOut) = BalancerLogicLib.depositorQuoteExit(
 //      BALANCER_VAULT,
@@ -145,6 +148,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
+    console.log("_depositorExit", liquidityAmount_);
     bytes32 _poolId = poolId; // gas saving
     IBalancerGauge __gauge = _gauge; // gas saving
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
@@ -154,10 +158,13 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     // we can have pool-BPTs on depositor's balance after previous exit, see BalancerLogicLib.depositorExit
     uint depositorBalance = pool.balanceOf(address(this));
     uint gaugeBalance = __gauge.balanceOf(address(this));
+    console.log("depositorBalance", depositorBalance);
+    console.log("gaugeBalance", gaugeBalance);
 
     uint liquidityToWithdraw = liquidityAmount_ > depositorBalance
       ? liquidityAmount_ - depositorBalance
       : 0;
+    console.log("liquidityToWithdraw.1", liquidityToWithdraw);
 
     // calculate how much pool-BPTs we should withdraw from the gauge
     if (liquidityToWithdraw > 0) {
@@ -165,16 +172,20 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
         liquidityToWithdraw = gaugeBalance;
       }
     }
+    console.log("liquidityToWithdraw.2", liquidityToWithdraw);
 
     // un-stake required pool-BPTs from the gauge
     if (liquidityToWithdraw > 0) {
       __gauge.withdraw(liquidityToWithdraw);
     }
+    console.log("liquidityToWithdraw.3", liquidityToWithdraw);
 
     // withdraw the liquidity from the pool
     if (liquidityAmount_ >= depositorBalance + gaugeBalance) {
+      console.log("depositorExitFull.1", liquidityAmount_, depositorBalance + gaugeBalance);
       amountsOut = BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId);
     } else {
+      console.log("depositorExit.1", liquidityAmount_, depositorBalance + gaugeBalance);
       amountsOut = BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
     }
   }

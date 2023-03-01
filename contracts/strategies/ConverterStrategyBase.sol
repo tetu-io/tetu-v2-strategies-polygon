@@ -151,8 +151,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount_) override internal virtual {
+    uint investedAssets = _updateInvestedAssets();
+
     // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+    if (amount_ > reinvestThresholdPercent * investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
@@ -259,8 +261,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function _withdrawUniversal(uint amount, bool all) internal returns (uint investedAssetsUSD, uint assetPrice) {
+    console.log("_withdrawUniversal", amount);
     ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory vars;
-    vars.investedAssets = _investedAssets;
+
+    // _investedAssets value is deprecated, prices can be changed since last update
+    // to avoid bugs if _investedAssets will be somewhere used below
+    vars.investedAssets = _updateInvestedAssets();
+
     if ((all || amount != 0) && vars.investedAssets != 0) {
       vars.tokens = _depositorPoolAssets();
       vars.indexAsset = ConverterStrategyBaseLib.getAssetIndex(vars.tokens, asset);
@@ -278,6 +285,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // liquidityAmount temporary contains ratio...
         liquidityAmount = liquidityAmount * _depositorLiquidity() / 1e18;
       }
+      console.log("liquidityAmount", liquidityAmount, _depositorLiquidity() );
 
       {
         IPriceOracle priceOracle = IPriceOracle(IConverterController(vars.tetuConverter.controller()).priceOracle());
@@ -629,15 +637,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    uint investedAssetsLocal = _updateInvestedAssets();
+
     _preHardWork(reInvest);
 
     (earned, lost) = _handleRewards();
     uint assetBalance = _balance(asset);
 
     // re-invest income
-    if (reInvest && assetBalance > reinvestThresholdPercent * _investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+    if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
 
-      uint assetInUseBefore = _investedAssets + assetBalance;
+      uint assetInUseBefore = investedAssetsLocal + assetBalance;
       _depositToPool(assetBalance);
       uint assetInUseAfter = _investedAssets + _balance(asset);
 
@@ -658,10 +668,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim
-  function _updateInvestedAssets() internal {
-    console.log("_updateInvestedAssets.before", _investedAssets);
-    _investedAssets = calcInvestedAssets();
-    console.log("_updateInvestedAssets.after", _investedAssets);
+  function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
+    investedAssetsOut = calcInvestedAssets();
+    _investedAssets = investedAssetsOut;
+  }
+  function updateInvestedAssets() external  returns (uint investedAssetsOut) {
+    return _updateInvestedAssets(); // todo remove, temp access
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool

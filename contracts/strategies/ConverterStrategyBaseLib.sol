@@ -269,11 +269,11 @@ library ConverterStrategyBaseLib {
         );
 
         if (all || targetAmount_ != 0) {
-          // We always repay WHOLE available baseAmount event if it gives us much more amount then we need.
+          // We always repay WHOLE available baseAmount even if it gives us much more amount then we need.
           // We cannot repay a part of it because converter doesn't allow to know
           // what amount should be repaid to get given amount of collateral.
           // And it's too dangerous to assume that we can calculate this amount
-          // but reducing baseAmount proportionally to expectedCollateral/targetAmount_
+          // by reducing baseAmount proportionally to expectedCollateral/targetAmount_
           amountsToConvertOut[i] = baseAmount;
         }
 

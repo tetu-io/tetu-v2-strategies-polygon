@@ -25,7 +25,6 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {ICoreContractsWrapper} from "../../../CoreContractsWrapper";
 import {IToolsContractsWrapper} from "../../../ToolsContractsWrapper";
-import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {BigNumber} from "ethers";
 import {VaultUtils} from "../../../VaultUtils";
 import {parseUnits} from "ethers/lib/utils";
@@ -58,6 +57,8 @@ describe('BalancerIntTest', function() {
   before(async function () {
     signer = await DeployerUtilsLocal.impersonate(); // governance by default
     user = (await ethers.getSigners())[1];
+    console.log("signer", signer.address);
+    console.log("user", user.address);
 
     snapshotBefore = await TimeUtils.snapshot();
 
@@ -743,6 +744,38 @@ describe('BalancerIntTest', function() {
           controlGasLimitsEx(gasUsed, GAS_HARDWORK_WITH_REWARDS, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
+        });
+      });
+
+      describe.skip("Withdraw maxWithdraw()", () => {
+        it("should return expected values", async () => {
+          const stateBefore = await enterToVault();
+          console.log("stateBefore", stateBefore);
+
+          const amountToWithdraw = await vault.maxWithdraw(user.address);
+          // const amountToWithdraw = (await vault.maxWithdraw(user.address)).sub(parseUnits("1", 6));
+          console.log("amountToWithdraw", amountToWithdraw);
+
+          console.log("maxWithdraw()", await vault.maxWithdraw(user.address));
+          console.log("balanceOf", await vault.balanceOf(user.address));
+          console.log("convertToAssets(balanceOf(owner))", await vault.convertToAssets(await vault.balanceOf(user.address)));
+          console.log("withdrawFee", await vault.withdrawFee());
+          console.log("maxWithdrawAssets", await vault.maxWithdrawAssets());
+
+          const assets = await vault.convertToAssets(await vault.balanceOf(user.address));
+          const shares = await vault.previewWithdraw(assets);
+          console.log("assets", assets);
+          console.log("previewWithdraw.shares", shares);
+
+          await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          expect(ret.eq(0)).eq(true);
         });
       });
     });
