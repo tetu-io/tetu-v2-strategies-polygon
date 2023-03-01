@@ -38,7 +38,7 @@ export class DeployerUtils {
 
   public static async deployProxy(signer: SignerWithAddress, contract: string) {
     const logic = await DeployerUtils.deployContract(signer, contract);
-    const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
+    const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
     await RunHelper.runAndWait(() => proxy.initProxy(logic.address));
     return proxy.address;
   }
@@ -57,7 +57,7 @@ export class DeployerUtils {
     buffer: number,
   ) {
     const logic = await DeployerUtils.deployContract(signer, 'TetuVaultV2') as TetuVaultV2;
-    const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
+    const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
     await proxy.initProxy(logic.address);
     const vault = TetuVaultV2__factory.connect(proxy.address, signer);
     await vault.init(

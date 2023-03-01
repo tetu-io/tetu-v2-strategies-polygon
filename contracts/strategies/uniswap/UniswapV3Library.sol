@@ -144,7 +144,8 @@ library UniswapV3Library {
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
-    return mulDiv(uint256(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96) / sqrtRatioAX96;
+//    return mulDiv(uint256(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96) / sqrtRatioAX96;
+    return mulDivRoundingUp(uint256(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96) / sqrtRatioAX96;
   }
 
   /// @notice Computes the amount of token1 for a given amount of liquidity and a price range
@@ -156,7 +157,8 @@ library UniswapV3Library {
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
-    return mulDiv(liquidity, sqrtRatioBX96 - sqrtRatioAX96, Q96);
+//    return mulDiv(liquidity, sqrtRatioBX96 - sqrtRatioAX96, Q96);
+    return mulDivRoundingUp(liquidity, sqrtRatioBX96 - sqrtRatioAX96, Q96);
   }
 
   /// @notice Computes the token0 and token1 value for a given amount of liquidity, the current
@@ -292,6 +294,23 @@ library UniswapV3Library {
     result = prod0 * inv;
     return result;
   }
+  }
+
+  /// @notice Calculates ceil(a×b÷denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
+  /// @param a The multiplicand
+  /// @param b The multiplier
+  /// @param denominator The divisor
+  /// @return result The 256-bit result
+  function mulDivRoundingUp(
+    uint256 a,
+    uint256 b,
+    uint256 denominator
+  ) internal pure returns (uint256 result) {
+    result = mulDiv(a, b, denominator);
+    if (mulmod(a, b, denominator) > 0) {
+      require(result < type(uint256).max);
+      result++;
+    }
   }
 
   /// @notice Calculates price in pool

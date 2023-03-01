@@ -28,6 +28,13 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IVeDistributor.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/vault/VaultFactory.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/ForwarderV3.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/ControllerV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/PlatformVoter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/infrastructure/InvestFundV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/ve/VeTetu.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/ve/VeDistributor.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/ve/TetuVoter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/reward/MultiGauge.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/reward/MultiBribe.sol";
 
 
 contract ___typechain___ {}

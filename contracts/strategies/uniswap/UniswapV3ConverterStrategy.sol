@@ -86,11 +86,22 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (_balance(tokenB) > debtAmount) {
       console.log('rebalance: need to increase debt by', _balance(tokenB) - debtAmount);
       console.log('rebalance: rebalancing debt and collateral');
-      // todo it
+      ConverterStrategyBaseLib.openPosition(
+        tetuConverter,
+        abi.encode(2),
+        tokenA,
+        tokenB,
+        _balance(tokenB) - debtAmount
+      );
     } else {
       console.log('rebalance: need to decrease debt by', debtAmount - _balance(tokenB));
       console.log('rebalance: rebalancing debt and collateral');
-      // todo it
+      ConverterStrategyBaseLib.closePosition(
+        tetuConverter,
+        tokenA,
+        tokenB,
+        debtAmount - _balance(tokenB)
+      );
     }
 
     console.log('rebalance: balanceOfTokenA', _balance(tokenA));
@@ -107,5 +118,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // add fillup liquidity
     _addFillup();
+
+    // adjust _investedAssets
+    _updateInvestedAssets();
+
+    // adjust base-amounts
+    // todo
+    // _updateBaseAmounts(_depositorPoolAssets(), borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
   }
 }

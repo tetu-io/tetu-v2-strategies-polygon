@@ -55,16 +55,16 @@ export default {
       chainId: argv.hardhatChainId,
       timeout: 99999999,
       gas: argv.hardhatChainId === 137 ? 19_000_000 : 9_000_000,
-      forking: {
+      forking: argv.hardhatChainId === 137 ? {
         url: argv.hardhatChainId === 137 ? argv.maticRpcUrl : undefined,
         blockNumber: argv.hardhatChainId === 137 ? argv.maticForkBlock !== 0 ? argv.maticForkBlock : undefined : undefined
-      },
+      } : undefined,
       accounts: {
         mnemonic: "test test test test test test test test test test test junk",
         path: "m/44'/60'/0'/0",
         accountsBalance: "100000000000000000000000000000"
       },
-      loggingEnabled: true,
+      // loggingEnabled: true,
     },
     matic: {
       url: argv.maticRpcUrl,
