@@ -14,7 +14,6 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -151,10 +150,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount_) override internal virtual {
-    uint investedAssets = _updateInvestedAssets();
+    uint newInvestedAssets = _updateInvestedAssets();
 
     // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * investedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+    if (amount_ > reinvestThresholdPercent * newInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
@@ -223,7 +222,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         AppLib.approveIfNeeded(tokens_[indexAsset_], tokenAmounts[i], address(tetuConverter_));
         (collateral, borrowedAmounts[i]) = ConverterStrategyBaseLib.openPosition(
           tetuConverter_,
-          "", // fixed collateral amount, max possible borrow amount
+          "", // fixed collateral amount, max possible borrow amount // todo possibility to customize entry kind
           tokens_[indexAsset_],
           tokens_[i],
           tokenAmounts[i]
@@ -249,24 +248,28 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
+    uint investedAssets = _updateInvestedAssets();
     require(_investedAssets != 0, AppErrors.NO_INVESTMENTS);
-    return _withdrawUniversal(amount, false);
+    return _withdrawUniversal(amount, false, investedAssets);
   }
 
   /// @notice Withdraw all from the pool.
   /// @return investedAssetsUSD The value that we should receive after withdrawing
   /// @return assetPrice Price of the {asset} taken from the price oracle
   function _withdrawAllFromPool() override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    return _withdrawUniversal(0, true);
+    return _withdrawUniversal(0, true, _updateInvestedAssets());
   }
 
-  function _withdrawUniversal(uint amount, bool all) internal returns (uint investedAssetsUSD, uint assetPrice) {
-    console.log("_withdrawUniversal", amount);
+  function _withdrawUniversal(uint amount, bool all, uint investedAssets_) internal returns (
+    uint investedAssetsUSD,
+    uint assetPrice
+  ) {
     ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory vars;
 
     // _investedAssets value is deprecated, prices can be changed since last update
-    // to avoid bugs if _investedAssets will be somewhere used below
-    vars.investedAssets = _updateInvestedAssets();
+    // so we need to recalculate _investedAssets
+    // to simplify testing, we pass recalculated version as a function param
+    vars.investedAssets = investedAssets_;
 
     if ((all || amount != 0) && vars.investedAssets != 0) {
       vars.tokens = _depositorPoolAssets();
@@ -285,7 +288,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // liquidityAmount temporary contains ratio...
         liquidityAmount = liquidityAmount * _depositorLiquidity() / 1e18;
       }
-      console.log("liquidityAmount", liquidityAmount, _depositorLiquidity() );
 
       {
         IPriceOracle priceOracle = IPriceOracle(IConverterController(vars.tetuConverter.controller()).priceOracle());
@@ -667,14 +669,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Updates cached _investedAssets to actual value
-  /// @dev Should be called after deposit / withdraw / claim
+  /// @dev Should be called after deposit / withdraw / claim; virtual - for ut
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
     investedAssetsOut = _calcInvestedAssets();
     _investedAssets = investedAssetsOut;
-  }
-
-  function updateInvestedAssets() external  returns (uint investedAssetsOut) {
-    return _updateInvestedAssets(); // todo remove, temp access
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool

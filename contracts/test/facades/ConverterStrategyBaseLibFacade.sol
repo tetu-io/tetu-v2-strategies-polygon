@@ -10,7 +10,7 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_
-  ) external pure returns (
+  ) external view returns (
     uint[] memory withdrawnAmountsOut
   ) {
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);

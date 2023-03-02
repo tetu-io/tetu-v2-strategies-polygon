@@ -84,12 +84,18 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     _updateInvestedAssets();
   }
 
-  function withdrawFromPoolTestAccess(uint amount) external returns (uint investedAssetsUSD, uint assetPrice) {
-    return _withdrawFromPool(amount);
+  function withdrawFromPoolTestAccess(uint amount, uint investedAssets_) external returns (
+    uint investedAssetsUSD,
+    uint assetPrice
+  ) {
+    return _withdrawUniversal(amount, false, investedAssets_);
   }
 
-  function _withdrawAllFromPoolTestAccess() external returns (uint investedAssetsUSD, uint assetPrice) {
-    return _withdrawAllFromPool();
+  function _withdrawAllFromPoolTestAccess(uint investedAssets_) external returns (
+    uint investedAssetsUSD,
+    uint assetPrice
+  ) {
+    return _withdrawUniversal(0, true, investedAssets_);
   }
 
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
