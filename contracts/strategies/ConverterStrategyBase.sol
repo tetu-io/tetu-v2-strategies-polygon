@@ -14,6 +14,7 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -193,7 +194,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint amount_,
     address[] memory tokens_,
     uint indexAsset_
-  ) internal returns (
+  ) internal virtual returns (
     uint[] memory tokenAmounts,
     uint[] memory borrowedAmounts,
     uint spentCollateral
@@ -249,6 +250,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
     uint investedAssets = _updateInvestedAssets();
+    console.log("_withdrawFromPool.investedAssets", investedAssets);
     require(_investedAssets != 0, AppErrors.NO_INVESTMENTS);
     return _withdrawUniversal(amount, false, investedAssets);
   }
@@ -260,6 +262,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return _withdrawUniversal(0, true, _updateInvestedAssets());
   }
 
+  /// @param amount Amount to be withdrawn. 0 is ok if we withdraw all.
+  /// @param all Withdraw all
+  /// @param investedAssets_ Current amount of invested assets
   function _withdrawUniversal(uint amount, bool all, uint investedAssets_) internal returns (
     uint investedAssetsUSD,
     uint assetPrice
@@ -365,6 +370,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Convert all available amounts of {tokens_} to the main {asset}
+  /// @dev todo SCB-587
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
   /// @return collateralOut Total amount of collateral returned after closing positions

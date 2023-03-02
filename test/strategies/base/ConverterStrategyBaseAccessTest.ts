@@ -3318,9 +3318,11 @@ describe("ConverterStrategyBaseAccessTest", () => {
       await strategy.setDepositorLiquidity(depositorLiquidity);
       await strategy.setDepositorPoolReserves(depositorPoolReserves);
       await strategy.setTotalSupply(depositorTotalSupply);
-      // TODO await strategy.setDepositorExit(depositorTotalSupply, withdrawnAmounts);
 
-      // TODO: await setupInvestedAssets(depositorLiquidity, params.investedAssetsBeforeWithdraw);
+      await strategy.setDepositorExit(depositorTotalSupply, withdrawnAmounts);
+      await strategy.setDepositorQuoteExit(depositorLiquidity, withdrawnAmounts);
+
+      // await setupInvestedAssets(depositorLiquidity, params.investedAssetsBeforeWithdraw);
       const investedAssets = params?.investedAssetsBeforeWithdraw || 0;
 
       const liquidityAmountToWithdraw = depositorLiquidity.mul(101).mul(amount).div(100).div(investedAssets);
@@ -3376,10 +3378,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         });
       });
       describe("There is not enough main asset on the balance", () => {
-        /**
-         * TODO need to fix
-         */
-        it.skip("should withdraw missed amount and send given amount to tetuConveter", async () => {
+        it("should withdraw missed amount and send given amount to tetuConveter", async () => {
           const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
 
           await prepareWithdraw(
@@ -3397,7 +3396,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
             ],
             parseUnits("3", 6), // amount to withdraw
             {
-              investedAssetsBeforeWithdraw: parseUnits("6", 6), // total invested amount
+              investedAssetsBeforeWithdraw: BigNumber.from(3927000000), // total invested amount, value from calcInvestedAmount()
               baseAmounts: [
                 {token: dai, amount: parseUnits("0", 18)},
                 {token: usdc, amount: parseUnits("1000", 6)},

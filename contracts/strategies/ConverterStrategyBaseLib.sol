@@ -139,7 +139,7 @@ library ConverterStrategyBaseLib {
     uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_
-  ) external view returns (
+  ) external pure returns (
     uint[] memory withdrawnAmountsOut
   ) {
     uint ratio = totalSupply_ == 0
