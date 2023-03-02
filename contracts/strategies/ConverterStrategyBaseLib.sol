@@ -77,7 +77,7 @@ library ConverterStrategyBaseLib {
   struct CalcInvestedAssetsLocal {
     uint len;
     uint[] prices;
-    uint[] decimals;
+    uint[] decs;
     uint[] debts;
   }
 
@@ -177,7 +177,7 @@ library ConverterStrategyBaseLib {
     tokenAmountsOut = new uint[](len);
 
     // get token prices and decimals
-    (uint[] memory prices, uint[] memory decimals) = getPricesAndDecimals(priceOracle, tokens_, len);
+    (uint[] memory prices, uint[] memory decs) = getPricesAndDecs(priceOracle, tokens_, len);
 
     // split the amount on tokens proportionally to the weights
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
@@ -189,9 +189,9 @@ library ConverterStrategyBaseLib {
         // if we have some tokens on balance then we need to use only a part of the collateral
         uint tokenAmountToBeBorrowed =  amountAssetForToken
           * prices[indexAsset_]
-          * 10**decimals[i]
+          * decs[i]
           / prices[i]
-          / 10**decimals[indexAsset_];
+          / decs[indexAsset_];
 
         uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
         if (tokenBalance < tokenAmountToBeBorrowed) {
@@ -201,15 +201,17 @@ library ConverterStrategyBaseLib {
     }
   }
 
-  function getPricesAndDecimals(IPriceOracle priceOracle, address[] memory tokens_, uint len) internal view returns (
+  /// @return prices Prices with decimals 18
+  /// @return decs 10**decimals
+  function getPricesAndDecs(IPriceOracle priceOracle, address[] memory tokens_, uint len) internal view returns (
     uint[] memory prices,
-    uint[] memory decimals
+    uint[] memory decs
   ) {
     prices = new uint[](len);
-    decimals = new uint[](len);
+    decs = new uint[](len);
     {
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        decimals[i] = IERC20Metadata(tokens_[i]).decimals();
+        decs[i] = 10**IERC20Metadata(tokens_[i]).decimals();
         prices[i] = priceOracle.getAssetPrice(tokens_[i]);
       }
     }
@@ -781,7 +783,7 @@ library ConverterStrategyBaseLib {
     v.len = tokens.length;
 
     // calculate prices, decimals
-    (v.prices, v.decimals) = getPricesAndDecimals(
+    (v.prices, v.decs) = getPricesAndDecs(
       IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
       tokens,
       v.len
@@ -791,6 +793,7 @@ library ConverterStrategyBaseLib {
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) {
+        // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += amountsOut[i];
       } else {
         // available amount to repay
@@ -799,7 +802,7 @@ library ConverterStrategyBaseLib {
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), tokens[indexAsset], tokens[i]);
         amountOut += collateral;
         if (toRepay >= toPay) {
-          amountOut += (toRepay - toPay) * v.prices[i] * v.decimals[indexAsset] / v.prices[indexAsset] / v.decimals[i];
+          amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         } else {
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
@@ -820,7 +823,7 @@ library ConverterStrategyBaseLib {
         if (v.debts[i] == 0) continue;
 
         // estimatedAssets should be reduced on the debt-value
-        uint debtInAsset = v.debts[i] * v.prices[i] * v.decimals[indexAsset] / v.prices[indexAsset] / v.decimals[i];
+        uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
