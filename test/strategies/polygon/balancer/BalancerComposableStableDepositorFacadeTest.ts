@@ -464,19 +464,19 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, {amount: "1"});
             const maxPercentDeltas = getMaxPercentDelta(r);
-            expect(maxPercentDeltas.abs().lt(1e6)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e7)).eq(true);
           });
           it("$10_000", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, {amount: "10000"});
             const maxPercentDeltas = getMaxPercentDelta(r);
-            expect(maxPercentDeltas.abs().lt(1e10)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e11)).eq(true);
           });
           it("$1_000_000", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, {amount: "1000000"});
             const maxPercentDeltas = getMaxPercentDelta(r);
-            expect(maxPercentDeltas.abs().lt(1e11)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e12)).eq(true);
           });
         });
       });

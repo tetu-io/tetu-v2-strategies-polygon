@@ -65,8 +65,12 @@ export async function deployContract<T extends ContractFactory>(
   //   gas = 5_000_000;
   // }
   // const instance = await _factory.deploy(...args, {gasLimit: gas, gasPrice: Math.floor(+gasPrice * 1.1)});
-  const gasLimit = hre.network.name !== 'hardhat' ? 9_000_000 : 29_000_000
-  const instance = await _factory.deploy(...args, {gasLimit, gasPrice: Math.floor(+gasPrice * 1.1)});
+  const instance = await _factory.deploy(...args, {
+    // large gas limit is required for npm run coverage
+    // see https://github.com/NomicFoundation/hardhat/issues/3121
+    gasLimit: 29_000_000,
+    gasPrice: Math.floor(+gasPrice * 1.1)
+  });
   log.info('Deploy tx:', instance.deployTransaction.hash);
   await instance.deployed();
 

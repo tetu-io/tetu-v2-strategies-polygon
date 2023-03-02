@@ -4,7 +4,7 @@ import {
   MockConverterStrategy,
   MockConverterStrategy__factory, MockTetuConverterController,
   MockTetuConverter, MockTetuLiquidatorSingleCall,
-  PriceOracleMock, Uniswap2LibFacade, MockForwarder
+  PriceOracleMock, Uniswap2LibFacade, MockForwarder, Aave3AggregatorInterfaceMock
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
@@ -87,4 +87,16 @@ export class MockHelper {
       'MockForwarder',
     )) as MockForwarder;
   }
+
+  public static async createAave3AggregatorInterfaceMock(
+    signer: SignerWithAddress,
+    price: BigNumber
+  ): Promise<Aave3AggregatorInterfaceMock> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'Aave3AggregatorInterfaceMock',
+      price
+    )) as Aave3AggregatorInterfaceMock;
+  }
+
 }

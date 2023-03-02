@@ -1,11 +1,7 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
 import {
-  BalancerComposableStableStrategy__factory, ControllerV2__factory,
-  IBalancerGauge__factory, IController__factory,
-  IERC20__factory, ISplitter__factory,
-  IStrategyV2,
-  StrategyBaseV2__factory,
+  IERC20__factory, IStrategyV2,
   TetuVaultV2
 } from "../../../typechain";
 import {IToolsContractsWrapper} from "../../ToolsContractsWrapper";
@@ -16,12 +12,9 @@ import {PPFS_NO_INCREASE, VaultUtils} from "../../VaultUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {expect} from "chai";
 import {PriceCalculatorUtils} from "../../PriceCalculatorUtils";
-import {MaticAddresses} from "../../../scripts/MaticAddresses";
-import {parseUnits} from "ethers/lib/utils";
 import {UniversalTestUtils} from "./UniversalTestUtils";
-import {BalancerIntTestUtils} from "../../strategies/polygon/balancer/utils/BalancerIntTestUtils";
 
-interface IBalances {
+export interface IBalances {
   userBalance: BigNumber;
   signerBalance: BigNumber;
 }
@@ -29,8 +22,6 @@ interface IBalances {
 export interface IDoHardWorkLoopInputParams {
   /// 50_000 for 0.5
   compoundRate?: number;
-  /// 1000 for 1%
-  reinvestThresholdPercent?: number;
 }
 
 export class DoHardWorkLoopBase {
@@ -162,11 +153,6 @@ export class DoHardWorkLoopBase {
     console.log("initialBalances", this.initialBalances);
 
     await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate);
-    await BalancerIntTestUtils.setThresholds(
-      this.strategy,
-      this.user,
-      {reinvestThresholdPercent: params?.reinvestThresholdPercent}
-    );
   }
 
   protected async initialSnapshot() {
@@ -252,25 +238,25 @@ export class DoHardWorkLoopBase {
   }
 
 //region End actions
-  /** Simplest version: single deposit, single withdrawing */
-  protected async loopEndActions(i: number, numberLoops: number) {
-    console.log("loopEndActions", i);
-    const start = Date.now();
-    // we need to enter and exit from the vault between loops for properly check all mechanic
-    if (i === numberLoops - 1) {
-      this.isUserDeposited = false;
-      console.log("!!!Withdraw all");
-      await this.withdraw(true, BigNumber.from(0));
-    // } else if (i === 0) {
-    //   this.isUserDeposited = true;
-    //   const underlyingBalance = await TokenUtils.balanceOf(this.underlying, this.user.address);
-    //   console.log("!!!Deposit", BigNumber.from(underlyingBalance));
-    //   await this.deposit(BigNumber.from(underlyingBalance));
-    }
-    Misc.printDuration('fLoopEndActions completed', start);
-  }
+//   /** Simplest version: single deposit, single withdrawing */
+//   protected async loopEndActions(i: number, numberLoops: number) {
+//     console.log("loopEndActions", i);
+//     const start = Date.now();
+//     // we need to enter and exit from the vault between loops for properly check all mechanic
+//     if (i === numberLoops - 1) {
+//       this.isUserDeposited = false;
+//       console.log("!!!Withdraw all");
+//       await this.withdraw(true, BigNumber.from(0));
+//     // } else if (i === 0) {
+//     //   this.isUserDeposited = true;
+//     //   const underlyingBalance = await TokenUtils.balanceOf(this.underlying, this.user.address);
+//     //   console.log("!!!Deposit", BigNumber.from(underlyingBalance));
+//     //   await this.deposit(BigNumber.from(underlyingBalance));
+//     }
+//     Misc.printDuration('fLoopEndActions completed', start);
+//   }
 
-  protected async loopEndActionsMain(i: number) {
+  protected async loopEndActions(i: number, numberLoops: number) {
     console.log("loopEndActions", i);
     const start = Date.now();
     // we need to enter and exit from the vault between loops for properly check all mechanic

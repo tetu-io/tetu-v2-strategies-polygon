@@ -2,20 +2,20 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
-import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
-import {ConverterStrategyBaseLibFacade, ITetuConverter, MockToken, PriceOracleMock} from "../../../typechain";
+import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
+import {ConverterStrategyBaseLibFacade, MockToken, PriceOracleMock} from "../../../typechain";
 import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
+  GAS_CALC_INVESTED_ASSETS_NO_DEBTS, GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
   GAS_OPEN_POSITION,
-  GET_EXPECTED_INVESTED_ASSETS_USD,
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS, GET_GET_COLLATERALS, GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
-import {decimalString} from "hardhat/internal/core/config/config-validation";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {BigNumber} from "ethers";
+import {decodeInstructions} from "hardhat/internal/hardhat-network/stack-traces/source-maps";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -1461,6 +1461,288 @@ describe("ConverterStrategyBaseLibTest", () => {
         );
 
         controlGasLimitsEx(r.gasUsed, GAS_OPEN_POSITION, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
+    });
+  });
+
+  describe("getAvailableBalances", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+        const assets = [dai, tetu, usdc, usdt];
+        const balances: BigNumber[] = [];
+        for (let i = 0; i < assets.length; ++i) {
+          balances.push(parseUnits((i + 1).toString(), await assets[i].decimals()));
+          await assets[i].mint(facade.address, balances[i]);
+        }
+
+        const r: BigNumber[] = await facade.getAvailableBalances(assets.map(x => x.address), 2);
+        const ret = r.map(x => BalanceUtils.toString(x)).join();
+        const expected = [
+          parseUnits("1", await dai.decimals()),
+          parseUnits("2", await tetu.decimals()),
+          0, // balance is not calculated for the main asset
+          parseUnits("4", await usdt.decimals()),
+        ].map(x => BalanceUtils.toString(x)).join();
+
+        expect(ret).eq(expected);
+      });
+    });
+  });
+
+  describe("calcInvestedAssets", () => {
+    interface ICalcInvestedAssetsParams {
+      tokens: MockToken[];
+      amountsOut?: string[];
+      indexAsset: number;
+      baseAmounts?: string[];
+      prices: string[];
+      debts?: {
+        borrowAsset: MockToken;
+        debtAmount: string;
+        collateralAmount: string;
+      }[];
+    }
+    interface ICalcInvestedAssetsResults {
+      amountOut: number;
+      gasUsed: BigNumber;
+    }
+    async function makeCalcInvestedAssetsTest(params: ICalcInvestedAssetsParams) : Promise<ICalcInvestedAssetsResults> {
+      const decimals = await Promise.all(
+        params.tokens.map(
+          async x => x.decimals()
+        )
+      );
+      if (params.baseAmounts) {
+        for (let i = 0; i < params.tokens.length; ++i) {
+          await facade.setBaseAmounts(
+            params.tokens[i].address,
+            parseUnits(params.baseAmounts[i], decimals[i])
+          )
+        }
+      }
+      const tc = await MockHelper.createMockTetuConverter(signer);
+      if (params.debts) {
+        for (let i = 0; i < params.debts.length; ++i) {
+          await tc.setGetDebtAmountCurrent(
+            facade.address,
+            params.tokens[params.indexAsset].address,
+            params.debts[i].borrowAsset.address,
+            parseUnits(params.debts[i].debtAmount, decimals[i]),
+            parseUnits(params.debts[i].collateralAmount, decimals[params.indexAsset]),
+          );
+        }
+      }
+      const priceOracle = await MockHelper.createPriceOracle(
+        signer,
+        params.tokens.map(x => x.address),
+        params.prices.map(x => parseUnits(x, 18))
+      );
+      const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await tc.setController(controller.address);
+
+      const amountOut = await facade.callStatic.calcInvestedAssets(
+        params.tokens.map(x => x.address),
+        params.amountsOut
+          ? params.amountsOut.map((x, index) => parseUnits(x, decimals[index]))
+          : params.tokens.map(x => BigNumber.from(0)),
+        params.indexAsset,
+        tc.address
+      );
+      console.log("amountOut", amountOut);
+
+      const gasUsed = await facade.estimateGas.calcInvestedAssets(
+        params.tokens.map(x => x.address),
+        params.amountsOut || params.tokens.map(x => BigNumber.from(0)),
+        params.indexAsset,
+        tc.address
+      );
+
+      return {
+        amountOut: +formatUnits(amountOut, decimals[params.indexAsset]),
+        gasUsed
+      };
+    }
+
+    describe("Good paths", () => {
+      describe("All amounts are located on the strategy balance only (liquidity is zero)", () => {
+        describe("No debts", () => {
+          it("should return expected values", async () => {
+            const ret = (await makeCalcInvestedAssetsTest({
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              baseAmounts: ["100", "1987", "300"],
+              prices: ["20", "10", "60"]
+            })).amountOut;
+            const expected = 100 * 20 / 10 + 300 * 60 / 10;
+
+            expect(ret).eq(expected);
+          });
+        });
+        describe("There is a debt", () => {
+          describe("Amount to repay == amount of the debt", () => {
+            it("should return expected values", async () => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                baseAmounts: ["117", "1987", "300"],
+                prices: ["20", "10", "60"],
+                debts: [{
+                  debtAmount: "117",
+                  collateralAmount: "1500",
+                  borrowAsset: dai
+                }]
+              })).amountOut;
+              const expected = 1500 + 300 * 60 / 10;
+
+              expect(ret).eq(expected);
+            });
+          });
+          describe("Amount to repay > amount of the debt", () => {
+            it("should return expected values", async () => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                baseAmounts: ["117", "1987", "300"],
+                prices: ["20", "10", "60"],
+                debts: [{
+                  debtAmount: "17",
+                  collateralAmount: "500",
+                  borrowAsset: dai
+                }]
+              })).amountOut;
+              const expected = 500 + (117 - 17) * 20 / 10 +  300 * 60 / 10;
+
+              expect(ret).eq(expected);
+            });
+          });
+          describe("Amount to repay < amount of the debt, the repayment is profitable", () => {
+            it("should return expected values", async () => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                baseAmounts: ["117", "1987", "300"],
+                prices: ["20", "10", "60"],
+                debts: [{
+                  debtAmount: "217",
+                  collateralAmount: "500",
+                  borrowAsset: dai
+                }]
+              })).amountOut;
+              const availableMainAsset = 300 * 60 / 10;
+              const amountToPayTheDebt = (217 - 117) * 20 / 10;
+              const expected = availableMainAsset + 500 - amountToPayTheDebt;
+
+              expect(ret).eq(expected);
+            });
+          });
+          describe("Amount to repay < amount of the debt, the repayment is NOT profitable", () => {
+            it("should return expected values", async () => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                baseAmounts: ["117", "1987", "300"],
+                prices: ["20", "10", "60"],
+                debts: [{
+                  debtAmount: "5117",
+                  collateralAmount: "500",
+                  borrowAsset: dai
+                }]
+              })).amountOut;
+              const availableMainAsset = 300 * 60 / 10;
+              const amountToPayTheDebt = (5117 - 117) * 20 / 10;
+              const expected = 0; // amountToPayTheDebt > availableMainAsset + 500 (collateral)
+
+              expect(ret).eq(expected);
+            });
+          });
+        });
+      });
+      describe("All amounts are deposited to the pool", () => {
+        it("should return expected values", async () => {
+          const ret = (await makeCalcInvestedAssetsTest({
+            tokens: [dai, usdc, usdt],
+            indexAsset: 1,
+            amountsOut: ["100", "200", "300"],
+            baseAmounts: ["0", "0", "0"],
+            prices: ["20", "10", "60"]
+          })).amountOut;
+          const expected = 200 + 100 * 20 / 10 + 300 * 60 / 10;
+
+          expect(ret).eq(expected);
+        });
+      });
+      describe("Amount to repay < amount available in the pool+balance", () => {
+        it("should return expected values", async () => {
+          const ret = (await makeCalcInvestedAssetsTest({
+            tokens: [dai, usdc, usdt],
+            indexAsset: 1,
+            baseAmounts: ["100", "1987", "300"],
+            amountsOut: ["700", "1000", "400"],
+            prices: ["20", "10", "60"],
+            debts: [{
+              debtAmount: "200",
+              collateralAmount: "1501",
+              borrowAsset: dai
+            }]
+          })).amountOut;
+          const amountToPayTheDebt = 200 * 20 / 10;
+          const availableMainAsset = 1000 + (300 + 400) * 60 / 10 + (700 + 100) * 20 / 10;
+          const expected = availableMainAsset + 1501 - amountToPayTheDebt;
+
+          expect(ret).eq(expected);
+        });
+      });
+      describe("Amount to repay >= amount available in the pool+balance", () => {
+        it("should return expected values", async () => {
+          const ret = (await makeCalcInvestedAssetsTest({
+            tokens: [dai, usdc, usdt],
+            indexAsset: 1,
+            baseAmounts: ["100", "1987", "300"],
+            amountsOut: ["700", "1000", "400"],
+            prices: ["20", "10", "60"],
+            debts: [{
+              debtAmount: "900",
+              collateralAmount: "1501",
+              borrowAsset: dai
+            }]
+          })).amountOut;
+          const amountToPayTheDebt = 900 * 20 / 10;
+          const availableMainAsset = 1000 + (300 + 400) * 60 / 10 + (700 + 100) * 20 / 10;
+          const expected = availableMainAsset + 1501 - amountToPayTheDebt;
+
+          expect(ret).eq(expected);
+        });
+      });
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should not exceed gas limits, no debts", async () => {
+        const r = await makeCalcInvestedAssetsTest({
+          tokens: [dai, usdc, usdt],
+          indexAsset: 1,
+          baseAmounts: ["100", "1987", "300"],
+          prices: ["20", "10", "60"]
+        });
+
+        controlGasLimitsEx(r.gasUsed, GAS_CALC_INVESTED_ASSETS_NO_DEBTS, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
+      it("should not exceed gas limits, debt exists", async () => {
+        const r = await makeCalcInvestedAssetsTest({
+          tokens: [dai, usdc, usdt],
+          indexAsset: 1,
+          baseAmounts: ["100", "1987", "300"],
+          amountsOut: ["700", "1000", "400"],
+          prices: ["20", "10", "60"],
+          debts: [{
+            debtAmount: "200",
+            collateralAmount: "1501",
+            borrowAsset: dai
+          }]
+        });
+        controlGasLimitsEx(r.gasUsed, GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT, (u, t) => {
           expect(u).to.be.below(t + 1);
         });
       });

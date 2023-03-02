@@ -10,7 +10,7 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory reserves_,
     uint liquidityAmount_,
     uint totalSupply_
-  ) external view returns (
+  ) external pure returns (
     uint[] memory withdrawnAmountsOut
   ) {
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
@@ -109,5 +109,29 @@ contract ConverterStrategyBaseLibFacade {
 
   function getAssetIndex(address[] memory tokens_, address asset_) external pure returns (uint) {
     return ConverterStrategyBaseLib.getAssetIndex(tokens_, asset_);
+  }
+
+  function getAvailableBalances(
+    address[] memory tokens_,
+    uint indexAsset
+  ) external view returns (uint[] memory) {
+    return ConverterStrategyBaseLib.getAvailableBalances(tokens_, indexAsset);
+  }
+
+  function calcInvestedAssets(
+    address[] memory tokens,
+    uint[] memory amountsOut,
+    uint indexAsset,
+    ITetuConverter converter_
+  ) external returns (
+    uint amountOut
+  ) {
+    return ConverterStrategyBaseLib.calcInvestedAssets(
+      tokens,
+      amountsOut,
+      indexAsset,
+      converter_,
+      baseAmounts
+    );
   }
 }

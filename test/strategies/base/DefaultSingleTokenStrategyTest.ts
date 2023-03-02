@@ -18,7 +18,6 @@ async function startDefaultStrategyTest(
   deployInfo: DeployInfo,
   deployer: ((signer: SignerWithAddress) => Promise<IVaultStrategyInfo>),
   params: IUniversalStrategyInputParams,
-  stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>
 ) {
 
   // ***********************************************
@@ -58,7 +57,6 @@ async function startDefaultStrategyTest(
     deployer as (signer: SignerWithAddress) => Promise<IVaultStrategyInfo>,
     hwInitiator,
     params,
-    stateRegistrar
   );
 }
 
