@@ -82,8 +82,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
   /// @notice Uniswap V3 callback fn, called back on pool.mint
   function uniswapV3MintCallback(
-    uint256 amount0Owed,
-    uint256 amount1Owed,
+    uint amount0Owed,
+    uint amount1Owed,
     bytes calldata /*_data*/
   ) external override {
     require(msg.sender == address(pool), "callback caller");
@@ -135,9 +135,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
     }
 
-    // console.log('_depositorEnter amountsConsumed[0]', amountsConsumed[0]);
-    // console.log('_depositorEnter amountsConsumed[1]', amountsConsumed[1]);
-    // console.log('_depositorEnter liquidityOut', liquidityOut);
+//     console.log('_depositorEnter amountsConsumed[0]', amountsConsumed[0]);
+//     console.log('_depositorEnter amountsConsumed[1]', amountsConsumed[1]);
+//     console.log('_depositorEnter liquidityOut', liquidityOut);
   }
 
   function _addFillup() internal {
@@ -239,8 +239,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
 
-    // console.log('_depositorQuoteExit amountsOut[0]', amountsOut[0]);
-    // console.log('_depositorQuoteExit amountsOut[1]', amountsOut[1]);
+//     console.log('_depositorQuoteExit amountsOut[0]', amountsOut[0]);
+//     console.log('_depositorQuoteExit amountsOut[1]', amountsOut[1]);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -254,8 +254,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ) {
     (uint fee0, uint fee1) = getFees();
 
-    console.log('_depositorClaimRewards fee0', fee0);
-    console.log('_depositorClaimRewards fee1', fee1);
+//    console.log('_depositorClaimRewards fee0', fee0);
+//    console.log('_depositorClaimRewards fee1', fee1);
 
     amountsOut = new uint[](2);
 
@@ -337,7 +337,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     return uint(totalLiquidity);
   }
 
-  function getUnderlyingBalances() public view returns (uint256 amount0Current, uint256 amount1Current) {
+  function getUnderlyingBalances() public view returns (uint amount0Current, uint amount1Current) {
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
     return _getUnderlyingBalances(sqrtRatioX96);
   }
@@ -346,7 +346,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     return UniswapV3Library.getPrice(pool, tokenIn);
   }
 
-  function _getUnderlyingBalances(uint160 sqrtRatioX96) internal view returns (uint256 amount0Current, uint256 amount1Current) {
+  function _getUnderlyingBalances(uint160 sqrtRatioX96) internal view returns (uint amount0Current, uint amount1Current) {
     // compute current holdings from liquidity
     (amount0Current, amount1Current) = UniswapV3Library.getAmountsForLiquidity(
       sqrtRatioX96,

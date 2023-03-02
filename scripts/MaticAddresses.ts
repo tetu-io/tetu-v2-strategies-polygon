@@ -287,6 +287,10 @@ export class MaticAddresses {
   public static DYSTOPIA_tetuQI_QI = '0x42c0cc5f1827c5d908392654389e5d93da426378'.toLowerCase();
   public static DYSTOPIA_TETU_USDPlus = '0x5A272ad79cBd3C874879E3FEc5753C2127f77583'.toLowerCase();
 
+  // UNISWAP V3
+  public static UNISWAPV3_USDC_WETH_500 = '0x45dDa9cb7c25131DF268515131f647d726f50608'.toLowerCase()
+  public static UNISWAPV3_WMATIC_USDC_500 = '0xA374094527e1673A86dE625aa59517c5dE346d32'.toLowerCase()
+
   public static BLUE_CHIPS = new Set<string>([
     MaticAddresses.USDC_TOKEN,
     MaticAddresses.USDT_TOKEN,

@@ -8,7 +8,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 /// @notice Provides functions for computing liquidity amounts from token amounts and prices
 library UniswapV3Library {
   uint8 internal constant RESOLUTION = 96;
-  uint256 internal constant Q96 = 0x1000000000000000000000000;
+  uint internal constant Q96 = 0x1000000000000000000000000;
   uint private constant TWO_96 = 2 ** 96;
   uint160 private constant MIN_SQRT_RATIO = 4295128739 + 1;
   uint160 private constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342 - 1;
@@ -37,13 +37,13 @@ library UniswapV3Library {
   function _computeFeesEarned(
     PoolPosition memory position,
     bool isZero,
-    uint256 feeGrowthInsideLast,
+    uint feeGrowthInsideLast,
     int24 tick
-  ) internal view returns (uint256 fee) {
+  ) internal view returns (uint fee) {
     IUniswapV3Pool pool = IUniswapV3Pool(position.pool);
-    uint256 feeGrowthOutsideLower;
-    uint256 feeGrowthOutsideUpper;
-    uint256 feeGrowthGlobal;
+    uint feeGrowthOutsideLower;
+    uint feeGrowthOutsideUpper;
+    uint feeGrowthGlobal;
     if (isZero) {
       feeGrowthGlobal = pool.feeGrowthGlobal0X128();
       (,, feeGrowthOutsideLower,,,,,) = pool.ticks(position.lowerTick);
@@ -56,7 +56,7 @@ library UniswapV3Library {
 
   unchecked {
     // calculate fee growth below
-    uint256 feeGrowthBelow;
+    uint feeGrowthBelow;
     if (tick >= position.lowerTick) {
       feeGrowthBelow = feeGrowthOutsideLower;
     } else {
@@ -64,14 +64,14 @@ library UniswapV3Library {
     }
 
     // calculate fee growth above
-    uint256 feeGrowthAbove;
+    uint feeGrowthAbove;
     if (tick < position.upperTick) {
       feeGrowthAbove = feeGrowthOutsideUpper;
     } else {
       feeGrowthAbove = feeGrowthGlobal - feeGrowthOutsideUpper;
     }
 
-    uint256 feeGrowthInside =
+    uint feeGrowthInside =
     feeGrowthGlobal - feeGrowthBelow - feeGrowthAbove;
     fee = mulDiv(
       position.liquidity,
@@ -81,7 +81,7 @@ library UniswapV3Library {
   }
   }
 
-  function toUint128(uint256 x) private pure returns (uint128 y) {
+  function toUint128(uint x) private pure returns (uint128 y) {
     require((y = uint128(x)) == x);
   }
 
@@ -91,11 +91,11 @@ library UniswapV3Library {
   /// @param sqrtRatioBX96 Another sqrt price
   /// @param amount0 The amount0 being sent in
   /// @return liquidity The amount of returned liquidity
-  function getLiquidityForAmount0(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint256 amount0) internal pure returns (uint128 liquidity) {
+  function getLiquidityForAmount0(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint amount0) internal pure returns (uint128 liquidity) {
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
-    uint256 intermediate = mulDiv(sqrtRatioAX96, sqrtRatioBX96, Q96);
+    uint intermediate = mulDiv(sqrtRatioAX96, sqrtRatioBX96, Q96);
     return toUint128(mulDiv(amount0, intermediate, sqrtRatioBX96 - sqrtRatioAX96));
   }
 
@@ -105,7 +105,7 @@ library UniswapV3Library {
   /// @param sqrtRatioBX96 Another sqrt price
   /// @param amount1 The amount1 being sent in
   /// @return liquidity The amount of returned liquidity
-  function getLiquidityForAmount1(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint256 amount1) internal pure returns (uint128 liquidity) {
+  function getLiquidityForAmount1(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint amount1) internal pure returns (uint128 liquidity) {
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
@@ -118,8 +118,8 @@ library UniswapV3Library {
     uint160 sqrtRatioX96,
     uint160 sqrtRatioAX96,
     uint160 sqrtRatioBX96,
-    uint256 amount0,
-    uint256 amount1
+    uint amount0,
+    uint amount1
   ) public pure returns (uint128 liquidity) {
     if (sqrtRatioAX96 > sqrtRatioBX96)
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
@@ -140,12 +140,13 @@ library UniswapV3Library {
   /// @param sqrtRatioBX96 Another sqrt price
   /// @param liquidity The liquidity being valued
   /// @return amount0 The amount0
-  function getAmount0ForLiquidity(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint128 liquidity) internal pure returns (uint256 amount0) {
+  function getAmount0ForLiquidity(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint128 liquidity) internal pure returns (uint amount0) {
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
-//    return mulDiv(uint256(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96) / sqrtRatioAX96;
-    return mulDivRoundingUp(uint256(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96) / sqrtRatioAX96;
+//    return mulDiv(uint(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96) / sqrtRatioAX96;
+//    return mulDivRoundingUp(uint(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96) / sqrtRatioAX96;
+    return mulDivRoundingUp(1, mulDivRoundingUp(uint(liquidity) << RESOLUTION, sqrtRatioBX96 - sqrtRatioAX96, sqrtRatioBX96), sqrtRatioAX96);
   }
 
   /// @notice Computes the amount of token1 for a given amount of liquidity and a price range
@@ -153,7 +154,7 @@ library UniswapV3Library {
   /// @param sqrtRatioBX96 Another sqrt price
   /// @param liquidity The liquidity being valued
   /// @return amount1 The amount1
-  function getAmount1ForLiquidity(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint128 liquidity) internal pure returns (uint256 amount1) {
+  function getAmount1ForLiquidity(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint128 liquidity) internal pure returns (uint amount1) {
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
@@ -168,7 +169,7 @@ library UniswapV3Library {
     uint160 sqrtRatioAX96,
     uint160 sqrtRatioBX96,
     uint128 liquidity
-  ) public pure returns (uint256 amount0, uint256 amount1) {
+  ) public pure returns (uint amount0, uint amount1) {
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
@@ -183,26 +184,26 @@ library UniswapV3Library {
     }
   }
 
-  /// @notice Calculates floor(a×b÷denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
+  /// @notice Calculates floor(a×b÷denominator) with full precision. Throws if result overflows a uint or denominator == 0
   /// @param a The multiplicand
   /// @param b The multiplier
   /// @param denominator The divisor
   /// @return result The 256-bit result
   /// @dev Credit to Remco Bloemen under MIT license https://xn--2-umb.com/21/muldiv
   function mulDiv(
-    uint256 a,
-    uint256 b,
-    uint256 denominator
-  ) public pure returns (uint256 result) {
+    uint a,
+    uint b,
+    uint denominator
+  ) public pure returns (uint result) {
   unchecked {
     // 512-bit multiply [prod1 prod0] = a * b
     // Compute the product mod 2**256 and mod 2**256 - 1
     // then use the Chinese Remainder Theorem to reconstruct
     // the 512 bit result. The result is stored in two 256
     // variables such that product = prod1 * 2**256 + prod0
-    uint256 prod0;
+    uint prod0;
     // Least significant 256 bits of the product
-    uint256 prod1;
+    uint prod1;
     // Most significant 256 bits of the product
     assembly {
       let mm := mulmod(a, b, not(0))
@@ -229,7 +230,7 @@ library UniswapV3Library {
 
     // Make division exact by subtracting the remainder from [prod1 prod0]
     // Compute remainder using mulmod
-    uint256 remainder;
+    uint remainder;
     assembly {
       remainder := mulmod(a, b, denominator)
     }
@@ -243,8 +244,8 @@ library UniswapV3Library {
     // Compute largest power of two divisor of denominator.
     // Always >= 1.
     // EDIT for 0.8 compatibility:
-    // see: https://ethereum.stackexchange.com/questions/96642/unary-operator-cannot-be-applied-to-type-uint256
-    uint256 twos = denominator & (~denominator + 1);
+    // see: https://ethereum.stackexchange.com/questions/96642/unary-operator-cannot-be-applied-to-type-uint
+    uint twos = denominator & (~denominator + 1);
 
     // Divide denominator by power of two
     assembly {
@@ -268,7 +269,7 @@ library UniswapV3Library {
     // modulo 2**256 such that denominator * inv = 1 mod 2**256.
     // Compute the inverse by starting with a seed that is correct
     // correct for four bits. That is, denominator * inv = 1 mod 2**4
-    uint256 inv = (3 * denominator) ^ 2;
+    uint inv = (3 * denominator) ^ 2;
     // Now use Newton-Raphson iteration to improve the precision.
     // Thanks to Hensel's lifting lemma, this also works in modular
     // arithmetic, doubling the correct bits in each step.
@@ -296,19 +297,19 @@ library UniswapV3Library {
   }
   }
 
-  /// @notice Calculates ceil(a×b÷denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
+  /// @notice Calculates ceil(a×b÷denominator) with full precision. Throws if result overflows a uint or denominator == 0
   /// @param a The multiplicand
   /// @param b The multiplier
   /// @param denominator The divisor
   /// @return result The 256-bit result
   function mulDivRoundingUp(
-    uint256 a,
-    uint256 b,
-    uint256 denominator
-  ) internal pure returns (uint256 result) {
+    uint a,
+    uint b,
+    uint denominator
+  ) internal pure returns (uint result) {
     result = mulDiv(a, b, denominator);
     if (mulmod(a, b, denominator) > 0) {
-      require(result < type(uint256).max);
+      require(result < type(uint).max);
       result++;
     }
   }

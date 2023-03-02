@@ -38,7 +38,8 @@ contract UniswapV3Factory is IUniswapV3Factory, UniswapV3PoolDeployer, NoDelegat
         uint24 fee
     ) external override noDelegateCall returns (address pool) {
         require(tokenA != tokenB);
-        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        // not need to sort tokens in this env, need put exact order on pool creation
+        (address token0, address token1) = /*tokenA < tokenB ? */(tokenA, tokenB)/* : (tokenB, tokenA)*/;
         require(token0 != address(0));
         int24 tickSpacing = feeAmountTickSpacing[fee];
         require(tickSpacing != 0);

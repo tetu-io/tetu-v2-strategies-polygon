@@ -54,8 +54,8 @@ contract UniswapV3Callee is IUniswapV3MintCallback, IUniswapV3SwapCallback {
 
   /// @notice Uniswap V3 callback fn, called back on pool.mint
   function uniswapV3MintCallback(
-    uint256 amount0Owed,
-    uint256 amount1Owed,
+    uint amount0Owed,
+    uint amount1Owed,
     bytes calldata data
   ) external override {
     address sender = abi.decode(data, (address));

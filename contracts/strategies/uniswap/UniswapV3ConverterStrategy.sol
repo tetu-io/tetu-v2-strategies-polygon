@@ -27,7 +27,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
   function _handleRewards() override internal returns (uint earned, uint lost) {
-    console.log('UniswapV3ConverterStrategy _handleRewards');
+//    console.log('UniswapV3ConverterStrategy _handleRewards');
 
     uint assetBalanceBefore = _balance(asset);
     _claim();
@@ -53,39 +53,39 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       (fee0, fee1) = (fee1, fee0);
     }
 
-    console.log('isReadyToHardWork fee0', fee0);
-    console.log('isReadyToHardWork fee1', fee1);
+//    console.log('isReadyToHardWork fee0', fee0);
+//    console.log('isReadyToHardWork fee1', fee1);
     return fee0 > liquidationThresholds[tokenA] || fee1 > liquidationThresholds[tokenB];
   }
 
   function rebalance() public {
     require(needRebalance(), "No rebalancing needed");
 
-    console.log('rebalance: start');
+//    console.log('rebalance: start');
     (uint fee0, uint fee1) = getFees();
     rebalanceEarned0 += fee0;
     rebalanceEarned1 += fee1;
 
     uint balanceOfTokenABefore = _balance(tokenA);
     uint balanceOfTokenBBefore = _balance(tokenB);
-    console.log('rebalance: balanceOfTokenABefore', balanceOfTokenABefore);
-    console.log('rebalance: balanceOfTokenBBefore', balanceOfTokenBBefore);
+//    console.log('rebalance: balanceOfTokenABefore', balanceOfTokenABefore);
+//    console.log('rebalance: balanceOfTokenBBefore', balanceOfTokenBBefore);
 
-    console.log('rebalance: remove all liquidity');
+//    console.log('rebalance: remove all liquidity');
     // close univ3 base and fillup positions
     _depositorEmergencyExit();
 
-    console.log('rebalance: balanceOfTokenA', _balance(tokenA));
-    console.log('rebalance: balanceOfTokenB', _balance(tokenB));
+//    console.log('rebalance: balanceOfTokenA', _balance(tokenA));
+//    console.log('rebalance: balanceOfTokenB', _balance(tokenB));
 
     ITetuConverter _tetuConverter = tetuConverter;
     (uint debtAmount, uint collateralAmount) = _tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
-    console.log('rebalance: collateralAmount in lending', collateralAmount);
-    console.log('rebalance: debtAmount in lending', debtAmount);
+//    console.log('rebalance: collateralAmount in lending', collateralAmount);
+//    console.log('rebalance: debtAmount in lending', debtAmount);
 
     if (_balance(tokenB) > debtAmount) {
-      console.log('rebalance: need to increase debt by', _balance(tokenB) - debtAmount);
-      console.log('rebalance: rebalancing debt and collateral');
+//      console.log('rebalance: need to increase debt by', _balance(tokenB) - debtAmount);
+//      console.log('rebalance: rebalancing debt and collateral');
       ConverterStrategyBaseLib.openPosition(
         tetuConverter,
         abi.encode(2),
@@ -94,8 +94,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         _balance(tokenB) - debtAmount
       );
     } else {
-      console.log('rebalance: need to decrease debt by', debtAmount - _balance(tokenB));
-      console.log('rebalance: rebalancing debt and collateral');
+//      console.log('rebalance: need to decrease debt by', debtAmount - _balance(tokenB));
+//      console.log('rebalance: rebalancing debt and collateral');
       ConverterStrategyBaseLib.closePosition(
         tetuConverter,
         tokenA,
@@ -104,8 +104,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       );
     }
 
-    console.log('rebalance: balanceOfTokenA', _balance(tokenA));
-    console.log('rebalance: balanceOfTokenB', _balance(tokenB));
+//    console.log('rebalance: balanceOfTokenA', _balance(tokenA));
+//    console.log('rebalance: balanceOfTokenB', _balance(tokenB));
 
     // set new ticks
     _setNewTickRange();
@@ -123,7 +123,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _updateInvestedAssets();
 
     // adjust base-amounts
-    // todo
-    // _updateBaseAmounts(_depositorPoolAssets(), borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
+    _updateBaseAmountsForAsset(tokenA, balanceOfTokenABefore > _balance(tokenA) ? balanceOfTokenABefore - _balance(tokenA) : _balance(tokenA) - balanceOfTokenABefore, balanceOfTokenABefore < _balance(tokenA));
+    _updateBaseAmountsForAsset(tokenB, balanceOfTokenBBefore > _balance(tokenB) ? balanceOfTokenBBefore - _balance(tokenB) : _balance(tokenB) - balanceOfTokenBBefore, balanceOfTokenBBefore < _balance(tokenB));
   }
 }
