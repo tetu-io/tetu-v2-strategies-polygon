@@ -117,4 +117,21 @@ contract ConverterStrategyBaseLibFacade {
   ) external view returns (uint[] memory) {
     return ConverterStrategyBaseLib.getAvailableBalances(tokens_, indexAsset);
   }
+
+  function calcInvestedAssets(
+    address[] memory tokens,
+    uint[] memory amountsOut,
+    uint indexAsset,
+    ITetuConverter converter_
+  ) external returns (
+    uint amountOut
+  ) {
+    return ConverterStrategyBaseLib.calcInvestedAssets(
+      tokens,
+      amountsOut,
+      indexAsset,
+      converter_,
+      baseAmounts
+    );
+  }
 }

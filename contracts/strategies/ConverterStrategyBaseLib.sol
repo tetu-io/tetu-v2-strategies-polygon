@@ -61,6 +61,7 @@ library ConverterStrategyBaseLib {
     uint collateral;
     uint amountToBorrow;
   }
+
   struct OpenPositionEntryKind2Local {
     address[] converters;
     uint[] collateralsRequired;
@@ -71,6 +72,13 @@ library ConverterStrategyBaseLib {
     uint c3;
     uint ratio;
     uint alpha;
+  }
+
+  struct CalcInvestedAssetsLocal {
+    uint len;
+    uint[] prices;
+    uint[] decimals;
+    uint[] debts;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -169,14 +177,7 @@ library ConverterStrategyBaseLib {
     tokenAmountsOut = new uint[](len);
 
     // get token prices and decimals
-    uint[] memory prices = new uint[](len);
-    uint[] memory decimals = new uint[](len);
-    {
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        decimals[i] = IERC20Metadata(tokens_[i]).decimals();
-        prices[i] = priceOracle.getAssetPrice(tokens_[i]);
-      }
-    }
+    (uint[] memory prices, uint[] memory decimals) = getPricesAndDecimals(priceOracle, tokens_, len);
 
     // split the amount on tokens proportionally to the weights
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
@@ -196,6 +197,20 @@ library ConverterStrategyBaseLib {
         if (tokenBalance < tokenAmountToBeBorrowed) {
           tokenAmountsOut[i] = amountAssetForToken * (tokenAmountToBeBorrowed - tokenBalance) / tokenAmountToBeBorrowed;
         }
+      }
+    }
+  }
+
+  function getPricesAndDecimals(IPriceOracle priceOracle, address[] memory tokens_, uint len) internal view returns (
+    uint[] memory prices,
+    uint[] memory decimals
+  ) {
+    prices = new uint[](len);
+    decimals = new uint[](len);
+    {
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        decimals[i] = IERC20Metadata(tokens_[i]).decimals();
+        prices[i] = priceOracle.getAssetPrice(tokens_[i]);
       }
     }
   }
@@ -747,4 +762,74 @@ library ConverterStrategyBaseLib {
   }
 
 
+  /////////////////////////////////////////////////////////////////////
+  ///                      calcInvestedAssets
+  /////////////////////////////////////////////////////////////////////
+  /// @notice Calculate amount we will receive when we withdraw all from pool
+  /// @dev This is writable function because we need to update current balances in the internal protocols.
+  /// @return amountOut Invested asset amount under control (in terms of {asset})
+  function calcInvestedAssets(
+    address[] memory tokens,
+    uint[] memory amountsOut,
+    uint indexAsset,
+    ITetuConverter converter_,
+    mapping(address => uint) storage baseAmounts
+  ) external returns (
+    uint amountOut
+  ) {
+    CalcInvestedAssetsLocal memory v;
+    v.len = tokens.length;
+
+    // calculate prices, decimals
+    (v.prices, v.decimals) = getPricesAndDecimals(
+      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
+      tokens,
+      v.len
+    );
+
+    // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
+    // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
+    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset) {
+        amountOut += amountsOut[i];
+      } else {
+        // available amount to repay
+        uint toRepay = baseAmounts[tokens[i]] + amountsOut[i];
+
+        (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), tokens[indexAsset], tokens[i]);
+        amountOut += collateral;
+        if (toRepay >= toPay) {
+          amountOut += (toRepay - toPay) * v.prices[i] * v.decimals[indexAsset] / v.prices[indexAsset] / v.decimals[i];
+        } else {
+          // there is not enough amount to pay the debt
+          // let's register a debt and try to resolve it later below
+          if (v.debts.length == 0) {
+            v.debts = new uint[](v.len); // lazy initialization
+          }
+          // to pay the following amount we need to swap some other asset at first
+          v.debts[i] = toPay - toRepay;
+        }
+      }
+    }
+
+    if (v.debts.length == v.len) {
+      // we assume here, that it would be always profitable to save collateral
+      // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
+      // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
+      for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+        if (v.debts[i] == 0) continue;
+
+        // estimatedAssets should be reduced on the debt-value
+        uint debtInAsset = v.debts[i] * v.prices[i] * v.decimals[indexAsset] / v.prices[indexAsset] / v.decimals[i];
+        if (debtInAsset > amountOut) {
+          // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
+          amountOut = 0;
+        } else {
+          amountOut -= debtInAsset;
+        }
+      }
+    }
+
+    return amountOut;
+  }
 }

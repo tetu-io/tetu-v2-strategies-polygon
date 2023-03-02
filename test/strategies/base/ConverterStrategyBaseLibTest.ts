@@ -3,7 +3,7 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
-import {ConverterStrategyBaseLibFacade, ITetuConverter, MockToken, PriceOracleMock} from "../../../typechain";
+import {ConverterStrategyBaseLibFacade, MockToken, PriceOracleMock} from "../../../typechain";
 import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
@@ -13,7 +13,6 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS, GET_GET_COLLATERALS, GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
-import {decimalString} from "hardhat/internal/core/config/config-validation";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {BigNumber} from "ethers";
 
@@ -1488,6 +1487,42 @@ describe("ConverterStrategyBaseLibTest", () => {
 
         expect(ret).eq(expected);
       });
+    });
+  });
+
+  describe("calcInvestedAssets", () => {
+    describe("Good paths", () => {
+      describe("All amounts are located on the strategy balance only (liquidity is zero)", () => {
+
+      });
+      describe("All amounts are deposited to the pool", () => {
+
+      });
+      describe("Amount to repay < amount available in the pool+balance", () => {
+
+      });
+      describe("Amount to repay >= amount available in the pool+balance", () => {
+        describe("Amount of main asset is enough to pay debts", () => {
+
+        });
+        describe("Amount of main asset is NOT enough to pay debts", () => {
+          describe("Amount of all assets is enough to pay debts", () => {
+
+          });
+          describe("Amount of all assets is NOT enough to pay debts", () => {
+
+          });
+        });
+      });
+      it("should return expected values", async () => {
+
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+
     });
   });
 //endregion Unit tests

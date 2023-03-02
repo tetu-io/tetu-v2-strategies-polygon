@@ -641,7 +641,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     _preHardWork(reInvest);
 
-    (earned, lost) = _handleRewards();
+      (earned, lost) = _handleRewards();
     uint assetBalance = _balance(asset);
 
     // re-invest income
@@ -669,35 +669,29 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
-    investedAssetsOut = calcInvestedAssets();
+    uint liquidity = _depositorLiquidity();
+    address[] memory tokens = _depositorPoolAssets();
+    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+
+    uint[] memory amountsOut = liquidity == 0
+      ? new uint[](tokens.length)
+      : _depositorQuoteExit(liquidity);
+
+    investedAssetsOut = ConverterStrategyBaseLib.calcInvestedAssets(
+      tokens,
+      amountsOut,
+      indexAsset,
+      tetuConverter,
+      baseAmounts
+    );
     _investedAssets = investedAssetsOut;
   }
+
   function updateInvestedAssets() external  returns (uint investedAssetsOut) {
     return _updateInvestedAssets(); // todo remove, temp access
   }
 
-  /// @notice Calculate amount we will receive when we withdraw all from pool
-  /// @dev This is writable function because quoteRepay is writable (it updates current balances in the internal pools)
-  /// @return estimatedAssets Invested asset amount under control (in terms of {asset})
-  function calcInvestedAssets() public returns (uint estimatedAssets) {
-    uint liquidity = _depositorLiquidity();
-    if (liquidity != 0) {
-      uint[] memory amountsOut = _depositorQuoteExit(liquidity);
-      address[] memory tokens = _depositorPoolAssets();
 
-      address _asset = asset;
-
-      uint len = tokens.length;
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        address borrowedToken = tokens[i];
-        estimatedAssets += _asset == borrowedToken
-          ? amountsOut[i]
-          : tetuConverter.quoteRepay(address(this), _asset, borrowedToken, _balance(borrowedToken) + amountsOut[i]);
-      }
-    }
-
-    return estimatedAssets;
-  }
 
   /////////////////////////////////////////////////////////////////////
   ///               ITetuConverterCallback
