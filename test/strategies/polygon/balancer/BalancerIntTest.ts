@@ -38,6 +38,7 @@ import {
 import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
+import {MaticHolders} from "../../../../scripts/MaticHolders";
 chai.use(chaiAsPromised);
 
 describe('BalancerIntTest', function() {
@@ -868,6 +869,107 @@ describe('BalancerIntTest', function() {
         });
       });
     });
+
+    /**
+     * Any deposit/withdraw/hardwork operation shouldn't change sharedPrice (at least significantly)
+     */
+    describe("Ensure share price is not changed", () => {
+      describe("Deposit", () => {
+        it("should return expected values, small deposit", async () => {
+          const stateInitial = await enterToVault();
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state)
+          }
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          // let's deposit $1 - calcInvestedAssets will be called
+          await IERC20__factory.connect(
+            MaticAddresses.USDC_TOKEN,
+            await Misc.impersonate(MaticHolders.HOLDER_USDC)
+          ).transfer(user.address, parseUnits("1", 6));
+          await VaultUtils.deposit(user, vault, parseUnits("1", 6));
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+
+          console.log("State before", stateBefore);
+          console.log("State after", stateAfter);
+
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          expect(ret.eq(0)).eq(true);
+        });
+        it("should return expected values, huge deposit", async () => {
+          const stateInitial = await enterToVault();
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state)
+          }
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          // let's deposit $1 - calcInvestedAssets will be called
+          await IERC20__factory.connect(
+            MaticAddresses.USDC_TOKEN,
+            await Misc.impersonate(MaticHolders.HOLDER_USDC)
+          ).transfer(user.address, parseUnits("50000", 6));
+          await VaultUtils.deposit(user, vault, parseUnits("50000", 6));
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+
+          console.log("State before", stateBefore);
+          console.log("State after", stateAfter);
+
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          expect(ret.eq(0)).eq(true);
+        });
+      });
+      describe("Withdraw", () => {
+        it("should return expected values", async () => {
+          const stateInitial = await enterToVault();
+          console.log("stateInitial", stateInitial);
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state)
+          }
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          // we need to force vault to withdraw some amount from the strategy
+          // so let's ask to withdraw ALMOST all amount from vault's balance
+          // calcInvestedAssets will be called after the withdrawal
+          const assets = await vault.convertToAssets(await vault.balanceOf(user.address));
+          // todo const amountToWithdraw = (await vault.maxWithdraw(user.address)).sub(parseUnits("1", 6));
+          const amountToWithdraw = assets.mul(DENOMINATOR-WITHDRAW_FEE).div(DENOMINATOR).sub(parseUnits("1", 6));
+          console.log("amountToWithdraw", amountToWithdraw);
+          await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          console.log("stateAfter", stateAfter);
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          expect(ret.eq(0)).eq(true);
+        });
+      });
+    });
+
   });
 
 //endregion Integration tests

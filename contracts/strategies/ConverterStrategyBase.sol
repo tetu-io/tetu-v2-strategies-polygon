@@ -669,21 +669,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
-    uint liquidity = _depositorLiquidity();
-    address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
-
-    uint[] memory amountsOut = liquidity == 0
-      ? new uint[](tokens.length)
-      : _depositorQuoteExit(liquidity);
-
-    investedAssetsOut = ConverterStrategyBaseLib.calcInvestedAssets(
-      tokens,
-      amountsOut,
-      indexAsset,
-      tetuConverter,
-      baseAmounts
-    );
+    investedAssetsOut = _calcInvestedAssets();
     _investedAssets = investedAssetsOut;
   }
 
@@ -691,7 +677,25 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return _updateInvestedAssets(); // todo remove, temp access
   }
 
+  /// @notice Calculate amount we will receive when we withdraw all from pool
+  /// @dev This is writable function because we need to update current balances in the internal protocols.
+  /// @return Invested asset amount under control (in terms of {asset})
+  function _calcInvestedAssets() internal returns (uint) {
+    uint liquidity = _depositorLiquidity();
 
+    address[] memory tokens = _depositorPoolAssets();
+    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+
+    uint[] memory amountsOut = liquidity == 0
+      ? new uint[](tokens.length)
+      : _depositorQuoteExit(liquidity);
+
+    return ConverterStrategyBaseLib.calcInvestedAssets(tokens, amountsOut, indexAsset, tetuConverter, baseAmounts);
+  }
+
+  function calcInvestedAssets() external returns (uint) {
+    return _calcInvestedAssets();
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///               ITetuConverterCallback
