@@ -14,7 +14,6 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -250,7 +249,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return assetPrice Price of the {asset} from the price oracle
   function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
     uint investedAssets = _updateInvestedAssets();
-    console.log("_withdrawFromPool.investedAssets", investedAssets);
     require(_investedAssets != 0, AppErrors.NO_INVESTMENTS);
     return _withdrawUniversal(amount, false, investedAssets);
   }
@@ -398,7 +396,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
-    console.log("_convertAfterWithdraw", amountsToConvert_[0], amountsToConvert_[1], amountsToConvert_[2]);
     ConvertAfterWithdrawLocalParams memory vars;
     vars.tetuConverter = tetuConverter;
     vars.asset = tokens_[indexAsset_];
@@ -406,9 +403,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint len = tokens_.length;
     repaidAmountsOut = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      console.log("closePosition amountsToConvert_[i]", amountsToConvert_[i]);
       if (i == indexAsset_) continue;
-      console.log("closePosition i", i);
       (vars.collateral, repaidAmountsOut[i]) = ConverterStrategyBaseLib.closePosition(
         vars.tetuConverter,
         vars.asset,
@@ -416,17 +411,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         amountsToConvert_[i]
       );
       collateralOut += vars.collateral;
-      console.log("Received collateral", vars.collateral);
     }
 
     // Manually swap remain leftovers
     vars.liquidator = ITetuLiquidator(IController(controller()).liquidator());
     vars.liquidationThreshold = liquidationThresholds[vars.asset];
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      console.log("liquidate i", i);
       if (i == indexAsset_) continue;
-      console.log("liquidate i", i);
-      console.log("amountsToConvert_[i], repaidAmountsOut[i]", amountsToConvert_[i], repaidAmountsOut[i]);
       if (amountsToConvert_[i] > repaidAmountsOut[i]) {
         (vars.spentAmountIn, vars.receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
           vars.liquidator,
@@ -436,9 +427,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           _ASSET_LIQUIDATION_SLIPPAGE,
           vars.liquidationThreshold
         );
-        console.log("liquidate amountIn", amountsToConvert_[i] - repaidAmountsOut[i]);
-        console.log("liquidate amountOut", vars.receivedAmountOut);
-        console.log("liquidate spentAmountIn", vars.spentAmountIn);
         if (vars.receivedAmountOut != 0) {
           collateralOut += vars.receivedAmountOut;
         }

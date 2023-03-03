@@ -13,8 +13,6 @@ import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
-import "hardhat/console.sol";
-
 /// @notice Functions of BalancerComposableStableDepositor
 /// @dev Many of functions are declared as external to reduce contract size
 library BalancerLogicLib {
@@ -385,25 +383,6 @@ library BalancerLogicLib {
       }
       ++k;
     }
-
-// just debug:
-//    // convert remained amount of bpt on the strategy balance to main asset to avoid changes in investedAsset amount
-//    uint depositorBalance = p.tokens[p.bptIndex].balanceOf(address(this));
-//    if (depositorBalance > 0) {
-//      console.log("Need to convert", depositorBalance);
-//      console.log("From", address(p.tokens[1]));
-//      console.log("To", address(p.tokens[2]));
-//      console.log("Balance", p.tokens[2].balanceOf(address(this)));
-//      BalancerLogicLib.swap(
-//        vault_,
-//        poolId_,
-//        address(p.tokens[p.bptIndex]),
-//        address(p.tokens[2]),
-//        depositorBalance,
-//        funds
-//      );
-//      console.log("Balance after swap", p.tokens[2].balanceOf(address(this)));
-//    }
   }
 
   /// @notice Withdraw all available amount of LP-tokens from the pool
@@ -478,6 +457,25 @@ library BalancerLogicLib {
         ++k;
       }
     }
+
+    // todo but probably we should swap remain bpt directly to USDC at full exit?
+    //    // convert remained amount of bpt on the strategy balance to main asset to avoid changes in investedAsset amount
+    //    uint depositorBalance = p.tokens[p.bptIndex].balanceOf(address(this));
+    //    if (depositorBalance > 0) {
+    //      console.log("Need to convert", depositorBalance);
+    //      console.log("From", address(p.tokens[1]));
+    //      console.log("To", address(p.tokens[2]));
+    //      console.log("Balance", p.tokens[2].balanceOf(address(this)));
+    //      BalancerLogicLib.swap(
+    //        vault_,
+    //        poolId_,
+    //        address(p.tokens[p.bptIndex]),
+    //        address(p.tokens[2]),
+    //        depositorBalance,
+    //        funds
+    //      );
+    //      console.log("Balance after swap", p.tokens[2].balanceOf(address(this)));
+    //    }
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
@@ -491,7 +489,6 @@ library BalancerLogicLib {
   ) external returns (
     uint[] memory amountsOut
   ) {
-    console.log("depositorQuoteExit");
     DepositorLocal memory p;
 
     p.bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
@@ -515,13 +512,11 @@ library BalancerLogicLib {
         toInternalBalance: false
       })
     );
-    console.log("depositorQuoteExit.1 bpt, liquidityAmount_", bpt, liquidityAmount_);
 
     // amount of unconverted bpt, we need to take them into account for correct calculation of investedAssets amount
     bpt = bpt < liquidityAmount_
       ? liquidityAmount_ - bpt
       : 0;
-    console.log("depositorQuoteExit.2 bpt", bpt);
 
     IBVault.FundManagement memory funds = IBVault.FundManagement({
       sender: address(this),
@@ -537,18 +532,13 @@ library BalancerLogicLib {
       if (bpt != 0) {
         // take into account the cost of unused BPT by directly converting them to first available amBPT
         int[] memory deltas = _convertBptToAmBpt(vault_, poolId_, p.tokens[p.bptIndex], bpt, p.tokens[i], funds);
-        console.log("depositorQuoteExit.3 deltas i", i);
-        console.logInt(deltas[0]);
-        console.logInt(deltas[1]);
         if (deltas[0] > 0) {
-          console.log("amountsBpt[i]", amountsBpt[i]);
           bpt = (bpt < uint(deltas[0]))
             ? bpt - uint(deltas[0])
             : 0;
           amountsBpt[i] += (deltas[1] < 0)
             ? uint(-deltas[1])
             : 0;
-          console.log("amountsBpt[i] (updated)", amountsBpt[i]);
         }
       }
       IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(p.tokens[i]));
@@ -574,7 +564,6 @@ library BalancerLogicLib {
 
       ++k;
     }
-    console.log("depositorQuoteExit.amountsOut", amountsOut[0], amountsOut[1], amountsOut[2]);
   }
 
   function _convertBptToAmBpt(
