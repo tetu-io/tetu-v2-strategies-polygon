@@ -14,6 +14,8 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
+import "hardhat/console.sol";
+
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -377,6 +379,9 @@ library ConverterStrategyBaseLib {
               ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
               : vars.amountsToBorrow[i];
             amountIn_ -= vars.collateral;
+            console.log("Borrow", borrowAsset_);
+            console.log("Borrow.collateral", vars.collateral);
+            console.log("Borrow.amountToBorrow", vars.amountToBorrow);
           } else {
             // assume here that entryKind == EntryKinds.ENTRY_KIND_EXACT_BORROW_OUT_FOR_MIN_COLLATERAL_IN_2
             // we have exact amount of total amount-to-borrow
@@ -530,6 +535,7 @@ library ConverterStrategyBaseLib {
     uint returnedAssetAmountOut,
     uint repaidAmountOut
   ) {
+    console.log("closePosition.amountToRepay", amountToRepay);
     //!! console.log("_closePosition");
 
     // We shouldn't try to pay more than we actually need to repay
@@ -540,6 +546,8 @@ library ConverterStrategyBaseLib {
     uint amountRepay = amountToRepay < needToRepay
       ? amountToRepay
       : needToRepay;
+    console.log("closePosition.needToRepay", needToRepay);
+    console.log("closePosition.amountRepay(updated)", amountRepay);
 
     // Make full/partial repayment
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
@@ -566,6 +574,7 @@ library ConverterStrategyBaseLib {
     repaidAmountOut = balanceBefore > balanceAfter
       ? balanceBefore - balanceAfter
       : 0;
+    console.log("closePosition.repaidAmountOut", repaidAmountOut);
 
     require(returnedBorrowAmountOut == 0, AppErrors.REPAY_MAKES_SWAP);
   }
@@ -788,6 +797,7 @@ library ConverterStrategyBaseLib {
       tokens,
       v.len
     );
+    console.log("calcInvestedAssets.prices", v.prices[0], v.prices[1], v.prices[2]);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
@@ -795,15 +805,20 @@ library ConverterStrategyBaseLib {
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += amountsOut[i];
+        console.log("calcInvestedAssets.1", amountsOut[i]);
       } else {
         // available amount to repay
         uint toRepay = baseAmounts[tokens[i]] + amountsOut[i];
+        console.log("calcInvestedAssets.2.toRepay, i", toRepay, i);
 
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), tokens[indexAsset], tokens[i]);
+        console.log("calcInvestedAssets.3.toPay collateral", toPay, collateral);
         amountOut += collateral;
         if (toRepay >= toPay) {
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+          console.log("calcInvestedAssets.4", (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
         } else {
+          console.log("calcInvestedAssets.5");
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           if (v.debts.length == 0) {
@@ -811,6 +826,7 @@ library ConverterStrategyBaseLib {
           }
           // to pay the following amount we need to swap some other asset at first
           v.debts[i] = toPay - toRepay;
+          console.log("calcInvestedAssets.6.debt", toPay - toRepay);
         }
       }
     }
@@ -827,12 +843,15 @@ library ConverterStrategyBaseLib {
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
+          console.log("calcInvestedAssets.7", amountOut);
         } else {
           amountOut -= debtInAsset;
+          console.log("calcInvestedAssets.7", v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
         }
       }
     }
 
+    console.log("calcInvestedAssets.results", amountOut);
     return amountOut;
   }
 }

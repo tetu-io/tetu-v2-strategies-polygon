@@ -375,7 +375,7 @@ describe('BalancerIntPriceChangeTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
           await changePrices(6, true);
@@ -389,7 +389,7 @@ describe('BalancerIntPriceChangeTest', function() {
           ).transfer(user.address, parseUnits("1", 6));
           await VaultUtils.deposit(user, vault, parseUnits("1", 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
 
@@ -398,6 +398,11 @@ describe('BalancerIntPriceChangeTest', function() {
 
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_deposit_small.csv",
+            [stateBefore, stateAfter]
+          );
 
           expect(ret.eq(0)).eq(true);
         });
@@ -410,7 +415,7 @@ describe('BalancerIntPriceChangeTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
           // await changePrices(6, true);
@@ -424,7 +429,7 @@ describe('BalancerIntPriceChangeTest', function() {
           ).transfer(user.address, parseUnits("50000", 6));
           await VaultUtils.deposit(user, vault, parseUnits("50000", 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
 
@@ -434,10 +439,15 @@ describe('BalancerIntPriceChangeTest', function() {
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
 
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_deposit_huge.csv",
+            [stateBefore, stateAfter]
+          );
+
           expect(ret.eq(0)).eq(true);
         });
       });
-      describe("Withdraw", () => {
+      describe("Withdraw almost most allowed amount", () => {
         it("should return expected values", async () => {
           const stateInitial = await enterToVault();
           console.log("stateInitial", stateInitial);
@@ -448,12 +458,10 @@ describe('BalancerIntPriceChangeTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
           await changePrices(6);
-          // await strategy.updateInvestedAssets();
-          const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
           // we need to force vault to withdraw some amount from the strategy
           // so let's ask to withdraw ALMOST all amount from vault's balance
@@ -464,13 +472,52 @@ describe('BalancerIntPriceChangeTest', function() {
           console.log("amountToWithdraw", amountToWithdraw);
           await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
-          console.log("stateMiddle", stateMiddle);
+          console.log("stateBefore", stateBefore);
           console.log("stateAfter", stateAfter);
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_withdraw.csv",
+            [stateBefore, stateAfter]
+          );
+
+          expect(ret.eq(0)).eq(true);
+        });
+      });
+      describe("WithdrawAll", () => {
+        it("should return expected values", async () => {
+          const stateInitial = await enterToVault();
+          console.log("stateInitial", stateInitial);
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state)
+          }
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
+
+          // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
+          await changePrices(6);
+
+          await vault.connect(user).withdrawAll();
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          console.log("stateBefore", stateBefore);
+          console.log("stateAfter", stateAfter);
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_withdraw_all.csv",
+            [stateBefore, stateAfter]
+          );
 
           expect(ret.eq(0)).eq(true);
         });

@@ -66,7 +66,7 @@ describe('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
   /** Save collected states to csv, compute profit */
   after(async function() {
     const pathOut = "./tmp/ts2-snapshots.csv";
-    await BalancerIntTestUtils.saveListStatesToCSV(pathOut, states);
+    await BalancerIntTestUtils.saveListStatesToCSVRows(pathOut, states);
     BalancerIntTestUtils.outputProfit(states);
   });
 
@@ -79,7 +79,7 @@ describe('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
       ppfsDecreaseAllowed: false,
       balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
-      loops: 4,
+      loops: 40,
       loopValue: 2000,
       advanceBlocks: true,
       specificTests: [],
