@@ -63,8 +63,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const investAmount = parseUnits('1000', 6) // 1k USDC
   const strategyTickRange = 1200 // +- 12% price
   const strategyRebalanceTickRange = 40 // +- 0.4% price change
-  const txLimit = 100 // 0 - unlimited
+  const txLimit = 0 // 0 - unlimited
   const disableBurns = true // backtest is 10x slower with enabled burns
+  const disableMints = true
 
   // liquidity snapshots
   let usdcWeth005PoolLiquiditySnapshot: IPoolLiquiditySnapshot
@@ -124,9 +125,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
     wmaticUsdc005PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_WMATIC_USDC_500), backtestStartBlock, 200);
 
     // deploy tokens
-    USDC = await DeployerUtils.deployMockToken(signer, 'USDC', 6, '100000000'); // mint 100m
+    USDC = await DeployerUtils.deployMockToken(signer, 'USDC', 6, '300000000'); // mint 300m
     WETH = await DeployerUtils.deployMockToken(signer, 'WETH', 18, '2000000'); // mint 2m
-    WMATIC = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18, '100000000'); // mint 100m
+    WMATIC = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18, '300000000'); // mint 300m
     const tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
 
     // give 10k USDC to user
@@ -145,9 +146,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
     // tetuUsdc pool need for strategy testing with compoundRatio < 100%
     const tetuUsdc500Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(tetu.address, USDC.address, 500), signer)
     uniswapV3Calee = await DeployerUtils.deployContract(signer, "UniswapV3Callee") as UniswapV3Callee
-    await USDC.approve(uniswapV3Calee.address, parseUnits('90000000', 6))
+    await USDC.approve(uniswapV3Calee.address, parseUnits('300000000', 6))
     await WETH.approve(uniswapV3Calee.address, parseUnits('900000'))
-    await WMATIC.approve(uniswapV3Calee.address, parseUnits('90000000'))
+    await WMATIC.approve(uniswapV3Calee.address, parseUnits('300000000'))
     await tetu.approve(uniswapV3Calee.address, parseUnits('10000000'))
     await usdcWeth005Pool.initialize(usdcWeth005PoolLiquiditySnapshot.currentSqrtPriceX96)
     await wmaticUsdc005Pool.initialize(wmaticUsdc005PoolLiquiditySnapshot.currentSqrtPriceX96)
@@ -428,7 +429,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
       backtestEndBlock,
       MaticAddresses.UNISWAPV3_USDC_WETH_500,
       txLimit,
-      disableBurns
+      disableBurns,
+      disableMints
     ))
   })
 
@@ -444,7 +446,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
       backtestEndBlock,
       MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
       txLimit,
-      disableBurns
+      disableBurns,
+      disableMints
     ))
   })
 })
@@ -486,6 +489,8 @@ interface IBacktestResult {
   minPrice: BigNumber
   backtestLocalTimeSpent: number
   tokenBSymbol: string
+  disableBurns: boolean
+  disableMints: boolean
 }
 
 function showBacktestResult(r: IBacktestResult) {
@@ -496,6 +501,7 @@ function showBacktestResult(r: IBacktestResult) {
   console.log(`APR: ${formatUnits(apr, 3)}%. Invest amount: ${formatUnits(r.investAmount, 6)} USDC. Earned: ${formatUnits(r.earned, 6)} USDC. Rebalances: ${r.rebalances}.`)
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp*1000).toLocaleDateString("en-US")} ${new Date(r.startTimestamp*1000).toLocaleTimeString("en-US")}. Finish: ${new Date(r.endTimestamp*1000).toLocaleDateString("en-US")} ${new Date(r.endTimestamp*1000).toLocaleTimeString("en-US")}.`)
   console.log(`Start price of ${r.tokenBSymbol}: ${formatUnits(r.startPrice, 6)}. End price: ${formatUnits(r.endPrice, 6)}. Min price: ${formatUnits(r.minPrice, 6)}. Max price: ${formatUnits(r.maxPrice, 6)}.`)
+  console.log(`Mints: ${!r.disableMints ? 'enabled' : 'disabled'}. Burns: ${!r.disableBurns ? 'enabled' : 'disabled'}.`)
   console.log(`Time spent for backtest: ${periodHuman(r.backtestLocalTimeSpent)}.`)
   console.log('')
 }
@@ -606,7 +612,8 @@ async function strategyBacktest(
   backtestEndBlock: number,
   uniswapV3RealPoolAddress: string,
   txLimit: number = 0,
-  disableBurns: boolean = true
+  disableBurns: boolean = true,
+  disableMints: boolean = false,
 ): Promise<IBacktestResult> {
   const startTimestampLocal = Math.floor(Date.now() / 1000)
   const tokenA = IERC20Extended__factory.connect(await strategy.tokenA(), signer)
@@ -679,7 +686,7 @@ async function strategyBacktest(
       console.log('')
     }
 
-    if (poolTx.type === TransactionType.MINT && poolTx.tickUpper !== undefined && poolTx.tickLower !== undefined) {
+    if (!disableMints && poolTx.type === TransactionType.MINT && poolTx.tickUpper !== undefined && poolTx.tickLower !== undefined) {
       await uniswapV3Calee.mint(pool.address, signer.address, poolTx.tickLower, poolTx.tickUpper, BigNumber.from(poolTx.amount))
 
       console.log(`[tx ${i} of ${txsTotal}] MINT`)
@@ -740,5 +747,7 @@ async function strategyBacktest(
     minPrice,
     backtestLocalTimeSpent: endTimestampLocal - startTimestampLocal,
     tokenBSymbol: await tokenB.symbol(),
+    disableBurns,
+    disableMints,
   }
 }
