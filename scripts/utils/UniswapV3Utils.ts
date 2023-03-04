@@ -194,6 +194,7 @@ export class UniswapV3Utils {
         }
         processedTicks.push(currentTickProcessed)
         previousTickProcessed = currentTickProcessed
+        process.stdout.write(`.`)
       }
       previousTickProcessed = activeTickProcessed
       for (let i = 0; i < numSurroundingTicks; i++) {
@@ -207,10 +208,12 @@ export class UniswapV3Utils {
         }
         processedTicks.push(currentTickProcessed)
         previousTickProcessed = currentTickProcessed
+        process.stdout.write(`.`)
       }
       r.ticks = processedTicks.sort((a,b) => a.tickIdx < b.tickIdx ? -1 : 1)
 
       fs.writeFileSync(cacheFileName, JSON.stringify(r));
+      console.log('')
       console.log(`Done. Added to cache file ${cacheFileName}.`)
     }
 

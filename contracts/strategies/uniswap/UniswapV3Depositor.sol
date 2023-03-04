@@ -26,6 +26,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.0";
 
   IUniswapV3Pool public pool;
+  int24 public tickSpacing;
   int24 public lowerTick;
   int24 public upperTick;
   int24 public lowerTickFillup;
@@ -57,10 +58,11 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ) internal onlyInitializing {
     require(pool_ != address(0) && tickRange_ != 0 && rebalanceTickRange_ != 0, AppErrors.ZERO_ADDRESS);
     pool = IUniswapV3Pool(pool_);
+    tickSpacing = UniswapV3Library.getTickSpacing(pool.fee());
     rebalanceTickRange = rebalanceTickRange_;
     (, int24 tick, , , , ,) = pool.slot0();
-    lowerTick = (tick - tickRange_) / 10 * 10;
-    upperTick = (tick + tickRange_) / 10 * 10;
+    lowerTick = (tick - tickRange_) / tickSpacing * tickSpacing;
+    upperTick = (tick + tickRange_) / tickSpacing * tickSpacing;
     if (asset_ == pool.token0()) {
       tokenA = pool.token0();
       tokenB = pool.token1();
@@ -76,8 +78,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   function _setNewTickRange() internal {
     (, int24 tick, , , , ,) = pool.slot0();
     int24 halfRange = (upperTick - lowerTick) / 2;
-    lowerTick = (tick - halfRange) / 10 * 10;
-    upperTick = (tick + halfRange) / 10 * 10;
+    lowerTick = (tick - halfRange) / tickSpacing * tickSpacing;
+    upperTick = (tick + halfRange) / tickSpacing * tickSpacing;
   }
 
   /// @notice Uniswap V3 callback fn, called back on pool.mint
@@ -126,6 +128,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       newLiquidity
     );
 
+//    console.log('_depositorEnter liquidityOut', liquidityOut);
 //    console.log('_depositorEnter pool.mint before');
     pool.mint(address(this), lowerTick, upperTick, uint128(liquidityOut), "");
 //    console.log('_depositorEnter pool.mint after');
@@ -144,12 +147,12 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     (, int24 tick, , , , ,) = pool.slot0();
     if (_balance(pool.token0()) > _balance(pool.token1()) * UniswapV3Library.getPrice(pool, pool.token1()) / 10**IERC20Metadata(pool.token1()).decimals()) {
       // add token0 to half range
-      lowerTickFillup = tick / 10 * 10 + 10;
+      lowerTickFillup = tick / tickSpacing * tickSpacing + tickSpacing;
       upperTickFillup = upperTick;
       _addLiquidityFillup(_balance(pool.token0()), 0);
     } else {
       lowerTickFillup = lowerTick;
-      upperTickFillup = tick / 10 * 10 - 10;
+      upperTickFillup = tick / tickSpacing * tickSpacing - tickSpacing;
       _addLiquidityFillup(0, _balance(pool.token1()));
     }
   }
