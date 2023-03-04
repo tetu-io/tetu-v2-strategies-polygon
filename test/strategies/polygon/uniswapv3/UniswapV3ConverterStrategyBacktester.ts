@@ -57,25 +57,45 @@ import {MaticAddresses} from "../../../../scripts/MaticAddresses";
 const { expect } = chai;
 
 describe('UmiswapV3 converter strategy backtester', function() {
-  // backtest config
+  // ==== backtest config ====
   const backtestStartBlock = 39530000 // Feb-21-2023 01:02:34 AM +UTC
   const backtestEndBlock = 39570000 // Feb-22-2023 01:40:46 AM +UTC
   const investAmount = parseUnits('1000', 6) // 1k USDC
-  const strategyTickRange = 1200 // +- 12% price
-  const strategyRebalanceTickRange = 40 // +- 0.4% price change
   const txLimit = 0 // 0 - unlimited
-  const disableBurns = true // backtest is 10x slower with enabled burns
+  const disableBurns = true // backtest is 5x slower with enabled burns
   const disableMints = true
+  const testStrategies = {
+    usdcWeth005: true, // USDC_WETH_0.05%
+    wmaticUsdc005: true, // WMATIC_USDC_0.05%
+    usdcDai001: true, // USDC_DAI_0.01%
+    usdcUsdt001: true, // USDC_USDT_0.01%
+  }
+  // =========================
+
+  // ==== strategies config ====
+  // 0.05% fee pools
+  const strategy005TickRange = 1200 // +- 12% price
+  const strategy005RebalanceTickRange = 40 // +- 0.4% price change
+  // 0.01% fee pools
+  const strategy001TickRange = 1 // +- 0.05% price
+  const strategy001RebalanceTickRange = 1 // +- 0.01% price change
+  // ===========================
 
   // liquidity snapshots
   let usdcWeth005PoolLiquiditySnapshot: IPoolLiquiditySnapshot
   let wmaticUsdc005PoolLiquiditySnapshot: IPoolLiquiditySnapshot
+  let usdcDai001PoolLiquiditySnapshot: IPoolLiquiditySnapshot
+  let usdcUsdt001PoolLiquiditySnapshot: IPoolLiquiditySnapshot
 
   // vaults and strategies
   let usdcWeth005Vault: TetuVaultV2
-  let usdcWeth005Strategy: UniswapV3ConverterStrategy
   let wmaticUsdc005Vault: TetuVaultV2
+  let usdcDai001Vault: TetuVaultV2
+  let usdcUsdt001Vault: TetuVaultV2
+  let usdcWeth005Strategy: UniswapV3ConverterStrategy
   let wmaticUsdc005Strategy: UniswapV3ConverterStrategy
+  let usdcDai001Strategy: UniswapV3ConverterStrategy
+  let usdcUsdt001Strategy: UniswapV3ConverterStrategy
 
   // time snapshots
   let snapshot: string;
@@ -87,14 +107,18 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
   // tokens
   let USDC: MockToken
+  let USDT: MockToken
+  let DAI: MockToken
   let WETH: MockToken
   let WMATIC: MockToken
 
   // uniswap v3
   let uniswapV3Factory: UniswapV3Factory;
+  let uniswapV3Calee: UniswapV3Callee
   let wmaticUsdc005Pool: UniswapV3Pool;
   let usdcWeth005Pool: UniswapV3Pool;
-  let uniswapV3Calee: UniswapV3Callee
+  let usdcDai001Pool: UniswapV3Pool;
+  let usdcUsdt001Pool: UniswapV3Pool;
 
   // compound
   let compPriceOracleImitator: CompPriceOracleImitator
@@ -103,6 +127,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
   let cUSDC: CErc20Immutable
   let cWETH: CErc20Immutable
   let cWMATIC: CErc20Immutable
+  let cDAI: CErc20Immutable
+  let cUSDT: CErc20Immutable
 
   // liquidator
   let liquidator: TetuLiquidator
@@ -123,35 +149,44 @@ describe('UmiswapV3 converter strategy backtester', function() {
     // fetch liquidity snapshots
     usdcWeth005PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_WETH_500), backtestStartBlock, 200);
     wmaticUsdc005PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_WMATIC_USDC_500), backtestStartBlock, 200);
+    usdcDai001PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_DAI_100), backtestStartBlock, 200);
+    usdcUsdt001PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_USDT_100), backtestStartBlock, 200);
 
     // deploy tokens
     USDC = await DeployerUtils.deployMockToken(signer, 'USDC', 6, '300000000'); // mint 300m
     WETH = await DeployerUtils.deployMockToken(signer, 'WETH', 18, '2000000'); // mint 2m
     WMATIC = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18, '300000000'); // mint 300m
+    DAI = await DeployerUtils.deployMockToken(signer, 'DAI', 18, '300000000'); // mint 300m
+    USDT = await DeployerUtils.deployMockToken(signer, 'USDT', 6, '300000000'); // mint 300m
     const tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
 
     // give 10k USDC to user
     await USDC.transfer(user.address, parseUnits('10000', 6))
 
-    // deploy uniswap v3, pools, callee and init first price
+    // deploy uniswap v3, pools, callee and init first prices
     uniswapV3Factory = await DeployerUtils.deployContract(signer, "UniswapV3Factory") as UniswapV3Factory;
-    tx = await uniswapV3Factory.createPool(WMATIC.address, USDC.address, 500)
-    await tx.wait()
+    await (await uniswapV3Factory.createPool(WMATIC.address, USDC.address, 500)).wait()
     wmaticUsdc005Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(WMATIC.address, USDC.address, 500), signer)
-    tx = await uniswapV3Factory.createPool(USDC.address, WETH.address, 500)
-    await tx.wait()
+    await (await uniswapV3Factory.createPool(USDC.address, WETH.address, 500)).wait()
     usdcWeth005Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(USDC.address, WETH.address, 500), signer)
-    tx = await uniswapV3Factory.createPool(tetu.address, USDC.address, 500)
-    await tx.wait()
+    await (await uniswapV3Factory.createPool(USDC.address, DAI.address, 100)).wait()
+    usdcDai001Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(USDC.address, DAI.address, 100), signer)
+    await (await uniswapV3Factory.createPool(USDC.address, USDT.address, 100)).wait()
+    usdcUsdt001Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(USDC.address, USDT.address, 100), signer)
     // tetuUsdc pool need for strategy testing with compoundRatio < 100%
+    await (await uniswapV3Factory.createPool(tetu.address, USDC.address, 500)).wait()
     const tetuUsdc500Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(tetu.address, USDC.address, 500), signer)
     uniswapV3Calee = await DeployerUtils.deployContract(signer, "UniswapV3Callee") as UniswapV3Callee
     await USDC.approve(uniswapV3Calee.address, parseUnits('300000000', 6))
     await WETH.approve(uniswapV3Calee.address, parseUnits('900000'))
     await WMATIC.approve(uniswapV3Calee.address, parseUnits('300000000'))
+    await DAI.approve(uniswapV3Calee.address, parseUnits('300000000'))
+    await USDT.approve(uniswapV3Calee.address, parseUnits('300000000', 6))
     await tetu.approve(uniswapV3Calee.address, parseUnits('10000000'))
     await usdcWeth005Pool.initialize(usdcWeth005PoolLiquiditySnapshot.currentSqrtPriceX96)
     await wmaticUsdc005Pool.initialize(wmaticUsdc005PoolLiquiditySnapshot.currentSqrtPriceX96)
+    await usdcDai001Pool.initialize(usdcDai001PoolLiquiditySnapshot.currentSqrtPriceX96)
+    await usdcUsdt001Pool.initialize(usdcUsdt001PoolLiquiditySnapshot.currentSqrtPriceX96)
     await tetuUsdc500Pool.initialize('79224306130848112672356') // 1:1
     await uniswapV3Calee.mint(tetuUsdc500Pool.address, signer.address, -277280, -275370, '21446390278959920000')
 
@@ -179,12 +214,6 @@ describe('UmiswapV3 converter strategy backtester', function() {
         tokenOut: USDC.address,
       },
       {
-        pool: usdcWeth005Pool.address,
-        swapper: uni3swapper.address,
-        tokenIn: USDC.address,
-        tokenOut: WETH.address,
-      },
-      {
         pool: wmaticUsdc005Pool.address,
         swapper: uni3swapper.address,
         tokenIn: USDC.address,
@@ -193,7 +222,37 @@ describe('UmiswapV3 converter strategy backtester', function() {
       {
         pool: usdcWeth005Pool.address,
         swapper: uni3swapper.address,
+        tokenIn: USDC.address,
+        tokenOut: WETH.address,
+      },
+      {
+        pool: usdcWeth005Pool.address,
+        swapper: uni3swapper.address,
         tokenIn: WETH.address,
+        tokenOut: USDC.address,
+      },
+      {
+        pool: usdcDai001Pool.address,
+        swapper: uni3swapper.address,
+        tokenIn: USDC.address,
+        tokenOut: DAI.address,
+      },
+      {
+        pool: usdcDai001Pool.address,
+        swapper: uni3swapper.address,
+        tokenIn: DAI.address,
+        tokenOut: USDC.address,
+      },
+      {
+        pool: usdcUsdt001Pool.address,
+        swapper: uni3swapper.address,
+        tokenIn: USDC.address,
+        tokenOut: USDT.address,
+      },
+      {
+        pool: usdcUsdt001Pool.address,
+        swapper: uni3swapper.address,
+        tokenIn: USDT.address,
         tokenOut: USDC.address,
       },
       {
@@ -214,20 +273,31 @@ describe('UmiswapV3 converter strategy backtester', function() {
     cUSDC = await DeployerUtils.deployContract(signer, "CErc20Immutable",USDC.address,comptroller.address,compInterestRateModel.address,parseUnits('1', 14),'Compound USDC','cUSDC',8,signer.address,) as CErc20Immutable
     cWETH = await DeployerUtils.deployContract(signer, "CErc20Immutable",WETH.address,comptroller.address,compInterestRateModel.address,parseUnits('1', 26),'Compound WETH','cWETH',8,signer.address,) as CErc20Immutable
     cWMATIC = await DeployerUtils.deployContract(signer, "CErc20Immutable",WMATIC.address,comptroller.address,compInterestRateModel.address,parseUnits('1', 26),'Compound WMATIC','cWMATIC',8,signer.address,) as CErc20Immutable
+    cDAI = await DeployerUtils.deployContract(signer, "CErc20Immutable",DAI.address,comptroller.address,compInterestRateModel.address,parseUnits('1', 26),'Compound DAI','cDAI',8,signer.address,) as CErc20Immutable
+    cUSDT = await DeployerUtils.deployContract(signer, "CErc20Immutable",USDT.address,comptroller.address,compInterestRateModel.address,parseUnits('1', 14),'Compound USDT','cUSDT',8,signer.address,) as CErc20Immutable
+
     await comptroller._supportMarket(cUSDC.address)
     await comptroller._supportMarket(cWETH.address)
     await comptroller._supportMarket(cWMATIC.address)
+    await comptroller._supportMarket(cDAI.address)
+    await comptroller._supportMarket(cUSDT.address)
     await comptroller._setCollateralFactor(cUSDC.address, parseUnits('0.9'))
     await comptroller._setCollateralFactor(cWETH.address, parseUnits('0.9'))
     await comptroller._setCollateralFactor(cWMATIC.address, parseUnits('0.9'))
-    // supply 500k USDC, WMATIC, WETH
-    await comptroller.enterMarkets([cUSDC.address, cWETH.address, cWMATIC.address])
+    await comptroller._setCollateralFactor(cDAI.address, parseUnits('0.9'))
+    await comptroller._setCollateralFactor(cUSDT.address, parseUnits('0.9'))
+    // supply 500k
+    await comptroller.enterMarkets([cUSDC.address, cWETH.address, cWMATIC.address, cDAI.address, cUSDT.address])
     await USDC.approve(cUSDC.address, parseUnits('500000', 6))
     await WETH.approve(cWETH.address, parseUnits('500000'))
     await WMATIC.approve(cWMATIC.address, parseUnits('500000'))
+    await DAI.approve(cDAI.address, parseUnits('500000'))
+    await USDT.approve(cUSDT.address, parseUnits('500000', 6))
     await cUSDC.mint(parseUnits('500000', 6))
     await cWETH.mint(parseUnits('500000'))
     await cWMATIC.mint(parseUnits('500000'))
+    await cDAI.mint(parseUnits('500000'))
+    await cUSDT.mint(parseUnits('500000', 6))
 
     // deploy price oracle for converter
     priceOracleImitator = await DeployerUtils.deployContract(signer, "PriceOracleImitator", USDC.address, liquidator.address) as PriceOracleImitator
@@ -242,8 +312,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
     tetuConverter = await DeployerUtils.deployContract(signer, "TetuConverter", converterController.address, borrowManager.address, debtMonitor.address, swapManager.address, keeper.address, priceOracleImitator.address) as TetuConverter
     await converterController.initialize(signer.address, 41142, 101, 120, 400, tetuConverter.address, borrowManager.address, debtMonitor.address, keeper.address, swapManager.address)
     const poolAdapter = await DeployerUtils.deployContract(signer, "HfPoolAdapter") as HfPoolAdapter
-    const platformAdapter = await DeployerUtils.deployContract(signer, "HfPlatformAdapter", converterController.address, borrowManager.address, comptroller.address, poolAdapter.address, [cUSDC.address, cWETH.address, cWMATIC.address]) as HfPlatformAdapter
-    const assetsPairs = generateAssetPairs([USDC.address, WETH.address, WMATIC.address])
+    const platformAdapter = await DeployerUtils.deployContract(signer, "HfPlatformAdapter", converterController.address, borrowManager.address, comptroller.address, poolAdapter.address, [cUSDC.address, cWETH.address, cWMATIC.address, cDAI.address, cUSDT.address]) as HfPlatformAdapter
+    const assetsPairs = generateAssetPairs([USDC.address, WETH.address, WMATIC.address, DAI.address, USDT.address])
     tx = await borrowManager.addAssetPairs(platformAdapter.address, assetsPairs.leftAssets, assetsPairs.rightAssets)
     await tx.wait()
 
@@ -351,8 +421,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
       tetuConverter.address,
       signer,
       usdcWeth005Pool.address,
-      strategyTickRange,
-      strategyRebalanceTickRange,
+      strategy005TickRange,
+      strategy005RebalanceTickRange,
     )
     usdcWeth005Vault = vaultStrategyInfo.vault
     usdcWeth005Strategy = vaultStrategyInfo.strategy
@@ -365,15 +435,45 @@ describe('UmiswapV3 converter strategy backtester', function() {
       tetuConverter.address,
       signer,
       wmaticUsdc005Pool.address,
-      strategyTickRange,
-      strategyRebalanceTickRange,
+      strategy005TickRange,
+      strategy005RebalanceTickRange,
     )
     wmaticUsdc005Vault = vaultStrategyInfo.vault
     wmaticUsdc005Strategy = vaultStrategyInfo.strategy
+    vaultStrategyInfo = await deployAndInitVaultAndUniswapV3Strategy(
+      USDC.address,
+      'TetuV2_UniswapV3_USDC-DAI-0.01%',
+      controller,
+      gauge,
+      vaultFactory,
+      tetuConverter.address,
+      signer,
+      usdcDai001Pool.address,
+      strategy001TickRange,
+      strategy001RebalanceTickRange,
+    )
+    usdcDai001Vault = vaultStrategyInfo.vault
+    usdcDai001Strategy = vaultStrategyInfo.strategy
+    vaultStrategyInfo = await deployAndInitVaultAndUniswapV3Strategy(
+      USDC.address,
+      'TetuV2_UniswapV3_USDC-USDT-0.01%',
+      controller,
+      gauge,
+      vaultFactory,
+      tetuConverter.address,
+      signer,
+      usdcUsdt001Pool.address,
+      strategy001TickRange,
+      strategy001RebalanceTickRange,
+    )
+    usdcUsdt001Vault = vaultStrategyInfo.vault
+    usdcUsdt001Strategy = vaultStrategyInfo.strategy
 
     const platformVoterSigner = await DeployerUtilsLocal.impersonate(await controller.platformVoter())
     await usdcWeth005Strategy.connect(platformVoterSigner).setCompoundRatio(100000) // 100%
     await wmaticUsdc005Strategy.connect(platformVoterSigner).setCompoundRatio(100000) // 100%
+    await usdcDai001Strategy.connect(platformVoterSigner).setCompoundRatio(100000) // 100%
+    await usdcUsdt001Strategy.connect(platformVoterSigner).setCompoundRatio(100000) // 100%
   })
 
   after(async function() {
@@ -399,56 +499,102 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
   it("Env test", async function () {
     // test price oracles
-    const liquidatorWethPrice = await liquidator.getPrice(WETH.address, USDC.address, parseUnits('1'))
-    const liquidatorWmaticPrice = await liquidator.getPrice(WMATIC.address, USDC.address, parseUnits('1'))
-    expect(liquidatorWethPrice).gt(0)
-    expect(liquidatorWmaticPrice).gt(0)
     const compPriceOracleUSDCPrice = await compPriceOracleImitator.getUnderlyingPrice(cUSDC.address)
     expect(compPriceOracleUSDCPrice).eq(parseUnits('1', 30))
-    const compPriceOracleWethPrice = await compPriceOracleImitator.getUnderlyingPrice(cWETH.address)
-    const compPriceOracleWmaticPrice = await compPriceOracleImitator.getUnderlyingPrice(cWMATIC.address)
-    expect(compPriceOracleWethPrice).eq(liquidatorWethPrice.mul(parseUnits('1', 12)))
-    expect(compPriceOracleWmaticPrice).eq(liquidatorWmaticPrice.mul(parseUnits('1', 12)))
-    const priceOracleUSDCPrice = await priceOracleImitator.getAssetPrice(USDC.address)
-    expect(priceOracleUSDCPrice).eq(parseUnits('1', 18))
-    const priceOracleWethPrice = await priceOracleImitator.getAssetPrice(WETH.address)
-    const priceOracleWmaticPrice = await priceOracleImitator.getAssetPrice(WMATIC.address)
-    expect(priceOracleWethPrice).eq(liquidatorWethPrice.mul(parseUnits('1', 12)))
-    expect(priceOracleWmaticPrice).eq(liquidatorWmaticPrice.mul(parseUnits('1', 12)))
+    expect(await priceOracleImitator.getAssetPrice(USDC.address)).eq(parseUnits('1', 18))
+
+    const liquidatorWethPrice = await liquidator.getPrice(WETH.address, USDC.address, parseUnits('1'))
+    const liquidatorWmaticPrice = await liquidator.getPrice(WMATIC.address, USDC.address, parseUnits('1'))
+    const liquidatorDaiPrice = await liquidator.getPrice(DAI.address, USDC.address, parseUnits('1'))
+    const liquidatorUsdtPrice = await liquidator.getPrice(USDT.address, USDC.address, parseUnits('1', 6))
+    expect(liquidatorWethPrice).gt(0)
+    expect(liquidatorWmaticPrice).gt(0)
+    expect(liquidatorDaiPrice).gt(0)
+    expect(liquidatorUsdtPrice).gt(0)
+    expect(await compPriceOracleImitator.getUnderlyingPrice(cWETH.address)).eq(liquidatorWethPrice.mul(parseUnits('1', 12)))
+    expect(await compPriceOracleImitator.getUnderlyingPrice(cWMATIC.address)).eq(liquidatorWmaticPrice.mul(parseUnits('1', 12)))
+    expect(await compPriceOracleImitator.getUnderlyingPrice(cDAI.address)).eq(liquidatorDaiPrice.mul(parseUnits('1', 12)))
+    expect(await compPriceOracleImitator.getUnderlyingPrice(cUSDT.address)).eq(liquidatorUsdtPrice.mul(parseUnits('1', 24)))
+    expect(await priceOracleImitator.getAssetPrice(WETH.address)).eq(liquidatorWethPrice.mul(parseUnits('1', 12)))
+    expect(await priceOracleImitator.getAssetPrice(WMATIC.address)).eq(liquidatorWmaticPrice.mul(parseUnits('1', 12)))
+    expect(await priceOracleImitator.getAssetPrice(DAI.address)).eq(liquidatorDaiPrice.mul(parseUnits('1', 12)))
+    expect(await priceOracleImitator.getAssetPrice(USDT.address)).eq(liquidatorUsdtPrice.mul(parseUnits('1', 12)))
   })
 
   it("USDC_WETH_0.05% test", async function () {
-    backtestResults.push(await strategyBacktest(
-      signer,
-      usdcWeth005Vault,
-      usdcWeth005Strategy,
-      uniswapV3Calee,
-      usdcWeth005PoolLiquiditySnapshot,
-      investAmount,
-      backtestStartBlock,
-      backtestEndBlock,
-      MaticAddresses.UNISWAPV3_USDC_WETH_500,
-      txLimit,
-      disableBurns,
-      disableMints
-    ))
+    if (testStrategies.usdcWeth005) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        usdcWeth005Vault,
+        usdcWeth005Strategy,
+        uniswapV3Calee,
+        usdcWeth005PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_USDC_WETH_500,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
   })
 
   it("WMATIC_USDC_0.05% test", async function () {
-    backtestResults.push(await strategyBacktest(
-      signer,
-      wmaticUsdc005Vault,
-      wmaticUsdc005Strategy,
-      uniswapV3Calee,
-      wmaticUsdc005PoolLiquiditySnapshot,
-      investAmount,
-      backtestStartBlock,
-      backtestEndBlock,
-      MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
-      txLimit,
-      disableBurns,
-      disableMints
-    ))
+    if (testStrategies.wmaticUsdc005) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        wmaticUsdc005Vault,
+        wmaticUsdc005Strategy,
+        uniswapV3Calee,
+        wmaticUsdc005PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
+  })
+
+  it("USDC_DAI_0.01% test", async function () {
+    if (testStrategies.usdcDai001) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        usdcDai001Vault,
+        usdcDai001Strategy,
+        uniswapV3Calee,
+        usdcDai001PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_USDC_DAI_100,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
+  })
+
+  it("USDC_USDT_0.01% test", async function () {
+    if (testStrategies.usdcUsdt001) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        usdcUsdt001Vault,
+        usdcUsdt001Strategy,
+        uniswapV3Calee,
+        usdcUsdt001PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_USDC_USDT_100,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
   })
 })
 
@@ -517,7 +663,7 @@ function periodHuman(periodSecs: number) {
   if (periodHours) {
     periodStr += `${periodHours - periodDays*24}h:`
   }
-  periodStr += `${periodMins - (periodHours - periodDays*24)*60}m`
+  periodStr += `${periodMins - periodHours*60}m`
   if (!periodDays && !periodHours) {
     if (periodMins) {
       periodStr += ':'
@@ -625,11 +771,12 @@ async function strategyBacktest(
   const token1Decimals = await token1.decimals()
   const token0Symbol = await token0.symbol()
   const token1Symbol = await token1.symbol()
+  const tickSpacing = await strategy.tickSpacing()
 
   console.log(`Starting backtest of ${await vault.name()}`)
   console.log(`Filling pool with initial liquidity from snapshot (${liquiditySnapshot.ticks.length} ticks)..`)
   for (const tick of liquiditySnapshot.ticks) {
-    await uniswapV3Calee.mint(pool.address, signer.address, tick.tickIdx, tick.tickIdx + 10, tick.liquidityActive)
+    await uniswapV3Calee.mint(pool.address, signer.address, tick.tickIdx, tick.tickIdx + tickSpacing, tick.liquidityActive)
   }
 
   console.log('Deposit USDC to vault...')
@@ -671,15 +818,15 @@ async function strategyBacktest(
         const newTickLower = poolTx.tickLower < liquidityTickLower ? liquidityTickLower : poolTx.tickLower
         const newRange = BigNumber.from(newTickUpper - newTickLower)
         const newAmount = BigNumber.from(poolTx.amount).mul(newRange).div(rangeOrigin)
-        const parts = (newTickUpper - newTickLower) / 10
-        for (let t = newTickLower; t < newTickUpper - 10; t+=10) {
-          await pool.burn(t, t + 10, BigNumber.from(newAmount).div(parts))
+        const parts = (newTickUpper - newTickLower) / tickSpacing
+        for (let t = newTickLower; t < newTickUpper - tickSpacing; t+=tickSpacing) {
+          await pool.burn(t, t + tickSpacing, BigNumber.from(newAmount).div(parts))
           process.stdout.write(`.`)
         }
       } else {
-        const parts = (poolTx.tickUpper - poolTx.tickLower) / 10
-        for (let t = poolTx.tickLower; t < poolTx.tickUpper - 10; t+=10) {
-          await pool.burn(t, t + 10, BigNumber.from(poolTx.amount).div(parts))
+        const parts = (poolTx.tickUpper - poolTx.tickLower) / tickSpacing
+        for (let t = poolTx.tickLower; t < poolTx.tickUpper - tickSpacing; t+=tickSpacing) {
+          await pool.burn(t, t + tickSpacing, BigNumber.from(poolTx.amount).div(parts))
           process.stdout.write(`.`)
         }
       }

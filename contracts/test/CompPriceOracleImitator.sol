@@ -26,6 +26,6 @@ contract CompPriceOracleImitator is PriceOracle {
         }
         uint tokenInDecimals = IERC20Metadata(asset).decimals();
         uint lPrice = liquidator.getPrice(asset, usdc, 10**tokenInDecimals);
-        return lPrice*1e12;
+        return lPrice*10**(12 + 18 - tokenInDecimals);
     }
 }

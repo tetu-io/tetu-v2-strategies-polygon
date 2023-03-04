@@ -323,16 +323,17 @@ library UniswapV3Library {
     uint tokenOutDecimals = tokenIn == token1 ? IERC20Metadata(token0).decimals() : IERC20Metadata(token1).decimals();
     (uint160 sqrtPriceX96,,,,,,) = pool.slot0();
 
-    uint divider = _max(10 ** tokenOutDecimals / 10 ** tokenInDecimals, 1);
+    uint divider = tokenOutDecimals < 18 ? _max(10 ** tokenOutDecimals / 10 ** tokenInDecimals, 1) : 1;
+
     uint priceDigits = _countDigits(uint(sqrtPriceX96));
     uint purePrice;
     uint precision;
     if (tokenIn == token0) {
-      precision = 10 ** ((priceDigits < 29 ? 29 - priceDigits : 0) + 18);
+      precision = 10 ** ((priceDigits < 29 ? 29 - priceDigits : 0) + tokenInDecimals);
       uint part = uint(sqrtPriceX96) * precision / TWO_96;
       purePrice = part * part;
     } else {
-      precision = 10 ** ((priceDigits > 29 ? priceDigits - 29 : 0) + 18);
+      precision = 10 ** ((priceDigits > 29 ? priceDigits - 29 : 0) + tokenInDecimals);
       uint part = TWO_96 * precision / uint(sqrtPriceX96);
       purePrice = part * part;
     }
@@ -357,5 +358,18 @@ library UniswapV3Library {
 
   function _max(uint a, uint b) internal pure returns (uint) {
     return a > b ? a : b;
+  }
+
+  function getTickSpacing(uint24 fee) external pure returns (int24) {
+    if (fee == 10000) {
+      return 200;
+    }
+    if (fee == 3000) {
+      return 60;
+    }
+    if (fee == 500) {
+      return 10;
+    }
+    return 1;
   }
 }
