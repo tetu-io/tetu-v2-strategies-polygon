@@ -40,7 +40,6 @@ async function simulateRewards(strategy: TetuV1SingleTokenStrictStrategy, reward
     const rt = await ethers.getContractAt("IERC20", rewardToken)
     await rt.transfer(strategy.address, amount)
   }
-
 }
 
 
@@ -163,12 +162,13 @@ describe("TetuV1 Single Token Strict Strategy tests", async () => {
       await simulateRewards(strategy, rewardTokens, ethers.utils.parseUnits("100", 18))
       const usdcStrategyBalanceBefore = await smartVault.underlyingBalanceWithInvestmentForHolder(strategy.address)
       await strategy.doHardWork()
+      expect((await strategy.getRate()).toString().length).is.eq(19)
+      expect(await strategy.getRate()).gt(ethers.utils.parseUnits("1", 18));
       const usdcStrategyBalanceAfter = await smartVault.underlyingBalanceWithInvestmentForHolder(strategy.address)
       const usdcInStrategy = await usdc.balanceOf(strategy.address)
       expect(usdcInStrategy).is.eq(0)
       const usdcInStrictVault = await usdc.balanceOf(strictVault.address)
       expect(usdcInStrictVault).is.eq(0)
-
       expect(usdcStrategyBalanceAfter).gt(usdcStrategyBalanceBefore)
       for (const rewardToken of rewardTokens) {
         const rt = await ethers.getContractAt("IERC20", rewardToken)

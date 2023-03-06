@@ -3,13 +3,15 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyStrictBase.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../../integrations/tetu-v1/ISmartVault.sol";
 import "../../tools/AppLib.sol";
 import "../../tools/ERC20Helpers.sol";
+import "../../integrations/balancer/IRateProvider.sol";
 
 /// @title Simple auto compounding strategy for TETU V1 vaults.
 /// @author AlehNat
-contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
+contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, ERC20Helpers {
   using SafeERC20 for IERC20;
 
   string public constant override NAME = "TetuV1 Single Token Strict Strategy";
@@ -62,10 +64,6 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
     }
   }
 
-  function investedAssets() public view override returns (uint) {
-    return pool.underlyingBalanceWithInvestmentForHolder(address(this));
-  }
-
   /// @dev Deposit given amount to the pool.
   function _depositToPool(uint amount) internal override {
     IERC20(asset).safeIncreaseAllowance(address(pool), amount);
@@ -115,4 +113,14 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, ERC20Helpers {
       }
     }
   }
+
+  function getRate() external view override returns (uint256) {
+    uint assetPrecision = 10 ** IERC20Metadata(asset).decimals();
+    return IERC4626(vault).convertToAssets(assetPrecision) * 1e18 / assetPrecision;
+  }
+
+  function investedAssets() public view override returns (uint) {
+    return pool.underlyingBalanceWithInvestmentForHolder(address(this));
+  }
+
 }
