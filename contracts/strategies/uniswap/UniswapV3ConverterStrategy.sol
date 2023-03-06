@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "../ConverterStrategyBase.sol";
 import "./UniswapV3Depositor.sol";
+import "../ConverterStrategyBaseLib.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up strategy for UniswapV3
 /// @author a17
@@ -86,22 +87,98 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (_balance(tokenB) > debtAmount) {
 //      console.log('rebalance: need to increase debt by', _balance(tokenB) - debtAmount);
 //      console.log('rebalance: rebalancing debt and collateral');
-      ConverterStrategyBaseLib.openPosition(
-        tetuConverter,
-        abi.encode(2),
-        tokenA,
-        tokenB,
-        _balance(tokenB) - debtAmount
+
+      uint needToBorrow = _balance(tokenB) - debtAmount;
+      ConverterStrategyBaseLib.OpenPositionLocal memory vars;
+      (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter.findBorrowStrategies(
+          abi.encode(2),
+          tokenA,
+          needToBorrow,
+          tokenB,
+          30 days / 2
       );
+
+      uint len = vars.converters.length;
+      if (len > 0) {
+        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+          vars.amountToBorrow = needToBorrow < vars.amountsToBorrow[i]
+          ? needToBorrow
+          : vars.amountsToBorrow[i];
+          vars.collateral = needToBorrow < vars.amountsToBorrow[i]
+          ? vars.collateralsRequired[i] * needToBorrow / vars.amountsToBorrow[i]
+          : vars.collateralsRequired[i];
+          needToBorrow -= vars.amountToBorrow;
+          if (needToBorrow == 0) break;
+        }
+      }
+//      console.log('rebalance: need collateral     ', vars.collateral);
+//      console.log('rebalance: available collateral', _balance(tokenA));
+
+      if (vars.collateral < _balance(tokenA)) {
+//        console.log('rebalance: enough collateral, increasing debt');
+        ConverterStrategyBaseLib.openPosition(
+          tetuConverter,
+          abi.encode(2),
+          tokenA,
+          tokenB,
+          _balance(tokenB) - debtAmount
+        );
+      } else {
+//        console.log('rebalance: not enough collateral, need swap and full debt rebalance');
+//        console.log('rebalance: close all debt');
+        ConverterStrategyBaseLib.closePosition(
+          tetuConverter,
+          tokenA,
+          tokenB,
+          debtAmount
+        );
+//        console.log('rebalance: full tokenB liquidation');
+        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller()).liquidator()), tokenB, tokenA, _balance(tokenB), 5_000, 0);
+//        console.log('rebalance: open new debt');
+        ConverterStrategyBaseLib.openPosition(
+          tetuConverter,
+          abi.encode(1,1,1),
+          tokenA,
+          tokenB,
+          _balance(tokenA)
+        );
+      }
     } else {
 //      console.log('rebalance: need to decrease debt by', debtAmount - _balance(tokenB));
 //      console.log('rebalance: rebalancing debt and collateral');
-      ConverterStrategyBaseLib.closePosition(
-        tetuConverter,
-        tokenA,
-        tokenB,
-        debtAmount - _balance(tokenB)
-      );
+      if (_balance(tokenB) > debtAmount - _balance(tokenB)) {
+//        console.log('rebalance: enough tokenB balance to decrease debt');
+        ConverterStrategyBaseLib.closePosition(
+          tetuConverter,
+          tokenA,
+          tokenB,
+          debtAmount - _balance(tokenB)
+        );
+      } else {
+//        console.log('rebalance: not enough tokenB, need swap and full debt rebalance');
+
+        uint needToSellTokenA = UniswapV3Library.getPrice(pool, tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
+        // add 1% gap for price impact
+        needToSellTokenA += needToSellTokenA / 100;
+//        console.log('rebalance: tokenA liquidation amountIn, need to buy tokenB', needToSellTokenA, debtAmount - _balance(tokenB));
+        (, uint bought) = ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller()).liquidator()), tokenA, tokenB, needToSellTokenA, 5_000, 0);
+//        console.log('rebalance: bought tokenB', bought);
+//        console.log('rebalance: close all debt');
+        ConverterStrategyBaseLib.closePosition(
+          tetuConverter,
+          tokenA,
+          tokenB,
+          debtAmount < _balance(tokenB) ? debtAmount : _balance(tokenB)
+        );
+//        console.log('rebalance: open new debt');
+        ConverterStrategyBaseLib.openPosition(
+          tetuConverter,
+          abi.encode(1,1,1),
+          tokenA,
+          tokenB,
+          _balance(tokenA)
+        );
+      }
     }
 
 //    console.log('rebalance: balanceOfTokenA', _balance(tokenA));
