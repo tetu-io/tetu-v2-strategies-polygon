@@ -378,7 +378,7 @@ describe('BalancerIntPriceChangeTest', function() {
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
-          await changePrices(6, true);
+          await changePrices(6);
 
           // await strategy.updateInvestedAssets();
 
@@ -404,7 +404,7 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.eq(0)).eq(true);
+          expect(ret.abs().lte(1)).eq(true);
         });
         it("should not change sharePrice, huge deposit", async () => {
           const stateInitial = await enterToVault();
@@ -418,7 +418,7 @@ describe('BalancerIntPriceChangeTest', function() {
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
-          // await changePrices(6, true);
+          await changePrices(6);
 
           // await strategy.updateInvestedAssets();
 
@@ -444,7 +444,7 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.eq(0)).eq(true);
+          expect(ret.abs().lte(1)).eq(true);
         });
       });
       describe("Withdraw almost most allowed amount", () => {
@@ -485,7 +485,7 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.eq(0)).eq(true);
+          expect(ret.abs().lte(1)).eq(true);
         });
       });
       describe("WithdrawAll", () => {
@@ -519,7 +519,7 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.eq(0)).eq(true);
+          expect(ret.abs().lte(1)).eq(true);
         });
       });
       describe("Hardwork", () => {

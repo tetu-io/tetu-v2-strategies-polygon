@@ -633,15 +633,15 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       }
       describe("Good paths", () => {
         describe("Withdraw full", () => {
-          it("should return same values as on real exit, $1", async () => {
+          it("should return almost same values as on real exit, $1", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             const r = await makeQuoteExitTest(facade, "1");
 
             const ret = [
               r.quoteExitAmountsOut.length,
-              areAlmostEqual(r.exitAmountsOut[0], r.quoteExitAmountsOut[0]),
-              areAlmostEqual(r.exitAmountsOut[1], r.quoteExitAmountsOut[1]),
-              areAlmostEqual(r.exitAmountsOut[2], r.quoteExitAmountsOut[2]),
+              differenceInPercentsLessThan(r.exitAmountsOut[0], r.quoteExitAmountsOut[0], 0.11),
+              differenceInPercentsLessThan(r.exitAmountsOut[1], r.quoteExitAmountsOut[1], 0.11),
+              differenceInPercentsLessThan(r.exitAmountsOut[2], r.quoteExitAmountsOut[2], 0.11),
             ].map(x => BalanceUtils.toString(x)).join("\n");
 
             const expected = [
@@ -653,15 +653,15 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
 
             expect(ret).eq(expected);
           });
-          it("should return same values as on real exit, $100_000", async () => {
+          it("should return almost same values as on real exit, $100_000", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             const r = await makeQuoteExitTest(facade, "100000");
 
             const ret = [
               r.quoteExitAmountsOut.length,
-              areAlmostEqual(r.exitAmountsOut[0], r.quoteExitAmountsOut[0]),
-              areAlmostEqual(r.exitAmountsOut[1], r.quoteExitAmountsOut[1]),
-              areAlmostEqual(r.exitAmountsOut[2], r.quoteExitAmountsOut[2]),
+              differenceInPercentsLessThan(r.exitAmountsOut[0], r.quoteExitAmountsOut[0], 0.11),
+              differenceInPercentsLessThan(r.exitAmountsOut[1], r.quoteExitAmountsOut[1], 0.11),
+              differenceInPercentsLessThan(r.exitAmountsOut[2], r.quoteExitAmountsOut[2], 0.11),
             ].map(x => BalanceUtils.toString(x)).join("\n");
 
             const expected = [

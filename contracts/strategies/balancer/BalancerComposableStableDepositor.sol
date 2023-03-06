@@ -114,30 +114,15 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
-    //! console.log("_depositorEnter amountsDesired_", amountsDesired_[0], amountsDesired_[1], amountsDesired_[2]);
     bytes32 _poolId = poolId; // gas saving
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
-    //!! console.log("_depositorEnter.0 depositorBalance", pool.balanceOf(address(this)));
 
     // join to the pool, receive pool-BPTs
     (amountsConsumedOut, liquidityOut) = BalancerLogicLib.depositorEnter(BALANCER_VAULT, _poolId, amountsDesired_);
 
-    //! console.log("_depositorEnter.1 liquidityOut", liquidityOut);
-    //! console.log("_depositorEnter.2 amountsConsumedOut", amountsConsumedOut[0], amountsConsumedOut[1], amountsConsumedOut[2]);
-    //! console.log("_depositorEnter.3 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
-
     // stake all available pool-BPTs to the gauge
     // we can have pool-BPTs on depositor's balance after previous exit, stake them too
     _gauge.deposit(pool.balanceOf(address(this)));
-    //! console.log("_depositorEnter.4 gaugeBalance, depositorBalance", _gauge.balanceOf(address(this)), pool.balanceOf(address(this)));
-
-//    (uint[] memory amountsOut) = BalancerLogicLib.depositorQuoteExit(
-//      BALANCER_VAULT,
-//      IBalancerHelper(BALANCER_HELPER),
-//      _poolId,
-//      _gauge.balanceOf(address(this))
-//    );
-//    console.log("_depositorEnter.5", amountsOut[0], amountsOut[1], amountsOut[2]);
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -190,15 +175,9 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     if (liquidity == 0) {
       // there is no liquidity, output is zero
       return new uint[](_depositorPoolAssets().length);
-    } else if (liquidityAmount_ >= liquidity) {
-      // todo quote full exit using try/catch
-      return BalancerLogicLib.depositorQuoteExit(
-        BALANCER_VAULT,
-        IBalancerHelper(BALANCER_HELPER),
-        poolId,
-        liquidityAmount_
-      );
     } else {
+      // BalancerLogicLib.depositorQuoteExit takes into account the cost of unused BPT
+      // so we don't need a special logic here for the full exit
       return BalancerLogicLib.depositorQuoteExit(
         BALANCER_VAULT,
         IBalancerHelper(BALANCER_HELPER),
