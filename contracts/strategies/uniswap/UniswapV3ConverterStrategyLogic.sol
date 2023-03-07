@@ -187,6 +187,34 @@ library UniswapV3ConverterStrategyLogic {
     }
   }
 
+  function rebalanceDebtFullWithSwap(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) external {
+    (uint debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
+
+    if (_balance(tokenB) < debtAmount) {
+      uint needToSellTokenA = UniswapV3Library.getPrice(address(pool), tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
+      // add 1% gap for price impact
+      needToSellTokenA += needToSellTokenA / 100;
+      ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, 5_000, 0);
+    }
+
+    ConverterStrategyBaseLib.closePosition(
+      tetuConverter,
+      tokenA,
+      tokenB,
+      debtAmount
+    );
+
+    ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, _balance(tokenB), 5_000, 0);
+
+    ConverterStrategyBaseLib.openPosition(
+      tetuConverter,
+      abi.encode(1,1,1),
+      tokenA,
+      tokenB,
+      _balance(tokenA)
+    );
+  }
+
   function rebalanceDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) external {
     (uint debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
     //    console.log('rebalance: collateralAmount in lending', collateralAmount);

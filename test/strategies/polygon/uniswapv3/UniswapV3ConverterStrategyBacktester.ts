@@ -534,7 +534,87 @@ describe('UmiswapV3 converter strategy backtester', function() {
     }
   })
 
-  it("Full debt rebalance test", async function () {
+  it("Full debt rebalance on stable pool test", async function () {
+    if (runNotBacktestingTests) {
+      // create DAI_USDT pool for test
+      await (await uniswapV3Factory.createPool(DAI.address, USDT.address, 100)).wait()
+      const pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(DAI.address, USDT.address, 100), signer)
+      // 1 USDT for 1 DAI
+      await pool.initialize('79225627830299477844530')
+      await liquidator.addLargestPools([{
+        pool: pool.address,
+        swapper: uni3swapper.address,
+        tokenIn: DAI.address,
+        tokenOut: USDT.address,
+      }], true)
+      const slot0 = await pool.slot0()
+      const vaultStrategyInfo = await deployAndInitVaultAndUniswapV3Strategy(
+        USDT.address,
+        'TetuV2_UniswapV3_DAI_USDT-0.01%',
+        controller,
+        gauge,
+        vaultFactory,
+        tetuConverter.address,
+        signer,
+        pool.address,
+        1,
+        1,
+      )
+      const vault = vaultStrategyInfo.vault
+      const strategy = vaultStrategyInfo.strategy
+
+      // add liquidity for +-3% of current price
+      const liquidityTickLower = slot0.tick - 300
+      const liquidityTickUpper = slot0.tick + 300
+      const liquidityPreview = await uniswapV3Helper.addLiquidityPreview(pool.address, liquidityTickLower, liquidityTickUpper, parseUnits('100000'), parseUnits('100000', 6))
+      await uniswapV3Calee.mint(pool.address, signer.address, liquidityTickLower, liquidityTickUpper, liquidityPreview.liquidityOut)
+
+      await USDT.approve(vault.address, Misc.MAX_UINT);
+      await vault.deposit(parseUnits('100', 6), signer.address);
+      const assetsBefore = await strategy.totalAssets()
+
+      let priceBefore
+      let priceAfter
+      let priceChangeVal
+      let swapAmount
+
+      // swap USDT to DAI N times
+      swapAmount = parseUnits('500', 6)
+      for (let i = 0; i < 5; i++) {
+        priceBefore = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+        await uniswapV3Calee.swap(pool.address, signer.address, USDT.address, swapAmount)
+        priceAfter = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+        priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
+        console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
+        if (await strategy.needRebalance()) {
+          console.log('Rebalance...')
+          await strategy.rebalance()
+        }
+      }
+
+      // swap DAI to USDT N times
+      swapAmount = parseUnits('500')
+      for (let i = 0; i < 5; i++) {
+        priceBefore = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+        await uniswapV3Calee.swap(pool.address, signer.address, DAI.address, swapAmount)
+        priceAfter = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+        priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
+        console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
+        console.log('Rebalance...')
+        if (await strategy.needRebalance()) {
+          console.log('Rebalance...')
+          await strategy.rebalance()
+        }
+      }
+
+      const assetsAfter = await strategy.totalAssets()
+      console.log('Assets before', assetsBefore.toString())
+      console.log('Assets after', assetsAfter.toString())
+      console.log(`Total assets loss: ${formatUnits(assetsAfter.sub(assetsBefore).mul(1e15).div(assetsBefore).div(1e8), 5)}%`)
+    }
+  })
+
+  it("Full debt rebalance on volatile pool test", async function () {
     if (runNotBacktestingTests) {
       // create WMATIC_USDT pool for test
       await (await uniswapV3Factory.createPool(WMATIC.address, USDT.address, 500)).wait()

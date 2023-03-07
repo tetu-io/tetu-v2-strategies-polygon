@@ -64,6 +64,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function rebalance() public {
     require(needRebalance(), "No rebalancing needed");
 
+    bool fillUp = upperTick - lowerTick >= 4;
+
 //    console.log('rebalance: start');
     (uint fee0, uint fee1) = getFees();
     rebalanceEarned0 += fee0;
@@ -77,7 +79,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // close univ3 base and fillup positions
     _depositorEmergencyExit();
 
-    UniswapV3ConverterStrategyLogic.rebalanceDebt(converter, controller(), pool, tokenA, tokenB);
+    if (fillUp) {
+      UniswapV3ConverterStrategyLogic.rebalanceDebt(converter, controller(), pool, tokenA, tokenB);
+    } else {
+      UniswapV3ConverterStrategyLogic.rebalanceDebtFullWithSwap(converter, controller(), pool, tokenA, tokenB);
+    }
 
     _setNewTickRange();
 
@@ -87,15 +93,17 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _depositorEnter(tokenAmounts);
 
     // add fillup liquidity
-    (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogic.addFillup(pool, lowerTick, upperTick, tickSpacing);
-
-    // adjust _investedAssets
-    _updateInvestedAssets();
+    if (fillUp) {
+      (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogic.addFillup(pool, lowerTick, upperTick, tickSpacing);
+    }
 
     // adjust base-amounts
     uint balanceOfTokenAAfter = _balance(tokenA);
     uint balanceOfTokenBAfter = _balance(tokenB);
     _updateBaseAmountsForAsset(tokenA, balanceOfTokenABefore > balanceOfTokenAAfter ? 0 : balanceOfTokenAAfter - balanceOfTokenABefore, balanceOfTokenABefore > balanceOfTokenAAfter ? balanceOfTokenABefore - balanceOfTokenAAfter : 0);
     _updateBaseAmountsForAsset(tokenB, balanceOfTokenBBefore > balanceOfTokenBAfter ? 0 : balanceOfTokenBAfter - balanceOfTokenBBefore, balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0);
+
+    // adjust _investedAssets
+    _updateInvestedAssets();
   }
 }
