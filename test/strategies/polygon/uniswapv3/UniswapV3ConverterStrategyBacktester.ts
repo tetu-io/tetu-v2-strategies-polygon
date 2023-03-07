@@ -34,7 +34,7 @@ import {
   UniswapV3Callee,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-  UniswapV3Factory, UniswapV3Helper,
+  UniswapV3Factory, UniswapV3Library,
   UniswapV3Pool,
   UniswapV3Pool__factory,
   VaultFactory,
@@ -117,7 +117,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // uniswap v3
   let uniswapV3Factory: UniswapV3Factory;
   let uniswapV3Calee: UniswapV3Callee
-  let uniswapV3Helper: UniswapV3Helper
+  let uniswapV3Helper: UniswapV3Library
   let wmaticUsdc005Pool: UniswapV3Pool;
   let usdcWeth005Pool: UniswapV3Pool;
   let usdcDai001Pool: UniswapV3Pool;
@@ -186,7 +186,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     // tetuUsdc pool need for strategy testing with compoundRatio < 100%
     await (await uniswapV3Factory.createPool(tetu.address, USDC.address, 500)).wait()
     const tetuUsdc500Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(tetu.address, USDC.address, 500), signer)
-    uniswapV3Helper = await DeployerUtils.deployContract(signer, "UniswapV3Helper") as UniswapV3Helper
+    uniswapV3Helper = await DeployerUtils.deployContract(signer, "UniswapV3Library") as UniswapV3Library
     uniswapV3Calee = await DeployerUtils.deployContract(signer, "UniswapV3Callee") as UniswapV3Callee
     await USDC.approve(uniswapV3Calee.address, parseUnits(mintAmount, 6))
     await WETH.approve(uniswapV3Calee.address, parseUnits(mintAmount))
@@ -579,11 +579,11 @@ describe('UmiswapV3 converter strategy backtester', function() {
       let swapAmount
 
       // swap USDT to WMATIC N times
-      swapAmount = parseUnits('100', 6)
-      for (let i = 0; i < 50; i++) {
-        priceBefore = await strategy.getPrice(WMATIC.address)
+      swapAmount = parseUnits('500', 6)
+      for (let i = 0; i < 10; i++) {
+        priceBefore = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
         await uniswapV3Calee.swap(pool.address, signer.address, USDT.address, swapAmount)
-        priceAfter = await strategy.getPrice(WMATIC.address)
+        priceAfter = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
         priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
         console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
         console.log('Rebalance...')
@@ -591,12 +591,11 @@ describe('UmiswapV3 converter strategy backtester', function() {
       }
 
       // swap WMATIC to USDT N times
-      // const priceStart = await strategy.getPrice(WMATIC.address)
-      swapAmount = parseUnits('100')
-      for (let i = 0; i < 50; i++) {
-        priceBefore = await strategy.getPrice(WMATIC.address)
+      swapAmount = parseUnits('500')
+      for (let i = 0; i < 10; i++) {
+        priceBefore = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
         await uniswapV3Calee.swap(pool.address, signer.address, WMATIC.address, swapAmount)
-        priceAfter = await strategy.getPrice(WMATIC.address)
+        priceAfter = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
         priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
         console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
         console.log('Rebalance...')
@@ -617,6 +616,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
         usdcWeth005Vault,
         usdcWeth005Strategy,
         uniswapV3Calee,
+        uniswapV3Helper,
         usdcWeth005PoolLiquiditySnapshot,
         investAmount,
         backtestStartBlock,
@@ -636,6 +636,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
         wmaticUsdc005Vault,
         wmaticUsdc005Strategy,
         uniswapV3Calee,
+        uniswapV3Helper,
         wmaticUsdc005PoolLiquiditySnapshot,
         investAmount,
         backtestStartBlock,
@@ -655,6 +656,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
         usdcDai001Vault,
         usdcDai001Strategy,
         uniswapV3Calee,
+        uniswapV3Helper,
         usdcDai001PoolLiquiditySnapshot,
         investAmount,
         backtestStartBlock,
@@ -674,6 +676,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
         usdcUsdt001Vault,
         usdcUsdt001Strategy,
         uniswapV3Calee,
+        uniswapV3Helper,
         usdcUsdt001PoolLiquiditySnapshot,
         investAmount,
         backtestStartBlock,
@@ -841,6 +844,7 @@ async function strategyBacktest(
   vault: TetuVaultV2,
   strategy: UniswapV3ConverterStrategy,
   uniswapV3Calee: UniswapV3Callee,
+  uniswapV3Helper: UniswapV3Library,
   liquiditySnapshot: IPoolLiquiditySnapshot,
   investAmount: BigNumber,
   backtestStartBlock: number,
@@ -875,7 +879,7 @@ async function strategyBacktest(
 
   const liquidityTickLower = liquiditySnapshot.ticks[0].tickIdx
   const liquidityTickUpper = liquiditySnapshot.ticks[liquiditySnapshot.ticks.length - 1].tickIdx
-  const startPrice = await strategy.getPrice(tokenB.address)
+  const startPrice = await uniswapV3Helper.getPrice(pool.address, tokenB.address)
   let endPrice = startPrice
   let minPrice = startPrice
   let maxPrice = startPrice
@@ -932,9 +936,9 @@ async function strategyBacktest(
       const swap0to1 = parseUnits(poolTx.amount1, token1Decimals).lt(0)
       const tokenIn = swap0to1 ? token0.address : token1.address
       const amountIn = swap0to1 ? parseUnits(poolTx.amount0, token0Decimals) : parseUnits(poolTx.amount1, token1Decimals)
-      const priceBefore = await strategy.getPrice(tokenB.address)
+      const priceBefore = await uniswapV3Helper.getPrice(pool.address, tokenB.address)
       await uniswapV3Calee.swap(pool.address, signer.address, tokenIn, amountIn)
-      const priceAfter = await strategy.getPrice(tokenB.address)
+      const priceAfter = await uniswapV3Helper.getPrice(pool.address, tokenB.address)
 
       const priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
       const priceChangeStr = priceChangeVal.eq(0) ? '' : ` (${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%)`
