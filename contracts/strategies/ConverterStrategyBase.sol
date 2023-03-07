@@ -148,11 +148,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     int totalAssetsDelta
   ){
+    uint __investedAssets = _investedAssets;
     uint updatedInvestedAssets = updateTotalAssetsBeforeInvest_
       ? _updateInvestedAssets()
-      : _investedAssets;
+      : __investedAssets;
     totalAssetsDelta = updateTotalAssetsBeforeInvest_
-      ? int(updatedInvestedAssets) - int(_investedAssets)
+      ? int(updatedInvestedAssets) - int(__investedAssets)
       : int(0);
 
     // skip deposit for small amounts
@@ -257,8 +258,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     int totalAssetsDelta
   ) {
+    uint __investedAssets = _investedAssets;
     uint updatedInvestedAssets = _updateInvestedAssets();
-    totalAssetsDelta = int(updatedInvestedAssets) - int(_investedAssets);
+    totalAssetsDelta = int(updatedInvestedAssets) - int(__investedAssets);
 
     require(updatedInvestedAssets != 0, AppErrors.NO_INVESTMENTS);
     (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
@@ -274,8 +276,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     int totalAssetsDelta
   ) {
+    uint __investedAssets = _investedAssets;
     uint updatedInvestedAssets = _updateInvestedAssets();
-    totalAssetsDelta = int(updatedInvestedAssets) - int(_investedAssets);
+    totalAssetsDelta = int(updatedInvestedAssets) - int(__investedAssets);
 
     (investedAssetsUSD, assetPrice) = _withdrawUniversal(0, true, updatedInvestedAssets);
   }
