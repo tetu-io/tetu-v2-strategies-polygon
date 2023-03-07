@@ -149,11 +149,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @notice Deposit given amount to the pool.
-  function _depositToPool(uint amount_) override internal virtual {
-    uint newInvestedAssets = _updateInvestedAssets();
+  function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
+    int totalAssetsDelta
+  ){
+    uint updatedInvestedAssets = updateTotalAssetsBeforeInvest_
+      ? _updateInvestedAssets()
+      : _investedAssets;
+    totalAssetsDelta = updateTotalAssetsBeforeInvest_
+      ? int(updatedInvestedAssets) - int(_investedAssets)
+      : int(0);
 
     // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * newInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+    if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
       address[] memory tokens = _depositorPoolAssets();
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
@@ -247,22 +254,41 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount Amount to be withdrawn in terms of the asset.
   /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
   /// @return assetPrice Price of the {asset} from the price oracle
-  function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    uint investedAssets = _updateInvestedAssets();
+  /// @return totalAssetsDelta The {strategy} updates its totalAssets amount internally before withdrawing
+  ///                          Return [totalAssets-before-withdraw - totalAssets-before-call-of-_withdrawFromPool]
+  function _withdrawFromPool(uint amount) override internal virtual returns (
+    uint investedAssetsUSD,
+    uint assetPrice,
+    int totalAssetsDelta
+  ) {
+    uint updatedInvestedAssets = _updateInvestedAssets();
+    totalAssetsDelta = int(updatedInvestedAssets) - int(_investedAssets);
+
     require(_investedAssets != 0, AppErrors.NO_INVESTMENTS);
-    return _withdrawUniversal(amount, false, investedAssets);
+    (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
   }
 
   /// @notice Withdraw all from the pool.
   /// @return investedAssetsUSD The value that we should receive after withdrawing
   /// @return assetPrice Price of the {asset} taken from the price oracle
-  function _withdrawAllFromPool() override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    return _withdrawUniversal(0, true, _updateInvestedAssets());
+  /// @return totalAssetsDelta The {strategy} updates its totalAssets amount internally before withdrawing
+  ///                          Return [totalAssets-before-withdraw - totalAssets-before-call-of-_withdrawFromPool]
+  function _withdrawAllFromPool() override internal virtual returns (
+    uint investedAssetsUSD,
+    uint assetPrice,
+    int totalAssetsDelta
+  ) {
+    uint updatedInvestedAssets = _updateInvestedAssets();
+    totalAssetsDelta = int(updatedInvestedAssets) - int(_investedAssets);
+
+    (investedAssetsUSD, assetPrice) = _withdrawUniversal(0, true, updatedInvestedAssets);
   }
 
   /// @param amount Amount to be withdrawn. 0 is ok if we withdraw all.
   /// @param all Withdraw all
   /// @param investedAssets_ Current amount of invested assets
+  /// @return investedAssetsUSD The value that we should receive after withdrawing
+  /// @return assetPrice Price of the {asset} taken from the price oracle
   function _withdrawUniversal(uint amount, bool all, uint investedAssets_) internal returns (
     uint investedAssetsUSD,
     uint assetPrice
@@ -654,7 +680,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
 
       uint assetInUseBefore = investedAssetsLocal + assetBalance;
-      _depositToPool(assetBalance);
+      _depositToPool(assetBalance, false);
       uint assetInUseAfter = _investedAssets + _balance(asset);
 
       if (assetInUseAfter > assetInUseBefore) {
@@ -753,6 +779,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // noop; will deposit amount received at the next hardwork
   }
 
+
+  /////////////////////////////////////////////////////////////////////
+  ///                Others
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Unlimited capacity by default
+  function capacity() external virtual view returns (uint) {
+    return 2**255; // almost same as type(uint).max but more gas efficient
+  }
 
 
   /**

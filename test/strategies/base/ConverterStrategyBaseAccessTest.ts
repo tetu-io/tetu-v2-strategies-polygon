@@ -1954,7 +1954,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
         await strategy.setMockedDepositToPool(
           parseUnits("8", 6),
-          assetProvider.address
+          assetProvider.address,
+          0
         );
 
         await strategy.setMockedHandleRewardsResults(
@@ -1983,7 +1984,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
         await strategy.setMockedDepositToPool(
           parseUnits("-8", 6),
-          assetProvider.address
+          assetProvider.address,
+          0
         );
 
         await strategy.setMockedHandleRewardsResults(
@@ -2382,7 +2384,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
       await setupInvestedAssets(liquidityOut, parseUnits("1", 18));
       const investedAssetsValueBefore = await strategy.investedAssets();
 
-      const tx = await strategy._depositToPoolAccess(amount);
+      const tx = await strategy._depositToPoolAccess(amount, false);
       const gasUsed = (await tx.wait()).gasUsed;
 
       const baseAmounts = await Promise.all(depositorTokens.map(

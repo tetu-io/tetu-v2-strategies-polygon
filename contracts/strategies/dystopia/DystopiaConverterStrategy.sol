@@ -43,5 +43,4 @@ contract DystopiaConverterStrategy is ConverterStrategyBase, DystopiaDepositor {
   function rewardTokens() external view returns (address[] memory tokens) {
     return _rewardTokens;
   }
-
 }
