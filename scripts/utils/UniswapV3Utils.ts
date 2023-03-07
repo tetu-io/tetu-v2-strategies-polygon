@@ -259,7 +259,7 @@ export class UniswapV3Utils {
     }`
   }
 
-  private static getTickSpacing(feeTier: number): number {
+  public static getTickSpacing(feeTier: number): number {
     switch (feeTier) {
       case 10000:
         return 200

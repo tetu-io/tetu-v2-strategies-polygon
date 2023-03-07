@@ -6,7 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "./UniswapV3Library.sol";
 
 library UniswapV3ConverterStrategyLogic {
-  function initDepositor(IUniswapV3Pool pool, int24 tickRange_, address asset_) external returns(int24 tickSpacing, int24 lowerTick, int24 upperTick, address tokenA, address tokenB, bool _depositorSwapTokens) {
+  function initDepositor(IUniswapV3Pool pool, int24 tickRange_, address asset_) external view returns(int24 tickSpacing, int24 lowerTick, int24 upperTick, address tokenA, address tokenB, bool _depositorSwapTokens) {
     tickSpacing = UniswapV3Library.getTickSpacing(pool.fee());
     (, int24 tick, , , , ,) = pool.slot0();
     lowerTick = (tick - tickRange_) / tickSpacing * tickSpacing;
@@ -20,6 +20,13 @@ library UniswapV3ConverterStrategyLogic {
       tokenB = pool.token0();
       _depositorSwapTokens = true;
     }
+  }
+
+  function setNewTickRange(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing) external view returns(int24 lowerTickNew, int24 upperTickNew) {
+    (, int24 tick, , , , ,) = pool.slot0();
+    int24 halfRange = (upperTick - lowerTick) / 2;
+    lowerTickNew = (tick - halfRange) / tickSpacing * tickSpacing;
+    upperTickNew = (tick + halfRange) / tickSpacing * tickSpacing;
   }
 
   function addFillup(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing) external returns(int24 lowerTickFillup, int24 upperTickFillup, uint128 liquidityOutFillup) {

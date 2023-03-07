@@ -9,8 +9,6 @@ import "../../integrations/uniswap/IUniswapV3MintCallback.sol";
 import "../../tools/AppErrors.sol";
 import "./UniswapV3ConverterStrategyLogic.sol";
 
-//import "hardhat/console.sol";
-
 abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
@@ -18,7 +16,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.0";
 
   IUniswapV3Pool public pool;
-  int24 public tickSpacing;
+  int24 internal tickSpacing;
   int24 public lowerTick;
   int24 public upperTick;
   int24 public lowerTickFillup;
@@ -55,10 +53,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   }
 
   function _setNewTickRange() internal {
-    (, int24 tick, , , , ,) = pool.slot0();
-    int24 halfRange = (upperTick - lowerTick) / 2;
-    lowerTick = (tick - halfRange) / tickSpacing * tickSpacing;
-    upperTick = (tick + halfRange) / tickSpacing * tickSpacing;
+    (lowerTick, upperTick) = UniswapV3ConverterStrategyLogic.setNewTickRange(pool, lowerTick, upperTick, tickSpacing);
   }
 
   /// @notice Uniswap V3 callback fn, called back on pool.mint
@@ -83,10 +78,6 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint liquidityOut
   ) {
     (amountsConsumed, liquidityOut, totalLiquidity) = UniswapV3ConverterStrategyLogic.enter(pool, lowerTick, upperTick, amountsDesired_, totalLiquidity, _depositorSwapTokens);
-  }
-
-  function _addFillup() internal {
-    (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogic.addFillup(pool, lowerTick, upperTick, tickSpacing);
   }
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
@@ -122,7 +113,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     return UniswapV3ConverterStrategyLogic.needRebalance(pool, lowerTick, upperTick, rebalanceTickRange);
   }
 
-  function getFees() public view returns (uint fee0, uint fee1) {
+  function getFees() internal view returns (uint fee0, uint fee1) {
     return UniswapV3ConverterStrategyLogic.getFees(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, totalLiquidity, totalLiquidityFillup);
   }
 

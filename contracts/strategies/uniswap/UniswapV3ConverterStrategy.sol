@@ -23,8 +23,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ) external initializer {
     __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
-    IERC20(pool.token0()).approve(IController(controller_).liquidator(), type(uint).max);
-    IERC20(pool.token1()).approve(IController(controller_).liquidator(), type(uint).max);
+    address liquidator = IController(controller_).liquidator();
+    IERC20(tokenA).approve(liquidator, type(uint).max);
+    IERC20(tokenB).approve(liquidator, type(uint).max);
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
@@ -76,7 +77,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // close univ3 base and fillup positions
     _depositorEmergencyExit();
 
-    UniswapV3ConverterStrategyLogic.rebalanceDebt(tetuConverter, controller(), pool, tokenA, tokenB);
+    UniswapV3ConverterStrategyLogic.rebalanceDebt(converter, controller(), pool, tokenA, tokenB);
 
     _setNewTickRange();
 
@@ -86,13 +87,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _depositorEnter(tokenAmounts);
 
     // add fillup liquidity
-    _addFillup();
+    (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogic.addFillup(pool, lowerTick, upperTick, tickSpacing);
 
     // adjust _investedAssets
     _updateInvestedAssets();
 
     // adjust base-amounts
-    _updateBaseAmountsForAsset(tokenA, balanceOfTokenABefore > _balance(tokenA) ? balanceOfTokenABefore - _balance(tokenA) : _balance(tokenA) - balanceOfTokenABefore, balanceOfTokenABefore < _balance(tokenA));
-    _updateBaseAmountsForAsset(tokenB, balanceOfTokenBBefore > _balance(tokenB) ? balanceOfTokenBBefore - _balance(tokenB) : _balance(tokenB) - balanceOfTokenBBefore, balanceOfTokenBBefore < _balance(tokenB));
+    uint balanceOfTokenAAfter = _balance(tokenA);
+    uint balanceOfTokenBAfter = _balance(tokenB);
+    _updateBaseAmountsForAsset(tokenA, balanceOfTokenABefore > balanceOfTokenAAfter ? 0 : balanceOfTokenAAfter - balanceOfTokenABefore, balanceOfTokenABefore > balanceOfTokenAAfter ? balanceOfTokenABefore - balanceOfTokenAAfter : 0);
+    _updateBaseAmountsForAsset(tokenB, balanceOfTokenBBefore > balanceOfTokenBAfter ? 0 : balanceOfTokenBAfter - balanceOfTokenBBefore, balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0);
   }
 }

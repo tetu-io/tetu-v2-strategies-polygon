@@ -864,7 +864,7 @@ async function strategyBacktest(
   const token1Decimals = await token1.decimals()
   const token0Symbol = await token0.symbol()
   const token1Symbol = await token1.symbol()
-  const tickSpacing = await strategy.tickSpacing()
+  const tickSpacing = UniswapV3Utils.getTickSpacing(await pool.fee())
 
   console.log(`Starting backtest of ${await vault.name()}`)
   console.log(`Filling pool with initial liquidity from snapshot (${liquiditySnapshot.ticks.length} ticks)..`)

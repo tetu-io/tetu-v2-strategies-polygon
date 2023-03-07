@@ -34,7 +34,7 @@
     "@nomiclabs/hardhat-ethers": "^2.2.1",
     "@nomiclabs/hardhat-etherscan": "^3.1.3",
     "@nomiclabs/hardhat-solhint": "^2.0.1",
-    "@tetu_io/tetu-contracts-v2": "git+https://github.com/tetu-io/tetu-contracts-v2.git#dev-dvpublic",
+    "@tetu_io/tetu-contracts-v2": "github:tetu-io/tetu-contracts-v2#dev-dvpublic",
     "@tetu_io/tetu-converter": "git+https://github.com/tetu-io/tetu-converter.git#dev",
     "@tetu_io/tetu-liquidator": "github:tetu-io/tetu-liquidator#master",
     "@typechain/ethers-v5": "^10.2.0",
