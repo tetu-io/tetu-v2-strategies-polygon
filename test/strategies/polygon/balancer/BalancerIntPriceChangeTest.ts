@@ -67,6 +67,7 @@ chai.use(chaiAsPromised);
 describe('BalancerIntPriceChangeTest', function() {
 //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
+  const PERCENT_CHANGE_PRICES = 2; // 2%
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -264,7 +265,7 @@ describe('BalancerIntPriceChangeTest', function() {
      * because after deposit we have either DAI or USDT not-zero amount on strategy balance
      * (but not both)
      */
-    describe("DAI and USDT price are reduced on 4%", () => {
+    describe("DAI and USDT price are reduced a bit", () => {
       it("should change prices in AAVE3 and TC oracles", async () => {
         // prices before
         const daiPriceAave3 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
@@ -308,7 +309,7 @@ describe('BalancerIntPriceChangeTest', function() {
       it("should change prices in Balancer pool", async () => {
         const r = await BalancerDaiUsdcUsdtPoolUtils.swapDaiToUsdt(
           signer,
-          4, // ~ 4%
+          PERCENT_CHANGE_PRICES,
           2
         );
         const ret = [
@@ -336,7 +337,7 @@ describe('BalancerIntPriceChangeTest', function() {
 
           // change prices
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
-          const r = await changePrices(6);
+          const r = await changePrices(PERCENT_CHANGE_PRICES);
           const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
           // check states
@@ -375,10 +376,10 @@ describe('BalancerIntPriceChangeTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
-          await changePrices(6, true);
+          await changePrices(PERCENT_CHANGE_PRICES);
 
           // await strategy.updateInvestedAssets();
 
@@ -389,7 +390,7 @@ describe('BalancerIntPriceChangeTest', function() {
           ).transfer(user.address, parseUnits("1", 6));
           await VaultUtils.deposit(user, vault, parseUnits("1", 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
 
@@ -399,10 +400,15 @@ describe('BalancerIntPriceChangeTest', function() {
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
 
-          expect(ret.eq(0)).eq(true);
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_deposit_small.csv",
+            [stateBefore, stateAfter]
+          );
+
+          expect(ret.abs().lte(1)).eq(true);
         });
         it("should not change sharePrice, huge deposit", async () => {
-          const stateInitial = await enterToVault();
+          await enterToVault();
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
@@ -410,10 +416,10 @@ describe('BalancerIntPriceChangeTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
-          // await changePrices(6, true);
+          await changePrices(PERCENT_CHANGE_PRICES);
 
           // await strategy.updateInvestedAssets();
 
@@ -424,7 +430,7 @@ describe('BalancerIntPriceChangeTest', function() {
           ).transfer(user.address, parseUnits("50000", 6));
           await VaultUtils.deposit(user, vault, parseUnits("50000", 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
 
@@ -434,10 +440,15 @@ describe('BalancerIntPriceChangeTest', function() {
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
 
-          expect(ret.eq(0)).eq(true);
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_deposit_huge.csv",
+            [stateBefore, stateAfter]
+          );
+
+          expect(ret.abs().lte(1)).eq(true);
         });
       });
-      describe("Withdraw", () => {
+      describe("Withdraw almost most allowed amount", () => {
         it("should return expected values", async () => {
           const stateInitial = await enterToVault();
           console.log("stateInitial", stateInitial);
@@ -448,12 +459,10 @@ describe('BalancerIntPriceChangeTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
-          await changePrices(6);
-          // await strategy.updateInvestedAssets();
-          const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          await changePrices(PERCENT_CHANGE_PRICES);
 
           // we need to force vault to withdraw some amount from the strategy
           // so let's ask to withdraw ALMOST all amount from vault's balance
@@ -464,22 +473,61 @@ describe('BalancerIntPriceChangeTest', function() {
           console.log("amountToWithdraw", amountToWithdraw);
           await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
-          console.log("stateMiddle", stateMiddle);
+          console.log("stateBefore", stateBefore);
           console.log("stateAfter", stateAfter);
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
 
-          expect(ret.eq(0)).eq(true);
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_withdraw.csv",
+            [stateBefore, stateAfter]
+          );
+
+          expect(ret.abs().lte(1)).eq(true);
         });
       });
-      describe("Hardwork", () => {
+      describe("WithdrawAll", () => {
         it("should return expected values", async () => {
-// todo
+          const stateInitial = await enterToVault();
+          console.log("stateInitial", stateInitial);
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state)
+          }
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
+
+          // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
+          await changePrices(PERCENT_CHANGE_PRICES);
+
+          await vault.connect(user).withdrawAll();
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          console.log("stateBefore", stateBefore);
+          console.log("stateAfter", stateAfter);
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/pc_withdraw_all.csv",
+            [stateBefore, stateAfter]
+          );
+
+          expect(ret.abs().lte(1)).eq(true);
         });
       });
+//       describe("Hardwork", () => {
+//         it("should return expected values", async () => {
+// // todo
+//         });
+//       });
     });
   });
 

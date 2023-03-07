@@ -352,7 +352,7 @@ library BalancerLogicLib {
             BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, p.balances, p.bptIndex),
             liquidityAmount_
           ),
-        toInternalBalance: false
+          toInternalBalance: false
         })
     );
 
@@ -457,6 +457,25 @@ library BalancerLogicLib {
         ++k;
       }
     }
+
+    // todo but probably we should swap remain bpt directly to USDC at full exit?
+    //    // convert remained amount of bpt on the strategy balance to main asset to avoid changes in investedAsset amount
+    //    uint depositorBalance = p.tokens[p.bptIndex].balanceOf(address(this));
+    //    if (depositorBalance > 0) {
+    //      console.log("Need to convert", depositorBalance);
+    //      console.log("From", address(p.tokens[1]));
+    //      console.log("To", address(p.tokens[2]));
+    //      console.log("Balance", p.tokens[2].balanceOf(address(this)));
+    //      BalancerLogicLib.swap(
+    //        vault_,
+    //        poolId_,
+    //        address(p.tokens[p.bptIndex]),
+    //        address(p.tokens[2]),
+    //        depositorBalance,
+    //        funds
+    //      );
+    //      console.log("Balance after swap", p.tokens[2].balanceOf(address(this)));
+    //    }
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
@@ -476,7 +495,9 @@ library BalancerLogicLib {
     (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
     p.len = p.tokens.length;
 
-    (, uint[] memory amountsBpt) = helper_.queryExit(
+    // bpt - amount of unconverted bpt
+    // let's temporary save total amount of converted BPT there
+    (uint256 bpt, uint[] memory amountsBpt) = helper_.queryExit(
       poolId_,
       address(this),
       payable(address(this)),
@@ -492,11 +513,34 @@ library BalancerLogicLib {
       })
     );
 
+    // amount of unconverted bpt, we need to take them into account for correct calculation of investedAssets amount
+    bpt = bpt < liquidityAmount_
+      ? liquidityAmount_ - bpt
+      : 0;
+
+    IBVault.FundManagement memory funds = IBVault.FundManagement({
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
+    });
     IBVault.BatchSwapStep[] memory steps = new IBVault.BatchSwapStep[](p.len - 1);
     IAsset[] memory assets = new IAsset[](2 * (p.len - 1));
     uint k;
     for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i == p.bptIndex) continue;
+      if (bpt != 0) {
+        // take into account the cost of unused BPT by directly converting them to first available amBPT
+        int[] memory deltas = _convertBptToAmBpt(vault_, poolId_, p.tokens[p.bptIndex], bpt, p.tokens[i], funds);
+        if (deltas[0] > 0) {
+          bpt = (bpt < uint(deltas[0]))
+            ? bpt - uint(deltas[0])
+            : 0;
+          amountsBpt[i] += (deltas[1] < 0)
+            ? uint(-deltas[1])
+            : 0;
+        }
+      }
       IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(p.tokens[i]));
       steps[k].poolId = linearPool.getPoolId();
       steps[k].assetInIndex = 2 * k + 1;
@@ -508,17 +552,7 @@ library BalancerLogicLib {
       ++k;
     }
 
-    int[] memory assetDeltas = vault_.queryBatchSwap(
-      IBVault.SwapKind.GIVEN_IN,
-      steps,
-      assets,
-      IBVault.FundManagement({
-        sender: address(this),
-        fromInternalBalance: false,
-        recipient: payable(address(this)),
-        toInternalBalance: false
-     })
-    );
+    int[] memory assetDeltas = vault_.queryBatchSwap(IBVault.SwapKind.GIVEN_IN, steps, assets, funds);
 
     amountsOut = new uint[](p.len - 1);
     k = 0;
@@ -530,7 +564,30 @@ library BalancerLogicLib {
 
       ++k;
     }
-  }  
+  }
+
+  function _convertBptToAmBpt(
+    IBVault vault_,
+    bytes32 poolId_,
+    IERC20 bptToken,
+    uint amountBpt,
+    IERC20 amBptToken,
+    IBVault.FundManagement memory funds
+  ) internal returns (
+    int[] memory assetDeltas
+  ) {
+    IAsset[] memory assets = new IAsset[](2);
+    assets[0] = IAsset(address(bptToken));
+    assets[1] = IAsset(address(amBptToken));
+
+    IBVault.BatchSwapStep[] memory steps = new IBVault.BatchSwapStep[](1);
+    steps[0].poolId = poolId_;
+    steps[0].assetInIndex = 0;
+    steps[0].assetOutIndex = 1;
+    steps[0].amount = amountBpt;
+
+    return vault_.queryBatchSwap(IBVault.SwapKind.GIVEN_IN, steps, assets, funds);
+  }
 
   /// @notice Swap given {amountIn_} of {assetIn_} to {assetOut_} using the given BalanceR pool
   function swap(

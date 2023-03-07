@@ -242,42 +242,47 @@ export class BalancerIntTestUtils {
     return dest;
   }
 
-  public static async saveListStatesToCSV(pathOut: string, states: IState[]) {
-
-    const headers = [
+  public static getCsvData() : {stateHeaders: string[], stateDecimals: number[]} {
+    const stateHeaders = [
       "title",
       "block",
       "timestamp",
 
-      "$signer",
-      "$user",
+      "signer.usdc",
+      "user.usdc",
 
-      "vault-user-shares",
-      "vault-signer-shares",
+      "vault.user.shares",
+      "vault.signer.shares",
 
-      "vault-$user",
-      "vault-signer",
+      "vault.user.usdc",
+      "vault.signer.usdc",
 
-      "sharePrice-vault",
-      "totalSupply-vault",
-      "totalAssets-vault",
+      "vault.sharePrice",
+      "vault.totalSupply",
+      "vault.totalAssets",
 
-      "$insurance",
-      "$strategy",
-      "usdt-strategy",
-      "dai-strategy",
-      "bal-strategy",
-      "bptp-strategy",
-      "totalAssets-strategy",
-      "investedAssets-strategy",
-      "bptp-gauge",
-      "$vault",
-      "$splitter",
-      "totalAssets-splitter",
-      "bbAmUsdc-pool",
-      "bbAmUsdt-pool",
-      "bbAmDai-pool",
+      "insurance.usdc",
+
+      "strategy.usdc",
+      "strategy.usdt",
+      "strategy.dai",
+      "strategy.bal",
+      "strategy.bptp",
+      "strategy.totalAssets",
+      "strategy.investedAssets",
+
+      "gauge.bptp",
+
+      "vault.usdc",
+
+      "splitter.usdc",
+      "splitter.totalAssets",
+
+      "pool.bbAmUsdc",
+      "pool.bbAmUsdt",
+      "pool.bbAmDai",
     ];
+
     const decimalsSharedPrice = 6;
     const decimalsUSDC = 6;
     const decimalsUSDT = 6;
@@ -287,7 +292,8 @@ export class BalancerIntTestUtils {
     const decimalsBbAmUsdt = 18;
     const decimalsBbAmDai = 18;
     const decimalsBptp = 18;
-    const decimals = [
+
+    const stateDecimals = [
       0,
       0,
       0,
@@ -316,7 +322,16 @@ export class BalancerIntTestUtils {
       decimalsBbAmUsdt,
       decimalsBbAmDai
     ];
-    writeFileSync(pathOut, headers.join(";") + "\n", {encoding: 'utf8', flag: "a" });
+
+    return {stateHeaders, stateDecimals};
+  }
+
+  /**
+   * Put data of a state into a separate row
+   */
+  public static async saveListStatesToCSVRows(pathOut: string, states: IState[]) {
+    const {stateHeaders, stateDecimals} = this.getCsvData();
+    writeFileSync(pathOut, stateHeaders.join(";") + "\n", {encoding: 'utf8', flag: "a" });
     for (const item of states) {
       const line = [
         item.title,
@@ -355,7 +370,65 @@ export class BalancerIntTestUtils {
       writeFileSync(pathOut,
         line.map((x, index) =>
           typeof x === "object"
-            ? +formatUnits(x, decimals[index])
+            ? +formatUnits(x, stateDecimals[index])
+            : "" + x
+        ).join(";") + "\n",
+        {encoding: 'utf8', flag: "a"}
+      );
+    }
+  }
+
+  /**
+   * Put data of a state into a separate column
+   */
+  public static async saveListStatesToCSVColumns(pathOut: string, states: IState[]) {
+    const {stateHeaders, stateDecimals} = this.getCsvData();
+    const headers = [
+      "",
+      ... states.map(x => x.title)
+    ];
+    const rows = states.map(item => [
+      item.title,
+      item.block,
+      item.blockTimestamp,
+
+      item.signer.usdc,
+      item.user.usdc,
+
+      item.vault.userShares,
+      item.vault.signerShares,
+
+      item.vault.userUsdc,
+      item.vault.signerUsdc,
+
+      item.vault.sharePrice,
+      item.vault.totalSupply,
+      item.vault.totalAssets,
+
+      item.insurance.usdc,
+      item.strategy.usdc,
+      item.strategy.usdt,
+      item.strategy.dai,
+      item.strategy.bal,
+      item.strategy.bptPool,
+      item.strategy.totalAssets,
+      item.strategy.investedAssets,
+      item.gauge.strategyBalance,
+      item.vault.usdc,
+      item.splitter.usdc,
+      item.splitter.totalAssets,
+      item.balancerPool.bbAmUsdc,
+      item.balancerPool.bbAmUsdt,
+      item.balancerPool.bbAmDai
+    ]);
+
+    writeFileSync(pathOut, headers.join(";") + "\n", {encoding: 'utf8', flag: "a" });
+    for (let i = 0; i < stateHeaders.length; ++i) {
+      const line = [stateHeaders[i], ...rows.map(x => x[i])];
+      writeFileSync(pathOut,
+        line.map((x) =>
+          typeof x === "object"
+            ? +formatUnits(x, stateDecimals[i])
             : "" + x
         ).join(";") + "\n",
         {encoding: 'utf8', flag: "a"}

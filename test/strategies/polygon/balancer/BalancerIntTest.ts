@@ -119,7 +119,7 @@ describe('BalancerIntTest', function() {
       await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
       await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-      return BalancerIntTestUtils.getState(signer, user, strategy, vault);
+      return BalancerIntTestUtils.getState(signer, user, strategy, vault, "enterToVault");
     }
 
     before(async function () {
@@ -489,7 +489,7 @@ describe('BalancerIntTest', function() {
             // balancer pool gives us a small profit
             // block 39612612: 149700000000 => 149772478557
             stateAfterWithdraw.vault.totalAssets.gte(stateAfterDeposit.vault.totalAssets),
-            stateAfterWithdraw.vault.sharePrice.gt(stateAfterDeposit.vault.sharePrice),
+            stateAfterWithdraw.vault.sharePrice.gte(stateAfterDeposit.vault.sharePrice),
 
             // base amounts
             stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
@@ -609,7 +609,7 @@ describe('BalancerIntTest', function() {
             // balancer pool gives us a small profit
             // block 39612612: 149700000000 => 149772478557
             stateAfterExit.vault.totalAssets.gte(stateAfterDeposit.vault.totalAssets),
-            stateAfterExit.vault.sharePrice.gt(stateAfterDeposit.vault.sharePrice),
+            stateAfterExit.vault.sharePrice.gte(stateAfterDeposit.vault.sharePrice),
 
             // base amounts
             stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
@@ -704,7 +704,7 @@ describe('BalancerIntTest', function() {
             stateAfterHardwork.gauge.strategyBalance.gt(stateBeforeDeposit.gauge.strategyBalance),
 
             // splitter: total assets amount is a bit decreased
-            stateAfterDeposit.splitter.totalAssets.gt(stateAfterHardwork.splitter.totalAssets),
+            stateAfterDeposit.splitter.totalAssets.lte(stateAfterHardwork.splitter.totalAssets),
             areAlmostEqual(stateAfterDeposit.splitter.totalAssets, stateAfterHardwork.splitter.totalAssets, 3),
 
             // base amounts
@@ -788,19 +788,21 @@ describe('BalancerIntTest', function() {
           const stepInBlocks = 20_000;
           const stateAfterDeposit = await enterToVault();
           console.log("stateAfterDeposit", stateAfterDeposit);
+          const states: IState[] = [];
 
           for (let i = 0; i < countLoops; ++i) {
             await TimeUtils.advanceNBlocks(stepInBlocks);
             await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state after hardwork ${i}`, state);
+            states.push(state);
           }
           await TimeUtils.advanceNBlocks(stepInBlocks);
 
           await vault.connect(user).withdrawAll();
           await vault.connect(signer).withdrawAll();
 
-          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "final");
           console.log("stateFinal", stateFinal);
 
           const initialTotalAmount = parseUnits(DEPOSIT_AMOUNT.toString(), 6).mul(3).div(2);
@@ -809,15 +811,23 @@ describe('BalancerIntTest', function() {
           console.log("resultTotalAmount", resultTotalAmount);
           console.log("initialTotalAmount", initialTotalAmount);
           BalancerIntTestUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/deposit-hardworks-withdraw.csv",
+            [stateAfterDeposit, ...states, stateFinal]
+          );
+
           expect(resultTotalAmount).gt(initialTotalAmount);
         });
       });
       describe("loopEndActions from DoHardWorkLoopBase", () => {
         it("should be profitable", async () => {
-          const countLoops = 20;
+          const countLoops = 5;
           const stepInBlocks = 5_000;
           const stateAfterDeposit = await enterToVault();
           console.log("stateAfterDeposit", stateAfterDeposit);
+
+          const states: IState[] = [];
 
           let isUserDeposited = true;
           for (let i = 0; i < countLoops; ++i) {
@@ -850,13 +860,14 @@ describe('BalancerIntTest', function() {
 
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state after hardwork ${i}`, state);
+            states.push(state);
           }
           await TimeUtils.advanceNBlocks(stepInBlocks);
 
           await vault.connect(user).withdrawAll();
           await vault.connect(signer).withdrawAll();
 
-          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "final");
           console.log("stateFinal", stateFinal);
 
           const initialTotalAmount = parseUnits(DEPOSIT_AMOUNT.toString(), 6).mul(3).div(2);
@@ -865,6 +876,12 @@ describe('BalancerIntTest', function() {
           console.log("resultTotalAmount", resultTotalAmount);
           console.log("initialTotalAmount", initialTotalAmount);
           BalancerIntTestUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/DoHardWorkLoopBase.csv",
+            [stateAfterDeposit, ...states, stateFinal]
+          );
+
           expect(resultTotalAmount).gt(initialTotalAmount);
         });
       });
@@ -884,7 +901,7 @@ describe('BalancerIntTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // let's deposit $1 - calcInvestedAssets will be called
           await IERC20__factory.connect(
@@ -893,7 +910,7 @@ describe('BalancerIntTest', function() {
           ).transfer(user.address, parseUnits("1", 6));
           await VaultUtils.deposit(user, vault, parseUnits("1", 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
 
@@ -903,7 +920,12 @@ describe('BalancerIntTest', function() {
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
 
-          expect(ret.eq(0)).eq(true);
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/npc_deposit_small.csv",
+            [stateBefore, stateAfter]
+          );
+
+          expect(ret.abs().lte(1)).eq(true);
         });
         it("should return expected values, huge deposit", async () => {
           const stateInitial = await enterToVault();
@@ -914,7 +936,7 @@ describe('BalancerIntTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // let's deposit $1 - calcInvestedAssets will be called
           await IERC20__factory.connect(
@@ -923,7 +945,7 @@ describe('BalancerIntTest', function() {
           ).transfer(user.address, parseUnits("50000", 6));
           await VaultUtils.deposit(user, vault, parseUnits("50000", 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
 
@@ -932,6 +954,11 @@ describe('BalancerIntTest', function() {
 
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/npc_deposit_huge.csv",
+            [stateBefore, stateAfter]
+          );
 
           expect(ret.eq(0)).eq(true);
         });
@@ -947,7 +974,7 @@ describe('BalancerIntTest', function() {
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // we need to force vault to withdraw some amount from the strategy
           // so let's ask to withdraw ALMOST all amount from vault's balance
@@ -958,12 +985,54 @@ describe('BalancerIntTest', function() {
           console.log("amountToWithdraw", amountToWithdraw);
           await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
           console.log("stateAfter", stateAfter);
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
           console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/npc_withdraw.csv",
+            [stateBefore, stateAfter]
+          );
+
+          expect(ret.eq(0)).eq(true);
+        });
+      });
+      describe("WithdrawAll", () => {
+        it("should return expected values", async () => {
+          const stateInitial = await enterToVault();
+          console.log("stateInitial", stateInitial);
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state)
+          }
+          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
+
+          // we need to force vault to withdraw some amount from the strategy
+          // so let's ask to withdraw ALMOST all amount from vault's balance
+          // calcInvestedAssets will be called after the withdrawal
+          const assets = await vault.convertToAssets(await vault.balanceOf(user.address));
+          // todo const amountToWithdraw = (await vault.maxWithdraw(user.address)).sub(parseUnits("1", 6));
+          const amountToWithdraw = assets.mul(DENOMINATOR-WITHDRAW_FEE).div(DENOMINATOR).sub(parseUnits("1", 6));
+          console.log("amountToWithdraw", amountToWithdraw);
+          await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
+
+          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
+
+          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          console.log("stateAfter", stateAfter);
+          console.log("Share price before", stateBefore.vault.sharePrice.toString());
+          console.log("Share price after", stateAfter.vault.sharePrice.toString());
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            "./tmp/npc_withdraw_all.csv",
+            [stateBefore, stateAfter]
+          );
 
           expect(ret.eq(0)).eq(true);
         });

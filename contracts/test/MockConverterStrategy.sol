@@ -35,6 +35,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
+
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
@@ -46,10 +47,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     int amountAsset_
   ) external {
     return _updateBaseAmounts(tokens_, receivedAmounts_, spentAmounts_, indexAsset_, amountAsset_);
-  }
-
-  function _updateBaseAmountsForAssetAccesss(address asset_, uint amount_, bool increased_) external {
-    return _updateBaseAmountsForAsset(asset_, amount_, increased_);
   }
 
   function _convertAfterWithdrawAccess(
@@ -77,7 +74,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint returnedAssetAmount,
     uint leftover
   ) {
-    return ConverterStrategyBaseLib.closePosition(tetuConverter, collateralAsset, borrowAsset, amountToRepay);
+    return ConverterStrategyBaseLib.closePosition(converter, collateralAsset, borrowAsset, amountToRepay);
   }
 
   function updateInvestedAssetsTestAccess() external {
@@ -159,12 +156,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     bool initialized;
     int balanceChange;
     address providerBalanceChange;
+    int totalAssetsDelta;
   }
   MockedDepositToPoolParams public depositToPoolParams;
-  function _depositToPoolAccess(uint amount_) external {
-    return _depositToPool(amount_);
+  function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns(
+    int totalAssetsDelta
+  ) {
+    return _depositToPool(amount_, updateTotalAssetsBeforeInvest_);
   }
-  function _depositToPool(uint amount_) override internal virtual {
+  function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
+    int totalAssetsDelta
+  ){
     if (depositToPoolParams.initialized) {
       console.log("_depositToPool.mocked-version is called");
       if (depositToPoolParams.balanceChange > 0) {
@@ -179,15 +181,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(-depositToPoolParams.balanceChange)
         );
       }
+      totalAssetsDelta = depositToPoolParams.totalAssetsDelta;
     } else {
-      super._depositToPool(amount_);
+      totalAssetsDelta = super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
     }
   }
-  function setMockedDepositToPool(int balanceChange, address providerBalanceChange) external {
+  function setMockedDepositToPool(int balanceChange, address providerBalanceChange, int totalAssetsDelta_) external {
     depositToPoolParams = MockedDepositToPoolParams({
       initialized: true,
       balanceChange: balanceChange,
-      providerBalanceChange: providerBalanceChange
+      providerBalanceChange: providerBalanceChange,
+      totalAssetsDelta: totalAssetsDelta_
     });
   }
   /////////////////////////////////////////////////////////////////////////////////////
