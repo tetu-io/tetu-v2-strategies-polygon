@@ -67,6 +67,7 @@ chai.use(chaiAsPromised);
 describe('BalancerIntPriceChangeTest', function() {
 //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
+  const PERCENT_CHANGE_PRICES = 2; // 2%
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -264,7 +265,7 @@ describe('BalancerIntPriceChangeTest', function() {
      * because after deposit we have either DAI or USDT not-zero amount on strategy balance
      * (but not both)
      */
-    describe("DAI and USDT price are reduced on 4%", () => {
+    describe("DAI and USDT price are reduced a bit", () => {
       it("should change prices in AAVE3 and TC oracles", async () => {
         // prices before
         const daiPriceAave3 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
@@ -308,7 +309,7 @@ describe('BalancerIntPriceChangeTest', function() {
       it("should change prices in Balancer pool", async () => {
         const r = await BalancerDaiUsdcUsdtPoolUtils.swapDaiToUsdt(
           signer,
-          4, // ~ 4%
+          PERCENT_CHANGE_PRICES,
           2
         );
         const ret = [
@@ -336,7 +337,7 @@ describe('BalancerIntPriceChangeTest', function() {
 
           // change prices
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
-          const r = await changePrices(6);
+          const r = await changePrices(PERCENT_CHANGE_PRICES);
           const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
           // check states
@@ -378,7 +379,7 @@ describe('BalancerIntPriceChangeTest', function() {
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
-          await changePrices(6);
+          await changePrices(PERCENT_CHANGE_PRICES);
 
           // await strategy.updateInvestedAssets();
 
@@ -407,7 +408,7 @@ describe('BalancerIntPriceChangeTest', function() {
           expect(ret.abs().lte(1)).eq(true);
         });
         it("should not change sharePrice, huge deposit", async () => {
-          const stateInitial = await enterToVault();
+          await enterToVault();
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
@@ -418,7 +419,7 @@ describe('BalancerIntPriceChangeTest', function() {
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, but calcInvestedAssets were not called
-          await changePrices(6);
+          await changePrices(PERCENT_CHANGE_PRICES);
 
           // await strategy.updateInvestedAssets();
 
@@ -461,7 +462,7 @@ describe('BalancerIntPriceChangeTest', function() {
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
-          await changePrices(6);
+          await changePrices(PERCENT_CHANGE_PRICES);
 
           // we need to force vault to withdraw some amount from the strategy
           // so let's ask to withdraw ALMOST all amount from vault's balance
@@ -502,7 +503,7 @@ describe('BalancerIntPriceChangeTest', function() {
           const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "before");
 
           // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
-          await changePrices(6);
+          await changePrices(PERCENT_CHANGE_PRICES);
 
           await vault.connect(user).withdrawAll();
 
@@ -522,11 +523,11 @@ describe('BalancerIntPriceChangeTest', function() {
           expect(ret.abs().lte(1)).eq(true);
         });
       });
-      describe("Hardwork", () => {
-        it("should return expected values", async () => {
-// todo
-        });
-      });
+//       describe("Hardwork", () => {
+//         it("should return expected values", async () => {
+// // todo
+//         });
+//       });
     });
   });
 
