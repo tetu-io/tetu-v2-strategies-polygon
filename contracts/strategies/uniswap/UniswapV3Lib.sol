@@ -6,7 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 
 /// @title Uniswap V3 liquidity management helper
 /// @notice Provides functions for computing liquidity amounts from token amounts and prices
-library UniswapV3Library {
+library UniswapV3Lib {
   uint8 internal constant RESOLUTION = 96;
   uint internal constant Q96 = 0x1000000000000000000000000;
   uint private constant TWO_96 = 2 ** 96;

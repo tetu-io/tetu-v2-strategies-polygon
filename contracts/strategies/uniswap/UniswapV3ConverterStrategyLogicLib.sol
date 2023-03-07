@@ -3,11 +3,11 @@ pragma solidity 0.8.17;
 
 import "../ConverterStrategyBaseLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
-import "./UniswapV3Library.sol";
+import "./UniswapV3Lib.sol";
 
-library UniswapV3ConverterStrategyLogic {
+library UniswapV3ConverterStrategyLogicLib {
   function initDepositor(IUniswapV3Pool pool, int24 tickRange_, address asset_) external view returns(int24 tickSpacing, int24 lowerTick, int24 upperTick, address tokenA, address tokenB, bool _depositorSwapTokens) {
-    tickSpacing = UniswapV3Library.getTickSpacing(pool.fee());
+    tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
     (, int24 tick, , , , ,) = pool.slot0();
     lowerTick = (tick - tickRange_) / tickSpacing * tickSpacing;
     upperTick = (tick + tickRange_) / tickSpacing * tickSpacing;
@@ -31,16 +31,16 @@ library UniswapV3ConverterStrategyLogic {
 
   function addFillup(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing) external returns(int24 lowerTickFillup, int24 upperTickFillup, uint128 liquidityOutFillup) {
     (, int24 tick, , , , ,) = pool.slot0();
-    if (_balance(pool.token0()) > _balance(pool.token1()) * UniswapV3Library.getPrice(address(pool), pool.token1()) / 10**IERC20Metadata(pool.token1()).decimals()) {
+    if (_balance(pool.token0()) > _balance(pool.token1()) * UniswapV3Lib.getPrice(address(pool), pool.token1()) / 10**IERC20Metadata(pool.token1()).decimals()) {
       // add token0 to half range
       lowerTickFillup = tick / tickSpacing * tickSpacing + tickSpacing;
       upperTickFillup = upperTick;
-      (,, liquidityOutFillup) = UniswapV3Library.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, _balance(pool.token0()), 0);
+      (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, _balance(pool.token0()), 0);
       pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
     } else {
       lowerTickFillup = lowerTick;
       upperTickFillup = tick / tickSpacing * tickSpacing - tickSpacing;
-      (,, liquidityOutFillup) = UniswapV3Library.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, 0, _balance(pool.token1()));
+      (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, 0, _balance(pool.token1()));
       pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
     }
   }
@@ -49,14 +49,14 @@ library UniswapV3ConverterStrategyLogic {
     reserves = new uint[](2);
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
 
-    (reserves[0], reserves[1]) = UniswapV3Library.getAmountsForLiquidity(
+    (reserves[0], reserves[1]) = UniswapV3Lib.getAmountsForLiquidity(
       sqrtRatioX96,
       lowerTick,
       upperTick,
       liquidity
     );
 
-    (uint amount0CurrentFillup, uint amount1CurrentFillup) = UniswapV3Library.getAmountsForLiquidity(
+    (uint amount0CurrentFillup, uint amount1CurrentFillup) = UniswapV3Lib.getAmountsForLiquidity(
       sqrtRatioX96,
       lowerTickFillup,
       upperTickFillup,
@@ -77,14 +77,14 @@ library UniswapV3ConverterStrategyLogic {
     amountsOut = new uint[](2);
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
 
-    (amountsOut[0], amountsOut[1]) = UniswapV3Library.getAmountsForLiquidity(
+    (amountsOut[0], amountsOut[1]) = UniswapV3Lib.getAmountsForLiquidity(
       sqrtRatioX96,
       lowerTick,
       upperTick,
         liquidityAmountToExit
     );
 
-    (uint amountOut0Fillup, uint amountOut1Fillup) = UniswapV3Library.getAmountsForLiquidity(
+    (uint amountOut0Fillup, uint amountOut1Fillup) = UniswapV3Lib.getAmountsForLiquidity(
       sqrtRatioX96,
       lowerTickFillup,
       upperTickFillup,
@@ -142,7 +142,7 @@ library UniswapV3ConverterStrategyLogic {
       (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
     }
     uint128 newLiquidity;
-    (amountsConsumed[0], amountsConsumed[1], newLiquidity) = UniswapV3Library.addLiquidityPreview(address(pool), lowerTick, upperTick, amountsDesired_[0], amountsDesired_[1]);
+    (amountsConsumed[0], amountsConsumed[1], newLiquidity) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, amountsDesired_[0], amountsDesired_[1]);
     pool.mint(address(this), lowerTick, upperTick, newLiquidity, "");
     liquidityOut = uint(newLiquidity);
     totalLiquidityNew = totalLiquidity + newLiquidity;
@@ -152,10 +152,10 @@ library UniswapV3ConverterStrategyLogic {
   }
 
   function getFees(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 lowerTickFillup, int24 upperTickFillup, uint128 liquidity, uint128 liquidityFillup) public view returns (uint fee0, uint fee1) {
-    UniswapV3Library.PoolPosition memory position = UniswapV3Library.PoolPosition(address(pool), lowerTick, upperTick, liquidity, address(this));
-    (fee0, fee1) = UniswapV3Library.getFees(position);
-    UniswapV3Library.PoolPosition memory positionFillup = UniswapV3Library.PoolPosition(address(pool), lowerTickFillup, upperTickFillup, liquidityFillup, address(this));
-    (uint fee0Fillup, uint fee1Fillup) = UniswapV3Library.getFees(positionFillup);
+    UniswapV3Lib.PoolPosition memory position = UniswapV3Lib.PoolPosition(address(pool), lowerTick, upperTick, liquidity, address(this));
+    (fee0, fee1) = UniswapV3Lib.getFees(position);
+    UniswapV3Lib.PoolPosition memory positionFillup = UniswapV3Lib.PoolPosition(address(pool), lowerTickFillup, upperTickFillup, liquidityFillup, address(this));
+    (uint fee0Fillup, uint fee1Fillup) = UniswapV3Lib.getFees(positionFillup);
     fee0 += fee0Fillup;
     fee1 += fee1Fillup;
   }
@@ -187,11 +187,19 @@ library UniswapV3ConverterStrategyLogic {
     }
   }
 
-  function rebalanceDebtFullWithSwap(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) external {
+  function rebalanceDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB, bool fillUp) external {
+    if (fillUp) {
+      rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB);
+    } else {
+      rebalanceDebtFullWithSwap(tetuConverter, controller, pool, tokenA, tokenB);
+    }
+  }
+
+  function rebalanceDebtFullWithSwap(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
     (uint debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
 
     if (_balance(tokenB) < debtAmount) {
-      uint needToSellTokenA = UniswapV3Library.getPrice(address(pool), tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
+      uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / 100;
       ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, 5_000, 0);
@@ -215,7 +223,7 @@ library UniswapV3ConverterStrategyLogic {
     );
   }
 
-  function rebalanceDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) external {
+  function rebalanceDebtFillup(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
     (uint debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
     //    console.log('rebalance: collateralAmount in lending', collateralAmount);
     //    console.log('rebalance: debtAmount in lending', debtAmount);
@@ -292,7 +300,7 @@ library UniswapV3ConverterStrategyLogic {
         );
       } else {
 //        console.log('rebalance: not enough tokenB, need swap and full debt rebalance');
-        uint needToSellTokenA = UniswapV3Library.getPrice(address(pool), tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
+        uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
         // add 1% gap for price impact
         needToSellTokenA += needToSellTokenA / 100;
 //        console.log('rebalance: tokenA liquidation amountIn, need to buy tokenB', needToSellTokenA, debtAmount - _balance(tokenB));

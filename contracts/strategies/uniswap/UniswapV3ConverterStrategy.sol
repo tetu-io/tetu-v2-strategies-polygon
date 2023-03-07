@@ -3,7 +3,7 @@ pragma solidity 0.8.17;
 
 import "../ConverterStrategyBase.sol";
 import "./UniswapV3Depositor.sol";
-import "./UniswapV3ConverterStrategyLogic.sol";
+import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../ConverterStrategyBaseLib.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up strategy for UniswapV3
@@ -64,6 +64,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function rebalance() public {
     require(needRebalance(), "No rebalancing needed");
 
+    // upperTick always greate then lowerTick
     bool fillUp = upperTick - lowerTick >= 4;
 
 //    console.log('rebalance: start');
@@ -79,11 +80,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // close univ3 base and fillup positions
     _depositorEmergencyExit();
 
-    if (fillUp) {
-      UniswapV3ConverterStrategyLogic.rebalanceDebt(converter, controller(), pool, tokenA, tokenB);
-    } else {
-      UniswapV3ConverterStrategyLogic.rebalanceDebtFullWithSwap(converter, controller(), pool, tokenA, tokenB);
-    }
+    UniswapV3ConverterStrategyLogicLib.rebalanceDebt(converter, controller(), pool, tokenA, tokenB, fillUp);
 
     _setNewTickRange();
 
@@ -94,14 +91,22 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // add fillup liquidity
     if (fillUp) {
-      (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogic.addFillup(pool, lowerTick, upperTick, tickSpacing);
+      (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(pool, lowerTick, upperTick, tickSpacing);
     }
 
     // adjust base-amounts
     uint balanceOfTokenAAfter = _balance(tokenA);
     uint balanceOfTokenBAfter = _balance(tokenB);
-    _updateBaseAmountsForAsset(tokenA, balanceOfTokenABefore > balanceOfTokenAAfter ? 0 : balanceOfTokenAAfter - balanceOfTokenABefore, balanceOfTokenABefore > balanceOfTokenAAfter ? balanceOfTokenABefore - balanceOfTokenAAfter : 0);
-    _updateBaseAmountsForAsset(tokenB, balanceOfTokenBBefore > balanceOfTokenBAfter ? 0 : balanceOfTokenBAfter - balanceOfTokenBBefore, balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0);
+    _updateBaseAmountsForAsset(
+      tokenA,
+      balanceOfTokenABefore > balanceOfTokenAAfter ? 0 : balanceOfTokenAAfter - balanceOfTokenABefore,
+      balanceOfTokenABefore > balanceOfTokenAAfter ? balanceOfTokenABefore - balanceOfTokenAAfter : 0
+    );
+    _updateBaseAmountsForAsset(
+      tokenB,
+      balanceOfTokenBBefore > balanceOfTokenBAfter ? 0 : balanceOfTokenBAfter - balanceOfTokenBBefore,
+      balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0
+    );
 
     // adjust _investedAssets
     _updateInvestedAssets();

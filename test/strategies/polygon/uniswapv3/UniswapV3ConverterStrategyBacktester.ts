@@ -34,7 +34,7 @@ import {
   UniswapV3Callee,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-  UniswapV3Factory, UniswapV3Library,
+  UniswapV3Factory, UniswapV3Lib,
   UniswapV3Pool,
   UniswapV3Pool__factory,
   VaultFactory,
@@ -117,7 +117,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // uniswap v3
   let uniswapV3Factory: UniswapV3Factory;
   let uniswapV3Calee: UniswapV3Callee
-  let uniswapV3Helper: UniswapV3Library
+  let uniswapV3Helper: UniswapV3Lib
   let wmaticUsdc005Pool: UniswapV3Pool;
   let usdcWeth005Pool: UniswapV3Pool;
   let usdcDai001Pool: UniswapV3Pool;
@@ -186,7 +186,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     // tetuUsdc pool need for strategy testing with compoundRatio < 100%
     await (await uniswapV3Factory.createPool(tetu.address, USDC.address, 500)).wait()
     const tetuUsdc500Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(tetu.address, USDC.address, 500), signer)
-    uniswapV3Helper = await DeployerUtils.deployContract(signer, "UniswapV3Library") as UniswapV3Library
+    uniswapV3Helper = await DeployerUtils.deployContract(signer, "UniswapV3Lib") as UniswapV3Lib
     uniswapV3Calee = await DeployerUtils.deployContract(signer, "UniswapV3Callee") as UniswapV3Callee
     await USDC.approve(uniswapV3Calee.address, parseUnits(mintAmount, 6))
     await WETH.approve(uniswapV3Calee.address, parseUnits(mintAmount))
@@ -924,7 +924,7 @@ async function strategyBacktest(
   vault: TetuVaultV2,
   strategy: UniswapV3ConverterStrategy,
   uniswapV3Calee: UniswapV3Callee,
-  uniswapV3Helper: UniswapV3Library,
+  uniswapV3Helper: UniswapV3Lib,
   liquiditySnapshot: IPoolLiquiditySnapshot,
   investAmount: BigNumber,
   backtestStartBlock: number,
