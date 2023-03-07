@@ -6,6 +6,8 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/IConverterController.sol";
@@ -48,7 +50,7 @@ library ConverterStrategyBaseLib {
     address[] tokens;
     /// @notice Index of the main asset in {tokens_}
     uint indexAsset;
-    ITetuConverter tetuConverter;
+    ITetuConverter converter;
     /// @notice Total amount of invested assets of the strategy
     uint investedAssets;
   }
@@ -81,6 +83,24 @@ library ConverterStrategyBaseLib {
     uint[] debts;
   }
 
+  struct ConvertAfterWithdrawInputParams {
+    ITetuConverter tetuConverter;
+    ITetuLiquidator liquidator;
+    uint liquidationThreshold;
+    /// @notice Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
+    address[] tokens;
+    /// Index of main {asset} in {tokens}
+    uint indexAsset;
+    uint[] amountsToConvert;
+  }
+
+  struct ConvertAfterWithdrawLocalParams {
+    address asset;
+    uint collateral;
+    uint spentAmountIn;
+    uint receivedAmountOut;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                        Constants
   /////////////////////////////////////////////////////////////////////
@@ -89,7 +109,8 @@ library ConverterStrategyBaseLib {
   uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
   uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant COMPOUND_DENOMINATOR = 100_000;
-
+  uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
+  uint private constant PRICE_IMPACT_TOLERANCE = 2_000; // 2%
 
   /////////////////////////////////////////////////////////////////////
   ///                         Events
@@ -177,7 +198,7 @@ library ConverterStrategyBaseLib {
     tokenAmountsOut = new uint[](len);
 
     // get token prices and decimals
-    (uint[] memory prices, uint[] memory decs) = getPricesAndDecs(priceOracle, tokens_, len);
+    (uint[] memory prices, uint[] memory decs) = _getPricesAndDecs(priceOracle, tokens_, len);
 
     // split the amount on tokens proportionally to the weights
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
@@ -203,7 +224,7 @@ library ConverterStrategyBaseLib {
 
   /// @return prices Prices with decimals 18
   /// @return decs 10**decimals
-  function getPricesAndDecs(IPriceOracle priceOracle, address[] memory tokens_, uint len) internal view returns (
+  function _getPricesAndDecs(IPriceOracle priceOracle, address[] memory tokens_, uint len) internal view returns (
     uint[] memory prices,
     uint[] memory decs
   ) {
@@ -263,7 +284,7 @@ library ConverterStrategyBaseLib {
     mapping(address => uint) storage baseAmounts_,
     address strategy_,
     LiquidityAmountRatioInputParams memory params_
-  ) internal returns (
+  ) external returns (
     uint liquidityRatioOut,
     uint[] memory amountsToConvertOut
   ) {
@@ -278,7 +299,7 @@ library ConverterStrategyBaseLib {
       uint baseAmount = baseAmounts_[params_.tokens[i]];
       if (baseAmount != 0) {
         // let's estimate collateral that we received back after repaying baseAmount
-        uint expectedCollateral = params_.tetuConverter.quoteRepay(
+        uint expectedCollateral = params_.converter.quoteRepay(
           strategy_,
           params_.tokens[params_.indexAsset],
           params_.tokens[i],
@@ -521,12 +542,12 @@ library ConverterStrategyBaseLib {
   /// @param amountToRepay Amount to repay in terms of {borrowAsset}
   /// @return returnedAssetAmountOut Amount of collateral received back after repaying
   /// @return repaidAmountOut Amount that was actually repaid
-  function closePosition(
+  function _closePosition(
     ITetuConverter tetuConverter_,
     address collateralAsset,
     address borrowAsset,
     uint amountToRepay
-  ) external returns (
+  ) internal returns (
     uint returnedAssetAmountOut,
     uint repaidAmountOut
   ) {
@@ -568,6 +589,22 @@ library ConverterStrategyBaseLib {
       : 0;
 
     require(returnedBorrowAmountOut == 0, AppErrors.REPAY_MAKES_SWAP);
+  }
+
+  /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
+  /// @param amountToRepay Amount to repay in terms of {borrowAsset}
+  /// @return returnedAssetAmountOut Amount of collateral received back after repaying
+  /// @return repaidAmountOut Amount that was actually repaid
+  function closePosition(
+    ITetuConverter tetuConverter_,
+    address collateralAsset,
+    address borrowAsset,
+    uint amountToRepay
+  ) external returns (
+    uint returnedAssetAmountOut,
+    uint repaidAmountOut
+  ) {
+    return _closePosition(tetuConverter_, collateralAsset, borrowAsset, amountToRepay);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -783,7 +820,7 @@ library ConverterStrategyBaseLib {
     v.len = tokens.length;
 
     // calculate prices, decimals
-    (v.prices, v.decs) = getPricesAndDecs(
+    (v.prices, v.decs) = _getPricesAndDecs(
       IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
       tokens,
       v.len
@@ -829,6 +866,114 @@ library ConverterStrategyBaseLib {
           amountOut = 0;
         } else {
           amountOut -= debtInAsset;
+        }
+      }
+    }
+
+    return amountOut;
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                      convertAfterWithdraw
+  /////////////////////////////////////////////////////////////////////
+  /// @notice Convert {p.amountsToConvert_} to the main asset
+  /// @return collateralOut Total amount of collateral returned after closing positions
+  /// @return repaidAmountsOut What amounts were spent in exchange of the {collateralOut}
+  function convertAfterWithdraw(ConvertAfterWithdrawInputParams memory p) external returns (
+    uint collateralOut,
+    uint[] memory repaidAmountsOut
+  ) {
+    ConvertAfterWithdrawLocalParams memory vars;
+    vars.asset = p.tokens[p.indexAsset];
+
+    uint len = p.tokens.length;
+    repaidAmountsOut = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == p.indexAsset) continue;
+      (vars.collateral, repaidAmountsOut[i]) = _closePosition(
+        p.tetuConverter,
+        vars.asset,
+        p.tokens[i],
+        p.amountsToConvert[i]
+      );
+      collateralOut += vars.collateral;
+    }
+
+    // Manually swap remain leftovers
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == p.indexAsset) continue;
+      if (p.amountsToConvert[i] > repaidAmountsOut[i]) {
+        (vars.spentAmountIn, vars.receivedAmountOut) = _liquidate(
+          p.liquidator,
+          p.tokens[i],
+          vars.asset,
+          p.amountsToConvert[i] - repaidAmountsOut[i],
+          _ASSET_LIQUIDATION_SLIPPAGE,
+          p.liquidationThreshold
+        );
+        if (vars.receivedAmountOut != 0) {
+          collateralOut += vars.receivedAmountOut;
+        }
+        if (vars.spentAmountIn != 0) {
+          repaidAmountsOut[i] += vars.spentAmountIn;
+          require(
+            p.tetuConverter.isConversionValid(
+              p.tokens[i],
+              vars.spentAmountIn,
+              vars.asset,
+              vars.receivedAmountOut,
+              PRICE_IMPACT_TOLERANCE
+            ),
+            AppErrors.PRICE_IMPACT
+          );
+        }
+      }
+    }
+
+    return (collateralOut, repaidAmountsOut);
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                      sendTokensToForwarder
+  /////////////////////////////////////////////////////////////////////
+  function sendTokensToForwarder(
+    address controller_,
+    address splitter_,
+    address[] memory tokens_,
+    uint[] memory amounts_
+  ) external {
+    uint len = tokens_.length;
+    IForwarder forwarder = IForwarder(IController(controller_).forwarder());
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
+    }
+
+    forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                      getExpectedAmountMainAsset
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Calculate expected amount of the main asset after withdrawing
+  /// @param withdrawnAmounts_ Expected amounts to be withdrawn from the pool
+  /// @param amountsToConvert_ Amounts on balance initially available for the conversion
+  /// @return amountOut Expected amount of the main asset
+  function getExpectedAmountMainAsset(
+    LiquidityAmountRatioInputParams memory vars,
+    uint[] memory withdrawnAmounts_,
+    uint[] memory amountsToConvert_
+  ) external returns (
+    uint amountOut
+  ) {
+    uint len = vars.tokens.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == vars.indexAsset) {
+        amountOut += withdrawnAmounts_[i];
+      } else {
+        uint amount = withdrawnAmounts_[i] + amountsToConvert_[i];
+        if (amount != 0) {
+          amountOut += vars.converter.quoteRepay(address(this), vars.tokens[vars.indexAsset], vars.tokens[i], amount);
         }
       }
     }

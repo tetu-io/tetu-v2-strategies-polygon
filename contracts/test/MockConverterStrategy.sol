@@ -49,10 +49,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _updateBaseAmounts(tokens_, receivedAmounts_, spentAmounts_, indexAsset_, amountAsset_);
   }
 
-  function _updateBaseAmountsForAssetAccesss(address asset_, uint amount_, bool increased_) external {
-    return _updateBaseAmountsForAsset(asset_, amount_, increased_);
-  }
-
   function _convertAfterWithdrawAccess(
     address[] memory tokens_,
     uint indexAsset_,
@@ -78,7 +74,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint returnedAssetAmount,
     uint leftover
   ) {
-    return ConverterStrategyBaseLib.closePosition(tetuConverter, collateralAsset, borrowAsset, amountToRepay);
+    return ConverterStrategyBaseLib.closePosition(converter, collateralAsset, borrowAsset, amountToRepay);
   }
 
   function updateInvestedAssetsTestAccess() external {

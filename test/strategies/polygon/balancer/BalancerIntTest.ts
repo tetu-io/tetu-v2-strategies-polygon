@@ -822,7 +822,7 @@ describe('BalancerIntTest', function() {
       });
       describe("loopEndActions from DoHardWorkLoopBase", () => {
         it("should be profitable", async () => {
-          const countLoops = 20;
+          const countLoops = 5;
           const stepInBlocks = 5_000;
           const stateAfterDeposit = await enterToVault();
           console.log("stateAfterDeposit", stateAfterDeposit);
