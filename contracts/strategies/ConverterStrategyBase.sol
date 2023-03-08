@@ -148,13 +148,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     int totalAssetsDelta
   ){
-    uint __investedAssets = _investedAssets;
-    uint updatedInvestedAssets = updateTotalAssetsBeforeInvest_
-      ? _updateInvestedAssets()
-      : __investedAssets;
-    totalAssetsDelta = updateTotalAssetsBeforeInvest_
-      ? int(updatedInvestedAssets) - int(__investedAssets)
-      : int(0);
+    uint updatedInvestedAssets;
+    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
 
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
@@ -258,9 +253,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     int totalAssetsDelta
   ) {
-    uint __investedAssets = _investedAssets;
-    uint updatedInvestedAssets = _updateInvestedAssets();
-    totalAssetsDelta = int(updatedInvestedAssets) - int(__investedAssets);
+    uint updatedInvestedAssets;
+    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(true);
 
     require(updatedInvestedAssets != 0, AppErrors.NO_INVESTMENTS);
     (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
@@ -276,9 +270,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     int totalAssetsDelta
   ) {
-    uint __investedAssets = _investedAssets;
-    uint updatedInvestedAssets = _updateInvestedAssets();
-    totalAssetsDelta = int(updatedInvestedAssets) - int(__investedAssets);
+    uint updatedInvestedAssets;
+    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(true);
 
     (investedAssetsUSD, assetPrice) = _withdrawUniversal(0, true, updatedInvestedAssets);
   }
@@ -651,6 +644,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   function calcInvestedAssets() external returns (uint) {
     return _calcInvestedAssets();
+  }
+
+  /// @notice Update invested assets and return delta [new-investedAssets - old-investedAssets]
+  /// @param updateTotalAssetsBeforeInvest_ If false - skip update, return delta = 0
+  function _updateInvestedAssetsAndGetDelta(bool updateTotalAssetsBeforeInvest_) internal returns (
+    uint updatedInvestedAssets,
+    int totalAssetsDelta
+  ) {
+    uint __investedAssets = _investedAssets;
+    updatedInvestedAssets = updateTotalAssetsBeforeInvest_
+      ? _updateInvestedAssets()
+      : __investedAssets;
+    totalAssetsDelta = updateTotalAssetsBeforeInvest_
+      ? int(updatedInvestedAssets) - int(__investedAssets)
+      : int(0);
   }
 
   /////////////////////////////////////////////////////////////////////

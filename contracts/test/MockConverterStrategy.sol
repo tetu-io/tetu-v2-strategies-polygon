@@ -237,4 +237,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
   }
+
+  function _updateInvestedAssetsAndGetDeltaAccess(bool updateTotalAssetsBeforeInvest_) external returns (
+    uint updatedInvestedAssets,
+    int totalAssetsDelta
+  ) {
+    return _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
+  }
 }

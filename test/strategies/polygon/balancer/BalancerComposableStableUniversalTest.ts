@@ -107,7 +107,7 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
       }
     }
 
-    const deployer = async (signer: SignerWithAddress) => UniversalTestUtils.makeStrategyDeployer(
+    const deployer = async (signer: SignerWithAddress) => UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
       signer,
       core,
       asset,

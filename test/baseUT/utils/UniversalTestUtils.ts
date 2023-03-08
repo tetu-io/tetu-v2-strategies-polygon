@@ -1,4 +1,4 @@
-import {BigNumber, ContractReceipt, ContractTransaction} from "ethers";
+import {BigNumber, ContractReceipt, ContractTransaction, Signer} from "ethers";
 import hre from "hardhat";
 import {
   BalancerComposableStableStrategy__factory, ControllerV2__factory,
@@ -16,6 +16,7 @@ import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/Dep
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {Misc} from "../../../scripts/utils/Misc";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {Provider} from "@ethersproject/providers";
 
 export interface IMakeStrategyDeployerInputParams {
   vaultName?: string;
@@ -47,15 +48,14 @@ export class UniversalTestUtils {
     asset: string,
     tetuConverterAddress: string,
     strategyName: string,
+    strategyFactory: (strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => Promise<IStrategyV2>,
     params?: IMakeStrategyDeployerInputParams
   ) : Promise<IVaultStrategyInfo> {
     const controller = DeployerUtilsLocal.getController(signer);
 
     const strategyDeployer = async (splitterAddress: string) => {
       const strategyProxy = await DeployerUtils.deployProxy(signer, strategyName);
-      const strategy = BalancerComposableStableStrategy__factory.connect(strategyProxy, signer);
-      await strategy.init(core.controller, splitterAddress, tetuConverterAddress);
-      return strategy as unknown as IStrategyV2;
+      return strategyFactory(strategyProxy, signer, splitterAddress);
     }
 
     const governance = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -70,6 +70,29 @@ export class UniversalTestUtils {
       params?.withdrawFee || 500,
       params?.wait || false
     );
+  }
+
+  public static async makeBalancerComposableStableStrategyDeployer(
+    signer: SignerWithAddress,
+    core: CoreAddresses,
+    asset: string,
+    tetuConverterAddress: string,
+    strategyName: string,
+    params?: IMakeStrategyDeployerInputParams
+  ) : Promise<IVaultStrategyInfo> {
+    return this.makeStrategyDeployer(
+      signer,
+      core,
+      asset,
+      tetuConverterAddress,
+      strategyName,
+      async (strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
+        const strategy = BalancerComposableStableStrategy__factory.connect(strategyProxy, signer);
+        await strategy.init(core.controller, splitterAddress, tetuConverterAddress);
+        return strategy as unknown as IStrategyV2;
+      },
+      params
+    )
   }
 
   public static async setCompoundRatio(strategy: IStrategyV2, user: SignerWithAddress, compoundRate?: number) {

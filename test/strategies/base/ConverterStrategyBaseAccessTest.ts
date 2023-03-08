@@ -2290,6 +2290,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
       baseAmounts?: ITokenAmount[];
       initialBalances?: ITokenAmount[];
       borrows?: IBorrowParams[];
+      updateTotalAssetsBeforeInvest?: boolean;
     }
     interface IDepositToPoolTestResults {
       gasUsed: BigNumber;
@@ -2299,6 +2300,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
       investedAssetsValueBefore: BigNumber;
       investedAssetsValueAfter: BigNumber;
+
+      totalAssetsDelta: BigNumber;
     }
     async function makeDepositToPoolTest(
       amount: BigNumber,
@@ -2384,7 +2387,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
       await setupInvestedAssets(liquidityOut, parseUnits("1", 18));
       const investedAssetsValueBefore = await strategy.investedAssets();
 
-      const tx = await strategy._depositToPoolAccess(amount, false);
+      const totalAssetsDelta = await strategy.callStatic._depositToPoolAccess(amount, params?.updateTotalAssetsBeforeInvest || false);
+
+      const tx = await strategy._depositToPoolAccess(amount, params?.updateTotalAssetsBeforeInvest || false);
       const gasUsed = (await tx.wait()).gasUsed;
 
       const baseAmounts = await Promise.all(depositorTokens.map(
@@ -2399,7 +2404,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
         strategyBalances,
         baseAmounts,
         investedAssetsValueBefore,
-        investedAssetsValueAfter: await strategy.investedAssets()
+        investedAssetsValueAfter: await strategy.investedAssets(),
+        totalAssetsDelta
       }
     }
 
@@ -2482,6 +2488,9 @@ describe("ConverterStrategyBaseAccessTest", () => {
           controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_DEPOSIT_TO_POOL, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
+        });
+        it("Should return zero totalAssetsDelta", async () => {
+          expect(results.totalAssetsDelta.eq(0)).eq(true);
         });
       });
     });

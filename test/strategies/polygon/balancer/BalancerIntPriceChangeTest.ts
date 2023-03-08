@@ -7,30 +7,17 @@ import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/Core
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
-  getAaveTwoPlatformAdapter,
   getConverterAddress,
-  getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter, Misc
+  Misc
 } from "../../../../scripts/utils/Misc";
 import {BalancerIntTestUtils, IPutInitialAmountsBalancesResults, IState} from "./utils/BalancerIntTestUtils";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {
-  Aave3AggregatorInterfaceMock,
   BalancerComposableStableStrategy,
-  BalancerComposableStableStrategy__factory,
   ControllerV2__factory,
-  IAave3PriceOracle,
-  IAave3PriceOracle__factory, IBalancerBoostedAavePool__factory,
-  IBalancerBoostedAaveStablePool__factory,
-  IBVault__factory,
-  IConverterController__factory,
   IERC20__factory,
-  IPriceOracle,
-  IPriceOracle__factory,
   ISplitter,
   ISplitter__factory,
   IStrategyV2,
-  ITetuConverter__factory,
   ITetuLiquidator,
   TetuVaultV2
 } from "../../../../typechain";
@@ -38,21 +25,11 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {ICoreContractsWrapper} from "../../../CoreContractsWrapper";
 import {IToolsContractsWrapper} from "../../../ToolsContractsWrapper";
-import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {BigNumber} from "ethers";
 import {VaultUtils} from "../../../VaultUtils";
-import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
+import {parseUnits} from "ethers/lib/utils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
-import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
-import {
-  GAS_DEPOSIT_SIGNER, GAS_EMERGENCY_EXIT,
-  GAS_FIRST_HARDWORK, GAS_HARDWORK_WITH_REWARDS,
-  GAS_WITHDRAW_ALL_TO_SPLITTER
-} from "../../../baseUT/GasLimits";
-import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {MaticHolders} from "../../../../scripts/MaticHolders";
 import {BalancerDaiUsdcUsdtPoolUtils} from "./utils/BalancerDaiUsdcUsdtPoolUtils";
 import {LiquidatorUtils} from "./utils/LiquidatorUtils";
@@ -207,7 +184,7 @@ describe('BalancerIntPriceChangeTest', function() {
       core = await DeployerUtilsLocal.getCoreAddressesWrapper(signer);
       tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
 
-      const data = await UniversalTestUtils.makeStrategyDeployer(
+      const data = await UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
         signer,
         addresses,
         MAIN_ASSET,
@@ -362,12 +339,9 @@ describe('BalancerIntPriceChangeTest', function() {
       });
     });
 
-    /**
-     * Any deposit/withdraw/hardwork operation shouldn't change sharedPrice (at least significantly)
-     */
-    describe("Ensure share price is not changed", () => {
+    describe("Reduce share price after price changing", () => {
       describe("Deposit", () => {
-        it("should not change sharePrice, small deposit", async () => {
+        it("should reduce sharePrice, small deposit", async () => {
           const stateInitial = await enterToVault();
 
           // let's allow strategy to invest all available amount
@@ -392,8 +366,6 @@ describe('BalancerIntPriceChangeTest', function() {
 
           const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
-
           console.log("State before", stateBefore);
           console.log("State after", stateAfter);
 
@@ -405,9 +377,14 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.abs().lte(1)).eq(true);
+          const ret = [
+            stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
+            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc)
+          ].join();
+          const expected = [true, true].join();
+          expect(ret).eq(expected);
         });
-        it("should not change sharePrice, huge deposit", async () => {
+        it("should reduce sharePrice, huge deposit", async () => {
           await enterToVault();
 
           // let's allow strategy to invest all available amount
@@ -432,8 +409,6 @@ describe('BalancerIntPriceChangeTest', function() {
 
           const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
-
           console.log("State before", stateBefore);
           console.log("State after", stateAfter);
 
@@ -445,11 +420,16 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.abs().lte(1)).eq(true);
+          const ret = [
+            stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
+            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc)
+          ].join();
+          const expected = [true, true].join();
+          expect(ret).eq(expected);
         });
       });
       describe("Withdraw almost most allowed amount", () => {
-        it("should return expected values", async () => {
+        it("should reduce sharePrice", async () => {
           const stateInitial = await enterToVault();
           console.log("stateInitial", stateInitial);
 
@@ -475,7 +455,6 @@ describe('BalancerIntPriceChangeTest', function() {
 
           const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
           console.log("stateBefore", stateBefore);
           console.log("stateAfter", stateAfter);
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
@@ -486,11 +465,16 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.abs().lte(1)).eq(true);
+          const ret = [
+            stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
+            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc)
+          ].join();
+          const expected = [true, true].join();
+          expect(ret).eq(expected);
         });
       });
       describe("WithdrawAll", () => {
-        it("should return expected values", async () => {
+        it("should reduce sharePrice", async () => {
           const stateInitial = await enterToVault();
           console.log("stateInitial", stateInitial);
 
@@ -509,7 +493,6 @@ describe('BalancerIntPriceChangeTest', function() {
 
           const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "after");
 
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
           console.log("stateBefore", stateBefore);
           console.log("stateAfter", stateAfter);
           console.log("Share price before", stateBefore.vault.sharePrice.toString());
@@ -520,7 +503,12 @@ describe('BalancerIntPriceChangeTest', function() {
             [stateBefore, stateAfter]
           );
 
-          expect(ret.abs().lte(1)).eq(true);
+          const ret = [
+            stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
+            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc)
+          ].join();
+          const expected = [true, true].join();
+          expect(ret).eq(expected);
         });
       });
 //       describe("Hardwork", () => {

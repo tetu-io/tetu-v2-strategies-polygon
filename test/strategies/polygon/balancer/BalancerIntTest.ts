@@ -129,7 +129,7 @@ describe('BalancerIntTest', function() {
       core = await DeployerUtilsLocal.getCoreAddressesWrapper(signer);
       tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
 
-      const data = await UniversalTestUtils.makeStrategyDeployer(
+      const data = await UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
         signer,
         addresses,
         MAIN_ASSET,
