@@ -259,7 +259,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens: [dai.address, usdc.address, usdt.address],
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([],1, [],[])
+                converter: getTetuConverter([],1, [],[])
               }
             )
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -296,7 +296,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -335,7 +335,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -374,7 +374,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -400,7 +400,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens: [dai.address, usdc.address, usdt.address],
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([],1, [],[])
+                converter: getTetuConverter([],1, [],[])
               }
             )
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -437,7 +437,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -480,7 +480,7 @@ describe("ConverterStrategyBaseLibTest", () => {
             indexAsset: 1,
             tokens,
             investedAssets: parseUnits("500", 6),
-            tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+            converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
           }
         );
 

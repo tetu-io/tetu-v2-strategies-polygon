@@ -92,6 +92,7 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
 
 //region Unit tests
   describe("Use single strategy ConverterStrategyBaseBalancerAccess", () => {
+//region constants, variables, before, after
     const COMPOUND_RATIO = 50_000;
     const REINVEST_THRESHOLD_PERCENT = 1_000;
     const DEPOSIT_AMOUNT = 100_000;
@@ -192,6 +193,7 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
     afterEach(async function () {
       await TimeUtils.rollback(localSnapshot);
     });
+//endregion constants, variables, before, after
 
     describe("_depositToPoolAccess", () => {
       it("should return expected totalAssetsDelta, updateTotalAssetsBeforeInvest_ = true", async () => {

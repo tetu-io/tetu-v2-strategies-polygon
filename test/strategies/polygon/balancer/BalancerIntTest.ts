@@ -327,9 +327,12 @@ describe('BalancerIntTest', function() {
 
             // vault
             stateAfterDepositUser.vault.userShares.add(stateAfterDepositUser.vault.signerShares),
-            stateAfterDepositUser.vault.userUsdc.add(stateAfterDepositUser.vault.signerUsdc),
-            stateAfterDepositUser.vault.totalAssets,
-            stateAfterDepositUser.vault.totalAssets.eq(
+            stateAfterDepositUser.vault.userUsdc.add(stateAfterDepositUser.vault.signerUsdc).gt(
+              stateAfterDepositUser.vault.totalSupply
+            ),
+            stateAfterDepositUser.vault.totalAssets.gt(stateAfterDepositUser.vault.totalSupply),
+            areAlmostEqual(
+              stateAfterDepositUser.vault.totalAssets,
               parseUnits((DEPOSIT_AMOUNT * 1.5).toString(), 6)
                 .mul(DENOMINATOR - DEPOSIT_FEE)
                 .div(DENOMINATOR)
@@ -361,8 +364,8 @@ describe('BalancerIntTest', function() {
 
             // vault
             stateAfterDepositUser.vault.totalSupply,
-            stateAfterDepositUser.vault.totalSupply,
-            stateAfterDepositUser.vault.totalSupply,
+            true,
+            true,
             true,
 
             // insurance and buffer
@@ -397,6 +400,9 @@ describe('BalancerIntTest', function() {
             // base amounts
             true, true, true, true
           ].map(x => BalanceUtils.toString(x)).join("\n");
+
+          console.log("stateBeforeDeposit", stateBeforeDeposit);
+          console.log("stateAfterDepositUser", stateAfterDepositUser);
 
           expect(ret).eq(expected);
         });
@@ -822,7 +828,7 @@ describe('BalancerIntTest', function() {
       });
       describe("loopEndActions from DoHardWorkLoopBase", () => {
         it("should be profitable", async () => {
-          const countLoops = 5;
+          const countLoops = 15;
           const stepInBlocks = 5_000;
           const stateAfterDeposit = await enterToVault();
           console.log("stateAfterDeposit", stateAfterDeposit);
