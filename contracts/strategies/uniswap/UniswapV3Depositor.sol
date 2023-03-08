@@ -33,7 +33,6 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ///         true:  tokenB == pool.token1
   bool internal _depositorSwapTokens;
 
-  /// @dev Total fractional shares of Uniswap V3 position
   uint128 internal totalLiquidity;
   uint128 internal totalLiquidityFillup;
 
@@ -46,10 +45,10 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     int24 tickRange_,
     int24 rebalanceTickRange_
   ) internal onlyInitializing {
-    require(pool_ != address(0) && tickRange_ != 0 && rebalanceTickRange_ != 0, AppErrors.ZERO_ADDRESS);
+    require(pool_ != address(0), AppErrors.ZERO_ADDRESS);
     pool = IUniswapV3Pool(pool_);
     rebalanceTickRange = rebalanceTickRange_;
-    (tickSpacing, lowerTick, upperTick, tokenA, tokenB, _depositorSwapTokens) = UniswapV3ConverterStrategyLogicLib.initDepositor(pool, tickRange_, asset_);
+    (tickSpacing, lowerTick, upperTick, tokenA, tokenB, _depositorSwapTokens) = UniswapV3ConverterStrategyLogicLib.initDepositor(pool, tickRange_, rebalanceTickRange_, asset_);
   }
 
   function _setNewTickRange() internal {
@@ -110,7 +109,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /////////////////////////////////////////////////////////////////////
 
   function needRebalance() public view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.needRebalance(pool, lowerTick, upperTick, rebalanceTickRange);
+    return UniswapV3ConverterStrategyLogicLib.needRebalance(pool, lowerTick, upperTick, rebalanceTickRange, tickSpacing);
   }
 
   function getFees() internal view returns (uint fee0, uint fee1) {

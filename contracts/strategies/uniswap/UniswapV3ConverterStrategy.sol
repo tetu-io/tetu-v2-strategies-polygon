@@ -4,9 +4,8 @@ pragma solidity 0.8.17;
 import "../ConverterStrategyBase.sol";
 import "./UniswapV3Depositor.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
-import "../ConverterStrategyBaseLib.sol";
 
-/// @title Delta-neutral liquidity hedging converter fill-up strategy for UniswapV3
+/// @title Delta-neutral liquidity hedging converter fill-up/swap strategy for UniswapV3
 /// @author a17
 contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase {
   string public constant override NAME = "UniswapV3 Converter Strategy";
@@ -28,23 +27,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     IERC20(tokenB).approve(liquidator, type(uint).max);
   }
 
-  /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  function _handleRewards() override internal returns (uint earned, uint lost) {
-//    console.log('UniswapV3ConverterStrategy _handleRewards');
-
-    uint assetBalanceBefore = _balance(asset);
-    _claim();
-    uint assetBalanceAfterClaim = _balance(asset);
-
-    if (assetBalanceAfterClaim > assetBalanceBefore) {
-      earned += assetBalanceAfterClaim - assetBalanceBefore;
-    } else {
-      lost += assetBalanceBefore - assetBalanceAfterClaim;
-    }
-
-    return (earned, lost);
-  }
-
   /// @notice Is strategy ready to hard work
   function isReadyToHardWork() override external virtual view returns (bool) {
     // check claimable amounts and compare with thresholds
@@ -56,28 +38,22 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       (fee0, fee1) = (fee1, fee0);
     }
 
-//    console.log('isReadyToHardWork fee0', fee0);
-//    console.log('isReadyToHardWork fee1', fee1);
     return fee0 > liquidationThresholds[tokenA] || fee1 > liquidationThresholds[tokenB];
   }
 
   function rebalance() public {
     require(needRebalance(), "No rebalancing needed");
 
-    // upperTick always greate then lowerTick
-    bool fillUp = upperTick - lowerTick >= 4;
+    // upperTick always greater then lowerTick
+    bool fillUp = upperTick - lowerTick >= 4 * tickSpacing;
 
-//    console.log('rebalance: start');
     (uint fee0, uint fee1) = getFees();
     rebalanceEarned0 += fee0;
     rebalanceEarned1 += fee1;
 
     uint balanceOfTokenABefore = _balance(tokenA);
     uint balanceOfTokenBBefore = _balance(tokenB);
-//    console.log('rebalance: balanceOfTokenABefore', balanceOfTokenABefore);
-//    console.log('rebalance: balanceOfTokenBBefore', balanceOfTokenBBefore);
 
-    // close univ3 base and fillup positions
     _depositorEmergencyExit();
 
     UniswapV3ConverterStrategyLogicLib.rebalanceDebt(converter, controller(), pool, tokenA, tokenB, fillUp);
@@ -89,12 +65,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     tokenAmounts[1] = _balance(tokenB);
     _depositorEnter(tokenAmounts);
 
-    // add fillup liquidity
     if (fillUp) {
       (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(pool, lowerTick, upperTick, tickSpacing);
     }
 
-    // adjust base-amounts
     uint balanceOfTokenAAfter = _balance(tokenA);
     uint balanceOfTokenBAfter = _balance(tokenB);
     _updateBaseAmountsForAsset(
@@ -108,7 +82,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0
     );
 
-    // adjust _investedAssets
     _updateInvestedAssets();
   }
 }

@@ -58,12 +58,19 @@ const { expect } = chai;
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
-  const backtestStartBlock = 39530000 // Feb-21-2023 01:02:34 AM +UTC
-  const backtestEndBlock = 39570000 // Feb-22-2023 01:40:46 AM +UTC
+  // 38500000 - Jan-25-2023 07:13:46 AM +UTC
+  // 39000000 - Feb-07-2023 01:57:19 AM +UTC
+  // 39200000 - Feb-12-2023 06:53:45 AM +UTC
+  // 39500000 - Feb-20-2023 06:42:10 AM +UTC
+  // 39530000 - Feb-21-2023 01:02:34 AM +UTC
+  // 39570000 - Feb-22-2023 01:40:46 AM +UTC
+  // 40000000 - Mar-05-2023 05:00:45 PM +UTC
+  const backtestStartBlock = 39200000
+  const backtestEndBlock = 39500000
   const investAmount = parseUnits('1000', 6) // 1k USDC
   const txLimit = 0 // 0 - unlimited
-  const disableBurns = true // backtest is 5x slower with enabled burns
-  const disableMints = true
+  const disableBurns = false // backtest is 5x slower with enabled burns for volatile pools
+  const disableMints = false
   const testStrategies = {
     usdcWeth005: true, // USDC_WETH_0.05%
     wmaticUsdc005: true, // WMATIC_USDC_0.05%
@@ -77,8 +84,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const strategy005TickRange = 1200 // +- 12% price
   const strategy005RebalanceTickRange = 40 // +- 0.4% price change
   // 0.01% fee pools
-  const strategy001TickRange = 1 // +- 0.05% price
-  const strategy001RebalanceTickRange = 1 // +- 0.01% price change
+  const strategy001TickRange = 0 // +- 0.05% price
+  const strategy001RebalanceTickRange = 0 // +- 0.01% price change
   // ===========================
 
   const runNotBacktestingTests = false
@@ -983,7 +990,7 @@ async function strategyBacktest(
         continue
       }
 
-      process.stdout.write(`[tx ${i} of ${txsTotal}] BURN`)
+      process.stdout.write(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] BURN`)
 
       if (poolTx.tickLower < liquidityTickLower || poolTx.tickUpper > liquidityTickUpper) {
         const rangeOrigin = BigNumber.from(poolTx.tickUpper - poolTx.tickLower)
@@ -1009,20 +1016,24 @@ async function strategyBacktest(
     if (!disableMints && poolTx.type === TransactionType.MINT && poolTx.tickUpper !== undefined && poolTx.tickLower !== undefined) {
       await uniswapV3Calee.mint(pool.address, signer.address, poolTx.tickLower, poolTx.tickUpper, BigNumber.from(poolTx.amount))
 
-      console.log(`[tx ${i} of ${txsTotal}] MINT`)
+      console.log(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] MINT`)
     }
 
     if (poolTx.type === TransactionType.SWAP) {
       const swap0to1 = parseUnits(poolTx.amount1, token1Decimals).lt(0)
       const tokenIn = swap0to1 ? token0.address : token1.address
       const amountIn = swap0to1 ? parseUnits(poolTx.amount0, token0Decimals) : parseUnits(poolTx.amount1, token1Decimals)
+      if (amountIn.eq(0)) {
+        console.log(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] Swap zero amount. Skipped.`)
+        continue
+      }
       const priceBefore = await uniswapV3Helper.getPrice(pool.address, tokenB.address)
       await uniswapV3Calee.swap(pool.address, signer.address, tokenIn, amountIn)
       const priceAfter = await uniswapV3Helper.getPrice(pool.address, tokenB.address)
 
       const priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
       const priceChangeStr = priceChangeVal.eq(0) ? '' : ` (${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%)`
-      console.log(`[tx ${i} of ${txsTotal}] Swap ${swap0to1 ? token0Symbol : token1Symbol} -> ${swap0to1 ? token1Symbol : token0Symbol}. Price: ${formatUnits(priceAfter, 6)}${priceChangeStr}.`)
+      console.log(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] Swap ${swap0to1 ? token0Symbol : token1Symbol} -> ${swap0to1 ? token1Symbol : token0Symbol}. Price: ${formatUnits(priceAfter, 6)}${priceChangeStr}.`)
 
       if (priceAfter.gt(maxPrice)) {
         maxPrice = priceAfter

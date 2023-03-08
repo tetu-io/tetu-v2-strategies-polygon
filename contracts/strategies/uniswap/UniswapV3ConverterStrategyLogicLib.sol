@@ -6,11 +6,19 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "./UniswapV3Lib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
-  function initDepositor(IUniswapV3Pool pool, int24 tickRange_, address asset_) external view returns(int24 tickSpacing, int24 lowerTick, int24 upperTick, address tokenA, address tokenB, bool _depositorSwapTokens) {
+  function initDepositor(IUniswapV3Pool pool, int24 tickRange_, int24 rebalanceTickRange_, address asset_) external view returns(int24 tickSpacing, int24 lowerTick, int24 upperTick, address tokenA, address tokenB, bool _depositorSwapTokens) {
     tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
     (, int24 tick, , , , ,) = pool.slot0();
-    lowerTick = (tick - tickRange_) / tickSpacing * tickSpacing;
-    upperTick = (tick + tickRange_) / tickSpacing * tickSpacing;
+    if (tickRange_ == 0) {
+      lowerTick = tick / tickSpacing * tickSpacing;
+      upperTick = lowerTick + tickSpacing;
+    } else {
+      require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, 'Incorrect tickRange');
+      require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, 'Incorrect rebalanceTickRange');
+      lowerTick = (tick - tickRange_) / tickSpacing * tickSpacing;
+      upperTick = (tick + tickRange_) / tickSpacing * tickSpacing;
+    }
+    require(asset_ == pool.token0() || asset_ == pool.token1(), 'Incorrect asset');
     if (asset_ == pool.token0()) {
       tokenA = pool.token0();
       tokenB = pool.token1();
@@ -24,9 +32,14 @@ library UniswapV3ConverterStrategyLogicLib {
 
   function setNewTickRange(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing) external view returns(int24 lowerTickNew, int24 upperTickNew) {
     (, int24 tick, , , , ,) = pool.slot0();
-    int24 halfRange = (upperTick - lowerTick) / 2;
-    lowerTickNew = (tick - halfRange) / tickSpacing * tickSpacing;
-    upperTickNew = (tick + halfRange) / tickSpacing * tickSpacing;
+    if (upperTick - lowerTick == tickSpacing) {
+      lowerTickNew = tick / tickSpacing * tickSpacing;
+      upperTickNew = lowerTickNew + tickSpacing;
+    } else {
+      int24 halfRange = (upperTick - lowerTick) / 2;
+      lowerTickNew = (tick - halfRange) / tickSpacing * tickSpacing;
+      upperTickNew = (tick + halfRange) / tickSpacing * tickSpacing;
+    }
   }
 
   function addFillup(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing) external returns(int24 lowerTickFillup, int24 upperTickFillup, uint128 liquidityOutFillup) {
@@ -160,14 +173,18 @@ library UniswapV3ConverterStrategyLogicLib {
     fee1 += fee1Fillup;
   }
 
-  function needRebalance(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 rebalanceTickRange) external view returns(bool) {
+  function needRebalance(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 rebalanceTickRange, int24 tickSpacing) external view returns(bool) {
     (, int24 tick, , , , ,) = pool.slot0();
-    int24 halfRange = (upperTick - lowerTick) / 2;
-    int24 oldMedianTick = lowerTick + halfRange;
-    if (tick > oldMedianTick) {
-      return tick - oldMedianTick > rebalanceTickRange;
+    if (upperTick - lowerTick == tickSpacing) {
+      return tick < lowerTick || tick > upperTick;
+    } else {
+      int24 halfRange = (upperTick - lowerTick) / 2;
+      int24 oldMedianTick = lowerTick + halfRange;
+      if (tick > oldMedianTick) {
+        return tick - oldMedianTick > rebalanceTickRange;
+      }
+      return oldMedianTick - tick > rebalanceTickRange;
     }
-    return oldMedianTick - tick > rebalanceTickRange;
   }
 
   function claimRewards(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, uint rebalanceEarned0, uint rebalanceEarned1, bool _depositorSwapTokens) external returns (uint[] memory amountsOut) {
@@ -189,20 +206,23 @@ library UniswapV3ConverterStrategyLogicLib {
 
   function rebalanceDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB, bool fillUp) external {
     if (fillUp) {
-      rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB);
+      _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB);
     } else {
-      rebalanceDebtFullWithSwap(tetuConverter, controller, pool, tokenA, tokenB);
+      _rebalanceDebtSwap(tetuConverter, controller, pool, tokenA, tokenB);
     }
   }
 
-  function rebalanceDebtFullWithSwap(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
+  function _rebalanceDebtSwap(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
     (uint debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
+
+    // slippage is 0.1% for 0.01% fee pools and 5% for other pools
+    uint liquidatorSwapSlippage = pool.fee() == 100 ? 100 : 5_000;
 
     if (_balance(tokenB) < debtAmount) {
       uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / 100;
-      ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, 5_000, 0);
+      ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
     }
 
     ConverterStrategyBaseLib.closePosition(
@@ -212,7 +232,7 @@ library UniswapV3ConverterStrategyLogicLib {
       debtAmount
     );
 
-    ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, _balance(tokenB), 5_000, 0);
+    ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, _balance(tokenB), liquidatorSwapSlippage, 0);
 
     ConverterStrategyBaseLib.openPosition(
       tetuConverter,
@@ -223,7 +243,7 @@ library UniswapV3ConverterStrategyLogicLib {
     );
   }
 
-  function rebalanceDebtFillup(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
+  function _rebalanceDebtFillup(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
     (uint debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
     //    console.log('rebalance: collateralAmount in lending', collateralAmount);
     //    console.log('rebalance: debtAmount in lending', debtAmount);
