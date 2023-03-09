@@ -74,15 +74,21 @@ export interface IState {
     sharePrice: BigNumber;
     totalSupply: BigNumber;
     totalAssets: BigNumber;
-  },
+  }
   insurance: {
     usdc: BigNumber;
-  },
+  }
   baseAmounts: {
     usdc: BigNumber;
     usdt: BigNumber;
     dai: BigNumber;
     bal: BigNumber;
+  }
+  converter: {
+    collateralForDai: BigNumber,
+    amountToRepayDai: BigNumber,
+    collateralForUsdt: BigNumber,
+    amountToRepayUsdt: BigNumber
   }
 }
 
@@ -178,13 +184,16 @@ export class BalancerIntTestUtils {
     const insurance = await vault.insurance();
     const block = await hre.ethers.provider.getBlock("latest");
 
-    // console.log("!", user.address, signer.address, balancerPool, bbAmUsdc);
-    // // await IERC20__factory.connect(bbAmUsdc, user).balanceOf(balancerPool);
-    // console.log("!!", user.address, signer.address, balancerPool, bbAmUsdt);
-    // await IERC20__factory.connect(bbAmUsdt, signer).balanceOf(balancerPool);
-    // console.log("!!!");
-    // await IERC20__factory.connect(bbAmDai, user).balanceOf(balancerPool);
-    console.log("!!!!");
+    const debtsDai = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
+      strategy.address,
+      MaticAddresses.USDC_TOKEN,
+      MaticAddresses.DAI_TOKEN
+    );
+    const debtsUsdt = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
+      strategy.address,
+      MaticAddresses.USDC_TOKEN,
+      MaticAddresses.DAI_TOKEN
+    );
 
     const dest = {
       title: title || "no-name",
@@ -235,6 +244,12 @@ export class BalancerIntTestUtils {
         usdt: await strategy.baseAmounts(MaticAddresses.USDT_TOKEN),
         dai: await strategy.baseAmounts(MaticAddresses.DAI_TOKEN),
         bal: await strategy.baseAmounts(MaticAddresses.BAL_TOKEN),
+      },
+      converter: {
+        collateralForDai: debtsDai.totalCollateralAmountOut,
+        amountToRepayDai: debtsDai.totalDebtAmountOut,
+        collateralForUsdt: debtsUsdt.totalCollateralAmountOut,
+        amountToRepayUsdt: debtsUsdt.totalDebtAmountOut
       }
     }
 
@@ -278,6 +293,11 @@ export class BalancerIntTestUtils {
       "splitter.usdc",
       "splitter.totalAssets",
 
+      "converter.collateralDai",
+      "converter.toRepayDai",
+      "converter.collateralUsdt",
+      "converter.toRepayUsdt",
+
       "pool.bbAmUsdc",
       "pool.bbAmUsdt",
       "pool.bbAmDai",
@@ -318,6 +338,12 @@ export class BalancerIntTestUtils {
       decimalsUSDC, // vault.usdc
       decimalsUSDC, // splitter.usdc
       decimalsUSDC, // splitter.totalAssets,
+
+      decimalsUSDC, // collateral for dai
+      decimalsDAI, // amount to repay, dai
+      decimalsUSDC, // collateral for usdt
+      decimalsUSDT, // amount to repay, usdt
+
       decimalsBbAmUsdc,
       decimalsBbAmUsdt,
       decimalsBbAmDai
@@ -363,6 +389,12 @@ export class BalancerIntTestUtils {
         item.vault.usdc,
         item.splitter.usdc,
         item.splitter.totalAssets,
+
+        item.converter.collateralForDai,
+        item.converter.amountToRepayDai,
+        item.converter.collateralForUsdt,
+        item.converter.amountToRepayUsdt,
+
         item.balancerPool.bbAmUsdc,
         item.balancerPool.bbAmUsdt,
         item.balancerPool.bbAmDai

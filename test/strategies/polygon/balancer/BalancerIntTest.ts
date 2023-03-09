@@ -828,7 +828,7 @@ describe('BalancerIntTest', function() {
       });
       describe("loopEndActions from DoHardWorkLoopBase", () => {
         it("should be profitable", async () => {
-          const countLoops = 15;
+          const countLoops = 20;
           const stepInBlocks = 5_000;
           const stateAfterDeposit = await enterToVault();
           console.log("stateAfterDeposit", stateAfterDeposit);
@@ -870,7 +870,9 @@ describe('BalancerIntTest', function() {
           }
           await TimeUtils.advanceNBlocks(stepInBlocks);
 
+          console.log("user withdraw all");
           await vault.connect(user).withdrawAll();
+          console.log("signer withdraw all");
           await vault.connect(signer).withdrawAll();
 
           const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "final");

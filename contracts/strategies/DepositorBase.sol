@@ -38,12 +38,15 @@ abstract contract DepositorBase is ERC20Helpers {
   );
 
   /// @notice Withdraw given lp amount from the pool.
-  /// @dev if requested liquidityAmount >= invested, then should make full exit
+  /// @param liquidityAmount Amount of liquidity to be converted
+  ///                        If requested liquidityAmount >= invested, then should make full exit.
   /// @return amountsOut The order of amounts is the same as in {_depositorPoolAssets}
   function _depositorExit(uint liquidityAmount) internal virtual returns (uint[] memory amountsOut);
 
   /// @notice Quotes output for given lp amount from the pool.
   /// @dev Write function with read-only behavior. BalanceR's depositor requires not-view.
+  /// @param liquidityAmount Amount of liquidity to be converted
+  ///                        If requested liquidityAmount >= invested, then should make full exit.
   /// @return amountsOut The order of amounts is the same as in {_depositorPoolAssets}
   function _depositorQuoteExit(uint liquidityAmount) internal virtual returns (uint[] memory amountsOut);
 
