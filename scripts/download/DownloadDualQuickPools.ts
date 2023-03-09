@@ -11,7 +11,7 @@ import {mkdir, writeFileSync} from "fs";
 import {utils} from "ethers";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {VaultUtils} from "../../test/VaultUtils";
-import {MaticAddresses} from "../MaticAddresses";
+import {MaticAddresses} from "../addresses/MaticAddresses";
 import {TokenUtils} from "../utils/TokenUtils";
 
 const exclude = new Set<string>([]);

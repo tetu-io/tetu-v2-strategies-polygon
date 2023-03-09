@@ -11,7 +11,7 @@ import {
   VaultFactory__factory
 } from "../../../../../typechain";
 import {Misc} from "../../../../../scripts/utils/Misc";
-import {MaticAddresses} from "../../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../../scripts/addresses/MaticAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtils} from "../../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../../scripts/utils/DeployerUtilsLocal";

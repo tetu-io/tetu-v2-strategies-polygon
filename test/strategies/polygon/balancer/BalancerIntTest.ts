@@ -36,9 +36,9 @@ import {
   GAS_WITHDRAW_ALL_TO_SPLITTER
 } from "../../../baseUT/GasLimits";
 import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {MaticHolders} from "../../../../scripts/MaticHolders";
+import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 chai.use(chaiAsPromised);
 
 describe('BalancerIntTest', function() {

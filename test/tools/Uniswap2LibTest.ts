@@ -7,11 +7,11 @@ import {
   IUniswapV2Router02__factory
 } from "../../typechain";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {MaticAddresses} from "../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {parseUnits} from "ethers/lib/utils";
 import {expect} from "chai";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
-import {MaticHolders} from "../../scripts/MaticHolders";
+import {MaticHolders} from "../../scripts/addresses/MaticHolders";
 
 describe('Uniswap2LibTest', function () {
 

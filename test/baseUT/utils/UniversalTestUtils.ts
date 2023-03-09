@@ -7,7 +7,7 @@ import {
   ISplitter__factory, IStrategyV2,
   StrategyBaseV2__factory, TetuVaultV2
 } from "../../../typechain";
-import {MaticAddresses} from "../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {writeFileSync} from "fs";
 import {formatUnits} from "ethers/lib/utils";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";

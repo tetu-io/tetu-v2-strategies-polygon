@@ -28,6 +28,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
   bool public override isReadyToHardWork;
 
   constructor(address _pool, address _liquidator, address _xTetuAddress) {
+    require(_pool != address(0) && _liquidator != address(0) && _xTetuAddress != address(0), '!address');
     pool = ISmartVault(_pool);
     liquidator = ITetuLiquidator(_liquidator);
     xTetuAddress = _xTetuAddress;
@@ -57,7 +58,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
 
     uint strategyBalanceAfter = pool.underlyingBalanceWithInvestmentForHolder(address(this));
 
-    if(strategyBalanceAfter > strategyBalanceBefore) {
+    if (strategyBalanceAfter > strategyBalanceBefore) {
       earned = strategyBalanceAfter - strategyBalanceBefore;
     } else {
       lost = strategyBalanceBefore - strategyBalanceAfter;
@@ -80,7 +81,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
   /// @dev Withdraw all from the pool.
   /// @return investedAssetsUSD and assetPrice are not used in this strategy returns (0,0)
   function _withdrawAllFromPool() internal override returns (uint investedAssetsUSD, uint assetPrice) {
-    uint totalBalance = _balance(address (pool));
+    uint totalBalance = _balance(address(pool));
     return _withdrawFromPool(totalBalance);
   }
 
@@ -104,7 +105,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
 
   function _liquidateReward() internal {
     address [] memory rewardTokens = pool.rewardTokens();
-    for(uint i = 0; i < rewardTokens.length; i = AppLib.uncheckedInc(i)) {
+    for (uint i = 0; i < rewardTokens.length; i = AppLib.uncheckedInc(i)) {
       address rewardToken = rewardTokens[i];
       uint rewardBalance = _balance(rewardToken);
       if (rewardBalance > 0) {

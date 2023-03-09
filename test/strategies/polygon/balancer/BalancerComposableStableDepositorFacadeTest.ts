@@ -3,8 +3,8 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {parseUnits} from "ethers/lib/utils";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
-import {MaticHolders} from "../../../../scripts/MaticHolders";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {
   BalancerComposableStableDepositorFacade,
   IBalancerBoostedAavePool__factory,

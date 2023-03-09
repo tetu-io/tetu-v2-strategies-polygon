@@ -1,4 +1,4 @@
-import {MaticHolders} from "../../../../../scripts/MaticHolders";
+import {MaticHolders} from "../../../../../scripts/addresses/MaticHolders";
 import {BigNumber} from "ethers";
 import {
   IBalancerBoostedAavePool__factory,
@@ -6,7 +6,7 @@ import {
   IBVault__factory,
   IERC20__factory
 } from "../../../../../typechain";
-import {MaticAddresses} from "../../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../../scripts/addresses/MaticAddresses";
 import {Misc} from "../../../../../scripts/utils/Misc";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 

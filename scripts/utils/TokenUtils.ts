@@ -6,7 +6,7 @@ import {
 } from "../../typechain";
 import {BigNumber} from "ethers";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {MaticAddresses} from "../MaticAddresses";
+import {MaticAddresses} from "../addresses/MaticAddresses";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {DeployerUtilsLocal} from "./DeployerUtilsLocal";

@@ -22,7 +22,7 @@ import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addres
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { BigNumber } from 'ethers';
-import { MaticAddresses } from '../../../../scripts/MaticAddresses';
+import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 
 
 const { expect } = chai;

@@ -17,7 +17,7 @@ import {
   ITetuLiquidator,
   TetuVaultV2
 } from "../../../../typechain";
-import {MaticHolders} from "../../../../scripts/MaticHolders";
+import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
@@ -35,7 +35,7 @@ import {VaultUtils} from "../../../VaultUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {expect} from "chai";
 
 /**

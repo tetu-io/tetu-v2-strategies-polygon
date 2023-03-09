@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 import LinearPoolABI from "../abis/LinearPool.json"
-import { MaticAddresses } from "../MaticAddresses"
+import { MaticAddresses } from "../addresses/MaticAddresses"
 import { ERC4626Strict, TetuV1SingleTokenStrictStrategy } from "../../typechain"
 
 const ERC4626LinearPoolFactoryAddress = "0xa3B9515A9c557455BC53F7a535A85219b59e8B2E";

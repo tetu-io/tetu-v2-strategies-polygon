@@ -8,8 +8,8 @@ import {
 } from "../../../../typechain";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {BigNumber} from "ethers";
-import {MaticHolders} from "../../../../scripts/MaticHolders";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
