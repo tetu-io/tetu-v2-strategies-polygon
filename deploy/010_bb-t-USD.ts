@@ -11,6 +11,12 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const {deployments, getNamedAccounts} = hre;
   const {COMPOSABLE_STABLE_POOL_FACTORY_ADDRESS} = await getNamedAccounts();
 
+  const bbTUsdComposablePool = await deployments.get('bbTUsdComposablePool');
+  if(bbTUsdComposablePool) {
+    console.log("bbTUsdComposablePool Pool already deployed at:", bbTUsdComposablePool.address);
+    return;
+  }
+
   const usdcLinearPool = await deployments.get('bbTUsdc4626LinearPool');
   const daiLinearPool = await deployments.get('bbTDai4626LinearPool');
   const usdtLinearPool = await deployments.get('bbTUsdt4626LinearPool');
@@ -167,4 +173,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   }
 };
 export default func;
-func.tags = ['bb-t-USDT']
+func.tags = ['bbTUsdComposablePool']

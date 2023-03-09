@@ -8,7 +8,11 @@ import LinearPool from "../scripts/abis/LinearPool.json"
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const {deployments, getNamedAccounts} = hre;
   const {USDC_ADDRESS, ERC4626_LINEAR_POOL_FACTORY_ADDRESS} = await getNamedAccounts();
-
+  const usdcLinearPool = await deployments.get('bbTUsdc4626LinearPool');
+  if (usdcLinearPool.address) {
+    console.log("bbTUsdc4626LinearPool Pool already deployed at:", usdcLinearPool.address);
+    return;
+  }
   const erc4626 = await deployments.get('tUsdc4626Strict');
 
   const usdcPoolParams = [
@@ -37,4 +41,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   await deployments.save('bbTUsdc4626LinearPool', deploymentSubmission);
 };
 export default func;
-func.tags = ['bb-t-USDC']
+func.tags = ['bbTUsdc4626LinearPool']
