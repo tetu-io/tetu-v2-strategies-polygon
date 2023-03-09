@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+//import "hardhat/console.sol";
+
 import "../ConverterStrategyBaseLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "./UniswapV3Lib.sol";
@@ -30,7 +32,7 @@ library UniswapV3ConverterStrategyLogicLib {
     }
   }
 
-  function setNewTickRange(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing) external view returns(int24 lowerTickNew, int24 upperTickNew) {
+  function setNewTickRange(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing) public view returns(int24 lowerTickNew, int24 upperTickNew) {
     (, int24 tick, , , , ,) = pool.slot0();
     if (upperTick - lowerTick == tickSpacing) {
       lowerTickNew = tick / tickSpacing * tickSpacing;
@@ -176,7 +178,7 @@ library UniswapV3ConverterStrategyLogicLib {
   function needRebalance(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 rebalanceTickRange, int24 tickSpacing) external view returns(bool) {
     (, int24 tick, , , , ,) = pool.slot0();
     if (upperTick - lowerTick == tickSpacing) {
-      return tick < lowerTick || tick > upperTick;
+      return tick < lowerTick || tick >= upperTick;
     } else {
       int24 halfRange = (upperTick - lowerTick) / 2;
       int24 oldMedianTick = lowerTick + halfRange;
@@ -204,39 +206,95 @@ library UniswapV3ConverterStrategyLogicLib {
     }
   }
 
-  function rebalanceDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB, bool fillUp) external {
-    if (fillUp) {
-      _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB);
+  function getEntryData(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 tickSpacing, bool depositSwapTokens) public returns(bytes memory entryData) {
+    address token0 = pool.token0();
+    address token1 = pool.token1();
+    uint token1Price = UniswapV3Lib.getPrice(address(pool), token1);
+    (lowerTick, upperTick) = setNewTickRange(pool, lowerTick, upperTick, tickSpacing);
+
+//    uint token0Decimals = IERC20Metadata(token0).decimals();
+    uint token1Decimals = IERC20Metadata(token1).decimals();
+
+    uint token0Desired = token1Price;
+    uint token1Desired = 10**token1Decimals;
+
+//    console.log('token0Desired', token0Desired);
+//    console.log('token1Desired', token1Desired);
+
+    // calculate proportions
+    (uint consumed0, uint consumed1,) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
+
+//    console.log('consumed0', consumed0);
+//    console.log('consumed1', consumed1);
+
+
+    if (depositSwapTokens) {
+      entryData = abi.encode(1, consumed1 * token1Price / token1Desired, consumed0);
+//      console.log('part0', consumed1 * token1Price / token1Desired);
+//      console.log('part1', consumed0);
     } else {
-      _rebalanceDebtSwap(tetuConverter, controller, pool, tokenA, tokenB);
+      entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
     }
   }
 
-  function _rebalanceDebtSwap(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
-    (uint debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
+  function rebalanceDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB, bool fillUp, int24 lowerTick, int24 upperTick, int24 tickSpacing, bool depositorSwapTokens) external {
+    if (fillUp) {
+      _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB);
+    } else {
+      _rebalanceDebtSwapP1(tetuConverter, controller, pool, tokenA, tokenB);
+      bytes memory entryData = getEntryData(pool, lowerTick, upperTick, tickSpacing, depositorSwapTokens);
+      _rebalanceDebtSwapP2(tetuConverter, controller, tokenA, tokenB, entryData);
+    }
+  }
+
+  function _rebalanceDebtSwapP1(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB) internal {
+    (uint debtAmount, uint collateralAmount) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
 
     // slippage is 0.1% for 0.01% fee pools and 5% for other pools
     uint liquidatorSwapSlippage = pool.fee() == 100 ? 100 : 5_000;
 
     if (_balance(tokenB) < debtAmount) {
-      uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
+      uint tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
+      uint needToSellTokenA = tokenBprice * (debtAmount - _balance(tokenB)) / 10**IERC20Metadata(tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / 100;
-      ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
+      if (needToSellTokenA < _balance(tokenA)) {
+        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
+      } else {
+        // very rare case, but happens on long run backtests
+        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, _balance(tokenA), liquidatorSwapSlippage, 0);
+        ConverterStrategyBaseLib.closePosition(
+          tetuConverter,
+          tokenA,
+          tokenB,
+          _balance(tokenB)
+        );
+        (debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
+        if (debtAmount > 0) {
+          tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
+          needToSellTokenA = tokenBprice * debtAmount / 10**IERC20Metadata(tokenB).decimals();
+          needToSellTokenA += needToSellTokenA / 100;
+          ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
+        }
+      }
     }
 
-    ConverterStrategyBaseLib.closePosition(
-      tetuConverter,
-      tokenA,
-      tokenB,
-      debtAmount
-    );
+    if (debtAmount > 0) {
+      ConverterStrategyBaseLib.closePosition(
+        tetuConverter,
+        tokenA,
+        tokenB,
+        debtAmount
+      );
+    }
 
     ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, _balance(tokenB), liquidatorSwapSlippage, 0);
+  }
 
+  function _rebalanceDebtSwapP2(ITetuConverter tetuConverter, address controller, address tokenA, address tokenB, bytes memory entryData) internal {
     ConverterStrategyBaseLib.openPosition(
       tetuConverter,
-      abi.encode(1,1,1),
+      entryData,
       tokenA,
       tokenB,
       _balance(tokenA)

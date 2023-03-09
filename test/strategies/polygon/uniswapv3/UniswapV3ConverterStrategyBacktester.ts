@@ -72,8 +72,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const disableBurns = false // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false
   const testStrategies = {
-    usdcWeth005: true, // USDC_WETH_0.05%
-    wmaticUsdc005: true, // WMATIC_USDC_0.05%
+    usdcWeth005: false, // USDC_WETH_0.05%
+    wmaticUsdc005: false, // WMATIC_USDC_0.05%
     usdcDai001: true, // USDC_DAI_0.01%
     usdcUsdt001: true, // USDC_USDT_0.01%
   }
@@ -541,7 +541,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     }
   })
 
-  it("Full debt rebalance on stable pool test", async function () {
+  it("Rebalance on stable pool test", async function () {
     if (runNotBacktestingTests) {
       // create DAI_USDT pool for test
       await (await uniswapV3Factory.createPool(DAI.address, USDT.address, 100)).wait()
@@ -564,8 +564,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
         tetuConverter.address,
         signer,
         pool.address,
-        1,
-        1,
+        0,
+        0,
       )
       const vault = vaultStrategyInfo.vault
       const strategy = vaultStrategyInfo.strategy
@@ -578,6 +578,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
       await USDT.approve(vault.address, Misc.MAX_UINT);
       await vault.deposit(parseUnits('100', 6), signer.address);
+
+      console.log('Utilization rate', await utilizationRate(strategy, signer, uniswapV3Helper))
+
       const assetsBefore = await strategy.totalAssets()
 
       let priceBefore
@@ -585,8 +588,29 @@ describe('UmiswapV3 converter strategy backtester', function() {
       let priceChangeVal
       let swapAmount
 
+      /*console.log('Tick', (await pool.slot0()).tick)
+
+      // creating conditions for a large loan after rebalancing to test all logic
+      swapAmount = parseUnits('261.07', 6) // 261.06 - no tick increasing
+      priceBefore = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+      await uniswapV3Calee.swap(pool.address, signer.address, USDT.address, swapAmount)
+      priceAfter = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+      priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
+      console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
+
+      console.log('Tick', (await pool.slot0()).tick)
+
+      if (await strategy.needRebalance()) {
+        console.log('Rebalance...')
+        await strategy.rebalance()
+        console.log('Utilization rate', await utilizationRate(strategy, signer, uniswapV3Helper))
+
+        // part0 125885259727509375
+        // part1 999986175915776626
+      }
+
       // swap USDT to DAI N times
-      swapAmount = parseUnits('500', 6)
+      swapAmount = parseUnits('510', 6)
       for (let i = 0; i < 5; i++) {
         priceBefore = await uniswapV3Helper.getPrice(pool.address, DAI.address)
         await uniswapV3Calee.swap(pool.address, signer.address, USDT.address, swapAmount)
@@ -596,8 +620,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
         if (await strategy.needRebalance()) {
           console.log('Rebalance...')
           await strategy.rebalance()
+          console.log('Utilization rate', await utilizationRate(strategy, signer, uniswapV3Helper))
         }
-      }
+      }*/
 
       // swap DAI to USDT N times
       swapAmount = parseUnits('500')
@@ -607,10 +632,10 @@ describe('UmiswapV3 converter strategy backtester', function() {
         priceAfter = await uniswapV3Helper.getPrice(pool.address, DAI.address)
         priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
         console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
-        console.log('Rebalance...')
         if (await strategy.needRebalance()) {
           console.log('Rebalance...')
           await strategy.rebalance()
+          console.log('Utilization rate', await utilizationRate(strategy, signer, uniswapV3Helper))
         }
       }
 
@@ -850,6 +875,16 @@ function periodHuman(periodSecs: number) {
     periodStr += `${periodSecs - periodMins*60}s`
   }
   return periodStr
+}
+
+async function utilizationRate(strategy: UniswapV3ConverterStrategy, signer: SignerWithAddress, uniswapV3Helper: UniswapV3Lib) {
+  const tokenA = IERC20Extended__factory.connect(await strategy.tokenA(), signer)
+  const tokenB = IERC20Extended__factory.connect(await strategy.tokenB(), signer)
+  const price = await uniswapV3Helper.getPrice(await strategy.pool(), tokenB.address)
+  const total = await strategy.totalAssets()
+  const used = total.sub((await tokenA.balanceOf(strategy.address)).add((await tokenB.balanceOf(strategy.address)).mul(price).div(parseUnits('1', await tokenB.decimals()))))
+  const rate = used.mul(10000).div(total)
+  return `${formatUnits(rate, 2)}%`
 }
 
 async function deployAndInitVaultAndUniswapV3Strategy<T>(

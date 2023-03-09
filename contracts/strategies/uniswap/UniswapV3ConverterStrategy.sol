@@ -56,7 +56,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     _depositorEmergencyExit();
 
-    UniswapV3ConverterStrategyLogicLib.rebalanceDebt(converter, controller(), pool, tokenA, tokenB, fillUp);
+    UniswapV3ConverterStrategyLogicLib.rebalanceDebt(converter, controller(), pool, tokenA, tokenB, fillUp, lowerTick, upperTick, tickSpacing, _depositorSwapTokens);
 
     _setNewTickRange();
 
