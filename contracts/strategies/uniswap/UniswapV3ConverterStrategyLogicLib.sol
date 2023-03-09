@@ -183,7 +183,7 @@ library UniswapV3ConverterStrategyLogicLib {
       int24 halfRange = (upperTick - lowerTick) / 2;
       int24 oldMedianTick = lowerTick + halfRange;
       if (tick > oldMedianTick) {
-        return tick - oldMedianTick > rebalanceTickRange;
+        return tick - oldMedianTick >= rebalanceTickRange;
       }
       return oldMedianTick - tick > rebalanceTickRange;
     }
