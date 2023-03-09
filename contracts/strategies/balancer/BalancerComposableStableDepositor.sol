@@ -134,7 +134,6 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (
     uint[] memory amountsOut
   ) {
-    console.log("_depositorExit.enter");
     bytes32 _poolId = poolId; // gas saving
     IBalancerGauge __gauge = _gauge; // gas saving
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
@@ -165,8 +164,6 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     amountsOut = (liquidityAmount_ >= depositorBalance + gaugeBalance)
       ? BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId)
       : BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
-
-    console.log("_depositorExit.exit", amountsOut[0], amountsOut[1], amountsOut[2]);
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.

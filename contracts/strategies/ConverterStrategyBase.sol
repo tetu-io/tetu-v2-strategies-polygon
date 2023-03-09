@@ -14,8 +14,6 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
-
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -54,6 +52,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint spentAmountIn;
     uint receivedAmountOut;
     uint liquidationThreshold;
+  }
+
+  struct WithdrawUniversalLocal {
+    uint[] reserves;
+    uint totalSupply;
+    uint depositorLiquidity;
+    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams p;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -287,18 +292,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint investedAssetsUSD,
     uint assetPrice
   ) {
-    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory vars;
+    WithdrawUniversalLocal memory vars;
 
     // _investedAssets value is deprecated, prices can be changed since last update
     // so we need to recalculate _investedAssets
     // to simplify testing, we pass recalculated version as a function param
-    vars.investedAssets = investedAssets_;
+    vars.p.investedAssets = investedAssets_;
 
-    if ((all || amount != 0) && vars.investedAssets != 0) {
-      vars.tokens = _depositorPoolAssets();
-      vars.indexAsset = ConverterStrategyBaseLib.getAssetIndex(vars.tokens, asset);
-      vars.converter = converter;
-      uint len = vars.tokens.length;
+    if ((all || amount != 0) && vars.p.investedAssets != 0) {
+      vars.p.tokens = _depositorPoolAssets();
+      vars.p.indexAsset = ConverterStrategyBaseLib.getAssetIndex(vars.p.tokens, asset);
+      vars.p.converter = converter;
+      uint len = vars.p.tokens.length;
       vars.depositorLiquidity = _depositorLiquidity();
 
       // temporary save liquidityRatioOut to liquidityAmount
@@ -306,28 +311,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         all ? 0 : amount,
         baseAmounts,
         address(this),
-        vars
+        vars.p
       );
-      console.log("liquidityAmount.1", liquidityAmount);
       if (liquidityAmount != 0) {
         // liquidityAmount temporary contains ratio...
         liquidityAmount = liquidityAmount * vars.depositorLiquidity / 1e18;
       }
-      console.log("liquidityAmount.2", liquidityAmount);
-      console.log("_depositorLiquidity.1", _depositorLiquidity());
-      console.log("amountsToConvert", amountsToConvert[0], amountsToConvert[1], amountsToConvert[2]);
 
       {
-        IPriceOracle priceOracle = IPriceOracle(IConverterController(vars.converter.controller()).priceOracle());
-        assetPrice = priceOracle.getAssetPrice(vars.tokens[vars.indexAsset]);
+        IPriceOracle priceOracle = IPriceOracle(IConverterController(vars.p.converter.controller()).priceOracle());
+        assetPrice = priceOracle.getAssetPrice(vars.p.tokens[vars.p.indexAsset]);
       }
-
-      console.log("balance bbp.1", IERC20(0x48e6B98ef6329f8f0A30eBB8c7C960330d648085).balanceOf(address(this)));
 
       uint[] memory withdrawnAmounts;
       uint expectedAmountMainAsset;
       if (liquidityAmount != 0) {
-        console.log("_withdrawUniversal.1.liquidityAmount", liquidityAmount);
         // get reserves and totalSupply before withdraw
         vars.reserves = _depositorPoolReserves();
         vars.totalSupply = _depositorTotalSupply();
@@ -342,12 +340,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // so, we need to fix liquidityAmount on this amount
 
         // we assume here, that liquidity cannot increase in _depositorExit
-        console.log("_withdrawUniversal.2._depositorLiquidity()", _depositorLiquidity());
         uint depositorLiquidityDelta = vars.depositorLiquidity - _depositorLiquidity();
-        console.log("depositorLiquidityDelta", depositorLiquidityDelta);
         if (liquidityAmount > depositorLiquidityDelta) {
           liquidityAmount = depositorLiquidityDelta;
-          console.log("liquidityAmount.fixed", liquidityAmount);
         }
 
         // now we can estimate expected amount of assets to be withdrawn
@@ -357,17 +352,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           vars.totalSupply
         );
 
-        console.log("expectedWithdrawAmounts", expectedWithdrawAmounts[0], expectedWithdrawAmounts[1], expectedWithdrawAmounts[2]);
-        console.log("withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
-        console.log("balance bbp.2", IERC20(0x48e6B98ef6329f8f0A30eBB8c7C960330d648085).balanceOf(address(this)));
-        console.log("_depositorLiquidity.2", _depositorLiquidity());
-
         expectedAmountMainAsset = ConverterStrategyBaseLib.getExpectedAmountMainAsset(
-          vars,
+          vars.p,
           expectedWithdrawAmounts,
           amountsToConvert
         );
-        console.log("expectedAmountMainAsset.1", expectedAmountMainAsset);
         for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
           amountsToConvert[i] += withdrawnAmounts[i];
         }
@@ -375,27 +364,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         withdrawnAmounts = new uint[](len);
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
         expectedAmountMainAsset = ConverterStrategyBaseLib.getExpectedAmountMainAsset(
-          vars,
+          vars.p,
           withdrawnAmounts, // array with all zero values
           amountsToConvert
         );
-        console.log("expectedAmountMainAsset.2", expectedAmountMainAsset);
       }
 
       // convert amounts to main asset and update base amounts
-      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(vars.tokens, vars.indexAsset, amountsToConvert);
-      console.log("expectedAmountMainAsset.collateral", collateral);
-      console.log("expectedAmountMainAsset.repaid", repaid[0], repaid[1], repaid[2]);
-      _updateBaseAmounts(vars.tokens, withdrawnAmounts, repaid, vars.indexAsset, int(collateral));
+      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(vars.p.tokens, vars.p.indexAsset, amountsToConvert);
+      _updateBaseAmounts(vars.p.tokens, withdrawnAmounts, repaid, vars.p.indexAsset, int(collateral));
 
       investedAssetsUSD = expectedAmountMainAsset * assetPrice / 1e18;
-      console.log("expectedAmountMainAsset.investedAssetsUSD", investedAssetsUSD);
-      console.log("expectedAmountMainAsset.assetPrice", assetPrice);
 
       // adjust _investedAssets
       _updateInvestedAssets();
     }
-    console.log("balance bbp.3", IERC20(0x48e6B98ef6329f8f0A30eBB8c7C960330d648085).balanceOf(address(this)));
 
     return (investedAssetsUSD, assetPrice);
   }

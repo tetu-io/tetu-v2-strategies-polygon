@@ -13,7 +13,6 @@ import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
-import "hardhat/console.sol";
 /// @notice Functions of BalancerComposableStableDepositor
 /// @dev Many of functions are declared as external to reduce contract size
 library BalancerLogicLib {
@@ -463,18 +462,14 @@ library BalancerLogicLib {
       uint k = 0;
       for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
         if (i == p.bptIndex) continue;
-        console.log("depositorExitFull.depositorBalance", depositorBalance, i, k);
-        console.log("depositorExitFull.amountsOut[k]", amountsOut[k]);
 
         // we assume here, that the depositorBalance is small
         // so we can directly swap it to any single asset without changing of pool resources proportions
         amountsOut[k] += _convertSmallBptRemainder(vault_, poolId_, p, funds, depositorBalance, i);
-        console.log("depositorExitFull.amountsOut[k]", amountsOut[k]);
         break;
       }
     }
 
-    console.log("depositorExitFull.final", amountsOut[0], amountsOut[1], amountsOut[2]);
     return amountsOut;
   }
 
@@ -488,10 +483,6 @@ library BalancerLogicLib {
     uint bptAmountIn_,
     uint indexTargetAmBpt_
   ) internal returns (uint amountOut) {
-    uint balanceBefore = p.tokens[indexTargetAmBpt_].balanceOf(address(this));
-    console.log("BPT remainder", p.tokens[p.bptIndex].balanceOf(address(this)));
-    console.log("targetToken", indexTargetAmBpt_, address(p.tokens[indexTargetAmBpt_]));
-    console.log("targetToken balance", balanceBefore);
     uint amountAmBpt = BalancerLogicLib.swap(
       vault_,
       poolId_,
@@ -500,11 +491,6 @@ library BalancerLogicLib {
       bptAmountIn_,
       funds
     );
-    uint balanceAfter = p.tokens[indexTargetAmBpt_].balanceOf(address(this));
-    console.log("BPT remainder.2", p.tokens[p.bptIndex].balanceOf(address(this)));
-    console.log("amountOut", amountAmBpt);
-    console.log("targetToken balance.2", balanceAfter);
-    console.log("_convertSmallBptRemainder.amountAmBpt", amountAmBpt);
     amountOut = swap(
       vault_,
       IBalancerBoostedAavePool(address(p.tokens[indexTargetAmBpt_])).getPoolId(),
@@ -513,7 +499,6 @@ library BalancerLogicLib {
       amountAmBpt,
       funds
     );
-    console.log("_convertSmallBptRemainder.amountOut", amountOut);
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.

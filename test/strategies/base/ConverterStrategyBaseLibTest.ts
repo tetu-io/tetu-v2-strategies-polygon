@@ -15,7 +15,6 @@ import {
 import {Misc} from "../../../scripts/utils/Misc";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {BigNumber} from "ethers";
-import {decodeInstructions} from "hardhat/internal/hardhat-network/stack-traces/source-maps";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
