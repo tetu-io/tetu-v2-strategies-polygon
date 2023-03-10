@@ -14,7 +14,14 @@ export class TimeUtils {
   }
 
   public static async advanceNBlocks(n: number) {
-    await ethers.provider.send("hardhat_mine", ['0x' + n.toString(16), '0x' + Number(1).toString(16)]);
+    const start = Date.now();
+    await ethers.provider.send('evm_increaseTime', [+(n * 2.35).toFixed(0)]);
+
+    // todo await ethers.provider.send("hardhat_mine", ['0x' + n.toString(16), '0x' + Number(1).toString(16)]);
+    for (let i = 0; i < n; i++) {
+      await ethers.provider.send('evm_mine', []);
+    }
+    Misc.printDuration('advanceNBlocks ' + n + ' completed', start);
   }
 
   public static async mineAndCheck() {
