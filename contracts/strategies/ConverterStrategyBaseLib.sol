@@ -1018,7 +1018,6 @@ library ConverterStrategyBaseLib {
   /// @return spentCollateral Total collateral amount spent for borrowing
   function getTokenAmounts(
     ITetuConverter tetuConverter_,
-    uint amount_,
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory collaterals_

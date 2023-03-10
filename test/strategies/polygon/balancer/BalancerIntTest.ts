@@ -415,7 +415,7 @@ describe('BalancerIntTest', function() {
 
           // initial deposit doesn't invest all amount to pool
           // a first hardwork make additional investment
-          await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+          await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
           const stateAfterHardwork = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
           const ret = [
@@ -459,7 +459,7 @@ describe('BalancerIntTest', function() {
           expect(ret).eq(expected);
         });
         it("should not exceed gas limits @skip-on-coverage", async () => {
-          const gasUsed = await strategy.connect(await Misc.impersonate(vault.address)).estimateGas.doHardWork();
+          const gasUsed = await strategy.connect(await Misc.impersonate(splitter.address)).estimateGas.doHardWork();
           controlGasLimitsEx(gasUsed, GAS_FIRST_HARDWORK, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
@@ -688,7 +688,7 @@ describe('BalancerIntTest', function() {
           // try to check forward income .. (unsuccessfully, todo)
           const tetuBefore = await IERC20__factory.connect(MaticAddresses.TETU_TOKEN, signer).balanceOf(forwarder);
 
-          const tx = await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+          const tx = await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
           const distributed = await UniversalTestUtils.extractDistributed(await tx.wait(), forwarder);
           const stateAfterHardwork = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
@@ -745,7 +745,7 @@ describe('BalancerIntTest', function() {
         });
         it("should not exceed gas limits @skip-on-coverage", async () => {
           await TimeUtils.advanceNBlocks(20_000);
-          const gasUsed = await strategy.connect(await Misc.impersonate(vault.address)).estimateGas.doHardWork();
+          const gasUsed = await strategy.connect(await Misc.impersonate(splitter.address)).estimateGas.doHardWork();
           controlGasLimitsEx(gasUsed, GAS_HARDWORK_WITH_REWARDS, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
@@ -796,7 +796,7 @@ describe('BalancerIntTest', function() {
 
           for (let i = 0; i < countLoops; ++i) {
             await TimeUtils.advanceNBlocks(stepInBlocks);
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state after hardwork ${i}`, state);
             states.push(state);
@@ -903,7 +903,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -938,7 +938,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -976,7 +976,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -1013,7 +1013,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }

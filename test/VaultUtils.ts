@@ -83,7 +83,7 @@ export class VaultUtils {
       console.log(`Call doHardWork, strategy=${strategyName}`);
 
       // handle HardWork-event to extract earned and lost values
-      const { earned, lost } = await strategy.callStatic.doHardWork();
+      const { earned, lost } = await strategy.connect(splitter.address).callStatic.doHardWork();
       await strategy.doHardWork();
       console.log(`Strategy=${strategyName} step earned=${earned} lost=${lost}`);
 

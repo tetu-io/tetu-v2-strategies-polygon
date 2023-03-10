@@ -226,7 +226,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // make borrow and save amounts of tokens available for deposit to tokenAmounts
     (tokenAmounts, borrowedAmounts, spentCollateral) = ConverterStrategyBaseLib.getTokenAmounts(
       tetuConverter_,
-      amount_,
       tokens_,
       indexAsset_,
       tokenAmounts
