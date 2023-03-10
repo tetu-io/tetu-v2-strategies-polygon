@@ -188,6 +188,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Prepare {tokenAmounts} to be passed to depositorEnter
+  /// @dev Override this function to customize entry kind
   /// @param amount_ The amount of main asset that should be invested
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
@@ -216,33 +217,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle())
     );
 
-    // make borrow and save amounts of tokens available for deposit to tokenAmounts
-    // total collateral amount spent for borrowing
-    uint len = tokens_.length;
-    borrowedAmounts = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset_) continue;
-
-      if (tokenAmounts[i] > 0) {
-        uint collateral;
-        AppLib.approveIfNeeded(tokens_[indexAsset_], tokenAmounts[i], address(tetuConverter_));
-        (collateral, borrowedAmounts[i]) = ConverterStrategyBaseLib.openPosition(
-          tetuConverter_,
-          "", // fixed collateral amount, max possible borrow amount // todo possibility to customize entry kind
-          tokens_[indexAsset_],
-          tokens_[i],
-          tokenAmounts[i]
-        );
-        // collateral should be equal to tokenAmounts[i] here because we use default entry kind
-        spentCollateral += collateral;
-
-        // zero amount are possible (conversion is not available) but it's not suitable for depositor
-        require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
-      }
-      tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(address(this));
-    }
-
-    return (tokenAmounts, borrowedAmounts, spentCollateral);
+    return ConverterStrategyBaseLib.getTokenAmounts(tetuConverter_, amount_, tokens_, indexAsset_);
   }
 
   /////////////////////////////////////////////////////////////////////

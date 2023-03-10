@@ -345,7 +345,6 @@ library ConverterStrategyBaseLib {
   /////////////////////////////////////////////////////////////////////
   ///                   Borrow and close positions
   /////////////////////////////////////////////////////////////////////
-
   /// @notice Make one or several borrow necessary to supply/borrow required {amountIn_} according to {entryData_}
   ///         Max possible collateral should be approved before calling of this function.
   /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
@@ -359,6 +358,25 @@ library ConverterStrategyBaseLib {
     address borrowAsset_,
     uint amountIn_
   ) external returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    return _openPosition(tetuConverter_, entryData_, collateralAsset_, borrowAsset_, amountIn_);
+  }
+
+  /// @notice Make one or several borrow necessary to supply/borrow required {amountIn_} according to {entryData_}
+  ///         Max possible collateral should be approved before calling of this function.
+  /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
+  ///                   See TetuConverter\EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
+  ///                   0 or empty: Amount of collateral {amountIn_} is fixed, amount of borrow should be max possible.
+  /// @param amountIn_ Meaning depends on {entryData_}.
+  function _openPosition(
+    ITetuConverter tetuConverter_,
+    bytes memory entryData_,
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountIn_
+  ) internal returns (
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
@@ -979,5 +997,47 @@ library ConverterStrategyBaseLib {
     }
 
     return amountOut;
+  }
+
+  /// @notice Make borrow and save amounts of tokens available for deposit to tokenAmounts
+  /// @return tokenAmounts Amounts of tokens available for deposit
+  /// @return borrowedAmounts Amounts borrowed for {spendCollateral}
+  /// @return spentCollateral Total collateral amount spent for borrowing
+  function getTokenAmounts(
+    ITetuConverter tetuConverter_,
+    uint amount_,
+    address[] memory tokens_,
+    uint indexAsset_
+  ) external returns (
+    uint[] memory tokenAmounts,
+    uint[] memory borrowedAmounts,
+    uint spentCollateral
+  ) {
+    // make borrow and save amounts of tokens available for deposit to tokenAmounts
+    uint len = tokens_.length;
+    borrowedAmounts = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset_) continue;
+
+      if (tokenAmounts[i] > 0) {
+        uint collateral;
+        AppLib.approveIfNeeded(tokens_[indexAsset_], tokenAmounts[i], address(tetuConverter_));
+        (collateral, borrowedAmounts[i]) = _openPosition(
+          tetuConverter_,
+          "", // entry kind = 0: fixed collateral amount, max possible borrow amount
+          tokens_[indexAsset_],
+          tokens_[i],
+          tokenAmounts[i]
+        );
+        // collateral should be equal to tokenAmounts[i] here because we use default entry kind
+        spentCollateral += collateral;
+
+        // zero amount are possible (conversion is not available) but it's not suitable for depositor
+        require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
+      }
+      tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(address(this));
+    }
+
+    return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 }
