@@ -480,13 +480,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // get rewards from the Depositor
     (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts) = _depositorClaimRewards();
 
-    console.log("_claim.1");
-    (address[] memory rewardTokens, uint[] memory amounts) = _prepareRewardsList(
+    (address[] memory rewardTokens, uint[] memory amounts) = ConverterStrategyBaseLib.prepareRewardsList(
       converter,
       depositorRewardTokens,
-      depositorRewardAmounts
+      depositorRewardAmounts,
+      baseAmounts
     );
-    console.log("_claim.2");
 
     uint len = rewardTokens.length;
     if (len > 0) {
@@ -611,32 +610,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     _postHardWork();
   }
 
-  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards
-  /// @dev The post-processing is rewards conversion to the main asset
-  /// @param tokens_ List of rewards claimed from the internal pool
-  /// @param amounts_ Amounts of rewards claimed from the internal pool
-  /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
-  /// @param amountsOut Amounts of available rewards
-  function _prepareRewardsList(
-    ITetuConverter tetuConverter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) internal returns(
-    address[] memory tokensOut,
-    uint[] memory amountsOut
-  ) {
-    // Rewards from TetuConverter
-    (address[] memory tokens2, uint[] memory amounts2) = tetuConverter_.claimRewards(address(this));
-
-    // Join arrays and recycle tokens
-    (tokensOut, amountsOut) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
-
-    // {amounts} contain just received values, but probably we already had some tokens on balance
-    uint len = tokensOut.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - baseAmounts[tokensOut[i]];
-    }
-  }
 
   /////////////////////////////////////////////////////////////////////
   ///               InvestedAssets Calculations
