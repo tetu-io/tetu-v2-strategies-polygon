@@ -80,6 +80,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   }
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+    (uint fee0, uint fee1) = getFees();
+    rebalanceEarned0 += fee0;
+    rebalanceEarned1 += fee1;
     (amountsOut, totalLiquidity, totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.exit(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, totalLiquidity, totalLiquidityFillup, uint128(liquidityAmount), _depositorSwapTokens);
   }
 

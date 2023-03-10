@@ -84,4 +84,34 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     _updateInvestedAssets();
   }
+
+  function _beforeDeposit(
+    ITetuConverter tetuConverter_,
+    uint amount_,
+    address[] memory /*tokens_*/,
+    uint /*indexAsset_*/
+  ) override internal virtual returns (
+    uint[] memory tokenAmounts,
+    uint[] memory borrowedAmounts,
+    uint spentCollateral
+  ) {
+    tokenAmounts = new uint[](2);
+    borrowedAmounts = new uint[](2);
+
+    bytes memory entryData = UniswapV3ConverterStrategyLogicLib.getEntryData(pool, lowerTick, upperTick, tickSpacing, _depositorSwapTokens);
+
+    AppLib.approveIfNeeded(tokenA, amount_, address(tetuConverter_));
+    (spentCollateral, borrowedAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+      tetuConverter_,
+      entryData,
+      tokenA,
+      tokenB,
+      amount_
+    );
+
+    tokenAmounts[0] = amount_ - spentCollateral;
+    tokenAmounts[1] = borrowedAmounts[1];
+
+    return (tokenAmounts, borrowedAmounts, spentCollateral);
+  }
 }
