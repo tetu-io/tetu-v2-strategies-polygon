@@ -109,8 +109,8 @@ library ConverterStrategyBaseLib {
   uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
   uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant COMPOUND_DENOMINATOR = 100_000;
-  uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
-  uint private constant PRICE_IMPACT_TOLERANCE = 2_000; // 2%
+  uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5% todo decrease to 0.3%
+  uint private constant PRICE_IMPACT_TOLERANCE = 2_000; // 2% todo decrease to 0.3%
 
   /////////////////////////////////////////////////////////////////////
   ///                         Events
