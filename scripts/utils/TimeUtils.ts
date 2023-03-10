@@ -1,6 +1,7 @@
 import {ethers} from "hardhat";
 import {Misc} from "./Misc";
 import {Multicall} from "../../typechain";
+import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 export class TimeUtils {
 
@@ -14,7 +15,9 @@ export class TimeUtils {
   }
 
   public static async advanceNBlocks(n: number) {
-    await ethers.provider.send("hardhat_mine", ['0x' + n.toString(16), '0x' + Number(1).toString(16)]);
+    // test BalancerComposableStableDepositorFacadeTest, depositorClaimRewards, Withdraw full - doesn't work rewards don't appears..
+    // await ethers.provider.send("hardhat_mine", ['0x' + n.toString(16), '0x' + Number(1*2.35).toString(16)]);
+    await mine(n, {interval: n*2.35});
   }
 
   public static async mineAndCheck() {

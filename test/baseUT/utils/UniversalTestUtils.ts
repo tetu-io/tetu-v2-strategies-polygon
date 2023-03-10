@@ -127,8 +127,10 @@ export class UniversalTestUtils {
           if (event.event === "LossCovered") {
             if (event.args) {
               console.log("vault", vaultAddress);
-              console.log("recoveredLoss", event.args[0]);
-              return event.args[0];
+              if (event.args.length > 0) {
+                console.log("recoveredLoss", event.args[0]);
+                return event.args[0];
+              }
             }
           }
         }

@@ -216,23 +216,28 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint[] memory borrowedAmounts,
     uint spentCollateral
   ) {
-    return _beforeDeposit(tetuConverter_, amount_, tokens_, indexAsset_);
+    return _beforeDeposit(
+      tetuConverter_,
+      amount_,
+      tokens_,
+      indexAsset_
+    );
   }
 
   function setBaseAmountAccess(address token_, uint amount_) external {
     baseAmounts[token_] = amount_;
   }
-
-  function _prepareRewardsListAccess(
-    ITetuConverter tetuConverter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) external returns(
-    address[] memory tokensOut,
-    uint[] memory amountsOut
-  ) {
-    return _prepareRewardsList(tetuConverter_, tokens_, amounts_);
-  }
+//
+//  function _prepareRewardsListAccess(
+//    ITetuConverter tetuConverter_,
+//    address[] memory tokens_,
+//    uint[] memory amounts_
+//  ) external returns(
+//    address[] memory tokensOut,
+//    uint[] memory amountsOut
+//  ) {
+//    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, amounts_, baseAmounts);
+//  }
 
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();

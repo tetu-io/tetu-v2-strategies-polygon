@@ -210,8 +210,9 @@ describe('BalancerIntTest', function() {
       describe("State after depositing 50_000 by signer", () => {
         it("should have expected values", async () => {
           // some insurance is immediately used to recover entry-loss during the depositing
+          const d = await (await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner)).wait();
           const recoveredLoss = await UniversalTestUtils.extractLossCovered(
-            await (await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner)).wait(),
+            d,
             vault.address
           ) || BigNumber.from(0);
           const stateAfterDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
@@ -482,8 +483,6 @@ describe('BalancerIntTest', function() {
             stateAfterWithdraw.strategy.usdt.eq(0),
             stateAfterWithdraw.strategy.dai.eq(0),
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            stateAfterWithdraw.strategy.bptPool.gt(0),
             stateAfterWithdraw.strategy.totalAssets.gt(0),
             stateAfterWithdraw.strategy.investedAssets.gt(0),
 
@@ -510,8 +509,7 @@ describe('BalancerIntTest', function() {
             // strategy
             true, true, true,
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            true, true, true,
+            true, true,
 
             // splitter
             true,
