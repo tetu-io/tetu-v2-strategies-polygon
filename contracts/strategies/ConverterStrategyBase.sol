@@ -558,6 +558,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Do hard work
   function doHardWork() override public returns (uint, uint) {
+    require(msg.sender == splitter, DENIED);
     return _doHardWork(true);
   }
 
