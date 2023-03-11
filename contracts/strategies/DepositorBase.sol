@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../tools/ERC20Helpers.sol";
 
 /// @title Abstract base Depositor contract.
@@ -10,10 +8,6 @@ import "../tools/ERC20Helpers.sol";
 /// @notice All communication with external pools should be done at inherited contract
 /// @author bogdoslav
 abstract contract DepositorBase is ERC20Helpers {
-  using SafeERC20 for IERC20;
-
-  /// @notice Version of this contract. Adjust manually on each code modification.
-  string internal constant DEPOSITOR_BASE_VERSION = "1.0.0";
 
   /// @notice Returns pool assets
   function _depositorPoolAssets() internal virtual view returns (address[] memory assets);
