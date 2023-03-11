@@ -37,10 +37,15 @@ library ConverterStrategyBaseLib {
   struct RecycleInputParams {
     address asset;
     uint compoundRatio;
+    /// @notice tokens received from {_depositorPoolAssets}
     address[] tokens;
     ITetuLiquidator liquidator;
+    /// @notice Full list of reward tokens received from tetuConverter and depositor
     address[] rewardTokens;
+    /// @notice Amounts of {rewardTokens_}; we assume, there are no zero amounts here
     uint[] rewardAmounts;
+    uint performanceFee;
+    address performanceReceiver;
   }
 
   /// @notice Input params for {getLiquidityAmountRatio}
@@ -707,13 +712,10 @@ library ConverterStrategyBaseLib {
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
   /// 2) any other rewards
   /// All received rewards are immediately "recycled".
-  /// It means, they are divided on two parts: to forwarder, to compound
+  /// It means, they are divided on THREE parts: to performance receiver, to forwarder, to compound
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
   /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
-  /// @param tokens_ tokens received from {_depositorPoolAssets}
-  /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
-  /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
   /// @param baseAmounts_ Base amounts for rewards tokens
   ///                     The base amounts allow to separate just received and previously received rewards.
@@ -722,66 +724,48 @@ library ConverterStrategyBaseLib {
   ///                                            there was no possibility to use separate var for it, stack too deep
   /// @return spentAmounts Spent amounts of the tokens
   /// @return amountsToForward Amounts to be sent to forwarder
+  /// @return performanceAmount Amount in terms of {asset} to be sent to performance receiver
+  /// @dev Implementation of {recycle}, input params are packed to a struct to avoid stack too deep.
   function recycle(
-    address asset_,
-    uint compoundRatio_,
-    address[] memory tokens_,
-    ITetuLiquidator liquidator_,
+    RecycleInputParams memory params,
     mapping(address => uint) storage liquidationThresholds_,
-    mapping(address => uint) storage baseAmounts_,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
+    mapping(address => uint) storage baseAmounts_
   ) external returns (
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
-    uint[] memory amountsToForward
-  ) {
-    RecycleInputParams memory p = RecycleInputParams({
-      asset: asset_,
-      compoundRatio: compoundRatio_,
-      tokens: tokens_,
-      liquidator: liquidator_,
-      rewardTokens: rewardTokens_,
-      rewardAmounts: rewardAmounts_
-    });
-    (receivedAmounts, spentAmounts, amountsToForward) = _recycle(p, liquidationThresholds_, baseAmounts_);
-  }
-
-  /// @dev Implementation of {recycle}, input params are packed to a struct to avoid stack too deep.
-  function _recycle(
-    RecycleInputParams memory params,
-    mapping(address => uint) storage liquidationThresholds,
-    mapping(address => uint) storage baseAmounts
-  ) internal returns (
-    uint[] memory receivedAmounts,
-    uint[] memory spentAmounts,
-    uint[] memory amountsToForward
+    uint[] memory amountsToForward,
+    uint performanceAmount
   ) {
     RecycleLocalParams memory p;
 
     p.len = params.rewardTokens.length;
     require(p.len == params.rewardAmounts.length, AppErrors.WRONG_LENGTHS);
 
-    p.liquidationThresholdAsset = liquidationThresholds[params.asset];
+    p.liquidationThresholdAsset = liquidationThresholds_[params.asset];
 
     amountsToForward = new uint[](p.len);
     receivedAmounts = new uint[](p.len + 1);
     spentAmounts = new uint[](p.len);
 
-    // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
+    // split each amount on two parts:
+    // 1) part-to-compound + part-to-transfer-to-the-forwarder
+    // 2) part for performance receiver
     for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
+      uint performanceAmountPart = params.performanceFee == 0
+        ? 0
+        : params.rewardAmounts[i] * params.performanceFee / COMPOUND_DENOMINATOR;
       p.rewardToken = params.rewardTokens[i];
-      p.amountToCompound = params.rewardAmounts[i] * params.compoundRatio / COMPOUND_DENOMINATOR;
+      p.amountToCompound = (params.rewardAmounts[i] - performanceAmountPart) * params.compoundRatio / COMPOUND_DENOMINATOR;
 
       if (p.amountToCompound > 0) {
         if (ConverterStrategyBaseLib.getAssetIndex(params.tokens, p.rewardToken) != type(uint).max) {
           // The asset is in the list of depositor's assets, liquidation is not allowed
           receivedAmounts[i] += p.amountToCompound;
         } else {
-          p.baseAmountIn = baseAmounts[p.rewardToken];
+          p.baseAmountIn = baseAmounts_[p.rewardToken];
           p.totalRewardAmounts = p.amountToCompound + p.baseAmountIn; // total amount that can be liquidated
 
-          if (p.totalRewardAmounts < liquidationThresholds[p.rewardToken]) {
+          if (p.totalRewardAmounts < liquidationThresholds_[p.rewardToken]) {
             // amount is too small, liquidation is not allowed
             receivedAmounts[i] += p.amountToCompound;
           } else {
@@ -811,8 +795,12 @@ library ConverterStrategyBaseLib {
         }
       }
 
-      p.amountToForward = params.rewardAmounts[i] - p.amountToCompound;
+      p.amountToForward = params.rewardAmounts[i] - p.amountToCompound - performanceAmountPart;
       amountsToForward[i] = p.amountToForward;
+
+      if (performanceAmountPart > 0) {
+// todo
+      }
     }
 
     return (receivedAmounts, spentAmounts, amountsToForward);

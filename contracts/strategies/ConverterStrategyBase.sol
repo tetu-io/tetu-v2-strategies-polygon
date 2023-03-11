@@ -514,16 +514,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    // todo send performanceFee to performanceReceiver
     (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
-      asset,
-      compoundRatio,
-      _depositorPoolAssets(),
-      ITetuLiquidator(IController(controller()).liquidator()),
+      ConverterStrategyBaseLib.RecycleInputParams({
+        asset: asset,
+        compoundRatio: compoundRatio,
+        tokens: _depositorPoolAssets(),
+        liquidator: ITetuLiquidator(IController(controller()).liquidator()),
+        rewardTokens: rewardTokens_,
+        rewardAmounts: rewardAmounts_,
+        performanceFee: performanceFee,
+        performanceReceiver: performanceReceiver
+      }),
       liquidationThresholds,
-      baseAmounts,
-      rewardTokens_,
-      rewardAmounts_
+      baseAmounts
     );
     emit Recycle(
       rewardTokens_,
