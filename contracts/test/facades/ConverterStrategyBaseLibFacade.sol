@@ -135,14 +135,7 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-//  function _prepareRewardsList(
-//    ITetuConverter tetuConverter_,
-//    address[] memory tokens_,
-//    uint[] memory amounts_
-//  ) external returns(
-//    address[] memory tokensOut,
-//    uint[] memory amountsOut
-//  ) {
-//    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, amounts_, baseAmounts);
-//  }
+  function transferAll(address[] memory tokens, uint[] memory amounts, address receiver) external {
+    ConverterStrategyBaseLib.transferAll(tokens, amounts, receiver);
+  }
 }

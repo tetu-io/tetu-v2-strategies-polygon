@@ -45,7 +45,6 @@ library ConverterStrategyBaseLib {
     /// @notice Amounts of {rewardTokens_}; we assume, there are no zero amounts here
     uint[] rewardAmounts;
     uint performanceFee;
-    address performanceReceiver;
   }
 
   /// @notice Input params for {getLiquidityAmountRatio}
@@ -457,8 +456,6 @@ library ConverterStrategyBaseLib {
         }
       }
 
-      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
-      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
       return (collateralAmountOut, borrowedAmountOut);
     }
   }
@@ -724,7 +721,7 @@ library ConverterStrategyBaseLib {
   ///                                            there was no possibility to use separate var for it, stack too deep
   /// @return spentAmounts Spent amounts of the tokens
   /// @return amountsToForward Amounts to be sent to forwarder
-  /// @return performanceAmount Amount in terms of {asset} to be sent to performance receiver
+  /// @return performanceAmounts Amounts to be sent to performance receiver
   /// @dev Implementation of {recycle}, input params are packed to a struct to avoid stack too deep.
   function recycle(
     RecycleInputParams memory params,
@@ -734,7 +731,7 @@ library ConverterStrategyBaseLib {
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
     uint[] memory amountsToForward,
-    uint performanceAmount
+    uint[] memory performanceAmounts
   ) {
     RecycleLocalParams memory p;
 
@@ -744,6 +741,7 @@ library ConverterStrategyBaseLib {
     p.liquidationThresholdAsset = liquidationThresholds_[params.asset];
 
     amountsToForward = new uint[](p.len);
+    performanceAmounts = new uint[](p.len);
     receivedAmounts = new uint[](p.len + 1);
     spentAmounts = new uint[](p.len);
 
@@ -751,11 +749,11 @@ library ConverterStrategyBaseLib {
     // 1) part-to-compound + part-to-transfer-to-the-forwarder
     // 2) part for performance receiver
     for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
-      uint performanceAmountPart = params.performanceFee == 0
+      performanceAmounts[i] = params.performanceFee == 0
         ? 0
         : params.rewardAmounts[i] * params.performanceFee / COMPOUND_DENOMINATOR;
       p.rewardToken = params.rewardTokens[i];
-      p.amountToCompound = (params.rewardAmounts[i] - performanceAmountPart) * params.compoundRatio / COMPOUND_DENOMINATOR;
+      p.amountToCompound = (params.rewardAmounts[i] - performanceAmounts[i]) * params.compoundRatio / COMPOUND_DENOMINATOR;
 
       if (p.amountToCompound > 0) {
         if (ConverterStrategyBaseLib.getAssetIndex(params.tokens, p.rewardToken) != type(uint).max) {
@@ -795,17 +793,22 @@ library ConverterStrategyBaseLib {
         }
       }
 
-      p.amountToForward = params.rewardAmounts[i] - p.amountToCompound - performanceAmountPart;
+      p.amountToForward = params.rewardAmounts[i] - p.amountToCompound - performanceAmounts[i];
       amountsToForward[i] = p.amountToForward;
-
-      if (performanceAmountPart > 0) {
-// todo
-      }
     }
 
-    return (receivedAmounts, spentAmounts, amountsToForward);
+    return (receivedAmounts, spentAmounts, amountsToForward, performanceAmounts);
   }
 
+  /// @notice Transfer {amounts} of {tokens} to {receiver}
+  function transferAll(address[] memory tokens, uint[] memory amounts, address receiver) external {
+    uint len = tokens.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (amounts[i] != 0) {
+        IERC20(tokens[i]).transfer(receiver, amounts[i]);
+      }
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                      calcInvestedAssets

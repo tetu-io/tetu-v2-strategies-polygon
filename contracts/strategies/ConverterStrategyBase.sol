@@ -110,7 +110,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address[] rewardTokens,
     uint[] receivedAmounts,
     uint[] spentAmounts,
-    uint[] amountsToForward
+    uint[] amountsToForward,
+    uint[] performanceAmounts
   );
 
   /////////////////////////////////////////////////////////////////////
@@ -480,7 +481,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     uint len = rewardTokens.length;
     if (len > 0) {
-      (uint[] memory received, uint[] memory spent, uint[] memory amountsToForward) = _recycle(rewardTokens, amounts);
+      (uint[] memory received,
+       uint[] memory spent,
+       uint[] memory amountsToForward,
+       uint[] memory performanceAmounts
+      ) = _recycle(rewardTokens, amounts);
+
 
       _updateBaseAmounts(rewardTokens, received, spent, type(uint).max, 0);
       // max - we don't need to exclude any asset
@@ -490,6 +496,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // send forwarder-part of the rewards to the forwarder
       ConverterStrategyBaseLib.sendTokensToForwarder(controller(), splitter, rewardTokens, amountsToForward);
+      ConverterStrategyBaseLib.transferAll(rewardTokens, performanceAmounts, performanceReceiver);
     }
   }
 
@@ -497,10 +504,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// We have two kinds of rewards:
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
   /// 2) any other rewards
-  /// All received rewards divided on two parts: to forwarder, to compound
+  /// All received rewards divided on three parts: to forwarder, to compound, to performance receiver
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
   /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
+  /// All performance fee are transferred to the performance receiver
   /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
@@ -512,9 +520,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _recycle(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal returns (
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
-    uint[] memory amountsToForward
+    uint[] memory amountsToForward,
+    uint[] memory performanceAmounts
   ) {
-    (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
+    (receivedAmounts, spentAmounts, amountsToForward, performanceAmounts) = ConverterStrategyBaseLib.recycle(
       ConverterStrategyBaseLib.RecycleInputParams({
         asset: asset,
         compoundRatio: compoundRatio,
@@ -522,8 +531,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         liquidator: ITetuLiquidator(IController(controller()).liquidator()),
         rewardTokens: rewardTokens_,
         rewardAmounts: rewardAmounts_,
-        performanceFee: performanceFee,
-        performanceReceiver: performanceReceiver
+        performanceFee: performanceFee
       }),
       liquidationThresholds,
       baseAmounts
@@ -532,7 +540,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       rewardTokens_,
       receivedAmounts,
       spentAmounts,
-      amountsToForward
+      amountsToForward,
+      performanceAmounts
     );
   }
 

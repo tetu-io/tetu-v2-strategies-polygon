@@ -1528,6 +1528,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
       thresholds?: ITokenAmount[];
       baseAmounts?: ITokenAmount[];
       initialBalances?: ITokenAmount[];
+      performanceFee?: number;
+      performanceReceiver?: string;
     }
     interface IRecycleTestResults {
       gasUsed: BigNumber;
@@ -1538,6 +1540,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
       receivedAmounts: BigNumber[];
       spentAmounts: BigNumber[];
       receivedAssetAmountOut: BigNumber;
+
+      performanceAmountReceivedByReceiver: BigNumber[];
     }
     async function makeRecycleTest(
       compoundRate: BigNumberish,
@@ -1546,6 +1550,12 @@ describe("ConverterStrategyBaseAccessTest", () => {
       params?: IRecycleTestParams
     ) : Promise<IRecycleTestResults> {
       await strategy.connect(await Misc.impersonate(await controller.platformVoter())).setCompoundRatio(compoundRate);
+      await strategy.connect(await Misc.impersonate(await controller.governance())).setupPerformanceFee(
+        params?.performanceFee || 0,
+        params?.performanceReceiver || await controller.governance()
+      );
+      console.log("performanceFee", await strategy.performanceFee());
+      console.log("performanceReceiver", await strategy.performanceReceiver());
 
       if (params?.baseAmounts) {
         for (const tokenAmount of params?.baseAmounts) {
@@ -1615,67 +1625,395 @@ describe("ConverterStrategyBaseAccessTest", () => {
       const gasUsed = (await tx.wait()).gasUsed;
 
       const retForwarder = await forwarder.getLastRegisterIncomeResults();
+
       return {
         gasUsed,
         forwarderAmounts: retForwarder.amounts,
         forwarderTokens: retForwarder.tokens,
         spentAmounts: r.spentAmounts,
         receivedAmounts: r.receivedAmounts.slice(0, -1),
-        receivedAssetAmountOut: r.receivedAmounts[r.receivedAmounts.length - 1]
+        receivedAssetAmountOut: r.receivedAmounts[r.receivedAmounts.length - 1],
+        performanceAmountReceivedByReceiver: r.performanceAmounts
       }
     }
     describe("Good paths", () => {
-      describe("All cases test", () => {
+      describe("performance fee is zero", () => {
+        describe("All cases test", () => {
+          let results: IRecycleTestResults;
+          let snapshotLocal: string;
+          before(async function () {
+            snapshotLocal = await TimeUtils.snapshot();
+            results = await makeRecycleTestBase();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshotLocal);
+          });
+
+          async function makeRecycleTestBase(): Promise<IRecycleTestResults> {
+            return makeRecycleTest(
+              40_000, // 40%
+              [bal, tetu, dai, usdc, weth],
+              [
+                parseUnits("10", 18),
+                parseUnits("20", 18),
+                parseUnits("40", 18),
+                parseUnits("80", 6),
+                parseUnits("100", 8),
+              ],
+              {
+                liquidations: [
+                  {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("5", 18), amountOut: parseUnits("17", 6)}, // 4 + 1
+                  {tokenIn: tetu, tokenOut: usdc, amountIn: parseUnits("11", 18), amountOut: parseUnits("23", 6)}, // 8 + 3
+                  {tokenIn: weth, tokenOut: usdc, amountIn: parseUnits("42", 8), amountOut: parseUnits("13", 6)}, // 40 + 2
+                ],
+                thresholds: [
+                  {token: bal, amount: parseUnits("4", 18)}, // ok
+                  {token: weth, amount: parseUnits("1", 8)}, // ok, (!) but it won't pass threshold by USDC
+                  {token: tetu, amount: parseUnits("12", 18)}, // (!) too high
+                  {token: usdc, amount: parseUnits("14", 6)},
+                ],
+                baseAmounts: [
+                  {token: bal, amount: parseUnits("1", 18)},
+                  {token: weth, amount: parseUnits("2", 8)},
+                  {token: tetu, amount: parseUnits("3", 18)},
+                  {token: usdc, amount: parseUnits("4", 6)},
+                  {token: dai, amount: parseUnits("5", 18)},
+                ],
+                initialBalances: [
+                  // any balances - just to be sure that _recycle doesn't use them
+                  {token: bal, amount: parseUnits("400", 18)},
+                  {token: weth, amount: parseUnits("500", 8)},
+                  {token: tetu, amount: parseUnits("600", 18)},
+                  {token: usdc, amount: parseUnits("700", 6)},
+                  {token: dai, amount: parseUnits("800", 18)},
+                ]
+              }
+            );
+          }
+
+          it("should receive expected values", async () => {
+            console.log("bal", bal.address);
+            console.log("dai", dai.address);
+            console.log("tetu", tetu.address);
+            console.log("usdc", usdc.address);
+            console.log("weth", weth.address);
+            const ret = [
+              results.receivedAmounts.map(x => BalanceUtils.toString(x)).join(),
+              results.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+              results.receivedAssetAmountOut.toString()
+            ].join("\n");
+
+            const expected = [
+              [
+                0, // compound bal tokens were liquidated
+                parseUnits("8", 18), // compound tetu were not liquidated because of too high tetu liquidation threshold
+                parseUnits("16", 18), // compound dai were added to base amounts
+                parseUnits("32", 6), // compound usdc were added to base amounts
+                parseUnits("40", 8), // compound weth were not liquidated because of too high usdc liquidation threshold
+              ].map(x => BalanceUtils.toString(x)).join(),
+              [
+                parseUnits("1", 18), // base amount of bal was liquidated
+                0,
+                0,
+                0,
+                0
+              ].map(x => BalanceUtils.toString(x)).join(),
+              parseUnits("17", 6).toString() // results of bal liquidation
+            ].join("\n");
+
+            expect(ret).eq(expected);
+          });
+          it("should not exceed gas limit @skip-on-coverage", () => {
+            controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_RECYCLE, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
+          });
+        });
+
+        describe("Reward token is in the list of depositor's assets", () => {
+          describe("Reward token is the main asset", () => {
+            it("should return receivedAmounts===amountToCompound", async () => {
+              const r = await makeRecycleTest(30_000, [usdc], [parseUnits("10", 6)]);
+
+              const ret = [r.receivedAmounts[0], r.spentAmounts[0], r.receivedAssetAmountOut].map(x => BalanceUtils.toString(x)).join();
+              const expected = [parseUnits("3", 6), 0, 0].map(x => BalanceUtils.toString(x)).join();
+
+              expect(ret).eq(expected);
+            });
+          });
+          describe("Reward token is the secondary asset", () => {
+            it("should return receivedAmounts===amountToCompound", async () => {
+              const r = await makeRecycleTest(30_000, [dai], [parseUnits("10", 18)]);
+
+              const ret = [
+                ...r.receivedAmounts,
+                ...r.spentAmounts,
+                r.receivedAssetAmountOut
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              const expected = [
+                parseUnits("3", 18),
+                0,
+                0
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              expect(ret).eq(expected);
+            });
+
+          });
+        });
+        describe("Reward token is not in the list of depositor's assets", () => {
+          describe("Liquidation thresholds allow liquidation", () => {
+            it("should return expected amounts", async () => {
+              const r = await makeRecycleTest(
+                30_000,
+                [bal],
+                [parseUnits("10", 18)],
+                {
+                  liquidations: [{
+                    tokenIn: bal,
+                    tokenOut: usdc,
+                    amountIn: parseUnits("3", 18),
+                    amountOut: parseUnits("17", 6)
+                  }]
+                }
+              );
+
+              const ret = [
+                ...r.receivedAmounts,
+                ...r.spentAmounts,
+                r.receivedAssetAmountOut
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              const expected = [
+                0,
+                0,
+                parseUnits("17", 6)
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              expect(ret).eq(expected);
+            });
+          });
+          describe("Liquidation threshold for main asset higher received amount", () => {
+            it("should return expected amounts, base amount == 0", async () => {
+              const r = await makeRecycleTest(
+                30_000,
+                [bal],
+                [parseUnits("10", 18)],
+                {
+                  liquidations: [{
+                    tokenIn: bal,
+                    tokenOut: usdc,
+                    amountIn: parseUnits("3", 18),
+                    amountOut: parseUnits("17", 6)
+                  }],
+                  thresholds: [
+                    {
+                      token: usdc,
+                      amount: parseUnits("18", 6) // (!) too high
+                    }
+                  ]
+                }
+              );
+
+              const ret = [
+                ...r.receivedAmounts,
+                ...r.spentAmounts,
+                r.receivedAssetAmountOut
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              const expected = [
+                parseUnits("3", 18),
+                0,
+                0,
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              expect(ret).eq(expected);
+            });
+            it("should return expected amounts, base amount > 0", async () => {
+              const r = await makeRecycleTest(
+                30_000,
+                [bal],
+                [parseUnits("10", 18)],
+                {
+                  liquidations: [
+                    // too possible liquidations: 3 (compound) and 3 + 5 (compound + base amount)
+                    // second one should be used
+                    {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
+                    {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
+                  ],
+                  thresholds: [{
+                    token: usdc,
+                    amount: parseUnits("18", 6) // too high for 3, but ok for 8
+                  }],
+                  baseAmounts: [{
+                    token: bal,
+                    amount: parseUnits("5", 18)
+                  }],
+                  initialBalances: [{
+                    token: bal,
+                    amount: parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
+                  }]
+                }
+              );
+
+              const ret = [
+                ...r.receivedAmounts,
+                ...r.spentAmounts,
+                r.receivedAssetAmountOut
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              const expected = [
+                0,
+                parseUnits("5", 18),
+                parseUnits("19", 6),
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              expect(ret).eq(expected);
+            });
+          });
+          describe("Liquidation threshold for the token is too high", () => {
+            it("should return expected amounts, base amount == 0", async () => {
+              const r = await makeRecycleTest(
+                30_000,
+                [bal],
+                [parseUnits("10", 18)],
+                {
+                  liquidations: [{
+                    tokenIn: bal,
+                    tokenOut: usdc,
+                    amountIn: parseUnits("3", 18),
+                    amountOut: parseUnits("17", 6)
+                  }],
+                  thresholds: [
+                    {
+                      token: bal,
+                      amount: parseUnits("4", 18) // (!) too high
+                    }
+                  ]
+                }
+              );
+
+              const ret = [
+                ...r.receivedAmounts,
+                ...r.spentAmounts,
+                r.receivedAssetAmountOut
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              const expected = [
+                parseUnits("3", 18),
+                0,
+                0,
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              expect(ret).eq(expected);
+            });
+            it("should return expected amounts, base amount > 0", async () => {
+              const r = await makeRecycleTest(
+                30_000,
+                [bal],
+                [parseUnits("10", 18)],
+                {
+                  liquidations: [
+                    // too possible liquidations: 3 (compound) and 3 + 5 (compound + base amount)
+                    // second one should be used
+                    {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
+                    {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
+                  ],
+                  thresholds: [{
+                    token: bal,
+                    amount: parseUnits("4", 18) // too high for 3, but ok for 8
+                  }],
+                  baseAmounts: [{
+                    token: bal,
+                    amount: parseUnits("5", 18)
+                  }],
+                  initialBalances: [{
+                    token: bal,
+                    amount: parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
+                  }]
+                }
+              );
+
+              const ret = [
+                ...r.receivedAmounts,
+                ...r.spentAmounts,
+                r.receivedAssetAmountOut
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              const expected = [
+                0,
+                parseUnits("5", 18),
+                parseUnits("19", 6),
+              ].map(x => BalanceUtils.toString(x)).join();
+
+              expect(ret).eq(expected);
+            });
+          });
+        });
+      });
+
+      /**
+       * 10% of all rewards are transferred to performanceReceiver
+       */
+      describe("performance fee is not zero", () => {
+        const PERFORMANCE_FEE = 10_000;
         let results: IRecycleTestResults;
         let snapshotLocal: string;
+        let performanceReceiver: string;
         before(async function () {
           snapshotLocal = await TimeUtils.snapshot();
           results = await makeRecycleTestBase();
+          performanceReceiver = ethers.Wallet.createRandom().address;
         });
         after(async function () {
           await TimeUtils.rollback(snapshotLocal);
         });
-        async function makeRecycleTestBase() : Promise<IRecycleTestResults> {
+
+        async function makeRecycleTestBase(): Promise<IRecycleTestResults> {
           return makeRecycleTest(
-            40_000, // 40%
+            40_000, // 50%
             [bal, tetu, dai, usdc, weth],
-            [
-              parseUnits("10", 18),
-              parseUnits("20", 18),
-              parseUnits("40", 18),
-              parseUnits("80", 6),
-              parseUnits("100", 8),
+            [                              // perf compound forwarder
+              parseUnits("10", 18), // 1 + 3.6 + 5.4    - bal
+              parseUnits("20", 18), // 2 + 7.2 + 10.8   - tetu
+              parseUnits("40", 18), // 4 + 14.4 + 21.6  - dai
+              parseUnits("80", 6),  // 8 + 28.8 + 43.2  - usdc
+              parseUnits("100", 8), // 10 + 36 + 54     - usdt
             ],
             {
-              liquidations: [
-                { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("5", 18), amountOut: parseUnits("17", 6)}, // 4 + 1
-                { tokenIn: tetu, tokenOut: usdc, amountIn: parseUnits("11", 18), amountOut: parseUnits("23", 6)}, // 8 + 3
-                { tokenIn: weth, tokenOut: usdc, amountIn: parseUnits("42", 8), amountOut: parseUnits("13", 6)}, // 40 + 2
+              performanceReceiver,
+              performanceFee: PERFORMANCE_FEE,
+              liquidations: [                                                                                                                       // base + compound
+                {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("4.6", 18), amountOut: parseUnits("17", 6)},   // 1 + 3.6
+                {tokenIn: tetu, tokenOut: usdc, amountIn: parseUnits("10.2", 18), amountOut: parseUnits("23", 6)}, // 3 + 7.2
+                {tokenIn: weth, tokenOut: usdc, amountIn: parseUnits("38", 8), amountOut: parseUnits("13", 6)},    // 2 + 36
               ],
               thresholds: [
-                { token: bal, amount:  parseUnits("4", 18)}, // ok
-                { token: weth, amount:  parseUnits("1", 8)}, // ok, (!) but it won't pass threshold by USDC
-                { token: tetu, amount:  parseUnits("12", 18)}, // (!) too high
-                { token: usdc, amount:  parseUnits("14", 6)},
+                {token: bal, amount: parseUnits("4", 18)}, // ok
+                {token: weth, amount: parseUnits("1", 8)}, // ok, (!) but it won't pass threshold by USDC
+                {token: tetu, amount: parseUnits("11", 18)}, // (!) too high
+                {token: usdc, amount: parseUnits("14", 6)}, // 14 < 17, 14 < 23 but 14 > 13
               ],
               baseAmounts: [
-                { token: bal, amount:  parseUnits("1", 18)},
-                { token: weth, amount:  parseUnits("2", 8)},
-                { token: tetu, amount:  parseUnits("3", 18)},
-                { token: usdc, amount:  parseUnits("4", 6)},
-                { token: dai, amount:  parseUnits("5", 18)},
+                {token: bal, amount: parseUnits("1", 18)},
+                {token: weth, amount: parseUnits("2", 8)},
+                {token: tetu, amount: parseUnits("3", 18)},
+                {token: usdc, amount: parseUnits("4", 6)},
+                {token: dai, amount: parseUnits("5", 18)},
               ],
               initialBalances: [
                 // any balances - just to be sure that _recycle doesn't use them
-                { token: bal, amount:  parseUnits("400", 18)},
-                { token: weth, amount:  parseUnits("500", 8)},
-                { token: tetu, amount:  parseUnits("600", 18)},
-                { token: usdc, amount:  parseUnits("700", 6)},
-                { token: dai, amount:  parseUnits("800", 18)},
+                {token: bal, amount: parseUnits("400", 18)},
+                {token: weth, amount: parseUnits("500", 8)},
+                {token: tetu, amount: parseUnits("600", 18)},
+                {token: usdc, amount: parseUnits("700", 6)},
+                {token: dai, amount: parseUnits("800", 18)},
               ]
             }
           );
         }
+
         it("should receive expected values", async () => {
           console.log("bal", bal.address);
           console.log("dai", dai.address);
@@ -1685,16 +2023,17 @@ describe("ConverterStrategyBaseAccessTest", () => {
           const ret = [
             results.receivedAmounts.map(x => BalanceUtils.toString(x)).join(),
             results.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-            results.receivedAssetAmountOut.toString()
+            results.receivedAssetAmountOut.toString(),
+            results.performanceAmountReceivedByReceiver.map(x => BalanceUtils.toString(x)).join(),
           ].join("\n");
 
           const expected = [
             [
               0, // compound bal tokens were liquidated
-              parseUnits("8", 18), // compound tetu were not liquidated because of too high tetu liquidation threshold
-              parseUnits("16", 18), // compound dai were added to base amounts
-              parseUnits("32", 6), // compound usdc were added to base amounts
-              parseUnits("40", 8), // compound weth were not liquidated because of too high usdc liquidation threshold
+              parseUnits("7.2", 18), // compound tetu were not liquidated because of too high tetu liquidation threshold
+              parseUnits("14.4", 18), // compound dai were added to base amounts
+              parseUnits("28.8", 6), // compound usdc were added to base amounts
+              parseUnits("36", 8), // compound weth were not liquidated because of too high usdc liquidation threshold
             ].map(x => BalanceUtils.toString(x)).join(),
             [
               parseUnits("1", 18), // base amount of bal was liquidated
@@ -1703,245 +2042,19 @@ describe("ConverterStrategyBaseAccessTest", () => {
               0,
               0
             ].map(x => BalanceUtils.toString(x)).join(),
-            parseUnits("17", 6).toString() // results of bal liquidation
+            parseUnits("17", 6).toString(), // results of bal liquidation
+            [
+              parseUnits("1", 18),
+              parseUnits("2", 18),
+              parseUnits("4", 18),
+              parseUnits("8", 6),
+              parseUnits("10", 8),
+            ].map(x => BalanceUtils.toString(x)).join(),
           ].join("\n");
 
           expect(ret).eq(expected);
         });
-        it("should not exceed gas limit @skip-on-coverage", () => {
-          controlGasLimitsEx(results.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_RECYCLE, (u, t) => {
-            expect(u).to.be.below(t + 1);
-          });
-        });
       });
-
-      describe("Reward token is in the list of depositor's assets", () => {
-        describe("Reward token is the main asset", () => {
-          it("should return receivedAmounts===amountToCompound", async () => {
-            const r = await makeRecycleTest(30_000, [usdc], [parseUnits("10", 6)]);
-
-            const ret = [r.receivedAmounts[0], r.spentAmounts[0], r.receivedAssetAmountOut].map(x => BalanceUtils.toString(x)).join();
-            const expected = [parseUnits("3", 6), 0, 0].map(x => BalanceUtils.toString(x)).join();
-
-            expect(ret).eq(expected);
-          });
-        });
-        describe("Reward token is the secondary asset", () => {
-          it("should return receivedAmounts===amountToCompound", async () => {
-            const r = await makeRecycleTest(30_000, [dai], [parseUnits("10", 18)]);
-
-            const ret = [
-              ...r.receivedAmounts,
-              ...r.spentAmounts,
-              r.receivedAssetAmountOut
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            const expected = [
-              parseUnits("3", 18),
-              0,
-              0
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            expect(ret).eq(expected);
-          });
-
-        });
-      });
-      describe("Reward token is not in the list of depositor's assets", () => {
-        describe("Liquidation thresholds allow liquidation", () => {
-          it("should return expected amounts", async () => {
-            const r = await makeRecycleTest(
-              30_000,
-              [bal],
-              [parseUnits("10", 18)],
-              {
-                liquidations: [{
-                  tokenIn: bal,
-                  tokenOut: usdc,
-                  amountIn: parseUnits("3", 18),
-                  amountOut: parseUnits("17", 6)
-                }]
-              }
-            );
-
-            const ret = [
-              ...r.receivedAmounts,
-              ...r.spentAmounts,
-              r.receivedAssetAmountOut
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            const expected = [
-              0,
-              0,
-              parseUnits("17", 6)
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            expect(ret).eq(expected);
-          });
-        });
-        describe("Liquidation threshold for main asset higher received amount", () => {
-          it("should return expected amounts, base amount == 0", async () => {
-            const r = await makeRecycleTest(
-              30_000,
-              [bal],
-              [parseUnits("10", 18)],
-              {
-                liquidations: [{
-                  tokenIn: bal,
-                  tokenOut: usdc,
-                  amountIn: parseUnits("3", 18),
-                  amountOut: parseUnits("17", 6)
-                }],
-                thresholds: [
-                  {
-                    token: usdc,
-                    amount:  parseUnits("18", 6) // (!) too high
-                  }
-                ]
-              }
-            );
-
-            const ret = [
-              ...r.receivedAmounts,
-              ...r.spentAmounts,
-              r.receivedAssetAmountOut
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            const expected = [
-              parseUnits("3", 18),
-              0,
-              0,
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            expect(ret).eq(expected);
-          });
-          it("should return expected amounts, base amount > 0", async () => {
-            const r = await makeRecycleTest(
-              30_000,
-              [bal],
-              [parseUnits("10", 18)],
-              {
-                liquidations: [
-                  // too possible liquidations: 3 (compound) and 3 + 5 (compound + base amount)
-                  // second one should be used
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
-                ],
-                thresholds: [{
-                  token: usdc,
-                  amount:  parseUnits("18", 6) // too high for 3, but ok for 8
-                }],
-                baseAmounts: [{
-                  token: bal,
-                  amount:  parseUnits("5", 18)
-                }],
-                initialBalances: [{
-                  token: bal,
-                  amount:  parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
-                }]
-              }
-            );
-
-            const ret = [
-              ...r.receivedAmounts,
-              ...r.spentAmounts,
-              r.receivedAssetAmountOut
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            const expected = [
-              0,
-              parseUnits("5", 18),
-              parseUnits("19", 6),
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            expect(ret).eq(expected);
-          });
-        });
-        describe("Liquidation threshold for the token is too high", () => {
-          it("should return expected amounts, base amount == 0", async () => {
-            const r = await makeRecycleTest(
-              30_000,
-              [bal],
-              [parseUnits("10", 18)],
-              {
-                liquidations: [{
-                  tokenIn: bal,
-                  tokenOut: usdc,
-                  amountIn: parseUnits("3", 18),
-                  amountOut: parseUnits("17", 6)
-                }],
-                thresholds: [
-                  {
-                    token: bal,
-                    amount:  parseUnits("4", 18) // (!) too high
-                  }
-                ]
-              }
-            );
-
-            const ret = [
-              ...r.receivedAmounts,
-              ...r.spentAmounts,
-              r.receivedAssetAmountOut
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            const expected = [
-              parseUnits("3", 18),
-              0,
-              0,
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            expect(ret).eq(expected);
-          });
-          it("should return expected amounts, base amount > 0", async () => {
-            const r = await makeRecycleTest(
-              30_000,
-              [bal],
-              [parseUnits("10", 18)],
-              {
-                liquidations: [
-                  // too possible liquidations: 3 (compound) and 3 + 5 (compound + base amount)
-                  // second one should be used
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
-                ],
-                thresholds: [{
-                  token: bal,
-                  amount:  parseUnits("4", 18) // too high for 3, but ok for 8
-                }],
-                baseAmounts: [{
-                  token: bal,
-                  amount:  parseUnits("5", 18)
-                }],
-                initialBalances: [{
-                  token: bal,
-                  amount:  parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
-                }]
-              }
-            );
-
-            const ret = [
-              ...r.receivedAmounts,
-              ...r.spentAmounts,
-              r.receivedAssetAmountOut
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            const expected = [
-              0,
-              parseUnits("5", 18),
-              parseUnits("19", 6),
-            ].map(x => BalanceUtils.toString(x)).join();
-
-            expect(ret).eq(expected);
-          });
-        });
-      });
-    });
-    describe("Bad paths", () => {
-    // TODO
-    });
-    describe("Gas estimation @skip-on-coverage", () => {
-
     });
   });
 

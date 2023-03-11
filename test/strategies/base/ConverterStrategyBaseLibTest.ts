@@ -1751,5 +1751,30 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
     });
   });
+
+  describe("transferAll", () => {
+    it("should transfer expected amounts", async () => {
+      const receiver = ethers.Wallet.createRandom().address;
+      const tokens = [tetu, usdc, weth];
+      const amounts = [
+        parseUnits("1", 18),
+        parseUnits("2", 6),
+        parseUnits("3", 8),
+      ];
+      for (let i = 0; i < amounts.length; ++i) {
+        await tokens[i].mint(facade.address, amounts[i]);
+      }
+      await facade.transferAll(tokens.map(x => x.address), amounts, receiver);
+      const balances = [];
+      for (let i = 0; i < amounts.length; ++i) {
+        balances.push(await tokens[i].balanceOf(receiver));
+      }
+
+      const ret = balances.map(x => BalanceUtils.toString(x)).join("\n");
+      const expected = amounts.map(x => BalanceUtils.toString(x)).join("\n");
+
+      expect(ret).eq(expected);
+    });
+  });
 //endregion Unit tests
 });
