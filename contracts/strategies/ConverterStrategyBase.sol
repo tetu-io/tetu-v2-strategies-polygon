@@ -160,8 +160,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
-      address[] memory tokens = _depositorPoolAssets();
-      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+      (address[] memory tokens, uint indexAsset) = _getTokens();
 
       // prepare array of amounts ready to deposit, borrow missed amounts
       (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
@@ -188,6 +187,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Prepare {tokenAmounts} to be passed to depositorEnter
+  /// @dev Override this function to customize entry kind
   /// @param amount_ The amount of main asset that should be invested
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
@@ -205,8 +205,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint spentCollateral
   ) {
     // calculate required collaterals for each token and temporary save them to tokenAmounts
-    // save to tokenAmounts[indexAsset_] already correct value
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
+    // temporary save collateral to tokensAmounts
     tokenAmounts = ConverterStrategyBaseLib.getCollaterals(
       amount_,
       tokens_,
@@ -217,31 +217,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     );
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts
-    // total collateral amount spent for borrowing
-    uint len = tokens_.length;
-    borrowedAmounts = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset_) continue;
-
-      if (tokenAmounts[i] > 0) {
-        uint collateral;
-        AppLib.approveIfNeeded(tokens_[indexAsset_], tokenAmounts[i], address(tetuConverter_));
-        (collateral, borrowedAmounts[i]) = ConverterStrategyBaseLib.openPosition(
-          tetuConverter_,
-          "", // fixed collateral amount, max possible borrow amount // todo possibility to customize entry kind
-          tokens_[indexAsset_],
-          tokens_[i],
-          tokenAmounts[i]
-        );
-        // collateral should be equal to tokenAmounts[i] here because we use default entry kind
-        spentCollateral += collateral;
-
-        // zero amount are possible (conversion is not available) but it's not suitable for depositor
-        require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
-      }
-      tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(address(this));
-    }
-
+    (tokenAmounts, borrowedAmounts, spentCollateral) = ConverterStrategyBaseLib.getTokenAmounts(
+      tetuConverter_,
+      tokens_,
+      indexAsset_,
+      tokenAmounts
+    );
     return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 
@@ -300,8 +281,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     vars.p.investedAssets = investedAssets_;
 
     if ((all || amount != 0) && vars.p.investedAssets != 0) {
-      vars.p.tokens = _depositorPoolAssets();
-      vars.p.indexAsset = ConverterStrategyBaseLib.getAssetIndex(vars.p.tokens, asset);
+      (vars.p.tokens, vars.p.indexAsset) = _getTokens();
       vars.p.converter = converter;
       uint len = vars.p.tokens.length;
       vars.depositorLiquidity = _depositorLiquidity();
@@ -388,8 +368,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory withdrawnAmounts = _depositorEmergencyExit();
     emit OnDepositorEmergencyExit(withdrawnAmounts);
 
-    address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+    (address[] memory tokens, uint indexAsset) = _getTokens();
 
     // convert amounts to main asset and update base amounts
     (uint collateral, uint[] memory repaid) = _convertAfterWithdrawAll(tokens, indexAsset);
@@ -487,42 +466,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                 Claim rewards
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards
-  /// @dev The post-processing is rewards conversion to the main asset
-  /// @param tokens_ List of rewards claimed from the internal pool
-  /// @param amounts_ Amounts of rewards claimed from the internal pool
-  /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
-  /// @param amountsOut Amounts of available rewards
-  function _prepareRewardsList(
-    ITetuConverter tetuConverter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) internal returns (
-    address[] memory tokensOut,
-    uint[] memory amountsOut
-  ) {
-    // Rewards from TetuConverter
-    (address[] memory tokens2, uint[] memory amounts2) = tetuConverter_.claimRewards(address(this));
-
-    // Join arrays and recycle tokens
-    (tokensOut, amountsOut) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
-
-    // {amounts} contain just received values, but probably we already had some tokens on balance
-    uint len = tokensOut.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - baseAmounts[tokensOut[i]];
-    }
-  }
-
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual {
     // get rewards from the Depositor
     (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts) = _depositorClaimRewards();
 
-    (address[] memory rewardTokens, uint[] memory amounts) = _prepareRewardsList(
+    (address[] memory rewardTokens, uint[] memory amounts) = ConverterStrategyBaseLib.prepareRewardsList(
       converter,
       depositorRewardTokens,
-      depositorRewardAmounts
+      depositorRewardAmounts,
+      baseAmounts
     );
 
     uint len = rewardTokens.length;
@@ -561,6 +514,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
+    // todo send performanceFee to performanceReceiver
     (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
       asset,
       compoundRatio,
@@ -597,6 +551,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Do hard work
   function doHardWork() override public returns (uint, uint) {
+    require(msg.sender == splitter, DENIED);
     return _doHardWork(true);
   }
 
@@ -665,8 +620,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _calcInvestedAssets() internal returns (uint) {
     uint liquidity = _depositorLiquidity();
 
-    address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+    (address[] memory tokens, uint indexAsset) = _getTokens();
 
     uint[] memory amountsOut = liquidity == 0
     ? new uint[](tokens.length)
@@ -756,6 +710,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function capacity() external virtual view returns (uint) {
     return 2 ** 255;
     // almost same as type(uint).max but more gas efficient
+  }
+
+  function _getTokens() internal view returns (address[] memory tokens, uint indexAsset) {
+    tokens = _depositorPoolAssets();
+    indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
   }
 
 

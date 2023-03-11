@@ -346,7 +346,7 @@ describe('BalancerIntPriceChangeTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -389,7 +389,7 @@ describe('BalancerIntPriceChangeTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -435,7 +435,7 @@ describe('BalancerIntPriceChangeTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -480,7 +480,7 @@ describe('BalancerIntPriceChangeTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }

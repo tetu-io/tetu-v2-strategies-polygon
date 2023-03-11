@@ -4,12 +4,15 @@ pragma solidity 0.8.17;
 import "../../integrations/balancer/IBVault.sol";
 import "../../strategies/balancer/BalancerComposableStableDepositor.sol";
 
+import "hardhat/console.sol";
+
 /// @notice Provide direct access to internal functions of {BalancerBoostedAaveStableDepositor}
 contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepositor {
   function init(
     bytes32 poolId,
     address[] memory rewardTokens_
   ) external initializer {
+    console.log("BalancerComposableStableDepositorFacade.init", rewardTokens_.length);
     __BalancerBoostedAaveUsdDepositor_init(poolId, rewardTokens_);
   }
 
@@ -79,6 +82,8 @@ contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepo
     uint[] memory amountsOut
   ) {
     (tokensOut, amountsOut) = _depositorClaimRewards();
+    console.log("_depositorClaimRewardsAccess.tokensOut", tokensOut.length);
+    console.log("_depositorClaimRewardsAccess.amountsOut", amountsOut.length);
     lastRewardsAmountsOut = amountsOut;
     lastRewardsTokensOut = tokensOut;
     lastRewardsAmountsOutLength = amountsOut.length;
