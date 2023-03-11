@@ -128,14 +128,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function setLiquidationThreshold(address token, uint amount) external {
-    _onlyOperators();
+    StrategyLib.onlyOperators(controller());
     liquidationThresholds[token] = amount;
     emit LiquidationThresholdChanged(token, amount);
   }
 
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   function setReinvestThresholdPercent(uint percent_) external {
-    _onlyOperators();
+    StrategyLib.onlyOperators(controller());
     require(percent_ <= REINVEST_THRESHOLD_DENOMINATOR, AppErrors.WRONG_VALUE);
 
     reinvestThresholdPercent = percent_;
@@ -551,7 +551,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Do hard work
   function doHardWork() override public returns (uint, uint) {
-    require(msg.sender == splitter, DENIED);
+    require(msg.sender == splitter, StrategyLib.DENIED);
     return _doHardWork(true);
   }
 
