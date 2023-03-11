@@ -15,10 +15,20 @@ export class TimeUtils {
   }
 
   public static async advanceNBlocks(n: number) {
-    // test BalancerComposableStableDepositorFacadeTest, depositorClaimRewards, Withdraw full - doesn't work rewards don't appears..
-    // await ethers.provider.send("hardhat_mine", ['0x' + n.toString(16), '0x' + Number(1*2.35).toString(16)]);
-    await mine(n, {interval: n*2.35});
+    // test BalancerComposableStableDepositorFacadeTest, depositorClaimRewards, Withdraw full - doesn't work rewards don't appear...
+    // await ethers.provider.send("hardhat_mine", ['0x' + n.toString(16), '0x' + (n * 2.35).toFixed(0).toString(16)]);
+    // await mine(n, {interval: n*2.35});
+    await mine(n, {interval: 1});
   }
+
+  // public static async advanceNBlocks(n: number) {
+  //   const start = Date.now();
+  //   await ethers.provider.send('evm_increaseTime', [+(n * 2.35).toFixed(0)]);
+  //   for (let i = 0; i < n; i++) {
+  //     await ethers.provider.send('evm_mine', []);
+  //   }
+  //   Misc.printDuration('advanceNBlocks ' + n + ' completed', start);
+  // }
 
   public static async mineAndCheck() {
     const start = ethers.provider.blockNumber;

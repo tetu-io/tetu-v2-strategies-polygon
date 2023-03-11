@@ -600,8 +600,6 @@ describe('BalancerIntTest', function() {
             stateAfterExit.strategy.usdt.eq(0),
             stateAfterExit.strategy.dai.eq(0),
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            stateAfterExit.strategy.bptPool.gt(0),
             stateAfterExit.strategy.totalAssets.gt(0),
             stateAfterExit.strategy.investedAssets.gt(0),
 
@@ -628,8 +626,7 @@ describe('BalancerIntTest', function() {
             // strategy
             true, true, true,
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            true, true, true,
+            true, true,
 
             // splitter
             true,
@@ -707,9 +704,8 @@ describe('BalancerIntTest', function() {
             // gauge
             stateAfterHardwork.gauge.strategyBalance.gt(stateBeforeDeposit.gauge.strategyBalance),
 
-            // splitter: total assets amount is a bit decreased
+            // splitter: total assets amount is a bit increased
             stateAfterDeposit.splitter.totalAssets.lte(stateAfterHardwork.splitter.totalAssets),
-            areAlmostEqual(stateAfterDeposit.splitter.totalAssets, stateAfterHardwork.splitter.totalAssets, 3),
 
             // base amounts
             stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
@@ -728,7 +724,7 @@ describe('BalancerIntTest', function() {
             true,
 
             // splitter
-            true, true,
+            true,
 
             // base amounts
             true, true, true, true

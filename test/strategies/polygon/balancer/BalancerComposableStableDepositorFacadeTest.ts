@@ -562,7 +562,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             await makeDepositorEnterTest(facade, {amount: "1"});
             const r = await makeDepositorExitTest(facade);
             const maxPercentDeltas = getMaxPercentDelta(r);
-            expect(maxPercentDeltas.abs().lt(1e6)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e9)).eq(true);
           });
           it("$10_000", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);

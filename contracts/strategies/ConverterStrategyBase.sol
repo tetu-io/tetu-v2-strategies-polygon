@@ -14,7 +14,6 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -156,7 +155,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     int totalAssetsDelta
   ){
-    console.log("_depositToPool.1");
     uint updatedInvestedAssets;
     (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
 
@@ -164,7 +162,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
       (address[] memory tokens, uint indexAsset) = _getTokens();
 
-      console.log("_depositToPool.2");
       // prepare array of amounts ready to deposit, borrow missed amounts
       (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
         converter,
@@ -173,12 +170,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         indexAsset
       );
 
-      console.log("_depositToPool.3");
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
       emit OnDepositorEnter(amounts, consumedAmounts);
 
-      console.log("_depositToPool.4");
       // adjust base-amounts
       _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
 
@@ -209,7 +204,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory borrowedAmounts,
     uint spentCollateral
   ) {
-    console.log("_beforeDeposit.1");
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
     // temporary save collateral to tokensAmounts
@@ -222,7 +216,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle())
     );
 
-    console.log("_beforeDeposit.2");
     // make borrow and save amounts of tokens available for deposit to tokenAmounts
     (tokenAmounts, borrowedAmounts, spentCollateral) = ConverterStrategyBaseLib.getTokenAmounts(
       tetuConverter_,
@@ -230,7 +223,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       indexAsset_,
       tokenAmounts
     );
-    console.log("_beforeDeposit.3", tokenAmounts[0], tokenAmounts[1], tokenAmounts[2]);
     return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 
@@ -578,26 +570,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    console.log("_doHardWork.1");
     uint investedAssetsLocal = _updateInvestedAssets();
 
     _preHardWork(reInvest);
 
-    console.log("_doHardWork.2");
     (earned, lost) = _handleRewards();
     uint assetBalance = _balance(asset);
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
 
-      console.log("_doHardWork.3");
       uint assetInUseBefore = investedAssetsLocal + assetBalance;
-      console.log("_doHardWork.33", assetInUseBefore);
       _depositToPool(assetBalance, false);
       uint assetInUseAfter = _investedAssets + _balance(asset);
-      console.log("_doHardWork.35", assetInUseAfter);
-
-      console.log("_doHardWork.4");
 
       if (assetInUseAfter > assetInUseBefore) {
         earned += assetInUseAfter - assetInUseBefore;
@@ -606,7 +591,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
     }
 
-    console.log("_doHardWork.5");
     _postHardWork();
   }
 

@@ -16,8 +16,6 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-import "hardhat/console.sol";
-
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -382,7 +380,6 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
-    console.log("_openPosition.amountIn_", amountIn_);
     OpenPositionLocal memory vars;
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
     vars.entryKind = EntryKinds.getEntryKind(entryData_);
@@ -395,7 +392,6 @@ library ConverterStrategyBaseLib {
         amountIn_
       );
     } else {
-      console.log("_openPosition.1");
       (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
         entryData_,
         collateralAsset_,
@@ -403,18 +399,14 @@ library ConverterStrategyBaseLib {
         borrowAsset_,
         _LOAN_PERIOD_IN_BLOCKS
       );
-      console.log("_openPosition.1.1");
 
       uint len = vars.converters.length;
       if (len > 0) {
-        console.log("_openPosition.2");
         for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-          console.log("_openPosition.3.i");
           // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
           vars.collateral;
           vars.amountToBorrow;
           if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_COLLATERAL_IN_FOR_MAX_BORROW_OUT_0) {
-            console.log("_openPosition.4");
             // we have exact amount of total collateral amount
             // Case ENTRY_KIND_EXACT_PROPORTION_1 is here too because we consider first platform only
             vars.collateral = amountIn_ < vars.collateralsRequired[i]
@@ -423,8 +415,6 @@ library ConverterStrategyBaseLib {
             vars.amountToBorrow = amountIn_ < vars.collateralsRequired[i]
               ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
               : vars.amountsToBorrow[i];
-            console.log("_openPosition.5.amountIn_", amountIn_);
-            console.log("_openPosition.5.vars.collateral", vars.collateral);
             amountIn_ -= vars.collateral;
           } else {
             // assume here that entryKind == EntryKinds.ENTRY_KIND_EXACT_BORROW_OUT_FOR_MIN_COLLATERAL_IN_2
@@ -1026,23 +1016,16 @@ library ConverterStrategyBaseLib {
     uint[] memory borrowedAmounts,
     uint spentCollateral
   ) {
-    console.log("getTokenAmounts.1");
     // content of tokenAmounts will be modified in place
     uint len = tokens_.length;
     borrowedAmounts = new uint[](len);
     tokenAmountsOut = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      console.log("getTokenAmounts.2");
       if (i == indexAsset_) {
-        console.log("getTokenAmounts.3");
         tokenAmountsOut[i] = collaterals_[i];
       } else {
-        console.log("getTokenAmounts.4");
         if (collaterals_[i] > 0) {
-          console.log("getTokenAmounts.7");
           uint collateral;
-          console.log("getTokenAmounts.8", tokens_[indexAsset_], collaterals_[i]);
-          console.log("getTokenAmounts.81", tokens_[i]);
           AppLib.approveIfNeeded(tokens_[indexAsset_], collaterals_[i], address(tetuConverter_));
           (collateral, borrowedAmounts[i]) = _openPosition(
             tetuConverter_,
@@ -1051,20 +1034,16 @@ library ConverterStrategyBaseLib {
             tokens_[i],
             collaterals_[i]
           );
-          console.log("getTokenAmounts.9", collateral, borrowedAmounts[i]);
           // collateral should be equal to tokenAmounts[i] here because we use default entry kind
           spentCollateral += collateral;
-          console.log("getTokenAmounts.91");
 
           // zero amount are possible (conversion is not available) but it's not suitable for depositor
           require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
         }
-        console.log("getTokenAmounts.5");
         tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
       }
     }
 
-    console.log("getTokenAmounts.6");
     return (tokenAmountsOut, borrowedAmounts, spentCollateral);
   }
 
