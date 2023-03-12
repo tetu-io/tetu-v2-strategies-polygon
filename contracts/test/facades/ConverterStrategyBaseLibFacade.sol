@@ -25,7 +25,10 @@ contract ConverterStrategyBaseLibFacade {
   function getLiquidityAmountRatio(
     uint targetAmount_,
     address strategy_,
-    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory params_
+    address[] memory tokens,
+    uint indexAsset,
+    ITetuConverter converter,
+    uint investedAssets
   ) external returns (
     uint liquidityRatioOut,
     uint[] memory amountsToConvertOut
@@ -34,10 +37,10 @@ contract ConverterStrategyBaseLibFacade {
       targetAmount_,
       baseAmounts,
       strategy_,
-      params_.tokens,
-      params_.indexAsset,
-      params_.converter,
-      params_.investedAssets,
+      tokens,
+      indexAsset,
+      converter,
+      investedAssets,
       1e18
     );
   }

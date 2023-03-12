@@ -2,8 +2,6 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/ITetuConverterCallback.sol";
@@ -31,28 +29,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
   ///                        DATA TYPES
   /////////////////////////////////////////////////////////////////////
-  /// @notice Local vars for {_recycle}, workaround for stack too deep
-  struct RecycleLocalParams {
-    address asset;
-    uint compoundRatio;
-    IForwarder forwarder;
-    uint[] amountsToForward;
-    uint liquidationThreshold;
-    uint amountToCompound;
-    uint amountToForward;
-    address rewardToken;
-    address[] tokens;
-  }
-
-  struct ConvertAfterWithdrawLocalParams {
-    address asset;
-    ITetuConverter tetuConverter;
-    ITetuLiquidator liquidator;
-    uint collateral;
-    uint spentAmountIn;
-    uint receivedAmountOut;
-    uint liquidationThreshold;
-  }
 
   struct WithdrawUniversalLocal {
     uint[] reserves;
@@ -138,7 +114,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   function setReinvestThresholdPercent(uint percent_) external {
     StrategyLib.onlyOperators(controller());
-    require(percent_ <= REINVEST_THRESHOLD_DENOMINATOR, AppErrors.WRONG_VALUE);
+    require(percent_ <= REINVEST_THRESHOLD_DENOMINATOR, StrategyLib.WRONG_VALUE);
 
     reinvestThresholdPercent = percent_;
     emit ReinvestThresholdPercentChanged(percent_);
@@ -500,7 +476,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    // todo send performanceFee to performanceReceiver
+    // todo send performanceFee to performanceReceiver (make dedicated call and adjust amounts)
     (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
       asset,
       compoundRatio,
@@ -542,17 +518,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  function _handleRewards() internal virtual returns (uint earned, uint lost) {
+  function _handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     uint assetBalanceBefore = _balance(asset);
     _claim();
-    uint assetBalanceAfterClaim = _balance(asset);
-    if (assetBalanceAfterClaim > assetBalanceBefore) {
-      earned = assetBalanceAfterClaim - assetBalanceBefore;
-    } else {
-      lost = assetBalanceBefore - assetBalanceAfterClaim;
-    }
-
-    return (earned, lost);
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, _balance(asset), earned, lost);
+    return (earned, lost, assetBalanceAfterClaim);
   }
 
   /// @return earned Earned amount in terms of {asset}
@@ -561,28 +531,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint investedAssetsBefore = _investedAssets;
     uint investedAssetsLocal = _updateInvestedAssets();
 
+    // register autocompound income or possible lose if assets fluctuated
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
+
     _preHardWork(reInvest);
 
-    (earned, lost) = _handleRewards();
-    if (investedAssetsBefore > investedAssetsLocal) {
-      lost += investedAssetsBefore - investedAssetsLocal;
-    } else {
-      earned += investedAssetsLocal - investedAssetsBefore;
-    }
-    uint assetBalance = _balance(asset);
+    uint assetBalance;
+    (earned, lost, assetBalance) = _handleRewards();
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
 
       uint assetInUseBefore = investedAssetsLocal + assetBalance;
       _depositToPool(assetBalance, false);
-      uint assetInUseAfter = _investedAssets + _balance(asset);
 
-      if (assetInUseAfter > assetInUseBefore) {
-        earned += assetInUseAfter - assetInUseBefore;
-      } else {
-        lost += assetInUseBefore - assetInUseAfter;
-      }
+      (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetInUseBefore, _investedAssets + _balance(asset), earned, lost);
     }
 
     _postHardWork();
@@ -604,15 +567,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
-    uint liquidity = _depositorLiquidity();
-
     (address[] memory tokens, uint indexAsset) = _getTokens();
 
-    uint[] memory amountsOut = liquidity == 0
-    ? new uint[](tokens.length)
-    : _depositorQuoteExit(liquidity);
-
-    return ConverterStrategyBaseLib.calcInvestedAssets(tokens, amountsOut, indexAsset, converter, baseAmounts);
+    return ConverterStrategyBaseLib.calcInvestedAssets(
+      tokens,
+    // quote exit should check zero liquidity
+      _depositorQuoteExit(_depositorLiquidity()),
+      indexAsset,
+      converter,
+      baseAmounts
+    );
   }
 
   function calcInvestedAssets() external returns (uint) {
@@ -626,9 +590,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     int totalAssetsDelta
   ) {
     uint __investedAssets = _investedAssets;
+
     updatedInvestedAssets = updateTotalAssetsBeforeInvest_
     ? _updateInvestedAssets()
     : __investedAssets;
+
     totalAssetsDelta = updateTotalAssetsBeforeInvest_
     ? int(updatedInvestedAssets) - int(__investedAssets)
     : int(0);
@@ -656,8 +622,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     bool isCollateral
   ) {
     address _converter = address(converter);
-    require(msg.sender == _converter, AppErrors.ONLY_TETU_CONVERTER);
-    require(collateralAsset_ == asset, AppErrors.WRONG_ASSET);
+    require(msg.sender == _converter, StrategyLib.DENIED);
+    require(collateralAsset_ == asset, StrategyLib.WRONG_VALUE);
 
     amountOut = 0;
     uint assetBalance = _balance(collateralAsset_);
@@ -669,9 +635,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // it will be rebalanced in the next call
       _withdrawFromPool(requiredAmountCollateralAsset_ - assetBalance);
       uint balanceAfterWithdraw = _balance(collateralAsset_);
-      amountOut = balanceAfterWithdraw > requiredAmountCollateralAsset_
-      ? requiredAmountCollateralAsset_
-      : balanceAfterWithdraw;
+      amountOut = Math.min(balanceAfterWithdraw, requiredAmountCollateralAsset_);
     }
 
     IERC20(collateralAsset_).safeTransfer(_converter, amountOut);
@@ -709,6 +673,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-  uint[50] private __gap;
+  uint[46] private __gap;
 
 }

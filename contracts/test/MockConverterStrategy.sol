@@ -109,9 +109,9 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   /////////////////////////////////////////////////////////////////////////////////////
   /// _handleRewards, mocked version + accessor
   /////////////////////////////////////////////////////////////////////////////////////
-  function _handleRewards() internal override returns (uint earned, uint lost) {
+  function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     if (handleRewardsParams.initialized) {
-      console.log("_handleRewards.mocked-version is called");
+//      console.log("_handleRewards.mocked-version is called");
       if (handleRewardsParams.assetBalanceChange > 0) {
         IERC20(asset).transferFrom(
           handleRewardsParams.providerBalanceChange,
@@ -124,13 +124,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- handleRewardsParams.assetBalanceChange)
         );
       }
-      return (handleRewardsParams.earned, handleRewardsParams.lost);
+      return (handleRewardsParams.earned, handleRewardsParams.lost, _balance(asset));
     } else {
       return super._handleRewards();
     }
   }
 
-  function _handleRewardsAccess() external virtual returns (uint earned, uint lost) {
+  function _handleRewardsAccess() external virtual returns (uint earned, uint lost, uint assetBalance) {
     return _handleRewards();
   }
 
@@ -181,7 +181,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     int totalAssetsDelta
   ){
     if (depositToPoolParams.initialized) {
-      console.log("_depositToPool.mocked-version is called");
+//      console.log("_depositToPool.mocked-version is called");
       if (depositToPoolParams.balanceChange > 0) {
         IERC20(asset).transferFrom(
           depositToPoolParams.providerBalanceChange,

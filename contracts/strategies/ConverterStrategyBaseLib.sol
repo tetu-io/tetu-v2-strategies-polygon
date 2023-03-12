@@ -8,6 +8,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/IConverterController.sol";
@@ -31,28 +32,8 @@ library ConverterStrategyBaseLib {
     uint len;
     uint baseAmountIn;
     uint totalRewardAmounts;
-  }
-
-  /// @notice Input params for {_recycle}, workaround for stack too deep
-  struct RecycleInputParams {
-    address asset;
-    uint compoundRatio;
-    address[] tokens;
-    ITetuLiquidator liquidator;
-    address[] rewardTokens;
-    uint[] rewardAmounts;
-  }
-
-  /// @notice Input params for {getLiquidityAmountRatio}
-  /// @dev Workaround for stack too deep in {_withdrawUniversal}
-  struct LiquidityAmountRatioInputParams {
-    /// @notice Results of {_depositorPoolAssets}
-    address[] tokens;
-    /// @notice Index of the main asset in {tokens_}
-    uint indexAsset;
-    ITetuConverter converter;
-    /// @notice Total amount of invested assets of the strategy
-    uint investedAssets;
+    uint spentAmountIn;
+    uint receivedAmountOut;
   }
 
   struct OpenPositionLocal {
@@ -81,17 +62,6 @@ library ConverterStrategyBaseLib {
     uint[] prices;
     uint[] decs;
     uint[] debts;
-  }
-
-  struct ConvertAfterWithdrawInputParams {
-    ITetuConverter tetuConverter;
-    ITetuLiquidator liquidator;
-    uint liquidationThreshold;
-    /// @notice Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
-    address[] tokens;
-    /// Index of main {asset} in {tokens}
-    uint indexAsset;
-    uint[] amountsToConvert;
   }
 
   struct ConvertAfterWithdrawLocalParams {
@@ -521,7 +491,7 @@ library ConverterStrategyBaseLib {
             vars.amountToBorrow,
             address(this)
           ) == vars.amountToBorrow,
-          AppErrors.WRONG_VALUE
+          StrategyLib.WRONG_VALUE
         );
         emit OpenPosition(
           vars.converters[i],
@@ -614,7 +584,7 @@ library ConverterStrategyBaseLib {
     ? balanceBefore - balanceAfter
     : 0;
 
-    require(returnedBorrowAmountOut == 0, AppErrors.REPAY_MAKES_SWAP);
+    require(returnedBorrowAmountOut == 0, StrategyLib.WRONG_VALUE);
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -744,20 +714,26 @@ library ConverterStrategyBaseLib {
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    RecycleInputParams memory p = RecycleInputParams({
-    asset : asset_,
-    compoundRatio : compoundRatio_,
-    tokens : tokens_,
-    liquidator : liquidator_,
-    rewardTokens : rewardTokens_,
-    rewardAmounts : rewardAmounts_
-    });
-    (receivedAmounts, spentAmounts, amountsToForward) = _recycle(p, liquidationThresholds_, baseAmounts_);
+    (receivedAmounts, spentAmounts, amountsToForward) = _recycle(
+      asset_,
+      compoundRatio_,
+      tokens_,
+      liquidator_,
+      rewardTokens_,
+      rewardAmounts_,
+      liquidationThresholds_,
+      baseAmounts_
+    );
   }
 
-  /// @dev Implementation of {recycle}, input params are packed to a struct to avoid stack too deep.
+  /// @dev Implementation of {recycle}
   function _recycle(
-    RecycleInputParams memory params,
+    address asset,
+    uint compoundRatio,
+    address[] memory tokens,
+    ITetuLiquidator liquidator,
+    address[] memory rewardTokens,
+    uint[] memory rewardAmounts,
     mapping(address => uint) storage liquidationThresholds,
     mapping(address => uint) storage baseAmounts
   ) internal returns (
@@ -767,10 +743,10 @@ library ConverterStrategyBaseLib {
   ) {
     RecycleLocalParams memory p;
 
-    p.len = params.rewardTokens.length;
-    require(p.len == params.rewardAmounts.length, AppErrors.WRONG_LENGTHS);
+    p.len = rewardTokens.length;
+    require(p.len == rewardAmounts.length, AppErrors.WRONG_LENGTHS);
 
-    p.liquidationThresholdAsset = liquidationThresholds[params.asset];
+    p.liquidationThresholdAsset = liquidationThresholds[asset];
 
     amountsToForward = new uint[](p.len);
     receivedAmounts = new uint[](p.len + 1);
@@ -778,11 +754,11 @@ library ConverterStrategyBaseLib {
 
     // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
     for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
-      p.rewardToken = params.rewardTokens[i];
-      p.amountToCompound = params.rewardAmounts[i] * params.compoundRatio / COMPOUND_DENOMINATOR;
+      p.rewardToken = rewardTokens[i];
+      p.amountToCompound = rewardAmounts[i] * compoundRatio / COMPOUND_DENOMINATOR;
 
       if (p.amountToCompound > 0) {
-        if (ConverterStrategyBaseLib.getAssetIndex(params.tokens, p.rewardToken) != type(uint).max) {
+        if (ConverterStrategyBaseLib.getAssetIndex(tokens, p.rewardToken) != type(uint).max) {
           // The asset is in the list of depositor's assets, liquidation is not allowed
           receivedAmounts[i] += p.amountToCompound;
         } else {
@@ -797,30 +773,30 @@ library ConverterStrategyBaseLib {
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
             // because the {_asset} is always included to the list of depositor's assets
-            (uint spentAmountIn, uint receivedAmountOut) = _liquidate(
-              params.liquidator,
+            (p.spentAmountIn, p.receivedAmountOut) = _liquidate(
+              liquidator,
               p.rewardToken,
-              params.asset,
+              asset,
               p.totalRewardAmounts,
               _REWARD_LIQUIDATION_SLIPPAGE,
               p.liquidationThresholdAsset
             );
 
             // Adjust amounts after liquidation
-            if (receivedAmountOut > 0) {
-              receivedAmounts[p.len] += receivedAmountOut;
+            if (p.receivedAmountOut > 0) {
+              receivedAmounts[p.len] += p.receivedAmountOut;
             }
-            if (spentAmountIn == 0) {
+            if (p.spentAmountIn == 0) {
               receivedAmounts[i] += p.amountToCompound;
             } else {
-              require(spentAmountIn == p.amountToCompound + p.baseAmountIn, AppErrors.WRONG_VALUE);
+              require(p.spentAmountIn == p.amountToCompound + p.baseAmountIn, StrategyLib.WRONG_VALUE);
               spentAmounts[i] += p.baseAmountIn;
             }
           }
         }
       }
 
-      p.amountToForward = params.rewardAmounts[i] - p.amountToCompound;
+      p.amountToForward = rewardAmounts[i] - p.amountToCompound;
       amountsToForward[i] = p.amountToForward;
     }
 
@@ -1031,10 +1007,6 @@ library ConverterStrategyBaseLib {
   ///                       WITHDRAW HELPERS
   /////////////////////////////////////////////////////////////////////
 
-  function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
-    return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
-  }
-
   function postWithdrawActions(
     uint[] memory reserves,
     uint depositorLiquidity,
@@ -1164,6 +1136,28 @@ library ConverterStrategyBaseLib {
     }
 
     return (collateralOut, repaidAmountsOut);
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                       OTHER HELPERS
+  /////////////////////////////////////////////////////////////////////
+
+  function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
+    return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
+  }
+
+  function registerIncome(
+    uint assetBefore,
+    uint assetAfter,
+    uint earned,
+    uint lost
+  ) internal pure returns (uint _earned, uint _lost) {
+    if (assetAfter > assetBefore) {
+      earned += assetAfter - assetBefore;
+    } else {
+      lost += assetBefore - assetAfter;
+    }
+    return (earned, lost);
   }
 }
 
