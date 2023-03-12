@@ -58,7 +58,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] reserves;
     uint totalSupply;
     uint depositorLiquidity;
-    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams p;
+    uint liquidityAmount;
+    uint assetPrice;
+    uint[] amountsToConvert;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -267,100 +269,85 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount Amount to be withdrawn. 0 is ok if we withdraw all.
   /// @param all Withdraw all
   /// @param investedAssets_ Current amount of invested assets
-  /// @return investedAssetsUSD The value that we should receive after withdrawing
-  /// @return assetPrice Price of the {asset} taken from the price oracle
+  /// @return __investedAssetsUSD The value that we should receive after withdrawing
+  /// @return __assetPrice Price of the {asset} taken from the price oracle
   function _withdrawUniversal(uint amount, bool all, uint investedAssets_) internal returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+    uint __investedAssetsUSD,
+    uint __assetPrice
   ) {
-    WithdrawUniversalLocal memory vars;
 
-    // _investedAssets value is deprecated, prices can be changed since last update
-    // so we need to recalculate _investedAssets
-    // to simplify testing, we pass recalculated version as a function param
-    vars.p.investedAssets = investedAssets_;
+    if ((all || amount != 0) && investedAssets_ != 0) {
 
-    if ((all || amount != 0) && vars.p.investedAssets != 0) {
-      (vars.p.tokens, vars.p.indexAsset) = _getTokens();
-      vars.p.converter = converter;
-      uint len = vars.p.tokens.length;
-      vars.depositorLiquidity = _depositorLiquidity();
+      address[] memory tokens = _depositorPoolAssets();
+      address _asset = asset;
+      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, _asset);
+      ITetuConverter _converter = converter;
 
-      // temporary save liquidityRatioOut to liquidityAmount
-      (uint liquidityAmount, uint[] memory amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmountRatio(
+      WithdrawUniversalLocal memory vars = WithdrawUniversalLocal({
+      reserves : _depositorPoolReserves(),
+      totalSupply : _depositorTotalSupply(),
+      depositorLiquidity : _depositorLiquidity(),
+      liquidityAmount : 0,
+      amountsToConvert : new uint[](0),
+      assetPrice : ConverterStrategyBaseLib.getAssetPriceFromConverter(_converter, _asset)
+      });
+
+      (vars.liquidityAmount, vars.amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmountRatio(
         all ? 0 : amount,
         baseAmounts,
         address(this),
-        vars.p
+        tokens,
+        indexAsset,
+        _converter,
+        investedAssets_,
+        vars.depositorLiquidity
       );
-      if (liquidityAmount != 0) {
-        // liquidityAmount temporary contains ratio...
-        liquidityAmount = liquidityAmount * vars.depositorLiquidity / 1e18;
-      }
-
-      {
-        IPriceOracle priceOracle = IPriceOracle(IConverterController(vars.p.converter.controller()).priceOracle());
-        assetPrice = priceOracle.getAssetPrice(vars.p.tokens[vars.p.indexAsset]);
-      }
 
       uint[] memory withdrawnAmounts;
       uint expectedAmountMainAsset;
-      if (liquidityAmount != 0) {
-        // get reserves and totalSupply before withdraw
-        vars.reserves = _depositorPoolReserves();
-        vars.totalSupply = _depositorTotalSupply();
 
+      if (vars.liquidityAmount != 0) {
+
+        // =============== WITHDRAW =====================
         // make withdraw
-        withdrawnAmounts = _depositorExit(liquidityAmount);
-        emit OnDepositorExit(liquidityAmount, withdrawnAmounts);
+        withdrawnAmounts = _depositorExit(vars.liquidityAmount);
+        emit OnDepositorExit(vars.liquidityAmount, withdrawnAmounts);
+        // ==============================================
 
-        // estimate, how many assets should be withdrawn
-        // the depositor is able to use less liquidity than it was asked
-        // (i.e. Balancer-depositor leaves some BPT unused)
-        // so, we need to fix liquidityAmount on this amount
-
-        // we assume here, that liquidity cannot increase in _depositorExit
-        uint depositorLiquidityDelta = vars.depositorLiquidity - _depositorLiquidity();
-        if (liquidityAmount > depositorLiquidityDelta) {
-          liquidityAmount = depositorLiquidityDelta;
-        }
-
-        // now we can estimate expected amount of assets to be withdrawn
-        uint[] memory expectedWithdrawAmounts = ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(
+        (expectedAmountMainAsset, vars.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
           vars.reserves,
-          liquidityAmount,
-          vars.totalSupply
+          vars.depositorLiquidity,
+          vars.liquidityAmount,
+          vars.totalSupply,
+          vars.amountsToConvert,
+          tokens,
+          indexAsset,
+          _converter,
+          _depositorLiquidity(),
+          withdrawnAmounts
         );
 
-        expectedAmountMainAsset = ConverterStrategyBaseLib.getExpectedAmountMainAsset(
-          vars.p,
-          expectedWithdrawAmounts,
-          amountsToConvert
-        );
-        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-          amountsToConvert[i] += withdrawnAmounts[i];
-        }
       } else {
-        withdrawnAmounts = new uint[](len);
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
-        expectedAmountMainAsset = ConverterStrategyBaseLib.getExpectedAmountMainAsset(
-          vars.p,
-          withdrawnAmounts, // array with all zero values
-          amountsToConvert
+        (withdrawnAmounts, expectedAmountMainAsset) = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+          tokens,
+          indexAsset,
+          _converter,
+          new uint[](tokens.length), // array with all zero values
+          vars.amountsToConvert
         );
       }
 
       // convert amounts to main asset and update base amounts
-      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(vars.p.tokens, vars.p.indexAsset, amountsToConvert);
-      _updateBaseAmounts(vars.p.tokens, withdrawnAmounts, repaid, vars.p.indexAsset, int(collateral));
-
-      investedAssetsUSD = expectedAmountMainAsset * assetPrice / 1e18;
+      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(tokens, indexAsset, vars.amountsToConvert, _converter);
+      _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
       // adjust _investedAssets
       _updateInvestedAssets();
-    }
 
-    return (investedAssetsUSD, assetPrice);
+      return (expectedAmountMainAsset * vars.assetPrice / 1e18, vars.assetPrice);
+    }
+    return (0, 0);
   }
 
   /// @notice If pool supports emergency withdraw need to call it for emergencyExit()
@@ -395,7 +382,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory amountsToConvert = ConverterStrategyBaseLib.getAvailableBalances(tokens_, indexAsset_);
 
     // convert amounts to the main asset
-    (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert);
+    (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert, converter);
   }
 
   /// @notice Convert {amountsToConvert_} to the main {asset}
@@ -406,20 +393,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _convertAfterWithdraw(
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory amountsToConvert_
+    uint[] memory amountsToConvert_,
+    ITetuConverter _converter
   ) internal returns (
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
     return ConverterStrategyBaseLib.convertAfterWithdraw(
-      ConverterStrategyBaseLib.ConvertAfterWithdrawInputParams({
-    tetuConverter : converter,
-    liquidator : ITetuLiquidator(IController(controller()).liquidator()),
-    liquidationThreshold : liquidationThresholds[tokens_[indexAsset_]],
-    tokens : tokens_,
-    indexAsset : indexAsset_,
-    amountsToConvert : amountsToConvert_
-    })
+      _converter,
+      ITetuLiquidator(IController(controller()).liquidator()),
+      liquidationThresholds[tokens_[indexAsset_]],
+      tokens_,
+      indexAsset_,
+      amountsToConvert_
     );
   }
 
