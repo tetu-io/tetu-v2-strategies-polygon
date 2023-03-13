@@ -1741,7 +1741,7 @@ describe("ConverterStrategyBaseLibTest", () => {
     interface ISendPerformanceFeeParams {
       fee: number;
       rewardTokens: MockToken[];
-      rewardAmounts: string[];
+      rewardAmounts: number[];
     }
     interface ISendPerformanceFeeResults {
       rewardAmounts: number[];
@@ -1755,10 +1755,7 @@ describe("ConverterStrategyBaseLibTest", () => {
     ) : Promise<ISendPerformanceFeeResults> {
       const receiver = ethers.Wallet.createRandom().address;
       for (let i = 0; i < params.rewardTokens.length; ++i) {
-        await params.rewardTokens[i].mint(
-          facade.address,
-          parseUnits(params.rewardAmounts[i], await params.rewardTokens[i].decimals())
-        )
+        await params.rewardTokens[i].mint(facade.address, params.rewardAmounts[i]);
       }
       const r = await facade.callStatic.sendPerformanceFee(
         params.fee,
@@ -1788,10 +1785,10 @@ describe("ConverterStrategyBaseLibTest", () => {
 
       return {
         gasUsed,
-        performanceAmounts: await BalanceUtils.formatUnitsAll(params.rewardTokens, r.performanceAmounts),
-        rewardAmounts: await BalanceUtils.formatUnitsAll(params.rewardTokens, r.rewardAmounts),
-        facadeBalances: await BalanceUtils.formatUnitsAll(params.rewardTokens, facadeBalances),
-        receiverBalances: await BalanceUtils.formatUnitsAll(params.rewardTokens, receiverBalances),
+        performanceAmounts: r.performanceAmounts.map(x => x.toNumber()),
+        rewardAmounts: r.rewardAmounts.map(x => x.toNumber()),
+        facadeBalances: facadeBalances.map(x => x.toNumber()),
+        receiverBalances: receiverBalances.map(x => x.toNumber()),
       }
     }
     describe("Good paths", () => {
@@ -1799,9 +1796,7 @@ describe("ConverterStrategyBaseLibTest", () => {
         const r = await sendPerformanceFeeTest({
           fee: 10_000,
           rewardTokens: [tetu, usdc, usdt, dai],
-          rewardAmounts: [
-            "10", "20", "30", "40"
-          ]
+          rewardAmounts: [10, 20, 30, 40]
         });
 
         const ret = [
@@ -1826,9 +1821,7 @@ describe("ConverterStrategyBaseLibTest", () => {
         const r = await sendPerformanceFeeTest({
           fee: 10_000,
           rewardTokens: [tetu, usdc, usdt, dai],
-          rewardAmounts: [
-            "10", "20", "30", "40"
-          ]
+          rewardAmounts: [10, 20, 30, 40]
         });
         controlGasLimitsEx(r.gasUsed, GAS_PERFORMANCE_FEE, (u, t) => {
           expect(u).to.be.below(t + 1);

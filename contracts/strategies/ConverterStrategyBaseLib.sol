@@ -823,8 +823,8 @@ library ConverterStrategyBaseLib {
     performanceAmounts = new uint[](len);
 
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      performanceAmounts[i] = rewardAmounts[i] * performanceFee_ / FEE_DENOMINATOR;
-      rewardAmounts[i] = rewardAmounts[i] - performanceAmounts[i];
+      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / FEE_DENOMINATOR;
+      rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
       IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
     }
   }

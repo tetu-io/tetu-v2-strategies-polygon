@@ -2633,13 +2633,13 @@ describe("ConverterStrategyBaseAccessTest", () => {
       const r: {investedAssetsUSD: BigNumber, assetPrice: BigNumber} = params?.emergency
         ? {investedAssetsUSD: BigNumber.from(0), assetPrice: BigNumber.from(0)}
         : amount
-          ? await strategy.callStatic.withdrawFromPoolTestAccess(amount, investedAssets)
-          : await strategy.callStatic._withdrawAllFromPoolTestAccess(investedAssets);
+          ? await strategy.callStatic.withdrawUniversalTestAccess(amount, false, investedAssets)
+          : await strategy.callStatic._withdrawAllFromPoolTestAccess(0, true, investedAssets);
       const tx = params?.emergency
         ? await strategy._emergencyExitFromPoolAccess()
         : amount
-          ? await strategy.withdrawFromPoolTestAccess(amount, investedAssets)
-          : await strategy._withdrawAllFromPoolTestAccess(investedAssets);
+          ? await strategy.withdrawFromPoolTestAccess(amount, false, investedAssets)
+          : await strategy._withdrawAllFromPoolTestAccess(0, true, investedAssets);
       const gasUsed = (await tx.wait()).gasUsed;
 
       const baseAmounts = await Promise.all(depositorTokens.map(

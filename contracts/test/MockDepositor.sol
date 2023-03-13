@@ -9,9 +9,6 @@ import "hardhat/console.sol";
 /// @title Mock contract for base Depositor.
 contract MockDepositor is DepositorBase, Initializable {
 
-  /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant DEPOSITOR_MOCK_VERSION = "1.0.0";
-
   uint[] private _depositorReserves;
   uint[] private _depositorWeights;
 
@@ -31,16 +28,12 @@ contract MockDepositor is DepositorBase, Initializable {
     uint[] memory depositorWeights_,
     uint[] memory depositorReserves_
   ) internal onlyInitializing {
-    require(tokens_.length == depositorReserves_.length, "!length");
-    require(tokens_.length == depositorWeights_.length, "!length");
-
     uint tokensLength = tokens_.length;
     for (uint i = 0; i < tokensLength; ++i) {
       _depositorAssets.push(tokens_[i]);
       _depositorWeights.push(depositorWeights_[i]);
       _depositorReserves.push(depositorReserves_[i]);
     }
-//    console.log("__MockDepositor_init", tokensLength, _depositorAssets.length, _depositorWeights.length);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -82,14 +75,14 @@ contract MockDepositor is DepositorBase, Initializable {
     weights = _depositorWeights;
     uint len = weights.length;
     totalWeight = 0;
-    for(uint i = 0; i < len; i++) {
+    for(uint i; i < len; i++) {
       totalWeight += weights[i];
     }
   }
 
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
     reserves = new uint[](_depositorReserves.length);
-    for (uint i = 0; i < _depositorReserves.length; ++i) {
+    for (uint i; i < _depositorReserves.length; ++i) {
       reserves[i] = _depositorReserves[i];
     }
   }
@@ -106,7 +99,7 @@ contract MockDepositor is DepositorBase, Initializable {
     uint[] amountsConsumed;
     uint liquidityOut;
   }
-  DepositorEnterParams public depositorEnterParams;
+  DepositorEnterParams internal depositorEnterParams;
 
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
     uint[] memory amountsConsumed,
@@ -148,7 +141,7 @@ contract MockDepositor is DepositorBase, Initializable {
     uint liquidityAmount;
     uint[] amountsOut;
   }
-  DepositorExitParams public depositorExitParams;
+  DepositorExitParams internal depositorExitParams;
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
 //    console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
@@ -186,7 +179,7 @@ contract MockDepositor is DepositorBase, Initializable {
     uint[] amountsOut;
   }
   /// @notice keccak256(liquidityAmount + 1) => results
-  mapping(bytes32 => DepositorQuoteExitParams) public depositorQuoteExitParams;
+  mapping(bytes32 => DepositorQuoteExitParams) internal depositorQuoteExitParams;
 
   /// @dev Quotes output for given lp amount from the pool.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {

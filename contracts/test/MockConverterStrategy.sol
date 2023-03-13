@@ -88,18 +88,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     _updateInvestedAssets();
   }
 
-  function withdrawFromPoolTestAccess(uint amount, uint investedAssets_) external returns (
+  function withdrawUniversalTestAccess(uint amount, bool all, uint investedAssets_) external returns (
     uint investedAssetsUSD,
     uint assetPrice
   ) {
-    return _withdrawUniversal(amount, false, investedAssets_);
-  }
-
-  function _withdrawAllFromPoolTestAccess(uint investedAssets_) external returns (
-    uint investedAssetsUSD,
-    uint assetPrice
-  ) {
-    return _withdrawUniversal(0, true, investedAssets_);
+    return _withdrawUniversal(amount, all, investedAssets_);
   }
 
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
@@ -128,10 +121,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     } else {
       return super._handleRewards();
     }
-  }
-
-  function _handleRewardsAccess() external virtual returns (uint earned, uint lost, uint assetBalance) {
-    return _handleRewards();
   }
 
   struct MockedHandleRewardsParams {
@@ -208,17 +197,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     totalAssetsDelta : totalAssetsDelta_
     });
   }
+
   /////////////////////////////////////////////////////////////////////////////////////
   /// Others
   /////////////////////////////////////////////////////////////////////////////////////
-
-  function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual returns (
-    uint[] memory receivedAmounts,
-    uint[] memory spentAmounts,
-    uint[] memory amountsToForward
-  ) {
-    return _recycle(tokens, amounts);
-  }
 
   function _beforeDepositAccess(
     ITetuConverter tetuConverter_,
@@ -242,25 +224,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     baseAmounts[token_] = amount_;
   }
 
-  function _prepareRewardsListAccess(
-    ITetuConverter tetuConverter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) external returns (
-    address[] memory tokensOut,
-    uint[] memory amountsOut
-  ) {
-    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, amounts_, baseAmounts);
-  }
-
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
   }
 
-  function _updateInvestedAssetsAndGetDeltaAccess(bool updateTotalAssetsBeforeInvest_) external returns (
-    uint updatedInvestedAssets,
-    int totalAssetsDelta
-  ) {
-    return _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
-  }
 }
