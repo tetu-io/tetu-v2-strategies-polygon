@@ -10,8 +10,7 @@ import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
   GAS_CALC_INVESTED_ASSETS_NO_DEBTS,
   GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
-  GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST,
-  GAS_OPEN_POSITION,
+  GAS_OPEN_POSITION, GAS_PERFORMANCE_FEE,
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS,
   GET_GET_COLLATERALS,
   GET_LIQUIDITY_AMOUNT_RATIO
@@ -258,12 +257,10 @@ describe("ConverterStrategyBaseLibTest", () => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits("5", 6),
               ethers.Wallet.createRandom().address,
-              {
-                indexAsset: 1,
-                tokens: [dai.address, usdc.address, usdt.address],
-                investedAssets: parseUnits("500", 6),
-                converter: getTetuConverter([],1, [],[])
-              }
+              [dai.address, usdc.address, usdt.address],
+              1,
+              getTetuConverter([],1, [],[]),
+              parseUnits("500", 6),
             )
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
             const expected = [
@@ -295,12 +292,10 @@ describe("ConverterStrategyBaseLibTest", () => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits("5", 6),
               ethers.Wallet.createRandom().address,
-              {
-                indexAsset: 1,
-                tokens,
-                investedAssets: parseUnits("500", 6),
-                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
-              }
+              tokens,
+              1,
+              getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut),
+              parseUnits("500", 6),
             );
 
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -334,12 +329,10 @@ describe("ConverterStrategyBaseLibTest", () => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits("9", 6),
               ethers.Wallet.createRandom().address,
-              {
-                indexAsset: 1,
-                tokens,
-                investedAssets: parseUnits("500", 6),
-                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
-              }
+              tokens,
+              1,
+              getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut),
+              parseUnits("500", 6),
             );
 
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -373,12 +366,10 @@ describe("ConverterStrategyBaseLibTest", () => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits("19", 6),
               ethers.Wallet.createRandom().address,
-              {
-                indexAsset: 1,
-                tokens,
-                investedAssets: parseUnits("500", 6),
-                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
-              }
+              tokens,
+              1,
+              getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut),
+              parseUnits("500", 6),
             );
 
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -399,12 +390,10 @@ describe("ConverterStrategyBaseLibTest", () => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits("0", 6),
               ethers.Wallet.createRandom().address,
-              {
-                indexAsset: 1,
-                tokens: [dai.address, usdc.address, usdt.address],
-                investedAssets: parseUnits("500", 6),
-                converter: getTetuConverter([],1, [],[])
-              }
+              [dai.address, usdc.address, usdt.address],
+              1,
+              getTetuConverter([],1, [],[]),
+              parseUnits("500", 6),
             )
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
             const expected = [
@@ -436,12 +425,10 @@ describe("ConverterStrategyBaseLibTest", () => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits("0", 6), // all
               ethers.Wallet.createRandom().address,
-              {
-                indexAsset: 1,
-                tokens,
-                investedAssets: parseUnits("500", 6),
-                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
-              }
+              tokens,
+              1,
+              getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut),
+              parseUnits("500", 6),
             );
 
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -479,12 +466,10 @@ describe("ConverterStrategyBaseLibTest", () => {
         const gasUsed = await facade.estimateGas.getLiquidityAmountRatio(
           parseUnits("19", 6),
           ethers.Wallet.createRandom().address,
-          {
-            indexAsset: 1,
-            tokens,
-            investedAssets: parseUnits("500", 6),
-            converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
-          }
+          tokens,
+          1,
+          getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut),
+          parseUnits("500", 6),
         );
 
         controlGasLimitsEx(gasUsed, GET_LIQUIDITY_AMOUNT_RATIO, (u, t) => {
@@ -1746,6 +1731,106 @@ describe("ConverterStrategyBaseLibTest", () => {
           }]
         });
         controlGasLimitsEx(r.gasUsed, GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
+    });
+  });
+
+  describe("sendPerformanceFee", () => {
+    interface ISendPerformanceFeeParams {
+      fee: number;
+      rewardTokens: MockToken[];
+      rewardAmounts: string[];
+    }
+    interface ISendPerformanceFeeResults {
+      rewardAmounts: number[];
+      performanceAmounts: number[];
+      facadeBalances: number[];
+      receiverBalances: number[];
+      gasUsed: BigNumber;
+    }
+    async function sendPerformanceFeeTest(
+      params: ISendPerformanceFeeParams
+    ) : Promise<ISendPerformanceFeeResults> {
+      const receiver = ethers.Wallet.createRandom().address;
+      for (let i = 0; i < params.rewardTokens.length; ++i) {
+        await params.rewardTokens[i].mint(
+          facade.address,
+          parseUnits(params.rewardAmounts[i], await params.rewardTokens[i].decimals())
+        )
+      }
+      const r = await facade.callStatic.sendPerformanceFee(
+        params.fee,
+        receiver,
+        params.rewardTokens.map(x => x.address),
+        params.rewardAmounts
+      );
+
+      const tx = await facade.sendPerformanceFee(
+        params.fee,
+        receiver,
+        params.rewardTokens.map(x => x.address),
+        params.rewardAmounts
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const facadeBalances = await Promise.all(
+        params.rewardTokens.map(
+          async rewardToken => rewardToken.balanceOf(facade.address)
+        )
+      );
+      const receiverBalances = await Promise.all(
+        params.rewardTokens.map(
+          async rewardToken => rewardToken.balanceOf(receiver)
+        )
+      );
+
+      return {
+        gasUsed,
+        performanceAmounts: await BalanceUtils.formatUnitsAll(params.rewardTokens, r.performanceAmounts),
+        rewardAmounts: await BalanceUtils.formatUnitsAll(params.rewardTokens, r.rewardAmounts),
+        facadeBalances: await BalanceUtils.formatUnitsAll(params.rewardTokens, facadeBalances),
+        receiverBalances: await BalanceUtils.formatUnitsAll(params.rewardTokens, receiverBalances),
+      }
+    }
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+        const r = await sendPerformanceFeeTest({
+          fee: 10_000,
+          rewardTokens: [tetu, usdc, usdt, dai],
+          rewardAmounts: [
+            "10", "20", "30", "40"
+          ]
+        });
+
+        const ret = [
+          r.performanceAmounts.join(),
+          r.rewardAmounts.join(),
+          r.facadeBalances.join(),
+          r.receiverBalances.join()
+        ].join("\n");
+
+        const expected = [
+          [1, 2, 3, 4].join(),
+          [9, 18, 27, 36].join(),
+          [9, 18, 27, 36].join(),
+          [1, 2, 3, 4].join()
+        ].join("\n");
+
+        return expect(ret).eq(expected);
+      });
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+      it("should return expected values", async () => {
+        const r = await sendPerformanceFeeTest({
+          fee: 10_000,
+          rewardTokens: [tetu, usdc, usdt, dai],
+          rewardAmounts: [
+            "10", "20", "30", "40"
+          ]
+        });
+        controlGasLimitsEx(r.gasUsed, GAS_PERFORMANCE_FEE, (u, t) => {
           expect(u).to.be.below(t + 1);
         });
       });

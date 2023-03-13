@@ -88,7 +88,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address[] rewardTokens,
     uint[] receivedAmounts,
     uint[] spentAmounts,
-    uint[] amountsToForward
+    uint[] amountsToForward,
+    uint[] performanceAmounts
   );
 
   /////////////////////////////////////////////////////////////////////
@@ -476,7 +477,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    // todo send performanceFee to performanceReceiver (make dedicated call and adjust amounts)
+    // send performance-part of the rewards to performanceReceiver
+    (uint[] memory rewardAmounts, uint[] memory performanceAmounts) = ConverterStrategyBaseLib.sendPerformanceFee(
+      performanceFee,
+      performanceReceiver,
+      rewardTokens_,
+      rewardAmounts_
+    );
+
+    // send other part of rewards to forwarder/compound
     (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
       asset,
       compoundRatio,
@@ -485,13 +494,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       liquidationThresholds,
       baseAmounts,
       rewardTokens_,
-      rewardAmounts_
+      rewardAmounts
     );
+
     emit Recycle(
       rewardTokens_,
       receivedAmounts,
       spentAmounts,
-      amountsToForward
+      amountsToForward,
+      performanceAmounts
     );
   }
 

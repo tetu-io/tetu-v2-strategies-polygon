@@ -148,6 +148,23 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
+  function sendPerformanceFee(
+    uint performanceFee_,
+    address performanceReceiver_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
+  ) external returns (
+    uint[] memory rewardAmounts,
+    uint[] memory performanceAmounts
+  ) {
+    return ConverterStrategyBaseLib.sendPerformanceFee(
+      performanceFee_,
+      performanceReceiver_,
+      rewardTokens_,
+      rewardAmounts_
+    );
+  }
+
   //  function _prepareRewardsList(
   //    ITetuConverter tetuConverter_,
   //    address[] memory tokens_,

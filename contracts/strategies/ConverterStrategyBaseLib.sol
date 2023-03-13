@@ -79,6 +79,7 @@ library ConverterStrategyBaseLib {
   uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
   uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant COMPOUND_DENOMINATOR = 100_000;
+  uint private constant FEE_DENOMINATOR = 100_000;
   uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5% todo decrease to 0.3%
   uint private constant PRICE_IMPACT_TOLERANCE = 2_000; // 2% todo decrease to 0.3%
 
@@ -803,6 +804,30 @@ library ConverterStrategyBaseLib {
     return (receivedAmounts, spentAmounts, amountsToForward);
   }
 
+  /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
+  /// @param performanceFee_ Max is FEE_DENOMINATOR
+  /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
+  /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
+  function sendPerformanceFee(
+    uint performanceFee_,
+    address performanceReceiver_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
+  ) external returns (
+    uint[] memory rewardAmounts,
+    uint[] memory performanceAmounts
+  ) {
+    // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
+    uint len = rewardAmounts_.length;
+    rewardAmounts = new uint[](len);
+    performanceAmounts = new uint[](len);
+
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      performanceAmounts[i] = rewardAmounts[i] * performanceFee_ / FEE_DENOMINATOR;
+      rewardAmounts[i] = rewardAmounts[i] - performanceAmounts[i];
+      IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                      calcInvestedAssets
