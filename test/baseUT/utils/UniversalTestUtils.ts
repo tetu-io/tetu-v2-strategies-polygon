@@ -2,14 +2,10 @@ import {BigNumber, ContractReceipt, ContractTransaction, Signer} from "ethers";
 import hre from "hardhat";
 import {
   BalancerComposableStableStrategy__factory, ControllerV2__factory,
-  IBalancerGauge__factory, IController__factory,
-  IERC20__factory,
-  ISplitter__factory, IStrategyV2,
+  IController__factory,
+  IStrategyV2,
   StrategyBaseV2__factory, TetuVaultV2
 } from "../../../typechain";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
-import {writeFileSync} from "fs";
-import {formatUnits} from "ethers/lib/utils";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";

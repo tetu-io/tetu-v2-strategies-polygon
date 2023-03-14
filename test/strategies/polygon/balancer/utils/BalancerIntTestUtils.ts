@@ -22,6 +22,7 @@ import {writeFileSync} from "fs";
 import {formatUnits} from "ethers/lib/utils";
 import {UniversalTestUtils} from "../../../../baseUT/utils/UniversalTestUtils";
 import {StrategyTestUtils} from "../../../../baseUT/utils/StrategyTestUtils";
+import {writeFileSyncRestoreFolder} from "../../../../baseUT/utils/FileUtils";
 
 export interface ISetThresholdsInputParams {
   reinvestThresholdPercent?: number;
@@ -357,7 +358,7 @@ export class BalancerIntTestUtils {
    */
   public static async saveListStatesToCSVRows(pathOut: string, states: IState[]) {
     const {stateHeaders, stateDecimals} = this.getCsvData();
-    writeFileSync(pathOut, stateHeaders.join(";") + "\n", {encoding: 'utf8', flag: "a" });
+    writeFileSyncRestoreFolder(pathOut, stateHeaders.join(";") + "\n", {encoding: 'utf8', flag: "a" });
     for (const item of states) {
       const line = [
         item.title,
@@ -454,7 +455,7 @@ export class BalancerIntTestUtils {
       item.balancerPool.bbAmDai
     ]);
 
-    writeFileSync(pathOut, headers.join(";") + "\n", {encoding: 'utf8', flag: "a" });
+    writeFileSyncRestoreFolder(pathOut, headers.join(";") + "\n", {encoding: 'utf8', flag: "a" });
     for (let i = 0; i < stateHeaders.length; ++i) {
       const line = [stateHeaders[i], ...rows.map(x => x[i])];
       writeFileSync(pathOut,

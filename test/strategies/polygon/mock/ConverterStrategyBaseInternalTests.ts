@@ -323,7 +323,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
                 priceOut: deltaPriceOut
               }
             )
-          ).revertedWith("TS-17 can not convert back"); // REPAY_MAKES_SWAP
+          ).revertedWith("SB: Wrong value"); // StrategyLib.WRONG_VALUE
         });
       });
     });
