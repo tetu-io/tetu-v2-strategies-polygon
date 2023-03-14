@@ -1404,6 +1404,41 @@ describe("ConverterStrategyBaseLibTest", () => {
 
           expect(ret).eq(expected);
         });
+        /**
+         * todo reproduce the problem with zero collateral amount
+         */
+        describe.skip("Very small amounts, decimals 18 and 6", () => {
+          it("should return expected values", async () => {
+            const converter = ethers.Wallet.createRandom().address;
+            const r = await makeOpenPositionTest(
+              defaultAbiCoder.encode(["uint256"], [2]),
+              usdc,
+              dai,
+              parseUnits("111", 18),
+              {
+                borrows: [], // amounts are too small, borrow shouldn't be called
+                findBorrowStrategyOutputs: [{
+                  converters: [converter],
+                  sourceToken: usdc.address,
+                  targetToken: dai.address,
+                  entryData: defaultAbiCoder.encode(["uint256"], [2]),
+                  aprs18: [parseUnits("1", 18)],
+                  amountIn: parseUnits("111", 18),
+                  amountToBorrowsOut: [BigNumber.from("1712848453478843025")],
+                  collateralAmountsOut: [BigNumber.from("6850990064")]
+                }],
+                amountBorrowAssetForTetuConverter: BigNumber.from("1712848453478843025"),
+                amountCollateralForFacade: BigNumber.from("0"),
+                amountInIsCollateral: true
+              }
+            );
+
+            const ret = [r.collateralAmountOut, r.borrowedAmountOut].map(x => BalanceUtils.toString(x)).join();
+            const expected = [parseUnits("3", 6), parseUnits("7", 18)].map(x => BalanceUtils.toString(x)).join();
+
+            expect(ret).eq(expected);
+          });
+        });
       });
     });
     describe("Bad paths", () => {

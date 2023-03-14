@@ -17,6 +17,7 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
+import "hardhat/console.sol";
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -844,6 +845,7 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
+    console.log("calcInvestedAssets.1");
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
 
@@ -853,22 +855,29 @@ library ConverterStrategyBaseLib {
       tokens,
       v.len
     );
+    console.log("calcInvestedAssets.2");
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      console.log("calcInvestedAssets.3");
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += amountsOut[i];
       } else {
+        console.log("calcInvestedAssets.4");
         // available amount to repay
         uint toRepay = baseAmounts[tokens[i]] + amountsOut[i];
 
+        console.log("calcInvestedAssets.5");
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), tokens[indexAsset], tokens[i]);
+        console.log("calcInvestedAssets.6");
         amountOut += collateral;
         if (toRepay >= toPay) {
+          console.log("calcInvestedAssets.7");
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         } else {
+          console.log("calcInvestedAssets.8");
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           if (v.debts.length == 0) {
@@ -881,11 +890,14 @@ library ConverterStrategyBaseLib {
       }
     }
 
+    console.log("calcInvestedAssets.9");
     if (v.debts.length == v.len) {
+      console.log("calcInvestedAssets.10");
       // we assume here, that it would be always profitable to save collateral
       // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
       // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
       for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+        console.log("calcInvestedAssets.11");
         if (v.debts[i] == 0) continue;
 
         // estimatedAssets should be reduced on the debt-value
@@ -898,6 +910,7 @@ library ConverterStrategyBaseLib {
         }
       }
     }
+    console.log("calcInvestedAssets.12");
 
     return amountOut;
   }
