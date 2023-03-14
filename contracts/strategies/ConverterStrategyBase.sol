@@ -201,7 +201,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tetuConverter_,
       tokens_,
       indexAsset_,
-      tokenAmounts
+      tokenAmounts,
+      liquidationThresholds[tokens_[indexAsset_]]
     );
     return (tokenAmounts, borrowedAmounts, spentCollateral);
   }

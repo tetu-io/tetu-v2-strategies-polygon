@@ -3,7 +3,13 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
-import {ConverterStrategyBaseLibFacade, IERC20Metadata__factory, MockToken, PriceOracleMock} from "../../../typechain";
+import {
+  ConverterStrategyBaseLibFacade,
+  IERC20__factory,
+  IERC20Metadata__factory,
+  MockToken,
+  PriceOracleMock
+} from "../../../typechain";
 import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
@@ -18,6 +24,7 @@ import {
 import {Misc} from "../../../scripts/utils/Misc";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {BigNumber} from "ethers";
+import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -44,7 +51,7 @@ describe("ConverterStrategyBaseLibTest", () => {
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
     tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
     dai = await DeployerUtils.deployMockToken(signer, 'DAI');
-    weth = await DeployerUtils.deployMockToken(signer, 'WETH', 8);
+    weth = await DeployerUtils.deployMockToken(signer, 'WETH', 18);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
   });
 
@@ -156,7 +163,7 @@ describe("ConverterStrategyBaseLibTest", () => {
             [
               parseUnits("200000", 6), // usdc
               parseUnits("100000", 18), // dai
-              parseUnits("800000", 8), // weth
+              parseUnits("800000", 18), // weth
             ],
             parseUnits("1000", 33), // decimals of the values don't matter here
             parseUnits("50000", 33), // only values ratio is important
@@ -166,7 +173,7 @@ describe("ConverterStrategyBaseLibTest", () => {
           const sexpected = [
             parseUnits((200_000 * 1000 / 50_000).toString(), 6),
             parseUnits((100_000 * 1000 / 50_000).toString(), 18),
-            parseUnits((800_000 * 1000 / 50_000).toString(), 8),
+            parseUnits((800_000 * 1000 / 50_000).toString(), 18),
           ].join("\n");
 
           expect(sret).eq(sexpected);
@@ -217,7 +224,7 @@ describe("ConverterStrategyBaseLibTest", () => {
           [
             parseUnits("200000", 6),
             parseUnits("100000", 18),
-            parseUnits("800000", 8),
+            parseUnits("800000", 18),
           ],
           parseUnits("1000", 33), // decimals of the values don't matter here
           parseUnits("50000", 33), // only values ratio is important
@@ -547,7 +554,7 @@ describe("ConverterStrategyBaseLibTest", () => {
           );
           const amountsOnBalance = [
             parseUnits("30", 18), // part of required amount is on the balance
-            parseUnits("200", 8), // more amount than required is on the balance
+            parseUnits("200", 18), // more amount than required is on the balance
             parseUnits("1000", 6), // USDC is the main asset
             parseUnits("100", 18), // full required amount is on balance
           ]
@@ -652,6 +659,8 @@ describe("ConverterStrategyBaseLibTest", () => {
       collateralAmountOut: BigNumber;
       borrowedAmountOut: BigNumber;
       gasUsed: BigNumber;
+      balanceBorrowAssetTetuConverter: BigNumber;
+      balanceCollateralAssetFacade: BigNumber;
     }
     async function makeOpenPositionTest(
       entryData: string,
@@ -715,21 +724,26 @@ describe("ConverterStrategyBaseLibTest", () => {
         entryData,
         collateralAsset.address,
         borrowAsset.address,
-        amountIn
+        amountIn,
+        0
       );
 
-      const gasUsed = await facade.estimateGas.openPosition(
+      const tx = await facade.openPosition(
         tetuConverter.address,
         entryData,
         collateralAsset.address,
         borrowAsset.address,
-        amountIn
+        amountIn,
+        0
       );
+      const gasUsed = (await tx.wait()).gasUsed;
 
       return {
         collateralAmountOut: ret.collateralAmountOut,
         borrowedAmountOut: ret.borrowedAmountOut,
-        gasUsed
+        gasUsed,
+        balanceBorrowAssetTetuConverter: await borrowAsset.balanceOf(tetuConverter.address),
+        balanceCollateralAssetFacade: await collateralAsset.balanceOf(facade.address)
       }
     }
 
@@ -901,6 +915,63 @@ describe("ConverterStrategyBaseLibTest", () => {
 
           expect(ret).eq(expected);
         });
+        describe("threshold is used, first conversion provides a bit less amount than required", () => {
+          it("should return expected values, single borrow", async () => {
+            const converter1 = ethers.Wallet.createRandom().address;
+            const converter2 = ethers.Wallet.createRandom().address;
+            const r = await makeOpenPositionTest(
+              defaultAbiCoder.encode(["uint256"], [0]),
+              usdc,
+              weth,
+              BigNumber.from("9762660842"),
+              {
+                findBorrowStrategyOutputs: [{
+                  converters: [converter1, converter2],
+                  sourceToken: usdc.address,
+                  targetToken: weth.address,
+                  entryData: defaultAbiCoder.encode(["uint256"], [0]),
+                  aprs18: [parseUnits("1", 18)],
+                  amountIn: BigNumber.from("9762660842"),
+                  collateralAmountsOut: [
+                    BigNumber.from("9762660841"), // (!) 9762660842-1
+                    BigNumber.from("9762660842")
+                  ],
+                  amountToBorrowsOut: [
+                    BigNumber.from("1720944043846096427"),
+                    BigNumber.from("1712848453478843025")
+                  ]
+                }],
+                borrows: [{
+                  collateralAsset: usdc,
+                  collateralAmount: BigNumber.from("9762660841"), // (!) 9762660842-1
+                  borrowAsset: weth,
+                  amountToBorrow: BigNumber.from("1718521573012697263"),
+                  converter: converter1
+                }],
+                amountBorrowAssetForTetuConverter: BigNumber.from("1720944043846096427"),
+                amountCollateralForFacade: BigNumber.from("9762660842"),
+                amountInIsCollateral: true,
+                prices: {
+                  collateral: BigNumber.from("998200000000000000"),
+                  borrow: BigNumber.from("1696840000000000000000")
+                }
+              }
+            );
+
+            const ret = [
+              r.collateralAmountOut,
+              r.borrowedAmountOut,
+              r.balanceCollateralAssetFacade
+            ].map(x => BalanceUtils.toString(x)).join();
+            const expected = [
+              BigNumber.from("9762660841"),
+              BigNumber.from("1718521573012697263"),
+              BigNumber.from(1)
+            ].map(x => BalanceUtils.toString(x)).join();
+
+            expect(ret).eq(expected);
+          });
+        })
       });
       describe("Entry kind 1", () => {
         describe("proportions 1:1", () => {
@@ -1236,6 +1307,57 @@ describe("ConverterStrategyBaseLibTest", () => {
             expect(ret).eq(expected);
           });
         });
+        describe("use threshold, reproduce case openPosition.dust [matic block 40302700]", () => {
+          it("should return expected values, single borrow", async () => {
+            const converter1 = ethers.Wallet.createRandom().address;
+            const converter2 = ethers.Wallet.createRandom().address;
+            const r = await makeOpenPositionTest(
+              defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 1, 1]),
+              usdc,
+              weth,
+              BigNumber.from("9762660842"),
+              {
+                findBorrowStrategyOutputs: [{
+                  converters: [converter1, converter2],
+                  sourceToken: usdc.address,
+                  targetToken: weth.address,
+                  entryData: defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 1, 1]),
+                  aprs18: [parseUnits("1", 18)],
+                  amountIn: BigNumber.from("9762660842"),
+                  collateralAmountsOut: [BigNumber.from("6850990064"), BigNumber.from("6850990064")],
+                  amountToBorrowsOut: [BigNumber.from("1720944043846096427"), BigNumber.from("1712848453478843025")]
+                }],
+                borrows: [{
+                  collateralAsset: usdc,
+                  collateralAmount: BigNumber.from("6841346331"),
+                  borrowAsset: weth,
+                  amountToBorrow: BigNumber.from("1718521573012697263"),
+                  converter: converter1
+                }],
+                amountBorrowAssetForTetuConverter: BigNumber.from("1718521573012697263"),
+                amountCollateralForFacade: BigNumber.from("6841346332"),
+                amountInIsCollateral: true,
+                prices: {
+                  collateral: BigNumber.from("998200000000000000"),
+                  borrow: BigNumber.from("1696840000000000000000")
+                }
+              }
+            );
+
+            console.log("results", r);
+
+            const totalAmountInTermsCollateral = r.collateralAmountOut.add(
+              r.borrowedAmountOut
+                .mul(BigNumber.from("1696840000000000000000"))
+                .mul(parseUnits("1", 6))
+                .div(BigNumber.from("998200000000000000"))
+                .div(parseUnits("1", 18))
+            );
+
+            const ret = areAlmostEqual(totalAmountInTermsCollateral, BigNumber.from("9762660842"));
+            expect(ret).eq(true);
+          });
+        })
       });
       describe("Entry kind 2", () => {
         it("should return expected values, single borrow", async () => {
@@ -1404,45 +1526,64 @@ describe("ConverterStrategyBaseLibTest", () => {
 
           expect(ret).eq(expected);
         });
-        /**
-         * todo reproduce the problem with zero collateral amount
-         */
-        describe.skip("Very small amounts, decimals 18 and 6", () => {
-          it("should return expected values", async () => {
-            const converter = ethers.Wallet.createRandom().address;
+        describe("threshold is used, first conversion provides a bit less amount than required", () => {
+          it("should return expected values, single borrow", async () => {
+            const converter1 = ethers.Wallet.createRandom().address;
+            const converter2 = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
               defaultAbiCoder.encode(["uint256"], [2]),
               usdc,
-              dai,
-              parseUnits("111", 18),
+              weth,
+              BigNumber.from("1720944043846096429"),
               {
-                borrows: [], // amounts are too small, borrow shouldn't be called
                 findBorrowStrategyOutputs: [{
-                  converters: [converter],
+                  converters: [converter1, converter2],
                   sourceToken: usdc.address,
-                  targetToken: dai.address,
+                  targetToken: weth.address,
                   entryData: defaultAbiCoder.encode(["uint256"], [2]),
                   aprs18: [parseUnits("1", 18)],
-                  amountIn: parseUnits("111", 18),
-                  amountToBorrowsOut: [BigNumber.from("1712848453478843025")],
-                  collateralAmountsOut: [BigNumber.from("6850990064")]
+                  amountIn: BigNumber.from("9762660842"),
+                  collateralAmountsOut: [
+                    BigNumber.from("9762660842"),
+                    BigNumber.from("9762660842")
+                  ],
+                  amountToBorrowsOut: [
+                    BigNumber.from("1720944043846096427"), // () 1720944043846096429 - 2
+                    BigNumber.from("1712848453478843025")
+                  ]
                 }],
-                amountBorrowAssetForTetuConverter: BigNumber.from("1712848453478843025"),
-                amountCollateralForFacade: BigNumber.from("0"),
-                amountInIsCollateral: true
+                borrows: [{
+                  collateralAsset: usdc,
+                  collateralAmount: BigNumber.from("9762660842"),
+                  borrowAsset: weth,
+                  amountToBorrow: BigNumber.from("1720944043846096427"),
+                  converter: converter1
+                }],
+                amountBorrowAssetForTetuConverter: BigNumber.from("1720944043846096429"),
+                amountCollateralForFacade: BigNumber.from("9762660842"),
+                amountInIsCollateral: true,
+                prices: {
+                  collateral: BigNumber.from("998200000000000000"),
+                  borrow: BigNumber.from("1696840000000000000000")
+                }
               }
             );
 
-            const ret = [r.collateralAmountOut, r.borrowedAmountOut].map(x => BalanceUtils.toString(x)).join();
-            const expected = [parseUnits("3", 6), parseUnits("7", 18)].map(x => BalanceUtils.toString(x)).join();
+            const ret = [
+              r.collateralAmountOut,
+              r.borrowedAmountOut,
+              r.balanceBorrowAssetTetuConverter
+            ].map(x => BalanceUtils.toString(x)).join();
+            const expected = [
+              BigNumber.from("9762660842"),
+              BigNumber.from("1720944043846096427"),
+              BigNumber.from(2)
+            ].map(x => BalanceUtils.toString(x)).join();
 
             expect(ret).eq(expected);
           });
-        });
+        })
       });
-    });
-    describe("Bad paths", () => {
-// todo
     });
     describe("Gas estimation @skip-on-coverage", () => {
       it("should not exceed gas limits", async () => {

@@ -68,7 +68,8 @@ contract ConverterStrategyBaseLibFacade {
     bytes memory entryData_,
     address collateralAsset_,
     address borrowAsset_,
-    uint amountIn_
+    uint amountIn_,
+    uint thresholdMainAsset_
   ) external returns (
     uint collateralAmountOut,
     uint borrowedAmountOut
@@ -78,7 +79,8 @@ contract ConverterStrategyBaseLibFacade {
       entryData_,
       collateralAsset_,
       borrowAsset_,
-      amountIn_
+      amountIn_,
+      thresholdMainAsset_
     );
   }
 
