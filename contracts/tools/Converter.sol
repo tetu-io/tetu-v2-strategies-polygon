@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.17;
+
 // converter
 import "@tetu_io/tetu-converter/contracts/core/BorrowManager.sol";
 import "@tetu_io/tetu-converter/contracts/core/Controller.sol";

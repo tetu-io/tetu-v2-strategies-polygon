@@ -319,7 +319,7 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
      * @param redeemAmount The amount of the underlying asset being redeemed
      * @param redeemTokens The number of tokens being redeemed
      */
-    function redeemVerify(address cToken, address redeemer, uint redeemAmount, uint redeemTokens) override external {
+    function redeemVerify(address cToken, address redeemer, uint redeemAmount, uint redeemTokens) override external pure {
         // Shh - currently unused
         cToken;
         redeemer;
@@ -350,9 +350,9 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
             require(msg.sender == cToken, "sender must be cToken");
 
             // attempt to add borrower to the market
-            Error err = addToMarketInternal(CToken(msg.sender), borrower);
-            if (err != Error.NO_ERROR) {
-                return uint(err);
+            Error err1 = addToMarketInternal(CToken(msg.sender), borrower);
+            if (err1 != Error.NO_ERROR) {
+                return uint(err1);
             }
 
             // it should be impossible to break the important invariant
@@ -475,7 +475,7 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
         address cTokenCollateral,
         address liquidator,
         address borrower,
-        uint repayAmount) override external returns (uint) {
+        uint repayAmount) override external view returns (uint) {
         // Shh - currently unused
         liquidator;
 

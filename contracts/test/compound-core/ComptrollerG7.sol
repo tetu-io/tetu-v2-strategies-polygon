@@ -77,7 +77,7 @@ contract ComptrollerG7 is ComptrollerV5Storage, ComptrollerInterface, Comptrolle
     // No collateralFactorMantissa may exceed this value
     uint internal constant collateralFactorMaxMantissa = 0.9e18; // 0.9
 
-    constructor() public {
+    constructor() {
         admin = msg.sender;
     }
 
@@ -310,7 +310,7 @@ contract ComptrollerG7 is ComptrollerV5Storage, ComptrollerInterface, Comptrolle
      * @param redeemAmount The amount of the underlying asset being redeemed
      * @param redeemTokens The number of tokens being redeemed
      */
-    function redeemVerify(address cToken, address redeemer, uint redeemAmount, uint redeemTokens) override external {
+    function redeemVerify(address cToken, address redeemer, uint redeemAmount, uint redeemTokens) override external pure {
         // Shh - currently unused
         cToken;
         redeemer;
@@ -341,9 +341,9 @@ contract ComptrollerG7 is ComptrollerV5Storage, ComptrollerInterface, Comptrolle
             require(msg.sender == cToken, "sender must be cToken");
 
             // attempt to add borrower to the market
-            Error err = addToMarketInternal(CToken(msg.sender), borrower);
-            if (err != Error.NO_ERROR) {
-                return uint(err);
+            Error err1 = addToMarketInternal(CToken(msg.sender), borrower);
+            if (err1 != Error.NO_ERROR) {
+                return uint(err1);
             }
 
             // it should be impossible to break the important invariant
@@ -466,7 +466,7 @@ contract ComptrollerG7 is ComptrollerV5Storage, ComptrollerInterface, Comptrolle
         address cTokenCollateral,
         address liquidator,
         address borrower,
-        uint repayAmount) override external returns (uint) {
+        uint repayAmount) override external view returns (uint) {
         // Shh - currently unused
         liquidator;
 
@@ -1331,7 +1331,7 @@ contract ComptrollerG7 is ComptrollerV5Storage, ComptrollerInterface, Comptrolle
      * @notice Return the address of the COMP token
      * @return The address of COMP
      */
-    function getCompAddress() public view returns (address) {
+    function getCompAddress() public pure returns (address) {
         return 0xc00e94Cb662C3520282E6f5717214004A7f26888;
     }
 }

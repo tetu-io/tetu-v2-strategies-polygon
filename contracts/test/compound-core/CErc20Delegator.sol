@@ -459,8 +459,8 @@ contract CErc20Delegator is CTokenInterface, CErc20Interface, CDelegatorInterfac
      * @notice Delegates execution to an implementation contract
      * @dev It returns to the external caller whatever the implementation returns or forwards reverts
      */
-    fallback() external payable {
-        require(msg.value == 0,"CErc20Delegator:fallback: cannot send value to fallback");
+    fallback() external /*payable*/ {
+//        require(msg.value == 0,"CErc20Delegator:fallback: cannot send value to fallback");
 
         // delegate all other functions to current implementation
         (bool success, ) = implementation.delegatecall(msg.data);
