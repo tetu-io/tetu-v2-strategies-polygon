@@ -111,20 +111,20 @@ library UniswapV3ConverterStrategyLogicLib {
       sqrtRatioX96,
       lowerTick,
       upperTick,
-        liquidityAmountToExit
+      liquidityAmountToExit
     );
 
-    (uint amountOut0Fillup, uint amountOut1Fillup) = UniswapV3Lib.getAmountsForLiquidity(
-      sqrtRatioX96,
-      lowerTickFillup,
-      upperTickFillup,
-      liquidityFillup * liquidityAmountToExit / liquidity
-    );
+    if (liquidity > 0 && liquidityFillup > 0) {
+      (uint amountOut0Fillup, uint amountOut1Fillup) = UniswapV3Lib.getAmountsForLiquidity(
+        sqrtRatioX96,
+        lowerTickFillup,
+        upperTickFillup,
+        liquidityFillup * liquidityAmountToExit / liquidity
+      );
 
-//    (uint fee0, uint fee1) = getFees(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, liquidity, liquidityFillup);
-
-    amountsOut[0] += amountOut0Fillup/* + fee0*/;
-    amountsOut[1] += amountOut1Fillup/* + fee1*/;
+      amountsOut[0] += amountOut0Fillup;
+      amountsOut[1] += amountOut1Fillup;
+    }
 
     if (_depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);

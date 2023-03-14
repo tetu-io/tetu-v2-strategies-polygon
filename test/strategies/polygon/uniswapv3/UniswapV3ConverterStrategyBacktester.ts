@@ -52,7 +52,7 @@ import {BigNumber} from "ethers";
 import {RunHelper} from "../../../../scripts/utils/RunHelper";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {config as dotEnvConfig} from "dotenv";
 
 const { expect } = chai;
@@ -1086,7 +1086,8 @@ async function strategyBacktest(
   }
 
   console.log('doHardWork...')
-  await strategy.doHardWork()
+  const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
+  await strategy.connect(splitterSigner).doHardWork()
 
   const totalAssetsinStrategyAfter = await strategy.totalAssets()
   const endTimestampLocal = Math.floor(Date.now() / 1000)

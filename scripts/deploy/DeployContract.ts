@@ -16,7 +16,7 @@ const libraries = new Map<string, string[]>([
   ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'StrategyLib']],
   ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib', 'StrategyLib']],
   ['BalancerComposableStableStrategyAccess', ['ConverterStrategyBaseLib', 'BalancerLogicLib', 'StrategyLib']],
-  ['UniswapV3ConverterStrategy', ['ConverterStrategyBaseLib', 'UniswapV3ConverterStrategyLogicLib']],
+  ['UniswapV3ConverterStrategy', ['ConverterStrategyBaseLib', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib']],
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib']],
 ]);
 
