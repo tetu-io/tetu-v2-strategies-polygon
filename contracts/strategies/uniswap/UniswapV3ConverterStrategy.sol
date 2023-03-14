@@ -5,7 +5,7 @@ import "../ConverterStrategyBase.sol";
 import "./UniswapV3Depositor.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
 
-/// @title Delta-neutral liquidity hedging converter fill-up/swap strategy for UniswapV3
+/// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @author a17
 contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase {
   string public constant override NAME = "UniswapV3 Converter Strategy";
@@ -41,36 +41,72 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return fee0 > liquidationThresholds[tokenA] || fee1 > liquidationThresholds[tokenB];
   }
 
+  /// @dev The rebalancing functionality is the core of this strategy.
+  ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
+  ///      There is also an attempt to cover rebalancing losses with rewards.
   function rebalance() public {
     require(needRebalance(), "No rebalancing needed");
 
-    // upperTick always greater then lowerTick
+    /// @dev for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
+    /// @dev upperTick always greater then lowerTick
     bool fillUp = upperTick - lowerTick >= 4 * tickSpacing;
 
-    (uint fee0, uint fee1) = getFees();
-    rebalanceEarned0 += fee0;
-    rebalanceEarned1 += fee1;
-
-    uint balanceOfTokenABefore = _balance(tokenA);
-    uint balanceOfTokenBBefore = _balance(tokenB);
-
+    /// @dev withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
     _depositorEmergencyExit();
 
-    UniswapV3ConverterStrategyLogicLib.rebalanceDebt(converter, controller(), pool, tokenA, tokenB, fillUp, lowerTick, upperTick, tickSpacing, _depositorSwapTokens);
+    /// @dev rebalacing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
+    UniswapV3ConverterStrategyLogicLib.rebalanceDebt(
+      converter,
+      controller(),
+      pool,
+      tokenA,
+      tokenB,
+      fillUp,
+      lowerTick,
+      upperTick,
+      tickSpacing,
+      _depositorSwapTokens,
+      rebalanceEarned0,
+      rebalanceEarned1
+    );
 
+    /// @dev trying to cover rebalance loss (IL + not hedged part of tokenB + swap cost) by pool rewards
+    (rebalanceEarned0, rebalanceEarned1) = UniswapV3ConverterStrategyLogicLib.tryToCoverLoss(
+      UniswapV3ConverterStrategyLogicLib.TryCoverLossParams(
+        converter,
+        controller(),
+        pool,
+        tokenA,
+        tokenB,
+        _depositorSwapTokens,
+        rebalanceEarned0,
+        rebalanceEarned1,
+        investedAssets(),
+        tickSpacing,
+        lowerTick,
+        upperTick
+      )
+    );
+
+    /// @dev calculate and set new tick range
     _setNewTickRange();
 
+    /// @dev put liquidity to pool without updated rebalanceEarned0, rebalanceEarned1 amounts
     uint[] memory tokenAmounts = new uint[](2);
-    tokenAmounts[0] = _balance(tokenA);
-    tokenAmounts[1] = _balance(tokenB);
+    tokenAmounts[0] = _balance(tokenA) - (_depositorSwapTokens ? rebalanceEarned1 : rebalanceEarned0);
+    tokenAmounts[1] = _balance(tokenB) - (_depositorSwapTokens ? rebalanceEarned0 : rebalanceEarned1);
     _depositorEnter(tokenAmounts);
 
+    /// @dev add fill-up liquidity part of fill-up is used
     if (fillUp) {
-      (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(pool, lowerTick, upperTick, tickSpacing);
+      (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(pool, lowerTick, upperTick, tickSpacing, rebalanceEarned0, rebalanceEarned1);
     }
 
-    uint balanceOfTokenAAfter = _balance(tokenA);
-    uint balanceOfTokenBAfter = _balance(tokenB);
+    /// @dev updating baseAmounts (token amounts on strategy balance which are not rewards)
+    uint balanceOfTokenABefore = baseAmounts[tokenA];
+    uint balanceOfTokenBBefore = baseAmounts[tokenB];
+    uint balanceOfTokenAAfter = _balance(tokenA) - (_depositorSwapTokens ? rebalanceEarned1 : rebalanceEarned0);
+    uint balanceOfTokenBAfter = _balance(tokenB) - (_depositorSwapTokens ? rebalanceEarned0 : rebalanceEarned1);
     _updateBaseAmountsForAsset(
       tokenA,
       balanceOfTokenABefore > balanceOfTokenAAfter ? 0 : balanceOfTokenAAfter - balanceOfTokenABefore,
@@ -82,6 +118,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0
     );
 
+    /// @dev updaing investedAssets based on new baseAmounts
     _updateInvestedAssets();
   }
 

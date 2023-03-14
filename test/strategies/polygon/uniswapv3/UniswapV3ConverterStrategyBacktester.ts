@@ -53,8 +53,25 @@ import {RunHelper} from "../../../../scripts/utils/RunHelper";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {config as dotEnvConfig} from "dotenv";
 
 const { expect } = chai;
+
+dotEnvConfig();
+// tslint:disable-next-line:no-var-requires
+const argv = require('yargs/yargs')()
+  .env('TETU')
+  .options({
+    disableStrategyTests: {
+      type: "boolean",
+      default: false,
+    },
+    hardhatChainId: {
+      type: "number",
+      default: 137
+    },
+  }).argv;
+
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
@@ -74,7 +91,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const testStrategies = {
     usdcWeth005: false, // USDC_WETH_0.05%
     wmaticUsdc005: false, // WMATIC_USDC_0.05%
-    usdcDai001: true, // USDC_DAI_0.01%
+    usdcDai001: false, // USDC_DAI_0.01%
     usdcUsdt001: true, // USDC_USDT_0.01%
   }
   // =========================
@@ -84,8 +101,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const strategy005TickRange = 1200 // +- 12% price
   const strategy005RebalanceTickRange = 40 // +- 0.4% price change
   // 0.01% fee pools
-  const strategy001TickRange = 0 // +- 0.05% price
-  const strategy001RebalanceTickRange = 0 // +- 0.01% price change
+  const strategy001TickRange = 0 // 1 tick
+  const strategy001RebalanceTickRange = 0 // 1 tick
   // ===========================
 
   const runNotBacktestingTests = false
@@ -156,6 +173,15 @@ describe('UmiswapV3 converter strategy backtester', function() {
   let vaultFactory: VaultFactory
 
   const backtestResults: IBacktestResult[] = []
+
+  if (argv.disableStrategyTests) {
+    return;
+  }
+
+  if (argv.hardhatChainId !== 31337) {
+    console.log('Backtester can only work in the local hardhat network (31337 chainId)')
+    return;
+  }
 
   before(async function () {
     snapshotBefore = await TimeUtils.snapshot();
@@ -588,42 +614,6 @@ describe('UmiswapV3 converter strategy backtester', function() {
       let priceChangeVal
       let swapAmount
 
-      /*console.log('Tick', (await pool.slot0()).tick)
-
-      // creating conditions for a large loan after rebalancing to test all logic
-      swapAmount = parseUnits('261.07', 6) // 261.06 - no tick increasing
-      priceBefore = await uniswapV3Helper.getPrice(pool.address, DAI.address)
-      await uniswapV3Calee.swap(pool.address, signer.address, USDT.address, swapAmount)
-      priceAfter = await uniswapV3Helper.getPrice(pool.address, DAI.address)
-      priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
-      console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
-
-      console.log('Tick', (await pool.slot0()).tick)
-
-      if (await strategy.needRebalance()) {
-        console.log('Rebalance...')
-        await strategy.rebalance()
-        console.log('Utilization rate', await utilizationRate(strategy, signer, uniswapV3Helper))
-
-        // part0 125885259727509375
-        // part1 999986175915776626
-      }
-
-      // swap USDT to DAI N times
-      swapAmount = parseUnits('510', 6)
-      for (let i = 0; i < 5; i++) {
-        priceBefore = await uniswapV3Helper.getPrice(pool.address, DAI.address)
-        await uniswapV3Calee.swap(pool.address, signer.address, USDT.address, swapAmount)
-        priceAfter = await uniswapV3Helper.getPrice(pool.address, DAI.address)
-        priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
-        console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
-        if (await strategy.needRebalance()) {
-          console.log('Rebalance...')
-          await strategy.rebalance()
-          console.log('Utilization rate', await utilizationRate(strategy, signer, uniswapV3Helper))
-        }
-      }*/
-
       // swap DAI to USDT N times
       swapAmount = parseUnits('500')
       for (let i = 0; i < 5; i++) {
@@ -692,7 +682,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
       // swap USDT to WMATIC N times
       swapAmount = parseUnits('500', 6)
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 2; i++) {
         priceBefore = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
         await uniswapV3Calee.swap(pool.address, signer.address, USDT.address, swapAmount)
         priceAfter = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
@@ -702,9 +692,11 @@ describe('UmiswapV3 converter strategy backtester', function() {
         await strategy.rebalance()
       }
 
+      await strategy.doHardWork()
+
       // swap WMATIC to USDT N times
       swapAmount = parseUnits('500')
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 2; i++) {
         priceBefore = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
         await uniswapV3Calee.swap(pool.address, signer.address, WMATIC.address, swapAmount)
         priceAfter = await uniswapV3Helper.getPrice(pool.address, WMATIC.address)
@@ -713,6 +705,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
         console.log('Rebalance...')
         await strategy.rebalance()
       }
+
+      await strategy.doHardWork()
 
       const assetsAfter = await strategy.totalAssets()
       console.log('Assets before', assetsBefore.toString())

@@ -2,9 +2,8 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {
-  IBorrowManager__factory,
   IConverterController__factory, IPlatformAdapter__factory,
-  ITetuConverter__factory
+  TetuConverter__factory
 } from "../../../typechain";
 import {
   getConverterAddress,
@@ -35,7 +34,7 @@ export class ConverterUtils {
   public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {
     console.log(`disable ${platformAdapter}`);
     const tools = Addresses.getTools();
-    const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
+    const converter = TetuConverter__factory.connect(getConverterAddress(), signer);
     const converterControllerAddr = await converter.controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();
