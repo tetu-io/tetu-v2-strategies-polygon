@@ -248,7 +248,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
         await expect(
           strategy.connect(operator).setReinvestThresholdPercent(100_001)
-        ).revertedWith("TS-9 wrong value"); // WRONG_VALUE
+        ).revertedWith("SB: Wrong value"); // WRONG_VALUE
       });
 
     });
@@ -1528,7 +1528,13 @@ describe("ConverterStrategyBaseAccessTest", () => {
       thresholds?: ITokenAmount[];
       baseAmounts?: ITokenAmount[];
       initialBalances?: ITokenAmount[];
+
+      // disable performanceFee by default
+      performanceFee?: number;
+      // governance is used as a performance receiver by default
+      performanceReceiver?: string;
     }
+
     interface IRecycleTestResults {
       gasUsed: BigNumber;
 
@@ -1539,13 +1545,20 @@ describe("ConverterStrategyBaseAccessTest", () => {
       spentAmounts: BigNumber[];
       receivedAssetAmountOut: BigNumber;
     }
+
     async function makeRecycleTest(
       compoundRate: BigNumberish,
       tokens: MockToken[],
       amounts: BigNumber[],
       params?: IRecycleTestParams
-    ) : Promise<IRecycleTestResults> {
+    ): Promise<IRecycleTestResults> {
       await strategy.connect(await Misc.impersonate(await controller.platformVoter())).setCompoundRatio(compoundRate);
+
+      // disable performance fee by default
+      await strategy.connect(await Misc.impersonate(await controller.governance())).setupPerformanceFee(
+        params?.performanceFee || 0,
+        params?.performanceReceiver || await controller.governance()
+      );
 
       if (params?.baseAmounts) {
         for (const tokenAmount of params?.baseAmounts) {
@@ -1624,6 +1637,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
         receivedAssetAmountOut: r.receivedAmounts[r.receivedAmounts.length - 1]
       }
     }
+
     describe("Good paths", () => {
       describe("All cases test", () => {
         let results: IRecycleTestResults;
@@ -1635,7 +1649,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
         after(async function () {
           await TimeUtils.rollback(snapshotLocal);
         });
-        async function makeRecycleTestBase() : Promise<IRecycleTestResults> {
+
+        async function makeRecycleTestBase(): Promise<IRecycleTestResults> {
           return makeRecycleTest(
             40_000, // 40%
             [bal, tetu, dai, usdc, weth],
@@ -1648,34 +1663,35 @@ describe("ConverterStrategyBaseAccessTest", () => {
             ],
             {
               liquidations: [
-                { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("5", 18), amountOut: parseUnits("17", 6)}, // 4 + 1
-                { tokenIn: tetu, tokenOut: usdc, amountIn: parseUnits("11", 18), amountOut: parseUnits("23", 6)}, // 8 + 3
-                { tokenIn: weth, tokenOut: usdc, amountIn: parseUnits("42", 8), amountOut: parseUnits("13", 6)}, // 40 + 2
+                {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("5", 18), amountOut: parseUnits("17", 6)}, // 4 + 1
+                {tokenIn: tetu, tokenOut: usdc, amountIn: parseUnits("11", 18), amountOut: parseUnits("23", 6)}, // 8 + 3
+                {tokenIn: weth, tokenOut: usdc, amountIn: parseUnits("42", 8), amountOut: parseUnits("13", 6)}, // 40 + 2
               ],
               thresholds: [
-                { token: bal, amount:  parseUnits("4", 18)}, // ok
-                { token: weth, amount:  parseUnits("1", 8)}, // ok, (!) but it won't pass threshold by USDC
-                { token: tetu, amount:  parseUnits("12", 18)}, // (!) too high
-                { token: usdc, amount:  parseUnits("14", 6)},
+                {token: bal, amount: parseUnits("4", 18)}, // ok
+                {token: weth, amount: parseUnits("1", 8)}, // ok, (!) but it won't pass threshold by USDC
+                {token: tetu, amount: parseUnits("12", 18)}, // (!) too high
+                {token: usdc, amount: parseUnits("14", 6)},
               ],
               baseAmounts: [
-                { token: bal, amount:  parseUnits("1", 18)},
-                { token: weth, amount:  parseUnits("2", 8)},
-                { token: tetu, amount:  parseUnits("3", 18)},
-                { token: usdc, amount:  parseUnits("4", 6)},
-                { token: dai, amount:  parseUnits("5", 18)},
+                {token: bal, amount: parseUnits("1", 18)},
+                {token: weth, amount: parseUnits("2", 8)},
+                {token: tetu, amount: parseUnits("3", 18)},
+                {token: usdc, amount: parseUnits("4", 6)},
+                {token: dai, amount: parseUnits("5", 18)},
               ],
               initialBalances: [
                 // any balances - just to be sure that _recycle doesn't use them
-                { token: bal, amount:  parseUnits("400", 18)},
-                { token: weth, amount:  parseUnits("500", 8)},
-                { token: tetu, amount:  parseUnits("600", 18)},
-                { token: usdc, amount:  parseUnits("700", 6)},
-                { token: dai, amount:  parseUnits("800", 18)},
-              ]
+                {token: bal, amount: parseUnits("400", 18)},
+                {token: weth, amount: parseUnits("500", 8)},
+                {token: tetu, amount: parseUnits("600", 18)},
+                {token: usdc, amount: parseUnits("700", 6)},
+                {token: dai, amount: parseUnits("800", 18)},
+              ],
             }
           );
         }
+
         it("should receive expected values", async () => {
           console.log("bal", bal.address);
           console.log("dai", dai.address);
@@ -1795,7 +1811,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
                 thresholds: [
                   {
                     token: usdc,
-                    amount:  parseUnits("18", 6) // (!) too high
+                    amount: parseUnits("18", 6) // (!) too high
                   }
                 ]
               }
@@ -1824,20 +1840,20 @@ describe("ConverterStrategyBaseAccessTest", () => {
                 liquidations: [
                   // too possible liquidations: 3 (compound) and 3 + 5 (compound + base amount)
                   // second one should be used
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
+                  {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
+                  {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
                 ],
                 thresholds: [{
                   token: usdc,
-                  amount:  parseUnits("18", 6) // too high for 3, but ok for 8
+                  amount: parseUnits("18", 6) // too high for 3, but ok for 8
                 }],
                 baseAmounts: [{
                   token: bal,
-                  amount:  parseUnits("5", 18)
+                  amount: parseUnits("5", 18)
                 }],
                 initialBalances: [{
                   token: bal,
-                  amount:  parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
+                  amount: parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
                 }]
               }
             );
@@ -1873,7 +1889,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
                 thresholds: [
                   {
                     token: bal,
-                    amount:  parseUnits("4", 18) // (!) too high
+                    amount: parseUnits("4", 18) // (!) too high
                   }
                 ]
               }
@@ -1902,20 +1918,20 @@ describe("ConverterStrategyBaseAccessTest", () => {
                 liquidations: [
                   // too possible liquidations: 3 (compound) and 3 + 5 (compound + base amount)
                   // second one should be used
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
-                  { tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
+                  {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("3", 18), amountOut: parseUnits("17", 6)},
+                  {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("8", 18), amountOut: parseUnits("19", 6)},
                 ],
                 thresholds: [{
                   token: bal,
-                  amount:  parseUnits("4", 18) // too high for 3, but ok for 8
+                  amount: parseUnits("4", 18) // too high for 3, but ok for 8
                 }],
                 baseAmounts: [{
                   token: bal,
-                  amount:  parseUnits("5", 18)
+                  amount: parseUnits("5", 18)
                 }],
                 initialBalances: [{
                   token: bal,
-                  amount:  parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
+                  amount: parseUnits("555", 18) // just to be sure that _recycle doesn't read balances
                 }]
               }
             );
@@ -1936,12 +1952,115 @@ describe("ConverterStrategyBaseAccessTest", () => {
           });
         });
       });
+
+      describe("Performance fee not zero", () => {
+        let results: IRecycleTestResults;
+        let snapshotLocal: string;
+        before(async function () {
+          snapshotLocal = await TimeUtils.snapshot();
+          results = await makeRecycleTestBase();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+
+        async function makeRecycleTestBase(): Promise<IRecycleTestResults> {
+          return makeRecycleTest(
+            40_000, // 40%
+            [bal, tetu, dai, usdc, weth],
+            [
+              // performance fee is 10%
+              parseUnits("10", 18), // 9 bal
+              parseUnits("20", 18), // 18 tetu
+              parseUnits("40", 18), // 36 dai
+              parseUnits("80", 6),  // 72 usdc
+              parseUnits("100", 8), // 90 weth
+            ],
+            {
+              liquidations: [
+                {tokenIn: bal, tokenOut: usdc, amountIn: parseUnits("4.6", 18), amountOut: parseUnits("17", 6)}, // 3.6 + 1
+                {tokenIn: tetu, tokenOut: usdc, amountIn: parseUnits("10.3", 18), amountOut: parseUnits("23", 6)}, // 7.2 + 3
+                {tokenIn: weth, tokenOut: usdc, amountIn: parseUnits("38", 8), amountOut: parseUnits("13", 6)}, // 36 + 2
+              ],
+              thresholds: [
+                {token: bal, amount: parseUnits("4", 18)}, // ok
+                {token: weth, amount: parseUnits("1", 8)}, // ok, (!) but it won't pass threshold by USDC
+                {token: tetu, amount: parseUnits("11", 18)}, // (!) too high
+                {token: usdc, amount: parseUnits("14", 6)},
+              ],
+              baseAmounts: [
+                {token: bal, amount: parseUnits("1", 18)},
+                {token: weth, amount: parseUnits("2", 8)},
+                {token: tetu, amount: parseUnits("3", 18)},
+                {token: usdc, amount: parseUnits("4", 6)},
+                {token: dai, amount: parseUnits("5", 18)},
+              ],
+              initialBalances: [
+                // any balances - just to be sure that _recycle doesn't use them
+                {token: bal, amount: parseUnits("400", 18)},
+                {token: weth, amount: parseUnits("500", 8)},
+                {token: tetu, amount: parseUnits("600", 18)},
+                {token: usdc, amount: parseUnits("700", 6)},
+                {token: dai, amount: parseUnits("800", 18)},
+              ],
+              // enable performance fee
+              performanceFee: 10_000,
+              performanceReceiver: ethers.Wallet.createRandom().address
+            }
+          );
+        }
+
+        it("should receive expected values", async () => {
+          console.log("bal", bal.address);
+          console.log("dai", dai.address);
+          console.log("tetu", tetu.address);
+          console.log("usdc", usdc.address);
+          console.log("weth", weth.address);
+
+          const performanceReceiverBalances = await Promise.all(
+            [bal, tetu, dai, usdc, weth].map(
+              async token => token.balanceOf(await strategy.performanceReceiver())
+            )
+          );
+          const ret = [
+            performanceReceiverBalances.map(x => BalanceUtils.toString(x)).join(),
+            results.receivedAmounts.map(x => BalanceUtils.toString(x)).join(),
+            results.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+            results.receivedAssetAmountOut.toString(),
+          ].join("\n");
+
+          const expected = [
+            [
+              // performance fee is 10%
+              parseUnits("1", 18), // bal
+              parseUnits("2", 18), // tetu
+              parseUnits("4", 18), // dai
+              parseUnits("8", 6),  // usdc
+              parseUnits("10", 8), // weth
+            ],
+            [
+              0, // compound bal tokens were liquidated
+              parseUnits("7.2", 18), // compound tetu were not liquidated because of too high tetu liquidation threshold
+              parseUnits("14.4", 18), // compound dai 14.4 were added to base amounts
+              parseUnits("28.8", 6), // compound usdc 28.8 were added to base amounts
+              parseUnits("36", 8), // compound weth were not liquidated because of too high usdc liquidation threshold
+            ].map(x => BalanceUtils.toString(x)).join(),
+            [
+              parseUnits("1", 18), // base amount of bal was liquidated
+              0,
+              0,
+              0,
+              0
+            ].map(x => BalanceUtils.toString(x)).join(),
+            parseUnits("17", 6).toString() // results of bal liquidation
+          ].join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
     });
     describe("Bad paths", () => {
-    // TODO
-    });
-    describe("Gas estimation @skip-on-coverage", () => {
-
+      // TODO
     });
   });
 
@@ -1953,15 +2072,24 @@ describe("ConverterStrategyBaseAccessTest", () => {
         await usdc.connect(await Misc.impersonate(assetProvider.address)).approve(strategy.address, Misc.MAX_UINT);
 
         await strategy.setMockedDepositToPool(
-          parseUnits("8", 6),
+          parseUnits("8", 6), // balance change
           assetProvider.address,
           0
         );
+        await strategy.setDepositorLiquidity(parseUnits("1", 18));
+        await strategy.setDepositorQuoteExit(
+          parseUnits("1", 18),
+          [
+            parseUnits("0", 18),
+            parseUnits("23", 6),
+            parseUnits("0", 6)
+          ]
+        );
 
         await strategy.setMockedHandleRewardsResults(
-          parseUnits("7", 6),
-          parseUnits("14", 6),
-          parseUnits("17", 6),
+          parseUnits("7", 6), // earned
+          parseUnits("14", 6), // lost
+          parseUnits("17", 6), // asset balance change
           assetProvider.address
         );
 
@@ -1971,8 +2099,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
           r.lost.toString()
         ].join();
         const expected = [
-          parseUnits("15", 6).toString(),
-          parseUnits("14", 6).toString() // 14 + 8
+          parseUnits("38", 6).toString(), // 8 + 7 + 23
+          parseUnits("14", 6).toString()
         ].join();
 
         expect(ret).eq(expected);
@@ -1987,10 +2115,19 @@ describe("ConverterStrategyBaseAccessTest", () => {
           assetProvider.address,
           0
         );
+        await strategy.setDepositorLiquidity(parseUnits("1", 18));
+        await strategy.setDepositorQuoteExit(
+          parseUnits("1", 18),
+          [
+            parseUnits("0", 18),
+            parseUnits("23", 6),
+            parseUnits("0", 6)
+          ]
+        );
 
         await strategy.setMockedHandleRewardsResults(
-          parseUnits("7", 6),
-          parseUnits("14", 6),
+          parseUnits("7", 6), // earned
+          parseUnits("14", 6), // lost
           parseUnits("17", 6),
           assetProvider.address
         );
@@ -2001,7 +2138,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
           r.lost.toString()
         ].join();
         const expected = [
-          parseUnits("7", 6).toString(),
+          parseUnits("30", 6).toString(), // 7 + 23
           parseUnits("22", 6).toString() // 14 + 8
         ].join();
 
@@ -2016,6 +2153,11 @@ describe("ConverterStrategyBaseAccessTest", () => {
       thresholds?: ITokenAmount[];
       baseAmounts?: ITokenAmount[];
       initialBalances?: ITokenAmount[];
+
+      // disable performanceFee by default
+      performanceFee?: number;
+      // governance is used as a performance receiver by default
+      performanceReceiver?: string;
     }
     interface IClaimTestResults {
       gasUsed: BigNumber;
@@ -2035,6 +2177,11 @@ describe("ConverterStrategyBaseAccessTest", () => {
       tetuConverterRewardAmounts: BigNumber[],
       params?: IClaimTestParams
     ) : Promise<IClaimTestResults> {
+      // disable performance fee by default
+      await strategy.connect(await Misc.impersonate(await controller.governance())).setupPerformanceFee(
+        params?.performanceFee || 0,
+        params?.performanceReceiver || await controller.governance()
+      );
       await strategy.setDepositorClaimRewards(
         depositorRewardTokens.map(x => x.address),
         depositorRewardAmounts
@@ -2311,6 +2458,23 @@ describe("ConverterStrategyBaseAccessTest", () => {
       liquidityOut: BigNumber,
       params?: IDepositToPoolTestParams
     ) : Promise<IDepositToPoolTestResults> {
+      await strategy.setDepositorLiquidity(parseUnits("1", 18));
+      await strategy.setDepositorQuoteExit(// calc before deposit
+        parseUnits("1", 18),
+        [
+          parseUnits("0", 18),
+          parseUnits("23", 6),
+          parseUnits("0", 6)
+        ]
+      );
+      await strategy.setDepositorQuoteExit(// calc after deposit
+        parseUnits("2", 18),
+        [
+          parseUnits("0", 18),
+          parseUnits("23", 6),
+          parseUnits("0", 6)
+        ]
+      );
       if (params?.baseAmounts) {
         for (const tokenAmount of params?.baseAmounts) {
           await strategy.setBaseAmountAccess(tokenAmount.token.address, tokenAmount.amount);
@@ -2633,13 +2797,13 @@ describe("ConverterStrategyBaseAccessTest", () => {
       const r: {investedAssetsUSD: BigNumber, assetPrice: BigNumber} = params?.emergency
         ? {investedAssetsUSD: BigNumber.from(0), assetPrice: BigNumber.from(0)}
         : amount
-          ? await strategy.callStatic.withdrawFromPoolTestAccess(amount, investedAssets)
-          : await strategy.callStatic._withdrawAllFromPoolTestAccess(investedAssets);
+          ? await strategy.callStatic.withdrawUniversalTestAccess(amount, false, investedAssets)
+          : await strategy.callStatic.withdrawUniversalTestAccess(0, true, investedAssets);
       const tx = params?.emergency
         ? await strategy._emergencyExitFromPoolAccess()
         : amount
-          ? await strategy.withdrawFromPoolTestAccess(amount, investedAssets)
-          : await strategy._withdrawAllFromPoolTestAccess(investedAssets);
+          ? await strategy.withdrawUniversalTestAccess(amount, false, investedAssets)
+          : await strategy.withdrawUniversalTestAccess(0, true, investedAssets);
       const gasUsed = (await tx.wait()).gasUsed;
 
       const baseAmounts = await Promise.all(depositorTokens.map(
@@ -3479,7 +3643,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
             dai.address,
             parseUnits("500", 18),
           )
-        ).revertedWith("TS-13 only TetuConverter"); // ONLY_TETU_CONVERTER
+        ).revertedWith("SB: Denied"); // DENIED
       });
       it("should revert if wrong asset", async () => {
         await usdc.mint(strategy.address, parseUnits("100", 6));
@@ -3491,7 +3655,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
             dai.address,
             parseUnits("500", 18),
           )
-        ).revertedWith("TS-14 wrong asset"); // WRONG_ASSET
+        ).revertedWith("SB: Wrong value"); // WRONG_VALUE
       });
 
     });

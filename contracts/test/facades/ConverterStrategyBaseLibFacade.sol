@@ -68,7 +68,8 @@ contract ConverterStrategyBaseLibFacade {
     bytes memory entryData_,
     address collateralAsset_,
     address borrowAsset_,
-    uint amountIn_
+    uint amountIn_,
+    uint thresholdMainAsset_
   ) external returns (
     uint collateralAmountOut,
     uint borrowedAmountOut
@@ -78,7 +79,8 @@ contract ConverterStrategyBaseLibFacade {
       entryData_,
       collateralAsset_,
       borrowAsset_,
-      amountIn_
+      amountIn_,
+      thresholdMainAsset_
     );
   }
 
@@ -145,6 +147,23 @@ contract ConverterStrategyBaseLibFacade {
       indexAsset,
       converter_,
       baseAmounts
+    );
+  }
+
+  function sendPerformanceFee(
+    uint performanceFee_,
+    address performanceReceiver_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
+  ) external returns (
+    uint[] memory rewardAmounts,
+    uint[] memory performanceAmounts
+  ) {
+    return ConverterStrategyBaseLib.sendPerformanceFee(
+      performanceFee_,
+      performanceReceiver_,
+      rewardTokens_,
+      rewardAmounts_
     );
   }
 
