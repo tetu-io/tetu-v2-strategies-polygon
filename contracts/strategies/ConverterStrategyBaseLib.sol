@@ -17,7 +17,6 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-import "hardhat/console.sol";
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -373,16 +372,13 @@ library ConverterStrategyBaseLib {
       // we assume here, that it's useless to borrow amount using collateral/borrow amount
       // less than given number of tokens (event for BTC)
       thresholdAmountIn_ = DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD;
-      console.log("thresholdAmountIn_", thresholdAmountIn_);
     }
     require(amountIn_ > thresholdAmountIn_, AppErrors.WRONG_VALUE);
 
     OpenPositionLocal memory vars;
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
     vars.entryKind = EntryKinds.getEntryKind(entryData_);
-    console.log("entryKind", vars.entryKind);
     if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_PROPORTION_1) {
-      console.log("_openPosition.1");
       return openPositionEntryKind1(
         tetuConverter_,
         entryData_,
@@ -392,7 +388,6 @@ library ConverterStrategyBaseLib {
         thresholdAmountIn_
       );
     } else {
-      console.log("_openPosition.2");
       (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
         entryData_,
         collateralAsset_,
@@ -430,7 +425,6 @@ library ConverterStrategyBaseLib {
           }
 
           if (amountIn_ < thresholdAmountIn_ && amountIn_ != 0) {
-            console.log("collateralThreshold_.2", amountIn_, thresholdAmountIn_);
             // dust amount is left, just leave it unused
             // we cannot add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
             amountIn_ = 0;
@@ -493,14 +487,11 @@ library ConverterStrategyBaseLib {
     if (len > 0) {
       // we should split amountIn on two amounts with proportions x:y
       (, uint x, uint y) = abi.decode(entryData_, (uint, uint, uint));
-      console.log("x, y", x, y);
       // calculate prices conversion ratio using price oracle, decimals 18
       // i.e. alpha = 1e18 * 75e6 usdc / 25e18 matic = 3e6 usdc/matic
       vars.alpha = _getCollateralToBorrowRatio(tetuConverter_, collateralAsset_, borrowAsset_);
-      console.log("vars.alpha", vars.alpha);
 
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        console.log("i", i);
         // the lending platform allows to convert {collateralsRequired[i]} to {amountsToBorrow[i]}
         // and give us required proportions in result
         // C = C1 + C2, C2 => B2, B2 * alpha = C3, C1/C3 must be equal to x/y
@@ -508,22 +499,15 @@ library ConverterStrategyBaseLib {
         // it reduces {collateralsRequired[i]} and {amountsToBorrow[i]} proportionally to fit the limits
         // as result, remaining C1 will be too big after conversion and we need to make another borrow
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
-        console.log("vars.c3", vars.c3);
         vars.c1 = x * vars.c3 / y;
-        console.log("vars.c1", vars.c1);
         vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
           ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
           : 1e18;
         vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
         vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
-        console.log("vars.ratio", vars.ratio);
-        console.log("vars.collateral", vars.collateral);
-        console.log("vars.amountToBorrow", vars.amountToBorrow);
 
         vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
-        console.log(" vars.c3",  vars.c3);
         vars.c1 = x * vars.c3 / y;
-        console.log(" vars.c1",  vars.c1);
 
         if (amountIn_ > vars.c1 + vars.collateral) {
           amountIn_ -= (vars.c1 + vars.collateral);
@@ -531,10 +515,8 @@ library ConverterStrategyBaseLib {
           // just leave left amount unused
           // we cannot add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
           if (amountIn_ < collateralThreshold_) {
-            console.log("collateralThreshold_.1", amountIn_, collateralThreshold_);
             amountIn_ = 0;
           }
-          console.log("amountIn_",  amountIn_);
         }
 
         require(
@@ -559,8 +541,6 @@ library ConverterStrategyBaseLib {
 
         borrowedAmountOut += vars.amountToBorrow;
         collateralAmountOut += vars.collateral;
-        console.log("borrowedAmountOut", borrowedAmountOut);
-        console.log("collateralAmountOut", collateralAmountOut);
 
         if (amountIn_ == 0) {
           break;
@@ -580,10 +560,6 @@ library ConverterStrategyBaseLib {
     IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle());
     uint priceCollateral = priceOracle.getAssetPrice(collateralAsset_);
     uint priceBorrow = priceOracle.getAssetPrice(borrowAsset_);
-    console.log("priceCollateral", priceCollateral);
-    console.log("priceBorrow", priceBorrow);
-    console.log("decimalsCollateral", IERC20Metadata(collateralAsset_).decimals());
-    console.log("deciimalsBorrow", IERC20Metadata(borrowAsset_).decimals());
     return 1e18 * priceBorrow * 10 ** IERC20Metadata(collateralAsset_).decimals()
            / priceCollateral / 10 ** IERC20Metadata(borrowAsset_).decimals();
   }
@@ -897,7 +873,6 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
-    console.log("calcInvestedAssets.1");
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
 
@@ -907,29 +882,22 @@ library ConverterStrategyBaseLib {
       tokens,
       v.len
     );
-    console.log("calcInvestedAssets.2");
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      console.log("calcInvestedAssets.3");
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += amountsOut[i];
       } else {
-        console.log("calcInvestedAssets.4");
         // available amount to repay
         uint toRepay = baseAmounts[tokens[i]] + amountsOut[i];
 
-        console.log("calcInvestedAssets.5");
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), tokens[indexAsset], tokens[i]);
-        console.log("calcInvestedAssets.6");
         amountOut += collateral;
         if (toRepay >= toPay) {
-          console.log("calcInvestedAssets.7");
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         } else {
-          console.log("calcInvestedAssets.8");
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           if (v.debts.length == 0) {
@@ -942,14 +910,11 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    console.log("calcInvestedAssets.9");
     if (v.debts.length == v.len) {
-      console.log("calcInvestedAssets.10");
       // we assume here, that it would be always profitable to save collateral
       // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
       // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
       for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-        console.log("calcInvestedAssets.11");
         if (v.debts[i] == 0) continue;
 
         // estimatedAssets should be reduced on the debt-value
@@ -962,7 +927,6 @@ library ConverterStrategyBaseLib {
         }
       }
     }
-    console.log("calcInvestedAssets.12");
 
     return amountOut;
   }

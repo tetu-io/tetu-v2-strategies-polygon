@@ -2153,6 +2153,11 @@ describe("ConverterStrategyBaseAccessTest", () => {
       thresholds?: ITokenAmount[];
       baseAmounts?: ITokenAmount[];
       initialBalances?: ITokenAmount[];
+
+      // disable performanceFee by default
+      performanceFee?: number;
+      // governance is used as a performance receiver by default
+      performanceReceiver?: string;
     }
     interface IClaimTestResults {
       gasUsed: BigNumber;
@@ -2172,6 +2177,11 @@ describe("ConverterStrategyBaseAccessTest", () => {
       tetuConverterRewardAmounts: BigNumber[],
       params?: IClaimTestParams
     ) : Promise<IClaimTestResults> {
+      // disable performance fee by default
+      await strategy.connect(await Misc.impersonate(await controller.governance())).setupPerformanceFee(
+        params?.performanceFee || 0,
+        params?.performanceReceiver || await controller.governance()
+      );
       await strategy.setDepositorClaimRewards(
         depositorRewardTokens.map(x => x.address),
         depositorRewardAmounts
@@ -2448,6 +2458,23 @@ describe("ConverterStrategyBaseAccessTest", () => {
       liquidityOut: BigNumber,
       params?: IDepositToPoolTestParams
     ) : Promise<IDepositToPoolTestResults> {
+      await strategy.setDepositorLiquidity(parseUnits("1", 18));
+      await strategy.setDepositorQuoteExit(// calc before deposit
+        parseUnits("1", 18),
+        [
+          parseUnits("0", 18),
+          parseUnits("23", 6),
+          parseUnits("0", 6)
+        ]
+      );
+      await strategy.setDepositorQuoteExit(// calc after deposit
+        parseUnits("2", 18),
+        [
+          parseUnits("0", 18),
+          parseUnits("23", 6),
+          parseUnits("0", 6)
+        ]
+      );
       if (params?.baseAmounts) {
         for (const tokenAmount of params?.baseAmounts) {
           await strategy.setBaseAmountAccess(tokenAmount.token.address, tokenAmount.amount);
@@ -3616,7 +3643,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
             dai.address,
             parseUnits("500", 18),
           )
-        ).revertedWith("TS-13 only TetuConverter"); // ONLY_TETU_CONVERTER
+        ).revertedWith("SB: Denied"); // DENIED
       });
       it("should revert if wrong asset", async () => {
         await usdc.mint(strategy.address, parseUnits("100", 6));
@@ -3628,7 +3655,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
             dai.address,
             parseUnits("500", 18),
           )
-        ).revertedWith("TS-14 wrong asset"); // WRONG_ASSET
+        ).revertedWith("SB: Wrong value"); // WRONG_VALUE
       });
 
     });

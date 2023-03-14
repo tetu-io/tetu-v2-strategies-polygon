@@ -12,7 +12,6 @@ import "../tools/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset: the asset deposited to the vault by users
@@ -542,31 +541,23 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
     uint investedAssetsBefore = _investedAssets;
-    console.log("_doHardWork investedAssetsBefore", investedAssetsBefore);
     uint investedAssetsLocal = _updateInvestedAssets();
-    console.log("_doHardWork.2 investedAssetsLocal", investedAssetsLocal);
 
     // register autocompound income or possible lose if assets fluctuated
     (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
-    console.log("_doHardWork.3 earned lost", earned, lost);
 
     _preHardWork(reInvest);
-    console.log("_doHardWork.4");
 
     (uint earned2, uint lost2, uint assetBalance) = _handleRewards();
     earned += earned2;
     lost += lost2;
-    console.log("_doHardWork.5 earned lost", earned, lost);
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
-      console.log("_doHardWork.6");
-
       uint assetInUseBefore = investedAssetsLocal + assetBalance;
       _depositToPool(assetBalance, false);
 
       (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetInUseBefore, _investedAssets + _balance(asset), earned, lost);
-      console.log("_doHardWork.7 earned lost", earned, lost);
     }
 
     _postHardWork();
@@ -588,9 +579,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
-    console.log("_calcInvestedAssets.1");
     (address[] memory tokens, uint indexAsset) = _getTokens();
-    console.log("_calcInvestedAssets.2");
 
     return ConverterStrategyBaseLib.calcInvestedAssets(
       tokens,
