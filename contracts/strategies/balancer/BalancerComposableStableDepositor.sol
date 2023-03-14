@@ -56,7 +56,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
       ).getPoolGauge(BalancerLogicLib.getPoolAddress(poolId_))
     );
     // infinite approve of pool-BPT to the gauge todo is it safe for the external gauge?
-    IERC20(BalancerLogicLib.getPoolAddress(poolId_)).safeApprove(address(_gauge), 2**255);
+    IERC20(BalancerLogicLib.getPoolAddress(poolId_)).safeApprove(address(_gauge), type(uint).max);
 
     // we can get list of reward tokens from the gauge, but it's more cheaper to get it outside
     _rewardTokens = rewardTokens_;
@@ -131,7 +131,9 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ///                         so it worth to add a gap to this amount, i.e. 1%
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
-  function _depositorExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {
+  function _depositorExit(uint liquidityAmount_) override internal virtual returns (
+    uint[] memory amountsOut
+  ) {
     bytes32 _poolId = poolId; // gas saving
     IBalancerGauge __gauge = _gauge; // gas saving
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
@@ -159,15 +161,14 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     }
 
     // withdraw the liquidity from the pool
-    if (liquidityAmount_ >= depositorBalance + gaugeBalance) {
-      amountsOut = BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId);
-    } else {
-      amountsOut = BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
-    }
+    amountsOut = (liquidityAmount_ >= depositorBalance + gaugeBalance)
+      ? BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId)
+      : BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.
-  /// @dev if requested liquidityAmount >= invested, then should make full exit - TODO
+  /// @dev if requested liquidityAmount >= invested, then full exit is required
+  ///      we emulate is at normal exit + conversion of remain BPT directly to the main asset
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
   ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function _depositorQuoteExit(uint liquidityAmount_) override internal virtual returns (uint[] memory amountsOut) {

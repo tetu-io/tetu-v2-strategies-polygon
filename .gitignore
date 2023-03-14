@@ -5,7 +5,7 @@ yarn.lock
 dist
 cache
 artifacts
-deployments
+deployments/hardhat
 typechain
 coverage
 coverage.json

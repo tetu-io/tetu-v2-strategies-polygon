@@ -16,7 +16,8 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
   }
 
-  mapping (address => uint) public baseAmounts;
+  mapping(address => uint) public baseAmounts;
+
   function setBaseAmounts(address asset, uint amount) external {
     baseAmounts[asset] = amount;
   }
@@ -24,12 +25,24 @@ contract ConverterStrategyBaseLibFacade {
   function getLiquidityAmountRatio(
     uint targetAmount_,
     address strategy_,
-    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory params_
+    address[] memory tokens,
+    uint indexAsset,
+    ITetuConverter converter,
+    uint investedAssets
   ) external returns (
     uint liquidityRatioOut,
     uint[] memory amountsToConvertOut
   ) {
-    return ConverterStrategyBaseLib.getLiquidityAmountRatio(targetAmount_, baseAmounts, strategy_, params_);
+    return ConverterStrategyBaseLib.getLiquidityAmountRatio(
+      targetAmount_,
+      baseAmounts,
+      strategy_,
+      tokens,
+      indexAsset,
+      converter,
+      investedAssets,
+      1e18
+    );
   }
 
   function getCollaterals(
@@ -134,4 +147,15 @@ contract ConverterStrategyBaseLibFacade {
       baseAmounts
     );
   }
+
+  //  function _prepareRewardsList(
+  //    ITetuConverter tetuConverter_,
+  //    address[] memory tokens_,
+  //    uint[] memory amounts_
+  //  ) external returns(
+  //    address[] memory tokensOut,
+  //    uint[] memory amountsOut
+  //  ) {
+  //    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, amounts_, baseAmounts);
+  //  }
 }

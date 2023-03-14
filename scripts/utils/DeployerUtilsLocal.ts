@@ -4,7 +4,7 @@ import axios from 'axios';
 import { config as dotEnvConfig } from 'dotenv';
 import logSettings from '../../log_settings';
 import { Logger } from 'tslog';
-import { MaticAddresses } from '../MaticAddresses';
+import { MaticAddresses } from '../addresses/MaticAddresses';
 import {
   ControllerV2,
   ControllerV2__factory,

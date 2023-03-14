@@ -3,19 +3,22 @@ import {ethers} from "hardhat";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
-import {ConverterStrategyBaseLibFacade, MockToken, PriceOracleMock} from "../../../typechain";
+import {ConverterStrategyBaseLibFacade, IERC20Metadata__factory, MockToken, PriceOracleMock} from "../../../typechain";
 import {expect} from "chai";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GAS_CALC_INVESTED_ASSETS_NO_DEBTS, GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
+  GAS_CALC_INVESTED_ASSETS_NO_DEBTS,
+  GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST,
   GAS_OPEN_POSITION,
-  GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS, GET_GET_COLLATERALS, GET_LIQUIDITY_AMOUNT_RATIO
+  GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS,
+  GET_GET_COLLATERALS,
+  GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {BigNumber} from "ethers";
-import {decodeInstructions} from "hardhat/internal/hardhat-network/stack-traces/source-maps";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -259,7 +262,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens: [dai.address, usdc.address, usdt.address],
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([],1, [],[])
+                converter: getTetuConverter([],1, [],[])
               }
             )
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -296,7 +299,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -335,7 +338,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -374,7 +377,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -400,7 +403,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens: [dai.address, usdc.address, usdt.address],
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([],1, [],[])
+                converter: getTetuConverter([],1, [],[])
               }
             )
             const ret = [r.liquidityRatioOut, ...r.amountsToConvertOut].map(x => BalanceUtils.toString(x)).join("\n");
@@ -437,7 +440,7 @@ describe("ConverterStrategyBaseLibTest", () => {
                 indexAsset: 1,
                 tokens,
                 investedAssets: parseUnits("500", 6),
-                tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+                converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
               }
             );
 
@@ -480,7 +483,7 @@ describe("ConverterStrategyBaseLibTest", () => {
             indexAsset: 1,
             tokens,
             investedAssets: parseUnits("500", 6),
-            tetuConverter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
+            converter: getTetuConverter([dai, usdc, usdt],1, amountsToRepay, amountsCollateralOut)
           }
         );
 

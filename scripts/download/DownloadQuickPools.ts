@@ -2,7 +2,7 @@ import {ethers} from "hardhat";
 import {mkdir, writeFileSync} from "fs";
 import {utils} from "ethers";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
-import {MaticAddresses} from "../MaticAddresses";
+import {MaticAddresses} from "../addresses/MaticAddresses";
 import {VaultUtils} from "../../test/VaultUtils";
 import {TokenUtils} from "../utils/TokenUtils";
 import {

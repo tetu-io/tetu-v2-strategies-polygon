@@ -387,10 +387,10 @@ library BalancerLogicLib {
 
   /// @notice Withdraw all available amount of LP-tokens from the pool
   ///         BalanceR doesn't allow to withdraw exact amount, so it's allowed to leave dust amount on the balance
-  /// @dev We make at most 2 attempts to withdraw (not more, each attempt takes a lot of gas).
+  /// @dev We make at most N attempts to withdraw (not more, each attempt takes a lot of gas).
   ///      Each attempt reduces available balance at ~1e4 times.
   /// @return amountsOut Result amounts of underlying (DAI, USDC..) that will be received from BalanceR
-  ///         The order of assets is the same as in getPoolTokens, but there is no pool-bpt
+  ///                    The order of assets is the same as in getPoolTokens, but there is no pool-bpt
   function depositorExitFull(IBVault vault_, bytes32 poolId_) external returns (
     uint[] memory amountsOut
   ) {
@@ -401,11 +401,19 @@ library BalancerLogicLib {
     p.len = p.tokens.length;
     amountsOut = new uint[](p.len - 1);
 
+    // we can create funds_ once and use it several times
+    IBVault.FundManagement memory funds = IBVault.FundManagement({
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
+    });
+
     uint liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
     if (liquidityAmount > 0) {
       uint liquidityThreshold = 10**IERC20Metadata(address(p.tokens[p.bptIndex])).decimals() / 100;
 
-      // we can make at most 2 attempts to withdraw amounts from the balanceR pool
+      // we can make at most N attempts to withdraw amounts from the balanceR pool
       for (uint i = 0; i < 2; ++i) {
         vault_.exitPool(
           poolId_,
@@ -430,15 +438,6 @@ library BalancerLogicLib {
       }
 
       // now we have amBbXXX tokens; swap them to XXX assets
-
-      // we can create funds_ once and use it several times
-      IBVault.FundManagement memory funds = IBVault.FundManagement({
-        sender: address(this),
-        fromInternalBalance: false,
-        recipient: payable(address(this)),
-        toInternalBalance: false
-      });
-
       uint k;
       for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
         if (i == p.bptIndex) continue;
@@ -458,24 +457,48 @@ library BalancerLogicLib {
       }
     }
 
-    // todo but probably we should swap remain bpt directly to USDC at full exit?
-    //    // convert remained amount of bpt on the strategy balance to main asset to avoid changes in investedAsset amount
-    //    uint depositorBalance = p.tokens[p.bptIndex].balanceOf(address(this));
-    //    if (depositorBalance > 0) {
-    //      console.log("Need to convert", depositorBalance);
-    //      console.log("From", address(p.tokens[1]));
-    //      console.log("To", address(p.tokens[2]));
-    //      console.log("Balance", p.tokens[2].balanceOf(address(this)));
-    //      BalancerLogicLib.swap(
-    //        vault_,
-    //        poolId_,
-    //        address(p.tokens[p.bptIndex]),
-    //        address(p.tokens[2]),
-    //        depositorBalance,
-    //        funds
-    //      );
-    //      console.log("Balance after swap", p.tokens[2].balanceOf(address(this)));
-    //    }
+    uint depositorBalance = p.tokens[p.bptIndex].balanceOf(address(this));
+    if (depositorBalance > 0) {
+      uint k = 0;
+      for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
+        if (i == p.bptIndex) continue;
+
+        // we assume here, that the depositorBalance is small
+        // so we can directly swap it to any single asset without changing of pool resources proportions
+        amountsOut[k] += _convertSmallBptRemainder(vault_, poolId_, p, funds, depositorBalance, i);
+        break;
+      }
+    }
+
+    return amountsOut;
+  }
+
+  /// @notice convert remained SMALL amount of bpt => am-bpt => main token of the am-bpt
+  /// @return amountOut Received amount of am-bpt's main token
+  function _convertSmallBptRemainder(
+    IBVault vault_,
+    bytes32 poolId_,
+    DepositorLocal memory p,
+    IBVault.FundManagement memory funds,
+    uint bptAmountIn_,
+    uint indexTargetAmBpt_
+  ) internal returns (uint amountOut) {
+    uint amountAmBpt = BalancerLogicLib.swap(
+      vault_,
+      poolId_,
+      address(p.tokens[p.bptIndex]),
+      address(p.tokens[indexTargetAmBpt_]),
+      bptAmountIn_,
+      funds
+    );
+    amountOut = swap(
+      vault_,
+      IBalancerBoostedAavePool(address(p.tokens[indexTargetAmBpt_])).getPoolId(),
+      address(p.tokens[indexTargetAmBpt_]),
+      IBalancerBoostedAavePool(address(p.tokens[indexTargetAmBpt_])).getMainToken(),
+      amountAmBpt,
+      funds
+    );
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.

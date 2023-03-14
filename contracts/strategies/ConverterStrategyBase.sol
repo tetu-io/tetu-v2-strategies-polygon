@@ -2,8 +2,6 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/ITetuConverterCallback.sol";
@@ -31,27 +29,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
   ///                        DATA TYPES
   /////////////////////////////////////////////////////////////////////
-  /// @notice Local vars for {_recycle}, workaround for stack too deep
-  struct RecycleLocalParams {
-    address asset;
-    uint compoundRatio;
-    IForwarder forwarder;
-    uint[] amountsToForward;
-    uint liquidationThreshold;
-    uint amountToCompound;
-    uint amountToForward;
-    address rewardToken;
-    address[] tokens;
-  }
 
-  struct ConvertAfterWithdrawLocalParams {
-    address asset;
-    ITetuConverter tetuConverter;
-    ITetuLiquidator liquidator;
-    uint collateral;
-    uint spentAmountIn;
-    uint receivedAmountOut;
-    uint liquidationThreshold;
+  struct WithdrawUniversalLocal {
+    uint[] reserves;
+    uint totalSupply;
+    uint depositorLiquidity;
+    uint liquidityAmount;
+    uint assetPrice;
+    uint[] amountsToConvert;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -121,15 +106,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function setLiquidationThreshold(address token, uint amount) external {
-    _onlyOperators();
+    StrategyLib.onlyOperators(controller());
     liquidationThresholds[token] = amount;
     emit LiquidationThresholdChanged(token, amount);
   }
 
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   function setReinvestThresholdPercent(uint percent_) external {
-    _onlyOperators();
-    require(percent_ <= REINVEST_THRESHOLD_DENOMINATOR, AppErrors.WRONG_VALUE);
+    StrategyLib.onlyOperators(controller());
+    require(percent_ <= REINVEST_THRESHOLD_DENOMINATOR, StrategyLib.WRONG_VALUE);
 
     reinvestThresholdPercent = percent_;
     emit ReinvestThresholdPercentChanged(percent_);
@@ -148,18 +133,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     int totalAssetsDelta
   ){
-    uint __investedAssets = _investedAssets;
-    uint updatedInvestedAssets = updateTotalAssetsBeforeInvest_
-      ? _updateInvestedAssets()
-      : __investedAssets;
-    totalAssetsDelta = updateTotalAssetsBeforeInvest_
-      ? int(updatedInvestedAssets) - int(__investedAssets)
-      : int(0);
+    uint updatedInvestedAssets;
+    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
 
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
-      address[] memory tokens = _depositorPoolAssets();
-      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+      (address[] memory tokens, uint indexAsset) = _getTokens();
 
       // prepare array of amounts ready to deposit, borrow missed amounts
       (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
@@ -174,7 +153,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       emit OnDepositorEnter(amounts, consumedAmounts);
 
       // adjust base-amounts
-      _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, -int(collateral));
+      _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, - int(collateral));
 
       // adjust _investedAssets
       _updateInvestedAssets();
@@ -186,6 +165,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Prepare {tokenAmounts} to be passed to depositorEnter
+  /// @dev Override this function to customize entry kind
   /// @param amount_ The amount of main asset that should be invested
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
@@ -203,8 +183,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint spentCollateral
   ) {
     // calculate required collaterals for each token and temporary save them to tokenAmounts
-    // save to tokenAmounts[indexAsset_] already correct value
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
+    // temporary save collateral to tokensAmounts
     tokenAmounts = ConverterStrategyBaseLib.getCollaterals(
       amount_,
       tokens_,
@@ -215,31 +195,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     );
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts
-    // total collateral amount spent for borrowing
-    uint len = tokens_.length;
-    borrowedAmounts = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset_) continue;
-
-      if (tokenAmounts[i] > 0) {
-        uint collateral;
-        AppLib.approveIfNeeded(tokens_[indexAsset_], tokenAmounts[i], address(tetuConverter_));
-        (collateral, borrowedAmounts[i]) = ConverterStrategyBaseLib.openPosition(
-          tetuConverter_,
-          "", // fixed collateral amount, max possible borrow amount // todo possibility to customize entry kind
-          tokens_[indexAsset_],
-          tokens_[i],
-          tokenAmounts[i]
-        );
-        // collateral should be equal to tokenAmounts[i] here because we use default entry kind
-        spentCollateral += collateral;
-
-        // zero amount are possible (conversion is not available) but it's not suitable for depositor
-        require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
-      }
-      tokenAmounts[i] = IERC20(tokens_[i]).balanceOf(address(this));
-    }
-
+    (tokenAmounts, borrowedAmounts, spentCollateral) = ConverterStrategyBaseLib.getTokenAmounts(
+      tetuConverter_,
+      tokens_,
+      indexAsset_,
+      tokenAmounts
+    );
     return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 
@@ -258,9 +219,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     int totalAssetsDelta
   ) {
-    uint __investedAssets = _investedAssets;
-    uint updatedInvestedAssets = _updateInvestedAssets();
-    totalAssetsDelta = int(updatedInvestedAssets) - int(__investedAssets);
+    uint updatedInvestedAssets;
+    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(true);
 
     require(updatedInvestedAssets != 0, AppErrors.NO_INVESTMENTS);
     (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
@@ -276,9 +236,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     int totalAssetsDelta
   ) {
-    uint __investedAssets = _investedAssets;
-    uint updatedInvestedAssets = _updateInvestedAssets();
-    totalAssetsDelta = int(updatedInvestedAssets) - int(__investedAssets);
+    uint updatedInvestedAssets;
+    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(true);
 
     (investedAssetsUSD, assetPrice) = _withdrawUniversal(0, true, updatedInvestedAssets);
   }
@@ -286,82 +245,85 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount Amount to be withdrawn. 0 is ok if we withdraw all.
   /// @param all Withdraw all
   /// @param investedAssets_ Current amount of invested assets
-  /// @return investedAssetsUSD The value that we should receive after withdrawing
-  /// @return assetPrice Price of the {asset} taken from the price oracle
+  /// @return __investedAssetsUSD The value that we should receive after withdrawing
+  /// @return __assetPrice Price of the {asset} taken from the price oracle
   function _withdrawUniversal(uint amount, bool all, uint investedAssets_) internal returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+    uint __investedAssetsUSD,
+    uint __assetPrice
   ) {
-    ConverterStrategyBaseLib.LiquidityAmountRatioInputParams memory vars;
 
-    // _investedAssets value is deprecated, prices can be changed since last update
-    // so we need to recalculate _investedAssets
-    // to simplify testing, we pass recalculated version as a function param
-    vars.investedAssets = investedAssets_;
+    if ((all || amount != 0) && investedAssets_ != 0) {
 
-    if ((all || amount != 0) && vars.investedAssets != 0) {
-      vars.tokens = _depositorPoolAssets();
-      vars.indexAsset = ConverterStrategyBaseLib.getAssetIndex(vars.tokens, asset);
-      vars.converter = converter;
-      uint len = vars.tokens.length;
+      address[] memory tokens = _depositorPoolAssets();
+      address _asset = asset;
+      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, _asset);
+      ITetuConverter _converter = converter;
 
-      // temporary save liquidityRatioOut to liquidityAmount
-      (uint liquidityAmount, uint[] memory amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmountRatio(
+      WithdrawUniversalLocal memory vars = WithdrawUniversalLocal({
+      reserves : _depositorPoolReserves(),
+      totalSupply : _depositorTotalSupply(),
+      depositorLiquidity : _depositorLiquidity(),
+      liquidityAmount : 0,
+      amountsToConvert : new uint[](0),
+      assetPrice : ConverterStrategyBaseLib.getAssetPriceFromConverter(_converter, _asset)
+      });
+
+      (vars.liquidityAmount, vars.amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmountRatio(
         all ? 0 : amount,
         baseAmounts,
         address(this),
-        vars
+        tokens,
+        indexAsset,
+        _converter,
+        investedAssets_,
+        vars.depositorLiquidity
       );
-      if (liquidityAmount != 0) {
-        // liquidityAmount temporary contains ratio...
-        liquidityAmount = liquidityAmount * _depositorLiquidity() / 1e18;
-      }
-
-      {
-        IPriceOracle priceOracle = IPriceOracle(IConverterController(vars.converter.controller()).priceOracle());
-        assetPrice = priceOracle.getAssetPrice(vars.tokens[vars.indexAsset]);
-      }
 
       uint[] memory withdrawnAmounts;
       uint expectedAmountMainAsset;
-      if (liquidityAmount != 0) {
-        uint[] memory expectedWithdrawAmounts = ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(
-          _depositorPoolReserves(),
-          liquidityAmount,
-          _depositorTotalSupply()
-        );
-        withdrawnAmounts = _depositorExit(liquidityAmount);
-        emit OnDepositorExit(liquidityAmount, withdrawnAmounts);
 
-        expectedAmountMainAsset = ConverterStrategyBaseLib.getExpectedAmountMainAsset(
-          vars,
-          expectedWithdrawAmounts,
-          amountsToConvert
+      if (vars.liquidityAmount != 0) {
+
+        // =============== WITHDRAW =====================
+        // make withdraw
+        withdrawnAmounts = _depositorExit(vars.liquidityAmount);
+        emit OnDepositorExit(vars.liquidityAmount, withdrawnAmounts);
+        // ==============================================
+
+        (expectedAmountMainAsset, vars.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
+          vars.reserves,
+          vars.depositorLiquidity,
+          vars.liquidityAmount,
+          vars.totalSupply,
+          vars.amountsToConvert,
+          tokens,
+          indexAsset,
+          _converter,
+          _depositorLiquidity(),
+          withdrawnAmounts
         );
-        for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-          amountsToConvert[i] += withdrawnAmounts[i];
-        }
+
       } else {
-        withdrawnAmounts = new uint[](len);
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
-        expectedAmountMainAsset = ConverterStrategyBaseLib.getExpectedAmountMainAsset(
-          vars,
-          withdrawnAmounts, // array with all zero values
-          amountsToConvert
+        (withdrawnAmounts, expectedAmountMainAsset) = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+          tokens,
+          indexAsset,
+          _converter,
+          new uint[](tokens.length), // array with all zero values
+          vars.amountsToConvert
         );
       }
 
       // convert amounts to main asset and update base amounts
-      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(vars.tokens, vars.indexAsset, amountsToConvert);
-      _updateBaseAmounts(vars.tokens, withdrawnAmounts, repaid, vars.indexAsset, int(collateral));
-
-      investedAssetsUSD = expectedAmountMainAsset * assetPrice / 1e18;
+      (uint collateral, uint[] memory repaid) = _convertAfterWithdraw(tokens, indexAsset, vars.amountsToConvert, _converter);
+      _updateBaseAmounts(tokens, withdrawnAmounts, repaid, indexAsset, int(collateral));
 
       // adjust _investedAssets
       _updateInvestedAssets();
-    }
 
-    return (investedAssetsUSD, assetPrice);
+      return (expectedAmountMainAsset * vars.assetPrice / 1e18, vars.assetPrice);
+    }
+    return (0, 0);
   }
 
   /// @notice If pool supports emergency withdraw need to call it for emergencyExit()
@@ -369,8 +331,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory withdrawnAmounts = _depositorEmergencyExit();
     emit OnDepositorEmergencyExit(withdrawnAmounts);
 
-    address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+    (address[] memory tokens, uint indexAsset) = _getTokens();
 
     // convert amounts to main asset and update base amounts
     (uint collateral, uint[] memory repaid) = _convertAfterWithdrawAll(tokens, indexAsset);
@@ -397,7 +358,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory amountsToConvert = ConverterStrategyBaseLib.getAvailableBalances(tokens_, indexAsset_);
 
     // convert amounts to the main asset
-    (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert);
+    (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert, converter);
   }
 
   /// @notice Convert {amountsToConvert_} to the main {asset}
@@ -408,20 +369,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _convertAfterWithdraw(
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory amountsToConvert_
+    uint[] memory amountsToConvert_,
+    ITetuConverter _converter
   ) internal returns (
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
     return ConverterStrategyBaseLib.convertAfterWithdraw(
-      ConverterStrategyBaseLib.ConvertAfterWithdrawInputParams({
-        tetuConverter: converter,
-        liquidator: ITetuLiquidator(IController(controller()).liquidator()),
-        liquidationThreshold: liquidationThresholds[tokens_[indexAsset_]],
-        tokens: tokens_,
-        indexAsset: indexAsset_,
-        amountsToConvert: amountsToConvert_
-     })
+      _converter,
+      ITetuLiquidator(IController(controller()).liquidator()),
+      liquidationThresholds[tokens_[indexAsset_]],
+      tokens_,
+      indexAsset_,
+      amountsToConvert_
     );
   }
 
@@ -449,7 +409,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         if (amountAsset_ > 0) {
           receivedAmount += uint(amountAsset_);
         } else {
-          spentAmount += uint(-amountAsset_);
+          spentAmount += uint(- amountAsset_);
         }
       }
       _updateBaseAmountsForAsset(tokens_[i], receivedAmount, spentAmount);
@@ -468,49 +428,24 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                 Claim rewards
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards
-  /// @dev The post-processing is rewards conversion to the main asset
-  /// @param tokens_ List of rewards claimed from the internal pool
-  /// @param amounts_ Amounts of rewards claimed from the internal pool
-  /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
-  /// @param amountsOut Amounts of available rewards
-  function _prepareRewardsList(
-    ITetuConverter tetuConverter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) internal returns(
-    address[] memory tokensOut,
-    uint[] memory amountsOut
-  ) {
-    // Rewards from TetuConverter
-    (address[] memory tokens2, uint[] memory amounts2) = tetuConverter_.claimRewards(address(this));
-
-    // Join arrays and recycle tokens
-    (tokensOut, amountsOut) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
-
-    // {amounts} contain just received values, but probably we already had some tokens on balance
-    uint len = tokensOut.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - baseAmounts[tokensOut[i]];
-    }
-  }
-
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual {
     // get rewards from the Depositor
     (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts) = _depositorClaimRewards();
 
-    (address[] memory rewardTokens, uint[] memory amounts) = _prepareRewardsList(
+    (address[] memory rewardTokens, uint[] memory amounts) = ConverterStrategyBaseLib.prepareRewardsList(
       converter,
       depositorRewardTokens,
-      depositorRewardAmounts
+      depositorRewardAmounts,
+      baseAmounts
     );
 
     uint len = rewardTokens.length;
     if (len > 0) {
       (uint[] memory received, uint[] memory spent, uint[] memory amountsToForward) = _recycle(rewardTokens, amounts);
 
-      _updateBaseAmounts(rewardTokens, received, spent, type(uint).max, 0); // max - we don't need to exclude any asset
+      _updateBaseAmounts(rewardTokens, received, spent, type(uint).max, 0);
+      // max - we don't need to exclude any asset
       // received has a length equal to rewardTokens.length + 1
       // last item contains amount of the {asset} received after swapping
       _updateBaseAmountsForAsset(asset, received[len], 0);
@@ -541,6 +476,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
+    // todo send performanceFee to performanceReceiver (make dedicated call and adjust amounts)
     (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
       asset,
       compoundRatio,
@@ -577,45 +513,39 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Do hard work
   function doHardWork() override public returns (uint, uint) {
+    require(msg.sender == splitter, StrategyLib.DENIED);
     return _doHardWork(true);
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
-  function _handleRewards() internal virtual returns (uint earned, uint lost) {
+  function _handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     uint assetBalanceBefore = _balance(asset);
     _claim();
-    uint assetBalanceAfterClaim = _balance(asset);
-    if (assetBalanceAfterClaim > assetBalanceBefore) {
-      earned = assetBalanceAfterClaim - assetBalanceBefore;
-    } else {
-      lost = assetBalanceBefore - assetBalanceAfterClaim;
-    }
-
-    return (earned, lost);
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, _balance(asset), earned, lost);
+    return (earned, lost, assetBalanceAfterClaim);
   }
 
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    uint investedAssetsBefore = _investedAssets;
     uint investedAssetsLocal = _updateInvestedAssets();
+
+    // register autocompound income or possible lose if assets fluctuated
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
 
     _preHardWork(reInvest);
 
-    (earned, lost) = _handleRewards();
-    uint assetBalance = _balance(asset);
+    uint assetBalance;
+    (earned, lost, assetBalance) = _handleRewards();
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
 
       uint assetInUseBefore = investedAssetsLocal + assetBalance;
       _depositToPool(assetBalance, false);
-      uint assetInUseAfter = _investedAssets + _balance(asset);
 
-      if (assetInUseAfter > assetInUseBefore) {
-        earned += assetInUseAfter - assetInUseBefore;
-      } else {
-        lost += assetInUseBefore - assetInUseAfter;
-      }
+      (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetInUseBefore, _investedAssets + _balance(asset), earned, lost);
     }
 
     _postHardWork();
@@ -637,20 +567,37 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
-    uint liquidity = _depositorLiquidity();
+    (address[] memory tokens, uint indexAsset) = _getTokens();
 
-    address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
-
-    uint[] memory amountsOut = liquidity == 0
-      ? new uint[](tokens.length)
-      : _depositorQuoteExit(liquidity);
-
-    return ConverterStrategyBaseLib.calcInvestedAssets(tokens, amountsOut, indexAsset, converter, baseAmounts);
+    return ConverterStrategyBaseLib.calcInvestedAssets(
+      tokens,
+    // quote exit should check zero liquidity
+      _depositorQuoteExit(_depositorLiquidity()),
+      indexAsset,
+      converter,
+      baseAmounts
+    );
   }
 
   function calcInvestedAssets() external returns (uint) {
     return _calcInvestedAssets();
+  }
+
+  /// @notice Update invested assets and return delta [new-investedAssets - old-investedAssets]
+  /// @param updateTotalAssetsBeforeInvest_ If false - skip update, return delta = 0
+  function _updateInvestedAssetsAndGetDelta(bool updateTotalAssetsBeforeInvest_) internal returns (
+    uint updatedInvestedAssets,
+    int totalAssetsDelta
+  ) {
+    uint __investedAssets = _investedAssets;
+
+    updatedInvestedAssets = updateTotalAssetsBeforeInvest_
+    ? _updateInvestedAssets()
+    : __investedAssets;
+
+    totalAssetsDelta = updateTotalAssetsBeforeInvest_
+    ? int(updatedInvestedAssets) - int(__investedAssets)
+    : int(0);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -675,8 +622,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     bool isCollateral
   ) {
     address _converter = address(converter);
-    require(msg.sender == _converter, AppErrors.ONLY_TETU_CONVERTER);
-    require(collateralAsset_ == asset, AppErrors.WRONG_ASSET);
+    require(msg.sender == _converter, StrategyLib.DENIED);
+    require(collateralAsset_ == asset, StrategyLib.WRONG_VALUE);
 
     amountOut = 0;
     uint assetBalance = _balance(collateralAsset_);
@@ -688,9 +635,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // it will be rebalanced in the next call
       _withdrawFromPool(requiredAmountCollateralAsset_ - assetBalance);
       uint balanceAfterWithdraw = _balance(collateralAsset_);
-      amountOut = balanceAfterWithdraw > requiredAmountCollateralAsset_
-        ? requiredAmountCollateralAsset_
-        : balanceAfterWithdraw;
+      amountOut = Math.min(balanceAfterWithdraw, requiredAmountCollateralAsset_);
     }
 
     IERC20(collateralAsset_).safeTransfer(_converter, amountOut);
@@ -713,7 +658,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Unlimited capacity by default
   function capacity() external virtual view returns (uint) {
-    return 2**255; // almost same as type(uint).max but more gas efficient
+    return 2 ** 255;
+    // almost same as type(uint).max but more gas efficient
+  }
+
+  function _getTokens() internal view returns (address[] memory tokens, uint indexAsset) {
+    tokens = _depositorPoolAssets();
+    indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
   }
 
 
@@ -722,6 +673,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-  uint[50] private __gap;
+  uint[46] private __gap;
 
 }

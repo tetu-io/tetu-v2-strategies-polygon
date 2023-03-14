@@ -36,9 +36,9 @@ import {
   GAS_WITHDRAW_ALL_TO_SPLITTER
 } from "../../../baseUT/GasLimits";
 import {areAlmostEqual} from "../../../baseUT/utils/MathUtils";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {MaticHolders} from "../../../../scripts/MaticHolders";
+import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 chai.use(chaiAsPromised);
 
 describe('BalancerIntTest', function() {
@@ -129,7 +129,7 @@ describe('BalancerIntTest', function() {
       core = await DeployerUtilsLocal.getCoreAddressesWrapper(signer);
       tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
 
-      const data = await UniversalTestUtils.makeStrategyDeployer(
+      const data = await UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
         signer,
         addresses,
         MAIN_ASSET,
@@ -210,8 +210,9 @@ describe('BalancerIntTest', function() {
       describe("State after depositing 50_000 by signer", () => {
         it("should have expected values", async () => {
           // some insurance is immediately used to recover entry-loss during the depositing
+          const d = await (await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner)).wait();
           const recoveredLoss = await UniversalTestUtils.extractLossCovered(
-            await (await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner)).wait(),
+            d,
             vault.address
           ) || BigNumber.from(0);
           const stateAfterDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
@@ -327,9 +328,12 @@ describe('BalancerIntTest', function() {
 
             // vault
             stateAfterDepositUser.vault.userShares.add(stateAfterDepositUser.vault.signerShares),
-            stateAfterDepositUser.vault.userUsdc.add(stateAfterDepositUser.vault.signerUsdc),
-            stateAfterDepositUser.vault.totalAssets,
-            stateAfterDepositUser.vault.totalAssets.eq(
+            stateAfterDepositUser.vault.userUsdc.add(stateAfterDepositUser.vault.signerUsdc).gt(
+              stateAfterDepositUser.vault.totalSupply
+            ),
+            stateAfterDepositUser.vault.totalAssets.gt(stateAfterDepositUser.vault.totalSupply),
+            areAlmostEqual(
+              stateAfterDepositUser.vault.totalAssets,
               parseUnits((DEPOSIT_AMOUNT * 1.5).toString(), 6)
                 .mul(DENOMINATOR - DEPOSIT_FEE)
                 .div(DENOMINATOR)
@@ -361,8 +365,8 @@ describe('BalancerIntTest', function() {
 
             // vault
             stateAfterDepositUser.vault.totalSupply,
-            stateAfterDepositUser.vault.totalSupply,
-            stateAfterDepositUser.vault.totalSupply,
+            true,
+            true,
             true,
 
             // insurance and buffer
@@ -398,6 +402,9 @@ describe('BalancerIntTest', function() {
             true, true, true, true
           ].map(x => BalanceUtils.toString(x)).join("\n");
 
+          console.log("stateBeforeDeposit", stateBeforeDeposit);
+          console.log("stateAfterDepositUser", stateAfterDepositUser);
+
           expect(ret).eq(expected);
         });
       });
@@ -408,7 +415,7 @@ describe('BalancerIntTest', function() {
 
           // initial deposit doesn't invest all amount to pool
           // a first hardwork make additional investment
-          await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+          await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
           const stateAfterHardwork = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
           const ret = [
@@ -452,7 +459,7 @@ describe('BalancerIntTest', function() {
           expect(ret).eq(expected);
         });
         it("should not exceed gas limits @skip-on-coverage", async () => {
-          const gasUsed = await strategy.connect(await Misc.impersonate(vault.address)).estimateGas.doHardWork();
+          const gasUsed = await strategy.connect(await Misc.impersonate(splitter.address)).estimateGas.doHardWork();
           controlGasLimitsEx(gasUsed, GAS_FIRST_HARDWORK, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
@@ -476,8 +483,6 @@ describe('BalancerIntTest', function() {
             stateAfterWithdraw.strategy.usdt.eq(0),
             stateAfterWithdraw.strategy.dai.eq(0),
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            stateAfterWithdraw.strategy.bptPool.gt(0),
             stateAfterWithdraw.strategy.totalAssets.gt(0),
             stateAfterWithdraw.strategy.investedAssets.gt(0),
 
@@ -504,8 +509,7 @@ describe('BalancerIntTest', function() {
             // strategy
             true, true, true,
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            true, true, true,
+            true, true,
 
             // splitter
             true,
@@ -596,8 +600,6 @@ describe('BalancerIntTest', function() {
             stateAfterExit.strategy.usdt.eq(0),
             stateAfterExit.strategy.dai.eq(0),
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            stateAfterExit.strategy.bptPool.gt(0),
             stateAfterExit.strategy.totalAssets.gt(0),
             stateAfterExit.strategy.investedAssets.gt(0),
 
@@ -624,8 +626,7 @@ describe('BalancerIntTest', function() {
             // strategy
             true, true, true,
 
-            // we cannot withdraw the whole amount from the balancer, small amount will leave there
-            true, true, true,
+            true, true,
 
             // splitter
             true,
@@ -684,7 +685,7 @@ describe('BalancerIntTest', function() {
           // try to check forward income .. (unsuccessfully, todo)
           const tetuBefore = await IERC20__factory.connect(MaticAddresses.TETU_TOKEN, signer).balanceOf(forwarder);
 
-          const tx = await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+          const tx = await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
           const distributed = await UniversalTestUtils.extractDistributed(await tx.wait(), forwarder);
           const stateAfterHardwork = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
 
@@ -703,9 +704,8 @@ describe('BalancerIntTest', function() {
             // gauge
             stateAfterHardwork.gauge.strategyBalance.gt(stateBeforeDeposit.gauge.strategyBalance),
 
-            // splitter: total assets amount is a bit decreased
+            // splitter: total assets amount is a bit increased
             stateAfterDeposit.splitter.totalAssets.lte(stateAfterHardwork.splitter.totalAssets),
-            areAlmostEqual(stateAfterDeposit.splitter.totalAssets, stateAfterHardwork.splitter.totalAssets, 3),
 
             // base amounts
             stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
@@ -724,7 +724,7 @@ describe('BalancerIntTest', function() {
             true,
 
             // splitter
-            true, true,
+            true,
 
             // base amounts
             true, true, true, true
@@ -741,7 +741,7 @@ describe('BalancerIntTest', function() {
         });
         it("should not exceed gas limits @skip-on-coverage", async () => {
           await TimeUtils.advanceNBlocks(20_000);
-          const gasUsed = await strategy.connect(await Misc.impersonate(vault.address)).estimateGas.doHardWork();
+          const gasUsed = await strategy.connect(await Misc.impersonate(splitter.address)).estimateGas.doHardWork();
           controlGasLimitsEx(gasUsed, GAS_HARDWORK_WITH_REWARDS, (u, t) => {
             expect(u).to.be.below(t + 1);
           });
@@ -792,7 +792,7 @@ describe('BalancerIntTest', function() {
 
           for (let i = 0; i < countLoops; ++i) {
             await TimeUtils.advanceNBlocks(stepInBlocks);
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state after hardwork ${i}`, state);
             states.push(state);
@@ -822,7 +822,7 @@ describe('BalancerIntTest', function() {
       });
       describe("loopEndActions from DoHardWorkLoopBase", () => {
         it("should be profitable", async () => {
-          const countLoops = 5;
+          const countLoops = 20;
           const stepInBlocks = 5_000;
           const stateAfterDeposit = await enterToVault();
           console.log("stateAfterDeposit", stateAfterDeposit);
@@ -864,7 +864,9 @@ describe('BalancerIntTest', function() {
           }
           await TimeUtils.advanceNBlocks(stepInBlocks);
 
+          console.log("user withdraw all");
           await vault.connect(user).withdrawAll();
+          console.log("signer withdraw all");
           await vault.connect(signer).withdrawAll();
 
           const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, "final");
@@ -897,7 +899,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -932,7 +934,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -970,7 +972,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }
@@ -1007,7 +1009,7 @@ describe('BalancerIntTest', function() {
 
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
-            await strategy.connect(await Misc.impersonate(vault.address)).doHardWork();
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
             const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state)
           }

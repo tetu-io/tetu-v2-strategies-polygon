@@ -1,17 +1,19 @@
-import {config as dotEnvConfig} from "dotenv";
-import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomiclabs/hardhat-ethers";
-import "@nomiclabs/hardhat-etherscan";
-import "@nomiclabs/hardhat-web3";
-import "@nomiclabs/hardhat-solhint";
-import "@typechain/hardhat";
-import "hardhat-contract-sizer";
-import "hardhat-gas-reporter";
-import "hardhat-tracer";
-import "solidity-coverage"
-import "hardhat-abi-exporter"
-import {task} from "hardhat/config";
-import {deployContract} from "./scripts/deploy/DeployContract";
+import { config as dotEnvConfig } from 'dotenv';
+import '@nomicfoundation/hardhat-chai-matchers';
+import '@nomiclabs/hardhat-ethers';
+import '@nomiclabs/hardhat-etherscan';
+import '@nomiclabs/hardhat-web3';
+import '@nomiclabs/hardhat-solhint';
+import '@typechain/hardhat';
+import 'hardhat-contract-sizer';
+import 'hardhat-gas-reporter';
+import 'hardhat-tracer';
+import 'solidity-coverage';
+import 'hardhat-abi-exporter';
+import { task } from 'hardhat/config';
+import { deployContract } from './scripts/deploy/DeployContract';
+import 'hardhat-deploy';
+import { deployAddresses } from './scripts/addresses/deploy-addresses';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -19,34 +21,34 @@ const argv = require('yargs/yargs')()
   .env('TETU')
   .options({
     hardhatChainId: {
-      type: "number",
-      default: 137
+      type: 'number',
+      default: 137,
     },
     maticRpcUrl: {
-      type: "string",
+      type: 'string',
     },
     networkScanKey: {
-      type: "string",
+      type: 'string',
     },
     privateKey: {
-      type: "string",
-      default: "85bb5fa78d5c4ed1fde856e9d0d1fe19973d7a79ce9ed6c0358ee06a4550504e" // random account
+      type: 'string',
+      default: '85bb5fa78d5c4ed1fde856e9d0d1fe19973d7a79ce9ed6c0358ee06a4550504e', // random account
     },
     maticForkBlock: {
-      type: "number",
-      default: 0
+      type: 'number',
+      default: 0,
     },
   }).argv;
 
-task("deploy", "Deploy contract", async function (args, hre, runSuper) {
+task('deployContract', 'Deploy contract', async function(args, hre, runSuper) {
   const [signer] = await hre.ethers.getSigners();
   // tslint:disable-next-line:ban-ts-ignore
   // @ts-ignore
-  await deployContract(hre, signer, args.name)
-}).addPositionalParam("name", "Name of the smart contract to deploy");
+  await deployContract(hre, signer, args.name);
+}).addPositionalParam('name', 'Name of the smart contract to deploy');
 
 export default {
-  defaultNetwork: "hardhat",
+  defaultNetwork: 'hardhat',
   networks: {
     hardhat: {
       allowUnlimitedContractSize: true,
@@ -55,21 +57,21 @@ export default {
       blockGasLimit: 0x1fffffffffffff,
       gas: argv.hardhatChainId === 1 ? 19_000_000 :
         argv.hardhatChainId === 137 ? 19_000_000 :
-            9_000_000,
+          9_000_000,
       forking: argv.hardhatChainId !== 31337 ? {
         url:
           argv.hardhatChainId === 1 ? argv.ethRpcUrl :
             argv.hardhatChainId === 137 ? argv.maticRpcUrl :
-                undefined,
+              undefined,
         blockNumber:
           argv.hardhatChainId === 1 ? argv.ethForkBlock !== 0 ? argv.ethForkBlock : undefined :
             argv.hardhatChainId === 137 ? argv.maticForkBlock !== 0 ? argv.maticForkBlock : undefined :
-                undefined
+              undefined,
       } : undefined,
       accounts: {
-        mnemonic: "test test test test test test test test test test test junk",
-        path: "m/44'/60'/0'/0",
-        accountsBalance: "100000000000000000000000000000"
+        mnemonic: 'test test test test test test test test test test test junk',
+        path: 'm/44\'/60\'/0\'/0',
+        accountsBalance: '100000000000000000000000000000',
       },
       // loggingEnabled: true,
     },
@@ -106,24 +108,24 @@ export default {
   solidity: {
     compilers: [
       {
-        version: "0.8.17",
+        version: '0.8.17',
         settings: {
           optimizer: {
             enabled: true,
             runs: 150,
-          }
-        }
+          },
+        },
       },
-    ]
+    ],
   },
   paths: {
-    sources: "./contracts",
-    tests: "./test",
-    cache: "./cache",
-    artifacts: "./artifacts"
+    sources: './contracts',
+    tests: './test',
+    cache: './cache',
+    artifacts: './artifacts',
   },
   mocha: {
-    timeout: 9999999999
+    timeout: 9999999999,
   },
   contractSizer: {
     alphaSort: false,
@@ -133,15 +135,16 @@ export default {
   gasReporter: {
     enabled: false,
     currency: 'USD',
-    gasPrice: 21
+    gasPrice: 21,
   },
   typechain: {
-    outDir: "typechain",
+    outDir: 'typechain',
   },
   abiExporter: {
     path: './artifacts/abi',
     runOnCompile: false,
     spacing: 2,
     pretty: true,
-  }
+  },
+  namedAccounts: deployAddresses,
 };

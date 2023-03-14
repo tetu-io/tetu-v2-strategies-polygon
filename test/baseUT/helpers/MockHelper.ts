@@ -1,10 +1,17 @@
 import {
   BalancerComposableStableDepositorFacade,
-  BalancerLogicLibFacade, ConverterStrategyBaseLibFacade,
+  BalancerLogicLibFacade,
+  ConverterStrategyBaseLibFacade,
   MockConverterStrategy,
-  MockConverterStrategy__factory, MockTetuConverterController,
-  MockTetuConverter, MockTetuLiquidatorSingleCall,
-  PriceOracleMock, Uniswap2LibFacade, MockForwarder, Aave3AggregatorInterfaceMock
+  MockConverterStrategy__factory,
+  MockTetuConverterController,
+  MockTetuConverter,
+  MockTetuLiquidatorSingleCall,
+  PriceOracleMock,
+  Uniswap2LibFacade,
+  MockForwarder,
+  Aave3AggregatorInterfaceMock,
+  BalancerComposableStableStrategyAccess
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
@@ -97,6 +104,13 @@ export class MockHelper {
       'Aave3AggregatorInterfaceMock',
       price
     )) as Aave3AggregatorInterfaceMock;
+  }
+
+  public static async createBalancerComposableStableStrategyAccess(signer: SignerWithAddress): Promise<BalancerComposableStableStrategyAccess> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'BalancerComposableStableStrategyAccess',
+    )) as BalancerComposableStableStrategyAccess;
   }
 
 }

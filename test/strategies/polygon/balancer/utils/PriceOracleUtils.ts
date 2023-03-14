@@ -5,7 +5,7 @@ import {
   IConverterController__factory, IPriceOracle,
   IPriceOracle__factory, ITetuConverter__factory
 } from "../../../../../typechain";
-import {MaticAddresses} from "../../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../../scripts/addresses/MaticAddresses";
 import {MockHelper} from "../../../../baseUT/helpers/MockHelper";
 import {ConverterUtils} from "../../../../baseUT/utils/ConverterUtils";
 import {

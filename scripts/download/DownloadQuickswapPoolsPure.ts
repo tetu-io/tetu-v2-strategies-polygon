@@ -1,6 +1,6 @@
 import {ethers} from "hardhat";
 import {IStakingRewards__factory, IStakingRewardsFactory__factory, IUniswapV2Pair__factory} from "../../typechain";
-import {MaticAddresses} from "../MaticAddresses";
+import {MaticAddresses} from "../addresses/MaticAddresses";
 import {TokenUtils} from "../utils/TokenUtils";
 import {BigNumber} from "ethers";
 import {mkdir, writeFileSync} from "fs";

@@ -57,7 +57,14 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
-    return _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert_);
+    return ConverterStrategyBaseLib.convertAfterWithdraw(
+      converter,
+      ITetuLiquidator(IController(controller()).liquidator()),
+      liquidationThresholds[tokens_[indexAsset_]],
+      tokens_,
+      indexAsset_,
+      amountsToConvert_
+    );
   }
 
   function _convertAfterWithdrawAllAccess(
@@ -102,11 +109,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   /////////////////////////////////////////////////////////////////////////////////////
   /// _handleRewards, mocked version + accessor
   /////////////////////////////////////////////////////////////////////////////////////
-  function _handleRewards() internal override returns (uint earned, uint lost) {
+  function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     if (handleRewardsParams.initialized) {
-      console.log("_handleRewards.mocked-version is called");
+//      console.log("_handleRewards.mocked-version is called");
       if (handleRewardsParams.assetBalanceChange > 0) {
-       IERC20(asset).transferFrom(
+        IERC20(asset).transferFrom(
           handleRewardsParams.providerBalanceChange,
           address(this),
           uint(handleRewardsParams.assetBalanceChange)
@@ -114,15 +121,16 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       } else if (handleRewardsParams.assetBalanceChange < 0) {
         IERC20(asset).transfer(
           handleRewardsParams.providerBalanceChange,
-          uint(-handleRewardsParams.assetBalanceChange)
+          uint(- handleRewardsParams.assetBalanceChange)
         );
       }
-      return (handleRewardsParams.earned, handleRewardsParams.lost);
+      return (handleRewardsParams.earned, handleRewardsParams.lost, _balance(asset));
     } else {
       return super._handleRewards();
     }
   }
-  function _handleRewardsAccess() external virtual returns (uint earned, uint lost) {
+
+  function _handleRewardsAccess() external virtual returns (uint earned, uint lost, uint assetBalance) {
     return _handleRewards();
   }
 
@@ -133,19 +141,21 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     int assetBalanceChange;
     address providerBalanceChange;
   }
+
   MockedHandleRewardsParams private handleRewardsParams;
+
   function setMockedHandleRewardsResults(
     uint earned,
     uint lost,
     int assetBalanceChange,
     address providerBalanceChange
   ) external {
-    handleRewardsParams =  MockedHandleRewardsParams({
-      initialized: true,
-      earned: earned,
-      lost: lost,
-      assetBalanceChange: assetBalanceChange,
-      providerBalanceChange: providerBalanceChange
+    handleRewardsParams = MockedHandleRewardsParams({
+    initialized : true,
+    earned : earned,
+    lost : lost,
+    assetBalanceChange : assetBalanceChange,
+    providerBalanceChange : providerBalanceChange
     });
   }
 
@@ -158,17 +168,20 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address providerBalanceChange;
     int totalAssetsDelta;
   }
+
   MockedDepositToPoolParams public depositToPoolParams;
-  function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns(
+
+  function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns (
     int totalAssetsDelta
   ) {
     return _depositToPool(amount_, updateTotalAssetsBeforeInvest_);
   }
+
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     int totalAssetsDelta
   ){
     if (depositToPoolParams.initialized) {
-      console.log("_depositToPool.mocked-version is called");
+//      console.log("_depositToPool.mocked-version is called");
       if (depositToPoolParams.balanceChange > 0) {
         IERC20(asset).transferFrom(
           depositToPoolParams.providerBalanceChange,
@@ -178,7 +191,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       } else if (depositToPoolParams.balanceChange < 0) {
         IERC20(asset).transfer(
           depositToPoolParams.providerBalanceChange,
-          uint(-depositToPoolParams.balanceChange)
+          uint(- depositToPoolParams.balanceChange)
         );
       }
       totalAssetsDelta = depositToPoolParams.totalAssetsDelta;
@@ -186,19 +199,20 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       totalAssetsDelta = super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
     }
   }
+
   function setMockedDepositToPool(int balanceChange, address providerBalanceChange, int totalAssetsDelta_) external {
     depositToPoolParams = MockedDepositToPoolParams({
-      initialized: true,
-      balanceChange: balanceChange,
-      providerBalanceChange: providerBalanceChange,
-      totalAssetsDelta: totalAssetsDelta_
+    initialized : true,
+    balanceChange : balanceChange,
+    providerBalanceChange : providerBalanceChange,
+    totalAssetsDelta : totalAssetsDelta_
     });
   }
   /////////////////////////////////////////////////////////////////////////////////////
   /// Others
   /////////////////////////////////////////////////////////////////////////////////////
 
-  function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual returns(
+  function _recycleAccess(address[] memory tokens, uint[] memory amounts) external virtual returns (
     uint[] memory receivedAmounts,
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
@@ -216,7 +230,12 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint[] memory borrowedAmounts,
     uint spentCollateral
   ) {
-    return _beforeDeposit(tetuConverter_, amount_, tokens_, indexAsset_);
+    return _beforeDeposit(
+      tetuConverter_,
+      amount_,
+      tokens_,
+      indexAsset_
+    );
   }
 
   function setBaseAmountAccess(address token_, uint amount_) external {
@@ -227,14 +246,21 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     ITetuConverter tetuConverter_,
     address[] memory tokens_,
     uint[] memory amounts_
-  ) external returns(
+  ) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    return _prepareRewardsList(tetuConverter_, tokens_, amounts_);
+    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, amounts_, baseAmounts);
   }
 
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
+  }
+
+  function _updateInvestedAssetsAndGetDeltaAccess(bool updateTotalAssetsBeforeInvest_) external returns (
+    uint updatedInvestedAssets,
+    int totalAssetsDelta
+  ) {
+    return _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
   }
 }

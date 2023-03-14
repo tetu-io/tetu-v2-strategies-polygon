@@ -31,8 +31,8 @@ contract MockDepositor is DepositorBase, Initializable {
     uint[] memory depositorWeights_,
     uint[] memory depositorReserves_
   ) internal onlyInitializing {
-    require(tokens_.length == depositorReserves_.length, "depositorReserves_.length");
-    require(tokens_.length == depositorWeights_.length, "depositorWeights_.length");
+    require(tokens_.length == depositorReserves_.length, "!length");
+    require(tokens_.length == depositorWeights_.length, "!length");
 
     uint tokensLength = tokens_.length;
     for (uint i = 0; i < tokensLength; ++i) {
@@ -40,7 +40,7 @@ contract MockDepositor is DepositorBase, Initializable {
       _depositorWeights.push(depositorWeights_[i]);
       _depositorReserves.push(depositorReserves_[i]);
     }
-    console.log("__MockDepositor_init", tokensLength, _depositorAssets.length, _depositorWeights.length);
+//    console.log("__MockDepositor_init", tokensLength, _depositorAssets.length, _depositorWeights.length);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -72,13 +72,13 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory) {
-    console.log("_depositorPoolAssets");
+//    console.log("_depositorPoolAssets");
     return _depositorAssets;
   }
 
   /// @dev Returns pool weights
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
-    console.log("_depositorPoolWeights", _depositorWeights.length);
+//    console.log("_depositorPoolWeights", _depositorWeights.length);
     weights = _depositorWeights;
     uint len = weights.length;
     totalWeight = 0;
@@ -118,7 +118,7 @@ contract MockDepositor is DepositorBase, Initializable {
     amountsConsumed = new uint[](len);
 
     for (uint i = 0; i < len; ++i) {
-      require(amountsDesired_[i] == depositorEnterParams.amountsDesired[i], "_depositorEnter input params");
+      require(amountsDesired_[i] == depositorEnterParams.amountsDesired[i], "!input params");
       IMockToken token = IMockToken(_depositorAssets[i]);
       token.burn(address(this), depositorEnterParams.amountsConsumed[i]);
       amountsConsumed[i] = depositorEnterParams.amountsConsumed[i];
@@ -151,8 +151,8 @@ contract MockDepositor is DepositorBase, Initializable {
   DepositorExitParams public depositorExitParams;
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
-    require(liquidityAmount == depositorExitParams.liquidityAmount, "_depositorExit input params");
+//    console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
+    require(liquidityAmount == depositorExitParams.liquidityAmount, "!input params");
 
     uint len = _depositorAssets.length;
     amountsOut = new uint[](len);
@@ -170,7 +170,7 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   function setDepositorExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
-    console.log("MockDepositor.setDepositorExit liquidityAmount", liquidityAmount_);
+//    console.log("MockDepositor.setDepositorExit liquidityAmount", liquidityAmount_);
     depositorExitParams.liquidityAmount = liquidityAmount_;
     depositorExitParams.amountsOut = new uint[](amountsOut_.length);
     for (uint i = 0; i < amountsOut_.length; ++i) {
@@ -193,7 +193,7 @@ contract MockDepositor is DepositorBase, Initializable {
     bytes32 key = keccak256(abi.encodePacked(liquidityAmount + 1));
     DepositorQuoteExitParams memory p = depositorQuoteExitParams[key];
     if (p.liquidityAmount == liquidityAmount) {
-      console.log("_depositorQuoteExit liquidityAmount", liquidityAmount, p.liquidityAmount);
+//      console.log("_depositorQuoteExit liquidityAmount", liquidityAmount, p.liquidityAmount);
 
       uint len = _depositorAssets.length;
       amountsOut = new uint[](len);
@@ -201,15 +201,15 @@ contract MockDepositor is DepositorBase, Initializable {
         amountsOut[i] = p.amountsOut[i];
       }
     } else {
-      console.log("_depositorQuoteExit.missed liquidityAmount", liquidityAmount);
-      revert("_depositorQuoteExit.missed liquidityAmount");
+//      console.log("_depositorQuoteExit.missed liquidityAmount", liquidityAmount);
+      revert("!liquidityAmount");
     }
 
     return amountsOut;
   }
 
   function setDepositorQuoteExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
-    console.log("setDepositorQuoteExit, liquidityAmount_", liquidityAmount_);
+//    console.log("setDepositorQuoteExit, liquidityAmount_", liquidityAmount_);
     bytes32 key = keccak256(abi.encodePacked(liquidityAmount_ + 1));
 
     DepositorQuoteExitParams memory p = DepositorQuoteExitParams({

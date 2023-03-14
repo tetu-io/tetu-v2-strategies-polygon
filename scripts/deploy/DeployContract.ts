@@ -12,9 +12,10 @@ export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 const libraries = new Map<string, string[]>([
   ['VeTetu', ['VeTetuLogo']],
   ['BalancerComposableStableDepositorFacade', ['BalancerLogicLib']],
-  ['BalancerComposableStableStrategy', ['ConverterStrategyBaseLib', 'BalancerLogicLib']],
-  ['MockConverterStrategy', ['ConverterStrategyBaseLib']],
-  ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib']],
+  ['BalancerComposableStableStrategy', ['ConverterStrategyBaseLib', 'BalancerLogicLib', 'StrategyLib']],
+  ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'StrategyLib']],
+  ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib', 'StrategyLib']],
+  ['BalancerComposableStableStrategyAccess', ['ConverterStrategyBaseLib', 'BalancerLogicLib', 'StrategyLib']],
   ['UniswapV3ConverterStrategy', ['ConverterStrategyBaseLib', 'UniswapV3ConverterStrategyLogicLib']],
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib']],
 ]);
