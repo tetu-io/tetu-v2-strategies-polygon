@@ -5,8 +5,6 @@ import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {
   ConverterStrategyBaseLibFacade,
-  IERC20__factory,
-  IERC20Metadata__factory,
   MockToken,
   PriceOracleMock
 } from "../../../typechain";

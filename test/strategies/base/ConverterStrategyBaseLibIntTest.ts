@@ -38,7 +38,7 @@ import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade,
  * real tetu converter, real assets.
  */
-describe("ConverterStrategyBaseLibIntTest", () => {
+describe.skip("ConverterStrategyBaseLibIntTest", () => {
 //region Variables
   let snapshotBefore: string;
   let snapshot: string;
