@@ -291,7 +291,8 @@ library UniswapV3ConverterStrategyLogicLib {
           entryData,
           p.tokenA,
           p.tokenB,
-          lost
+          lost,
+          0
         );
       } else {
         // console.log('rebalance: lost more then feeA');
@@ -314,7 +315,8 @@ library UniswapV3ConverterStrategyLogicLib {
             entryData,
             p.tokenA,
             p.tokenB,
-            lost
+            lost,
+            0
           );
           if (p.depositorSwapTokens) {
             newFee1 = feeA + boughtA - lost;
@@ -328,7 +330,8 @@ library UniswapV3ConverterStrategyLogicLib {
             entryData,
             p.tokenA,
             p.tokenB,
-            feeA + boughtA
+            feeA + boughtA,
+            0
           );
           if (p.depositorSwapTokens) {
             newFee1 = 0;
@@ -404,7 +407,8 @@ library UniswapV3ConverterStrategyLogicLib {
       entryData,
       tokenA,
       tokenB,
-      _balance(tokenA) - feeA
+      _balance(tokenA) - feeA,
+      0
     );
   }
 
@@ -461,7 +465,8 @@ library UniswapV3ConverterStrategyLogicLib {
           abi.encode(2),
           tokenA,
           tokenB,
-          needToBorrowOrFreeFromBorrow
+          needToBorrowOrFreeFromBorrow,
+          0
         );
       } else {
         // console.log('rebalance: not enough collateral, need swap and full debt rebalance');
@@ -484,7 +489,8 @@ library UniswapV3ConverterStrategyLogicLib {
           abi.encode(1,1,1),
           tokenA,
           tokenB,
-          availableBalanceTokenA
+          availableBalanceTokenA,
+          0
         );
       }
     } else {
@@ -518,14 +524,15 @@ library UniswapV3ConverterStrategyLogicLib {
           debtAmount < availableBalanceTokenB ? debtAmount : availableBalanceTokenB
         );
         availableBalanceTokenA = _balance(tokenA) - tokenAFee;
-        // console.log('rebalance: availableBalanceTokenA', availableBalanceTokenA);
+         console.log('rebalance: availableBalanceTokenA', availableBalanceTokenA);
         // console.log('rebalance: open new debt');
         ConverterStrategyBaseLib.openPosition(
           tetuConverter,
           abi.encode(1,1,1),
           tokenA,
           tokenB,
-          availableBalanceTokenA
+          availableBalanceTokenA,
+          0
         );
       }
     }

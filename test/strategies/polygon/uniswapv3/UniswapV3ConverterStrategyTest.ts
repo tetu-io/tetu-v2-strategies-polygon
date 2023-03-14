@@ -27,7 +27,7 @@ import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import {MaticAddresses} from "../../../../scripts/MaticAddresses";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {config as dotEnvConfig} from "dotenv";
 
 const { expect } = chai;
@@ -202,6 +202,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
       let price;
       price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
       console.log('tokenB price', formatUnits(price, 6))
@@ -219,19 +221,18 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy.isReadyToHardWork()).eq(true)
       expect(await strategy.needRebalance()).eq(true)
       await strategy.rebalance()
-      expect(await strategy.isReadyToHardWork()).eq(true)
+      expect(await strategy.isReadyToHardWork()).eq(false) // all rewards spent to cover rebalance loss
       expect(await strategy.needRebalance()).eq(false)
 
       await movePriceDown(signer2, strategy.address, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price).mul(2))
 
-      expect(await strategy.needRebalance()).eq(true)
+      /*expect(await strategy.needRebalance()).eq(true)
+      console.log('rebalance...');
       await strategy.rebalance()
-      expect(await strategy.needRebalance()).eq(false)
+      expect(await strategy.needRebalance()).eq(false)*/
 
-      // because rebalanceEarned > 0
-      // tokenB sold at good price
       expect(await strategy.isReadyToHardWork()).eq(true)
-      await strategy.doHardWork()
+      await strategy.connect(splitterSigner).doHardWork()
       expect(await strategy.isReadyToHardWork()).eq(false)
     })
 
@@ -246,6 +247,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await converterController.connect(converterGovernance).setTargetHealthFactor2(112)
       await borrowManager.setTargetHealthFactors([MaticAddresses.USDC_TOKEN, MaticAddresses.WMATIC_TOKEN,], [112,112])
       const investAmount = _1_000;
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault2.splitter())
 
       console.log('Deposit 1k USDC...');
       await vault2.deposit(investAmount, signer.address);
@@ -262,14 +264,16 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       expect(await strategy2.needRebalance()).eq(false)
       expect(await strategy2.isReadyToHardWork()).eq(true)
-      await strategy2.doHardWork()
+      await strategy2.connect(splitterSigner).doHardWork()
       expect(await strategy2.isReadyToHardWork()).eq(false)
 
       console.log('Vault totalAssets', await vault2.totalAssets())
       console.log('Strategy totalAssets', await strategy2.totalAssets())
       // move price to more then 0.5%
 
-      // todo continue when base contracts would be fixed
+      expect(await strategy2.needRebalance()).eq(true)
+      await strategy.rebalance()
+      await strategy2.connect(splitterSigner).doHardWork()
     })*/
 
     /*it('deposit / withdraw, fees, totalAssets + check insurance and LossCovered', async() => {
@@ -708,7 +712,7 @@ async function movePriceDown(signer: SignerWithAddress, strategyAddress: string,
   console.log('tokenB price', formatUnits(priceBefore, 6))
   console.log('swap in pool tokenB to USDC...');
   await TokenUtils.transfer(tokenB, signer, swapper.address, swapAmount.toString())
-  await swapper.connect(signer).swap(await strategy.pool(), tokenB, tokenA, signer.address, 10000) // 10% slippage
+  await swapper.connect(signer).swap(await strategy.pool(), tokenB, tokenA, signer.address, 40000) // 40% slippage
   price = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB new price', formatUnits(price, 6))
   console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')

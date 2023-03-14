@@ -143,7 +143,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       entryData,
       tokenA,
       tokenB,
-      amount_
+      amount_,
+      0
     );
 
     tokenAmounts[0] = amount_ - spentCollateral;
