@@ -88,7 +88,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address[] rewardTokens,
     uint[] receivedAmounts,
     uint[] spentAmounts,
-    uint[] amountsToForward
+    uint[] amountsToForward,
+    uint[] performanceAmounts
   );
 
   /////////////////////////////////////////////////////////////////////
@@ -199,7 +200,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tetuConverter_,
       tokens_,
       indexAsset_,
-      tokenAmounts
+      tokenAmounts,
+      liquidationThresholds[tokens_[indexAsset_]]
     );
     return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
@@ -476,7 +478,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    // todo send performanceFee to performanceReceiver (make dedicated call and adjust amounts)
+    // send performance-part of the rewards to performanceReceiver
+    (uint[] memory rewardAmounts, uint[] memory performanceAmounts) = ConverterStrategyBaseLib.sendPerformanceFee(
+      performanceFee,
+      performanceReceiver,
+      rewardTokens_,
+      rewardAmounts_
+    );
+
+    // send other part of rewards to forwarder/compound
     (receivedAmounts, spentAmounts, amountsToForward) = ConverterStrategyBaseLib.recycle(
       asset,
       compoundRatio,
@@ -485,13 +495,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       liquidationThresholds,
       baseAmounts,
       rewardTokens_,
-      rewardAmounts_
+      rewardAmounts
     );
+
     emit Recycle(
       rewardTokens_,
       receivedAmounts,
       spentAmounts,
-      amountsToForward
+      amountsToForward,
+      performanceAmounts
     );
   }
 
@@ -536,12 +548,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     _preHardWork(reInvest);
 
-    uint assetBalance;
-    (earned, lost, assetBalance) = _handleRewards();
+    (uint earned2, uint lost2, uint assetBalance) = _handleRewards();
+    earned += earned2;
+    lost += lost2;
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
-
       uint assetInUseBefore = investedAssetsLocal + assetBalance;
       _depositToPool(assetBalance, false);
 

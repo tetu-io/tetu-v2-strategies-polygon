@@ -1,6 +1,6 @@
 import {BigNumber} from "ethers";
-import {IERC20__factory, IERC20Metadata, IERC20Metadata__factory} from "../../../typechain";
-import {parseUnits} from "ethers/lib/utils";
+import {IERC20__factory, IERC20Metadata, IERC20Metadata__factory, MockToken} from "../../../typechain";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../scripts/utils/Misc";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
@@ -18,6 +18,17 @@ export class BalanceUtils {
     return typeof n === "object"
       ? n.toString()
       : "" + n;
+  }
+
+  static async formatUnitsAll(tokens: MockToken[], amounts: BigNumber[]): Promise<number[]> {
+    return Promise.all(
+      tokens.map(
+        async (token, index) => +formatUnits(
+          amounts[index],
+          await token.decimals()
+        )
+      )
+    );
   }
 
   static async getAmountFromHolder(

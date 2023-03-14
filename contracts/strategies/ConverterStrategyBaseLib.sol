@@ -45,7 +45,7 @@ library ConverterStrategyBaseLib {
     uint amountToBorrow;
   }
 
-  struct OpenPositionEntryKind2Local {
+  struct OpenPositionEntryKind1Local {
     address[] converters;
     uint[] collateralsRequired;
     uint[] amountsToBorrow;
@@ -79,8 +79,11 @@ library ConverterStrategyBaseLib {
   uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
   uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint private constant COMPOUND_DENOMINATOR = 100_000;
+  uint private constant FEE_DENOMINATOR = 100_000;
   uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5% todo decrease to 0.3%
   uint private constant PRICE_IMPACT_TOLERANCE = 2_000; // 2% todo decrease to 0.3%
+  /// @notice borrow/collateral amount cannot be less than given number of tokens
+  uint private constant DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD = 10;
 
   /////////////////////////////////////////////////////////////////////
   ///                         Events
@@ -334,12 +337,13 @@ library ConverterStrategyBaseLib {
     bytes memory entryData_,
     address collateralAsset_,
     address borrowAsset_,
-    uint amountIn_
+    uint amountIn_,
+    uint thresholdAmountIn_
   ) external returns (
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
-    return _openPosition(tetuConverter_, entryData_, collateralAsset_, borrowAsset_, amountIn_);
+    return _openPosition(tetuConverter_, entryData_, collateralAsset_, borrowAsset_, amountIn_, thresholdAmountIn_);
   }
 
   /// @notice Make one or several borrow necessary to supply/borrow required {amountIn_} according to {entryData_}
@@ -348,26 +352,40 @@ library ConverterStrategyBaseLib {
   ///                   See TetuConverter\EntryKinds.sol\ENTRY_KIND_XXX constants for possible entry kinds
   ///                   0 or empty: Amount of collateral {amountIn_} is fixed, amount of borrow should be max possible.
   /// @param amountIn_ Meaning depends on {entryData_}.
+  /// @param thresholdAmountIn_ Min value of amountIn allowed for the second and subsequent conversions.
+  ///        0 - use default min value
+  ///        If amountIn becomes too low, no additional borrows are possible, so
+  ///        the rest amountIn is just added to collateral/borrow amount of previous conversion.
   function _openPosition(
     ITetuConverter tetuConverter_,
     bytes memory entryData_,
     address collateralAsset_,
     address borrowAsset_,
-    uint amountIn_
+    uint amountIn_,
+    uint thresholdAmountIn_
   ) internal returns (
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    if (thresholdAmountIn_ == 0) {
+      // zero threshold is not allowed because round-issues are possible, see openPosition.dust test
+      // we assume here, that it's useless to borrow amount using collateral/borrow amount
+      // less than given number of tokens (event for BTC)
+      thresholdAmountIn_ = DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD;
+    }
+    require(amountIn_ > thresholdAmountIn_, AppErrors.WRONG_VALUE);
+
     OpenPositionLocal memory vars;
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
     vars.entryKind = EntryKinds.getEntryKind(entryData_);
     if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_PROPORTION_1) {
-      return openPositionEntryKind2(
+      return openPositionEntryKind1(
         tetuConverter_,
         entryData_,
         collateralAsset_,
         borrowAsset_,
-        amountIn_
+        amountIn_,
+        thresholdAmountIn_
       );
     } else {
       (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
@@ -388,22 +406,28 @@ library ConverterStrategyBaseLib {
             // we have exact amount of total collateral amount
             // Case ENTRY_KIND_EXACT_PROPORTION_1 is here too because we consider first platform only
             vars.collateral = amountIn_ < vars.collateralsRequired[i]
-            ? amountIn_
-            : vars.collateralsRequired[i];
+              ? amountIn_
+              : vars.collateralsRequired[i];
             vars.amountToBorrow = amountIn_ < vars.collateralsRequired[i]
-            ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
-            : vars.amountsToBorrow[i];
+              ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
+              : vars.amountsToBorrow[i];
             amountIn_ -= vars.collateral;
           } else {
             // assume here that entryKind == EntryKinds.ENTRY_KIND_EXACT_BORROW_OUT_FOR_MIN_COLLATERAL_IN_2
             // we have exact amount of total amount-to-borrow
             vars.amountToBorrow = amountIn_ < vars.amountsToBorrow[i]
-            ? amountIn_
-            : vars.amountsToBorrow[i];
+              ? amountIn_
+              : vars.amountsToBorrow[i];
             vars.collateral = amountIn_ < vars.amountsToBorrow[i]
-            ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
-            : vars.collateralsRequired[i];
+              ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
+              : vars.collateralsRequired[i];
             amountIn_ -= vars.amountToBorrow;
+          }
+
+          if (amountIn_ < thresholdAmountIn_ && amountIn_ != 0) {
+            // dust amount is left, just leave it unused
+            // we cannot add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
+            amountIn_ = 0;
           }
 
           if (vars.amountToBorrow != 0) {
@@ -436,17 +460,18 @@ library ConverterStrategyBaseLib {
     }
   }
 
-  function openPositionEntryKind2(
+  function openPositionEntryKind1(
     ITetuConverter tetuConverter_,
     bytes memory entryData_,
     address collateralAsset_,
     address borrowAsset_,
-    uint amountIn_
+    uint amountIn_,
+    uint collateralThreshold_
   ) internal returns (
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
-    OpenPositionEntryKind2Local memory vars;
+    OpenPositionEntryKind1Local memory vars;
     (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
       entryData_,
       collateralAsset_,
@@ -457,7 +482,6 @@ library ConverterStrategyBaseLib {
 
     collateralAmountOut = 0;
     borrowedAmountOut = 0;
-
 
     uint len = vars.converters.length;
     if (len > 0) {
@@ -477,10 +501,23 @@ library ConverterStrategyBaseLib {
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
         vars.c1 = x * vars.c3 / y;
         vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
-        ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
-        : 1e18;
+          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
+          : 1e18;
         vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
         vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
+
+        vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
+        vars.c1 = x * vars.c3 / y;
+
+        if (amountIn_ > vars.c1 + vars.collateral) {
+          amountIn_ -= (vars.c1 + vars.collateral);
+          // protection against rounding, to avoid situations, when we have dust amountIn_ , see "openPosition.dust"
+          // just leave left amount unused
+          // we cannot add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
+          if (amountIn_ < collateralThreshold_) {
+            amountIn_ = 0;
+          }
+        }
 
         require(
           tetuConverter_.borrow(
@@ -505,20 +542,13 @@ library ConverterStrategyBaseLib {
         borrowedAmountOut += vars.amountToBorrow;
         collateralAmountOut += vars.collateral;
 
-        vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
-        vars.c1 = x * vars.c3 / y;
-
-        if (amountIn_ > vars.c1 + vars.collateral) {
-          amountIn_ -= (vars.c1 + vars.collateral);
-        } else {
+        if (amountIn_ == 0) {
           break;
         }
       }
-
-      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
-      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
-      return (collateralAmountOut, borrowedAmountOut);
     }
+
+    return (collateralAmountOut, borrowedAmountOut);
   }
 
   /// @notice Get ratio18 = collateral / borrow
@@ -531,7 +561,7 @@ library ConverterStrategyBaseLib {
     uint priceCollateral = priceOracle.getAssetPrice(collateralAsset_);
     uint priceBorrow = priceOracle.getAssetPrice(borrowAsset_);
     return 1e18 * priceBorrow * 10 ** IERC20Metadata(collateralAsset_).decimals()
-    / priceCollateral / 10 ** IERC20Metadata(borrowAsset_).decimals();
+           / priceCollateral / 10 ** IERC20Metadata(borrowAsset_).decimals();
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -803,6 +833,30 @@ library ConverterStrategyBaseLib {
     return (receivedAmounts, spentAmounts, amountsToForward);
   }
 
+  /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
+  /// @param performanceFee_ Max is FEE_DENOMINATOR
+  /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
+  /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
+  function sendPerformanceFee(
+    uint performanceFee_,
+    address performanceReceiver_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
+  ) external returns (
+    uint[] memory rewardAmounts,
+    uint[] memory performanceAmounts
+  ) {
+    // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
+    uint len = rewardAmounts_.length;
+    rewardAmounts = new uint[](len);
+    performanceAmounts = new uint[](len);
+
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / FEE_DENOMINATOR;
+      rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
+      IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                      calcInvestedAssets
@@ -931,6 +985,7 @@ library ConverterStrategyBaseLib {
   ///              Reduce size of ConverterStrategyBase
   /////////////////////////////////////////////////////////////////////
   /// @notice Make borrow and save amounts of tokens available for deposit to tokenAmounts
+  /// @param thresholdMainAsset_ Min allowed value of collateral in terms of main asset, 0 - use default min value
   /// @return tokenAmountsOut Amounts available for deposit
   /// @return borrowedAmounts Amounts borrowed for {spendCollateral}
   /// @return spentCollateral Total collateral amount spent for borrowing
@@ -938,7 +993,8 @@ library ConverterStrategyBaseLib {
     ITetuConverter tetuConverter_,
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory collaterals_
+    uint[] memory collaterals_,
+    uint thresholdMainAsset_
   ) external returns (
     uint[] memory tokenAmountsOut,
     uint[] memory borrowedAmounts,
@@ -960,7 +1016,8 @@ library ConverterStrategyBaseLib {
             "", // entry kind = 0: fixed collateral amount, max possible borrow amount
             tokens_[indexAsset_],
             tokens_[i],
-            collaterals_[i]
+            collaterals_[i],
+            thresholdMainAsset_
           );
           // collateral should be equal to tokenAmounts[i] here because we use default entry kind
           spentCollateral += collateral;

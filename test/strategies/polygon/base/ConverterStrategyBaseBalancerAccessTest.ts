@@ -4,7 +4,6 @@ import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {parseUnits} from "ethers/lib/utils";
 import {
-  BalancerComposableStableStrategy__factory,
   BalancerComposableStableStrategyAccess,
   BalancerComposableStableStrategyAccess__factory,
   ControllerV2__factory,
@@ -244,17 +243,20 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
           .transfer(strategy.address, parseUnits("1", 6));
 
         // withdraw
-        const ret = await strategy.callStatic._withdrawFromPoolAccess(parseUnits("55", 6));
+        const r = await strategy.callStatic._withdrawFromPoolAccess(parseUnits("55", 6));
 
         const priceUSDC = await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN);
         const priceUSDT = await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
         const expectedTotalAssetsDelta = parseUnits("1", 6).mul(priceUSDT).div(priceUSDC);
 
-        console.log("ret", ret);
+        console.log("ret", r);
         console.log("expectedTotalAssetsDelta", expectedTotalAssetsDelta.toString());
 
-        expect(ret.totalAssetsDelta.eq(expectedTotalAssetsDelta)).eq(true);
+        const ret = r.totalAssetsDelta.sub(expectedTotalAssetsDelta).abs();
+
+        // we can have difference in 1 token because of the rounding
+        expect(ret.lt(2)).eq(true);
       });
     });
 
@@ -276,17 +278,20 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
           .transfer(strategy.address, parseUnits("1", 6));
 
         // withdraw
-        const ret = await strategy.callStatic._withdrawAllFromPoolAccess();
+        const r = await strategy.callStatic._withdrawAllFromPoolAccess();
 
         const priceUSDC = await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN);
         const priceUSDT = await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
         const expectedTotalAssetsDelta = parseUnits("1", 6).mul(priceUSDT).div(priceUSDC);
 
-        console.log("ret", ret);
+        console.log("ret", r);
         console.log("expectedTotalAssetsDelta", expectedTotalAssetsDelta.toString());
 
-        expect(ret.totalAssetsDelta.eq(expectedTotalAssetsDelta)).eq(true);
+        const ret = r.totalAssetsDelta.sub(expectedTotalAssetsDelta).abs();
+
+        // we can have difference in 1 token because of the rounding
+        expect(ret.lt(2)).eq(true);
       });
     });
   });
