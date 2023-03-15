@@ -8,11 +8,15 @@ import LinearPool from "../scripts/abis/LinearPool.json"
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const {deployments, getNamedAccounts} = hre;
   const {USDT_ADDRESS, ERC4626_LINEAR_POOL_FACTORY_ADDRESS} = await getNamedAccounts();
-  const usdtLinearPool = await deployments.get('bbTUsdt4626LinearPool');
-  if(usdtLinearPool.address) {
-    console.log("usdtLinearPool Pool already deployed at:", usdtLinearPool.address)
-    return;
-  }
+
+  try {
+    const usdtLinearPool = await deployments.get('bbTUsdt4626LinearPool');
+    if(usdtLinearPool.address) {
+      console.log("usdtLinearPool Pool already deployed at:", usdtLinearPool.address)
+      return;
+    }
+  } catch {}
+
   const erc4626 = await deployments.get('tUsdt4626Strict');
 
   const usdtPoolParams = [

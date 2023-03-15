@@ -1,4 +1,5 @@
 import { MaticAddresses } from './MaticAddresses';
+import {Misc} from "../utils/Misc";
 
 export const deployAddresses = {
   deployer: 0,
@@ -41,5 +42,13 @@ export const deployAddresses = {
   COMPOSABLE_STABLE_POOL_FACTORY_ADDRESS: {
     "hardhat": "0x7bc6C0E73EDAa66eF3F6E2f27b0EE8661834c6C9",
     "matic": "0x7bc6C0E73EDAa66eF3F6E2f27b0EE8661834c6C9"
-  }
+  },
+  CONVERTER_ADDRESS: {
+    "hardhat": MaticAddresses.TETU_CONVERTER,
+    "matic": MaticAddresses.TETU_CONVERTER
+  },
+  UNISWAPV3_USDC_USDT_100: {
+    "hardhat": MaticAddresses.UNISWAPV3_USDC_USDT_100,
+    "matic": MaticAddresses.UNISWAPV3_USDC_USDT_100
+  },
 }
