@@ -973,7 +973,7 @@ describe("ConverterStrategyBaseLibTest", () => {
       });
       describe("Entry kind 1", () => {
         describe("proportions 1:1", () => {
-          it("should return expected values, single borrow", async () => {
+          it("should return expected values, single borrow, single converter", async () => {
             const converter = ethers.Wallet.createRandom().address;
             const r = await makeOpenPositionTest(
               defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 1, 1]),
@@ -990,6 +990,46 @@ describe("ConverterStrategyBaseLibTest", () => {
                   amountIn: parseUnits("100", 6),
                   amountToBorrowsOut: [parseUnits("50", 18)],
                   collateralAmountsOut: [parseUnits("75", 6)]
+                }],
+                borrows: [{
+                  collateralAsset: usdc,
+                  collateralAmount: parseUnits("75", 6),
+                  borrowAsset: dai,
+                  amountToBorrow: parseUnits("50", 18),
+                  converter
+                }],
+                amountBorrowAssetForTetuConverter: parseUnits("50", 18),
+                amountCollateralForFacade: parseUnits("75", 6),
+                amountInIsCollateral: true,
+                prices: {
+                  collateral: parseUnits("1", 18),
+                  borrow: parseUnits("0.5", 18)
+                }
+              }
+            );
+
+            const ret = [r.collateralAmountOut, r.borrowedAmountOut].map(x => BalanceUtils.toString(x)).join();
+            const expected = [parseUnits("75", 6), parseUnits("50", 18)].map(x => BalanceUtils.toString(x)).join();
+
+            expect(ret).eq(expected);
+          });
+          it("should return expected values, single borrow, multiple converters", async () => {
+            const converter = ethers.Wallet.createRandom().address;
+            const r = await makeOpenPositionTest(
+              defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 1, 1]),
+              usdc,
+              dai,
+              parseUnits("100", 6),
+              {
+                findBorrowStrategyOutputs: [{
+                  converters: [converter, converter],
+                  sourceToken: usdc.address,
+                  targetToken: dai.address,
+                  entryData: defaultAbiCoder.encode(["uint256", "uint256", "uint256"], [1, 1, 1]),
+                  aprs18: [parseUnits("1", 18)],
+                  amountIn: parseUnits("100", 6),
+                  amountToBorrowsOut: [parseUnits("50", 18), parseUnits("40", 18)],
+                  collateralAmountsOut: [parseUnits("75", 6), parseUnits("70", 6)]
                 }],
                 borrows: [{
                   collateralAsset: usdc,
