@@ -82,8 +82,10 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 39530000 - Feb-21-2023 01:02:34 AM +UTC
   // 39570000 - Feb-22-2023 01:40:46 AM +UTC
   // 40000000 - Mar-05-2023 05:00:45 PM +UTC
-  const backtestStartBlock = 39200000
-  const backtestEndBlock = 39500000
+  // 40200000 - Mar-10-2023 11:13:15 PM +UTC (before USDC price drop start)
+  // 40360000 - Mar-15-2023 03:54:49 AM +UTC (after USDC price drop end)
+  const backtestStartBlock = 40200000
+  const backtestEndBlock = 40360000
   const investAmount = parseUnits('1000', 6) // 1k USDC
   const txLimit = 0 // 0 - unlimited
   const disableBurns = false // backtest is 5x slower with enabled burns for volatile pools
@@ -94,6 +96,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
     usdcDai001: false, // USDC_DAI_0.01%
     usdcUsdt001: true, // USDC_USDT_0.01%
   }
+  const pool500LiquiditySnapshotSurroundingTickSpacings = 200 // 200*10*0.01% == +-20% price
+  const pool100LiquiditySnapshotSurroundingTickSpacings = 2000 // 2000*1*0.01% == +-20% price
   // =========================
 
   // ==== strategies config ====
@@ -189,10 +193,10 @@ describe('UmiswapV3 converter strategy backtester', function() {
     [signer,user] = await ethers.getSigners();
 
     // fetch liquidity snapshots
-    usdcWeth005PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_WETH_500), backtestStartBlock, 200);
-    wmaticUsdc005PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_WMATIC_USDC_500), backtestStartBlock, 200);
-    usdcDai001PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_DAI_100), backtestStartBlock, 200);
-    usdcUsdt001PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_USDT_100), backtestStartBlock, 200);
+    usdcWeth005PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_WETH_500), backtestStartBlock, pool500LiquiditySnapshotSurroundingTickSpacings);
+    wmaticUsdc005PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_WMATIC_USDC_500), backtestStartBlock, pool500LiquiditySnapshotSurroundingTickSpacings);
+    usdcDai001PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_DAI_100), backtestStartBlock, pool100LiquiditySnapshotSurroundingTickSpacings);
+    usdcUsdt001PoolLiquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(MaticAddresses.UNISWAPV3_USDC_USDT_100), backtestStartBlock, pool100LiquiditySnapshotSurroundingTickSpacings);
 
     // deploy tokens
     const mintAmount = '100000000000' // 100b

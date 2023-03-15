@@ -207,7 +207,7 @@ library UniswapV3ConverterStrategyLogicLib {
     }
   }
 
-  function claimRewards(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, uint rebalanceEarned0, uint rebalanceEarned1, bool _depositorSwapTokens) external returns (uint[] memory amountsOut) {
+  function claimRewards(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, int24 lowerTickFillup, int24 upperTickFillup, uint rebalanceEarned0, uint rebalanceEarned1, bool _depositorSwapTokens) external returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
     pool.burn(lowerTick, upperTick, 0);
     (amountsOut[0], amountsOut[1]) = pool.collect(
@@ -217,6 +217,18 @@ library UniswapV3ConverterStrategyLogicLib {
       type(uint128).max,
       type(uint128).max
     );
+    if (lowerTickFillup != upperTickFillup) {
+      pool.burn(lowerTickFillup, upperTickFillup, 0);
+      (uint fillup0, uint fillup1) = pool.collect(
+        address(this),
+        lowerTickFillup,
+        upperTickFillup,
+        type(uint128).max,
+        type(uint128).max
+      );
+      amountsOut[0] += fillup0;
+      amountsOut[1] += fillup1;
+    }
     amountsOut[0] += rebalanceEarned0;
     amountsOut[1] += rebalanceEarned1;
     if (_depositorSwapTokens) {

@@ -100,7 +100,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    amountsOut = UniswapV3ConverterStrategyLogicLib.claimRewards(pool, lowerTick, upperTick, rebalanceEarned0, rebalanceEarned1, _depositorSwapTokens);
+    amountsOut = UniswapV3ConverterStrategyLogicLib.claimRewards(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, rebalanceEarned0, rebalanceEarned1, _depositorSwapTokens);
     rebalanceEarned0 = 0;
     rebalanceEarned1 = 0;
     tokensOut = new address[](2);

@@ -1,5 +1,4 @@
 import { MaticAddresses } from './MaticAddresses';
-import {Misc} from "../utils/Misc";
 
 export const deployAddresses = {
   deployer: 0,
