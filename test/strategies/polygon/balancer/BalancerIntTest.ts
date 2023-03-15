@@ -41,7 +41,10 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 chai.use(chaiAsPromised);
 
-describe('BalancerIntTest', function() {
+/**
+ * Integration time-consuming tests, so @skip-on-coverage
+ */
+describe('BalancerIntTest  @skip-on-coverage', function() {
 //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
 
@@ -781,7 +784,7 @@ describe('BalancerIntTest', function() {
       });
     });
 
-    describe("Deposit, hardwork, withdraw @skip-on-coverage", () =>{
+    describe("Deposit, hardwork, withdraw", () =>{
       describe("deposit, several hardworks, withdraw", () => {
         it("should be profitable", async () => {
           const countLoops = 2;
