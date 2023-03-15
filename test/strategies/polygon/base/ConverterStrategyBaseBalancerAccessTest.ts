@@ -247,6 +247,8 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
 
         const priceUSDC = await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN);
         const priceUSDT = await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        console.log("priceUSDC", priceUSDC);
+        console.log("priceUSDT", priceUSDT);
 
         const expectedTotalAssetsDelta = parseUnits("1", 6).mul(priceUSDT).div(priceUSDC);
 
@@ -255,8 +257,9 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
 
         const ret = r.totalAssetsDelta.sub(expectedTotalAssetsDelta).abs();
 
-        // we can have difference in 1 token because of the rounding
-        expect(ret.lt(2)).eq(true);
+        // we can have a difference of several tokens because of the rounding
+        // in contract we have S1*PB/PC - S2*PB/PC, but here we have only (S1-S2)*PB/PC
+        expect(ret.lt(10)).eq(true);
       });
     });
 
@@ -290,8 +293,10 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
 
         const ret = r.totalAssetsDelta.sub(expectedTotalAssetsDelta).abs();
 
-        // we can have difference in 1 token because of the rounding
-        expect(ret.lt(2)).eq(true);
+        // we can have a difference of several tokens because of the rounding
+        // in contract we have S1*PB/PC - S2*PB/PC, but here we have only (S1-S2)*PB/PC
+        expect(ret.lt(10)).eq(true);
+
       });
     });
   });
