@@ -137,10 +137,10 @@ library ConverterStrategyBaseLib {
     uint[] memory withdrawnAmountsOut
   ) {
     uint ratio = totalSupply_ == 0
-    ? 0
-    : (liquidityAmount_ >= totalSupply_
-    ? 1e18
-    : 1e18 * liquidityAmount_ / totalSupply_
+      ? 0
+      : (liquidityAmount_ >= totalSupply_
+        ? 1e18
+        : 1e18 * liquidityAmount_ / totalSupply_
     );
     // we need brackets here for npm.run.coverage
 
@@ -245,7 +245,7 @@ library ConverterStrategyBaseLib {
   ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
   ///         To withdraw {targetAmount_} we need
   ///         1) Reconvert converted amounts back to main asset
-  ///         2) IF result amount is not necessary - extract withdraw some liquidity from the pool
+  ///         2) IF result amount is not necessary - withdraw some liquidity from the pool
   ///            and also convert it to the main asset.
   /// @dev This is a writable function with read-only behavior (because of the quote-call)
   /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy
@@ -308,13 +308,13 @@ library ConverterStrategyBaseLib {
     require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
 
     liquidityRatioOut = all
-    ? 1e18
-    : ((targetAmount_ == 0)
-    ? 0
-    : 1e18
-    * 101 // add 1% on top...
-    * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-    / 100 // .. add 1% on top
+      ? 1e18
+      : ((targetAmount_ == 0)
+        ? 0
+        : 1e18
+          * 101 // add 1% on top...
+          * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
+          / 100 // .. add 1% on top
     );
 
     if (liquidityRatioOut != 0) {

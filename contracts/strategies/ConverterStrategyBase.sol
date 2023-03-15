@@ -14,7 +14,7 @@ import "./DepositorBase.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
-///  Main asset: the asset deposited to the vault by users
+///  Main asset == underlying: the asset deposited to the vault by users
 ///  Secondary assets: all assets deposited to the internal pool except the main asset
 ///  Base amounts: not rewards; amounts deposited to vault, amounts deposited after compound
 ///                Base amounts can be converted one to another
@@ -73,7 +73,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
-  event ReturnMainAssetToConverter(uint amount);
+  event ReturnAssetToConverter(address asset, uint amount);
   event OnDepositorEnter(uint[] amounts, uint[] consumedAmounts);
   event OnDepositorExit(uint liquidityAmount, uint[] withdrawnAmounts);
   event OnDepositorEmergencyExit(uint[] withdrawnAmounts);
@@ -531,9 +531,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
   function _handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
-    uint assetBalanceBefore = _balance(asset);
+    uint assetBalanceBefore = _balance(asset); // todo replace by baseAmounts
     _claim();
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, _balance(asset), earned, lost);
+    assetBalanceAfterClaim = _balance(asset);  // todo replace by baseAmounts
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
     return (earned, lost, assetBalanceAfterClaim);
   }
 
@@ -616,43 +617,42 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///               ITetuConverterCallback
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice TetuConverter calls this function health factor is unhealthy and TetuConverter need more tokens to fix it.
-  ///         The borrow must send either required collateral-asset amount OR required borrow-asset amount.
-  /// @dev The implementation below always sends {collateralAsset_}
-  /// @param collateralAsset_ Collateral asset of the borrow to identify the borrow on the borrower's side
-  /// @param requiredAmountCollateralAsset_ What amount of collateral asset the Borrower should send to TetuConverter
+  /// @notice Converters asks to send some amount back.
+  /// @param asset_ Required asset (either collateral or borrow)
+  /// @param amount_ Required amount of the {asset_}
   /// @return amountOut Exact amount that borrower has sent to balance of TetuConverter
-  ///                   It should be equal to either to requiredAmountBorrowAsset_ or to requiredAmountCollateralAsset_
-  /// @return isCollateral What is amountOut: true - collateral asset, false - borrow asset
-  function requireAmountBack(
-    address collateralAsset_,
-    uint requiredAmountCollateralAsset_,
-    address /*borrowAsset_*/,
-    uint /*requiredAmountBorrowAsset_*/
-  ) external override returns (
-    uint amountOut,
-    bool isCollateral
-  ) {
+  function requirePayAmountBack(address asset_, uint amount_) external override returns (uint amountOut) {
     address _converter = address(converter);
     require(msg.sender == _converter, StrategyLib.DENIED);
-    require(collateralAsset_ == asset, StrategyLib.WRONG_VALUE);
 
-    amountOut = 0;
-    uint assetBalance = _balance(collateralAsset_);
+    uint assetBalance = _balance(asset_);
 
-    if (assetBalance >= requiredAmountCollateralAsset_) {
-      amountOut = requiredAmountCollateralAsset_;
+    if (assetBalance >= amount_) {
+      amountOut = amount_;
     } else {
-      // we assume if withdraw less amount then requiredAmountCollateralAsset_
-      // it will be rebalanced in the next call
-      _withdrawFromPool(requiredAmountCollateralAsset_ - assetBalance);
-      uint balanceAfterWithdraw = _balance(collateralAsset_);
-      amountOut = Math.min(balanceAfterWithdraw, requiredAmountCollateralAsset_);
+      // withdraw all from the pool but don't convert assets to underlying
+      uint liquidity = _depositorLiquidity();
+      if (liquidity != 0) {
+        (uint[] memory withdrawnAmounts) = _depositorExit(liquidity);
+        assetBalance = _balance(asset_);
+      }
+
+      if (assetBalance >= amount_) {
+        amountOut = amount_;
+      } else {
+        // swap not-underlying
+
+        // swap underlying
+
+        amountOut = Math.min(balanceAfterWithdraw, amount_);
+      }
+
+      // dont' reinvest leftovers
     }
 
-    IERC20(collateralAsset_).safeTransfer(_converter, amountOut);
-    isCollateral = true;
-    emit ReturnMainAssetToConverter(amountOut);
+    IERC20(asset_).safeTransfer(_converter, amountOut);
+    // todo fix base amount (!)
+    emit ReturnAssetToConverter(asset_, amountOut);
   }
 
   function onTransferBorrowedAmount(
