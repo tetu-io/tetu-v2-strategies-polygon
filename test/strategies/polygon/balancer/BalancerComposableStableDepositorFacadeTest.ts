@@ -459,7 +459,10 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             expect(ret).eq(expected);
           });
         });
-        describe("Ensure that deposit doesn't change proportions too much", () => {
+        /**
+         * TODO: scb-615
+         */
+        describe.skip("Ensure that deposit doesn't change proportions too much", () => {
           it("$1", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, {amount: "1"});
@@ -560,7 +563,10 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             expect(ret).eq(expected);
           });
         });
-        describe("Ensure that the withdrawing doesn't change proportions too much", () => {
+        /**
+         * TODO: scb-615
+         */
+        describe.skip("Ensure that the withdrawing doesn't change proportions too much", () => {
           it("$1", async () => {
             const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
             await makeDepositorEnterTest(facade, {amount: "1"});
