@@ -38,6 +38,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
   uint internal rebalanceEarned0;
   uint internal rebalanceEarned1;
+  uint internal rebalanceLost;
 
   function __UniswapV3Depositor_init(
     address asset_,

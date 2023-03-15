@@ -71,7 +71,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     /// @dev trying to cover rebalance loss (IL + not hedged part of tokenB + swap cost) by pool rewards
-    (rebalanceEarned0, rebalanceEarned1) = UniswapV3ConverterStrategyLogicLib.tryToCoverLoss(
+    uint notCoveredLoss;
+    (rebalanceEarned0, rebalanceEarned1, notCoveredLoss) = UniswapV3ConverterStrategyLogicLib.tryToCoverLoss(
       UniswapV3ConverterStrategyLogicLib.TryCoverLossParams(
         converter,
         controller(),
@@ -87,6 +88,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         upperTick
       )
     );
+    if (notCoveredLoss > 0) {
+      rebalanceLost += notCoveredLoss;
+    }
 
     /// @dev calculate and set new tick range
     _setNewTickRange();
@@ -151,5 +155,18 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     tokenAmounts[1] = borrowedAmounts[1];
 
     return (tokenAmounts, borrowedAmounts, spentCollateral);
+  }
+
+  /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
+  function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+    uint assetBalanceBefore = _balance(asset);
+    _claim();
+    assetBalanceAfterClaim = _balance(asset);
+    if (rebalanceLost > 0) {
+      lost = rebalanceLost;
+      rebalanceLost = 0;
+    }
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, _balance(asset), earned, lost);
+    return (earned, lost, assetBalanceAfterClaim);
   }
 }

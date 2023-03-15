@@ -264,7 +264,9 @@ library UniswapV3ConverterStrategyLogicLib {
     }
   }
 
-  function tryToCoverLoss(TryCoverLossParams memory p) external returns(uint newFee0, uint newFee1) {
+  function tryToCoverLoss(TryCoverLossParams memory p) external returns(uint newFee0, uint newFee1, uint notCoveredLoss) {
+    notCoveredLoss = 0; // hide warning
+
     (,uint collateralAmount) = p.tetuConverter.getDebtAmountCurrent(address(this), p.tokenA, p.tokenB);
     // console.log('rebalance: collateralAmount after debt rebalancing', collateralAmount);
 
@@ -333,6 +335,7 @@ library UniswapV3ConverterStrategyLogicLib {
             feeA + boughtA,
             0
           );
+          notCoveredLoss = lost - feeA - boughtA;
           if (p.depositorSwapTokens) {
             newFee1 = 0;
           } else {
