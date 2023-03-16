@@ -1041,6 +1041,7 @@ async function strategyBacktest(
   const startTimestamp = poolTxs[0].timestamp
   const txsTotal = txLimit === 0 || txLimit > poolTxs.length ? poolTxs.length : txLimit
   let endTimestamp = startTimestamp
+  let previousTimestamp = startTimestamp
   for (const poolTx of poolTxs) {
     i++
     endTimestamp = poolTx.timestamp
@@ -1111,16 +1112,20 @@ async function strategyBacktest(
       endPrice = priceAfter
     }
 
-    if (await strategy.needRebalance()) {
-      await strategy.rebalance()
-      rebalances++
+    if (previousTimestamp !== poolTx.timestamp) {
+      if (await strategy.needRebalance()) {
+        rebalances++
+        console.log(`Rebalance ${rebalances}..`)
+        await strategy.rebalance()
+      }
+
+      if (await strategy.isFuseTriggered()) {
+        console.log('Fuse enabled!')
+        break;
+      }
     }
 
-    if (await strategy.isFuseTriggered()) {
-      console.log('Fuse enabled!')
-      break;
-    }
-
+    previousTimestamp = poolTx.timestamp
     if (i >= txsTotal) {
       break
     }
