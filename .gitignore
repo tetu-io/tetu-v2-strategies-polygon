@@ -24,3 +24,4 @@ core_addresses.txt
 tool_addresses.txt
 .env
 docs
+cache_*
