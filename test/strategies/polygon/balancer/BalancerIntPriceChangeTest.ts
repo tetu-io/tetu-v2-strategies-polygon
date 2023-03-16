@@ -40,8 +40,10 @@ chai.use(chaiAsPromised);
  * Price of borrowed asset is significantly changed.
  * Disable all lending platforms except AAVE3,
  * Set mocked price-source to AAVE3's price oracle for DAI, USDC and USDT to be able to control the prices.
+ *
+ * Integration time-consuming tests, so @skip-on-coverage
  */
-describe('BalancerIntPriceChangeTest', function() {
+describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
 //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
   const PERCENT_CHANGE_PRICES = 2; // 2%
