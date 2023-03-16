@@ -63,6 +63,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let strategy: UniswapV3ConverterStrategy;
   let vault2: TetuVaultV2; // pool with reverse tokens order
   let strategy2: UniswapV3ConverterStrategy;
+  let vault3: TetuVaultV2; // stable pool
+  let strategy3: UniswapV3ConverterStrategy;
   let _1: BigNumber;
   let _100: BigNumber;
   let _1_000: BigNumber;
@@ -102,7 +104,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       // USDC / WETH 0.05%
       const poolAddress = MaticAddresses.UNISWAPV3_USDC_WETH_500;
-      // +-10% price (10 ticks == 0.05%*2 price change)
+      // +-10% price (1 tick == 0.01% price change)
       const range = 1000;
       // +-1% price - rebalance
       const rebalanceRange = 100;
@@ -140,7 +142,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       // WMATIC / USDC 0.05%
       const poolAddress = MaticAddresses.UNISWAPV3_WMATIC_USDC_500;
-      // +-2.5% price (10 ticks == 0.05%*2 price change)
+      // +-2.5% price (1 tick == 0.01% price change)
       const range = 250;
       // +-0.5% price - rebalance
       const rebalanceRange = 50;
@@ -170,10 +172,48 @@ describe('UniswapV3ConverterStrategyTests', function() {
     vault2 = data.vault.connect(signer);
     strategy2 = data.strategy as unknown as UniswapV3ConverterStrategy;
 
+    const strategyUSDCUSDT100Deployer = async(_splitterAddress: string) => {
+      const _strategy = UniswapV3ConverterStrategy__factory.connect(
+        await DeployerUtils.deployProxy(signer, 'UniswapV3ConverterStrategy'),
+        gov
+      );
+
+      // USDC / USDT 0.01%
+      const poolAddress = MaticAddresses.UNISWAPV3_USDC_USDT_100;
+      // +-0.01% price (1 tick == 0.01% price change)
+      const range = 0;
+      const rebalanceRange = 0;
+
+      await _strategy.init(
+        core.controller,
+        _splitterAddress,
+        getConverterAddress(),
+        poolAddress,
+        range,
+        rebalanceRange,
+      );
+
+      return _strategy as unknown as IStrategyV2;
+    };
+    data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+      asset.address,
+      'TetuV2_UniswapV3_USDC_USDT-0.01%',
+      strategyUSDCUSDT100Deployer,
+      controller,
+      gov,
+      bufferRate,
+      0,
+      0,
+      false,
+    );
+    vault3 = data.vault.connect(signer);
+    strategy3 = data.strategy as unknown as UniswapV3ConverterStrategy;
+
     await TokenUtils.getToken(asset.address, signer.address, _100_000);
     // await TokenUtils.getToken(asset.address, signer2.address, _100_000);
     await asset.approve(vault.address, Misc.MAX_UINT);
     await asset.approve(vault2.address, Misc.MAX_UINT);
+    await asset.approve(vault3.address, Misc.MAX_UINT);
 
     // Disable platforms at TetuConverter
     // await ConverterUtils.disableHf(signer);
@@ -199,6 +239,26 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
+    /*it('Fuse test', async() => {
+      const s = strategy3
+      const v = vault3
+      const investAmount = _1_000;
+      const swapAssetValueForPriceMove = parseUnits('3000000', 6);
+      let price;
+      price = await swapper.getPrice(await s.pool(), await s.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6))
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      expect(await s.fuse()).eq(false)
+      await movePriceUp(signer2, s.address, swapAssetValueForPriceMove)
+      if (await s.needRebalance()) {
+        await s.rebalance()
+        expect(await s.fuse()).eq(true)
+      }
+    })*/
+
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
@@ -519,7 +579,7 @@ async function movePriceUp(signer: SignerWithAddress, strategyAddress: string, a
   console.log('tokenB price', formatUnits(priceBefore, 6))
   console.log('swap in pool USDC to tokenB...');
   await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString())
-  await swapper.connect(signer).swap(await strategy.pool(), tokenA, tokenB, signer.address, 10000) // 10% slippage
+  await swapper.connect(signer).swap(await strategy.pool(), tokenA, tokenB, signer.address, 90000) // 90% slippage
   price = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB new price', formatUnits(price, 6))
   console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')

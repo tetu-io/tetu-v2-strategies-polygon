@@ -112,10 +112,6 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
-  function needRebalance() public view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.needRebalance(pool, lowerTick, upperTick, rebalanceTickRange, tickSpacing);
-  }
-
   function getFees() internal view returns (uint fee0, uint fee1) {
     return UniswapV3ConverterStrategyLogicLib.getFees(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, totalLiquidity, totalLiquidityFillup);
   }

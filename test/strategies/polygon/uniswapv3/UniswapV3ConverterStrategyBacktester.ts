@@ -54,6 +54,7 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {config as dotEnvConfig} from "dotenv";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 const { expect } = chai;
 
@@ -82,10 +83,11 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 39530000 - Feb-21-2023 01:02:34 AM +UTC
   // 39570000 - Feb-22-2023 01:40:46 AM +UTC
   // 40000000 - Mar-05-2023 05:00:45 PM +UTC
-  // 40200000 - Mar-10-2023 11:13:15 PM +UTC (before USDC price drop start)
+  // 40200000 - Mar-10-2023 11:13:15 PM +UTC (before USDC price drop start, need pool100LiquiditySnapshotSurroundingTickSpacings = 2000 - 20%, for other periods 200 - 2% is enough)
   // 40360000 - Mar-15-2023 03:54:49 AM +UTC (after USDC price drop end)
-  const backtestStartBlock = 40200000
-  const backtestEndBlock = 40360000
+  // 40410000 - Mar-16-2023 11:34:58 AM +UTC
+  const backtestStartBlock = 40360000
+  const backtestEndBlock = 40410000
   const investAmount = parseUnits('1000', 6) // 1k USDC
   const txLimit = 0 // 0 - unlimited
   const disableBurns = false // backtest is 5x slower with enabled burns for volatile pools
@@ -97,7 +99,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     usdcUsdt001: true, // USDC_USDT_0.01%
   }
   const pool500LiquiditySnapshotSurroundingTickSpacings = 200 // 200*10*0.01% == +-20% price
-  const pool100LiquiditySnapshotSurroundingTickSpacings = 2000 // 2000*1*0.01% == +-20% price
+  const pool100LiquiditySnapshotSurroundingTickSpacings = 200 // 200*1*0.01% == +-2% price
   // =========================
 
   // ==== strategies config ====
@@ -545,6 +547,86 @@ describe('UmiswapV3 converter strategy backtester', function() {
     await TimeUtils.rollback(snapshot);
   });
 
+  it("USDC_WETH_0.05% test", async function () {
+    if (testStrategies.usdcWeth005) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        usdcWeth005Vault,
+        usdcWeth005Strategy,
+        uniswapV3Calee,
+        uniswapV3Helper,
+        usdcWeth005PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_USDC_WETH_500,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
+  })
+
+  it("WMATIC_USDC_0.05% test", async function () {
+    if (testStrategies.wmaticUsdc005) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        wmaticUsdc005Vault,
+        wmaticUsdc005Strategy,
+        uniswapV3Calee,
+        uniswapV3Helper,
+        wmaticUsdc005PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
+  })
+
+  it("USDC_DAI_0.01% test", async function () {
+    if (testStrategies.usdcDai001) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        usdcDai001Vault,
+        usdcDai001Strategy,
+        uniswapV3Calee,
+        uniswapV3Helper,
+        usdcDai001PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_USDC_DAI_100,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
+  })
+
+  it("USDC_USDT_0.01% test", async function () {
+    if (testStrategies.usdcUsdt001) {
+      backtestResults.push(await strategyBacktest(
+        signer,
+        usdcUsdt001Vault,
+        usdcUsdt001Strategy,
+        uniswapV3Calee,
+        uniswapV3Helper,
+        usdcUsdt001PoolLiquiditySnapshot,
+        investAmount,
+        backtestStartBlock,
+        backtestEndBlock,
+        MaticAddresses.UNISWAPV3_USDC_USDT_100,
+        txLimit,
+        disableBurns,
+        disableMints
+      ))
+    }
+  })
+
   it("Env test", async function () {
     if (runNotBacktestingTests) {
       // test price oracles
@@ -571,19 +653,32 @@ describe('UmiswapV3 converter strategy backtester', function() {
     }
   })
 
-  it("Rebalance on stable pool test", async function () {
+  it("Rebalance on stable pool with fuse test", async function () {
     if (runNotBacktestingTests) {
       // create DAI_USDT pool for test
       await (await uniswapV3Factory.createPool(DAI.address, USDT.address, 100)).wait()
       const pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(DAI.address, USDT.address, 100), signer)
       // 1 USDT for 1 DAI
       await pool.initialize('79225627830299477844530')
-      await liquidator.addLargestPools([{
-        pool: pool.address,
-        swapper: uni3swapper.address,
-        tokenIn: DAI.address,
-        tokenOut: USDT.address,
-      }], true)
+      await liquidator.removeLargestPool(USDC.address)
+      await liquidator.removeLargestPool(WETH.address)
+      await liquidator.removeLargestPool(WMATIC.address)
+      await liquidator.addLargestPools([
+        {
+          pool: pool.address,
+          swapper: uni3swapper.address,
+          tokenIn: DAI.address,
+          tokenOut: USDT.address,
+        },
+        {
+          pool: pool.address,
+          swapper: uni3swapper.address,
+          tokenIn: USDT.address,
+          tokenOut: DAI.address,
+        }
+      ], true)
+      await priceOracleImitator.setUsdc(USDT.address)
+
       const slot0 = await pool.slot0()
       const vaultStrategyInfo = await deployAndInitVaultAndUniswapV3Strategy(
         USDT.address,
@@ -632,6 +727,23 @@ describe('UmiswapV3 converter strategy backtester', function() {
           console.log('Utilization rate', await utilizationRate(strategy, signer, uniswapV3Helper))
         }
       }
+
+      swapAmount = parseUnits('25000')
+      priceBefore = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+      await uniswapV3Calee.swap(pool.address, signer.address, DAI.address, swapAmount)
+      priceAfter = await uniswapV3Helper.getPrice(pool.address, DAI.address)
+      priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8)
+      console.log(`Price change: ${priceAfter.gt(priceBefore) ? '+' : ''}${formatUnits(priceChangeVal, 5)}%`)
+      // Price change: -0.73819%
+      console.log('Rebalance...')
+      await strategy.rebalance()
+      expect(await strategy.fuse()).eq(true)
+      console.log('Fuse was enabled')
+      await vault.deposit(parseUnits('1', 6), signer.address);
+      await vault.withdraw(parseUnits('1', 6), signer.address, signer.address);
+      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+      await strategy.connect(operator).disableFuse();
+      await strategy.connect(operator).setFuseThreshold(1000000);
 
       const assetsAfter = await strategy.totalAssets()
       console.log('Assets before', assetsBefore.toString())
@@ -716,86 +828,6 @@ describe('UmiswapV3 converter strategy backtester', function() {
       console.log('Assets before', assetsBefore.toString())
       console.log('Assets after', assetsAfter.toString())
       console.log(`Total assets loss: ${formatUnits(assetsAfter.sub(assetsBefore).mul(1e15).div(assetsBefore).div(1e8), 5)}%`)
-    }
-  })
-
-  it("USDC_WETH_0.05% test", async function () {
-    if (testStrategies.usdcWeth005) {
-      backtestResults.push(await strategyBacktest(
-        signer,
-        usdcWeth005Vault,
-        usdcWeth005Strategy,
-        uniswapV3Calee,
-        uniswapV3Helper,
-        usdcWeth005PoolLiquiditySnapshot,
-        investAmount,
-        backtestStartBlock,
-        backtestEndBlock,
-        MaticAddresses.UNISWAPV3_USDC_WETH_500,
-        txLimit,
-        disableBurns,
-        disableMints
-      ))
-    }
-  })
-
-  it("WMATIC_USDC_0.05% test", async function () {
-    if (testStrategies.wmaticUsdc005) {
-      backtestResults.push(await strategyBacktest(
-        signer,
-        wmaticUsdc005Vault,
-        wmaticUsdc005Strategy,
-        uniswapV3Calee,
-        uniswapV3Helper,
-        wmaticUsdc005PoolLiquiditySnapshot,
-        investAmount,
-        backtestStartBlock,
-        backtestEndBlock,
-        MaticAddresses.UNISWAPV3_WMATIC_USDC_500,
-        txLimit,
-        disableBurns,
-        disableMints
-      ))
-    }
-  })
-
-  it("USDC_DAI_0.01% test", async function () {
-    if (testStrategies.usdcDai001) {
-      backtestResults.push(await strategyBacktest(
-        signer,
-        usdcDai001Vault,
-        usdcDai001Strategy,
-        uniswapV3Calee,
-        uniswapV3Helper,
-        usdcDai001PoolLiquiditySnapshot,
-        investAmount,
-        backtestStartBlock,
-        backtestEndBlock,
-        MaticAddresses.UNISWAPV3_USDC_DAI_100,
-        txLimit,
-        disableBurns,
-        disableMints
-      ))
-    }
-  })
-
-  it("USDC_USDT_0.01% test", async function () {
-    if (testStrategies.usdcUsdt001) {
-      backtestResults.push(await strategyBacktest(
-        signer,
-        usdcUsdt001Vault,
-        usdcUsdt001Strategy,
-        uniswapV3Calee,
-        uniswapV3Helper,
-        usdcUsdt001PoolLiquiditySnapshot,
-        investAmount,
-        backtestStartBlock,
-        backtestEndBlock,
-        MaticAddresses.UNISWAPV3_USDC_USDT_100,
-        txLimit,
-        disableBurns,
-        disableMints
-      ))
     }
   })
 })
@@ -1082,6 +1114,11 @@ async function strategyBacktest(
     if (await strategy.needRebalance()) {
       await strategy.rebalance()
       rebalances++
+    }
+
+    if (await strategy.fuse()) {
+      console.log('Fuse enabled!')
+      break;
     }
 
     if (i >= txsTotal) {

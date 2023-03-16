@@ -21,6 +21,24 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 upperTick;
   }
 
+  function isStablePool(IUniswapV3Pool pool) external view returns(bool) {
+    return pool.fee() == 100;
+  }
+
+  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (uint) {
+    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
+    uint priceA = oracle.getAssetPrice(tokenA);
+    uint priceB = oracle.getAssetPrice(tokenB);
+    // console.log('getOracleAssetsPrice: priceA', priceA);
+    // console.log('getOracleAssetsPrice: priceB', priceB);
+    // console.log('getOracleAssetsPrice: price B/A', priceB * 1e18 / priceA);
+    return priceB * 1e18 / priceA;
+  }
+
+  function enableFuse(uint oldPrice, uint newPrice, uint fuseThreshold) external pure returns(bool) {
+    return oldPrice > newPrice ? (oldPrice - newPrice) > fuseThreshold : (newPrice - oldPrice) > fuseThreshold;
+  }
+
   function initDepositor(IUniswapV3Pool pool, int24 tickRange_, int24 rebalanceTickRange_, address asset_) external view returns(int24 tickSpacing, int24 lowerTick, int24 upperTick, address tokenA, address tokenB, bool _depositorSwapTokens) {
     tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
     (, int24 tick, , , , ,) = pool.slot0();
@@ -264,6 +282,12 @@ library UniswapV3ConverterStrategyLogicLib {
     }
   }
 
+  function closeDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB, bool depositorSwapTokens, uint fee0, uint fee1) external {
+    uint tokenAFee = depositorSwapTokens ? fee1 : fee0;
+    uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
+    _rebalanceDebtSwapP1(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee);
+  }
+
   function rebalanceDebt(ITetuConverter tetuConverter, address controller, IUniswapV3Pool pool, address tokenA, address tokenB, bool fillUp, int24 lowerTick, int24 upperTick, int24 tickSpacing, bool depositorSwapTokens, uint fee0, uint fee1) external {
     uint tokenAFee = depositorSwapTokens ? fee1 : fee0;
     uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
@@ -374,6 +398,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
     if (availableBalanceTokenB < debtAmount) {
       // console.log('_rebalanceDebtSwapP1: not enough availableBalanceTokenB to close debt');
+      // todo get price from oracle
       uint tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
       uint needToSellTokenA = tokenBprice * (debtAmount - availableBalanceTokenB) / 10**IERC20Metadata(tokenB).decimals();
       // add 1% gap for price impact
@@ -395,6 +420,7 @@ library UniswapV3ConverterStrategyLogicLib {
         (debtAmount,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
         if (debtAmount > 0) {
           // console.log('_rebalanceDebtSwapP1: debt was not closed fully, new debt amount', debtAmount);
+          // todo get price from oracle
           tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
           needToSellTokenA = tokenBprice * debtAmount / 10**IERC20Metadata(tokenB).decimals();
           needToSellTokenA += needToSellTokenA / 100;
@@ -428,8 +454,8 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   function _getLiquidatorSwapSlippage(IUniswapV3Pool pool) internal view returns(uint) {
-    // slippage is 0.1% for 0.01% fee pools and 5% for other pools
-    return pool.fee() == 100 ? 100 : 5_000;
+    // slippage is 0.5% for 0.01% fee pools and 5% for other pools
+    return pool.fee() == 100 ? 500 : 5_000;
   }
 
   function _getCollateralAmountForBorrow(ITetuConverter tetuConverter, address tokenA, address tokenB, uint needToBorrow) internal view returns(uint) {
@@ -539,7 +565,7 @@ library UniswapV3ConverterStrategyLogicLib {
           debtAmount < availableBalanceTokenB ? debtAmount : availableBalanceTokenB
         );
         availableBalanceTokenA = _balance(tokenA) - tokenAFee;
-         console.log('rebalance: availableBalanceTokenA', availableBalanceTokenA);
+        // console.log('rebalance: availableBalanceTokenA', availableBalanceTokenA);
         // console.log('rebalance: open new debt');
         ConverterStrategyBaseLib.openPosition(
           tetuConverter,

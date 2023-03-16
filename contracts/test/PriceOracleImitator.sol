@@ -23,4 +23,8 @@ contract PriceOracleImitator is IPriceOracle {
         uint lPrice = liquidator.getPrice(asset, usdc, 10**tokenInDecimals);
         return lPrice*1e12;
     }
+
+    function setUsdc(address asset) external {
+        usdc = asset;
+    }
 }
