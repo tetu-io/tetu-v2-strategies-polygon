@@ -1,16 +1,19 @@
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {Contract, ContractFactory} from "ethers";
-import logSettings from "../../log_settings";
-import {Logger} from "tslog";
-import {parseUnits} from "ethers/lib/utils";
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { Contract, ContractFactory } from 'ethers';
+import logSettings from '../../log_settings';
+import { Logger } from 'tslog';
+import { parseUnits } from 'ethers/lib/utils';
 import {
   ControllerMinimal,
   MockToken,
-  ProxyControlled, TetuVaultV2, TetuVaultV2__factory, VaultInsurance,
-} from "../../typechain";
-import {RunHelper} from "./RunHelper";
-import {deployContract} from "../deploy/DeployContract";
-import {ethers} from "hardhat";
+  ProxyControlled,
+  TetuVaultV2,
+  TetuVaultV2__factory,
+  VaultInsurance,
+} from '../../typechain';
+import { RunHelper } from './RunHelper';
+import { deployContract } from '../deploy/DeployContract';
+import { ethers } from 'hardhat';
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");

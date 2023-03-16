@@ -1,13 +1,13 @@
-import chai from "chai";
-import chaiAsPromised from "chai-as-promised";
-import {IStrategyV2, TetuVaultV2} from "../../../typechain";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {ICoreContractsWrapper} from "../../CoreContractsWrapper";
-import {IToolsContractsWrapper} from "../../ToolsContractsWrapper";
-import {IUniversalStrategyInputParams, universalStrategyTest} from "./UniversalStrategyTest";
-import {DeployInfo} from "../../baseUT/utils/DeployInfo";
-import {DoHardWorkLoopBase} from "../../baseUT/utils/DoHardWorkLoopBase";
-import {IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
+import chai from 'chai';
+import chaiAsPromised from 'chai-as-promised';
+import { IStrategyV2, TetuVaultV2 } from '../../../typechain';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
+import { IToolsContractsWrapper } from '../../ToolsContractsWrapper';
+import { IUniversalStrategyInputParams, universalStrategyTest } from './UniversalStrategyTest';
+import { DeployInfo } from '../../baseUT/utils/DeployInfo';
+import { DoHardWorkLoopBase } from '../../baseUT/utils/DoHardWorkLoopBase';
+import { IVaultStrategyInfo } from '../../../scripts/utils/DeployerUtilsLocal';
 
 chai.use(chaiAsPromised);
 

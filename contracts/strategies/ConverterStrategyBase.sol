@@ -7,8 +7,8 @@ import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/ITetuConverterCallback.sol";
 import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/IConverterController.sol";
-import "../tools/TokenAmountsLib.sol";
-import "../tools/AppLib.sol";
+import "../libs/TokenAmountsLib.sol";
+import "../libs/AppLib.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 

@@ -1,9 +1,9 @@
-import {ContractFactory, utils} from "ethers";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {Libraries} from "hardhat-deploy/dist/types";
-import {Logger} from "tslog";
-import logSettings from "../../log_settings";
-import {formatUnits} from "ethers/lib/utils";
+import { ContractFactory, utils } from 'ethers';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { Libraries } from 'hardhat-deploy/dist/types';
+import { Logger } from 'tslog';
+import logSettings from '../../log_settings';
+import { formatUnits } from 'ethers/lib/utils';
 
 const log: Logger = new Logger(logSettings);
 

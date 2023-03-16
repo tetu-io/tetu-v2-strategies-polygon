@@ -1,38 +1,30 @@
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {ethers} from "hardhat";
-import {TimeUtils} from "../../../scripts/utils/TimeUtils";
-import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
-import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { ethers } from 'hardhat';
+import { TimeUtils } from '../../../scripts/utils/TimeUtils';
+import { defaultAbiCoder, parseUnits } from 'ethers/lib/utils';
 import {
-  ConverterStrategyBaseLibFacade, IConverterController__factory, IERC20__factory,
-  IERC20Metadata__factory, IPriceOracle__factory,
-  ITetuConverter, ITetuConverter__factory,
-  MockToken,
-  PriceOracleMock
-} from "../../../typechain";
-import {expect} from "chai";
-import {MockHelper} from "../../baseUT/helpers/MockHelper";
-import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
-import {
-  GAS_CALC_INVESTED_ASSETS_NO_DEBTS,
-  GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
-  GAS_OPEN_POSITION, GAS_PERFORMANCE_FEE,
-  GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS,
-  GET_GET_COLLATERALS,
-  GET_LIQUIDITY_AMOUNT_RATIO
-} from "../../baseUT/GasLimits";
+  ConverterStrategyBaseLibFacade,
+  IConverterController__factory,
+  IERC20__factory,
+  IERC20Metadata__factory,
+  IPriceOracle__factory,
+  ITetuConverter,
+  ITetuConverter__factory,
+} from '../../../typechain';
+import { expect } from 'chai';
+import { MockHelper } from '../../baseUT/helpers/MockHelper';
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
   getHundredFinancePlatformAdapter,
-  Misc
-} from "../../../scripts/utils/Misc";
-import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
-import {BigNumber} from "ethers";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
-import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
-import {MaticHolders} from "../../../scripts/addresses/MaticHolders";
-import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
+  Misc,
+} from '../../../scripts/utils/Misc';
+import { BalanceUtils } from '../../baseUT/utils/BalanceUtils';
+import { BigNumber } from 'ethers';
+import { MaticAddresses } from '../../../scripts/addresses/MaticAddresses';
+import { ConverterUtils } from '../../baseUT/utils/ConverterUtils';
+import { MaticHolders } from '../../../scripts/addresses/MaticHolders';
+import { areAlmostEqual } from '../../baseUT/utils/MathUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade,

@@ -737,7 +737,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       // Price change: -0.73819%
       console.log('Rebalance...')
       await strategy.rebalance()
-      expect(await strategy.fuse()).eq(true)
+      expect(await strategy.isFuseTriggered()).eq(true)
       console.log('Fuse was enabled')
       await vault.deposit(parseUnits('1', 6), signer.address);
       await vault.withdraw(parseUnits('1', 6), signer.address, signer.address);
@@ -1116,7 +1116,7 @@ async function strategyBacktest(
       rebalances++
     }
 
-    if (await strategy.fuse()) {
+    if (await strategy.isFuseTriggered()) {
       console.log('Fuse enabled!')
       break;
     }

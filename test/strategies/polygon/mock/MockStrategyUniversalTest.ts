@@ -1,15 +1,15 @@
-import chai from "chai";
-import chaiAsPromised from "chai-as-promised";
-import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
-import {config as dotEnvConfig} from "dotenv";
-import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
-import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {IStrategyV2, MockStrategySimple__factory} from "../../../../typechain";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
+import chai from 'chai';
+import chaiAsPromised from 'chai-as-promised';
+import { startDefaultStrategyTest } from '../../base/DefaultSingleTokenStrategyTest';
+import { config as dotEnvConfig } from 'dotenv';
+import { DeployInfo } from '../../../baseUT/utils/DeployInfo';
+import { StrategyTestUtils } from '../../../baseUT/utils/StrategyTestUtils';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
+import { IStrategyV2, MockStrategySimple__factory } from '../../../../typechain';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
+import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
+import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires

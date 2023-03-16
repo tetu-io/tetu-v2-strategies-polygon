@@ -1,5 +1,5 @@
 import fs from 'fs';
-import path from "path";
+import path from 'path';
 
 /**
  * Create path's directory if it doesn't exist

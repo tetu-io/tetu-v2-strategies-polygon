@@ -4,15 +4,16 @@ pragma solidity 0.8.17;
 import "../ConverterStrategyBase.sol";
 import "./UniswapV3Depositor.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
+import "../../libs/AppPlatforms.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @author a17
 contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase {
   string public constant override NAME = "UniswapV3 Converter Strategy";
-  string public constant override PLATFORM = "UniswapV3";
+  string public constant override PLATFORM = AppPlatforms.UNIV3;
   string public constant override STRATEGY_VERSION = "1.0.0";
 
-  bool public fuse;
+  bool public isFuseTriggered;
   uint public fuseThreshold;
   uint public lastPrice;
 
@@ -38,7 +39,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   function disableFuse() external {
     StrategyLib.onlyOperators(controller());
-    fuse = false;
+    isFuseTriggered = false;
   }
 
   function setFuseThreshold(uint newFuseThreshold) external {
@@ -61,14 +62,18 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function needRebalance() public view returns (bool) {
-    return !fuse && UniswapV3ConverterStrategyLogicLib.needRebalance(pool, lowerTick, upperTick, rebalanceTickRange, tickSpacing);
+    return !isFuseTriggered && UniswapV3ConverterStrategyLogicLib.needRebalance(pool, lowerTick, upperTick, rebalanceTickRange, tickSpacing);
   }
 
   /// @dev The rebalancing functionality is the core of this strategy.
   ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
   ///      There is also an attempt to cover rebalancing losses with rewards.
-  function rebalance() public {
+  function rebalance() external {
+    StrategyLib.onlyOperators(controller());
     require(needRebalance(), "No rebalancing needed");
+
+    /// @dev withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
+    _depositorEmergencyExit();
 
     /// @dev for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
     /// @dev upperTick always greater then lowerTick
@@ -77,14 +82,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     /// @dev for stable pools fuse can be enabled
     bool isStablePool = UniswapV3ConverterStrategyLogicLib.isStablePool(pool);
 
-    /// @dev withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
-    _depositorEmergencyExit();
-
     uint newPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, tokenA, tokenB);
 
     if (isStablePool && UniswapV3ConverterStrategyLogicLib.enableFuse(lastPrice, newPrice, fuseThreshold)) {
       /// @dev enabling fuse: close debt and stop providing liquidity
-      fuse = true;
+      isFuseTriggered = true;
 
       UniswapV3ConverterStrategyLogicLib.closeDebt(
         converter,
@@ -135,26 +137,27 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
           upperTick
         )
       );
+
       if (notCoveredLoss > 0) {
         rebalanceLost += notCoveredLoss;
       }
 
-      /// @dev calculate and set new tick range
+      // calculate and set new tick range
       _setNewTickRange();
 
-      /// @dev put liquidity to pool without updated rebalanceEarned0, rebalanceEarned1 amounts
+      //put liquidity to pool without updated rebalanceEarned0, rebalanceEarned1 amounts
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = _balance(tokenA) - (_depositorSwapTokens ? rebalanceEarned1 : rebalanceEarned0);
       tokenAmounts[1] = _balance(tokenB) - (_depositorSwapTokens ? rebalanceEarned0 : rebalanceEarned1);
       _depositorEnter(tokenAmounts);
 
-      /// @dev add fill-up liquidity part of fill-up is used
+      //add fill-up liquidity part of fill-up is used
       if (fillUp) {
         (lowerTickFillup, upperTickFillup, totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(pool, lowerTick, upperTick, tickSpacing, rebalanceEarned0, rebalanceEarned1);
       }
     }
 
-    /// @dev updating baseAmounts (token amounts on strategy balance which are not rewards)
+    //updating baseAmounts (token amounts on strategy balance which are not rewards)
     uint balanceOfTokenABefore = baseAmounts[tokenA];
     uint balanceOfTokenBBefore = baseAmounts[tokenB];
     uint balanceOfTokenAAfter = _balance(tokenA) - (_depositorSwapTokens ? rebalanceEarned1 : rebalanceEarned0);
@@ -170,7 +173,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0
     );
 
-    /// @dev updaing investedAssets based on new baseAmounts
+    //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
   }
 
@@ -234,7 +237,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     require(updatedInvestedAssets != 0, AppErrors.NO_INVESTMENTS);
 
-    if (fuse) {
+    if (isFuseTriggered) {
       assetPrice = ConverterStrategyBaseLib.getAssetPriceFromConverter(converter, tokenA);
       if (amount != 0) {
         _updateBaseAmountsForAsset(tokenA, 0, amount);
@@ -258,7 +261,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / 100_000/*REINVEST_THRESHOLD_DENOMINATOR*/) {
-      if (fuse) {
+      if (isFuseTriggered) {
         uint[] memory tokenAmounts = new uint[](2);
         tokenAmounts[0] = amount_;
         emit OnDepositorEnter(tokenAmounts, tokenAmounts);

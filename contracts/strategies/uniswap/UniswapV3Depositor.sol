@@ -6,7 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "../DepositorBase.sol";
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
 import "../../integrations/uniswap/IUniswapV3MintCallback.sol";
-import "../../tools/AppErrors.sol";
+import "../../libs/AppErrors.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
 
 abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, Initializable {

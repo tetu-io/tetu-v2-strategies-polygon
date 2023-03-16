@@ -1,8 +1,7 @@
-import { ethers } from "hardhat"
-import LinearPoolABI from "../abis/LinearPool.json"
-import { MaticAddresses } from "../addresses/MaticAddresses"
-import { ERC4626Strict, TetuV1SingleTokenStrictStrategy } from "../../typechain"
-import BalancerVaultABI from "../abis/BalancerVault.json"
+import { ethers } from 'hardhat';
+import LinearPoolABI from '../abis/LinearPool.json';
+import { ERC4626Strict } from '../../typechain';
+import BalancerVaultABI from '../abis/BalancerVault.json';
 
 const DAI_ADDRESS = "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063"
 const DAI_LINEAR_POOL_ADDRESS = "0xDa1CD1711743e57Dd57102E9e61b75f3587703da"
