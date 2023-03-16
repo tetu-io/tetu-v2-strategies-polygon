@@ -18,6 +18,8 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
+import "hardhat/console.sol";
+
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -669,7 +671,7 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_ // todo Probably it worth to use threshold for amount IN? it would be more gas efficient
+    uint liquidationThresholdForTokenOut_
   ) external returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -686,7 +688,7 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_ // todo Probably it worth to use threshold for amount IN? it would be more gas efficient
+    uint liquidationThresholdForTokenOut_
   ) internal returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -824,10 +826,14 @@ library ConverterStrategyBaseLib {
         continue;
       }
       if (p.indexTargetAsset == i) continue;
+      console.log("indexUnderlying", indexUnderlying);
+      console.log("indexTargetAsset", p.indexTargetAsset);
+      console.log("i", i);
 
       (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, i);
-      receivedAmounts[p.indexTargetAsset] += received;
       spentAmounts[i] += spent;
+      receivedAmounts[p.indexTargetAsset] += received;
+      console.log("spent, received", spent, received);
 
       if (receivedAmounts[p.indexTargetAsset] >= p.targetAmount) break;
     }
@@ -835,8 +841,9 @@ library ConverterStrategyBaseLib {
     // swap underlying
     if (receivedAmounts[p.indexTargetAsset] < p.targetAmount && p.indexTargetAsset != indexUnderlying) {
       (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, indexUnderlying);
-      receivedAmounts[p.indexTargetAsset] += received;
+      console.log("spent, received2", spent, received);
       spentAmounts[indexUnderlying] += spent;
+      receivedAmounts[p.indexTargetAsset] += received;
     }
   }
 
@@ -852,13 +859,24 @@ library ConverterStrategyBaseLib {
     uint amountSpent,
     uint amountReceived
   ) {
+    console.log("_swapToGetAmount", receivedTargetAmount, indexTokenIn, p.targetAmount);
+    // we assume here, that p.targetAmount > receivedTargetAmount, see _swapToGivenAmount implementation
+
     // calculate amount that should be swapped
-    // let's swap a bit more to avoid additional swap if the swap will give us a bit less amount than expected
+    // {overswap} allows to swap a bit more
+    // to avoid additional swaps if the swap will give us a bit less amount than expected
     uint amountIn = (
       (p.targetAmount - receivedTargetAmount)
       * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
       / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
     ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
+    console.log("amountIn", amountIn);
+    console.log("tokenIn", p.tokens[indexTokenIn]);
+    console.log("tokenOut", p.tokens[p.indexTargetAsset]);
+    console.log("decsIn", v.decs[indexTokenIn]);
+    console.log("decsOut", v.decs[p.indexTargetAsset]);
+    console.log("priceIn", v.prices[indexTokenIn]);
+    console.log("priceOut", v.prices[p.indexTargetAsset]);
 
     return _liquidate(
       p.liquidator,

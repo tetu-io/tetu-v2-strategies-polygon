@@ -42,6 +42,8 @@ import {
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
+import {IBorrowParams, ILiquidationParams, IRepayParams, ITokenAmount} from "../../baseUT/utils/TestDataTypes";
+import {setupMockedLiquidation} from "./utils/MockLiquidationUtils";
 
 /**
  * Test of ConverterStrategyBase
@@ -166,33 +168,6 @@ describe("ConverterStrategyBaseAccessTest", () => {
     await TimeUtils.rollback(snapshot);
   });
 //endregion before, after
-
-//region Data types
-  interface ILiquidationParams {
-    tokenIn: MockToken;
-    tokenOut: MockToken;
-    amountIn: BigNumber;
-    amountOut: BigNumber;
-  }
-  interface ITokenAmount {
-    token: MockToken;
-    amount: BigNumber;
-  }
-  interface IBorrowParams {
-    collateralAsset: MockToken;
-    collateralAmount: BigNumber;
-    borrowAsset: MockToken;
-    converter: string;
-    maxTargetAmount: BigNumber;
-  }
-  interface IRepayParams {
-    collateralAsset: MockToken;
-    borrowAsset: MockToken;
-    totalDebtAmountOut: BigNumber;
-    totalCollateralAmountOut: BigNumber;
-    amountRepay: BigNumber;
-  }
-//endregion Data types
 
 //region Utils
   async function setupInvestedAssets(
@@ -3432,32 +3407,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
       }
       if (params?.liquidations) {
         for (const liquidation of params?.liquidations) {
-          const pool = ethers.Wallet.createRandom().address;
-          const swapper = ethers.Wallet.createRandom().address;
-          await liquidator.setBuildRoute(
-            liquidation.tokenIn.address,
-            liquidation.tokenOut.address,
-            pool,
-            swapper,
-            ""
-          );
-          await liquidator.setGetPriceForRoute(
-            liquidation.tokenIn.address,
-            liquidation.tokenOut.address,
-            pool,
-            swapper,
-            liquidation.amountIn,
-            liquidation.amountOut
-          );
-          await liquidator.setLiquidateWithRoute(
-            liquidation.tokenIn.address,
-            liquidation.tokenOut.address,
-            pool,
-            swapper,
-            liquidation.amountIn,
-            liquidation.amountOut
-          );
-          await liquidation.tokenOut.mint(liquidator.address, liquidation.amountOut);
+          await setupMockedLiquidation(liquidator, liquidation);
         }
       }
       if (params?.repayments) {

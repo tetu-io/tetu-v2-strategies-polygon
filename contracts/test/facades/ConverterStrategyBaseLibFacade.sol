@@ -195,12 +195,19 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
+  function _swapToGivenAmountAccess(ConverterStrategyBaseLib.SwapToGivenAmountInputParams memory p) external returns (
+    uint[] memory spentAmounts,
+    uint[] memory receivedAmounts
+  ) {
+    return ConverterStrategyBaseLib._swapToGivenAmount(p);
+  }
+
   function swapToGetAmountAccess(
     uint receivedTargetAmount,
     ConverterStrategyBaseLib.SwapToGivenAmountInputParams memory p,
     ConverterStrategyBaseLib.CalcInvestedAssetsLocal memory v,
     uint indexTokenIn
-  ) internal returns (
+  ) external returns (
     uint amountSpent,
     uint amountReceived
   ) {
