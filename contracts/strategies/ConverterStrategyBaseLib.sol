@@ -495,6 +495,7 @@ library ConverterStrategyBaseLib {
         // the lending platform allows to convert {collateralsRequired[i]} to {amountsToBorrow[i]}
         // and give us required proportions in result
         // C = C1 + C2, C2 => B2, B2 * alpha = C3, C1/C3 must be equal to x/y
+        // C2 is collateral amount, that is converted to B2
         // but if lending platform doesn't have enough liquidity
         // it reduces {collateralsRequired[i]} and {amountsToBorrow[i]} proportionally to fit the limits
         // as result, remaining C1 will be too big after conversion and we need to make another borrow
@@ -503,20 +504,23 @@ library ConverterStrategyBaseLib {
         vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
           ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
           : 1e18;
-        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
+        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18; // c2
         vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
 
         vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
         vars.c1 = x * vars.c3 / y;
 
         if (amountIn_ > vars.c1 + vars.collateral) {
+          // we have some amount for next converter
           amountIn_ -= (vars.c1 + vars.collateral);
-          // protection against rounding, to avoid situations, when we have dust amountIn_ , see "openPosition.dust"
-          // just leave left amount unused
-          // we cannot add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
+
+          // protection against dust amounts, see "openPosition.dust", just leave dust amount unused
+          // we CAN NOT add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
           if (amountIn_ < collateralThreshold_) {
             amountIn_ = 0;
           }
+        } else {
+          amountIn_ = 0;
         }
 
         require(
