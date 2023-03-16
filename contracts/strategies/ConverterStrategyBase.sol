@@ -39,6 +39,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] amountsToConvert;
   }
 
+  struct RequirePayAmountBackLocal {
+    uint len;
+    address converter;
+    address[] tokens;
+    uint indexTheAsset;
+    uint theAssetBaseAmount;
+    uint[] withdrawnAmounts;
+    uint[] spentAmounts;
+    uint liquidity;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                        CONSTANTS
   /////////////////////////////////////////////////////////////////////
@@ -139,7 +150,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
-      (address[] memory tokens, uint indexAsset) = _getTokens();
+      (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
       (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
@@ -333,7 +344,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory withdrawnAmounts = _depositorEmergencyExit();
     emit OnDepositorEmergencyExit(withdrawnAmounts);
 
-    (address[] memory tokens, uint indexAsset) = _getTokens();
+    (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
     // convert amounts to main asset and update base amounts
     (uint collateral, uint[] memory repaid) = _convertAfterWithdrawAll(tokens, indexAsset);
@@ -580,7 +591,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
-    (address[] memory tokens, uint indexAsset) = _getTokens();
+    (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
     return ConverterStrategyBaseLib.calcInvestedAssets(
       tokens,
@@ -618,41 +629,60 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Converters asks to send some amount back.
-  /// @param asset_ Required asset (either collateral or borrow)
-  /// @param amount_ Required amount of the {asset_}
-  /// @return amountOut Exact amount that borrower has sent to balance of TetuConverter
-  function requirePayAmountBack(address asset_, uint amount_) external override returns (uint amountOut) {
-    address _converter = address(converter);
-    require(msg.sender == _converter, StrategyLib.DENIED);
+  /// @param theAsset_ Required asset (either collateral or borrow)
+  /// @param amount_ Required amount of the {theAsset_}
+  /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
+  function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
+    RequirePayAmountBackLocal memory v;
+    v.converter = address(converter);
+    require(msg.sender == v.converter, StrategyLib.DENIED);
 
-    uint assetBalance = _balance(asset_);
+    // detect index of the target asset
+    (v.tokens, v.indexTheAsset) = _getTokens(theAsset_);
+    require(v.indexTheAsset != type(uint).max, AppErrors.ITEM_NOT_FOUND);
+    v.len = v.tokens.length;
 
-    if (assetBalance >= amount_) {
-      amountOut = amount_;
-    } else {
+    // get amount of target asset available to be sent
+    v.theAssetBaseAmount = baseAmounts[theAsset_];
+
+    // withdraw from the pool
+    if (v.theAssetBaseAmount < amount_) {
+      // the strategy doesn't have enough target asset on balance
       // withdraw all from the pool but don't convert assets to underlying
-      uint liquidity = _depositorLiquidity();
-      if (liquidity != 0) {
-        (uint[] memory withdrawnAmounts) = _depositorExit(liquidity);
-        assetBalance = _balance(asset_);
-      }
-
-      if (assetBalance >= amount_) {
-        amountOut = amount_;
+      v.liquidity = _depositorLiquidity();
+      if (v.liquidity != 0) {
+        v.withdrawnAmounts = _depositorExit(v.liquidity);
+        emit OnDepositorExit(v.liquidity, v.withdrawnAmounts);
       } else {
-        // swap not-underlying
-
-        // swap underlying
-
-        amountOut = Math.min(balanceAfterWithdraw, amount_);
+        v.withdrawnAmounts = new uint[](v.len);
       }
-
-      // dont' reinvest leftovers
     }
 
-    IERC20(asset_).safeTransfer(_converter, amountOut);
-    // todo fix base amount (!)
-    emit ReturnAssetToConverter(asset_, amountOut);
+    // convert withdrawn assets to the target asset
+    if (v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset] < amount_) {
+      (v.spentAmounts, v.withdrawnAmounts) = ConverterStrategyBaseLib.swapToGivenAmount(
+        amount_ - (v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset]),
+        v.tokens,
+        v.indexTheAsset,
+        asset, // underlying === main asset
+        v.withdrawnAmounts,
+        ITetuConverter(v.converter),
+        ITetuLiquidator(IController(controller()).liquidator()),
+        liquidationThresholds[theAsset_],
+        ConverterStrategyBaseLib.OVERSWAP,
+        baseAmounts
+      );
+    } else {
+      v.spentAmounts = new uint[](v.len);
+    }
+
+    // send amount to converter and update baseAmounts
+    amountOut = Math.min(v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset], amount_);
+    IERC20(theAsset_).safeTransfer(v.converter, amountOut);
+    _updateBaseAmounts(v.tokens, v.withdrawnAmounts, v.spentAmounts, v.indexTheAsset, - int(amountOut));
+    emit ReturnAssetToConverter(theAsset_, amountOut);
+
+    // let's leave any leftovers un-invested, they will be reinvested at next hardwork
   }
 
   function onTransferBorrowedAmount(
@@ -674,11 +704,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // almost same as type(uint).max but more gas efficient
   }
 
-  function _getTokens() internal view returns (address[] memory tokens, uint indexAsset) {
+  function _getTokens(address asset_) internal view returns (address[] memory tokens, uint indexAsset) {
     tokens = _depositorPoolAssets();
-    indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+    indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset_);
   }
-
 
   /**
 * @dev This empty reserved space is put in place to allow future versions to add new
