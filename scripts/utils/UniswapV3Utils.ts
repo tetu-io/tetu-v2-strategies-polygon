@@ -204,7 +204,7 @@ export class UniswapV3Utils {
           tickIdx,
           liquidityGross: tickData.liquidityGross.toString(),
           liquidityNet: tickData.liquidityNet.toString(),
-          liquidityActive: BigNumber.from(previousTickProcessed.liquidityActive).sub(tickData.liquidityNet).toString(),
+          liquidityActive: BigNumber.from(previousTickProcessed.liquidityActive).sub(previousTickProcessed.liquidityNet).toString(),
         }
         processedTicks.push(currentTickProcessed)
         previousTickProcessed = currentTickProcessed
