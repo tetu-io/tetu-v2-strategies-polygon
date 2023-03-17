@@ -86,8 +86,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 40200000 - Mar-10-2023 11:13:15 PM +UTC (before USDC price drop start, need pool100LiquiditySnapshotSurroundingTickSpacings = 2000 - 20%, for other periods 200 - 2% is enough)
   // 40360000 - Mar-15-2023 03:54:49 AM +UTC (after USDC price drop end)
   // 40410000 - Mar-16-2023 11:34:58 AM +UTC
-  const backtestStartBlock = 40360000
-  const backtestEndBlock = 40410000
+  // 40448000 - Mar-17-2023 10:54:46 AM +UTC
+  const backtestStartBlock = 40410000
+  const backtestEndBlock = 40448000
   const investAmount = parseUnits('1000', 6) // 1k USDC
   const txLimit = 0 // 0 - unlimited
   const disableBurns = false // backtest is 5x slower with enabled burns for volatile pools
@@ -737,7 +738,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       // Price change: -0.73819%
       console.log('Rebalance...')
       await strategy.rebalance()
-      expect(await strategy.isFuseTriggered()).eq(true)
+      expect((await strategy.getState()).isFuseTriggered).eq(true)
       console.log('Fuse was enabled')
       await vault.deposit(parseUnits('1', 6), signer.address);
       await vault.withdraw(parseUnits('1', 6), signer.address, signer.address);
@@ -908,9 +909,10 @@ function periodHuman(periodSecs: number) {
 }
 
 async function utilizationRate(strategy: UniswapV3ConverterStrategy, signer: SignerWithAddress, uniswapV3Helper: UniswapV3Lib) {
-  const tokenA = IERC20Extended__factory.connect(await strategy.tokenA(), signer)
-  const tokenB = IERC20Extended__factory.connect(await strategy.tokenB(), signer)
-  const price = await uniswapV3Helper.getPrice(await strategy.pool(), tokenB.address)
+  const state = await strategy.getState()
+  const tokenA = IERC20Extended__factory.connect(state.tokenA, signer)
+  const tokenB = IERC20Extended__factory.connect(state.tokenB, signer)
+  const price = await uniswapV3Helper.getPrice(state.pool, tokenB.address)
   const total = await strategy.totalAssets()
   const used = total.sub((await tokenA.balanceOf(strategy.address)).add((await tokenB.balanceOf(strategy.address)).mul(price).div(parseUnits('1', await tokenB.decimals()))))
   const rate = used.mul(10000).div(total)
@@ -1006,10 +1008,11 @@ async function strategyBacktest(
   disableBurns: boolean = true,
   disableMints: boolean = false,
 ): Promise<IBacktestResult> {
+  const state = await strategy.getState()
   const startTimestampLocal = Math.floor(Date.now() / 1000)
-  const tokenA = IERC20Extended__factory.connect(await strategy.tokenA(), signer)
-  const tokenB = IERC20Extended__factory.connect(await strategy.tokenB(), signer)
-  const pool = IUniswapV3Pool__factory.connect(await strategy.pool(), signer)
+  const tokenA = IERC20Extended__factory.connect(state.tokenA, signer)
+  const tokenB = IERC20Extended__factory.connect(state.tokenB, signer)
+  const pool = IUniswapV3Pool__factory.connect(state.pool, signer)
   const token0 = IERC20Extended__factory.connect(await pool.token0(), signer)
   const token1 = IERC20Extended__factory.connect(await pool.token1(), signer)
   const token0Decimals = await token0.decimals()
@@ -1121,7 +1124,7 @@ async function strategyBacktest(
         console.log(`done with ${txRes.gasUsed} gas.`)
       }
 
-      if (await strategy.isFuseTriggered()) {
+      if ((await strategy.getState()).isFuseTriggered) {
         console.log('Fuse enabled!')
         break;
       }
@@ -1143,8 +1146,8 @@ async function strategyBacktest(
 
   return {
     vaultName: await vault.name(),
-    tickRange: (await strategy.upperTick() - await strategy.lowerTick()) / 2,
-    rebalanceTickRange: await strategy.rebalanceTickRange(),
+    tickRange: (state.upperTick - state.lowerTick) / 2,
+    rebalanceTickRange: state.rebalanceTickRange,
     startTimestamp,
     endTimestamp,
     investAmount,
