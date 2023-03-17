@@ -108,7 +108,7 @@ contract MockDepositor is DepositorBase, Initializable {
     amountsConsumed = depositorEnterParams.amountsConsumed;
 
     for (uint i = 0; i < len; ++i) {
-      require(amountsDesired_[i] == depositorEnterParams.amountsDesired[i], "!input params");
+      require(amountsDesired_[i] == depositorEnterParams.amountsDesired[i], "!depositorEnter");
       IMockToken token = IMockToken(_depositorAssets[i]);
       token.burn(address(this), depositorEnterParams.amountsConsumed[i]);
     }
@@ -134,8 +134,8 @@ contract MockDepositor is DepositorBase, Initializable {
   DepositorExitParams internal depositorExitParams;
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-//    console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
-    require(liquidityAmount == depositorExitParams.liquidityAmount, "!input params");
+    console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
+    require(liquidityAmount == depositorExitParams.liquidityAmount, "!depositorExit");
 
     uint len = _depositorAssets.length;
     amountsOut = depositorExitParams.amountsOut;

@@ -861,34 +861,38 @@ library ConverterStrategyBaseLib {
     uint amountSpent,
     uint amountReceived
   ) {
-    console.log("_swapToGetAmount", receivedTargetAmount, indexTokenIn, p.targetAmount);
-    // we assume here, that p.targetAmount > receivedTargetAmount, see _swapToGivenAmount implementation
+    if (p.amounts[indexTokenIn] != 0) {
+      console.log("_swapToGetAmount", receivedTargetAmount, indexTokenIn, p.targetAmount);
+      // we assume here, that p.targetAmount > receivedTargetAmount, see _swapToGivenAmount implementation
 
-    // calculate amount that should be swapped
-    // {overswap} allows to swap a bit more
-    // to avoid additional swaps if the swap will give us a bit less amount than expected
-    uint amountIn = (
-      (p.targetAmount - receivedTargetAmount)
-      * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
-      / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
-    ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
-    console.log("amountIn", amountIn);
-    console.log("available amount", p.amounts[indexTokenIn]);
-    console.log("tokenIn", p.tokens[indexTokenIn]);
-    console.log("tokenOut", p.tokens[p.indexTargetAsset]);
-    console.log("decsIn", v.decs[indexTokenIn]);
-    console.log("decsOut", v.decs[p.indexTargetAsset]);
-    console.log("priceIn", v.prices[indexTokenIn]);
-    console.log("priceOut", v.prices[p.indexTargetAsset]);
+      // calculate amount that should be swapped
+      // {overswap} allows to swap a bit more
+      // to avoid additional swaps if the swap will give us a bit less amount than expected
+      uint amountIn = (
+        (p.targetAmount - receivedTargetAmount)
+        * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
+        / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
+      ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
+      console.log("amountIn", amountIn);
+      console.log("available amount", p.amounts[indexTokenIn]);
+      console.log("tokenIn", p.tokens[indexTokenIn]);
+      console.log("tokenOut", p.tokens[p.indexTargetAsset]);
+      console.log("decsIn", v.decs[indexTokenIn]);
+      console.log("decsOut", v.decs[p.indexTargetAsset]);
+      console.log("priceIn", v.prices[indexTokenIn]);
+      console.log("priceOut", v.prices[p.indexTargetAsset]);
 
-    return _liquidate(
-      p.liquidator,
-      p.tokens[indexTokenIn],
-      p.tokens[p.indexTargetAsset],
-      Math.min(amountIn, p.amounts[indexTokenIn]),
-      _ASSET_LIQUIDATION_SLIPPAGE,
-      p.liquidationThresholdForTargetAsset
-    );
+      (amountSpent, amountReceived) = _liquidate(
+        p.liquidator,
+        p.tokens[indexTokenIn],
+        p.tokens[p.indexTargetAsset],
+        Math.min(amountIn, p.amounts[indexTokenIn]),
+        _ASSET_LIQUIDATION_SLIPPAGE,
+        p.liquidationThresholdForTargetAsset
+      );
+    }
+
+    return (amountSpent, amountReceived);
   }
 
   /////////////////////////////////////////////////////////////////////
