@@ -88,6 +88,13 @@ library ConverterStrategyBaseLib {
     uint overswap;
   }
 
+  struct SwapToGivenAmountLocal {
+    uint len;
+    uint[] availableAmounts;
+    uint[] receivedAmounts;
+    uint i;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                        Constants
   /////////////////////////////////////////////////////////////////////
@@ -734,13 +741,6 @@ library ConverterStrategyBaseLib {
   ///                 requirePayAmountBack
   /////////////////////////////////////////////////////////////////////
 
-  struct SwapToGivenAmountLocal {
-    uint len;
-    uint[] availableAmounts;
-    uint[] receivedAmounts;
-    uint i;
-  }
-
   /// @notice Swap available {amounts_} of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
   /// @param targetAmount_ Required amount of tokens[indexTheAsset_] that should be received by swap(s)
   /// @param tokens_ tokens received from {_depositorPoolAssets}
@@ -776,6 +776,7 @@ library ConverterStrategyBaseLib {
     v.availableAmounts = new uint[](v.len);
     for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
       v.availableAmounts[v.i] = withdrawnAmounts_[v.i] + baseAmounts_[tokens_[v.i]];
+      console.log("swapToGivenAmount.availableAmounts,i", v.i, v.availableAmounts[v.i]);
     }
     (spentAmounts, v.receivedAmounts) = _swapToGivenAmount(
       SwapToGivenAmountInputParams({
@@ -792,6 +793,7 @@ library ConverterStrategyBaseLib {
     );
     for (v.i = 0; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
       withdrawnAmountsOut[v.i] = withdrawnAmounts_[v.i] + v.receivedAmounts[v.i];
+      console.log("swapToGivenAmount.withdrawnAmountsOut,i", v.i, withdrawnAmountsOut[v.i]);
     }
   }
 
@@ -871,6 +873,7 @@ library ConverterStrategyBaseLib {
       / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
     ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
     console.log("amountIn", amountIn);
+    console.log("available amount", p.amounts[indexTokenIn]);
     console.log("tokenIn", p.tokens[indexTokenIn]);
     console.log("tokenOut", p.tokens[p.indexTargetAsset]);
     console.log("decsIn", v.decs[indexTokenIn]);

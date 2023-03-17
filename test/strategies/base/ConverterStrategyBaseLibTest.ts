@@ -16,12 +16,12 @@ import {
   GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
   GAS_OPEN_POSITION, GAS_PERFORMANCE_FEE,
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS,
-  GET_GET_COLLATERALS,
+  GET_GET_COLLATERALS, GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT,
   GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
-import {BigNumber, BigNumberish} from "ethers";
+import {BigNumber} from "ethers";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
 import {ILiquidationParams} from "../../baseUT/utils/TestDataTypes";
 import {setupMockedLiquidation} from "./utils/MockLiquidationUtils";
@@ -2261,8 +2261,8 @@ describe("ConverterStrategyBaseLibTest", () => {
     });
   });
 
-  describe("_swapToGivenAmount", () => {
-    interface ISwapToGivenAmountParams {
+  describe("internal _swapToGivenAmount", () => {
+    interface IInternalSwapToGivenAmountParams {
       targetAmount: string;
       tokens: MockToken[];
       indexTargetAsset: number;
@@ -2274,11 +2274,14 @@ describe("ConverterStrategyBaseLibTest", () => {
       prices: string[];
       liquidations: ILiquidationParams[];
     }
-    interface ISwapToGivenAmountResults {
+    interface IInternalSwapToGivenAmountResults {
       spentAmounts: BigNumber[];
-      withdrawnAmountsOut: BigNumber[];
+      receivedAmounts: BigNumber[];
+      gasUsed: BigNumber;
     }
-    async function makeSwapToGivenAmountTest(p: ISwapToGivenAmountParams) : Promise<ISwapToGivenAmountResults> {
+    async function makeInternalSwapToGivenAmountTest(
+      p: IInternalSwapToGivenAmountParams
+    ) : Promise<IInternalSwapToGivenAmountResults> {
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -2313,7 +2316,7 @@ describe("ConverterStrategyBaseLibTest", () => {
         overswap: p.overswap
       });
       console.log("r", r);
-      await facade._swapToGivenAmountAccess({
+      const tx = await facade._swapToGivenAmountAccess({
         targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
         tokens: p.tokens.map(x => x.address),
         indexTargetAsset: p.indexTargetAsset,
@@ -2324,15 +2327,17 @@ describe("ConverterStrategyBaseLibTest", () => {
         liquidationThresholdForTargetAsset: parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
         overswap: p.overswap
       });
+      const gasUsed = (await tx.wait()).gasUsed;
       return {
         spentAmounts: r.spentAmounts,
-        withdrawnAmountsOut: r.receivedAmounts
+        receivedAmounts: r.receivedAmounts,
+        gasUsed
       }
     }
     describe("Two assets", () => {
       describe("Target asset is underlying", () => {
         it("should return expected values", async () => {
-          const r = await makeSwapToGivenAmountTest({
+          const r = await makeInternalSwapToGivenAmountTest({
             targetAmount: "100", // we need to get 100 USDC
             tokens: [usdc, tetu],
             indexTargetAsset: 0, // USDC
@@ -2352,7 +2357,7 @@ describe("ConverterStrategyBaseLibTest", () => {
 
           const ret = [
             r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-            r.withdrawnAmountsOut.map(x => BalanceUtils.toString(x)).join()
+            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
           ].join("\n");
 
           const expected = [
@@ -2370,23 +2375,404 @@ describe("ConverterStrategyBaseLibTest", () => {
         });
       });
       describe("Target asset is not underlying", () => {
+        it("should return expected values", async () => {
+          const r = await makeInternalSwapToGivenAmountTest({
+            targetAmount: "200", // we need to get 200 TETU
+            tokens: [usdc, tetu],
+            indexTargetAsset: 1, // TETU
+            underlying: usdc,
+            liquidationThresholdForTargetAsset: "0",
+            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
+            amounts: ["1000", "0"],
+            prices: ["1", "0.5"],
+            liquidations: [{
+              amountIn: parseUnits("150", 6), // we need to converter 100 usdc + overswap 50% = 150 usdc
+              amountOut: parseUnits("210", 18),
+              tokenIn: usdc,
+              tokenOut: tetu
+            }]
+          });
+
+          const ret = [
+            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
+          ].join("\n");
+
+          const expected = [
+            [
+              parseUnits("150", 6),
+              parseUnits("0", 18)
+            ].map(x => BalanceUtils.toString(x)).join(),
+            [
+              parseUnits("0", 6),
+              parseUnits("210", 18)
+            ].map(x => BalanceUtils.toString(x)).join(),
+          ].join("\n");
+
+          expect(ret).eq(expected);
+        });
       });
     });
     describe("Three assets", () => {
       describe("Not-underlying is enough", () => {
-        it("should convert not-underlying only", async () => {
+        it("should convert not-underlying (weth) only", async () => {
+          const r = await makeInternalSwapToGivenAmountTest({
+            targetAmount: "200", // we need to get 200 TETU
+            tokens: [usdc, tetu, weth],
+            indexTargetAsset: 1, // TETU
+            underlying: usdc,
+            liquidationThresholdForTargetAsset: "0",
+            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
+            amounts: ["1000", "0", "1000"],
+            prices: ["1", "0.5", "2"],
+            liquidations: [{
+              amountIn: parseUnits("75", 18), // we need to converter 50 weth + overswap 50% = 75 weth
+              amountOut: parseUnits("250", 18),
+              tokenIn: weth,
+              tokenOut: tetu
+            }]
+          });
+
+          const ret = [
+            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
+          ].join("\n");
+
+          const expected = [
+            [
+              parseUnits("0", 6),
+              parseUnits("0", 18),
+              parseUnits("75", 18),
+            ].map(x => BalanceUtils.toString(x)).join(),
+            [
+              parseUnits("0", 6),
+              parseUnits("250", 18),
+              parseUnits("0", 18)
+            ].map(x => BalanceUtils.toString(x)).join(),
+          ].join("\n");
+
+          expect(ret).eq(expected);
         });
       });
       describe("Not-underlying is NOT enough", () => {
         it("should convert not-underlying and underlying", async () => {
+          const r = await makeInternalSwapToGivenAmountTest({
+            targetAmount: "2000", // tetu
+            tokens: [usdc, tetu, weth],
+            indexTargetAsset: 1, // TETU
+            underlying: usdc,
+            liquidationThresholdForTargetAsset: "0",
+            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
+            amounts: ["1400", "0", "50"],
+            prices: ["1", "0.5", "2"],
+            liquidations: [
+              // in total, we need to convert 2000 tetu == $1000 + 50% of overswap = $1500
+              // $1500 = 750 weth, but we have only 50 weth
+              // we make following conversion: 50 weth => tetu
+              // After the conversion we have 200 tetu on balance and need 1800 tetu more
+              // we need to make one more conversion: 1800 tetu => $900 + 50% of overswap = 1350 usdc
+              {
+                amountIn: parseUnits("50", 18),
+                amountOut: parseUnits("200", 18),
+                tokenIn: weth,
+                tokenOut: tetu
+              },
+              {
+                amountIn: parseUnits("1350", 6),
+                amountOut: parseUnits("2700", 18),
+                tokenIn: usdc,
+                tokenOut: tetu
+              },
+            ]
+          });
+
+          const ret = [
+            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
+          ].join("\n");
+
+          const expected = [
+            [
+              parseUnits("1350", 6),
+              parseUnits("0", 18),
+              parseUnits("50", 18),
+            ].map(x => BalanceUtils.toString(x)).join(),
+            [
+              parseUnits("0", 6),
+              parseUnits("2900", 18),
+              parseUnits("0", 18)
+            ].map(x => BalanceUtils.toString(x)).join(),
+          ].join("\n");
+
+          expect(ret).eq(expected);
+        });
+      });
+      describe("Not-underlying and underlying is NOT enough", () => {
+        it("should convert not-underlying and underlying and return as much as possible", async () => {
+          const r = await makeInternalSwapToGivenAmountTest({
+            targetAmount: "2000", // tetu
+            tokens: [usdc, tetu, weth],
+            indexTargetAsset: 1, // TETU
+            underlying: usdc,
+            liquidationThresholdForTargetAsset: "0",
+            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
+
+            amounts: ["150", "0", "50"],
+            prices: ["1", "0.5", "2"],
+            liquidations: [
+              // in total, we need to convert 2000 tetu == $1000 + 50% of overswap = $1500
+              // $1500 = 750 weth, but we have only 50 weth
+              // we make following conversion: 50 weth => tetu
+              // After the conversion we have 200 tetu on balance and need 1800 tetu more
+              // we need to make one more conversion: 1800 tetu => $900 + 50% of overswap = 1350 usdc
+              // but we have only 150 usdc...
+              {
+                amountIn: parseUnits("50", 18),
+                amountOut: parseUnits("200", 18),
+                tokenIn: weth,
+                tokenOut: tetu
+              },
+              {
+                amountIn: parseUnits("150", 6),
+                amountOut: parseUnits("300", 18),
+                tokenIn: usdc,
+                tokenOut: tetu
+              },
+            ]
+          });
+
+          const ret = [
+            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
+          ].join("\n");
+
+          const expected = [
+            [
+              parseUnits("150", 6),
+              parseUnits("0", 18),
+              parseUnits("50", 18),
+            ].map(x => BalanceUtils.toString(x)).join(),
+            [
+              parseUnits("0", 6),
+              parseUnits("500", 18),
+              parseUnits("0", 18)
+            ].map(x => BalanceUtils.toString(x)).join(),
+          ].join("\n");
+
+          expect(ret).eq(expected);
         });
       });
     });
     describe("Gas estimation @skip-on-coverage", () => {
+      it("should return expected values", async () => {
+        const r = await makeInternalSwapToGivenAmountTest({
+          targetAmount: "200", // we need to get 200 TETU
+          tokens: [usdc, tetu],
+          indexTargetAsset: 1, // TETU
+          underlying: usdc,
+          liquidationThresholdForTargetAsset: "0",
+          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
+          amounts: ["1000", "0"],
+          prices: ["1", "0.5"],
+          liquidations: [{
+            amountIn: parseUnits("150", 6), // we need to converter 100 usdc + overswap 50% = 150 usdc
+            amountOut: parseUnits("210", 18),
+            tokenIn: usdc,
+            tokenOut: tetu
+          }]
+        });
+
+        controlGasLimitsEx(r.gasUsed, GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT, (u, t) => {
+          expect(u).to.be.below(t + 1);
+        });
+      });
+    });
+  });
+
+  describe("swapToGivenAmount", () => {
+    interface ISwapToGivenAmountParams {
+      targetAmount: string;
+      tokens: MockToken[];
+      indexTargetAsset: number;
+      underlying: MockToken;
+      liquidationThresholdForTargetAsset: string;
+      overswap: number;
+
+      amounts: string[];
+      prices: string[];
+      liquidations: ILiquidationParams[];
+      baseAmounts: string[];
+      airdrops: string[];
+    }
+    interface ISwapToGivenAmountResults {
+      spentAmounts: BigNumber[];
+      withdrawnAmountsOut: BigNumber[];
+      gasUsed: BigNumber;
+    }
+    async function makeSwapToGivenAmountTest(p: ISwapToGivenAmountParams) : Promise<ISwapToGivenAmountResults> {
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        const d = await p.tokens[i].decimals()
+        decimals.push(d);
+
+        // withdrawn amounts
+        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
+
+        // base amounts
+        await p.tokens[i].mint(facade.address, parseUnits(p.baseAmounts[i], d));
+        await facade.setBaseAmounts(p.tokens[i].address, parseUnits(p.baseAmounts[i], d));
+
+        // airdrops
+        await p.tokens[i].mint(facade.address, parseUnits(p.airdrops[i], d));
+      }
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      const priceOracle = (await DeployerUtils.deployContract(
+        signer,
+        'PriceOracleMock',
+        p.tokens.map(x => x.address),
+        p.prices.map(x => parseUnits(x, 18))
+      )) as PriceOracleMock;
+      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(tetuConverterController.address);
+
+      const r = await facade.callStatic.swapToGivenAmountAccess(
+        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
+        p.tokens.map(x => x.address),
+        p.indexTargetAsset,
+        p.underlying.address,
+        p.amounts.map((x, index) => parseUnits(x, decimals[index])),
+        converter.address,
+        liquidator.address,
+        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        p.overswap
+      );
+      console.log("r", r);
+      const tx = await facade.swapToGivenAmountAccess(
+        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
+        p.tokens.map(x => x.address),
+        p.indexTargetAsset,
+        p.underlying.address,
+        p.amounts.map((x, index) => parseUnits(x, decimals[index])),
+        converter.address,
+        liquidator.address,
+        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        p.overswap
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        spentAmounts: r.spentAmounts,
+        withdrawnAmountsOut: r.withdrawnAmountsOut,
+        gasUsed
+      }
+    }
+
+    it("should return amount from balance, single liquidation is required", async () => {
+        const r = await makeSwapToGivenAmountTest({
+          targetAmount: "10",
+          tokens: [tetu, usdc, usdt, dai],
+          indexTargetAsset: 0, // TETU
+          underlying: usdc,
+          liquidationThresholdForTargetAsset: "0",
+          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
+
+          amounts: ["1000", "2000", "4000", "5000"], // == $100, $400, $1600, $2500
+          prices: ["0.1", "0.2", "0.4", "0.5"],
+          liquidations: [{
+            amountIn: parseUnits("3.75", 6),
+            amountOut: parseUnits("15", 18), // 10 tetu + 50% of overswap
+            tokenIn: usdt,
+            tokenOut: tetu
+          }],
+          // we assume, that base amount of target asset < targetAmount, see requirePayAmountBack implementation
+          baseAmounts: ["100", "200", "400", "500"],
+          // these amounts should never be used
+          airdrops: ["100000", "100000", "100000", "100000"],
+        });
+
+        const ret = [
+          r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+          r.withdrawnAmountsOut.map(x => BalanceUtils.toString(x)).join()
+        ].join("\n");
+
+        const expected = [
+          [
+            parseUnits("0", 18),
+            parseUnits("0", 6),
+            parseUnits("3.75", 6),
+            parseUnits("0", 18),
+          ].map(x => BalanceUtils.toString(x)).join(),
+          [
+            parseUnits("1015", 18),
+            parseUnits("2000", 6),
+            parseUnits("4000", 6),
+            parseUnits("5000", 18),
+          ].map(x => BalanceUtils.toString(x)).join(),
+        ].join("\n");
+
+        expect(ret).eq(expected);
+      });
+    it("should return amount from balance, two liquidations are required", async () => {
+      const r = await makeSwapToGivenAmountTest({
+        targetAmount: "16010",
+        tokens: [tetu, usdc, usdt, dai],
+        indexTargetAsset: 0, // TETU
+        underlying: usdc,
+        liquidationThresholdForTargetAsset: "0",
+        overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
+
+        amounts: ["900", "1800", "3600", "4500"], // == $100, $400, $1600, $2500
+        prices: ["0.1", "0.2", "0.4", "0.5"],
+        liquidations: [
+          {
+            amountIn: parseUnits("4000", 6),
+            amountOut: parseUnits("16000", 18),
+            tokenIn: usdt,
+            tokenOut: tetu
+          },
+          {
+            amountIn: parseUnits("3", 18),
+            amountOut: parseUnits("15", 18),
+            tokenIn: dai,
+            tokenOut: tetu
+          },
+        ],
+        // we assume, that base amount of target asset < targetAmount, see requirePayAmountBack implementation
+        baseAmounts: ["100", "200", "400", "500"],
+        // these amounts should never be used
+        airdrops: ["100000", "100000", "100000", "100000"],
+      });
+
+      const ret = [
+        r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
+        r.withdrawnAmountsOut.map(x => BalanceUtils.toString(x)).join()
+      ].join("\n");
+
+      const expected = [
+        [
+          parseUnits("0", 18),
+          parseUnits("0", 6),
+          parseUnits("4000", 6),
+          parseUnits("3", 18),
+        ].map(x => BalanceUtils.toString(x)).join(),
+        [
+          parseUnits("16915", 18), // 900 + 16000 + 15
+          parseUnits("1800", 6),
+          parseUnits("3600", 6),
+          parseUnits("4500", 18),
+        ].map(x => BalanceUtils.toString(x)).join(),
+      ].join("\n");
+
+      expect(ret).eq(expected);
     });
   });
 
