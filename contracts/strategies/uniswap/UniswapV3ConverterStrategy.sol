@@ -124,17 +124,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       (rebalanceEarned0, rebalanceEarned1, notCoveredLoss) = UniswapV3ConverterStrategyLogicLib.tryToCoverLoss(
         UniswapV3ConverterStrategyLogicLib.TryCoverLossParams(
           converter,
-          controller(),
           pool,
           tokenA,
           tokenB,
           _depositorSwapTokens,
           rebalanceEarned0,
           rebalanceEarned1,
-          investedAssets(),
-          tickSpacing,
-          lowerTick,
-          upperTick
+          investedAssets()
         )
       );
 

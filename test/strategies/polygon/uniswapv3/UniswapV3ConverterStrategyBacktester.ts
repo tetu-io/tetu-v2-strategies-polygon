@@ -1115,8 +1115,10 @@ async function strategyBacktest(
     if (previousTimestamp !== poolTx.timestamp) {
       if (await strategy.needRebalance()) {
         rebalances++
-        console.log(`Rebalance ${rebalances}..`)
-        await strategy.rebalance()
+        process.stdout.write(`Rebalance ${rebalances}.. `)
+        const tx = await strategy.rebalance()
+        const txRes = await tx.wait()
+        console.log(`done with ${txRes.gasUsed} gas.`)
       }
 
       if (await strategy.isFuseTriggered()) {

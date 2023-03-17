@@ -8,7 +8,6 @@ import "./UniswapV3Lib.sol";
 library UniswapV3ConverterStrategyLogicLib {
   struct TryCoverLossParams {
     ITetuConverter tetuConverter;
-    address controller;
     IUniswapV3Pool pool;
     address tokenA;
     address tokenB;
@@ -16,9 +15,6 @@ library UniswapV3ConverterStrategyLogicLib {
     uint fee0;
     uint fee1;
     uint oldInvestedAssets;
-    int24 tickSpacing;
-    int24 lowerTick;
-    int24 upperTick;
   }
 
   function isStablePool(IUniswapV3Pool pool) external view returns (bool) {
@@ -296,8 +292,6 @@ library UniswapV3ConverterStrategyLogicLib {
 
     (,uint collateralAmount) = p.tetuConverter.getDebtAmountCurrent(address(this), p.tokenA, p.tokenB);
 
-    bytes memory entryData = getEntryData(p.pool, p.lowerTick, p.upperTick, p.tickSpacing, p.depositorSwapTokens);
-
     newFee0 = p.fee0;
     newFee1 = p.fee1;
     uint feeA = p.depositorSwapTokens ? p.fee1 : p.fee0;
@@ -305,68 +299,46 @@ library UniswapV3ConverterStrategyLogicLib {
 
     uint newInvestedAssets = collateralAmount + _balance(p.tokenA) - feeA;
     if (newInvestedAssets < p.oldInvestedAssets) {
+      // we have lost
       uint lost = p.oldInvestedAssets - newInvestedAssets;
 
       if (lost <= feeA) {
-
+        // feeA is enough to cover lost
         if (p.depositorSwapTokens) {
           newFee1 -= lost;
         } else {
           newFee0 -= lost;
         }
-        ConverterStrategyBaseLib.openPosition(
-          p.tetuConverter,
-          entryData,
-          p.tokenA,
-          p.tokenB,
-          lost,
-          0
-        );
       } else {
+        // feeA is not enough to cover lost
 
-        uint boughtA;
-        if (feeB > 0) {
-
-          uint slippage = _getLiquidatorSwapSlippage(p.pool);
-          (, boughtA) = ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(p.controller).liquidator()), p.tokenB, p.tokenA, feeB, slippage, 0);
-          if (p.depositorSwapTokens) {
-            newFee0 = 0;
-          } else {
-            newFee1 = 0;
-          }
+        if (p.depositorSwapTokens) {
+          newFee1 = 0;
+        } else {
+          newFee0 = 0;
         }
 
-        if (feeA + boughtA >= lost) {
+        uint feeBinTermOfA;
+        if (feeB > 0) {
 
-          ConverterStrategyBaseLib.openPosition(
-            p.tetuConverter,
-            entryData,
-            p.tokenA,
-            p.tokenB,
-            lost,
-            0
-          );
-          if (p.depositorSwapTokens) {
-            newFee1 = feeA + boughtA - lost;
+          feeBinTermOfA = UniswapV3Lib.getPrice(address(p.pool), p.tokenB) * feeB / 10 ** IERC20Metadata(p.tokenB).decimals();
+
+          if (feeA + feeBinTermOfA > lost) {
+            if (p.depositorSwapTokens) {
+              newFee0 = (feeA + feeBinTermOfA - lost) * UniswapV3Lib.getPrice(address(p.pool), p.tokenA) / 10 ** IERC20Metadata(p.tokenA).decimals();
+            } else {
+              newFee1 = (feeA + feeBinTermOfA - lost) * UniswapV3Lib.getPrice(address(p.pool), p.tokenA) / 10 ** IERC20Metadata(p.tokenA).decimals();
+            }
           } else {
-            newFee0 = feeA + boughtA - lost;
+            notCoveredLoss = lost - feeA - feeBinTermOfA;
+            if (p.depositorSwapTokens) {
+              newFee0 = 0;
+            } else {
+              newFee1 = 0;
+            }
           }
         } else {
-
-          ConverterStrategyBaseLib.openPosition(
-            p.tetuConverter,
-            entryData,
-            p.tokenA,
-            p.tokenB,
-            feeA + boughtA,
-            0
-          );
-          notCoveredLoss = lost - feeA - boughtA;
-          if (p.depositorSwapTokens) {
-            newFee1 = 0;
-          } else {
-            newFee0 = 0;
-          }
+          notCoveredLoss = lost - feeA;
         }
       }
     }
