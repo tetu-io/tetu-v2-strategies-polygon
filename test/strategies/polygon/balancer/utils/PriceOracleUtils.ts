@@ -2,18 +2,21 @@ import {
   Aave3AggregatorInterfaceMock,
   IAave3PriceOracle,
   IAave3PriceOracle__factory,
-  IConverterController__factory, IPriceOracle,
-  IPriceOracle__factory, ITetuConverter__factory
-} from "../../../../../typechain";
-import {MaticAddresses} from "../../../../../scripts/addresses/MaticAddresses";
-import {MockHelper} from "../../../../baseUT/helpers/MockHelper";
-import {ConverterUtils} from "../../../../baseUT/utils/ConverterUtils";
+  IConverterController__factory,
+  IPriceOracle,
+  IPriceOracle__factory,
+  ITetuConverter__factory,
+} from '../../../../../typechain';
+import { MaticAddresses } from '../../../../../scripts/addresses/MaticAddresses';
+import { MockHelper } from '../../../../baseUT/helpers/MockHelper';
+import { ConverterUtils } from '../../../../baseUT/utils/ConverterUtils';
 import {
   getAaveTwoPlatformAdapter,
   getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter, Misc
-} from "../../../../../scripts/utils/Misc";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+  getHundredFinancePlatformAdapter,
+  Misc,
+} from '../../../../../scripts/utils/Misc';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
 export interface IPriceOracles {
   daiPriceSource: Aave3AggregatorInterfaceMock;

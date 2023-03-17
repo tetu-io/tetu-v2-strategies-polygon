@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../tools/ERC20Helpers.sol";
+import "../helpers/ERC20Helpers.sol";
 
 /// @title Abstract base Depositor contract.
 /// @notice Converter strategies should inherit xDepositor.

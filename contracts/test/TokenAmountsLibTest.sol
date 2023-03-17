@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../tools/TokenAmountsLib.sol";
+import "../libs/TokenAmountsLib.sol";
 
 /// @author bogdoslav
 contract TokenAmountsLibTest {

@@ -1,18 +1,18 @@
-import {BigNumber, ContractReceipt, ContractTransaction, Signer} from "ethers";
-import hre from "hardhat";
+import { BigNumber, ContractReceipt, Signer } from 'ethers';
 import {
-  BalancerComposableStableStrategy__factory, ControllerV2__factory,
+  BalancerComposableStableStrategy__factory,
+  ControllerV2__factory,
   IController__factory,
   IStrategyV2,
-  StrategyBaseV2__factory, TetuVaultV2
-} from "../../../typechain";
-import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
-import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
-import {Misc} from "../../../scripts/utils/Misc";
-import {TokenUtils} from "../../../scripts/utils/TokenUtils";
-import {Provider} from "@ethersproject/providers";
+  StrategyBaseV2__factory,
+} from '../../../typechain';
+import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { DeployerUtilsLocal, IVaultStrategyInfo } from '../../../scripts/utils/DeployerUtilsLocal';
+import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
+import { Misc } from '../../../scripts/utils/Misc';
+import { TokenUtils } from '../../../scripts/utils/TokenUtils';
+import { Provider } from '@ethersproject/providers';
 
 export interface IMakeStrategyDeployerInputParams {
   vaultName?: string;

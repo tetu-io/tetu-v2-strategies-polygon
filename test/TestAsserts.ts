@@ -1,6 +1,6 @@
-import chai from "chai";
-import {BigNumber, ContractTransaction, Event, utils} from "ethers";
-import chaiAsPromised from "chai-as-promised";
+import chai from 'chai';
+import { BigNumber, ContractTransaction, Event, utils } from 'ethers';
+import chaiAsPromised from 'chai-as-promised';
 
 const {expect} = chai;
 chai.use(chaiAsPromised);

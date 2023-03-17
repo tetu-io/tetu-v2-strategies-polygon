@@ -114,12 +114,11 @@ export class DeployerUtilsLocal {
     }
   }
 
-
-  // tslint:disable-next-line:no-any
   public static async verifyImplWithContractName(
     signer: SignerWithAddress,
     proxyAddress: string,
     contractPath: string,
+    // tslint:disable-next-line:no-any
     args?: any[],
   ) {
     const proxy = ProxyControlled__factory.connect(proxyAddress, signer);

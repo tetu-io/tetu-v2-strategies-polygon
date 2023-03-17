@@ -11,11 +11,13 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const {deployments, getNamedAccounts} = hre;
   const {COMPOSABLE_STABLE_POOL_FACTORY_ADDRESS} = await getNamedAccounts();
 
-  const bbTUsdComposablePool = await deployments.get('bbTUsdComposablePool');
-  if(bbTUsdComposablePool) {
-    console.log("bbTUsdComposablePool Pool already deployed at:", bbTUsdComposablePool.address);
-    return;
-  }
+  try {
+    const bbTUsdComposablePool = await deployments.get('bbTUsdComposablePool');
+    if(bbTUsdComposablePool) {
+      console.log("bbTUsdComposablePool Pool already deployed at:", bbTUsdComposablePool.address);
+      return;
+    }
+  } catch {}
 
   const usdcLinearPool = await deployments.get('bbTUsdc4626LinearPool');
   const daiLinearPool = await deployments.get('bbTDai4626LinearPool');
@@ -64,7 +66,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     const USDC_BIG_HOLDER_ADDRESS = "0xe7804c37c13166ff0b37f5ae0bb07a3aebb6e245"
     const BALANCER_VAULT_ADDRESS = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"
 
-    const usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS)
+    const usdc = await ethers.getContractAt("@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol:IERC20", USDC_ADDRESS)
     const impersonatedSigner = await ethers.getImpersonatedSigner(USDC_BIG_HOLDER_ADDRESS)
     await usdc.connect(impersonatedSigner).transfer(signer.address, ethers.utils.parseUnits("1000000", 6))
     await usdc.connect(signer)
@@ -158,9 +160,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     console.log(`Signer USDC balance: ${await usdc.balanceOf(signer.address)}`)
 
     const poolTokens = await vault.getPoolTokens(await usdcLinerPool.getPoolId())
-    const t0 = await ethers.getContractAt("IERC20Metadata", poolTokens.tokens[0])
-    const t1 = await ethers.getContractAt("IERC20Metadata", poolTokens.tokens[1])
-    const t2 = await ethers.getContractAt("IERC20Metadata", poolTokens.tokens[2])
+    const t0 = await ethers.getContractAt("@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol:IERC20Metadata", poolTokens.tokens[0])
+    const t1 = await ethers.getContractAt("@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol:IERC20Metadata", poolTokens.tokens[1])
+    const t2 = await ethers.getContractAt("@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol:IERC20Metadata", poolTokens.tokens[2])
     console.log(`t0: ${await t0.symbol()}`)
     console.log(`t1: ${await t1.symbol()}`)
     console.log(`t2: ${await t2.symbol()}`)

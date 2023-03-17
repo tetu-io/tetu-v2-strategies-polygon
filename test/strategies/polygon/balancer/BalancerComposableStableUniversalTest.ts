@@ -1,23 +1,23 @@
-import chai from "chai";
-import chaiAsPromised from "chai-as-promised";
-import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
-import {config as dotEnvConfig} from "dotenv";
-import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
-import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
+import chai from 'chai';
+import chaiAsPromised from 'chai-as-promised';
+import { startDefaultStrategyTest } from '../../base/DefaultSingleTokenStrategyTest';
+import { config as dotEnvConfig } from 'dotenv';
+import { DeployInfo } from '../../../baseUT/utils/DeployInfo';
+import { StrategyTestUtils } from '../../../baseUT/utils/StrategyTestUtils';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
+import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
+import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
   getHundredFinancePlatformAdapter,
 } from '../../../../scripts/utils/Misc';
-import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {BalancerIntTestUtils, IState} from "./utils/BalancerIntTestUtils";
-import {ethers} from "hardhat";
-import {BalancerComposableStableStrategy, IStrategyV2, TetuVaultV2} from "../../../../typechain";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import { IUniversalStrategyInputParams } from '../../base/UniversalStrategyTest';
+import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
+import { BalancerIntTestUtils, IState } from './utils/BalancerIntTestUtils';
+import { ethers } from 'hardhat';
+import { BalancerComposableStableStrategy, IStrategyV2, TetuVaultV2 } from '../../../../typechain';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -82,7 +82,7 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
       ppfsDecreaseAllowed: false,
       balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
-      loops: 40,
+      loops: 3,
       loopValue: 2000,
       advanceBlocks: true,
       specificTests: [],

@@ -1,9 +1,8 @@
-import {ethers} from "hardhat";
-import {ContractTransaction} from "ethers";
-import {Logger} from "tslog";
-import logSettings from "../../log_settings";
-import {Misc} from "./Misc";
-import {WAIT_BLOCKS_BETWEEN_DEPLOY} from "../deploy/DeployContract";
+import { ethers } from 'hardhat';
+import { ContractTransaction } from 'ethers';
+import { Logger } from 'tslog';
+import logSettings from '../../log_settings';
+import { Misc } from './Misc';
 
 const log: Logger = new Logger(logSettings);
 

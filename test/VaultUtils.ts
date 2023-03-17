@@ -1,9 +1,4 @@
-import {
-  IERC20__factory,
-  TetuVaultV2,
-  IStrategyV2__factory,
-  StrategySplitterV2__factory,
-} from '../typechain';
+import { IERC20__factory, IStrategyV2__factory, StrategySplitterV2__factory, TetuVaultV2 } from '../typechain';
 import { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { TokenUtils } from '../scripts/utils/TokenUtils';

@@ -1,4 +1,4 @@
-import {BigNumber, ContractTransaction} from "ethers";
+import { BigNumber, ContractTransaction } from 'ethers';
 
 export async function getGasUsed(p: Promise<ContractTransaction>): Promise<BigNumber> {
   const tx = await p;

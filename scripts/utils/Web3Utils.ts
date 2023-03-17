@@ -1,5 +1,5 @@
-import {web3} from "hardhat";
-import {DeployerUtils} from "./DeployerUtils";
+import { web3 } from 'hardhat';
+import { DeployerUtilsLocal } from './DeployerUtilsLocal';
 
 export class Web3Utils {
 
@@ -16,7 +16,7 @@ export class Web3Utils {
           fromBlock: from,
           toBlock: to,
           address: contracts,
-          "topics": topics
+          'topics': topics,
         })));
 
         console.log('logs', from, to, logs.length);
@@ -29,7 +29,7 @@ export class Web3Utils {
         }
       } catch (e) {
         console.log('Error fetch logs', e);
-        await DeployerUtils.delay(1000);
+        await DeployerUtilsLocal.delay(1000);
       }
     }
 

@@ -1,9 +1,9 @@
-import {ContractFactory, utils} from "ethers";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {Libraries} from "hardhat-deploy/dist/types";
-import {Logger} from "tslog";
-import logSettings from "../../log_settings";
-import {formatUnits} from "ethers/lib/utils";
+import { ContractFactory, utils } from 'ethers';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { Libraries } from 'hardhat-deploy/dist/types';
+import { Logger } from 'tslog';
+import logSettings from '../../log_settings';
+import { formatUnits } from 'ethers/lib/utils';
 
 const log: Logger = new Logger(logSettings);
 
@@ -16,6 +16,8 @@ const libraries = new Map<string, string[]>([
   ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'StrategyLib']],
   ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib']],
   ['BalancerComposableStableStrategyAccess', ['ConverterStrategyBaseLib', 'BalancerLogicLib', 'StrategyLib']],
+  ['UniswapV3ConverterStrategy', ['ConverterStrategyBaseLib', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib']],
+  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(
@@ -26,7 +28,9 @@ export async function deployContract<T extends ContractFactory>(
   // tslint:disable-next-line:no-any
   ...args: any[]
 ) {
-  await hre.run("compile")
+  if (hre.network.name !== 'hardhat') {
+    await hre.run("compile")
+  }
   const web3 = hre.web3;
   const ethers = hre.ethers;
   log.info(`Deploying ${name}`);

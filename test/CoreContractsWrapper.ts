@@ -1,11 +1,15 @@
 import {
   IBribe,
-  IController, IERC20,
+  IController,
+  IERC20,
   IForwarder,
   IGauge,
   IPlatformVoter,
-  IVeDistributor, IVeTetu, IVoter, VaultFactory,
-} from "../typechain";
+  IVeDistributor,
+  IVeTetu,
+  IVoter,
+  VaultFactory,
+} from '../typechain';
 
 export interface ICoreContractsWrapper {
   tetu: IERC20;

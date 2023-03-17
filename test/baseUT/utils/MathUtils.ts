@@ -1,6 +1,6 @@
 /// @param accuracy 10 for 1e-10
-import {BigNumber} from "ethers";
-import {formatUnits, parseUnits} from "ethers/lib/utils";
+import { BigNumber } from 'ethers';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
 
 /** true if the given big numbers are equal to each other with given precision */
 export function areAlmostEqual(b1: BigNumber, b2: BigNumber, precision: number = 8) : boolean {

@@ -14,9 +14,9 @@ import "../interfaces/converter/IPriceOracle.sol";
 import "../interfaces/converter/ITetuConverter.sol";
 import "../interfaces/converter/IConverterController.sol";
 import "../interfaces/converter/EntryKinds.sol";
-import "../tools/AppErrors.sol";
-import "../tools/AppLib.sol";
-import "../tools/TokenAmountsLib.sol";
+import "../libs/AppErrors.sol";
+import "../libs/AppLib.sol";
+import "../libs/TokenAmountsLib.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;

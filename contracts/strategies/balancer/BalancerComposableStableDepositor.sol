@@ -6,8 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../DepositorBase.sol";
 import "./BalancerLogicLib.sol";
-import "../../tools/TokenAmountsLib.sol";
-import "../../tools/AppErrors.sol";
 import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerBoostedAavePool.sol";

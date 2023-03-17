@@ -5,8 +5,8 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyStrictBase.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../../integrations/tetu-v1/ISmartVault.sol";
-import "../../tools/AppLib.sol";
-import "../../tools/ERC20Helpers.sol";
+import "../../libs/AppLib.sol";
+import "../../helpers/ERC20Helpers.sol";
 import "../../integrations/balancer/IRateProvider.sol";
 
 /// @title Simple auto compounding strategy for TETU V1 vaults.

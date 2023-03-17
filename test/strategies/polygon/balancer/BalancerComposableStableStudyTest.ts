@@ -1,19 +1,20 @@
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {ethers} from "hardhat";
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { ethers } from 'hardhat';
 import {
   IBalancerBoostedAavePool__factory,
   IBalancerBoostedAaveStablePool__factory,
-  IBVault__factory, IERC20__factory,
-  IERC20Extended__factory
-} from "../../../../typechain";
-import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
-import {BigNumber} from "ethers";
-import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {Misc} from "../../../../scripts/utils/Misc";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {IGauge__factory} from "../../../../typechain/factories/contracts/integrations/dystopia";
+  IBVault__factory,
+  IERC20__factory,
+  IERC20Extended__factory,
+} from '../../../../typechain';
+import { defaultAbiCoder, parseUnits } from 'ethers/lib/utils';
+import { BigNumber } from 'ethers';
+import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
+import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
+import { Misc } from '../../../../scripts/utils/Misc';
+import { MockHelper } from '../../../baseUT/helpers/MockHelper';
+import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
+import { IGauge__factory } from '../../../../typechain/factories/contracts/integrations/dystopia';
 
 describe.skip("BalancerComposableStableStudyTest @skip-on-coverage", () => {
   let signer: SignerWithAddress;
