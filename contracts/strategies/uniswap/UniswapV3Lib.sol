@@ -587,11 +587,13 @@ library UniswapV3Lib {
       (log_sqrt10001 + 291339464771989622907027621153398088495) >> 128
     );
 
-    tick = tickLow == tickHi
+    tick = (tickLow == tickHi)
     ? tickLow
-    : _getSqrtRatioAtTick(tickHi) <= sqrtPriceX96
-    ? tickHi
-    : tickLow;
+    : ( // we need round brackets for npm.run.coverage
+    _getSqrtRatioAtTick(tickHi) <= sqrtPriceX96
+      ? tickHi
+      : tickLow
+    );
   }
 
   function _getPositionId(PoolPosition memory position) internal pure returns(bytes32) {
