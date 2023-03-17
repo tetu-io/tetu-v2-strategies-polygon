@@ -633,7 +633,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount_ Required amount of the {theAsset_}
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
-    console.log("requirePayAmountBack.amount_", amount_);
     RequirePayAmountBackLocal memory v;
     v.converter = address(converter);
     require(msg.sender == v.converter, StrategyLib.DENIED);
@@ -645,21 +644,20 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // get amount of target asset available to be sent
     v.theAssetBaseAmount = baseAmounts[theAsset_];
-    console.log("requirePayAmountBack.theAssetBaseAmount", v.theAssetBaseAmount);
+
+    // follow array can be re-created below but it's safer to initialize them here
+    v.withdrawnAmounts = new uint[](v.len);
+    v.spentAmounts = new uint[](v.len);
 
     // withdraw from the pool
     if (v.theAssetBaseAmount < amount_) {
       // the strategy doesn't have enough target asset on balance
       // withdraw all from the pool but don't convert assets to underlying
       v.liquidity = _depositorLiquidity();
-      console.log("requirePayAmountBack.liquidity", v.liquidity);
       if (v.liquidity != 0) {
         v.withdrawnAmounts = _depositorExit(v.liquidity);
         emit OnDepositorExit(v.liquidity, v.withdrawnAmounts);
-      } else {
-        v.withdrawnAmounts = new uint[](v.len);
       }
-      console.log("requirePayAmountBack.withdrawnAmounts", v.withdrawnAmounts[0], v.withdrawnAmounts[1], v.withdrawnAmounts[2]);
     }
 
     // convert withdrawn assets to the target asset
@@ -676,24 +674,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         ConverterStrategyBaseLib.OVERSWAP,
         baseAmounts
       );
-    } else {
-      v.spentAmounts = new uint[](v.len);
     }
-    console.log("requirePayAmountBack.withdrawnAmounts2", v.withdrawnAmounts[0], v.withdrawnAmounts[1], v.withdrawnAmounts[2]);
-    console.log("requirePayAmountBack.spentAmounts", v.spentAmounts[0], v.spentAmounts[1], v.spentAmounts[2]);
 
     // send amount to converter and update baseAmounts
     amountOut = Math.min(v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset], amount_);
-    console.log("requirePayAmountBack.amount_", amount_);
-    console.log("requirePayAmountBack.theAssetBaseAmount", v.theAssetBaseAmount);
-    console.log("requirePayAmountBack.v.withdrawnAmounts[v.indexTheAsset]", v.withdrawnAmounts[v.indexTheAsset]);
-    console.log("requirePayAmountBack.amountOut", amountOut);
-    console.log("requirePayAmountBack.converter.baseAmounts", baseAmounts[v.tokens[0]], baseAmounts[v.tokens[1]], baseAmounts[v.tokens[2]]);
-    console.log("requirePayAmountBack.converter.balance.before", IERC20(theAsset_).balanceOf(v.converter));
     IERC20(theAsset_).safeTransfer(v.converter, amountOut);
     _updateBaseAmounts(v.tokens, v.withdrawnAmounts, v.spentAmounts, v.indexTheAsset, - int(amountOut));
-    console.log("requirePayAmountBack.converter.balance.after", IERC20(theAsset_).balanceOf(v.converter));
-    console.log("requirePayAmountBack.converter.baseAmounts.after", baseAmounts[v.tokens[0]], baseAmounts[v.tokens[1]], baseAmounts[v.tokens[2]]);
     emit ReturnAssetToConverter(theAsset_, amountOut);
 
     // let's leave any leftovers un-invested, they will be reinvested at next hardwork

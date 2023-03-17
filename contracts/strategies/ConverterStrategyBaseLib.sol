@@ -18,8 +18,6 @@ import "../tools/AppErrors.sol";
 import "../tools/AppLib.sol";
 import "../tools/TokenAmountsLib.sol";
 
-import "hardhat/console.sol";
-
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -482,8 +480,6 @@ library ConverterStrategyBaseLib {
         }
       }
 
-      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
-      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
       return (collateralAmountOut, borrowedAmountOut);
     }
   }
@@ -609,7 +605,6 @@ library ConverterStrategyBaseLib {
     uint returnedAssetAmountOut,
     uint repaidAmountOut
   ) {
-    //!! console.log("_closePosition");
 
     // We shouldn't try to pay more than we actually need to repay
     // The leftover will be swapped inside TetuConverter, it's inefficient.
@@ -776,7 +771,6 @@ library ConverterStrategyBaseLib {
     v.availableAmounts = new uint[](v.len);
     for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
       v.availableAmounts[v.i] = withdrawnAmounts_[v.i] + baseAmounts_[tokens_[v.i]];
-      console.log("swapToGivenAmount.availableAmounts,i", v.i, v.availableAmounts[v.i]);
     }
     (spentAmounts, v.receivedAmounts) = _swapToGivenAmount(
       SwapToGivenAmountInputParams({
@@ -793,7 +787,6 @@ library ConverterStrategyBaseLib {
     );
     for (v.i = 0; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
       withdrawnAmountsOut[v.i] = withdrawnAmounts_[v.i] + v.receivedAmounts[v.i];
-      console.log("swapToGivenAmount.withdrawnAmountsOut,i", v.i, withdrawnAmountsOut[v.i]);
     }
   }
 
@@ -828,14 +821,10 @@ library ConverterStrategyBaseLib {
         continue;
       }
       if (p.indexTargetAsset == i) continue;
-      console.log("indexUnderlying", indexUnderlying);
-      console.log("indexTargetAsset", p.indexTargetAsset);
-      console.log("i", i);
 
       (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, i);
       spentAmounts[i] += spent;
       receivedAmounts[p.indexTargetAsset] += received;
-      console.log("spent, received", spent, received);
 
       if (receivedAmounts[p.indexTargetAsset] >= p.targetAmount) break;
     }
@@ -843,7 +832,6 @@ library ConverterStrategyBaseLib {
     // swap underlying
     if (receivedAmounts[p.indexTargetAsset] < p.targetAmount && p.indexTargetAsset != indexUnderlying) {
       (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, indexUnderlying);
-      console.log("spent, received2", spent, received);
       spentAmounts[indexUnderlying] += spent;
       receivedAmounts[p.indexTargetAsset] += received;
     }
@@ -862,7 +850,6 @@ library ConverterStrategyBaseLib {
     uint amountReceived
   ) {
     if (p.amounts[indexTokenIn] != 0) {
-      console.log("_swapToGetAmount", receivedTargetAmount, indexTokenIn, p.targetAmount);
       // we assume here, that p.targetAmount > receivedTargetAmount, see _swapToGivenAmount implementation
 
       // calculate amount that should be swapped
@@ -873,14 +860,6 @@ library ConverterStrategyBaseLib {
         * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
         / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
       ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
-      console.log("amountIn", amountIn);
-      console.log("available amount", p.amounts[indexTokenIn]);
-      console.log("tokenIn", p.tokens[indexTokenIn]);
-      console.log("tokenOut", p.tokens[p.indexTargetAsset]);
-      console.log("decsIn", v.decs[indexTokenIn]);
-      console.log("decsOut", v.decs[p.indexTargetAsset]);
-      console.log("priceIn", v.prices[indexTokenIn]);
-      console.log("priceOut", v.prices[p.indexTargetAsset]);
 
       (amountSpent, amountReceived) = _liquidate(
         p.liquidator,

@@ -134,7 +134,7 @@ contract MockDepositor is DepositorBase, Initializable {
   DepositorExitParams internal depositorExitParams;
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
+    // console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
     require(liquidityAmount == depositorExitParams.liquidityAmount, "!depositorExit");
 
     uint len = _depositorAssets.length;
