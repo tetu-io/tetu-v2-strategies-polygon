@@ -19,6 +19,13 @@ library UniswapV3ConverterStrategyLogicLib {
   uint internal constant HARD_WORK_USD_FEE_THRESHOLD = 100;
 
   //////////////////////////////////////////
+  //            EVENTS
+  //////////////////////////////////////////
+
+  event FuseTriggered();
+  event Rebalanced();
+
+  //////////////////////////////////////////
   //            STRUCTURES
   //////////////////////////////////////////
 
@@ -432,7 +439,7 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 upperTick,
     int24 tickSpacing,
     int24 rebalanceTickRange
-  ) internal view returns (bool) {
+  ) public view returns (bool) {
     if (isFuseTriggered) {
       return false;
     }
@@ -1079,6 +1086,7 @@ library UniswapV3ConverterStrategyLogicLib {
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// @dev enabling fuse: close debt and stop providing liquidity
       state.isFuseTriggered = true;
+      emit FuseTriggered();
 
       closeDebt(
         converter,
@@ -1149,5 +1157,6 @@ library UniswapV3ConverterStrategyLogicLib {
         isNeedFillup = true;
       }
     }
+    emit Rebalanced();
   }
 }
