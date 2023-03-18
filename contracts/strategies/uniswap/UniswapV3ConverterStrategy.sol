@@ -34,8 +34,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (UniswapV3ConverterStrategyLogicLib.isStablePool(state.pool)) {
       /// @dev for stable pools fuse can be enabled
       state.isStablePool = true;
-      state.fuseThreshold = 5e15; // 0.5% price change
-      state.lastPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, state);
+      // 0.5% price change
+      state.fuseThreshold = 5e15;
+      state.lastPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
     }
   }
 
@@ -77,66 +78,48 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     /// @dev withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
     _depositorEmergencyExit();
 
-    uint newPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, state);
+    (
+    uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
+    bool isNeedFillup
+    ) = UniswapV3ConverterStrategyLogicLib.rebalance(
+      state,
+      converter,
+      controller(),
+      investedAssets()
+    );
 
-    if (UniswapV3ConverterStrategyLogicLib.enableFuse(state, newPrice)) {
-      /// @dev enabling fuse: close debt and stop providing liquidity
-      state.isFuseTriggered = true;
-
-      UniswapV3ConverterStrategyLogicLib.closeDebt(
-        converter,
-        controller(),
-        state
-      );
-    } else {
-      if (state.isStablePool) {
-        state.lastPrice = newPrice;
-      }
-
-      /// @dev rebalacing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
-      UniswapV3ConverterStrategyLogicLib.rebalanceDebt(
-        converter,
-        controller(),
-        state
-      );
-
-      /// @dev trying to cover rebalance loss (IL + not hedged part of tokenB + swap cost) by pool rewards
-      uint notCoveredLoss;
-      (state.rebalanceEarned0, state.rebalanceEarned1, notCoveredLoss) = UniswapV3ConverterStrategyLogicLib.tryToCoverLossWrapper(
-        state,
-        converter,
-        investedAssets()
-      );
-
-      if (notCoveredLoss > 0) {
-        state.rebalanceLost += notCoveredLoss;
-      }
-
-      // calculate and set new tick range
-      (state.lowerTick, state.upperTick) = UniswapV3ConverterStrategyLogicLib.getNewTickRange(state);
-
-      //put liquidity to pool without updated rebalanceEarned0, rebalanceEarned1 amounts
-      _depositorEnter(UniswapV3ConverterStrategyLogicLib.getTokenAmountsArray(state));
+    if (tokenAmounts.length == 2) {
+      _depositorEnter(tokenAmounts);
 
       //add fill-up liquidity part of fill-up is used
-      if (state.fillUp) {
-        (state.lowerTickFillup, state.upperTickFillup, state.totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(state);
+      if (isNeedFillup) {
+        (state.lowerTickFillup, state.upperTickFillup, state.totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(
+          state.pool,
+          state.lowerTick,
+          state.upperTick,
+          state.tickSpacing,
+          state.rebalanceEarned0,
+          state.rebalanceEarned1
+        );
       }
     }
 
-    //updating baseAmounts (token amounts on strategy balance which are not rewards)
-    uint balanceOfTokenABefore = baseAmounts[state.tokenA];
-    uint balanceOfTokenBBefore = baseAmounts[state.tokenB];
-    (uint balanceOfTokenAAfter, uint balanceOfTokenBAfter) = UniswapV3ConverterStrategyLogicLib.getTokenAmounts(state);
+    (
+    uint receivedA,
+    uint spentA,
+    uint receivedB,
+    uint spentB
+    ) = UniswapV3ConverterStrategyLogicLib.getUpdateInfo(state, baseAmounts);
+
     _updateBaseAmountsForAsset(
       state.tokenA,
-      balanceOfTokenABefore > balanceOfTokenAAfter ? 0 : balanceOfTokenAAfter - balanceOfTokenABefore,
-      balanceOfTokenABefore > balanceOfTokenAAfter ? balanceOfTokenABefore - balanceOfTokenAAfter : 0
+      receivedA,
+      spentA
     );
     _updateBaseAmountsForAsset(
       state.tokenB,
-      balanceOfTokenBBefore > balanceOfTokenBAfter ? 0 : balanceOfTokenBAfter - balanceOfTokenBBefore,
-      balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0
+      receivedB,
+      spentB
     );
 
     //updating investedAssets based on new baseAmounts
@@ -156,7 +139,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     tokenAmounts = new uint[](2);
     borrowedAmounts = new uint[](2);
 
-    bytes memory entryData = UniswapV3ConverterStrategyLogicLib.getEntryData(state);
+    bytes memory entryData = UniswapV3ConverterStrategyLogicLib.getEntryData(
+      state.pool,
+      state.lowerTick,
+      state.upperTick,
+      state.tickSpacing,
+      state.depositorSwapTokens
+    );
 
     AppLib.approveIfNeeded(state.tokenA, amount_, address(tetuConverter_));
     (spentCollateral, borrowedAmounts[1]) = ConverterStrategyBaseLib.openPosition(
