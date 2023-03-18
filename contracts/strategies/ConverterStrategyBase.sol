@@ -46,7 +46,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.0.0";
 
-  uint private constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
+  uint internal constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
 
   /////////////////////////////////////////////////////////////////////
   //                        VARIABLES
@@ -55,7 +55,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Amount of underlying assets invested to the pool.
-  uint private _investedAssets;
+  uint internal _investedAssets;
 
   /// @dev Linked Tetu Converter
   ITetuConverter public converter;

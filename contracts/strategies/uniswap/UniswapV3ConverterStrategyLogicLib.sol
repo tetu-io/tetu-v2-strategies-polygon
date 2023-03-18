@@ -14,7 +14,9 @@ library UniswapV3ConverterStrategyLogicLib {
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_STABLE = 100;
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE = 500;
   uint internal constant SELL_GAP = 100;
+  /// @dev should be placed local, probably will be adjusted later
   uint internal constant BORROW_PERIOD_ESTIMATION = 30 days / 2;
+  uint internal constant HARD_WORK_USD_FEE_THRESHOLD = 100;
 
   //////////////////////////////////////////
   //            STRUCTURES
@@ -422,22 +424,28 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   /// @notice Determine if the pool needs to be rebalanced.
-  /// @param state The state of the pool.
   /// @return A boolean indicating if the pool needs to be rebalanced.
-  function needRebalance(State storage state) external view returns (bool) {
-    if (state.isFuseTriggered) {
+  function needRebalance(
+    bool isFuseTriggered,
+    IUniswapV3Pool pool,
+    int24 lowerTick,
+    int24 upperTick,
+    int24 tickSpacing,
+    int24 rebalanceTickRange
+  ) internal view returns (bool) {
+    if (isFuseTriggered) {
       return false;
     }
-    (, int24 tick, , , , ,) = state.pool.slot0();
-    if (state.upperTick - state.lowerTick == state.tickSpacing) {
-      return tick < state.lowerTick || tick >= state.upperTick;
+    (, int24 tick, , , , ,) = pool.slot0();
+    if (upperTick - lowerTick == tickSpacing) {
+      return tick < lowerTick || tick >= upperTick;
     } else {
-      int24 halfRange = (state.upperTick - state.lowerTick) / 2;
-      int24 oldMedianTick = state.lowerTick + halfRange;
+      int24 halfRange = (upperTick - lowerTick) / 2;
+      int24 oldMedianTick = lowerTick + halfRange;
       if (tick > oldMedianTick) {
-        return tick - oldMedianTick >= state.rebalanceTickRange;
+        return tick - oldMedianTick >= rebalanceTickRange;
       }
-      return oldMedianTick - tick > state.rebalanceTickRange;
+      return oldMedianTick - tick > rebalanceTickRange;
     }
   }
 
@@ -669,6 +677,28 @@ library UniswapV3ConverterStrategyLogicLib {
     if (_depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
+  }
+
+  function isReadyToHardWork(State storage state, ITetuConverter converter) external view returns (bool isReady) {
+    // check claimable amounts and compare with thresholds
+    (uint fee0, uint fee1) = getFees(state);
+    fee0 += state.rebalanceEarned0;
+    fee1 += state.rebalanceEarned1;
+
+    if (state.depositorSwapTokens) {
+      (fee0, fee1) = (fee1, fee0);
+    }
+
+    address tokenA = state.tokenA;
+    address tokenB = state.tokenB;
+    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
+    uint priceA = oracle.getAssetPrice(tokenA);
+    uint priceB = oracle.getAssetPrice(tokenB);
+
+    uint fee0USD = fee0 * priceA / 1e18;
+    uint fee1USD = fee1 * priceB / 1e18;
+
+    return fee0USD > HARD_WORK_USD_FEE_THRESHOLD || fee1USD > HARD_WORK_USD_FEE_THRESHOLD;
   }
 
   //////////////////////////////////////////
@@ -1027,6 +1057,15 @@ library UniswapV3ConverterStrategyLogicLib {
     isStablePool : false,
     newPrice : 0
     });
+
+    require(needRebalance(
+        state.isFuseTriggered,
+        vars.pool,
+        vars.lowerTick,
+        vars.upperTick,
+        vars.tickSpacing,
+        state.rebalanceTickRange
+      ), "No rebalancing needed");
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
