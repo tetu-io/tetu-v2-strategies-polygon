@@ -555,14 +555,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint investedAssetsBefore = _investedAssets;
     uint investedAssetsLocal = _updateInvestedAssets();
 
-    // register autocompound income or possible lose if assets fluctuated
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
-
     _preHardWork(reInvest);
 
-    (uint earned2, uint lost2, uint assetBalance) = _handleRewards();
-    earned += earned2;
-    lost += lost2;
+    uint assetBalance;
+    (earned, lost, assetBalance) = _handleRewards();
+
+    // register autocompound income or possible lose if assets fluctuated
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
@@ -592,7 +591,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
     (address[] memory tokens, uint indexAsset) = _getTokens(asset);
-
     return ConverterStrategyBaseLib.calcInvestedAssets(
       tokens,
     // quote exit should check zero liquidity

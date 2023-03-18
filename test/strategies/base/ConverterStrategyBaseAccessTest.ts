@@ -3448,6 +3448,8 @@ describe("ConverterStrategyBaseAccessTest", () => {
 
       await strategy.setDepositorExit(depositorLiquidity, withdrawnAmounts);
       await strategy.setDepositorQuoteExit(depositorLiquidity, withdrawnAmounts);
+      // _updateInvestedAssets is called at the end of requirePayAmountBack when the liquidity is 0
+      await strategy.setDepositorQuoteExit(0, withdrawnAmounts);
     }
     describe("Good paths", () => {
       describe("There is enough asset on the balance", () => {
@@ -3455,6 +3457,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
           await usdc.mint(strategy.address, parseUnits("100", 6));
           await strategy.setBaseAmountAccess(usdc.address, parseUnits("100", 6));
           const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+          await strategy.setDepositorQuoteExit(0, [0, 0, 0]);
           const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(
             usdc.address,
             parseUnits("99", 6),
