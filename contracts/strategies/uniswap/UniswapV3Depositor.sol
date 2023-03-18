@@ -15,30 +15,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.0";
 
-  IUniswapV3Pool public pool;
-  int24 internal tickSpacing;
-  int24 public lowerTick;
-  int24 public upperTick;
-  int24 internal lowerTickFillup;
-  int24 internal upperTickFillup;
-  int24 public rebalanceTickRange;
-
-  // asset - collateral token
-  address public tokenA;
-
-  // borrowing (hedging) token
-  address public tokenB;
-
-  /// @notice false: tokenA == pool.token0
-  ///         true:  tokenB == pool.token1
-  bool internal _depositorSwapTokens;
-
-  uint128 internal totalLiquidity;
-  uint128 internal totalLiquidityFillup;
-
-  uint internal rebalanceEarned0;
-  uint internal rebalanceEarned1;
-  uint internal rebalanceLost;
+  UniswapV3ConverterStrategyLogicLib.State internal state;
 
   function __UniswapV3Depositor_init(
     address asset_,
@@ -47,13 +24,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     int24 rebalanceTickRange_
   ) internal onlyInitializing {
     require(pool_ != address(0), AppErrors.ZERO_ADDRESS);
-    pool = IUniswapV3Pool(pool_);
-    rebalanceTickRange = rebalanceTickRange_;
-    (tickSpacing, lowerTick, upperTick, tokenA, tokenB, _depositorSwapTokens) = UniswapV3ConverterStrategyLogicLib.initDepositor(pool, tickRange_, rebalanceTickRange_, asset_);
-  }
-
-  function _setNewTickRange() internal {
-    (lowerTick, upperTick) = UniswapV3ConverterStrategyLogicLib.setNewTickRange(pool, lowerTick, upperTick, tickSpacing);
+    state.pool = IUniswapV3Pool(pool_);
+    state.rebalanceTickRange = rebalanceTickRange_;
+    (state.tickSpacing, state.lowerTick, state.upperTick, state.tokenA, state.tokenB, state.depositorSwapTokens) = UniswapV3ConverterStrategyLogicLib.initDepositor(state.pool, tickRange_, rebalanceTickRange_, asset_);
   }
 
   /// @notice Uniswap V3 callback fn, called back on pool.mint
@@ -62,11 +35,11 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint amount1Owed,
     bytes calldata /*_data*/
   ) external override {
-    require(msg.sender == address(pool), "callback caller");
+    require(msg.sender == address(state.pool), "callback caller");
     // console.log('uniswapV3MintCallback amount0Owed', amount0Owed);
     // console.log('uniswapV3MintCallback amount1Owed', amount1Owed);
-    if (amount0Owed > 0) IERC20(_depositorSwapTokens ? tokenB : tokenA).safeTransfer(msg.sender, amount0Owed);
-    if (amount1Owed > 0) IERC20(_depositorSwapTokens ? tokenA : tokenB).safeTransfer(msg.sender, amount1Owed);
+    if (amount0Owed > 0) IERC20(state.depositorSwapTokens ? state.tokenB : state.tokenA).safeTransfer(msg.sender, amount0Owed);
+    if (amount1Owed > 0) IERC20(state.depositorSwapTokens ? state.tokenA : state.tokenB).safeTransfer(msg.sender, amount1Owed);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -77,18 +50,18 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint[] memory amountsConsumed,
     uint liquidityOut
   ) {
-    (amountsConsumed, liquidityOut, totalLiquidity) = UniswapV3ConverterStrategyLogicLib.enter(pool, lowerTick, upperTick, amountsDesired_, totalLiquidity, _depositorSwapTokens);
+    (amountsConsumed, liquidityOut, state.totalLiquidity) = UniswapV3ConverterStrategyLogicLib.enter(state.pool, state.lowerTick, state.upperTick, amountsDesired_, state.totalLiquidity, state.depositorSwapTokens);
   }
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     (uint fee0, uint fee1) = getFees();
-    rebalanceEarned0 += fee0;
-    rebalanceEarned1 += fee1;
-    (amountsOut, totalLiquidity, totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.exit(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, totalLiquidity, totalLiquidityFillup, uint128(liquidityAmount), _depositorSwapTokens);
+    state.rebalanceEarned0 += fee0;
+    state.rebalanceEarned1 += fee1;
+    (amountsOut, state.totalLiquidity, state.totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.exit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, uint128(liquidityAmount), state.depositorSwapTokens);
   }
 
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = UniswapV3ConverterStrategyLogicLib.quoteExit(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, totalLiquidity, totalLiquidityFillup, uint128(liquidityAmount), _depositorSwapTokens);
+    amountsOut = UniswapV3ConverterStrategyLogicLib.quoteExit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, uint128(liquidityAmount), state.depositorSwapTokens);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -100,27 +73,59 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    amountsOut = UniswapV3ConverterStrategyLogicLib.claimRewards(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, rebalanceEarned0, rebalanceEarned1, _depositorSwapTokens);
-    rebalanceEarned0 = 0;
-    rebalanceEarned1 = 0;
+    amountsOut = UniswapV3ConverterStrategyLogicLib.claimRewards(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.rebalanceEarned0, state.rebalanceEarned1, state.depositorSwapTokens);
+    state.rebalanceEarned0 = 0;
+    state.rebalanceEarned1 = 0;
     tokensOut = new address[](2);
-    tokensOut[0] = tokenA;
-    tokensOut[1] = tokenB;
+    tokensOut[0] = state.tokenA;
+    tokensOut[1] = state.tokenB;
   }
 
   /////////////////////////////////////////////////////////////////////
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
+  function getState() external view returns (
+    address tokenA,
+    address tokenB,
+    IUniswapV3Pool pool,
+    int24 tickSpacing,
+    int24 lowerTick,
+    int24 upperTick,
+    int24 rebalanceTickRange,
+    uint128 totalLiquidity,
+    uint rebalanceEarned0,
+    uint rebalanceEarned1,
+    uint rebalanceLost,
+    bool isFuseTriggered,
+    uint fuseThreshold
+  ) {
+    return (
+    state.tokenA,
+    state.tokenB,
+    state.pool,
+    state.tickSpacing,
+    state.lowerTick,
+    state.upperTick,
+    state.rebalanceTickRange,
+    state.totalLiquidity,
+    state.rebalanceEarned0,
+    state.rebalanceEarned1,
+    state.rebalanceLost,
+    state.isFuseTriggered,
+    state.fuseThreshold
+    );
+  }
+
   function getFees() internal view returns (uint fee0, uint fee1) {
-    return UniswapV3ConverterStrategyLogicLib.getFees(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, totalLiquidity, totalLiquidityFillup);
+    return UniswapV3ConverterStrategyLogicLib.getFees(state);
   }
 
   /// @notice Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
-    poolAssets[0] = tokenA;
-    poolAssets[1] = tokenB;
+    poolAssets[0] = state.tokenA;
+    poolAssets[1] = state.tokenB;
   }
 
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
@@ -131,14 +136,14 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   }
 
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    return UniswapV3ConverterStrategyLogicLib.getPoolReserves(pool, lowerTick, upperTick, lowerTickFillup, upperTickFillup, totalLiquidity, totalLiquidityFillup, _depositorSwapTokens);
+    return UniswapV3ConverterStrategyLogicLib.getPoolReserves(state);
   }
 
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return uint(totalLiquidity);
+    return uint(state.totalLiquidity);
   }
 
   function _depositorTotalSupply() override internal view virtual returns (uint) {
-    return uint(totalLiquidity);
+    return uint(state.totalLiquidity);
   }
 }

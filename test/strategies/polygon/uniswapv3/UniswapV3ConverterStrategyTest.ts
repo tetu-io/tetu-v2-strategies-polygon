@@ -262,10 +262,11 @@ describe('UniswapV3ConverterStrategyTests', function() {
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      const state = await strategy.getState()
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
       let price;
-      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
       console.log('tokenB price', formatUnits(price, 6))
 
       console.log('deposit...');
@@ -276,7 +277,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       await movePriceUp(signer2, strategy.address, swapAssetValueForPriceMove)
 
-      price = await swapper.getPrice(await strategy.pool(), await strategy.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
 
       expect(await strategy.isReadyToHardWork()).eq(true)
       expect(await strategy.needRebalance()).eq(true)
@@ -528,9 +529,10 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
 async function makeVolume(signer: SignerWithAddress, strategyAddress: string, amount: BigNumber) {
   const strategy = UniswapV3ConverterStrategy__factory.connect(strategyAddress, signer) as UniswapV3ConverterStrategy
+  const state = await strategy.getState()
   const swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer)
-  const tokenA = await strategy.tokenA()
-  const tokenB = await strategy.tokenB()
+  const tokenA = state.tokenA
+  const tokenB = state.tokenB
   const swapAmount = amount.div(2)
   let price
   let priceBefore
@@ -541,12 +543,12 @@ async function makeVolume(signer: SignerWithAddress, strategyAddress: string, am
   }
 
   console.log('Making pool volume...');
-  priceBefore = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+  priceBefore = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB price', formatUnits(priceBefore, 6))
   console.log('swap in pool USDC to tokenB...');
   await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString())
-  await swapper.connect(signer).swap(await strategy.pool(), tokenA, tokenB, signer.address, 10000) // 10% slippage
-  price = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+  await swapper.connect(signer).swap(state.pool, tokenA, tokenB, signer.address, 10000) // 10% slippage
+  price = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB new price', formatUnits(price, 6))
   console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
   priceBefore = price
@@ -555,17 +557,18 @@ async function makeVolume(signer: SignerWithAddress, strategyAddress: string, am
   console.log('swap in pool tokenB to USDC...');
   console.log('Swap amount of tokenB:', formatUnits(gotTokenBAmount, 18))
   await TokenUtils.transfer(tokenB, signer, swapper.address, gotTokenBAmount.toString())
-  await swapper.connect(signer).swap(await strategy.pool(), tokenB, tokenA, signer.address, 10000) // 10% slippage
-  price = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+  await swapper.connect(signer).swap(state.pool, tokenB, tokenA, signer.address, 10000) // 10% slippage
+  price = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB new price', formatUnits(price, 6))
   console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`)
 }
 
 async function movePriceUp(signer: SignerWithAddress, strategyAddress: string, amount: BigNumber) {
   const strategy = UniswapV3ConverterStrategy__factory.connect(strategyAddress, signer) as UniswapV3ConverterStrategy
+  const state = await strategy.getState()
   const swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer)
-  const tokenA = await strategy.tokenA()
-  const tokenB = await strategy.tokenB()
+  const tokenA = state.tokenA
+  const tokenB = state.tokenB
   const swapAmount = amount
   let price
   let priceBefore
@@ -575,21 +578,22 @@ async function movePriceUp(signer: SignerWithAddress, strategyAddress: string, a
   }
 
   console.log('Moving price up...');
-  priceBefore = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+  priceBefore = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB price', formatUnits(priceBefore, 6))
   console.log('swap in pool USDC to tokenB...');
   await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString())
-  await swapper.connect(signer).swap(await strategy.pool(), tokenA, tokenB, signer.address, 90000) // 90% slippage
-  price = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+  await swapper.connect(signer).swap(state.pool, tokenA, tokenB, signer.address, 90000) // 90% slippage
+  price = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB new price', formatUnits(price, 6))
   console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
 }
 
 async function movePriceDown(signer: SignerWithAddress, strategyAddress: string, amount: BigNumber) {
   const strategy = UniswapV3ConverterStrategy__factory.connect(strategyAddress, signer) as UniswapV3ConverterStrategy
+  const state = await strategy.getState()
   const swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer)
-  const tokenA = await strategy.tokenA()
-  const tokenB = await strategy.tokenB()
+  const tokenA = state.tokenA
+  const tokenB = state.tokenB
   const swapAmount = amount
   let price
   let priceBefore
@@ -599,12 +603,12 @@ async function movePriceDown(signer: SignerWithAddress, strategyAddress: string,
   }
 
   console.log('Moving price down...');
-  priceBefore = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+  priceBefore = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB price', formatUnits(priceBefore, 6))
   console.log('swap in pool tokenB to USDC...');
   await TokenUtils.transfer(tokenB, signer, swapper.address, swapAmount.toString())
-  await swapper.connect(signer).swap(await strategy.pool(), tokenB, tokenA, signer.address, 40000) // 40% slippage
-  price = await swapper.getPrice(await strategy.pool(), tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+  await swapper.connect(signer).swap(state.pool, tokenB, tokenA, signer.address, 40000) // 40% slippage
+  price = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
   console.log('tokenB new price', formatUnits(price, 6))
   console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%')
 }
