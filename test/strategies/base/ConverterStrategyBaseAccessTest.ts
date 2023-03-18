@@ -3825,7 +3825,7 @@ describe("ConverterStrategyBaseAccessTest", () => {
             weth.address, // (!) wrong asset, not registered in the depositor
             parseUnits("99", 18),
           )
-        ).revertedWith("TS-6 not found"); // ITEM_NOT_FOUND
+        ).revertedWith("SB: Wrong value"); // StrategyLib.WRONG_VALUE
       });
 
     });

@@ -639,7 +639,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // detect index of the target asset
     (v.tokens, v.indexTheAsset) = _getTokens(theAsset_);
-    require(v.indexTheAsset != type(uint).max, AppErrors.ITEM_NOT_FOUND);
+    require(v.indexTheAsset != type(uint).max, StrategyLib.WRONG_VALUE);
     v.len = v.tokens.length;
 
     // get amount of target asset available to be sent
@@ -680,6 +680,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     amountOut = Math.min(v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset], amount_);
     IERC20(theAsset_).safeTransfer(v.converter, amountOut);
     _updateBaseAmounts(v.tokens, v.withdrawnAmounts, v.spentAmounts, v.indexTheAsset, - int(amountOut));
+    _updateInvestedAssets();
+
     emit ReturnAssetToConverter(theAsset_, amountOut);
 
     // let's leave any leftovers un-invested, they will be reinvested at next hardwork
