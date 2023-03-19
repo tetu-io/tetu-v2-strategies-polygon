@@ -1059,7 +1059,7 @@ library UniswapV3ConverterStrategyLogicLib {
     notCoveredLoss : 0,
     newLowerTick : 0,
     newUpperTick : 0,
-    fillUp : false,
+    fillUp : state.fillUp,
     isStablePool : false,
     newPrice : 0
     });
@@ -1074,10 +1074,6 @@ library UniswapV3ConverterStrategyLogicLib {
       ), "No rebalancing needed");
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
-
-    /// @dev for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
-    /// @dev upperTick always greater then lowerTick
-    vars.fillUp = vars.upperTick - vars.lowerTick >= 4 * vars.tickSpacing;
 
     /// @dev for stable pools fuse can be enabled
     vars.isStablePool = isStablePool(vars.pool);
