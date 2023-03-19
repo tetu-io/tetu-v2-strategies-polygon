@@ -10,7 +10,7 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { DeployerUtilsLocal } from '../scripts/utils/DeployerUtilsLocal';
 
-const log: Logger = new Logger(logSettings);
+const log: Logger<undefined> = new Logger(logSettings);
 
 export class PriceCalculatorUtils {
 

@@ -74,27 +74,25 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     int24 upperTick,
     int24 rebalanceTickRange,
     uint128 totalLiquidity,
-    uint rebalanceEarned0,
-    uint rebalanceEarned1,
-    uint rebalanceLost,
     bool isFuseTriggered,
-    uint fuseThreshold
+    uint fuseThreshold,
+    uint[] memory rebalanceResults
   ) {
-    return (
-    state.tokenA,
-    state.tokenB,
-    state.pool,
-    state.tickSpacing,
-    state.lowerTick,
-    state.upperTick,
-    state.rebalanceTickRange,
-    state.totalLiquidity,
-    state.rebalanceEarned0,
-    state.rebalanceEarned1,
-    state.rebalanceLost,
-    state.isFuseTriggered,
-    state.fuseThreshold
-    );
+    tokenA = state.tokenA;
+    tokenB = state.tokenB;
+    pool = state.pool;
+    tickSpacing = state.tickSpacing;
+    lowerTick = state.lowerTick;
+    upperTick = state.upperTick;
+    rebalanceTickRange = state.rebalanceTickRange;
+    totalLiquidity = state.totalLiquidity;
+    isFuseTriggered = state.isFuseTriggered;
+    fuseThreshold = state.fuseThreshold;
+
+    rebalanceResults = new uint[](3);
+    rebalanceResults[0] = state.rebalanceEarned0;
+    rebalanceResults[1] = state.rebalanceEarned1;
+    rebalanceResults[2] = state.rebalanceLost;
   }
 
   /// @notice Returns the fees for the current state.
