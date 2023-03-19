@@ -11,7 +11,7 @@ import { PriceCalculatorUtils } from '../../PriceCalculatorUtils';
 import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import { DeployerUtilsLocal, IVaultStrategyInfo } from '../../../scripts/utils/DeployerUtilsLocal';
 
-const log: Logger = new Logger(logSettings);
+const log: Logger<undefined> = new Logger(logSettings);
 
 export class StrategyTestUtils {
 
@@ -27,7 +27,7 @@ export class StrategyTestUtils {
   ): Promise<IVaultStrategyInfo> {
 
     const start = Date.now();
-    log.info("Starting deploy")
+    log.info('Starting deploy');
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,
       vaultName,
@@ -36,7 +36,7 @@ export class StrategyTestUtils {
       signer,
       buffer,
       depositFee,
-      withdrawFee
+      withdrawFee,
     );
     const vault = data.vault;
     const strategy = data.strategy;
@@ -45,11 +45,11 @@ export class StrategyTestUtils {
     expect((await vault.asset()).toLowerCase()).is.eq(asset.toLowerCase());
 
     Misc.printDuration('Vault and strategy deployed and initialized', start);
-    return {vault, strategy};
+    return { vault, strategy };
   }
 
   public static async checkStrategyRewardsBalance(strategy: IStrategyV2, balances: string[]) {
-    const tokens:string[] = []; // await strategy.rewardTokens(); // TODO
+    const tokens: string[] = []; // await strategy.rewardTokens(); // TODO
     const cRatio = await strategy.compoundRatio();
     if (cRatio.toNumber() >= 1000) {
       return;
@@ -66,16 +66,16 @@ export class StrategyTestUtils {
     user: SignerWithAddress,
     vault: TetuVaultV2,
     underlying: string,
-    deposit: string
+    deposit: string,
   ) {
     const dec = await TokenUtils.decimals(underlying);
     const bal = await TokenUtils.balanceOf(underlying, user.address);
     log.info('balance', utils.formatUnits(bal, dec), bal.toString());
     expect(+utils.formatUnits(bal, dec))
-      .is.greaterThanOrEqual(+utils.formatUnits(deposit, dec), 'not enough balance')
+      .is.greaterThanOrEqual(+utils.formatUnits(deposit, dec), 'not enough balance');
     const vaultForUser = vault.connect(user);
     await TokenUtils.approve(underlying, user, vault.address, deposit);
-    log.info('deposit', BigNumber.from(deposit).toString())
+    log.info('deposit', BigNumber.from(deposit).toString());
     await vaultForUser.deposit(BigNumber.from(deposit), user.address);
   }
 
@@ -94,7 +94,7 @@ export class StrategyTestUtils {
     // TODO
     // expect(await strategy.unsalvageableTokens(underlying)).is.eq(true);
     // expect(await strategy.unsalvageableTokens(MaticAddresses.ZERO_ADDRESS)).is.eq(false);
-    expect((await strategy.compoundRatio()).toNumber()).is.lessThanOrEqual(100_000)
+    expect((await strategy.compoundRatio()).toNumber()).is.lessThanOrEqual(100_000);
     expect(await strategy.PLATFORM()).is.not.eq('');
     // expect((await strategy.assets()).length).is.not.eq(0);
     expect(!!(await strategy.totalAssets())).is.eq(true);
@@ -116,25 +116,25 @@ export class StrategyTestUtils {
   public static async setConversionPaths(forwarder: IForwarder) {
     // TODO? Looks like we do not need to init Forwarder
     /*const net = (await ethers.provider.getNetwork()).chainId;
-    const bc: string[] = JSON.parse(readFileSync(`./test/strategies/data/${net}/bc.json`, 'utf8'));
+     const bc: string[] = JSON.parse(readFileSync(`./test/strategies/data/${net}/bc.json`, 'utf8'));
 
-    const batch = 20;
-    for (let i = 0; i < bc.length / batch; i++) {
-      const l = bc.slice(i * batch, i * batch + batch)
-      log.info('addBlueChipsLps', l.length);
-      await forwarder.addBlueChipsLps(l);
-    }
+     const batch = 20;
+     for (let i = 0; i < bc.length / batch; i++) {
+     const l = bc.slice(i * batch, i * batch + batch)
+     log.info('addBlueChipsLps', l.length);
+     await forwarder.addBlueChipsLps(l);
+     }
 
-    const tokens: string[] = JSON.parse(readFileSync(`./test/strategies/data/${net}/tokens.json`, 'utf8'));
-    const lps: string[] = JSON.parse(readFileSync(`./test/strategies/data/${net}/lps.json`, 'utf8'));
-    for (let i = 0; i < tokens.length / batch; i++) {
-      const t = tokens.slice(i * batch, i * batch + batch)
-      const l = lps.slice(i * batch, i * batch + batch)
-      // log.info('t', t)
-      // log.info('l', l)
-      log.info('addLargestLps', t.length);
-      await forwarder.addLargestLps(t, l);
-    }*/
+     const tokens: string[] = JSON.parse(readFileSync(`./test/strategies/data/${net}/tokens.json`, 'utf8'));
+     const lps: string[] = JSON.parse(readFileSync(`./test/strategies/data/${net}/lps.json`, 'utf8'));
+     for (let i = 0; i < tokens.length / batch; i++) {
+     const t = tokens.slice(i * batch, i * batch + batch)
+     const l = lps.slice(i * batch, i * batch + batch)
+     // log.info('t', t)
+     // log.info('l', l)
+     log.info('addLargestLps', t.length);
+     await forwarder.addLargestLps(t, l);
+     }*/
   }
 
   public static async deployCoreAndInit(deployInfo: DeployInfo, deploy: boolean) {
@@ -168,7 +168,7 @@ export class StrategyTestUtils {
     await TokenUtils.getToken(underlying, signer.address, amountAdjusted2);
 
     for (const recipient of recipients) {
-      await TokenUtils.transfer(underlying, signer, recipient, balance.div(recipients.length + 1).toString())
+      await TokenUtils.transfer(underlying, signer, recipient, balance.div(recipients.length + 1).toString());
     }
     const signerUnderlyingBalanceFinal = await TokenUtils.balanceOf(underlying, signer.address);
     Misc.printDuration('Get underlying finished for', start);

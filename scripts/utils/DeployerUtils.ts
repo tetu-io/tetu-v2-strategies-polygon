@@ -17,7 +17,7 @@ import { ethers } from 'hardhat';
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
-const log: Logger = new Logger(logSettings);
+const log: Logger<undefined> = new Logger(logSettings);
 
 
 export class DeployerUtils {

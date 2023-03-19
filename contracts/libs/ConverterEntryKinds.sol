@@ -2,7 +2,7 @@
 pragma solidity 0.8.17;
 
 /// @notice Utils and constants related to entryKind param of ITetuConverter.findBorrowStrategy
-library EntryKinds {
+library ConverterEntryKinds {
   /// @notice Amount of collateral is fixed. Amount of borrow should be max possible.
   uint constant public ENTRY_KIND_EXACT_COLLATERAL_IN_FOR_MAX_BORROW_OUT_0 = 0;
 

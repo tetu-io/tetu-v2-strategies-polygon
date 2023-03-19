@@ -104,7 +104,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   /////////////////////////////////////////////////////////////////////////////////////
   function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     if (handleRewardsParams.initialized) {
-//      console.log("_handleRewards.mocked-version is called");
+      //      console.log("_handleRewards.mocked-version is called");
       if (handleRewardsParams.assetBalanceChange > 0) {
         IERC20(asset).transferFrom(
           handleRewardsParams.providerBalanceChange,
@@ -170,7 +170,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     int totalAssetsDelta
   ){
     if (depositToPoolParams.initialized) {
-//      console.log("_depositToPool.mocked-version is called");
+      //      console.log("_depositToPool.mocked-version is called");
       if (depositToPoolParams.balanceChange > 0) {
         IERC20(asset).transferFrom(
           depositToPoolParams.providerBalanceChange,

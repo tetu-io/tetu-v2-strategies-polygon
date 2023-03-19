@@ -56,7 +56,7 @@ describe.skip('Mock Converter Strategy tests', function() {
     await usdc.transfer(signer2.address, parseUnits('1', 6));
 
     const mockGaugeImp = await DeployerUtils.deployContract(signer, 'MockGauge') as MockGauge;
-    const gProxy = await DeployerUtils.deployContract(signer, 'ProxyControlled',) as ProxyControlled;
+    const gProxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
     await gProxy.initProxy(mockGaugeImp.address);
     mockGauge = MockGauge__factory.connect(gProxy.address, signer);
     await mockGauge.init(controller.address);
@@ -70,9 +70,9 @@ describe.skip('Mock Converter Strategy tests', function() {
       10,
     );
 
-    const sProxy = await DeployerUtils.deployContract(signer, 'ProxyControlled',) as ProxyControlled;
+    const sProxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
     const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2') as StrategySplitterV2;
-    await sProxy.initProxy(splitterImpl.address)
+    await sProxy.initProxy(splitterImpl.address);
     splitter = StrategySplitterV2__factory.connect(sProxy.address, signer);
     await splitter.init(controller.address, usdc.address, vault.address);
     await vault.setSplitter(splitter.address);

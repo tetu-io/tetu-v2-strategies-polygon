@@ -46,7 +46,8 @@ contract Reservoir {
   function drip() public returns (uint) {
     // First, read storage into memory
     EIP20Interface token_ = token;
-    uint reservoirBalance_ = token_.balanceOf(address(this)); // TODO: Verify this is a static call
+    uint reservoirBalance_ = token_.balanceOf(address(this));
+    // TODO: Verify this is a static call
     uint dripRate_ = dripRate;
     uint dripStart_ = dripStart;
     uint dripped_ = dripped;
@@ -70,7 +71,7 @@ contract Reservoir {
 
   function add(uint a, uint b, string memory errorMessage) internal pure returns (uint) {
     uint c;
-    unchecked { c = a + b; }
+  unchecked {c = a + b;}
     require(c >= a, errorMessage);
     return c;
   }
@@ -86,7 +87,7 @@ contract Reservoir {
       return 0;
     }
     uint c;
-    unchecked { c = a * b; }
+  unchecked {c = a * b;}
     require(c / a == b, errorMessage);
     return c;
   }

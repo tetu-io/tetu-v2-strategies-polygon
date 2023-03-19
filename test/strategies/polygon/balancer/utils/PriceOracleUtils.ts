@@ -30,8 +30,8 @@ export interface IPriceOracles {
 export class PriceOracleUtils {
   public static async setupMockedPriceOracleSources(
     signer: SignerWithAddress,
-    tetuConverterAddress: string
-  ) : Promise<IPriceOracles>{
+    tetuConverterAddress: string,
+  ): Promise<IPriceOracles> {
 
     // Disable all lending platforms except AAVE3
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
@@ -40,13 +40,16 @@ export class PriceOracleUtils {
 
     //  See first event for of ACLManager (AAVE_V3_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD")
     //  https://polygonscan.com/address/0xa72636cbcaa8f5ff95b2cc47f3cdee83f3294a0b#readContract
-    const AAVE_V3_POOL_OWNER = "0xdc9a35b16db4e126cfedc41322b3a36454b1f772";
+    const AAVE_V3_POOL_OWNER = '0xdc9a35b16db4e126cfedc41322b3a36454b1f772';
     const poolOwner = await Misc.impersonate(AAVE_V3_POOL_OWNER);
 
     // Set up mocked price-source to AAVE3's price oracle
     // Tetu converter uses same price oracle internally
-    const AAVE_V3_PRICE_ORACLE = "0xb023e699F5a33916Ea823A16485e259257cA8Bd1";
-    const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(AAVE_V3_PRICE_ORACLE, poolOwner);
+    const AAVE_V3_PRICE_ORACLE = '0xb023e699F5a33916Ea823A16485e259257cA8Bd1';
+    const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(
+      AAVE_V3_PRICE_ORACLE,
+      poolOwner,
+    );
 
     const priceDai = await priceOracleAsPoolOwner.getAssetPrice(MaticAddresses.DAI_TOKEN);
     const priceUsdc = await priceOracleAsPoolOwner.getAssetPrice(MaticAddresses.USDC_TOKEN);
@@ -65,9 +68,9 @@ export class PriceOracleUtils {
     const priceOracleInTetuConverter = await IPriceOracle__factory.connect(
       await IConverterController__factory.connect(
         await ITetuConverter__factory.connect(tetuConverterAddress, signer).controller(),
-        signer
+        signer,
       ).priceOracle(),
-      signer
+      signer,
     );
 
     return {
@@ -75,8 +78,8 @@ export class PriceOracleUtils {
       priceOracleAave3,
       priceOracleInTetuConverter,
       usdcPriceSource,
-      usdtPriceSource
-    }
+      usdtPriceSource,
+    };
   }
 
   public static async decPriceDai(priceOracles: IPriceOracles, percent: number) {

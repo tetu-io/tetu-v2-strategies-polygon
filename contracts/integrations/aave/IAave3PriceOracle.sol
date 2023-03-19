@@ -43,6 +43,8 @@ interface IAave3PriceOracle {
    * @return The address of the source
    */
   function getSourceOfAsset(address asset) external view returns (address);
+
   function setAssetSources(address[] memory assets, address[] memory sources) external;
+
   function setFallbackOracle(address fallbackOracle) external;
 }

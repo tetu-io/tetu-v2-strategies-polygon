@@ -1,14 +1,12 @@
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
-import {
-  IConverterController__factory, IPlatformAdapter__factory,
-  TetuConverter__factory
-} from "../../../typechain";
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
+import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
+import { IConverterController__factory, IPlatformAdapter__factory, TetuConverter__factory } from '../../../typechain';
 import {
   getConverterAddress,
-  getDForcePlatformAdapter, getHundredFinancePlatformAdapter
-} from "../../../scripts/utils/Misc";
+  getDForcePlatformAdapter,
+  getHundredFinancePlatformAdapter,
+} from '../../../scripts/utils/Misc';
 
 export class ConverterUtils {
 
@@ -44,29 +42,29 @@ export class ConverterUtils {
     console.log(`disable ${platformAdapter} done.\n\n`);
   }
 
-/*  public static async disableAaveV2(signer: SignerWithAddress) {
-    console.log('disableAaveV2...');
-    const tools = Addresses.getTools();
-    const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
-    const converterControllerAddr = await converter.controller();
-    const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
-    const converterControllerGovernanceAddr = await converterController.governance();
-    const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
-    const platformAdapterDForce = IPlatformAdapter__factory.connect(getAaveV2PlatformAdapter(), converterControllerGovernance);
-    await platformAdapterDForce.setFrozen(true);
-    console.log('disableAaveV2 done.\n\n');
-  }
+  /*  public static async disableAaveV2(signer: SignerWithAddress) {
+   console.log('disableAaveV2...');
+   const tools = Addresses.getTools();
+   const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
+   const converterControllerAddr = await converter.controller();
+   const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
+   const converterControllerGovernanceAddr = await converterController.governance();
+   const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
+   const platformAdapterDForce = IPlatformAdapter__factory.connect(getAaveV2PlatformAdapter(), converterControllerGovernance);
+   await platformAdapterDForce.setFrozen(true);
+   console.log('disableAaveV2 done.\n\n');
+   }
 
-  public static async disableAaveV3(signer: SignerWithAddress) {
-    console.log('disableAaveV3...');
-    const tools = Addresses.getTools();
-    const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
-    const converterControllerAddr = await converter.controller();
-    const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
-    const converterControllerGovernanceAddr = await converterController.governance();
-    const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
-    const platformAdapterDForce = IPlatformAdapter__factory.connect(getAaveV3PlatformAdapter(), converterControllerGovernance);
-    await platformAdapterDForce.setFrozen(true);
-    console.log('disableAaveV3 done.\n\n');
-  }*/
+   public static async disableAaveV3(signer: SignerWithAddress) {
+   console.log('disableAaveV3...');
+   const tools = Addresses.getTools();
+   const converter = ITetuConverter__factory.connect(getConverterAddress(), signer);
+   const converterControllerAddr = await converter.controller();
+   const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
+   const converterControllerGovernanceAddr = await converterController.governance();
+   const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
+   const platformAdapterDForce = IPlatformAdapter__factory.connect(getAaveV3PlatformAdapter(), converterControllerGovernance);
+   await platformAdapterDForce.setFrozen(true);
+   console.log('disableAaveV3 done.\n\n');
+   }*/
 }

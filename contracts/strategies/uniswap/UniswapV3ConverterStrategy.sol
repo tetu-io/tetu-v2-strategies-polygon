@@ -7,12 +7,40 @@ import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
+/// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
+///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
+///         It also attempts to cover rebalancing losses with rewards.
 /// @author a17
 contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase {
+
+  /////////////////////////////////////////////////////////////////////
+  ///                CONSTANTS
+  /////////////////////////////////////////////////////////////////////
+
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
   string public constant override STRATEGY_VERSION = "1.0.0";
 
+  uint internal constant DEFAULT_FUSE_THRESHOLD = 5e15;
+
+  /////////////////////////////////////////////////////////////////////
+  ///                EVENTS
+  /////////////////////////////////////////////////////////////////////
+
+  event DisableFuse();
+  event NewFuseThreshold(uint newFuseThreshold);
+
+  /////////////////////////////////////////////////////////////////////
+  ///                INIT
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Initialize the strategy with the given parameters.
+  /// @param controller_ The address of the controller.
+  /// @param splitter_ The address of the splitter.
+  /// @param converter_ The address of the converter.
+  /// @param pool_ The address of the pool.
+  /// @param tickRange_ The tick range for the liquidity position.
+  /// @param rebalanceTickRange_ The tick range for rebalancing.
   function init(
     address controller_,
     address splitter_,
@@ -27,53 +55,73 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     IERC20(state.tokenA).approve(liquidator, type(uint).max);
     IERC20(state.tokenB).approve(liquidator, type(uint).max);
 
-    /// @dev for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
-    /// @dev upperTick always greater then lowerTick
+    /// for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
+    /// upperTick always greater then lowerTick
     state.fillUp = state.upperTick - state.lowerTick >= 4 * state.tickSpacing;
 
     if (UniswapV3ConverterStrategyLogicLib.isStablePool(state.pool)) {
-      /// @dev for stable pools fuse can be enabled
+      /// for stable pools fuse can be enabled
       state.isStablePool = true;
       // 0.5% price change
-      state.fuseThreshold = 5e15;
+      state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
+      emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
       state.lastPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
     }
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ///                OPERATOR ACTIONS
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Disable fuse for the strategy.
   function disableFuse() external {
     StrategyLib.onlyOperators(controller());
     state.isFuseTriggered = false;
+    emit DisableFuse();
   }
 
+  /// @notice Set the fuse threshold for the strategy.
+  /// @param newFuseThreshold The new fuse threshold value.
   function setFuseThreshold(uint newFuseThreshold) external {
     StrategyLib.onlyOperators(controller());
     state.fuseThreshold = newFuseThreshold;
+
+    emit NewFuseThreshold(newFuseThreshold);
   }
 
-  /// @notice Is strategy ready to hard work
+  /////////////////////////////////////////////////////////////////////
+  ///                   METRIC VIEWS
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Check if the strategy is ready for hard work.
+  /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    // check claimable amounts and compare with thresholds
-    (uint fee0, uint fee1) = getFees();
-    fee0 += state.rebalanceEarned0;
-    fee1 += state.rebalanceEarned1;
-
-    if (state.depositorSwapTokens) {
-      (fee0, fee1) = (fee1, fee0);
-    }
-
-    return fee0 > liquidationThresholds[state.tokenA] || fee1 > liquidationThresholds[state.tokenB];
+    return UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state, converter);
   }
 
-  function needRebalance() public view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.needRebalance(state);
+  /// @notice Check if the strategy needs rebalancing.
+  /// @return A boolean indicating if the strategy needs rebalancing.
+  function needRebalance() external view returns (bool) {
+    return UniswapV3ConverterStrategyLogicLib.needRebalance(
+      state.isFuseTriggered,
+      state.pool,
+      state.lowerTick,
+      state.upperTick,
+      state.tickSpacing,
+      state.rebalanceTickRange
+    );
   }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                   REBALANCE
+  /////////////////////////////////////////////////////////////////////
 
   /// @dev The rebalancing functionality is the core of this strategy.
   ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
   ///      There is also an attempt to cover rebalancing losses with rewards.
   function rebalance() external {
-    StrategyLib.onlyOperators(controller());
-    require(needRebalance(), "No rebalancing needed");
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
 
     /// @dev withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
     _depositorEmergencyExit();
@@ -84,7 +132,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     ) = UniswapV3ConverterStrategyLogicLib.rebalance(
       state,
       converter,
-      controller(),
+      _controller,
       investedAssets()
     );
 
@@ -126,6 +174,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _updateInvestedAssets();
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ///                   INTERNAL LOGIC
+  /////////////////////////////////////////////////////////////////////
+
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
     uint amount_,
@@ -164,6 +216,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
+  /// @return earned The amount of earned rewards.
+  /// @return lost The amount of lost rewards.
+  /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     uint assetBalanceBefore = _balance(asset);
     _claim();
@@ -172,7 +227,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       lost = state.rebalanceLost;
       state.rebalanceLost = 0;
     }
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, _balance(asset), earned, lost);
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
     return (earned, lost, assetBalanceAfterClaim);
   }
 
@@ -189,25 +244,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ) {
     uint updatedInvestedAssets;
     (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(true);
-
     require(updatedInvestedAssets != 0, AppErrors.NO_INVESTMENTS);
-
-    if (state.isFuseTriggered) {
-      assetPrice = ConverterStrategyBaseLib.getAssetPriceFromConverter(converter, state.tokenA);
-      if (amount != 0) {
-        _updateBaseAmountsForAsset(state.tokenA, 0, amount);
-        _updateInvestedAssets();
-        investedAssetsUSD = amount * assetPrice / 1e18;
-      } else {
-        // hide warning
-        investedAssetsUSD = 0;
-      }
-    } else {
-      (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
-    }
+    (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
   }
 
   /// @notice Deposit given amount to the pool.
+  /// @param amount_ The amount to be deposited.
+  /// @param updateTotalAssetsBeforeInvest_ A boolean indicating if the total assets should be updated before investing.
+  /// @return totalAssetsDelta The change in total assets after the deposit.
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     int totalAssetsDelta
   ) {
@@ -215,7 +259,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
 
     // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / 100_000/*REINVEST_THRESHOLD_DENOMINATOR*/) {
+    if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
       if (state.isFuseTriggered) {
         uint[] memory tokenAmounts = new uint[](2);
         tokenAmounts[0] = amount_;

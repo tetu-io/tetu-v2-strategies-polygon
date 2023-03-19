@@ -65,17 +65,17 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Returns pool assets
   function _depositorPoolAssets() override internal virtual view returns (address[] memory) {
-//    console.log("_depositorPoolAssets");
+    //    console.log("_depositorPoolAssets");
     return _depositorAssets;
   }
 
   /// @dev Returns pool weights
   function _depositorPoolWeights() override internal virtual view returns (uint[] memory weights, uint totalWeight) {
-//    console.log("_depositorPoolWeights", _depositorWeights.length);
+    //    console.log("_depositorPoolWeights", _depositorWeights.length);
     weights = _depositorWeights;
     uint len = weights.length;
     totalWeight = 0;
-    for(uint i; i < len; i++) {
+    for (uint i; i < len; i++) {
       totalWeight += weights[i];
     }
   }
@@ -96,6 +96,7 @@ contract MockDepositor is DepositorBase, Initializable {
     uint[] amountsConsumed;
     uint liquidityOut;
   }
+
   DepositorEnterParams internal depositorEnterParams;
 
   function _depositorEnter(uint[] memory amountsDesired_) override internal virtual returns (
@@ -131,10 +132,10 @@ contract MockDepositor is DepositorBase, Initializable {
     uint liquidityAmount;
     uint[] amountsOut;
   }
+
   DepositorExitParams internal depositorExitParams;
 
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    // console.log("MockDepositor._depositorExit liquidityAmount", liquidityAmount, depositorExitParams.liquidityAmount);
     require(liquidityAmount == depositorExitParams.liquidityAmount, "!depositorExit");
 
     uint len = _depositorAssets.length;
@@ -152,7 +153,7 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   function setDepositorExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
-//    console.log("MockDepositor.setDepositorExit liquidityAmount", liquidityAmount_);
+    //    console.log("MockDepositor.setDepositorExit liquidityAmount", liquidityAmount_);
     depositorExitParams.liquidityAmount = liquidityAmount_;
     depositorExitParams.amountsOut = amountsOut_;
   }
@@ -182,12 +183,12 @@ contract MockDepositor is DepositorBase, Initializable {
   }
 
   function setDepositorQuoteExit(uint liquidityAmount_, uint[] memory amountsOut_) external {
-//    console.log("setDepositorQuoteExit, liquidityAmount_", liquidityAmount_);
+    //    console.log("setDepositorQuoteExit, liquidityAmount_", liquidityAmount_);
     bytes32 key = keccak256(abi.encodePacked(liquidityAmount_ + 1));
 
     DepositorQuoteExitParams memory p = DepositorQuoteExitParams({
-      liquidityAmount: liquidityAmount_,
-      amountsOut: amountsOut_
+    liquidityAmount : liquidityAmount_,
+    amountsOut : amountsOut_
     });
 
     depositorQuoteExitParams[key] = p;
@@ -200,6 +201,7 @@ contract MockDepositor is DepositorBase, Initializable {
     address[] rewardTokens;
     uint[] rewardAmounts;
   }
+
   DepositorClaimRewardsParams internal depositorClaimRewardsParams;
 
   function _depositorClaimRewards() override internal virtual returns (
