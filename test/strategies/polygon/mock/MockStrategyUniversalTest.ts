@@ -17,26 +17,26 @@ const argv = require('yargs/yargs')()
   .env('TETU')
   .options({
     disableStrategyTests: {
-      type: "boolean",
+      type: 'boolean',
       default: false,
     },
     hardhatChainId: {
-      type: "number",
-      default: 137
+      type: 'number',
+      default: 137,
     },
   }).argv;
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe.skip('Universal tests', async () => {
+describe.skip('Universal tests', async() => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
 
 
   const deployInfo: DeployInfo = new DeployInfo();
-  before(async function () {
+  before(async function() {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
   });
 
@@ -46,21 +46,21 @@ describe.skip('Universal tests', async () => {
   const vaultName = 'mock' + assetName;
   const core = Addresses.getCore();
 
-  const deployer = async (signer: SignerWithAddress) => {
+  const deployer = async(signer: SignerWithAddress) => {
 
     const controller = DeployerUtilsLocal.getController(signer);
-    const strategyDeployer = async (splitterAddress: string) => {
+    const strategyDeployer = async(splitterAddress: string) => {
       const strategy = MockStrategySimple__factory.connect(
         await DeployerUtils.deployProxy(signer, strategyName), signer);
 
       await strategy.init(
         core.controller,
         splitterAddress,
-        asset
+        asset,
       );
 
       return strategy as unknown as IStrategyV2;
-    }
+    };
 
     console.log('getControllerGovernance...');
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -68,10 +68,10 @@ describe.skip('Universal tests', async () => {
     console.log('deployAndInitVaultAndStrategy...');
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset, vaultName, strategyDeployer, controller, gov,
-      100, 250, 500, false
+      100, 250, 500, false,
     );
 
-  }
+  };
 
   /* tslint:disable:no-floating-promises */
   await startDefaultStrategyTest(
@@ -79,7 +79,7 @@ describe.skip('Universal tests', async () => {
     asset,
     assetName,
     deployInfo,
-    deployer
+    deployer,
   );
 
 

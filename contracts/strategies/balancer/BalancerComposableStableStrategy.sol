@@ -5,6 +5,7 @@ import "../ConverterStrategyBase.sol";
 import "./BalancerComposableStableDepositor.sol";
 import "../../libs/AppPlatforms.sol";
 
+// todo make BalancerComposableStableDepositor not abstract
 contract BalancerComposableStableStrategy is ConverterStrategyBase, BalancerComposableStableDepositor {
   string public constant override NAME = "Balancer Boosted Aave USD Strategy";
   string public constant override PLATFORM = AppPlatforms.BALANCER;

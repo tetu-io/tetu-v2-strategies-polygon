@@ -25,6 +25,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   }
   /// @notice keccak256(tokenIn, tokenOut) => results
   mapping(bytes32 => BuildRouteParams) public buildRouteParams;
+
   function buildRoute(
     address tokenIn,
     address tokenOut
@@ -53,6 +54,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       }
     }
   }
+
   function setBuildRoute(
     address tokenIn,
     address tokenOut,
@@ -63,11 +65,11 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     console.log("setBuildRoute", tokenIn, tokenOut);
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut));
     buildRouteParams[key] = BuildRouteParams({
-      errorMessage: errorMessage,
-      tokenIn: tokenIn,
-      tokenOut: tokenOut,
-      pool: pool,
-      swapper: swapper
+    errorMessage : errorMessage,
+    tokenIn : tokenIn,
+    tokenOut : tokenOut,
+    pool : pool,
+    swapper : swapper
     });
   }
 
@@ -101,6 +103,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       return 0;
     }
   }
+
   function setGetPriceForRoute(
     address tokenIn,
     address tokenOut,
@@ -111,12 +114,12 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   ) external {
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, pool, swapper, amount));
     getPriceForRouteParams[key] = GetPriceForRouteParams({
-      tokenIn: tokenIn,
-      tokenOut: tokenOut,
-      pool: pool,
-      swapper: swapper,
-      amount: amount,
-      priceOut: priceOut
+    tokenIn : tokenIn,
+    tokenOut : tokenOut,
+    pool : pool,
+    swapper : swapper,
+    amount : amount,
+    priceOut : priceOut
     });
   }
 
@@ -156,6 +159,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.missed");
     }
   }
+
   function setLiquidateWithRoute(
     address tokenIn,
     address tokenOut,
@@ -166,13 +170,13 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
   ) external {
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut, pool, swapper, amount));
     liquidateWithRouteParams[key] = LiquidateWithRouteParams({
-      tokenIn: tokenIn,
-      tokenOut: tokenOut,
-      pool: pool,
-      swapper: swapper,
-      amount: amount,
-      slippage: 0,
-      amountOut: amountOut
+    tokenIn : tokenIn,
+    tokenOut : tokenOut,
+    pool : pool,
+    swapper : swapper,
+    amount : amount,
+    slippage : 0,
+    amountOut : amountOut
     });
   }
 

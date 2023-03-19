@@ -1,5 +1,5 @@
 import { ethers } from 'hardhat';
-import { IERC20__factory, IERC20Extended__factory, IWmatic__factory } from '../../typechain';
+import { IERC20__factory, IERC20Metadata__factory, IWmatic__factory } from '../../typechain';
 import { BigNumber } from 'ethers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { MaticAddresses } from '../addresses/MaticAddresses';
@@ -105,15 +105,15 @@ export class TokenUtils {
   }
 
   public static async decimals(tokenAddress: string): Promise<number> {
-    return IERC20Extended__factory.connect(tokenAddress, ethers.provider).decimals();
+    return IERC20Metadata__factory.connect(tokenAddress, ethers.provider).decimals();
   }
 
   public static async tokenName(tokenAddress: string): Promise<string> {
-    return IERC20Extended__factory.connect(tokenAddress, ethers.provider).name();
+    return IERC20Metadata__factory.connect(tokenAddress, ethers.provider).name();
   }
 
   public static async tokenSymbol(tokenAddress: string): Promise<string> {
-    return IERC20Extended__factory.connect(tokenAddress, ethers.provider).symbol();
+    return IERC20Metadata__factory.connect(tokenAddress, ethers.provider).symbol();
   }
 
   public static async checkBalance(tokenAddress: string, account: string, amount: string) {

@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
-import "../interfaces/converter/ITetuConverter.sol";
-import "../interfaces/converter/ITetuConverterCallback.sol";
-import "../interfaces/converter/IPriceOracle.sol";
-import "../interfaces/converter/IConverterController.sol";
-import "../libs/TokenAmountsLib.sol";
-import "../libs/AppLib.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
 

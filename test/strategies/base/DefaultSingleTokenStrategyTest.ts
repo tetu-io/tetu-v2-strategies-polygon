@@ -35,7 +35,7 @@ async function startDefaultStrategyTest(
     _underlying: string,
     _vault: TetuVaultV2,
     _strategy: IStrategyV2,
-    _balanceTolerance: number
+    _balanceTolerance: number,
   ) => {
     return new DoHardWorkLoopBase(
       _signer,
@@ -60,4 +60,4 @@ async function startDefaultStrategyTest(
   );
 }
 
-export {startDefaultStrategyTest};
+export { startDefaultStrategyTest };

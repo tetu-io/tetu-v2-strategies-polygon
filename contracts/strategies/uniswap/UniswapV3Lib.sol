@@ -15,9 +15,9 @@ library UniswapV3Lib {
   /// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
   uint160 private constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342 - 1;
   /// @dev The minimum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**-128
-  int24 internal constant MIN_TICK = -887272;
+  int24 internal constant MIN_TICK = - 887272;
   /// @dev The maximum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**128
-  int24 internal constant MAX_TICK = -MIN_TICK;
+  int24 internal constant MAX_TICK = - MIN_TICK;
 
   struct PoolPosition {
     address pool;
@@ -65,8 +65,8 @@ library UniswapV3Lib {
     uint amount0,
     uint amount1
   ) public pure returns (uint128 liquidity) {
-  uint160 sqrtRatioAX96 = _getSqrtRatioAtTick(lowerTick);
-  uint160 sqrtRatioBX96 = _getSqrtRatioAtTick(upperTick);
+    uint160 sqrtRatioAX96 = _getSqrtRatioAtTick(lowerTick);
+    uint160 sqrtRatioBX96 = _getSqrtRatioAtTick(upperTick);
     if (sqrtRatioAX96 > sqrtRatioBX96) {
       (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
     }
@@ -373,7 +373,7 @@ library UniswapV3Lib {
   returns (uint160 sqrtPriceX96)
   {
     uint256 absTick =
-    tick < 0 ? uint256(-int256(tick)) : uint256(int256(tick));
+    tick < 0 ? uint256(- int256(tick)) : uint256(int256(tick));
 
     // EDIT: 0.8 compatibility
     require(absTick <= uint256(int256(MAX_TICK)), "T");
@@ -576,7 +576,12 @@ library UniswapV3Lib {
       log_2 := or(log_2, shl(50, f))
     }
 
-    int256 log_sqrt10001 = log_2 * 255738958999603826347141; // 128.128 number
+    tick = _getFinalTick(log_2, sqrtPriceX96);
+  }
+
+  function _getFinalTick(int256 log_2, uint160 sqrtPriceX96) internal pure returns (int24 tick) {
+    // 128.128 number
+    int256 log_sqrt10001 = log_2 * 255738958999603826347141;
 
     int24 tickLow =
     int24(
@@ -587,14 +592,14 @@ library UniswapV3Lib {
       (log_sqrt10001 + 291339464771989622907027621153398088495) >> 128
     );
 
-    tick = tickLow == tickHi
+    tick = (tickLow == tickHi)
     ? tickLow
-    : _getSqrtRatioAtTick(tickHi) <= sqrtPriceX96
+    : (_getSqrtRatioAtTick(tickHi) <= sqrtPriceX96
     ? tickHi
-    : tickLow;
+    : tickLow);
   }
 
-  function _getPositionId(PoolPosition memory position) internal pure returns(bytes32) {
+  function _getPositionId(PoolPosition memory position) internal pure returns (bytes32) {
     return keccak256(abi.encodePacked(position.owner, position.lowerTick, position.upperTick));
   }
 

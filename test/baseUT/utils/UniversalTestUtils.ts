@@ -44,27 +44,31 @@ export class UniversalTestUtils {
     asset: string,
     tetuConverterAddress: string,
     strategyName: string,
-    strategyFactory: (strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => Promise<IStrategyV2>,
-    params?: IMakeStrategyDeployerInputParams
-  ) : Promise<IVaultStrategyInfo> {
+    strategyFactory: (
+      strategyProxy: string,
+      signerOrProvider: Signer | Provider,
+      splitterAddress: string,
+    ) => Promise<IStrategyV2>,
+    params?: IMakeStrategyDeployerInputParams,
+  ): Promise<IVaultStrategyInfo> {
     const controller = DeployerUtilsLocal.getController(signer);
 
-    const strategyDeployer = async (splitterAddress: string) => {
+    const strategyDeployer = async(splitterAddress: string) => {
       const strategyProxy = await DeployerUtils.deployProxy(signer, strategyName);
       return strategyFactory(strategyProxy, signer, splitterAddress);
-    }
+    };
 
     const governance = await DeployerUtilsLocal.getControllerGovernance(signer);
     return DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,
-      params?.vaultName || "vault",
+      params?.vaultName || 'vault',
       strategyDeployer,
       controller,
       governance,
       params?.buffer || 100,
       params?.depositFee || 250,
       params?.withdrawFee || 500,
-      params?.wait || false
+      params?.wait || false,
     );
   }
 
@@ -74,21 +78,21 @@ export class UniversalTestUtils {
     asset: string,
     tetuConverterAddress: string,
     strategyName: string,
-    params?: IMakeStrategyDeployerInputParams
-  ) : Promise<IVaultStrategyInfo> {
+    params?: IMakeStrategyDeployerInputParams,
+  ): Promise<IVaultStrategyInfo> {
     return this.makeStrategyDeployer(
       signer,
       core,
       asset,
       tetuConverterAddress,
       strategyName,
-      async (strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
+      async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
         const strategy = BalancerComposableStableStrategy__factory.connect(strategyProxy, signer);
         await strategy.init(core.controller, splitterAddress, tetuConverterAddress);
         return strategy as unknown as IStrategyV2;
       },
-      params
-    )
+      params,
+    );
   }
 
   public static async setCompoundRatio(strategy: IStrategyV2, user: SignerWithAddress, compoundRate?: number) {
@@ -97,7 +101,7 @@ export class UniversalTestUtils {
       const platformVoter = await IController__factory.connect(controller, user).platformVoter();
       const strategyAsPlatformVoter = await StrategyBaseV2__factory.connect(
         strategy.address,
-        await Misc.impersonate(platformVoter)
+        await Misc.impersonate(platformVoter),
       );
       await strategyAsPlatformVoter.setCompoundRatio(compoundRate);
     }
@@ -116,15 +120,15 @@ export class UniversalTestUtils {
   /**
    * Finds event "LossCovered(lossValue)" in {tx}, returns {lossValue}
    */
-  public static async extractLossCovered(cr: ContractReceipt, vaultAddress: string) : Promise<BigNumber | undefined> {
+  public static async extractLossCovered(cr: ContractReceipt, vaultAddress: string): Promise<BigNumber | undefined> {
     if (cr.events) {
       for (const event of cr.events) {
         if (event.address === vaultAddress) {
-          if (event.event === "LossCovered") {
+          if (event.event === 'LossCovered') {
             if (event.args) {
-              console.log("vault", vaultAddress);
+              console.log('vault', vaultAddress);
               if (event.args.length > 0) {
-                console.log("recoveredLoss", event.args[0]);
+                console.log('recoveredLoss', event.args[0]);
                 return event.args[0];
               }
             }
@@ -134,16 +138,16 @@ export class UniversalTestUtils {
     }
   }
 
-  public static async extractDistributed(cr: ContractReceipt, forwarder: string) : Promise<IDistributedInfo[]> {
+  public static async extractDistributed(cr: ContractReceipt, forwarder: string): Promise<IDistributedInfo[]> {
     const dest: IDistributedInfo[] = [];
     if (cr.events) {
       for (const event of cr.events) {
-        console.log("Event", event.address, event.event);
+        console.log('Event', event.address, event.event);
         if (event.address === forwarder) {
-          console.log("Forwarder event", event);
-          if (event.event === "Distributed") {
+          console.log('Forwarder event', event);
+          if (event.event === 'Distributed') {
             if (event.args) {
-              console.log("Distributed", event.args);
+              console.log('Distributed', event.args);
               dest.push({
                 sender: event.args[0],
                 incomeToken: event.args[1],
@@ -152,7 +156,7 @@ export class UniversalTestUtils {
                 tetuBalance: event.args[4],
                 toInvestFund: event.args[5],
                 toGauges: event.args[6],
-                toBribes: event.args[7]
+                toBribes: event.args[7],
               });
             }
           }
@@ -163,7 +167,7 @@ export class UniversalTestUtils {
     return dest;
   }
 
-  public static async getAnOperator(strategy: string, signer: SignerWithAddress) : Promise<SignerWithAddress> {
+  public static async getAnOperator(strategy: string, signer: SignerWithAddress): Promise<SignerWithAddress> {
     const controller = await StrategyBaseV2__factory.connect(strategy, signer).controller();
     const controllerAsUser = await ControllerV2__factory.connect(controller, signer);
     const operators = await controllerAsUser.operatorsList();

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: ISC
 pragma solidity 0.8.17;
 
-import "../../interfaces/converter/IPriceOracle.sol";
+
+import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib

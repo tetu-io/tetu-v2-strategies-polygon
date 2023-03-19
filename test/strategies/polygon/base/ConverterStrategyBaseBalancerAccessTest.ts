@@ -47,8 +47,8 @@ import { expect } from 'chai';
  * Test of ConverterStrategyBase using direct access to internal functions
  * through BalancerComposableStableStrategyAccess (so, real depositor is used)
  */
-describe("ConverterStrategyBaseBalancerAccessTest", function() {
-//region Constants and variables
+describe('ConverterStrategyBaseBalancerAccessTest', function() {
+  //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
 
   let snapshotBefore: string;
@@ -58,14 +58,14 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
   let tetuConverterAddress: string;
   let user: SignerWithAddress;
 
-//endregion Constants and variables
+  //endregion Constants and variables
 
-//region before, after
-  before(async function () {
+  //region before, after
+  before(async function() {
     signer = await DeployerUtilsLocal.impersonate(); // governance by default
     user = (await ethers.getSigners())[1];
-    console.log("signer", signer.address);
-    console.log("user", user.address);
+    console.log('signer', signer.address);
+    console.log('user', user.address);
 
     snapshotBefore = await TimeUtils.snapshot();
 
@@ -82,22 +82,22 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
     await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
   });
 
-  after(async function () {
+  after(async function() {
     await TimeUtils.rollback(snapshotBefore);
   });
 
-  beforeEach(async function () {
+  beforeEach(async function() {
     snapshot = await TimeUtils.snapshot();
   });
 
-  afterEach(async function () {
+  afterEach(async function() {
     await TimeUtils.rollback(snapshot);
   });
-//endregion before, after
+  //endregion before, after
 
-//region Unit tests
-  describe("Use single strategy ConverterStrategyBaseBalancerAccess", () => {
-//region constants, variables, before, after
+  //region Unit tests
+  describe('Use single strategy ConverterStrategyBaseBalancerAccess', () => {
+    //region constants, variables, before, after
     const COMPOUND_RATIO = 50_000;
     const REINVEST_THRESHOLD_PERCENT = 1_000;
     const DEPOSIT_AMOUNT = 100_000;
@@ -122,15 +122,15 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
     /**
      * DEPOSIT_AMOUNT => user, DEPOSIT_AMOUNT/2 => signer, DEPOSIT_AMOUNT/2 => liquidator
      */
-    async function enterToVault() : Promise<IState> {
+    async function enterToVault(): Promise<IState> {
       await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
       await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
       await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-      return BalancerIntTestUtils.getState(signer, user, strategy, vault, "enterToVault");
+      return BalancerIntTestUtils.getState(signer, user, strategy, vault, 'enterToVault');
     }
 
-    before(async function () {
+    before(async function() {
       [signer] = await ethers.getSigners();
       localSnapshotBefore = await TimeUtils.snapshot();
 
@@ -142,8 +142,8 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
         addresses,
         MAIN_ASSET,
         tetuConverterAddress,
-        "BalancerComposableStableStrategyAccess",
-        async (strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
+        'BalancerComposableStableStrategyAccess',
+        async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
           const _strategy = BalancerComposableStableStrategyAccess__factory.connect(strategyProxy, signer);
           await _strategy.init(addresses.controller, splitterAddress, tetuConverterAddress);
           return _strategy as unknown as IStrategyV2;
@@ -151,8 +151,8 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
         {
           depositFee: DEPOSIT_FEE,
           buffer: BUFFER,
-          withdrawFee: WITHDRAW_FEE
-        }
+          withdrawFee: WITHDRAW_FEE,
+        },
       );
 
       vault = data.vault;
@@ -160,16 +160,16 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
       strategy = data.strategy as unknown as BalancerComposableStableStrategyAccess;
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
-      console.log("vault", vault.address);
-      console.log("strategy", strategy.address);
-      console.log("splitter", splitter.address);
-      console.log("forwarder", forwarder);
+      console.log('vault', vault.address);
+      console.log('strategy', strategy.address);
+      console.log('splitter', splitter.address);
+      console.log('forwarder', forwarder);
 
       await UniversalTestUtils.setCompoundRatio(strategy as unknown as IStrategyV2, user, COMPOUND_RATIO);
       await BalancerIntTestUtils.setThresholds(
         strategy as unknown as IStrategyV2,
         user,
-        {reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT}
+        { reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT },
       );
 
       initialBalances = await BalancerIntTestUtils.putInitialAmountsToBalances(
@@ -187,79 +187,79 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
       priceOracle = IPriceOracle__factory.connect(await tetuController.priceOracle(), signer);
     });
 
-    after(async function () {
+    after(async function() {
       await TimeUtils.rollback(localSnapshotBefore);
     });
 
-    beforeEach(async function () {
+    beforeEach(async function() {
       localSnapshot = await TimeUtils.snapshot();
     });
 
-    afterEach(async function () {
+    afterEach(async function() {
       await TimeUtils.rollback(localSnapshot);
     });
-//endregion constants, variables, before, after
+    //endregion constants, variables, before, after
 
-    describe("_depositToPoolAccess", () => {
-      it("should return expected totalAssetsDelta, updateTotalAssetsBeforeInvest_ = true", async () => {
+    describe('_depositToPoolAccess', () => {
+      it('should return expected totalAssetsDelta, updateTotalAssetsBeforeInvest_ = true', async() => {
         // increase invested assets amount on 1 USDT
-        await strategy.setBaseAmountAccess(PolygonAddresses.USDT_TOKEN, parseUnits("1", 6));
-        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits("77", 6));
+        await strategy.setBaseAmountAccess(PolygonAddresses.USDT_TOKEN, parseUnits('1', 6));
+        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits('77', 6));
 
         // deposit 77 USDC
         await IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_USDC))
-          .transfer(strategy.address, parseUnits("77", 6));
-        const ret = await strategy.callStatic._depositToPoolAccess(parseUnits("77", 6), true);
+          .transfer(strategy.address, parseUnits('77', 6));
+        const ret = await strategy.callStatic._depositToPoolAccess(parseUnits('77', 6), true);
 
         const priceUSDC = await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN);
         const priceUSDT = await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
-        const expectedTotalAssetsDelta = parseUnits("1", 6).mul(priceUSDT).div(priceUSDC);
+        const expectedTotalAssetsDelta = parseUnits('1', 6).mul(priceUSDT).div(priceUSDC);
         expect(ret).eq(expectedTotalAssetsDelta);
       });
-      it("should return zero totalAssetsDelta, updateTotalAssetsBeforeInvest_ = false", async () => {
+      it('should return zero totalAssetsDelta, updateTotalAssetsBeforeInvest_ = false', async() => {
         // increase invested assets amount on 1 USDT
-        await strategy.setBaseAmountAccess(PolygonAddresses.USDT_TOKEN, parseUnits("1", 6));
-        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits("77", 6));
+        await strategy.setBaseAmountAccess(PolygonAddresses.USDT_TOKEN, parseUnits('1', 6));
+        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits('77', 6));
 
         // deposit 77 USDC
         await IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_USDC))
-          .transfer(strategy.address, parseUnits("77", 6));
-        const ret = await strategy.callStatic._depositToPoolAccess(parseUnits("77", 6), false);
+          .transfer(strategy.address, parseUnits('77', 6));
+        const ret = await strategy.callStatic._depositToPoolAccess(parseUnits('77', 6), false);
 
         expect(ret).eq(0);
       });
     });
 
-    describe("_withdrawFromPool", () => {
-      it("should return expected totalAssetsDelta", async () => {
-        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits("77", 6));
+    describe('_withdrawFromPool', () => {
+      it('should return expected totalAssetsDelta', async() => {
+        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits('77', 6));
 
         // deposit 77 USDC
         await IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_USDC))
-          .transfer(strategy.address, parseUnits("77", 6));
-        await strategy._depositToPoolAccess(parseUnits("77", 6), true);
+          .transfer(strategy.address, parseUnits('77', 6));
+        await strategy._depositToPoolAccess(parseUnits('77', 6), true);
 
         // increase invested assets amount on 1 USDT before withdraw
         await strategy.setBaseAmountAccess(
           PolygonAddresses.USDT_TOKEN,
-          (await strategy.baseAmounts(PolygonAddresses.USDT_TOKEN)).add(parseUnits("1", 6))
+          (await strategy.baseAmounts(PolygonAddresses.USDT_TOKEN)).add(parseUnits('1', 6)),
         );
         await IERC20__factory.connect(PolygonAddresses.USDT_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_USDC))
-          .transfer(strategy.address, parseUnits("1", 6));
+          .transfer(strategy.address, parseUnits('1', 6));
 
         // withdraw
-        const r = await strategy.callStatic._withdrawFromPoolAccess(parseUnits("55", 6));
+        const r = await strategy.callStatic._withdrawFromPoolAccess(parseUnits('55', 6));
 
         const priceUSDC = await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN);
         const priceUSDT = await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN);
-        console.log("priceUSDC", priceUSDC);
-        console.log("priceUSDT", priceUSDT);
+        console.log('priceUSDC', priceUSDC);
+        console.log('priceUSDT', priceUSDT);
 
-        const expectedTotalAssetsDelta = parseUnits("1", 6).mul(priceUSDT).div(priceUSDC);
+        const expectedTotalAssetsDelta = parseUnits('1', 6).mul(priceUSDT).div(priceUSDC);
 
-        console.log("ret", r);
-        console.log("expectedTotalAssetsDelta", expectedTotalAssetsDelta.toString());
+        console.log('ret', r);
+        console.log('expectedTotalAssetsDelta', expectedTotalAssetsDelta.toString());
 
         const ret = r.totalAssetsDelta.sub(expectedTotalAssetsDelta).abs();
 
@@ -269,22 +269,22 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
       });
     });
 
-    describe("_withdrawAllFromPool", () => {
-      it("should return expected totalAssetsDelta", async () => {
-        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits("77", 6));
+    describe('_withdrawAllFromPool', () => {
+      it('should return expected totalAssetsDelta', async() => {
+        await strategy.setBaseAmountAccess(PolygonAddresses.USDC_TOKEN, parseUnits('77', 6));
 
         // deposit 77 USDC
         await IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_USDC))
-          .transfer(strategy.address, parseUnits("77", 6));
-        await strategy._depositToPoolAccess(parseUnits("77", 6), true);
+          .transfer(strategy.address, parseUnits('77', 6));
+        await strategy._depositToPoolAccess(parseUnits('77', 6), true);
 
         // increase invested assets amount on 1 USDT before withdraw
         await strategy.setBaseAmountAccess(
           PolygonAddresses.USDT_TOKEN,
-          (await strategy.baseAmounts(PolygonAddresses.USDT_TOKEN)).add(parseUnits("1", 6))
+          (await strategy.baseAmounts(PolygonAddresses.USDT_TOKEN)).add(parseUnits('1', 6)),
         );
         await IERC20__factory.connect(PolygonAddresses.USDT_TOKEN, await Misc.impersonate(MaticHolders.HOLDER_USDC))
-          .transfer(strategy.address, parseUnits("1", 6));
+          .transfer(strategy.address, parseUnits('1', 6));
 
         // withdraw
         const r = await strategy.callStatic._withdrawAllFromPoolAccess();
@@ -292,10 +292,10 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
         const priceUSDC = await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN);
         const priceUSDT = await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
-        const expectedTotalAssetsDelta = parseUnits("1", 6).mul(priceUSDT).div(priceUSDC);
+        const expectedTotalAssetsDelta = parseUnits('1', 6).mul(priceUSDT).div(priceUSDC);
 
-        console.log("ret", r);
-        console.log("expectedTotalAssetsDelta", expectedTotalAssetsDelta.toString());
+        console.log('ret', r);
+        console.log('expectedTotalAssetsDelta', expectedTotalAssetsDelta.toString());
 
         const ret = r.totalAssetsDelta.sub(expectedTotalAssetsDelta).abs();
 
@@ -307,5 +307,5 @@ describe("ConverterStrategyBaseBalancerAccessTest", function() {
     });
   });
 
-//endregion Unit tests
+  //endregion Unit tests
 });

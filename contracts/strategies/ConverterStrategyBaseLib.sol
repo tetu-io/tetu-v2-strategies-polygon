@@ -3,19 +3,13 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
-import "../interfaces/converter/IPriceOracle.sol";
-import "../interfaces/converter/ITetuConverter.sol";
-import "../interfaces/converter/IConverterController.sol";
-import "../interfaces/converter/EntryKinds.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
+import "../libs/ConverterEntryKinds.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -377,8 +371,8 @@ library ConverterStrategyBaseLib {
 
     OpenPositionLocal memory vars;
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
-    vars.entryKind = EntryKinds.getEntryKind(entryData_);
-    if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_PROPORTION_1) {
+    vars.entryKind = ConverterEntryKinds.getEntryKind(entryData_);
+    if (vars.entryKind == ConverterEntryKinds.ENTRY_KIND_EXACT_PROPORTION_1) {
       return openPositionEntryKind1(
         tetuConverter_,
         entryData_,
@@ -402,25 +396,25 @@ library ConverterStrategyBaseLib {
           // we need to approve collateralAmount before the borrow-call but it's already approved, see above comments
           vars.collateral;
           vars.amountToBorrow;
-          if (vars.entryKind == EntryKinds.ENTRY_KIND_EXACT_COLLATERAL_IN_FOR_MAX_BORROW_OUT_0) {
+          if (vars.entryKind == ConverterEntryKinds.ENTRY_KIND_EXACT_COLLATERAL_IN_FOR_MAX_BORROW_OUT_0) {
             // we have exact amount of total collateral amount
             // Case ENTRY_KIND_EXACT_PROPORTION_1 is here too because we consider first platform only
             vars.collateral = amountIn_ < vars.collateralsRequired[i]
-              ? amountIn_
-              : vars.collateralsRequired[i];
+            ? amountIn_
+            : vars.collateralsRequired[i];
             vars.amountToBorrow = amountIn_ < vars.collateralsRequired[i]
-              ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
-              : vars.amountsToBorrow[i];
+            ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
+            : vars.amountsToBorrow[i];
             amountIn_ -= vars.collateral;
           } else {
             // assume here that entryKind == EntryKinds.ENTRY_KIND_EXACT_BORROW_OUT_FOR_MIN_COLLATERAL_IN_2
             // we have exact amount of total amount-to-borrow
             vars.amountToBorrow = amountIn_ < vars.amountsToBorrow[i]
-              ? amountIn_
-              : vars.amountsToBorrow[i];
+            ? amountIn_
+            : vars.amountsToBorrow[i];
             vars.collateral = amountIn_ < vars.amountsToBorrow[i]
-              ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
-              : vars.collateralsRequired[i];
+            ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
+            : vars.collateralsRequired[i];
             amountIn_ -= vars.amountToBorrow;
           }
 
@@ -502,9 +496,10 @@ library ConverterStrategyBaseLib {
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
         vars.c1 = x * vars.c3 / y;
         vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
-          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
-          : 1e18;
-        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18; // c2
+        ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
+        : 1e18;
+        // c2
+        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
         vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
 
         vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
@@ -565,7 +560,7 @@ library ConverterStrategyBaseLib {
     uint priceCollateral = priceOracle.getAssetPrice(collateralAsset_);
     uint priceBorrow = priceOracle.getAssetPrice(borrowAsset_);
     return 1e18 * priceBorrow * 10 ** IERC20Metadata(collateralAsset_).decimals()
-           / priceCollateral / 10 ** IERC20Metadata(borrowAsset_).decimals();
+    / priceCollateral / 10 ** IERC20Metadata(borrowAsset_).decimals();
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -650,7 +645,7 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_ // todo Probably it worth to use threshold for amount IN? it would be more gas efficient
+    uint liquidationThresholdForTokenOut_
   ) external returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -667,7 +662,7 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_ // todo Probably it worth to use threshold for amount IN? it would be more gas efficient
+    uint liquidationThresholdForTokenOut_
   ) internal returns (
     uint spentAmountIn,
     uint receivedAmountOut

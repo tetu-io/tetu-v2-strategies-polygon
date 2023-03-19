@@ -13,12 +13,19 @@ interface IChildChainLiquidityGaugeFactory {
   function create(address pool) external returns (address);
 
   function getChildChainStreamerImplementation() external view returns (address);
+
   function getGaugeImplementation() external view returns (address);
+
   function getGaugePool(address gauge) external view returns (address);
+
   function getGaugeStreamer(address gauge) external view returns (address);
+
   function getPoolGauge(address pool) external view returns (address);
+
   function getPoolStreamer(address pool) external view returns (address);
+
   function isGaugeFromFactory(address gauge) external view returns (bool);
+
   function isStreamerFromFactory(address streamer) external view returns (bool);
 }
 

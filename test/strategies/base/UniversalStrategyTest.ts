@@ -63,12 +63,12 @@ async function universalStrategyTest(
     underlying: string,
     vault: TetuVaultV2,
     strategy: IStrategyV2,
-    balanceTolerance: number
+    balanceTolerance: number,
   ) => DoHardWorkLoopBase,
-  params: IUniversalStrategyInputParams
+  params: IUniversalStrategyInputParams,
 ) {
 
-  describe(name + "_Test", async function () {
+  describe(name + '_Test', async function() {
     let snapshotBefore: string;
     let snapshot: string;
     let signer: SignerWithAddress;
@@ -78,8 +78,8 @@ async function universalStrategyTest(
     let strategy: IStrategyV2;
     let userBalance: BigNumber;
 
-//region Before, after
-    before(async function () {
+    //region Before, after
+    before(async function() {
       const start = Date.now();
       snapshotBefore = await TimeUtils.snapshot();
       signer = await DeployerUtilsLocal.impersonate(); // governance by default
@@ -120,27 +120,27 @@ async function universalStrategyTest(
       }
 
       // display initial balances
-      console.log("Balance of signer", await IERC20__factory.connect(asset, signer).balanceOf(signer.address));
-      console.log("Balance of user", await IERC20__factory.connect(asset, signer).balanceOf(user.address));
+      console.log('Balance of signer', await IERC20__factory.connect(asset, signer).balanceOf(signer.address));
+      console.log('Balance of user', await IERC20__factory.connect(asset, signer).balanceOf(user.address));
 
       Misc.printDuration('Test Preparations completed', start);
     });
 
-    beforeEach(async function () {
+    beforeEach(async function() {
       snapshot = await TimeUtils.snapshot();
     });
 
-    afterEach(async function () {
+    afterEach(async function() {
       await TimeUtils.rollback(snapshot);
     });
 
-    after(async function () {
+    after(async function() {
       await TimeUtils.rollback(snapshotBefore);
     });
-//endregion Before, after
+    //endregion Before, after
 
-//region Unit tests
-    it("doHardWork loop", async function () {
+    //region Unit tests
+    it('doHardWork loop', async function() {
       const core = deployInfo.core as ICoreContractsWrapper;
       const tools = deployInfo.tools as IToolsContractsWrapper;
       await hardworkInitiator(
@@ -158,20 +158,20 @@ async function universalStrategyTest(
         params.loopValue,
         params.advanceBlocks,
         params.hwParams,
-        params.stateRegistrar
+        params.stateRegistrar,
       );
     });
 
-    it("common test should be ok", async () => {
+    it('common test should be ok', async() => {
       await StrategyTestUtils.commonTests(strategy, asset);
     });
 
     if (params.specificTests) {
       params.specificTests?.forEach(test => test.do(deployInfo));
     }
-//endregion Unit tests
+    //endregion Unit tests
 
   });
 }
 
-export {universalStrategyTest};
+export { universalStrategyTest };

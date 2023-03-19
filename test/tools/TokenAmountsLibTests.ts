@@ -14,43 +14,28 @@ import {
 import { controlGasLimitsEx } from '../../scripts/utils/GasLimitUtils';
 
 
-const {expect} = chai;
+const { expect } = chai;
 chai.use(chaiAsPromised);
 
-describe('TokenAmountsLib tests', function () {
+describe('TokenAmountsLib tests', function() {
   let signer: SignerWithAddress;
 
   let lib: TokenAmountsLibTest;
   const _addr = utils.getAddress;
 
-  before(async function () {
-    [signer] = await ethers.getSigners()
+  before(async function() {
+    [signer] = await ethers.getSigners();
 
     lib = await DeployerUtils.deployContract(signer, 'TokenAmountsLibTest') as TokenAmountsLibTest;
   });
 
   ////////////////////////// TESTS ///////////////////////////
 
-  it('print', async () => {
-    const tokens = [
-      PA.USDC_TOKEN,
-      PA.DAI_TOKEN,
-      PA.TETU_TOKEN,
-      ethers.constants.AddressZero,
-      '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-      PA.ONE_INCH_ROUTER
-    ];
-    const amounts = [1, 2, 3, 0, 9, 555];
-    await lib.print(tokens, amounts);
-    await expect(lib.print(tokens, [])).revertedWith('TAL: Arrays mismatch');
-    await expect(lib.print([], amounts)).revertedWith('TAL: Arrays mismatch');
-  });
+  describe('filterZeroAmounts', async() => {
 
-  describe('filterZeroAmounts', async () => {
-
-    describe("Good paths", () => {
-      describe("Zero amounts exist", () => {
-        it('at index 0', async () => {
+    describe('Good paths', () => {
+      describe('Zero amounts exist', () => {
+        it('at index 0', async() => {
           const tokens = [
             PA.USDC_TOKEN,
             PA.DAI_TOKEN,
@@ -58,7 +43,7 @@ describe('TokenAmountsLib tests', function () {
           ];
           const amounts = [0, 1, 2];
           const filtered = await lib.filterZeroAmounts(tokens, amounts);
-          await lib.print(filtered[0], filtered[1]);
+          // await lib.print(filtered[0], filtered[1]);
 
           expect(filtered[0].length).eq(2);
           expect(filtered[0]).deep.equal([
@@ -69,7 +54,7 @@ describe('TokenAmountsLib tests', function () {
           expect(filtered[1][1]).eq(2);
         });
 
-        it('at index 1', async () => {
+        it('at index 1', async() => {
           const tokens = [
             PA.USDC_TOKEN,
             PA.DAI_TOKEN,
@@ -77,7 +62,7 @@ describe('TokenAmountsLib tests', function () {
           ];
           const amounts = [1, 0, 2];
           const filtered = await lib.filterZeroAmounts(tokens, amounts);
-          await lib.print(filtered[0], filtered[1]);
+          // await lib.print(filtered[0], filtered[1]);
 
           expect(filtered[0].length).eq(2);
           expect(filtered[0]).deep.equal([
@@ -88,7 +73,7 @@ describe('TokenAmountsLib tests', function () {
           expect(filtered[1][1]).eq(2);
         });
 
-        it('at index 2', async () => {
+        it('at index 2', async() => {
           const tokens = [
             PA.USDC_TOKEN,
             PA.DAI_TOKEN,
@@ -96,7 +81,7 @@ describe('TokenAmountsLib tests', function () {
           ];
           const amounts = [1, 2, 0];
           const filtered = await lib.filterZeroAmounts(tokens, amounts);
-          await lib.print(filtered[0], filtered[1]);
+          // await lib.print(filtered[0], filtered[1]);
 
           expect(filtered[0].length).eq(2);
           expect(filtered[0]).deep.equal([
@@ -107,7 +92,7 @@ describe('TokenAmountsLib tests', function () {
           expect(filtered[1][1]).eq(2);
         });
 
-        it('all zeros', async () => {
+        it('all zeros', async() => {
           const tokens = [
             PA.USDC_TOKEN,
             PA.DAI_TOKEN,
@@ -115,25 +100,25 @@ describe('TokenAmountsLib tests', function () {
           ];
           const amounts = [0, 0, 0];
           const filtered = await lib.filterZeroAmounts(tokens, amounts);
-          await lib.print(filtered[0], filtered[1]);
+          // await lib.print(filtered[0], filtered[1]);
 
           expect(filtered[0].length).eq(0);
           expect(filtered[1].length).eq(0);
         });
       });
-      it('empty array', async () => {
+      it('empty array', async() => {
         const tokens: string[] = [];
         const amounts: BigNumber[] = [];
         const filtered = await lib.filterZeroAmounts(tokens, amounts);
-        await lib.print(filtered[0], filtered[1]);
+        // await lib.print(filtered[0], filtered[1]);
 
         expect(filtered[0].length).eq(0);
         expect(filtered[1].length).eq(0);
       });
     });
 
-    describe("Bad paths", () => {
-      it('array mismatch', async () => {
+    describe('Bad paths', () => {
+      it('array mismatch', async() => {
         const tokens = [
           PA.USDC_TOKEN,
           PA.DAI_TOKEN,
@@ -145,8 +130,8 @@ describe('TokenAmountsLib tests', function () {
       });
     });
 
-    describe("Gas estimation @skip-on-coverage", () => {
-      it('Two tokens, no zero amounts', async () => {
+    describe('Gas estimation @skip-on-coverage', () => {
+      it('Two tokens, no zero amounts', async() => {
         const tokens = [PA.USDC_TOKEN, PA.DAI_TOKEN];
         const amounts = [1, 2];
         const gasUsed = await lib.estimateGas.filterZeroAmounts(tokens, amounts);
@@ -156,7 +141,7 @@ describe('TokenAmountsLib tests', function () {
         });
       });
 
-      it('Two tokens, both amounts are zero', async () => {
+      it('Two tokens, both amounts are zero', async() => {
         const tokens = [PA.USDC_TOKEN, PA.DAI_TOKEN];
         const amounts = [0, 0];
         const gasUsed = await lib.estimateGas.filterZeroAmounts(tokens, amounts);
@@ -166,7 +151,7 @@ describe('TokenAmountsLib tests', function () {
         });
       });
 
-      it('Two tokens, second amount is zero', async () => {
+      it('Two tokens, second amount is zero', async() => {
         const tokens = [PA.USDC_TOKEN, PA.DAI_TOKEN];
         const amounts = [1, 0];
         const gasUsed = await lib.estimateGas.filterZeroAmounts(tokens, amounts);
@@ -178,21 +163,21 @@ describe('TokenAmountsLib tests', function () {
     });
   });
 
-  describe('unite', async () => {
+  describe('unite', async() => {
 
-    it('empty + empty', async () => {
+    it('empty + empty', async() => {
       const tokens1: string[] = [];
       const amounts1: BigNumber[] = [];
       const tokens2: string[] = [];
       const amounts2: BigNumber[] = [];
       const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      await lib.print(united[0], united[1]);
+      // await lib.print(united[0], united[1]);
 
       expect(united[0].length).eq(0);
       expect(united[1].length).eq(0);
     });
 
-    it('array + empty', async () => {
+    it('array + empty', async() => {
       const tokens1 = [
         PA.USDC_TOKEN,
         PA.DAI_TOKEN,
@@ -202,7 +187,7 @@ describe('TokenAmountsLib tests', function () {
       const tokens2: string[] = [];
       const amounts2: BigNumber[] = [];
       const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      await lib.print(united[0], united[1]);
+      // await lib.print(united[0], united[1]);
 
       expect(united[0].length).eq(3);
       expect(united[1].length).eq(3);
@@ -216,7 +201,7 @@ describe('TokenAmountsLib tests', function () {
       expect(united[1][2]).eq(3);
     });
 
-    it('empty + array', async () => {
+    it('empty + array', async() => {
       const tokens1 = [
         PA.USDC_TOKEN,
         PA.DAI_TOKEN,
@@ -226,7 +211,7 @@ describe('TokenAmountsLib tests', function () {
       const tokens2: string[] = [];
       const amounts2: BigNumber[] = [];
       const united = await lib.unite(tokens2, amounts2, tokens1, amounts1);
-      await lib.print(united[0], united[1]);
+      // await lib.print(united[0], united[1]);
 
       expect(united[0].length).eq(3);
       expect(united[1].length).eq(3);
@@ -240,7 +225,7 @@ describe('TokenAmountsLib tests', function () {
       expect(united[1][2]).eq(3);
     });
 
-    it('array + array', async () => {
+    it('array + array', async() => {
       const tokens1 = [
         PA.USDC_TOKEN,
         PA.DAI_TOKEN,
@@ -254,7 +239,7 @@ describe('TokenAmountsLib tests', function () {
       ];
       const amounts2 = [1, 2, 3];
       const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      await lib.print(united[0], united[1]);
+      // await lib.print(united[0], united[1]);
 
       expect(united[0].length).eq(4);
       expect(united[1].length).eq(4);
@@ -270,7 +255,7 @@ describe('TokenAmountsLib tests', function () {
       expect(united[1][3]).eq(1);
     });
 
-    it('array1 with duplicates + empty', async () => {
+    it('array1 with duplicates + empty', async() => {
       const tokens1 = [
         PA.USDC_TOKEN,
         PA.DAI_TOKEN,
@@ -282,7 +267,7 @@ describe('TokenAmountsLib tests', function () {
       const tokens2: string[] = [];
       const amounts2: BigNumber[] = [];
       const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      await lib.print(united[0], united[1]);
+      // await lib.print(united[0], united[1]);
 
       expect(united[0].length).eq(3);
       expect(united[1].length).eq(3);
@@ -296,7 +281,7 @@ describe('TokenAmountsLib tests', function () {
       expect(united[1][2]).eq(3);
     });
 
-    it('arrays mismatch', async () => {
+    it('arrays mismatch', async() => {
       const tokens1 = [
         PA.DAI_TOKEN,
         PA.TETU_TOKEN,
@@ -308,7 +293,7 @@ describe('TokenAmountsLib tests', function () {
       await expect(lib.unite(tokens2, amounts2, tokens1, amounts1)).revertedWith('TAL: Arrays mismatch');
     });
 
-    it('array1 with zero amounts + empty', async () => {
+    it('array1 with zero amounts + empty', async() => {
       const tokens1 = [
         PA.USDC_TOKEN,
         PA.DAI_TOKEN,
@@ -320,7 +305,7 @@ describe('TokenAmountsLib tests', function () {
       const tokens2: string[] = [];
       const amounts2: BigNumber[] = [];
       const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      await lib.print(united[0], united[1]);
+      // await lib.print(united[0], united[1]);
 
       expect(united[0].length).eq(2);
       expect(united[1].length).eq(2);
@@ -332,7 +317,7 @@ describe('TokenAmountsLib tests', function () {
       expect(united[1][1]).eq(5);
     });
 
-    it('empty + array1 with zero amounts', async () => {
+    it('empty + array1 with zero amounts', async() => {
       const tokens1 = [
         PA.USDC_TOKEN,
         PA.DAI_TOKEN,
@@ -344,7 +329,7 @@ describe('TokenAmountsLib tests', function () {
       const tokens2: string[] = [];
       const amounts2: BigNumber[] = [];
       const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      await lib.print(united[0], united[1]);
+      // await lib.print(united[0], united[1]);
 
       expect(united[0].length).eq(1);
       expect(united[1].length).eq(1);

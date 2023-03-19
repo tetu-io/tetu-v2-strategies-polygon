@@ -44,10 +44,10 @@ export interface IState {
   blockTimestamp: number;
   signer: {
     usdc: BigNumber;
-  }
+  };
   user: {
     usdc: BigNumber;
-  }
+  };
   strategy: {
     usdc: BigNumber;
     usdt: BigNumber;
@@ -56,19 +56,19 @@ export interface IState {
     bptPool: BigNumber;
     totalAssets: BigNumber;
     investedAssets: BigNumber;
-  }
+  };
   gauge: {
     strategyBalance: BigNumber;
-  }
+  };
   balancerPool: {
     bbAmUsdc: BigNumber;
     bbAmUsdt: BigNumber;
     bbAmDai: BigNumber;
-  }
+  };
   splitter: {
     usdc: BigNumber;
     totalAssets: BigNumber;
-  }
+  };
   vault: {
     usdc: BigNumber;
     userShares: BigNumber;
@@ -78,22 +78,22 @@ export interface IState {
     sharePrice: BigNumber;
     totalSupply: BigNumber;
     totalAssets: BigNumber;
-  }
+  };
   insurance: {
     usdc: BigNumber;
-  }
+  };
   baseAmounts: {
     usdc: BigNumber;
     usdt: BigNumber;
     dai: BigNumber;
     bal: BigNumber;
-  }
+  };
   converter: {
     collateralForDai: BigNumber,
     amountToRepayDai: BigNumber,
     collateralForUsdt: BigNumber,
     amountToRepayUsdt: BigNumber
-  }
+  };
 }
 
 export interface IPutInitialAmountsBalancesResults {
@@ -116,20 +116,20 @@ export class BalancerIntTestUtils {
     const governance = await controller.governance();
     const controllerAsGovernance = IConverterController__factory.connect(
       controllerAddress,
-      await Misc.impersonate(governance)
+      await Misc.impersonate(governance),
     );
 
     const borrowManagerAddress = await controller.borrowManager();
     await controllerAsGovernance.setMinHealthFactor2(102);
     const borrowManagerAsGovernance = IBorrowManager__factory.connect(
       borrowManagerAddress,
-      await Misc.impersonate(governance)
+      await Misc.impersonate(governance),
     );
 
     await controllerAsGovernance.setTargetHealthFactor2(112);
     await borrowManagerAsGovernance.setTargetHealthFactors(
       [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN, MaticAddresses.USDT_TOKEN],
-      [112, 112, 112]
+      [112, 112, 112],
     );
   }
 
@@ -137,10 +137,10 @@ export class BalancerIntTestUtils {
    * deploy own splitter to be able to add console messages to the splitter
    */
   public static async deployAndSetCustomSplitter(signer: SignerWithAddress, core: CoreAddresses) {
-    const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2')
+    const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
     await VaultFactory__factory.connect(
       core.vaultFactory,
-      await DeployerUtilsLocal.getControllerGovernance(signer)
+      await DeployerUtilsLocal.getControllerGovernance(signer),
     ).setSplitterImpl(splitterImpl.address);
   }
 
@@ -150,7 +150,7 @@ export class BalancerIntTestUtils {
   public static async setThresholds(
     strategy: IStrategyV2,
     user: SignerWithAddress,
-    params?: ISetThresholdsInputParams
+    params?: ISetThresholdsInputParams,
   ) {
     const controller = await StrategyBaseV2__factory.connect(strategy.address, user).controller();
     // const platformVoter = await IController__factory.connect(controller, user).platformVoter();
@@ -178,29 +178,29 @@ export class BalancerIntTestUtils {
     strategy: BalancerComposableStableStrategy,
     vault: TetuVaultV2,
     title?: string,
-  ) : Promise<IState>{
-    const gauge = "0x1c514fEc643AdD86aeF0ef14F4add28cC3425306";
-    const balancerPool = "0x48e6b98ef6329f8f0a30ebb8c7c960330d648085";
-    const bbAmDai = "0x178E029173417b1F9C8bC16DCeC6f697bC323746";
-    const bbAmUsdc = "0xF93579002DBE8046c43FEfE86ec78b1112247BB8";
-    const bbAmUsdt = "0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6";
+  ): Promise<IState> {
+    const gauge = '0x1c514fEc643AdD86aeF0ef14F4add28cC3425306';
+    const balancerPool = '0x48e6b98ef6329f8f0a30ebb8c7c960330d648085';
+    const bbAmDai = '0x178E029173417b1F9C8bC16DCeC6f697bC323746';
+    const bbAmUsdc = '0xF93579002DBE8046c43FEfE86ec78b1112247BB8';
+    const bbAmUsdt = '0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6';
     const splitterAddress = await vault.splitter();
     const insurance = await vault.insurance();
-    const block = await hre.ethers.provider.getBlock("latest");
+    const block = await hre.ethers.provider.getBlock('latest');
 
     const debtsDai = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
       strategy.address,
       MaticAddresses.USDC_TOKEN,
-      MaticAddresses.DAI_TOKEN
+      MaticAddresses.DAI_TOKEN,
     );
     const debtsUsdt = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
       strategy.address,
       MaticAddresses.USDC_TOKEN,
-      MaticAddresses.DAI_TOKEN
+      MaticAddresses.DAI_TOKEN,
     );
 
     const dest = {
-      title: title || "no-name",
+      title: title || 'no-name',
       block: block.number,
       blockTimestamp: block.timestamp,
       signer: {
@@ -216,7 +216,7 @@ export class BalancerIntTestUtils {
         bal: await IERC20__factory.connect(MaticAddresses.BAL_TOKEN, user).balanceOf(strategy.address),
         bptPool: await IERC20__factory.connect(balancerPool, user).balanceOf(strategy.address),
         totalAssets: await strategy.totalAssets(),
-        investedAssets: await StrategyBaseV2__factory.connect(strategy.address, user).investedAssets()
+        investedAssets: await StrategyBaseV2__factory.connect(strategy.address, user).investedAssets(),
       },
       gauge: {
         strategyBalance: await IBalancerGauge__factory.connect(gauge, user).balanceOf(strategy.address),
@@ -253,58 +253,58 @@ export class BalancerIntTestUtils {
         collateralForDai: debtsDai.totalCollateralAmountOut,
         amountToRepayDai: debtsDai.totalDebtAmountOut,
         collateralForUsdt: debtsUsdt.totalCollateralAmountOut,
-        amountToRepayUsdt: debtsUsdt.totalDebtAmountOut
-      }
-    }
+        amountToRepayUsdt: debtsUsdt.totalDebtAmountOut,
+      },
+    };
 
     // console.log("State", dest);
     return dest;
   }
 
-  public static getCsvData() : {stateHeaders: string[], stateDecimals: number[]} {
+  public static getCsvData(): { stateHeaders: string[], stateDecimals: number[] } {
     const stateHeaders = [
-      "title",
-      "block",
-      "timestamp",
+      'title',
+      'block',
+      'timestamp',
 
-      "signer.usdc",
-      "user.usdc",
+      'signer.usdc',
+      'user.usdc',
 
-      "vault.user.shares",
-      "vault.signer.shares",
+      'vault.user.shares',
+      'vault.signer.shares',
 
-      "vault.user.usdc",
-      "vault.signer.usdc",
+      'vault.user.usdc',
+      'vault.signer.usdc',
 
-      "vault.sharePrice",
-      "vault.totalSupply",
-      "vault.totalAssets",
+      'vault.sharePrice',
+      'vault.totalSupply',
+      'vault.totalAssets',
 
-      "insurance.usdc",
+      'insurance.usdc',
 
-      "strategy.usdc",
-      "strategy.usdt",
-      "strategy.dai",
-      "strategy.bal",
-      "strategy.bptp",
-      "strategy.totalAssets",
-      "strategy.investedAssets",
+      'strategy.usdc',
+      'strategy.usdt',
+      'strategy.dai',
+      'strategy.bal',
+      'strategy.bptp',
+      'strategy.totalAssets',
+      'strategy.investedAssets',
 
-      "gauge.bptp",
+      'gauge.bptp',
 
-      "vault.usdc",
+      'vault.usdc',
 
-      "splitter.usdc",
-      "splitter.totalAssets",
+      'splitter.usdc',
+      'splitter.totalAssets',
 
-      "converter.collateralDai",
-      "converter.toRepayDai",
-      "converter.collateralUsdt",
-      "converter.toRepayUsdt",
+      'converter.collateralDai',
+      'converter.toRepayDai',
+      'converter.collateralUsdt',
+      'converter.toRepayUsdt',
 
-      "pool.bbAmUsdc",
-      "pool.bbAmUsdt",
-      "pool.bbAmDai",
+      'pool.bbAmUsdc',
+      'pool.bbAmUsdt',
+      'pool.bbAmDai',
     ];
 
     const decimalsSharedPrice = 6;
@@ -350,18 +350,18 @@ export class BalancerIntTestUtils {
 
       decimalsBbAmUsdc,
       decimalsBbAmUsdt,
-      decimalsBbAmDai
+      decimalsBbAmDai,
     ];
 
-    return {stateHeaders, stateDecimals};
+    return { stateHeaders, stateDecimals };
   }
 
   /**
    * Put data of a state into a separate row
    */
   public static async saveListStatesToCSVRows(pathOut: string, states: IState[]) {
-    const {stateHeaders, stateDecimals} = this.getCsvData();
-    writeFileSyncRestoreFolder(pathOut, stateHeaders.join(";") + "\n", {encoding: 'utf8', flag: "a" });
+    const { stateHeaders, stateDecimals } = this.getCsvData();
+    writeFileSyncRestoreFolder(pathOut, stateHeaders.join(';') + '\n', { encoding: 'utf8', flag: 'a' });
     for (const item of states) {
       const line = [
         item.title,
@@ -401,15 +401,16 @@ export class BalancerIntTestUtils {
 
         item.balancerPool.bbAmUsdc,
         item.balancerPool.bbAmUsdt,
-        item.balancerPool.bbAmDai
+        item.balancerPool.bbAmDai,
       ];
-      writeFileSync(pathOut,
+      writeFileSync(
+        pathOut,
         line.map((x, index) =>
-          typeof x === "object"
+          typeof x === 'object'
             ? +formatUnits(x, stateDecimals[index])
-            : "" + x
-        ).join(";") + "\n",
-        {encoding: 'utf8', flag: "a"}
+            : '' + x,
+        ).join(';') + '\n',
+        { encoding: 'utf8', flag: 'a' },
       );
     }
   }
@@ -418,10 +419,10 @@ export class BalancerIntTestUtils {
    * Put data of a state into a separate column
    */
   public static async saveListStatesToCSVColumns(pathOut: string, states: IState[]) {
-    const {stateHeaders, stateDecimals} = this.getCsvData();
+    const { stateHeaders, stateDecimals } = this.getCsvData();
     const headers = [
-      "",
-      ... states.map(x => x.title)
+      '',
+      ...states.map(x => x.title),
     ];
     const rows = states.map(item => [
       item.title,
@@ -455,34 +456,35 @@ export class BalancerIntTestUtils {
       item.splitter.totalAssets,
       item.balancerPool.bbAmUsdc,
       item.balancerPool.bbAmUsdt,
-      item.balancerPool.bbAmDai
+      item.balancerPool.bbAmDai,
     ]);
 
-    writeFileSyncRestoreFolder(pathOut, headers.join(";") + "\n", {encoding: 'utf8', flag: "a" });
+    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' });
     for (let i = 0; i < stateHeaders.length; ++i) {
       const line = [stateHeaders[i], ...rows.map(x => x[i])];
-      writeFileSync(pathOut,
+      writeFileSync(
+        pathOut,
         line.map((x) =>
-          typeof x === "object"
+          typeof x === 'object'
             ? +formatUnits(x, stateDecimals[i])
-            : "" + x
-        ).join(";") + "\n",
-        {encoding: 'utf8', flag: "a"}
+            : '' + x,
+        ).join(';') + '\n',
+        { encoding: 'utf8', flag: 'a' },
       );
     }
   }
 
-  public static getTotalUsdAmount(state: IState) : BigNumber {
+  public static getTotalUsdAmount(state: IState): BigNumber {
     return state.user.usdc.add(
-      state.signer.usdc
+      state.signer.usdc,
     ).add(
-      state.vault.usdc
+      state.vault.usdc,
     ).add(
-      state.insurance.usdc
+      state.insurance.usdc,
     ).add(
-      state.strategy.usdc
+      state.strategy.usdc,
     ).add(
-      state.splitter.usdc
+      state.splitter.usdc,
     );
   }
 
@@ -492,7 +494,9 @@ export class BalancerIntTestUtils {
    * @param states
    */
   public static outputProfit(states: IState[]) {
-    if (states.length < 2) return;
+    if (states.length < 2) {
+      return;
+    }
 
     const enter: IState = states[0];
     const final: IState = states[states.length - 1];
@@ -509,19 +513,19 @@ export class BalancerIntTestUtils {
     const amount = finalAmount.sub(initialAmount);
     const amountNum = +formatUnits(amount, 6);
     const apr = amountNum * 365
-      / (timeSeconds / (24*60*60))
+      / (timeSeconds / (24 * 60 * 60))
       / +formatUnits(initialAmount, 6)
       * 100;
-    console.log("final.blockTimestamp", final.blockTimestamp);
-    console.log("enter.blockTimestamp", enter.blockTimestamp);
-    console.log("final.getTotalUsdAmount", this.getTotalUsdAmount(final));
-    console.log("enter.getTotalUsdAmount", this.getTotalUsdAmount(enter));
-    console.log("Initial amount", initialAmount);
-    console.log("Final amount", initialAmount);
-    console.log("Total profit", amountNum);
-    console.log("Duration in seconds", timeSeconds);
-    console.log("Duration in days", timeSeconds / (24*60*60));
-    console.log("Estimated APR, %", apr);
+    console.log('final.blockTimestamp', final.blockTimestamp);
+    console.log('enter.blockTimestamp', enter.blockTimestamp);
+    console.log('final.getTotalUsdAmount', this.getTotalUsdAmount(final));
+    console.log('enter.getTotalUsdAmount', this.getTotalUsdAmount(enter));
+    console.log('Initial amount', initialAmount);
+    console.log('Final amount', initialAmount);
+    console.log('Total profit', amountNum);
+    console.log('Duration in seconds', timeSeconds);
+    console.log('Duration in days', timeSeconds / (24 * 60 * 60));
+    console.log('Estimated APR, %', apr);
   }
 
   /**
@@ -532,8 +536,8 @@ export class BalancerIntTestUtils {
     user: SignerWithAddress,
     signer: SignerWithAddress,
     liquidator: ITetuLiquidator,
-    amount: number
-  ) : Promise<IPutInitialAmountsBalancesResults>{
+    amount: number,
+  ): Promise<IPutInitialAmountsBalancesResults> {
     const userBalance = await StrategyTestUtils.getUnderlying(user, asset, amount, liquidator, [signer.address]);
 
     // put half of signer's balance to liquidator

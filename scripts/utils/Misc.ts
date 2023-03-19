@@ -8,7 +8,7 @@ import {Multicall} from "../../typechain";
 import {BigNumber} from "ethers";
 import {MaticAddresses} from "../addresses/MaticAddresses";
 
-const log: Logger = new Logger(logSettings);
+const log: Logger<undefined> = new Logger(logSettings);
 
 const MATIC_CHAIN = Common.forCustomChain(
   'mainnet', {

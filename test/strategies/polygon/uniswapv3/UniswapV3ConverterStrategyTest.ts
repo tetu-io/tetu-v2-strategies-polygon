@@ -12,21 +12,18 @@ import {
   IStrategyV2,
   ISwapper,
   ISwapper__factory,
-  ITetuConverter__factory,
-  IUniswapV3Pool__factory,
   TetuConverter__factory,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
 } from '../../../../typechain';
-import { BigNumber, ContractReceipt, ContractTransaction } from 'ethers';
+import { BigNumber } from 'ethers';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
-import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
 

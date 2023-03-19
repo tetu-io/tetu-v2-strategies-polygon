@@ -9,6 +9,7 @@ export interface ILiquidatorSwapResults {
   finalPrice: BigNumber;
   pricesRatio18: BigNumber;
 }
+
 /**
  * Change prices in liquidator by swapping big amounts
  */
@@ -23,7 +24,7 @@ export class LiquidatorUtils {
     assetInHolder: string,
     amountInPerSingleSwap: BigNumber,
     approxTargetPercent: number,
-  ) : Promise<ILiquidatorSwapResults> {
+  ): Promise<ILiquidatorSwapResults> {
     const assetOut = MaticAddresses.USDC_TOKEN;
     const liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, signer);
     const initialPrice = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
@@ -34,20 +35,20 @@ export class LiquidatorUtils {
 
       await IERC20__factory.connect(
         assetIn,
-        await Misc.impersonate(assetInHolder)
+        await Misc.impersonate(assetInHolder),
       ).transfer(signer.address, amountInPerSingleSwap);
       await IERC20__factory.connect(assetIn, signer).approve(liquidator.address, amountInPerSingleSwap);
 
       await liquidator.liquidate(assetIn, assetOut, amountInPerSingleSwap, 100_000);
       price = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
-      console.log("swapToUsdc.getPrice", price, assetIn, assetOut);
+      console.log('swapToUsdc.getPrice', price, assetIn, assetOut);
     }
 
     return {
       initialPrice,
       finalPrice: price,
-      pricesRatio18: initialPrice.mul(Misc.ONE18).div(price)
-    }
+      pricesRatio18: initialPrice.mul(Misc.ONE18).div(price),
+    };
   }
 
   /**
@@ -60,7 +61,7 @@ export class LiquidatorUtils {
     assetInHolder: string,
     amountInPerSingleSwap: BigNumber,
     approxTargetPercent: number,
-  ) : Promise<ILiquidatorSwapResults> {
+  ): Promise<ILiquidatorSwapResults> {
     const assetIn = MaticAddresses.USDC_TOKEN;
     const liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, signer);
     const initialPrice = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
@@ -70,19 +71,19 @@ export class LiquidatorUtils {
       // console.log("swapUsdcTo.holderBalance", holderBalance, amountInPerSingleSwap);
       await IERC20__factory.connect(
         assetIn,
-        await Misc.impersonate(assetInHolder)
+        await Misc.impersonate(assetInHolder),
       ).transfer(signer.address, amountInPerSingleSwap);
       await IERC20__factory.connect(assetIn, signer).approve(liquidator.address, amountInPerSingleSwap);
 
       await liquidator.liquidate(assetIn, assetOut, amountInPerSingleSwap, 100_000);
       price = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
-      console.log("swapUsdcTo.getPrice", price, assetIn, assetOut);
+      console.log('swapUsdcTo.getPrice', price, assetIn, assetOut);
     }
 
     return {
       initialPrice,
       finalPrice: price,
-      pricesRatio18: initialPrice.mul(Misc.ONE18).div(price)
-    }
+      pricesRatio18: initialPrice.mul(Misc.ONE18).div(price),
+    };
   }
 }

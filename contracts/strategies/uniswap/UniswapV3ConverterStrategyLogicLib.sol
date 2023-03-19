@@ -2,7 +2,6 @@
 pragma solidity 0.8.17;
 
 import "../ConverterStrategyBaseLib.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "./UniswapV3Lib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {

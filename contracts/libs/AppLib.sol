@@ -11,9 +11,9 @@ library AppLib {
 
   /// @notice Unchecked increment for for-cycles
   function uncheckedInc(uint i) internal pure returns (uint) {
-    unchecked {
-      return i + 1;
-    }
+  unchecked {
+    return i + 1;
+  }
   }
 
   /// @notice Make infinite approve of {token} to {spender} if the approved amount is less than {amount}
@@ -22,7 +22,7 @@ library AppLib {
     if (IERC20(token).allowance(address(this), spender) < amount) {
       IERC20(token).safeApprove(spender, 0);
       // infinite approve, 2*255 is more gas efficient then type(uint).max
-      IERC20(token).safeApprove(spender, 2**255);
+      IERC20(token).safeApprove(spender, 2 ** 255);
     }
   }
 }

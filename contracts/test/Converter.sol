@@ -3,7 +3,7 @@ pragma solidity 0.8.17;
 
 // converter
 import "@tetu_io/tetu-converter/contracts/core/BorrowManager.sol";
-import "@tetu_io/tetu-converter/contracts/core/Controller.sol";
+import "@tetu_io/tetu-converter/contracts/core/ConverterController.sol";
 import "@tetu_io/tetu-converter/contracts/core/DebtMonitor.sol";
 import "@tetu_io/tetu-converter/contracts/core/Keeper.sol";
 import "@tetu_io/tetu-converter/contracts/core/SwapManager.sol";

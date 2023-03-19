@@ -25,12 +25,12 @@ const argv = require('yargs/yargs')()
   .env('TETU')
   .options({
     disableStrategyTests: {
-      type: "boolean",
+      type: 'boolean',
       default: false,
     },
     hardhatChainId: {
-      type: "number",
-      default: 137
+      type: 'number',
+      default: 137,
     },
   }).argv;
 
@@ -52,7 +52,7 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
 
   before(async function() {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
-    console.log("Liquidator", deployInfo.tools?.liquidator);
+    console.log('Liquidator', deployInfo.tools?.liquidator);
     console.log(deployInfo.tools?.converter);
 
     const [signer] = await ethers.getSigners();
@@ -68,12 +68,12 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
 
   /** Save collected states to csv, compute profit */
   after(async function() {
-    const pathOut = "./tmp/ts2-snapshots.csv";
+    const pathOut = './tmp/ts2-snapshots.csv';
     await BalancerIntTestUtils.saveListStatesToCSVRows(pathOut, states);
     BalancerIntTestUtils.outputProfit(states);
   });
 
-  describe('tests', async () => {
+  describe('tests', async() => {
     const strategyName = 'BalancerComposableStableStrategy';
     const assetName = 'USDC';
     const asset = PolygonAddresses.USDC_TOKEN;
@@ -89,33 +89,33 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
       hwParams: {
         compoundRate: 100_000, // 50%
       },
-      stateRegistrar: async (title, h) => {
+      stateRegistrar: async(title, h) => {
         states.push(await BalancerIntTestUtils.getState(
           h.signer,
           h.user,
           h.strategy as unknown as BalancerComposableStableStrategy,
           h.vault,
-          title
+          title,
         ));
       },
-      strategyInit: async (strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
+      strategyInit: async(strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
         await BalancerIntTestUtils.setThresholds(
           strategy as unknown as IStrategyV2,
           user,
-          {reinvestThresholdPercent}
+          { reinvestThresholdPercent },
         );
-      }
-    }
+      },
+    };
 
-    const deployer = async (signer: SignerWithAddress) => UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
+    const deployer = async(signer: SignerWithAddress) => UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
       signer,
       core,
       asset,
       tetuConverterAddress,
       strategyName,
       {
-        vaultName: 'tetu' + assetName
-      }
+        vaultName: 'tetu' + assetName,
+      },
     );
 
     /* tslint:disable:no-floating-promises */

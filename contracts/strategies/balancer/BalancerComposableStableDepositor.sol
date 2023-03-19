@@ -82,13 +82,13 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   ///                     1: balance USDC + (amUSDC recalculated to USDC)
   ///                     2: balance USDT + (amUSDT recalculated to USDT)
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reservesOut) {
-    reservesOut =  BalancerLogicLib.depositorPoolReserves(BALANCER_VAULT, poolId);
+    reservesOut = BalancerLogicLib.depositorPoolReserves(BALANCER_VAULT, poolId);
   }
 
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint liquidityOut) {
     liquidityOut = _gauge.balanceOf(address(this))
-      + IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this));
+    + IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
@@ -112,7 +112,7 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
-    bytes32 _poolId = poolId; // gas saving
+    bytes32 _poolId = poolId;
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
 
     // join to the pool, receive pool-BPTs
@@ -132,8 +132,8 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   function _depositorExit(uint liquidityAmount_) override internal virtual returns (
     uint[] memory amountsOut
   ) {
-    bytes32 _poolId = poolId; // gas saving
-    IBalancerGauge __gauge = _gauge; // gas saving
+    bytes32 _poolId = poolId;
+    IBalancerGauge __gauge = _gauge;
     IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
 
     // we need to withdraw pool-BPTs from the _gauge
@@ -143,8 +143,8 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint gaugeBalance = __gauge.balanceOf(address(this));
 
     uint liquidityToWithdraw = liquidityAmount_ > depositorBalance
-      ? liquidityAmount_ - depositorBalance
-      : 0;
+    ? liquidityAmount_ - depositorBalance
+    : 0;
 
     // calculate how much pool-BPTs we should withdraw from the gauge
     if (liquidityToWithdraw > 0) {
@@ -160,8 +160,8 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
 
     // withdraw the liquidity from the pool
     amountsOut = (liquidityAmount_ >= depositorBalance + gaugeBalance)
-      ? BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId)
-      : BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
+    ? BalancerLogicLib.depositorExitFull(BALANCER_VAULT, _poolId)
+    : BalancerLogicLib.depositorExit(BALANCER_VAULT, _poolId, liquidityToWithdraw);
   }
 
   /// @notice Quotes output for given amount of LP-tokens from the pool.

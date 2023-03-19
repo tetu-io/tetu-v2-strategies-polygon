@@ -39,6 +39,7 @@ contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepo
   uint[] public lastAmountsConsumedOut;
   uint public lastAmountsConsumedOutLength;
   uint public lastLiquidityOut;
+
   function _depositorEnterAccess(uint[] memory amountsDesired_) external virtual returns (
     uint[] memory amountsConsumedOut,
     uint liquidityOut
@@ -52,10 +53,11 @@ contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepo
   uint[] public lastAmountsOut;
   uint public lastAmountsOutLength;
   uint public lastLiquidityAmountIn;
+
   function _depositorExitAccess(uint liquidityAmount_) external returns (uint[] memory) {
     lastLiquidityAmountIn = liquidityAmount_ == 0  // 0 means that we should withdraw all liquidity
-      ? _depositorLiquidity()
-      : liquidityAmount_;
+    ? _depositorLiquidity()
+    : liquidityAmount_;
     lastAmountsOut = _depositorExit(lastLiquidityAmountIn);
     lastAmountsOutLength = lastAmountsOut.length;
     return lastAmountsOut;
@@ -63,11 +65,12 @@ contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepo
 
   uint[] public lastQuoteExitAmountsOut;
   uint public lastQuoteExitAmountsOutLength;
+
   function _depositorQuoteExitAccess(uint liquidityAmount_) external returns (uint[] memory) {
     lastQuoteExitAmountsOut = _depositorQuoteExit(
       liquidityAmount_ == 0  // 0 means that we should withdraw all liquidity
-        ? _depositorLiquidity()
-        : liquidityAmount_
+      ? _depositorLiquidity()
+      : liquidityAmount_
     );
     lastQuoteExitAmountsOutLength = lastQuoteExitAmountsOut.length;
     return lastQuoteExitAmountsOut;
@@ -77,6 +80,7 @@ contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepo
   address[] public lastRewardsTokensOut;
   uint public lastRewardsAmountsOutLength;
   uint public lastRewardsTokensOutLength;
+
   function _depositorClaimRewardsAccess() external virtual returns (
     address[] memory tokensOut,
     uint[] memory amountsOut
