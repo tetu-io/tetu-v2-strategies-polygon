@@ -168,14 +168,50 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  //  function _prepareRewardsList(
-  //    ITetuConverter tetuConverter_,
-  //    address[] memory tokens_,
-  //    uint[] memory amounts_
-  //  ) external returns(
-  //    address[] memory tokensOut,
-  //    uint[] memory amountsOut
-  //  ) {
-  //    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, amounts_, baseAmounts);
-  //  }
+  function swapToGivenAmountAccess(
+    uint targetAmount_,
+    address[] memory tokens_,
+    uint indexTargetAsset_,
+    address underlying_,
+    uint[] memory withdrawnAmounts_,
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
+    uint liquidationThresholdForTargetAsset_,
+    uint overswap_
+  ) external returns (
+    uint[] memory spentAmounts,
+    uint[] memory withdrawnAmountsOut
+  ) {
+    return ConverterStrategyBaseLib.swapToGivenAmount(
+      targetAmount_,
+      tokens_,
+      indexTargetAsset_,
+      underlying_,
+      withdrawnAmounts_,
+      converter_,
+      liquidator_,
+      liquidationThresholdForTargetAsset_,
+      overswap_,
+      baseAmounts
+    );
+  }
+
+  function _swapToGivenAmountAccess(ConverterStrategyBaseLib.SwapToGivenAmountInputParams memory p) external returns (
+    uint[] memory spentAmounts,
+    uint[] memory receivedAmounts
+  ) {
+    return ConverterStrategyBaseLib._swapToGivenAmount(p);
+  }
+
+  function swapToGetAmountAccess(
+    uint receivedTargetAmount,
+    ConverterStrategyBaseLib.SwapToGivenAmountInputParams memory p,
+    ConverterStrategyBaseLib.CalcInvestedAssetsLocal memory v,
+    uint indexTokenIn
+  ) external returns (
+    uint amountSpent,
+    uint amountReceived
+  ) {
+    return ConverterStrategyBaseLib._swapToGetAmount(receivedTargetAmount, p, v, indexTokenIn);
+  }
 }

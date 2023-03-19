@@ -671,4 +671,13 @@ contract MockTetuConverter is ITetuConverter {
     result : result_
     });
   }
+
+  function repayTheBorrow(address poolAdapter_, bool closePosition) external pure returns (
+    uint collateralAmountOut,
+    uint repaidAmountOut
+  ) {
+    poolAdapter_;
+    closePosition;
+    return (collateralAmountOut, repaidAmountOut);
+  }
 }

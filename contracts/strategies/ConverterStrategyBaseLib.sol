@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../libs/AppErrors.sol";
@@ -65,6 +66,27 @@ library ConverterStrategyBaseLib {
     uint receivedAmountOut;
   }
 
+  struct SwapToGivenAmountInputParams {
+    uint targetAmount;
+    address[] tokens;
+    uint indexTargetAsset;
+    address underlying;
+    uint[] amounts;
+    ITetuConverter converter;
+    ITetuLiquidator liquidator;
+    uint liquidationThresholdForTargetAsset;
+    /// @notice Allow to swap more then required (i.e. 1_000 => +1%)
+    ///         to avoid additional swap if the swap return amount a bit less than we expected
+    uint overswap;
+  }
+
+  struct SwapToGivenAmountLocal {
+    uint len;
+    uint[] availableAmounts;
+    uint[] receivedAmounts;
+    uint i;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                        Constants
   /////////////////////////////////////////////////////////////////////
@@ -73,11 +95,14 @@ library ConverterStrategyBaseLib {
   uint internal constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
   uint internal constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint internal constant COMPOUND_DENOMINATOR = 100_000;
-  uint internal constant FEE_DENOMINATOR = 100_000;
+  uint internal constant DENOMINATOR = 100_000;
   uint internal constant _ASSET_LIQUIDATION_SLIPPAGE = 300;
   uint internal constant PRICE_IMPACT_TOLERANCE = 300;
   /// @notice borrow/collateral amount cannot be less than given number of tokens
   uint internal constant DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD = 10;
+  /// @notice Allow to swap more then required (i.e. 1_000 => +1%) inside {swapToGivenAmount}
+  ///         to avoid additional swap if the swap will return amount a bit less than we expected
+  uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
 
   /////////////////////////////////////////////////////////////////////
   ///                         Events
@@ -131,10 +156,10 @@ library ConverterStrategyBaseLib {
     uint[] memory withdrawnAmountsOut
   ) {
     uint ratio = totalSupply_ == 0
-    ? 0
-    : (liquidityAmount_ >= totalSupply_
-    ? 1e18
-    : 1e18 * liquidityAmount_ / totalSupply_
+      ? 0
+      : (liquidityAmount_ >= totalSupply_
+        ? 1e18
+        : 1e18 * liquidityAmount_ / totalSupply_
     );
     // we need brackets here for npm.run.coverage
 
@@ -239,7 +264,7 @@ library ConverterStrategyBaseLib {
   ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
   ///         To withdraw {targetAmount_} we need
   ///         1) Reconvert converted amounts back to main asset
-  ///         2) IF result amount is not necessary - extract withdraw some liquidity from the pool
+  ///         2) IF result amount is not necessary - withdraw some liquidity from the pool
   ///            and also convert it to the main asset.
   /// @dev This is a writable function with read-only behavior (because of the quote-call)
   /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy
@@ -302,13 +327,13 @@ library ConverterStrategyBaseLib {
     require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
 
     liquidityRatioOut = all
-    ? 1e18
-    : ((targetAmount_ == 0)
-    ? 0
-    : 1e18
-    * 101 // add 1% on top...
-    * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-    / 100 // .. add 1% on top
+      ? 1e18
+      : ((targetAmount_ == 0)
+        ? 0
+        : 1e18
+          * 101 // add 1% on top...
+          * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
+          / 100 // .. add 1% on top
     );
 
     if (liquidityRatioOut != 0) {
@@ -448,8 +473,6 @@ library ConverterStrategyBaseLib {
         }
       }
 
-      //!! console.log('>>> BORROW collateralAmount collateralAsset', collateralAmount, collateralAsset);
-      //!! console.log('>>> BORROW borrowedAmount borrowAsset', borrowedAmountOut, borrowAsset);
       return (collateralAmountOut, borrowedAmountOut);
     }
   }
@@ -576,7 +599,6 @@ library ConverterStrategyBaseLib {
     uint returnedAssetAmountOut,
     uint repaidAmountOut
   ) {
-    //!! console.log("_closePosition");
 
     // We shouldn't try to pay more than we actually need to repay
     // The leftover will be swapped inside TetuConverter, it's inefficient.
@@ -704,6 +726,147 @@ library ConverterStrategyBaseLib {
     return (spentAmountIn, receivedAmountOut);
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ///                 requirePayAmountBack
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Swap available {amounts_} of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
+  /// @param targetAmount_ Required amount of tokens[indexTheAsset_] that should be received by swap(s)
+  /// @param tokens_ tokens received from {_depositorPoolAssets}
+  /// @param indexTargetAsset_ Index of target asset in tokens_ array
+  /// @param underlying_ Index of underlying
+  /// @param withdrawnAmounts_ Amounts withdrawn from the pool
+  /// @param liquidationThresholdForTargetAsset_ Liquidation thresholds for the target asset
+  /// @param overswap_ Allow to swap more then required (i.e. 1_000 => +1%)
+  ///                  to avoid additional swap if the swap return amount a bit less than we expected
+  /// @return spentAmounts Any amounts spent during the swaps
+  /// @return withdrawnAmountsOut withdrawnAmounts + any amounts received during the swaps
+  function swapToGivenAmount(
+    uint targetAmount_,
+    address[] memory tokens_,
+    uint indexTargetAsset_,
+    address underlying_,
+    uint[] memory withdrawnAmounts_,
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
+    uint liquidationThresholdForTargetAsset_,
+    uint overswap_,
+    mapping(address => uint) storage baseAmounts_
+  ) external returns (
+    uint[] memory spentAmounts,
+    uint[] memory withdrawnAmountsOut
+  ) {
+    SwapToGivenAmountLocal memory v;
+    v.len = tokens_.length;
+
+    spentAmounts = new uint[](v.len);
+    withdrawnAmountsOut = new uint[](v.len);
+
+    v.availableAmounts = new uint[](v.len);
+    for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
+      v.availableAmounts[v.i] = withdrawnAmounts_[v.i] + baseAmounts_[tokens_[v.i]];
+    }
+    (spentAmounts, v.receivedAmounts) = _swapToGivenAmount(
+      SwapToGivenAmountInputParams({
+        targetAmount: targetAmount_,
+        tokens: tokens_,
+        indexTargetAsset: indexTargetAsset_,
+        underlying: underlying_,
+        amounts: v.availableAmounts,
+        converter: converter_,
+        liquidator: liquidator_,
+        liquidationThresholdForTargetAsset: liquidationThresholdForTargetAsset_,
+        overswap: overswap_
+      })
+    );
+    for (v.i = 0; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
+      withdrawnAmountsOut[v.i] = withdrawnAmounts_[v.i] + v.receivedAmounts[v.i];
+    }
+  }
+
+  /// @notice Swap available {amounts_} of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
+  /// @return spentAmounts Any amounts spent during the swaps
+  /// @return receivedAmounts Any amounts received during the swaps
+  function _swapToGivenAmount(SwapToGivenAmountInputParams memory p) internal returns (
+    uint[] memory spentAmounts,
+    uint[] memory receivedAmounts
+  ) {
+    CalcInvestedAssetsLocal memory v;
+    v.len = p.tokens.length;
+    receivedAmounts = new uint[](v.len);
+    spentAmounts = new uint[](v.len);
+
+    // calculate prices, decimals
+    (v.prices, v.decs) = _getPricesAndDecs(
+      IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
+      p.tokens,
+      v.len
+    );
+
+    // we need to swap other assets to the asset
+    // at first we should swap NOT underlying.
+    // if it would be not enough, we can swap underlying too.
+
+    // swap NOT underlying, initialize {indexUnderlying}
+    uint indexUnderlying;
+    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      if (p.underlying == p.tokens[i]) {
+        indexUnderlying = i;
+        continue;
+      }
+      if (p.indexTargetAsset == i) continue;
+
+      (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, i);
+      spentAmounts[i] += spent;
+      receivedAmounts[p.indexTargetAsset] += received;
+
+      if (receivedAmounts[p.indexTargetAsset] >= p.targetAmount) break;
+    }
+
+    // swap underlying
+    if (receivedAmounts[p.indexTargetAsset] < p.targetAmount && p.indexTargetAsset != indexUnderlying) {
+      (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, indexUnderlying);
+      spentAmounts[indexUnderlying] += spent;
+      receivedAmounts[p.indexTargetAsset] += received;
+    }
+  }
+
+  /// @notice Swap a part of amount of asset {tokens[indexTokenIn]} to {targetAsset} to get {targetAmount} in result
+  /// @param receivedTargetAmount Already received amount of {targetAsset} in previous swaps
+  /// @param indexTokenIn Index of the tokenIn in p.tokens
+  function _swapToGetAmount(
+    uint receivedTargetAmount,
+    SwapToGivenAmountInputParams memory p,
+    CalcInvestedAssetsLocal memory v,
+    uint indexTokenIn
+  ) internal returns (
+    uint amountSpent,
+    uint amountReceived
+  ) {
+    if (p.amounts[indexTokenIn] != 0) {
+      // we assume here, that p.targetAmount > receivedTargetAmount, see _swapToGivenAmount implementation
+
+      // calculate amount that should be swapped
+      // {overswap} allows to swap a bit more
+      // to avoid additional swaps if the swap will give us a bit less amount than expected
+      uint amountIn = (
+        (p.targetAmount - receivedTargetAmount)
+        * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
+        / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
+      ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
+
+      (amountSpent, amountReceived) = _liquidate(
+        p.liquidator,
+        p.tokens[indexTokenIn],
+        p.tokens[p.indexTargetAsset],
+        Math.min(amountIn, p.amounts[indexTokenIn]),
+        _ASSET_LIQUIDATION_SLIPPAGE,
+        p.liquidationThresholdForTargetAsset
+      );
+    }
+
+    return (amountSpent, amountReceived);
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                      Recycle rewards
@@ -851,7 +1014,7 @@ library ConverterStrategyBaseLib {
     performanceAmounts = new uint[](len);
 
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / FEE_DENOMINATOR;
+      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
       rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
       IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
     }
@@ -1215,5 +1378,6 @@ library ConverterStrategyBaseLib {
     }
     return (earned, lost);
   }
+
 }
 

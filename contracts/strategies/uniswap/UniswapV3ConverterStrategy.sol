@@ -243,7 +243,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         emit OnDepositorEnter(tokenAmounts, tokenAmounts);
         _updateBaseAmountsForAsset(state.tokenA, amount_, 0);
       } else {
-        (address[] memory tokens, uint indexAsset) = _getTokens();
+        (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
         // prepare array of amounts ready to deposit, borrow missed amounts
         (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
