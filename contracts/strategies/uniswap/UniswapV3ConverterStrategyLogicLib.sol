@@ -1060,7 +1060,7 @@ library UniswapV3ConverterStrategyLogicLib {
     newLowerTick : 0,
     newUpperTick : 0,
     fillUp : state.fillUp,
-    isStablePool : false,
+    isStablePool : state.isStablePool,
     newPrice : 0
     });
 
@@ -1074,9 +1074,6 @@ library UniswapV3ConverterStrategyLogicLib {
       ), "No rebalancing needed");
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
-
-    /// @dev for stable pools fuse can be enabled
-    vars.isStablePool = isStablePool(vars.pool);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// @dev enabling fuse: close debt and stop providing liquidity
