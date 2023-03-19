@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3Lib.sol";
+import "./UniswapV3DebtLib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
 
@@ -12,10 +12,8 @@ library UniswapV3ConverterStrategyLogicLib {
 
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_STABLE = 100;
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE = 500;
-  uint internal constant SELL_GAP = 100;
-  /// @dev should be placed local, probably will be adjusted later
-  uint internal constant BORROW_PERIOD_ESTIMATION = 30 days / 2;
   uint internal constant HARD_WORK_USD_FEE_THRESHOLD = 100;
+  uint public constant DEFAULT_FUSE_THRESHOLD = 5e15;
 
   //////////////////////////////////////////
   //            EVENTS
@@ -23,6 +21,8 @@ library UniswapV3ConverterStrategyLogicLib {
 
   event FuseTriggered();
   event Rebalanced();
+  event DisableFuse();
+  event NewFuseThreshold(uint newFuseThreshold);
 
   //////////////////////////////////////////
   //            STRUCTURES
@@ -70,7 +70,7 @@ library UniswapV3ConverterStrategyLogicLib {
     address tokenB;
     uint lastPrice;
     uint fuseThreshold;
-    bool _depositorSwapTokens;
+    bool depositorSwapTokens;
     uint rebalanceEarned0;
     uint rebalanceEarned1;
 
@@ -85,16 +85,17 @@ library UniswapV3ConverterStrategyLogicLib {
     uint newPrice;
   }
 
-  struct RebalanceDebtFillUpLocalVariables {
-    uint debtAmount;
-    uint availableBalanceTokenA;
-    uint availableBalanceTokenB;
-    uint needToBorrowOrFreeFromBorrow;
-  }
-
   //////////////////////////////////////////
   //            HELPERS
   //////////////////////////////////////////
+
+  function emitDisableFuse() external {
+    emit DisableFuse();
+  }
+
+  function emitNewFuseThreshold(uint value) external {
+    emit NewFuseThreshold(value);
+  }
 
   /// @dev Gets the liquidator swap slippage based on the pool type (stable or volatile).
   /// @param pool The IUniswapV3Pool instance.
@@ -108,16 +109,6 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @return The balance of the token.
   function _balance(address token) internal view returns (uint) {
     return IERC20(token).balanceOf(address(this));
-  }
-
-  /// @dev Gets the token balance without fees.
-  /// @param token The token address.
-  /// @param fee The fee amount to be subtracted from the balance.
-  /// @return balanceWithoutFees The token balance without the specified fee amount.
-  function getBalanceWithoutFees(address token, uint fee) internal view returns (uint balanceWithoutFees) {
-    balanceWithoutFees = _balance(token);
-    require(balanceWithoutFees >= fee, "Balance lower than fee");
-    balanceWithoutFees -= fee;
   }
 
   /// @notice Check if the given pool is a stable pool.
@@ -191,6 +182,25 @@ library UniswapV3ConverterStrategyLogicLib {
     spentA = balanceOfTokenABefore > balanceOfTokenAAfter ? balanceOfTokenABefore - balanceOfTokenAAfter : 0;
     receivedB = balanceOfTokenBBefore > balanceOfTokenBAfter ? 0 : balanceOfTokenBAfter - balanceOfTokenBBefore;
     spentB = balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0;
+  }
+
+  function initStrategyState(State storage state, address controller_, address converter) external {
+    address liquidator = IController(controller_).liquidator();
+    IERC20(state.tokenA).approve(liquidator, type(uint).max);
+    IERC20(state.tokenB).approve(liquidator, type(uint).max);
+
+    /// for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
+    /// upperTick always greater then lowerTick
+    state.fillUp = state.upperTick - state.lowerTick >= 4 * state.tickSpacing;
+
+    if (isStablePool(state.pool)) {
+      /// for stable pools fuse can be enabled
+      state.isStablePool = true;
+      // 0.5% price change
+      state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
+      emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
+      state.lastPrice = getOracleAssetsPrice(ITetuConverter(converter), state.tokenA, state.tokenB);
+    }
   }
 
   //////////////////////////////////////////
@@ -708,317 +718,6 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   //////////////////////////////////////////
-  //            Debt actions
-  //////////////////////////////////////////
-
-  /// @dev Returns the total collateral amount out for the given token pair.
-  /// @param tetuConverter The ITetuConverter instance.
-  /// @param tokenA The address of tokenA.
-  /// @param tokenB The address of tokenB.
-  /// @return totalCollateralAmountOut The total collateral amount out for the token pair.
-  function getDeptTotalCollateralAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalCollateralAmountOut) {
-    (, totalCollateralAmountOut) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
-  }
-
-  /// @dev Returns the total debt amount out for the given token pair.
-  /// @param tetuConverter The ITetuConverter instance.
-  /// @param tokenA The address of tokenA.
-  /// @param tokenB The address of tokenB.
-  /// @return totalDebtAmountOut The total debt amount out for the token pair.
-  function getDeptTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalDebtAmountOut) {
-    (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
-  }
-
-  /// @dev Closes the debt positions for the given token pair.
-  /// @param tetuConverter The ITetuConverter instance.
-  /// @param controller The controller address.
-  /// @param pool The IUniswapV3Pool instance.
-  /// @param tokenA The address of tokenA.
-  /// @param tokenB The address of tokenB.
-  /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
-  /// @param fee0 The fee amount for tokenA.
-  /// @param fee1 The fee amount for tokenB.
-  function closeDebt(
-    ITetuConverter tetuConverter,
-    address controller,
-    IUniswapV3Pool pool,
-    address tokenA,
-    address tokenB,
-    bool depositorSwapTokens,
-    uint fee0,
-    uint fee1
-  ) internal {
-    uint tokenAFee = depositorSwapTokens ? fee1 : fee0;
-    uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
-    _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee);
-  }
-
-  /// @dev Rebalances the debt by either filling up or closing and reopening debt positions.
-  /// @param tetuConverter The ITetuConverter instance.
-  /// @param controller The controller address.
-  /// @param pool The IUniswapV3Pool instance.
-  /// @param tokenA The address of tokenA.
-  /// @param tokenB The address of tokenB.
-  /// @param fillUp True if the fill-up strategy should be used, false otherwise.
-  /// @param lowerTick The lower tick of the current tick range.
-  /// @param upperTick The upper tick of the current tick range.
-  /// @param tickSpacing The tick spacing for the pool.
-  /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
-  /// @param fee0 The fee amount for tokenA.
-  /// @param fee1 The fee amount for tokenB.
-  function rebalanceDebt(
-    ITetuConverter tetuConverter,
-    address controller,
-    IUniswapV3Pool pool,
-    address tokenA,
-    address tokenB,
-    bool fillUp,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 tickSpacing,
-    bool depositorSwapTokens,
-    uint fee0,
-    uint fee1
-  ) internal {
-    uint tokenAFee = depositorSwapTokens ? fee1 : fee0;
-    uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
-    if (fillUp) {
-      _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee);
-    } else {
-      _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee);
-      bytes memory entryData = getEntryData(pool, lowerTick, upperTick, tickSpacing, depositorSwapTokens);
-      _openDebt(tetuConverter, tokenA, tokenB, entryData, tokenAFee);
-    }
-  }
-
-  /// @notice Closes debt by liquidating tokens as necessary.
-  ///         This function helps ensure that the converter strategy maintains the appropriate balances
-  ///         and debt positions for token A and token B, while accounting for fees and potential price impacts.
-  /// @param tetuConverter The Tetu converter instance.
-  /// @param controller The Tetu controller instance.
-  /// @param pool The Uniswap V3 pool instance.
-  /// @param tokenA The address of token A.
-  /// @param tokenB The address of token B.
-  /// @param feeA The fee associated with token A.
-  /// @param feeB The fee associated with token B.
-  function _closeDebt(
-    ITetuConverter tetuConverter,
-    address controller,
-    IUniswapV3Pool pool,
-    address tokenA,
-    address tokenB,
-    uint feeA,
-    uint feeB
-  ) internal {
-    uint debtAmount = getDeptTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
-
-    uint availableBalanceTokenA = _balance(tokenA);
-    uint availableBalanceTokenB = _balance(tokenB);
-
-    require(availableBalanceTokenA >= feeA && availableBalanceTokenB >= feeB, "Wrong balance");
-    availableBalanceTokenA -= feeA;
-    availableBalanceTokenB -= feeB;
-
-    uint liquidatorSwapSlippage = _getLiquidatorSwapSlippage(pool);
-
-    if (availableBalanceTokenB < debtAmount) {
-
-      uint tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
-      uint needToSellTokenA = tokenBprice * (debtAmount - availableBalanceTokenB) / 10 ** IERC20Metadata(tokenB).decimals();
-      // add 1% gap for price impact
-      needToSellTokenA += needToSellTokenA / SELL_GAP;
-
-      if (needToSellTokenA < availableBalanceTokenA) {
-        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
-      } else {
-        // very rare case, but happens on long run backtests
-        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, availableBalanceTokenA, liquidatorSwapSlippage, 0);
-        ConverterStrategyBaseLib.closePosition(
-          tetuConverter,
-          tokenA,
-          tokenB,
-          _balance(tokenB) - feeB
-        );
-        // refresh dept amount
-        debtAmount = getDeptTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
-        if (debtAmount > 0) {
-          tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
-          needToSellTokenA = tokenBprice * debtAmount / 10 ** IERC20Metadata(tokenB).decimals();
-          needToSellTokenA += needToSellTokenA / SELL_GAP;
-          ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
-        }
-      }
-    }
-
-    if (debtAmount > 0) {
-      ConverterStrategyBaseLib.closePosition(
-        tetuConverter,
-        tokenA,
-        tokenB,
-        debtAmount
-      );
-    }
-
-    ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, _balance(tokenB) - feeB, liquidatorSwapSlippage, 0);
-  }
-
-  /// @dev Opens a new debt position using entry data.
-  /// @param tetuConverter The TetuConverter contract.
-  /// @param tokenA The address of token A.
-  /// @param tokenB The address of token B.
-  /// @param entryData The data required to open a position.
-  /// @param feeA The fee associated with token A.
-  function _openDebt(
-    ITetuConverter tetuConverter,
-    address tokenA,
-    address tokenB,
-    bytes memory entryData,
-    uint feeA
-  ) internal {
-    ConverterStrategyBaseLib.openPosition(
-      tetuConverter,
-      entryData,
-      tokenA,
-      tokenB,
-      _balance(tokenA) - feeA,
-      0
-    );
-  }
-
-  /// @dev Rebalances the debt to reach the optimal ratio between token A and token B.
-  /// @param tetuConverter The TetuConverter contract.
-  /// @param controller The controller contract address.
-  /// @param pool The Uniswap V3 pool contract.
-  /// @param tokenA The address of token A.
-  /// @param tokenB The address of token B.
-  /// @param tokenAFee The fee associated with token A.
-  /// @param tokenBFee The fee associated with token B.
-  function _rebalanceDebtFillup(
-    ITetuConverter tetuConverter,
-    address controller,
-    IUniswapV3Pool pool,
-    address tokenA,
-    address tokenB,
-    uint tokenAFee,
-    uint tokenBFee
-  ) internal {
-    RebalanceDebtFillUpLocalVariables memory vars;
-    vars.debtAmount = getDeptTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
-
-    vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
-    vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
-
-    if (vars.availableBalanceTokenB > vars.debtAmount) {
-      vars.needToBorrowOrFreeFromBorrow = vars.availableBalanceTokenB - vars.debtAmount;
-
-      if (_getCollateralAmountForBorrow(tetuConverter, tokenA, tokenB, vars.needToBorrowOrFreeFromBorrow) < vars.availableBalanceTokenA) {
-        ConverterStrategyBaseLib.openPosition(
-          tetuConverter,
-          abi.encode(2),
-          tokenA,
-          tokenB,
-          vars.needToBorrowOrFreeFromBorrow,
-          0
-        );
-      } else {
-        ConverterStrategyBaseLib.closePosition(
-          tetuConverter,
-          tokenA,
-          tokenB,
-          vars.debtAmount
-        );
-
-        vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
-
-        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, vars.availableBalanceTokenB, _getLiquidatorSwapSlippage(pool), 0);
-
-        vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
-
-        ConverterStrategyBaseLib.openPosition(
-          tetuConverter,
-          abi.encode(1, 1, 1),
-          tokenA,
-          tokenB,
-          vars.availableBalanceTokenA,
-          0
-        );
-      }
-    } else {
-      vars.needToBorrowOrFreeFromBorrow = vars.debtAmount - vars.availableBalanceTokenB;
-      if (vars.availableBalanceTokenB > vars.needToBorrowOrFreeFromBorrow) {
-        ConverterStrategyBaseLib.closePosition(
-          tetuConverter,
-          tokenA,
-          tokenB,
-          vars.needToBorrowOrFreeFromBorrow
-        );
-      } else {
-        uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * vars.needToBorrowOrFreeFromBorrow / 10 ** IERC20Metadata(tokenB).decimals();
-        // add % gap for price impact
-        needToSellTokenA += needToSellTokenA / SELL_GAP;
-        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, _getLiquidatorSwapSlippage(pool), 0);
-
-        vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
-
-        ConverterStrategyBaseLib.closePosition(
-          tetuConverter,
-          tokenA,
-          tokenB,
-          vars.debtAmount < vars.availableBalanceTokenB ? vars.debtAmount : vars.availableBalanceTokenB
-        );
-
-        vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
-
-        ConverterStrategyBaseLib.openPosition(
-          tetuConverter,
-          abi.encode(1, 1, 1),
-          tokenA,
-          tokenB,
-          vars.availableBalanceTokenA,
-          0
-        );
-      }
-    }
-  }
-
-  /// @dev Calculates the collateral amount required for borrowing a specified amount.
-  /// @param tetuConverter The TetuConverter contract.
-  /// @param tokenA The address of token A.
-  /// @param tokenB The address of token B.
-  /// @param needToBorrow The amount that needs to be borrowed.
-  /// @return collateralAmount The amount of collateral required for borrowing the specified amount.
-  function _getCollateralAmountForBorrow(
-    ITetuConverter tetuConverter,
-    address tokenA,
-    address tokenB,
-    uint needToBorrow
-  ) internal view returns (uint collateralAmount) {
-    ConverterStrategyBaseLib.OpenPositionLocal memory vars;
-    (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter.findBorrowStrategies(
-      abi.encode(2),
-      tokenA,
-      needToBorrow,
-      tokenB,
-      BORROW_PERIOD_ESTIMATION
-    );
-
-    uint len = vars.converters.length;
-    if (len > 0) {
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        vars.amountToBorrow = needToBorrow < vars.amountsToBorrow[i]
-        ? needToBorrow
-        : vars.amountsToBorrow[i];
-        vars.collateral = needToBorrow < vars.amountsToBorrow[i]
-        ? vars.collateralsRequired[i] * needToBorrow / vars.amountsToBorrow[i]
-        : vars.collateralsRequired[i];
-        needToBorrow -= vars.amountToBorrow;
-        if (needToBorrow == 0) break;
-      }
-    }
-    return vars.collateral;
-  }
-
-  //////////////////////////////////////////
   //            Rebalance
   //////////////////////////////////////////
 
@@ -1050,7 +749,7 @@ library UniswapV3ConverterStrategyLogicLib {
     tokenB : state.tokenB,
     lastPrice : state.lastPrice,
     fuseThreshold : state.fuseThreshold,
-    _depositorSwapTokens : state.depositorSwapTokens,
+    depositorSwapTokens : state.depositorSwapTokens,
     rebalanceEarned0 : state.rebalanceEarned0,
     rebalanceEarned1 : state.rebalanceEarned1,
     // setup initial values
@@ -1076,19 +775,20 @@ library UniswapV3ConverterStrategyLogicLib {
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
-      /// @dev enabling fuse: close debt and stop providing liquidity
+      /// enabling fuse: close debt and stop providing liquidity
       state.isFuseTriggered = true;
       emit FuseTriggered();
 
-      closeDebt(
+      UniswapV3DebtLib.closeDebt(
         converter,
         controller,
         vars.pool,
         vars.tokenA,
         vars.tokenB,
-        vars._depositorSwapTokens,
+        vars.depositorSwapTokens,
         vars.rebalanceEarned0,
-        vars.rebalanceEarned1
+        vars.rebalanceEarned1,
+        _getLiquidatorSwapSlippage(vars.pool)
       );
 
       vars.newRebalanceEarned0 = vars.rebalanceEarned0;
@@ -1100,34 +800,32 @@ library UniswapV3ConverterStrategyLogicLib {
         state.lastPrice = vars.newPrice;
       }
 
-      /// @dev rebalacing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
-      rebalanceDebt(
+      /// rebalancing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
+      UniswapV3DebtLib.rebalanceDebt(
         converter,
         controller,
         vars.pool,
         vars.tokenA,
         vars.tokenB,
         vars.fillUp,
-        vars.lowerTick,
-        vars.upperTick,
-        vars.tickSpacing,
-        vars._depositorSwapTokens,
-        vars.rebalanceEarned0,
-        vars.rebalanceEarned1
+        (vars.depositorSwapTokens ? vars.rebalanceEarned1 : vars.rebalanceEarned0),
+        (vars.depositorSwapTokens ? vars.rebalanceEarned0 : vars.rebalanceEarned1),
+        getEntryData(vars.pool, vars.lowerTick, vars.upperTick, vars.tickSpacing, vars.depositorSwapTokens),
+        _getLiquidatorSwapSlippage(vars.pool)
       );
 
-      /// @dev trying to cover rebalance loss (IL + not hedged part of tokenB + swap cost) by pool rewards
+      /// trying to cover rebalance loss (IL + not hedged part of tokenB + swap cost) by pool rewards
       (vars.newRebalanceEarned0, vars.newRebalanceEarned1, vars.notCoveredLoss) = _calculateCoverLoss(
         TryCoverLossParams(
           vars.pool,
           vars.tokenA,
           vars.tokenB,
-          vars._depositorSwapTokens,
+          vars.depositorSwapTokens,
           vars.rebalanceEarned0,
           vars.rebalanceEarned1,
           oldInvestedAssets
         ),
-        getDeptTotalCollateralAmountOut(converter, vars.tokenA, vars.tokenB)
+        UniswapV3DebtLib.getDeptTotalCollateralAmountOut(converter, vars.tokenA, vars.tokenB)
       );
       state.rebalanceEarned0 = vars.newRebalanceEarned0;
       state.rebalanceEarned1 = vars.newRebalanceEarned1;
@@ -1142,8 +840,8 @@ library UniswapV3ConverterStrategyLogicLib {
 
 
       tokenAmounts = new uint[](2);
-      tokenAmounts[0] = _balance(vars.tokenA) - (vars._depositorSwapTokens ? vars.newRebalanceEarned1 : vars.newRebalanceEarned0);
-      tokenAmounts[1] = _balance(vars.tokenB) - (vars._depositorSwapTokens ? vars.newRebalanceEarned0 : vars.newRebalanceEarned1);
+      tokenAmounts[0] = _balance(vars.tokenA) - (vars.depositorSwapTokens ? vars.newRebalanceEarned1 : vars.newRebalanceEarned0);
+      tokenAmounts[1] = _balance(vars.tokenB) - (vars.depositorSwapTokens ? vars.newRebalanceEarned0 : vars.newRebalanceEarned1);
 
       if (vars.fillUp) {
         isNeedFillup = true;

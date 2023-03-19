@@ -21,15 +21,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   string public constant override PLATFORM = AppPlatforms.UNIV3;
   string public constant override STRATEGY_VERSION = "1.0.0";
 
-  uint internal constant DEFAULT_FUSE_THRESHOLD = 5e15;
-
-  /////////////////////////////////////////////////////////////////////
-  ///                EVENTS
-  /////////////////////////////////////////////////////////////////////
-
-  event DisableFuse();
-  event NewFuseThreshold(uint newFuseThreshold);
-
   /////////////////////////////////////////////////////////////////////
   ///                INIT
   /////////////////////////////////////////////////////////////////////
@@ -51,22 +42,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ) external initializer {
     __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
-    address liquidator = IController(controller_).liquidator();
-    IERC20(state.tokenA).approve(liquidator, type(uint).max);
-    IERC20(state.tokenB).approve(liquidator, type(uint).max);
-
-    /// for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
-    /// upperTick always greater then lowerTick
-    state.fillUp = state.upperTick - state.lowerTick >= 4 * state.tickSpacing;
-
-    if (UniswapV3ConverterStrategyLogicLib.isStablePool(state.pool)) {
-      /// for stable pools fuse can be enabled
-      state.isStablePool = true;
-      // 0.5% price change
-      state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
-      emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
-      state.lastPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
-    }
+    UniswapV3ConverterStrategyLogicLib.initStrategyState(state, controller_, converter_);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -77,7 +53,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function disableFuse() external {
     StrategyLib.onlyOperators(controller());
     state.isFuseTriggered = false;
-    emit DisableFuse();
+
+    UniswapV3ConverterStrategyLogicLib.emitDisableFuse();
   }
 
   /// @notice Set the fuse threshold for the strategy.
@@ -86,7 +63,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     StrategyLib.onlyOperators(controller());
     state.fuseThreshold = newFuseThreshold;
 
-    emit NewFuseThreshold(newFuseThreshold);
+    UniswapV3ConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
   }
 
   /////////////////////////////////////////////////////////////////////
