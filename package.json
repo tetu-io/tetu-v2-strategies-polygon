@@ -15,9 +15,6 @@
     "slither": "npm run build && slither .",
     "lint": "tslint -p tsconfig.json",
     "lint-fix": "tslint --fix -p tsconfig.json",
-    "update-tetu-contracts-v2": "npm update @tetu_io/tetu-contracts-v2",
-    "update-tetu-converter": "npm update @tetu_io/tetu-converter",
-    "update-tetu-liquidator": "npm update @tetu_io/tetu-liquidator",
     "update-block": "ts-node scripts/utils/UpdateBlock.ts"
   },
   "keywords": [
@@ -72,7 +69,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "solidity-coverage": "^0.8.2",
-    "tetu_converter": "git+https://github.com/tetu-io/tetu-converter.git#master",
     "ts-generator": "^0.1.1",
     "ts-node": "^10.9.1",
     "tslint": "^6.1.3",

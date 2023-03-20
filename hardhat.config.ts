@@ -40,7 +40,7 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-task('deployContract', 'Deploy contract', async function(args, hre, runSuper) {
+task('deploy1', 'Deploy contract', async function(args, hre, runSuper) {
   const [signer] = await hre.ethers.getSigners();
   // tslint:disable-next-line:ban-ts-ignore
   // @ts-ignore

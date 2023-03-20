@@ -15,7 +15,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const core = Addresses.getCore() as CoreAddresses
 
   const strategyImplDeployment = await deployments.get('UniswapV3ConverterStrategy')
-  const proxyDeployResult = await deployments.deploy('UsdcUsdtUniswapV3Strategy', {
+  const proxyDeployResult = await deployments.deploy('Strategy_UniswapV3ConverterStrategy_UsdcUsdt', {
     contract: '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
     from: deployer,
     log: true,
@@ -34,5 +34,5 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   )
 }
 export default func;
-func.tags = ['UsdcUsdtUniswapV3Strategy']
+func.tags = ['Strategy_UniswapV3ConverterStrategy_UsdcUsdt']
 func.dependencies = ['UniswapV3ConverterStrategy']
