@@ -24,9 +24,7 @@ export class ConverterUtils {
   }
 
   public static async disableHf(signer: SignerWithAddress) {
-    console.log('disableHf...');
-    await this.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
-    console.log('disableHf done.\n\n');
+    console.log("Hundred Finance is not deployed, so it's not necessary to disable it");
   }
 
   public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {

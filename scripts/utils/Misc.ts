@@ -119,9 +119,8 @@ export class Misc {
 
 //region TetuConverter addresses
 
-const DFORCE_PLATFORM_ADAPTER_ADDRESS = "0x6F4ff8c26727F74103D9dDd7aF33d6c57913Ed06";
-const HUNDRED_FINANCE_PLATFORM_ADAPTER_ADDRESS = "0xf0331230Cd31288A887897975130d00915eaF325";
-const AAVE_TWO_PLATFORM_ADAPTER_ADDRESS = "0x0d75324d2218e413111E41382eaDc913845F7540";
+const DFORCE_PLATFORM_ADAPTER_ADDRESS = "0xB8d6019eD82a9e6216c9Bf87cAf145fFe4439b40"; // beta 6
+const AAVE_TWO_PLATFORM_ADAPTER_ADDRESS = "0x98b083E6170b9AAD8318BB3a79e5D22eCDf78feC"; // beta 6
 
 /**
  * Address of TetuConverter
@@ -137,10 +136,6 @@ export function getConverterAddress() {
  */
 export function getDForcePlatformAdapter() {
   return DFORCE_PLATFORM_ADAPTER_ADDRESS;
-}
-
-export function getHundredFinancePlatformAdapter() {
-  return HUNDRED_FINANCE_PLATFORM_ADAPTER_ADDRESS;
 }
 
 export function getAaveTwoPlatformAdapter() {

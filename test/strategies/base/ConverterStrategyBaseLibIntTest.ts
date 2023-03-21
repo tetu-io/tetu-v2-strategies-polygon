@@ -81,9 +81,6 @@ describe.skip('ConverterStrategyBaseLibIntTest', () => {
       // Disable DForce (as it reverts on repay after block advance)
       await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
 
-      // Disable Hundred Finance (no liquidity)
-      await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
-
       // todo add facade to whitelist of the tetu converter
 
       await BalanceUtils.getAmountFromHolder(

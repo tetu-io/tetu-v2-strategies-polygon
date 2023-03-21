@@ -82,9 +82,6 @@ describe.skip('BalancerIntTest  @skip-on-coverage', function() {
 
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-
-    // Disable Hundred Finance (no liquidity)
-    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
   });
 
   after(async function() {

@@ -61,9 +61,6 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-
-    // Disable Hundred Finance (no liquidity)
-    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
   });
 
   /** Save collected states to csv, compute profit */
