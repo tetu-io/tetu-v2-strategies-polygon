@@ -14,6 +14,14 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.USDT_TOKEN,
     "matic": MaticAddresses.USDT_TOKEN
   },
+  WMATIC_ADDRESS: {
+    "hardhat": MaticAddresses.WMATIC_TOKEN,
+    "matic": MaticAddresses.WMATIC_TOKEN
+  },
+  STMATIC_ADDRESS: {
+    "hardhat": MaticAddresses.STMATIC_TOKEN,
+    "matic": MaticAddresses.STMATIC_TOKEN
+  },
   X_USDC_VAULT_ADDRESS: {
     "hardhat": "0xeE3B4Ce32A6229ae15903CDa0A5Da92E739685f7",
     "matic": "0xeE3B4Ce32A6229ae15903CDa0A5Da92E739685f7"
@@ -25,6 +33,14 @@ export const deployAddresses = {
   X_USDT_VAULT_ADDRESS: {
     "hardhat": "0xE680e0317402ad3CB37D5ed9fc642702658Ef57F",
     "matic": "0xE680e0317402ad3CB37D5ed9fc642702658Ef57F"
+  },
+  X_MATIC_VAULT_ADDRESS: {
+    "hardhat": "0xBd2E7f163D7605fa140D873Fea3e28a031370363",
+    "matic": "0xBd2E7f163D7605fa140D873Fea3e28a031370363"
+  },
+  X_ST_MATIC_VAULT_ADDRESS: {
+    "hardhat": "0xa0a88Eaf9b0c4f09dE183F5ba3ba4Bd967a92093",
+    "matic": "0xa0a88Eaf9b0c4f09dE183F5ba3ba4Bd967a92093"
   },
   LIQUIDATOR_ADDRESS: {
     "hardhat": "0xC737eaB847Ae6A92028862fE38b828db41314772",
