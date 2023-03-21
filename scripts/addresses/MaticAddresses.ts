@@ -9,7 +9,7 @@ export class MaticAddresses {
 
   public static ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   public static GOV_ADDRESS = "0xcc16d636dD05b52FF1D8B9CE09B09BC62b11412B".toLowerCase(); // TETU v1
-  public static TETU_CONVERTER = "0x298F30E21f0dfa3718b9C31ae27c8A5E6A88B95E".toLowerCase(); // beta 5
+  public static TETU_CONVERTER = "0x43b53cc004563523C2E271EeF49FEb4184f1fAE1".toLowerCase(); // beta 5
   public static TETU_LIQUIDATOR = "0xC737eaB847Ae6A92028862fE38b828db41314772".toLowerCase();
   // tokens
   public static WETH_TOKEN = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619".toLowerCase();

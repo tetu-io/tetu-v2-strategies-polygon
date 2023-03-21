@@ -15,7 +15,10 @@
     "slither": "npm run build && slither .",
     "lint": "tslint -p tsconfig.json",
     "lint-fix": "tslint --fix -p tsconfig.json",
-    "update-block": "ts-node scripts/utils/UpdateBlock.ts"
+    "update-block": "ts-node scripts/utils/UpdateBlock.ts",
+    "deploy-prod": "hardhat deploy --network matic --write true",
+    "verify-all": "hardhat etherscan-verify --network matic",
+    "deploy-local": "hardhat deploy --write true --reset"
   },
   "keywords": [
     "solidity",
@@ -37,7 +40,7 @@
     "@nomiclabs/hardhat-solhint": "^3.0.0",
     "@nomiclabs/hardhat-web3": "^2.0.0",
     "@tetu_io/tetu-contracts-v2": "2.0.1",
-    "@tetu_io/tetu-converter": "git+https://github.com/tetu-io/tetu-converter.git#dev",
+    "@tetu_io/tetu-converter": "0.0.2",
     "@tetu_io/tetu-liquidator": "1.0.0",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.5",

@@ -26,6 +26,7 @@ import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
+import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 
 const { expect } = chai;
 
@@ -221,6 +222,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
     swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer);
 
     FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+
+    await ConverterUtils.whitelist([strategy.address, strategy2.address, strategy3.address]);
   });
 
   after(async function() {

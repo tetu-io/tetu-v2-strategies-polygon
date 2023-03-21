@@ -105,6 +105,11 @@ export default {
       polygon: argv.networkScanKeyMatic || argv.networkScanKey,
     },
   },
+  verify: {
+    etherscan: {
+      apiKey: argv.networkScanKey
+    }
+  },
   solidity: {
     compilers: [
       {

@@ -1,14 +1,33 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
-import { IConverterController__factory, IPlatformAdapter__factory, TetuConverter__factory } from '../../../typechain';
+import {
+  ConverterController__factory,
+  IConverterController__factory,
+  IPlatformAdapter__factory,
+  TetuConverter__factory,
+} from '../../../typechain';
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
   getHundredFinancePlatformAdapter,
+  Misc,
 } from '../../../scripts/utils/Misc';
+import { MaticAddresses } from '../../../scripts/addresses/MaticAddresses';
 
 export class ConverterUtils {
+
+  public static async whitelist(adrs: string[]) {
+    const signer = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
+    const converterControllerAddr = await TetuConverter__factory.connect(getConverterAddress(), signer).controller();
+    const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
+    const converterControllerGovernanceAddr = await converterController.governance();
+    const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
+
+    const contrl = ConverterController__factory.connect(getConverterAddress(), converterControllerGovernance);
+
+    await contrl.setWhitelistValues(adrs, true);
+  }
 
   /**
    * Disable DForce (because it reverts on repay after block advance)
