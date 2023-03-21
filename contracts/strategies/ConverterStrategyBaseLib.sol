@@ -11,7 +11,6 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
-
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 

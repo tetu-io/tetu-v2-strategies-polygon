@@ -169,7 +169,7 @@ export class BalancerIntTestUtils {
     const debtsUsdt = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
       strategy.address,
       MaticAddresses.USDC_TOKEN,
-      MaticAddresses.DAI_TOKEN,
+      MaticAddresses.USDT_TOKEN,
     );
 
     const dest = {

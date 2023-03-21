@@ -5,7 +5,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./DepositorBase.sol";
-
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -573,6 +572,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///               InvestedAssets Calculations
   /////////////////////////////////////////////////////////////////////
 
+  /// @dev Call it after requirePayAmountBack
+  function updateInvestedAssets() external {
+    StrategyLib.onlyGovernance(controller());
+    _updateInvestedAssets();
+  }
+
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim; virtual - for ut
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
@@ -670,9 +675,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // send amount to converter and update baseAmounts
     amountOut = Math.min(v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset], amount_);
-    IERC20(theAsset_).safeTransfer(v.converter, amountOut);
-    _updateBaseAmounts(v.tokens, v.withdrawnAmounts, v.spentAmounts, v.indexTheAsset, - int(amountOut));
+    _updateBaseAmounts(v.tokens, v.withdrawnAmounts, v.spentAmounts, v.indexTheAsset, 0);
     _updateInvestedAssets();
+    _decreaseBaseAmount(v.tokens[v.indexTheAsset], amountOut);
+    IERC20(theAsset_).safeTransfer(v.converter, amountOut);
 
     emit ReturnAssetToConverter(theAsset_, amountOut);
 
@@ -686,7 +692,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) override pure external {
     // noop; will deposit amount received at the next hardwork
   }
-
 
   /////////////////////////////////////////////////////////////////////
   ///                Others

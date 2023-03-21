@@ -16,7 +16,7 @@ import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import {
   BalancerComposableStableStrategy,
   BalancerComposableStableStrategy__factory,
-  ControllerV2__factory, ConverterController__factory,
+  ControllerV2__factory, ConverterController__factory, IController__factory,
   IERC20__factory,
   ISplitter,
   ISplitter__factory,
@@ -1086,6 +1086,17 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           for (let i = 0; i < countBorrows; ++i) {
             const poolAdapter = await borrowManager.listPoolAdapters(i);
             await tetuConverterAsGovernance.repayTheBorrow(poolAdapter, true);
+
+            const governanceOfStrategy = await IController__factory.connect(
+              await strategy.controller(),
+              signer
+            ).governance();
+            await strategy.connect(
+              await Misc.impersonate(governanceOfStrategy)
+            ).updateInvestedAssets();
+
+            const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'middle');
+            console.log(i, stateMiddle);
           }
 
           const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
@@ -1103,11 +1114,14 @@ describe('BalancerIntTest @skip-on-coverage', function() {
             stateFinal.converter.amountToRepayUsdt.eq(0),
             stateFinal.converter.collateralForDai.eq(0),
             stateFinal.converter.collateralForUsdt.eq(0),
+
+            stateAfterDeposit.vault.sharePrice.eq(stateFinal.vault.sharePrice)
           ].join("\n");
 
           const expected = [
             true, true, true, true, true,
             true, true, true, true, true,
+            true
           ].join("\n");
 
           await BalancerIntTestUtils.saveListStatesToCSVColumns(
