@@ -22,7 +22,6 @@ import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter,
   Misc,
 } from '../../../../scripts/utils/Misc';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
@@ -72,7 +71,7 @@ describe('ConverterStrategyBaseBalancerAccessTest', function() {
     addresses = Addresses.getCore();
     tetuConverterAddress = getConverterAddress();
 
-    await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
+    await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     // Disable DForce (as it reverts on repay after block advance)
@@ -155,6 +154,7 @@ describe('ConverterStrategyBaseBalancerAccessTest', function() {
       vault = data.vault;
       asset = await data.vault.asset();
       strategy = data.strategy as unknown as BalancerComposableStableStrategyAccess;
+      await ConverterUtils.addToWhitelist(signer, tetuConverterAddress, strategy.address);
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
       console.log('vault', vault.address);

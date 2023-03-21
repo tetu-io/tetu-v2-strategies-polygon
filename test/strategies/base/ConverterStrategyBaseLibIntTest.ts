@@ -16,7 +16,6 @@ import { MockHelper } from '../../baseUT/helpers/MockHelper';
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter,
   Misc,
 } from '../../../scripts/utils/Misc';
 import { BalanceUtils } from '../../baseUT/utils/BalanceUtils';
@@ -80,6 +79,7 @@ describe.skip('ConverterStrategyBaseLibIntTest', () => {
     ): Promise<IOpenPositionTestResults> {
       // Disable DForce (as it reverts on repay after block advance)
       await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+      await ConverterUtils.addToWhitelist(signer, tetuConverter.address, facade.address);
 
       // todo add facade to whitelist of the tetu converter
 

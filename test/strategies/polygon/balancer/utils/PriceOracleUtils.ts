@@ -13,7 +13,6 @@ import { ConverterUtils } from '../../../../baseUT/utils/ConverterUtils';
 import {
   getAaveTwoPlatformAdapter,
   getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter,
   Misc,
 } from '../../../../../scripts/utils/Misc';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';

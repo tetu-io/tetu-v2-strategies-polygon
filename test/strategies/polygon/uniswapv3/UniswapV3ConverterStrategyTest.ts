@@ -26,6 +26,7 @@ import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 const { expect } = chai;
 
@@ -92,6 +93,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     let data;
+    const converterAddress = getConverterAddress();
 
     const strategyUSDCWETH500Deployer = async(_splitterAddress: string) => {
       const _strategy = UniswapV3ConverterStrategy__factory.connect(
@@ -109,7 +111,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await _strategy.init(
         core.controller,
         _splitterAddress,
-        getConverterAddress(),
+        converterAddress,
         poolAddress,
         range,
         rebalanceRange,
@@ -130,6 +132,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
     );
     vault = data.vault.connect(signer);
     strategy = data.strategy as unknown as UniswapV3ConverterStrategy;
+    await ConverterUtils.addToWhitelist(signer, converterAddress, strategy.address);
 
     const strategyWMATICUSDC500Deployer = async(_splitterAddress: string) => {
       const _strategy = UniswapV3ConverterStrategy__factory.connect(
@@ -147,7 +150,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await _strategy.init(
         core.controller,
         _splitterAddress,
-        getConverterAddress(),
+        converterAddress,
         poolAddress,
         range,
         rebalanceRange,
@@ -168,6 +171,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
     );
     vault2 = data.vault.connect(signer);
     strategy2 = data.strategy as unknown as UniswapV3ConverterStrategy;
+    await ConverterUtils.addToWhitelist(signer, converterAddress, strategy2.address);
 
     const strategyUSDCUSDT100Deployer = async(_splitterAddress: string) => {
       const _strategy = UniswapV3ConverterStrategy__factory.connect(
@@ -184,7 +188,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await _strategy.init(
         core.controller,
         _splitterAddress,
-        getConverterAddress(),
+        converterAddress,
         poolAddress,
         range,
         rebalanceRange,
@@ -205,6 +209,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
     );
     vault3 = data.vault.connect(signer);
     strategy3 = data.strategy as unknown as UniswapV3ConverterStrategy;
+    await ConverterUtils.addToWhitelist(signer, converterAddress, strategy3.address);
 
     await TokenUtils.getToken(asset.address, signer.address, _100_000);
     // await TokenUtils.getToken(asset.address, signer2.address, _100_000);
@@ -303,6 +308,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
       await strategy2.connect(platformVoter).setCompoundRatio(100000); // 100%
       const converter = TetuConverter__factory.connect(getConverterAddress(), signer);
+      await ConverterUtils.addToWhitelist(signer, converter.address, strategy2.address);
       const converterController = IConverterController__factory.connect(await converter.controller(), signer);
       const converterGovernance = await DeployerUtilsLocal.impersonate(await converterController.governance());
       const borrowManager = IBorrowManager__factory.connect(
