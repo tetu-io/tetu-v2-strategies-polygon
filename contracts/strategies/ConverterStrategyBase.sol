@@ -715,12 +715,26 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // let's leave any leftovers un-invested, they will be reinvested at next hardwork
   }
 
-  function onTransferBorrowedAmount(
-    address /*collateralAsset_*/,
-    address /*borrowAsset_*/,
-    uint /*amountBorrowAssetSentToBorrower_*/
-  ) override pure external {
-    // noop; will deposit amount received at the next hardwork
+  /// @notice TetuConverter calls this function when it sends any amount to user's balance
+  /// @param assets_ Any asset sent to the balance, i.e. inside repayTheBorrow
+  /// @param amounts_ Amount of {asset_} that has been sent to the user's balance
+  function onTransferAmounts(address[] memory assets_, uint[] memory amounts_) external {
+    console.log("onTransferAmounts", amounts_[0], amounts_[1]);
+    uint len = assets_.length;
+    require(len == amounts_.length, AppErrors.INCORRECT_LENGTHS);
+
+    for (uint i = 0; i < len; AppLib.uncheckedInc(i)) {
+      if (amounts_[i] != 0) {
+        _increaseBaseAmount(assets_[i], amounts_[i], _balance(assets_[i]));
+      }
+    }
+
+    // TetuConverter is able two call this function in two cases:
+    // 1) rebalancing (the health factor of some borrow is too low)
+    // 2) forcible closing of the borrow
+    // In both cases we update invested assets value here
+    // and avoid fixing any related losses in hardwork
+    _updateInvestedAssets();
   }
 
   /////////////////////////////////////////////////////////////////////

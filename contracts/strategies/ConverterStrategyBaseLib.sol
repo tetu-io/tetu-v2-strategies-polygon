@@ -166,7 +166,7 @@ library ConverterStrategyBaseLib {
     withdrawnAmountsOut = new uint[](len);
 
     if (ratio != 0) {
-      for (uint i; i < len; ++i) {
+      for (uint i; i < len; AppLib.uncheckedInc(i)) {
         withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
       }
     }

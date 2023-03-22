@@ -6,7 +6,7 @@ import {
   ConverterController__factory, IBorrowManager,
   IBorrowManager__factory,
   IConverterController__factory,
-  IPlatformAdapter__factory,
+  IPlatformAdapter__factory, ITetuConverter,
   ITetuConverter__factory,
   TetuConverter__factory
 } from '../../../typechain';
@@ -30,10 +30,6 @@ export class ConverterUtils {
     console.log('disableDForce...');
     await this.disablePlatformAdapter(signer, getDForcePlatformAdapter());
     console.log('disableDForce done.\n\n');
-  }
-
-  public static async disableHf(signer: SignerWithAddress) {
-    console.log("Hundred Finance is not deployed, so it's not necessary to disable it");
   }
 
   public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {
@@ -107,5 +103,4 @@ export class ConverterUtils {
       signer
     );
   }
-
 }

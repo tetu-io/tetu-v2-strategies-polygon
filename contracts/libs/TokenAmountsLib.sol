@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+import "./AppErrors.sol";
+
 /// @title Library for clearing / joining token addresses & amounts arrays
 /// @author bogdoslav
 library TokenAmountsLib {
@@ -62,7 +64,7 @@ library TokenAmountsLib {
 
     require(
       lens[0] == amounts0.length && lens[1] == amounts1.length && lens[2] == amounts2.length,
-      'TAL: Arrays mismatch'
+      AppErrors.INCORRECT_LENGTHS
     );
 
     uint maxLength = lens[0] + lens[1] + lens[2];

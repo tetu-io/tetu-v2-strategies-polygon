@@ -72,7 +72,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "solidity-coverage": "^0.8.2",
-    "tetu_converter": "git+https://github.com/tetu-io/tetu-converter.git#master",
+    "tetu_converter": "git+https://github.com/tetu-io/tetu-converter.git#dev",
     "ts-generator": "^0.1.1",
     "ts-node": "^10.9.1",
     "tslint": "^6.1.3",
