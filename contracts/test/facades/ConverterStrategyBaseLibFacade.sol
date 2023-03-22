@@ -60,7 +60,8 @@ contract ConverterStrategyBaseLibFacade {
       weights_,
       totalWeight_,
       indexAsset_,
-      priceOracle
+      priceOracle,
+      baseAmounts
     );
   }
 

@@ -231,12 +231,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _prepareRewardsListAccess(
     ITetuConverter tetuConverter_,
     address[] memory tokens_,
-    uint[] memory amounts_
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
   ) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, amounts_, baseAmounts);
+    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, rewardTokens_, rewardAmounts_, baseAmounts);
   }
 
   function _recycleAccess(address[] memory tokens, uint[] memory amounts) external returns (

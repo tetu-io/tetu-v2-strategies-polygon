@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../libs/TokenAmountsLib.sol";
+import "../../libs/TokenAmountsLib.sol";
 
 /// @author bogdoslav
 contract TokenAmountsLibTest {
@@ -16,8 +16,9 @@ contract TokenAmountsLibTest {
     return TokenAmountsLib.filterZeroAmounts(tokens, amounts);
   }
 
-  /// @dev unites tokens2 and amounts2 in to tokens & amounts
-  function unite(
+  function combineArrays(
+    address[] memory tokens0,
+    uint[] memory amounts0,
     address[] memory tokens1,
     uint[] memory amounts1,
     address[] memory tokens2,
@@ -26,7 +27,10 @@ contract TokenAmountsLibTest {
     address[] memory allTokens,
     uint[] memory allAmounts
   ) {
-    return TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
+    return TokenAmountsLib.combineArrays(
+      tokens0, amounts0,
+      tokens1, amounts1,
+      tokens2, amounts2
+    );
   }
-
 }

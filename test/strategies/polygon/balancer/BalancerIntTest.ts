@@ -1086,18 +1086,21 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           for (let i = 0; i < countBorrows; ++i) {
             const poolAdapter = await borrowManager.listPoolAdapters(i);
             await tetuConverterAsGovernance.repayTheBorrow(poolAdapter, true);
-
-            const governanceOfStrategy = await IController__factory.connect(
-              await strategy.controller(),
-              signer
-            ).governance();
-            await strategy.connect(
-              await Misc.impersonate(governanceOfStrategy)
-            ).updateInvestedAssets();
-
-            const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'middle');
-            console.log(i, stateMiddle);
+            break;
           }
+
+          // we need to make hardwork to recalculate investedAssets amount
+          await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, false);
+          const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'middle');
+          console.log("stateMiddle", stateMiddle);
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            './tmp/npc_requirePayAmountBack1.csv',
+            [stateAfterDeposit, stateMiddle],
+          );
+
+
+          await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
 
           const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
           console.log("stateFinal", stateFinal);
