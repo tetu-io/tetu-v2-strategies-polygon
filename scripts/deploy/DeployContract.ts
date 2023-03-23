@@ -12,13 +12,13 @@ export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 const libraries = new Map<string, string[]>([
   ['VeTetu', ['VeTetuLogo']],
   ['BalancerComposableStableDepositorFacade', ['BalancerLogicLib']],
-  ['BalancerComposableStableStrategy', ['ConverterStrategyBaseLib', 'BalancerLogicLib', 'StrategyLib']],
-  ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'StrategyLib']],
-  ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib']],
-  ['BalancerComposableStableStrategyAccess', ['ConverterStrategyBaseLib', 'BalancerLogicLib', 'StrategyLib']],
-  ['UniswapV3ConverterStrategy', ['ConverterStrategyBaseLib', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib']],
-  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'UniswapV3DebtLib']],
-  ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib']],
+  ['BalancerComposableStableStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib']],
+  ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib']],
+  ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
+  ['BalancerComposableStableStrategyAccess', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib']],
+  ['UniswapV3ConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib']],
+  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'UniswapV3DebtLib']],
+  ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(

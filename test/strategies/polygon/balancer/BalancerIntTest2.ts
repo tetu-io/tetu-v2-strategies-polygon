@@ -228,12 +228,15 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           const countBorrows = (await borrowManager.listPoolAdaptersLength()).toNumber();
           for (let i = 0; i < countBorrows; ++i) {
             const poolAdapter = await borrowManager.listPoolAdapters(i);
+            console.log("7");
             await tetuConverterAsGovernance.repayTheBorrow(poolAdapter, true);
-            break;
+            console.log("8");
           }
+          console.log("9");
 
           // we need to make hardwork to recalculate investedAssets amount
           await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, false);
+          console.log("10");
           const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'middle');
           console.log("stateMiddle", stateMiddle);
 
@@ -245,8 +248,8 @@ describe('BalancerIntTest @skip-on-coverage', function() {
 
           await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
 
-          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
-          console.log("stateFinal", stateFinal);
+          const afterHardwork = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
+          console.log("afterHardwork", afterHardwork);
 
           const ret = [
             stateAfterDeposit.gauge.strategyBalance.gt(0),
@@ -255,13 +258,13 @@ describe('BalancerIntTest @skip-on-coverage', function() {
             stateAfterDeposit.converter.collateralForDai.gt(0),
             stateAfterDeposit.converter.collateralForUsdt.gt(0),
 
-            stateFinal.gauge.strategyBalance.eq(0),
-            stateFinal.converter.amountToRepayDai.eq(0),
-            stateFinal.converter.amountToRepayUsdt.eq(0),
-            stateFinal.converter.collateralForDai.eq(0),
-            stateFinal.converter.collateralForUsdt.eq(0),
+            afterHardwork.gauge.strategyBalance.eq(0),
+            afterHardwork.converter.amountToRepayDai.eq(0),
+            afterHardwork.converter.amountToRepayUsdt.eq(0),
+            afterHardwork.converter.collateralForDai.eq(0),
+            afterHardwork.converter.collateralForUsdt.eq(0),
 
-            stateAfterDeposit.vault.sharePrice.eq(stateFinal.vault.sharePrice)
+            stateAfterDeposit.vault.sharePrice.eq(afterHardwork.vault.sharePrice)
           ].join("\n");
 
           const expected = [
@@ -272,7 +275,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
 
           await BalancerIntTestUtils.saveListStatesToCSVColumns(
             './tmp/npc_requirePayAmountBack.csv',
-            [stateAfterDeposit, stateFinal],
+            [stateAfterDeposit, afterHardwork],
           );
 
           expect(ret).eq(expected);

@@ -166,7 +166,7 @@ library ConverterStrategyBaseLib {
     withdrawnAmountsOut = new uint[](len);
 
     if (ratio != 0) {
-      for (uint i; i < len; AppLib.uncheckedInc(i)) {
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
       }
     }
@@ -240,20 +240,6 @@ library ConverterStrategyBaseLib {
       }
     }
     return type(uint).max;
-  }
-
-  /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
-  function getAvailableBalances(
-    address[] memory tokens_,
-    uint indexAsset
-  ) external view returns (uint[] memory) {
-    uint len = tokens_.length;
-    uint[] memory amountsToConvert = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) continue;
-      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this)); // todo baseAmounts??
-    }
-    return amountsToConvert;
   }
 
   /// @notice Get a ratio to calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
@@ -995,31 +981,6 @@ library ConverterStrategyBaseLib {
     return (receivedAmounts, spentAmounts, amountsToForward);
   }
 
-  /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
-  /// @param performanceFee_ Max is FEE_DENOMINATOR
-  /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
-  /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
-  function sendPerformanceFee(
-    uint performanceFee_,
-    address performanceReceiver_,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) external returns (
-    uint[] memory rewardAmounts,
-    uint[] memory performanceAmounts
-  ) {
-    // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
-    uint len = rewardAmounts_.length;
-    rewardAmounts = new uint[](len);
-    performanceAmounts = new uint[](len);
-
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
-      rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
-      IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
-    }
-  }
-
   /////////////////////////////////////////////////////////////////////
   ///                      calcInvestedAssets
   /////////////////////////////////////////////////////////////////////
@@ -1091,24 +1052,6 @@ library ConverterStrategyBaseLib {
     }
 
     return amountOut;
-  }
-
-  /////////////////////////////////////////////////////////////////////
-  ///                      sendTokensToForwarder
-  /////////////////////////////////////////////////////////////////////
-  function sendTokensToForwarder(
-    address controller_,
-    address splitter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) external {
-    uint len = tokens_.length;
-    IForwarder forwarder = IForwarder(IController(controller_).forwarder());
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
-    }
-
-    forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
   }
 
   /////////////////////////////////////////////////////////////////////

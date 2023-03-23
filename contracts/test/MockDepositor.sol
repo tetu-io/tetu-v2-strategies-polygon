@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 import "../strategies/DepositorBase.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/test/IMockToken.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 /// @title Mock contract for base Depositor.
 contract MockDepositor is DepositorBase, Initializable {

@@ -1068,6 +1068,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           console.log("stateAfterDeposit", stateAfterDeposit);
 
           await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, true);
+          console.log("0");
 
           // tetu converter as governance
           const controller = ConverterController__factory.connect(
@@ -1085,7 +1086,9 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           const countBorrows = (await borrowManager.listPoolAdaptersLength()).toNumber();
           for (let i = 0; i < countBorrows; ++i) {
             const poolAdapter = await borrowManager.listPoolAdapters(i);
+            console.log("repayTheBorrow.start");
             await tetuConverterAsGovernance.repayTheBorrow(poolAdapter, true);
+            console.log("repayTheBorrow.finished");
             break;
           }
 

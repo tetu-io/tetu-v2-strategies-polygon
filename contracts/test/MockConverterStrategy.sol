@@ -140,11 +140,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address providerBalanceChange
   ) external {
     handleRewardsParams = MockedHandleRewardsParams({
-    initialized : true,
-    earned : earned,
-    lost : lost,
-    assetBalanceChange : assetBalanceChange,
-    providerBalanceChange : providerBalanceChange
+        initialized: true,
+        earned: earned,
+        lost: lost,
+        assetBalanceChange: assetBalanceChange,
+        providerBalanceChange: providerBalanceChange
     });
   }
 
@@ -158,7 +158,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     int totalAssetsDelta;
   }
 
-  MockedDepositToPoolParams public depositToPoolParams;
+  MockedDepositToPoolParams internal depositToPoolParams;
 
   function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns (
     int totalAssetsDelta
