@@ -75,14 +75,14 @@ library TokenAmountsLib {
     for (uint step; step < 3; ++step) {
       uint[] memory amounts = step == 0
         ? amounts0
-        : step == 1
+        : (step == 1
           ? amounts1
-          : amounts2;
+          : amounts2);
       address[] memory tokens = step == 0
         ? tokens0
-        : step == 1
+        : (step == 1
           ? tokens1
-          : tokens2;
+          : tokens2);
       for (uint i1 = 0; i1 < lens[step]; i1++) {
         uint amount1 = amounts[i1];
         address token1 = tokens[i1];
