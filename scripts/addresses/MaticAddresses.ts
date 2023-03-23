@@ -16,6 +16,7 @@ export class MaticAddresses {
   public static ADDY_TOKEN = "0xc3FdbadC7c795EF1D6Ba111e06fF8F16A20Ea539".toLowerCase();
   public static USDC_TOKEN = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
   public static WMATIC_TOKEN = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270".toLowerCase();
+  public static STMATIC_TOKEN = "0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4".toLowerCase();
   public static QUICK_TOKEN = "0x831753DD7087CaC61aB5644b308642cc1c33Dc13".toLowerCase();
   public static SUSHI_TOKEN = "0x0b3F868E0BE5597D5DB7fEB59E1CADBb0fdDa50a".toLowerCase();
   public static WBTC_TOKEN = "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6".toLowerCase();
