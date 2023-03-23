@@ -26,7 +26,7 @@ export class ConverterUtils {
     const converterControllerGovernanceAddr = await converterController.governance();
     const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
 
-    const contrl = ConverterController__factory.connect(getConverterAddress(), converterControllerGovernance);
+    const contrl = ConverterController__factory.connect(converterControllerAddr, converterControllerGovernance);
 
     await contrl.setWhitelistValues(adrs, true);
   }
