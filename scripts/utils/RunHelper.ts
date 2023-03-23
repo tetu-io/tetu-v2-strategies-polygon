@@ -37,6 +37,7 @@ export class RunHelper {
       throw Error("Wrong status!");
     }
     Misc.printDuration('runAndWait completed', start);
+    return receipt;
   }
 
 }

@@ -4,18 +4,15 @@ import { Consts } from "../deploy_constants/constatants"
 import { ethers } from "hardhat"
 import ERC4626LinearPoolFactoryABI from "../scripts/abis/ERC4626LinearPoolFactory.json"
 import LinearPool from "../scripts/abis/LinearPool.json"
+import { isContractExist } from '../deploy_constants/deploy-helpers';
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const {deployments, getNamedAccounts} = hre;
   const {USDC_ADDRESS, ERC4626_LINEAR_POOL_FACTORY_ADDRESS} = await getNamedAccounts();
 
-  try {
-    const usdcLinearPool = await deployments.get('bbTUsdc4626LinearPool');
-    if (usdcLinearPool.address) {
-      console.log("bbTUsdc4626LinearPool Pool already deployed at:", usdcLinearPool.address);
-      return;
-    }
-  } catch {}
+  if (await isContractExist(hre, 'bbTUsdc4626LinearPool')) {
+    return;
+  }
 
   const erc4626 = await deployments.get('tUsdc4626Strict');
 

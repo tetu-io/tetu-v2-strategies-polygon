@@ -132,7 +132,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
     );
     vault = data.vault.connect(signer);
     strategy = data.strategy as unknown as UniswapV3ConverterStrategy;
-    await ConverterUtils.addToWhitelist(signer, converterAddress, strategy.address);
 
     const strategyWMATICUSDC500Deployer = async(_splitterAddress: string) => {
       const _strategy = UniswapV3ConverterStrategy__factory.connect(
@@ -171,7 +170,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
     );
     vault2 = data.vault.connect(signer);
     strategy2 = data.strategy as unknown as UniswapV3ConverterStrategy;
-    await ConverterUtils.addToWhitelist(signer, converterAddress, strategy2.address);
 
     const strategyUSDCUSDT100Deployer = async(_splitterAddress: string) => {
       const _strategy = UniswapV3ConverterStrategy__factory.connect(
@@ -209,7 +207,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
     );
     vault3 = data.vault.connect(signer);
     strategy3 = data.strategy as unknown as UniswapV3ConverterStrategy;
-    await ConverterUtils.addToWhitelist(signer, converterAddress, strategy3.address);
 
     await TokenUtils.getToken(asset.address, signer.address, _100_000);
     // await TokenUtils.getToken(asset.address, signer2.address, _100_000);
@@ -226,6 +223,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
     swapper = ISwapper__factory.connect('0x7b505210a0714d2a889E41B59edc260Fa1367fFe', signer);
 
     FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+
+    await ConverterUtils.whitelist([strategy.address, strategy2.address, strategy3.address]);
   });
 
   after(async function() {
@@ -308,7 +307,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
       await strategy2.connect(platformVoter).setCompoundRatio(100000); // 100%
       const converter = TetuConverter__factory.connect(getConverterAddress(), signer);
-      await ConverterUtils.addToWhitelist(signer, converter.address, strategy2.address);
       const converterController = IConverterController__factory.connect(await converter.controller(), signer);
       const converterGovernance = await DeployerUtilsLocal.impersonate(await converterController.governance());
       const borrowManager = IBorrowManager__factory.connect(

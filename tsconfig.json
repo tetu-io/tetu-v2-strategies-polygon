@@ -12,6 +12,7 @@
     "./scripts",
     "./test",
     "./deploy",
+    "./deploy_constants",
     "./typechain",
     "./tmp"
   ],

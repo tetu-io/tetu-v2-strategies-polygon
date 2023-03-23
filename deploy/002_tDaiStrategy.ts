@@ -11,6 +11,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     from: deployer,
     args: [X_DAI_VAULT_ADDRESS, LIQUIDATOR_ADDRESS, X_TETU_ADDRESS],
     log: true,
+    skipIfAlreadyDeployed: true,
   });
 
 };
