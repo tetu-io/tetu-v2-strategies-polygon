@@ -35,7 +35,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     'Balancer Tetu Boosted MATIC Pool',
     'bb-t-MATIC',
     poolData.map(p => p.pool),
-    '2000', // amplificationParameter
+    '50', // amplificationParameter
     poolData.map(p => p.strategy), // strategy implements IRatesProvider interface
     ['21600', '21600'], // tokenRateCacheDurations
     [false, false], // exemptFromYieldProtocolFeeFlags
