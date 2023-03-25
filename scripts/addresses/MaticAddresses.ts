@@ -9,7 +9,7 @@ export class MaticAddresses {
 
   public static ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   public static GOV_ADDRESS = "0xcc16d636dD05b52FF1D8B9CE09B09BC62b11412B".toLowerCase(); // TETU v1
-  public static TETU_CONVERTER = "0x43b53cc004563523C2E271EeF49FEb4184f1fAE1".toLowerCase(); // beta 5
+  public static TETU_CONVERTER = "0x081735DEa3D1256881B7cb31cd37c4f7C3E95152".toLowerCase(); // beta 7
   public static TETU_LIQUIDATOR = "0xC737eaB847Ae6A92028862fE38b828db41314772".toLowerCase();
   // tokens
   public static WETH_TOKEN = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619".toLowerCase();
@@ -212,6 +212,7 @@ export class MaticAddresses {
   public static aPolDAI_TOKEN = "0x82E64f49Ed5EC1bC6e43DAD4FC8Af9bb3A2312EE".toLowerCase();
   public static sPolDAI_TOKEN = "0xd94112B5B62d53C9402e7A60289c6810dEF1dC9B".toLowerCase();
   public static vPolDAI_TOKEN = "0x8619d80FB0141ba7F184CbF22fd724116D9f7ffC".toLowerCase();
+  public static AAVE3_PRICE_ORACLE = "0xb023e699F5a33916Ea823A16485e259257cA8Bd1".toLowerCase();
 
   // qidao
   public static camWMATICVault = '0x88d84a85A87ED12B8f098e8953B322fF789fCD1a'.toLowerCase();
@@ -281,6 +282,13 @@ export class MaticAddresses {
 
   // DFORCE
   public static DFORCE_CONTROLLER = '0x52eaCd19E38D501D006D2023C813d7E37F025f37'.toLowerCase();
+  public static DFORCE_IUSDC = "0x5268b3c4afb0860D365a093C184985FCFcb65234";
+  public static DFORCE_IUSDT = "0xb3ab7148cCCAf66686AD6C1bE24D83e58E6a504e";
+  public static DFORCE_IDAI = "0xec85F77104Ffa35a5411750d70eDFf8f1496d95b";
+  public static DFORCE_IWETH = "0x0c92617dF0753Af1CaB2d9Cc6A56173970d81740";
+  public static DFORCE_IWBTC = "0x94a14Ba6E59f4BE36a77041Ef5590Fe24445876A";
+  public static DFORCE_IAAVE = "0x38D0c498698A35fc52a6EB943E47e4A5471Cd6f9";
+  public static DFORCE_IMATIC = "0x6A3fE5342a4Bd09efcd44AC5B9387475A0678c74";
 
   // DYSTOPIA
   public static DYSTOPIA_FACTORY = '0x1d21Db6cde1b18c7E47B0F7F42f4b3F68b9beeC9'.toLowerCase();

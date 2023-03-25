@@ -163,181 +163,286 @@ describe('TokenAmountsLib tests', function() {
     });
   });
 
-  describe('unite', async() => {
+  describe("combineArrays", () => {
+    describe("Good paths", () => {
+      it("should return empty array if all arrays are empty", async () => {
+        const r = await lib.combineArrays(
+          [], [],
+          [], [],
+          [], [],
+        );
 
-    it('empty + empty', async() => {
-      const tokens1: string[] = [];
-      const amounts1: BigNumber[] = [];
-      const tokens2: string[] = [];
-      const amounts2: BigNumber[] = [];
-      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      // await lib.print(united[0], united[1]);
+        const ret = [r.allTokens.length, r.allAmounts.length].join();
+        const expected = [0, 0].join();
 
-      expect(united[0].length).eq(0);
-      expect(united[1].length).eq(0);
+        expect(ret.toLowerCase()).eq(expected.toLowerCase());
+      });
+      it("should return all items if first array is empty", async () => {
+        const r = await lib.combineArrays(
+          [], [],
+          [PA.DAI_TOKEN], [2],
+          [PA.TETU_TOKEN], [3],
+        );
+
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const expected = [
+          [PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
+          [2, 3].join()
+        ].join("\n");
+        expect(ret.toLowerCase()).eq(expected.toLowerCase());
+      });
+      it("should return all items if second array is empty", async () => {
+        const r = await lib.combineArrays(
+          [PA.DAI_TOKEN], [2],
+          [], [],
+          [PA.TETU_TOKEN], [3],
+        );
+
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const expected = [
+          [PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
+          [2, 3].join()
+        ].join("\n");
+        expect(ret.toLowerCase()).eq(expected.toLowerCase());
+      });
+      it("should return all items if third array is empty", async () => {
+        const r = await lib.combineArrays(
+          [PA.DAI_TOKEN], [2],
+          [PA.TETU_TOKEN], [3],
+          [], [],
+        );
+
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const expected = [
+          [PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
+          [2, 3].join()
+        ].join("\n");
+        expect(ret.toLowerCase()).eq(expected.toLowerCase());
+      });
+      it("should return all items if no duplicates in input arrays", async () => {
+        const r = await lib.combineArrays(
+          [PA.USDC_TOKEN], [1],
+          [PA.DAI_TOKEN], [2],
+          [PA.TETU_TOKEN], [3],
+        );
+
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const expected = [
+          [PA.USDC_TOKEN, PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
+          [1, 2, 3].join()
+        ].join("\n");
+
+        expect(ret.toLowerCase()).eq(expected.toLowerCase());
+      });
+      it("should return single item if all input arrays contain same token", async () => {
+        const r = await lib.combineArrays(
+          [PA.USDC_TOKEN, PA.USDC_TOKEN], [1, 2],
+          [PA.USDC_TOKEN], [3],
+          [PA.USDC_TOKEN, PA.USDC_TOKEN, PA.USDC_TOKEN], [4, 5, 6],
+        );
+
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const expected = [PA.USDC_TOKEN, 21].join("\n");
+
+        expect(ret.toLowerCase()).eq(expected.toLowerCase());
+      });
+
+      it("should return all items if duplicates exist in input arrays", async () => {
+        const r = await lib.combineArrays(
+          [PA.USDC_TOKEN, PA.DAI_TOKEN], [1, 2],
+          [PA.DAI_TOKEN], [3],
+          [PA.TETU_TOKEN, PA.DAI_TOKEN, PA.USDC_TOKEN], [4, 5, 6],
+        );
+
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const expected = [
+          [PA.USDC_TOKEN, PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
+          [7, 10, 4].join()
+        ].join("\n");
+
+        expect(ret.toLowerCase()).eq(expected.toLowerCase());
+      });
     });
+    describe("Gas estimation @skip-on-coverage", () => {
 
-    it('array + empty', async() => {
-      const tokens1 = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts1 = [1, 2, 3];
-      const tokens2: string[] = [];
-      const amounts2: BigNumber[] = [];
-      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      // await lib.print(united[0], united[1]);
-
-      expect(united[0].length).eq(3);
-      expect(united[1].length).eq(3);
-      expect(united[0]).deep.equal([
-        _addr(PA.USDC_TOKEN),
-        _addr(PA.DAI_TOKEN),
-        _addr(PA.TETU_TOKEN),
-      ]);
-      expect(united[1][0]).eq(1);
-      expect(united[1][1]).eq(2);
-      expect(united[1][2]).eq(3);
-    });
-
-    it('empty + array', async() => {
-      const tokens1 = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts1 = [1, 2, 3];
-      const tokens2: string[] = [];
-      const amounts2: BigNumber[] = [];
-      const united = await lib.unite(tokens2, amounts2, tokens1, amounts1);
-      // await lib.print(united[0], united[1]);
-
-      expect(united[0].length).eq(3);
-      expect(united[1].length).eq(3);
-      expect(united[0]).deep.equal([
-        _addr(PA.USDC_TOKEN),
-        _addr(PA.DAI_TOKEN),
-        _addr(PA.TETU_TOKEN),
-      ]);
-      expect(united[1][0]).eq(1);
-      expect(united[1][1]).eq(2);
-      expect(united[1][2]).eq(3);
-    });
-
-    it('array + array', async() => {
-      const tokens1 = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts1 = [1, 2, 3];
-      const tokens2 = [
-        PA.USDT_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts2 = [1, 2, 3];
-      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      // await lib.print(united[0], united[1]);
-
-      expect(united[0].length).eq(4);
-      expect(united[1].length).eq(4);
-      expect(united[0]).deep.equal([
-        _addr(PA.USDC_TOKEN),
-        _addr(PA.DAI_TOKEN),
-        _addr(PA.TETU_TOKEN),
-        _addr(PA.USDT_TOKEN),
-      ]);
-      expect(united[1][0]).eq(1);
-      expect(united[1][1]).eq(4);
-      expect(united[1][2]).eq(6);
-      expect(united[1][3]).eq(1);
-    });
-
-    it('array1 with duplicates + empty', async() => {
-      const tokens1 = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-        PA.DAI_TOKEN,
-        PA.USDC_TOKEN,
-      ];
-      const amounts1 = [1, 20, 3, 40, 5];
-      const tokens2: string[] = [];
-      const amounts2: BigNumber[] = [];
-      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      // await lib.print(united[0], united[1]);
-
-      expect(united[0].length).eq(3);
-      expect(united[1].length).eq(3);
-      expect(united[0]).deep.equal([
-        _addr(PA.USDC_TOKEN),
-        _addr(PA.DAI_TOKEN),
-        _addr(PA.TETU_TOKEN),
-      ]);
-      expect(united[1][0]).eq(6);
-      expect(united[1][1]).eq(60);
-      expect(united[1][2]).eq(3);
-    });
-
-    it('arrays mismatch', async() => {
-      const tokens1 = [
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-      ];
-      const amounts1 = [1, 2, 3];
-      const tokens2: string[] = [];
-      const amounts2: BigNumber[] = [];
-      await expect(lib.unite(tokens1, amounts1, tokens2, amounts2)).revertedWith('TAL: Arrays mismatch');
-      await expect(lib.unite(tokens2, amounts2, tokens1, amounts1)).revertedWith('TAL: Arrays mismatch');
-    });
-
-    it('array1 with zero amounts + empty', async() => {
-      const tokens1 = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-        PA.DAI_TOKEN,
-        PA.USDC_TOKEN,
-      ];
-      const amounts1 = [0, 20, 0, 40, 5];
-      const tokens2: string[] = [];
-      const amounts2: BigNumber[] = [];
-      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      // await lib.print(united[0], united[1]);
-
-      expect(united[0].length).eq(2);
-      expect(united[1].length).eq(2);
-      expect(united[0]).deep.equal([
-        _addr(PA.DAI_TOKEN),
-        _addr(PA.USDC_TOKEN),
-      ]);
-      expect(united[1][0]).eq(60);
-      expect(united[1][1]).eq(5);
-    });
-
-    it('empty + array1 with zero amounts', async() => {
-      const tokens1 = [
-        PA.USDC_TOKEN,
-        PA.DAI_TOKEN,
-        PA.TETU_TOKEN,
-        PA.DAI_TOKEN,
-        PA.USDC_TOKEN,
-      ];
-      const amounts1 = [0, 20, 0, 40, 0];
-      const tokens2: string[] = [];
-      const amounts2: BigNumber[] = [];
-      const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
-      // await lib.print(united[0], united[1]);
-
-      expect(united[0].length).eq(1);
-      expect(united[1].length).eq(1);
-      expect(united[0]).deep.equal([
-        _addr(PA.DAI_TOKEN),
-      ]);
-      expect(united[1][0]).eq(60);
     });
   });
+
+  // describe('unite', async() => {
+  //
+  //   it('empty + empty', async() => {
+  //     const tokens1: string[] = [];
+  //     const amounts1: BigNumber[] = [];
+  //     const tokens2: string[] = [];
+  //     const amounts2: BigNumber[] = [];
+  //     const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+  //     // await lib.print(united[0], united[1]);
+  //
+  //     expect(united[0].length).eq(0);
+  //     expect(united[1].length).eq(0);
+  //   });
+  //
+  //   it('array + empty', async() => {
+  //     const tokens1 = [
+  //       PA.USDC_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //     ];
+  //     const amounts1 = [1, 2, 3];
+  //     const tokens2: string[] = [];
+  //     const amounts2: BigNumber[] = [];
+  //     const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+  //     // await lib.print(united[0], united[1]);
+  //
+  //     expect(united[0].length).eq(3);
+  //     expect(united[1].length).eq(3);
+  //     expect(united[0]).deep.equal([
+  //       _addr(PA.USDC_TOKEN),
+  //       _addr(PA.DAI_TOKEN),
+  //       _addr(PA.TETU_TOKEN),
+  //     ]);
+  //     expect(united[1][0]).eq(1);
+  //     expect(united[1][1]).eq(2);
+  //     expect(united[1][2]).eq(3);
+  //   });
+  //
+  //   it('empty + array', async() => {
+  //     const tokens1 = [
+  //       PA.USDC_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //     ];
+  //     const amounts1 = [1, 2, 3];
+  //     const tokens2: string[] = [];
+  //     const amounts2: BigNumber[] = [];
+  //     const united = await lib.unite(tokens2, amounts2, tokens1, amounts1);
+  //     // await lib.print(united[0], united[1]);
+  //
+  //     expect(united[0].length).eq(3);
+  //     expect(united[1].length).eq(3);
+  //     expect(united[0]).deep.equal([
+  //       _addr(PA.USDC_TOKEN),
+  //       _addr(PA.DAI_TOKEN),
+  //       _addr(PA.TETU_TOKEN),
+  //     ]);
+  //     expect(united[1][0]).eq(1);
+  //     expect(united[1][1]).eq(2);
+  //     expect(united[1][2]).eq(3);
+  //   });
+  //
+  //   it('array + array', async() => {
+  //     const tokens1 = [
+  //       PA.USDC_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //     ];
+  //     const amounts1 = [1, 2, 3];
+  //     const tokens2 = [
+  //       PA.USDT_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //     ];
+  //     const amounts2 = [1, 2, 3];
+  //     const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+  //     // await lib.print(united[0], united[1]);
+  //
+  //     expect(united[0].length).eq(4);
+  //     expect(united[1].length).eq(4);
+  //     expect(united[0]).deep.equal([
+  //       _addr(PA.USDC_TOKEN),
+  //       _addr(PA.DAI_TOKEN),
+  //       _addr(PA.TETU_TOKEN),
+  //       _addr(PA.USDT_TOKEN),
+  //     ]);
+  //     expect(united[1][0]).eq(1);
+  //     expect(united[1][1]).eq(4);
+  //     expect(united[1][2]).eq(6);
+  //     expect(united[1][3]).eq(1);
+  //   });
+  //
+  //   it('array1 with duplicates + empty', async() => {
+  //     const tokens1 = [
+  //       PA.USDC_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.USDC_TOKEN,
+  //     ];
+  //     const amounts1 = [1, 20, 3, 40, 5];
+  //     const tokens2: string[] = [];
+  //     const amounts2: BigNumber[] = [];
+  //     const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+  //     // await lib.print(united[0], united[1]);
+  //
+  //     expect(united[0].length).eq(3);
+  //     expect(united[1].length).eq(3);
+  //     expect(united[0]).deep.equal([
+  //       _addr(PA.USDC_TOKEN),
+  //       _addr(PA.DAI_TOKEN),
+  //       _addr(PA.TETU_TOKEN),
+  //     ]);
+  //     expect(united[1][0]).eq(6);
+  //     expect(united[1][1]).eq(60);
+  //     expect(united[1][2]).eq(3);
+  //   });
+  //
+  //   it('arrays mismatch', async() => {
+  //     const tokens1 = [
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //     ];
+  //     const amounts1 = [1, 2, 3];
+  //     const tokens2: string[] = [];
+  //     const amounts2: BigNumber[] = [];
+  //     await expect(lib.unite(tokens1, amounts1, tokens2, amounts2)).revertedWith('TAL: Arrays mismatch');
+  //     await expect(lib.unite(tokens2, amounts2, tokens1, amounts1)).revertedWith('TAL: Arrays mismatch');
+  //   });
+  //
+  //   it('array1 with zero amounts + empty', async() => {
+  //     const tokens1 = [
+  //       PA.USDC_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.USDC_TOKEN,
+  //     ];
+  //     const amounts1 = [0, 20, 0, 40, 5];
+  //     const tokens2: string[] = [];
+  //     const amounts2: BigNumber[] = [];
+  //     const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+  //     // await lib.print(united[0], united[1]);
+  //
+  //     expect(united[0].length).eq(2);
+  //     expect(united[1].length).eq(2);
+  //     expect(united[0]).deep.equal([
+  //       _addr(PA.DAI_TOKEN),
+  //       _addr(PA.USDC_TOKEN),
+  //     ]);
+  //     expect(united[1][0]).eq(60);
+  //     expect(united[1][1]).eq(5);
+  //   });
+  //
+  //   it('empty + array1 with zero amounts', async() => {
+  //     const tokens1 = [
+  //       PA.USDC_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.TETU_TOKEN,
+  //       PA.DAI_TOKEN,
+  //       PA.USDC_TOKEN,
+  //     ];
+  //     const amounts1 = [0, 20, 0, 40, 0];
+  //     const tokens2: string[] = [];
+  //     const amounts2: BigNumber[] = [];
+  //     const united = await lib.unite(tokens1, amounts1, tokens2, amounts2);
+  //     // await lib.print(united[0], united[1]);
+  //
+  //     expect(united[0].length).eq(1);
+  //     expect(united[1].length).eq(1);
+  //     expect(united[0]).deep.equal([
+  //       _addr(PA.DAI_TOKEN),
+  //     ]);
+  //     expect(united[1][0]).eq(60);
+  //   });
+  // });
 
 });

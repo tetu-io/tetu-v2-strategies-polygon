@@ -10,7 +10,6 @@ import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addres
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter,
 } from '../../../../scripts/utils/Misc';
 import { IUniversalStrategyInputParams } from '../../base/UniversalStrategyTest';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
@@ -57,13 +56,10 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
 
     const [signer] = await ethers.getSigners();
 
-    await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
+    await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-
-    // Disable Hundred Finance (no liquidity)
-    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
   });
 
   /** Save collected states to csv, compute profit */

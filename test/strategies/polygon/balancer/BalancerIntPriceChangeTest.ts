@@ -31,6 +31,7 @@ import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import { BalancerDaiUsdcUsdtPoolUtils } from './utils/BalancerDaiUsdcUsdtPoolUtils';
 import { LiquidatorUtils } from './utils/LiquidatorUtils';
 import { IPriceOracles, PriceOracleUtils } from './utils/PriceOracleUtils';
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 chai.use(chaiAsPromised);
 
@@ -67,7 +68,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
     addresses = Addresses.getCore();
     tetuConverterAddress = getConverterAddress();
 
-    await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
+    await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, tetuConverterAddress);
@@ -200,6 +201,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       vault = data.vault;
       asset = await data.vault.asset();
       strategy = data.strategy as unknown as BalancerComposableStableStrategy;
+      await ConverterUtils.addToWhitelist(signer, tetuConverterAddress, strategy.address);
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
       console.log('vault', vault.address);

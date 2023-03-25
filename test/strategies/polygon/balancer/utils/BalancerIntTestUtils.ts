@@ -105,33 +105,6 @@ export interface IPutInitialAmountsBalancesResults {
  * Utils for integration tests of BalancerComposableStableStrategy
  */
 export class BalancerIntTestUtils {
-  /**
-   * set up health factors in tetu converter
-   * set min health factor 1.02
-   * for dai and usdt set target health factor = 1.05
-   */
-  public static async setTetConverterHealthFactors(signer: SignerWithAddress, tetuConverter: string) {
-    const controllerAddress = await ITetuConverter__factory.connect(tetuConverter, signer).controller();
-    const controller = IConverterController__factory.connect(controllerAddress, signer);
-    const governance = await controller.governance();
-    const controllerAsGovernance = IConverterController__factory.connect(
-      controllerAddress,
-      await Misc.impersonate(governance),
-    );
-
-    const borrowManagerAddress = await controller.borrowManager();
-    await controllerAsGovernance.setMinHealthFactor2(102);
-    const borrowManagerAsGovernance = IBorrowManager__factory.connect(
-      borrowManagerAddress,
-      await Misc.impersonate(governance),
-    );
-
-    await controllerAsGovernance.setTargetHealthFactor2(112);
-    await borrowManagerAsGovernance.setTargetHealthFactors(
-      [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN, MaticAddresses.USDT_TOKEN],
-      [112, 112, 112],
-    );
-  }
 
   /**
    * deploy own splitter to be able to add console messages to the splitter
@@ -196,7 +169,7 @@ export class BalancerIntTestUtils {
     const debtsUsdt = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
       strategy.address,
       MaticAddresses.USDC_TOKEN,
-      MaticAddresses.DAI_TOKEN,
+      MaticAddresses.USDT_TOKEN,
     );
 
     const dest = {
@@ -454,6 +427,12 @@ export class BalancerIntTestUtils {
       item.vault.usdc,
       item.splitter.usdc,
       item.splitter.totalAssets,
+
+      item.converter.collateralForDai,
+      item.converter.amountToRepayDai,
+      item.converter.collateralForUsdt,
+      item.converter.amountToRepayUsdt,
+
       item.balancerPool.bbAmUsdc,
       item.balancerPool.bbAmUsdt,
       item.balancerPool.bbAmDai,

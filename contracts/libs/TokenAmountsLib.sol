@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+import "./AppErrors.sol";
+
 /// @title Library for clearing / joining token addresses & amounts arrays
 /// @author bogdoslav
 library TokenAmountsLib {
@@ -43,9 +45,10 @@ library TokenAmountsLib {
     }
   }
 
-  /// @dev unites tokens2 and amounts2 in to tokens & amounts
-  /// @notice zero amount tokens will be filtered!
-  function unite(
+  /// @notice unites three arrays to single array without duplicates, amounts are sum, zero amounts are allowed
+  function combineArrays(
+    address[] memory tokens0,
+    uint[] memory amounts0,
     address[] memory tokens1,
     uint[] memory amounts1,
     address[] memory tokens2,
@@ -54,58 +57,50 @@ library TokenAmountsLib {
     address[] memory allTokens,
     uint[] memory allAmounts
   ) {
-    uint tokens1Length = tokens1.length;
-    uint tokens2Length = tokens2.length;
+    uint[] memory lens = new uint[](3);
+    lens[0] = tokens0.length;
+    lens[1] = tokens1.length;
+    lens[2] = tokens2.length;
 
-    require(tokens1Length == amounts1.length && tokens2Length == amounts2.length, 'TAL: Arrays mismatch');
+    require(
+      lens[0] == amounts0.length && lens[1] == amounts1.length && lens[2] == amounts2.length,
+      AppErrors.INCORRECT_LENGTHS
+    );
 
-    uint maxLength = tokens1Length + tokens2Length;
-    address[] memory tokens = new address[](maxLength);
-    uint[] memory amounts = new uint[](maxLength);
+    uint maxLength = lens[0] + lens[1] + lens[2];
+    address[] memory tokensOut = new address[](maxLength);
+    uint[] memory amountsOut = new uint[](maxLength);
+    uint unitedLength;
 
-    uint unitedLength = 0;
+    for (uint step; step < 3; ++step) {
+      uint[] memory amounts = step == 0
+        ? amounts0
+        : (step == 1
+          ? amounts1
+          : amounts2);
+      address[] memory tokens = step == 0
+        ? tokens0
+        : (step == 1
+          ? tokens1
+          : tokens2);
+      for (uint i1 = 0; i1 < lens[step]; i1++) {
+        uint amount1 = amounts[i1];
+        address token1 = tokens[i1];
+        bool united = false;
 
-    // join tokens1
-    for (uint i1 = 0; i1 < tokens1Length; i1++) {
-
-      uint amount1 = amounts1[i1];
-      if (amount1 == 0) continue;
-      address token1 = tokens1[i1];
-      bool united = false;
-
-      for (uint i = 0; i < unitedLength; i++) {
-        if (token1 == tokens[i]) {
-          amounts[i] += amount1;
-          united = true;
-          break;
+        for (uint i = 0; i < unitedLength; i++) {
+          if (token1 == tokensOut[i]) {
+            amountsOut[i] += amount1;
+            united = true;
+            break;
+          }
         }
-      }
-      if (!united) {
-        tokens[unitedLength] = token1;
-        amounts[unitedLength] = amount1;
-        unitedLength++;
-      }
-    }
 
-    // join tokens2
-    for (uint i2 = 0; i2 < tokens2Length; i2++) {
-
-      uint amount2 = amounts2[i2];
-      if (amount2 == 0) continue;
-      address token2 = tokens2[i2];
-      bool united = false;
-
-      for (uint i = 0; i < unitedLength; i++) {
-        if (token2 == tokens[i]) {
-          amounts[i] += amount2;
-          united = true;
-          break;
+        if (!united) {
+          tokensOut[unitedLength] = token1;
+          amountsOut[unitedLength] = amount1;
+          unitedLength++;
         }
-      }
-      if (!united) {
-        tokens[unitedLength] = token2;
-        amounts[unitedLength] = amount2;
-        unitedLength++;
       }
     }
 
@@ -113,8 +108,8 @@ library TokenAmountsLib {
     allTokens = new address[](unitedLength);
     allAmounts = new uint[](unitedLength);
     for (uint i; i < unitedLength; i++) {
-      allTokens[i] = tokens[i];
-      allAmounts[i] = amounts[i];
+      allTokens[i] = tokensOut[i];
+      allAmounts[i] = amountsOut[i];
     }
 
   }

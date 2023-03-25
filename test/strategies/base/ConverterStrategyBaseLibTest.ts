@@ -565,6 +565,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           ];
           for (let i = 0; i < assets.length; ++i) {
             await assets[i].mint(facade.address, amountsOnBalance[i]);
+            await facade.setBaseAmounts(assets[i].address, amountsOnBalance[i]);
           }
 
           const ret = await facade.getCollaterals(

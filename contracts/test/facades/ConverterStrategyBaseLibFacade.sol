@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib.sol";
+import "../../strategies/ConverterStrategyBaseLib2.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
@@ -60,7 +61,8 @@ contract ConverterStrategyBaseLibFacade {
       weights_,
       totalWeight_,
       indexAsset_,
-      priceOracle
+      priceOracle,
+      baseAmounts
     );
   }
 
@@ -131,7 +133,7 @@ contract ConverterStrategyBaseLibFacade {
     address[] memory tokens_,
     uint indexAsset
   ) external view returns (uint[] memory) {
-    return ConverterStrategyBaseLib.getAvailableBalances(tokens_, indexAsset);
+    return ConverterStrategyBaseLib2.getAvailableBalances(tokens_, indexAsset);
   }
 
   function calcInvestedAssets(
@@ -160,7 +162,7 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory rewardAmounts,
     uint[] memory performanceAmounts
   ) {
-    return ConverterStrategyBaseLib.sendPerformanceFee(
+    return ConverterStrategyBaseLib2.sendPerformanceFee(
       performanceFee_,
       performanceReceiver_,
       rewardTokens_,

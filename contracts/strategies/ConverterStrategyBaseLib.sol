@@ -167,7 +167,7 @@ library ConverterStrategyBaseLib {
     withdrawnAmountsOut = new uint[](len);
 
     if (ratio != 0) {
-      for (uint i; i < len; ++i) {
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
       }
     }
@@ -183,7 +183,8 @@ library ConverterStrategyBaseLib {
     uint[] memory weights_,
     uint totalWeight_,
     uint indexAsset_,
-    IPriceOracle priceOracle
+    IPriceOracle priceOracle,
+    mapping(address => uint) storage baseAmounts_
   ) external view returns (
     uint[] memory tokenAmountsOut
   ) {
@@ -207,7 +208,7 @@ library ConverterStrategyBaseLib {
         / prices[i]
         / decs[indexAsset_];
 
-        uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
+        uint tokenBalance = baseAmounts_[tokens_[i]];
         if (tokenBalance < tokenAmountToBeBorrowed) {
           tokenAmountsOut[i] = amountAssetForToken * (tokenAmountToBeBorrowed - tokenBalance) / tokenAmountToBeBorrowed;
         }
@@ -240,20 +241,6 @@ library ConverterStrategyBaseLib {
       }
     }
     return type(uint).max;
-  }
-
-  /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
-  function getAvailableBalances(
-    address[] memory tokens_,
-    uint indexAsset
-  ) external view returns (uint[] memory) {
-    uint len = tokens_.length;
-    uint[] memory amountsToConvert = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) continue;
-      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this));
-    }
-    return amountsToConvert;
   }
 
   /// @notice Get a ratio to calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
@@ -995,31 +982,6 @@ library ConverterStrategyBaseLib {
     return (receivedAmounts, spentAmounts, amountsToForward);
   }
 
-  /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
-  /// @param performanceFee_ Max is FEE_DENOMINATOR
-  /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
-  /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
-  function sendPerformanceFee(
-    uint performanceFee_,
-    address performanceReceiver_,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) external returns (
-    uint[] memory rewardAmounts,
-    uint[] memory performanceAmounts
-  ) {
-    // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
-    uint len = rewardAmounts_.length;
-    rewardAmounts = new uint[](len);
-    performanceAmounts = new uint[](len);
-
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
-      rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
-      IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
-    }
-  }
-
   /////////////////////////////////////////////////////////////////////
   ///                      calcInvestedAssets
   /////////////////////////////////////////////////////////////////////
@@ -1094,24 +1056,6 @@ library ConverterStrategyBaseLib {
   }
 
   /////////////////////////////////////////////////////////////////////
-  ///                      sendTokensToForwarder
-  /////////////////////////////////////////////////////////////////////
-  function sendTokensToForwarder(
-    address controller_,
-    address splitter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) external {
-    uint len = tokens_.length;
-    IForwarder forwarder = IForwarder(IController(controller_).forwarder());
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
-    }
-
-    forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
-  }
-
-  /////////////////////////////////////////////////////////////////////
   ///                      getExpectedAmountMainAsset
   /////////////////////////////////////////////////////////////////////
 
@@ -1156,7 +1100,8 @@ library ConverterStrategyBaseLib {
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory collaterals_,
-    uint thresholdMainAsset_
+    uint thresholdMainAsset_,
+    mapping(address => uint) storage baseAmounts_
   ) external returns (
     uint[] memory tokenAmountsOut,
     uint[] memory borrowedAmounts,
@@ -1187,39 +1132,49 @@ library ConverterStrategyBaseLib {
           // zero amount are possible (conversion is not available) but it's not suitable for depositor
           require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
         }
-        tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
+        tokenAmountsOut[i] = baseAmounts_[tokens_[i]] + borrowedAmounts[i];
       }
     }
 
     return (tokenAmountsOut, borrowedAmounts, spentCollateral);
   }
 
-  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards
+  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
   /// @dev The post-processing is rewards conversion to the main asset
-  /// @param tokens_ List of rewards claimed from the internal pool
-  /// @param amounts_ Amounts of rewards claimed from the internal pool
+  /// @param tokens_ tokens received from {_depositorPoolAssets}
+  /// @param rewardTokens_ List of rewards claimed from the internal pool
+  /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
   /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
   /// @param amountsOut Amounts of available rewards
   function prepareRewardsList(
     ITetuConverter tetuConverter_,
     address[] memory tokens_,
-    uint[] memory amounts_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_,
     mapping(address => uint) storage baseAmounts_
   ) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
     // Rewards from TetuConverter
-    (address[] memory tokens2, uint[] memory amounts2) = tetuConverter_.claimRewards(address(this));
+    (address[] memory tokensTC, uint[] memory amountsTC) = tetuConverter_.claimRewards(address(this));
 
     // Join arrays and recycle tokens
-    (tokensOut, amountsOut) = TokenAmountsLib.unite(tokens_, amounts_, tokens2, amounts2);
+    (tokensOut, amountsOut) = TokenAmountsLib.combineArrays(
+      rewardTokens_, rewardAmounts_,
+      tokensTC, amountsTC,
+      // by default, depositor assets have zero amounts here .. but probably they have airdrops (see below)
+      tokens_, new uint[](tokens_.length)
+    );
 
-    // {amounts} contain just received values, but probably we already had some tokens on balance
+    // Add airdrops
     uint len = tokensOut.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - baseAmounts_[tokensOut[i]];
     }
+
+    // filter zero amounts out
+    (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
   }
 
   /////////////////////////////////////////////////////////////////////

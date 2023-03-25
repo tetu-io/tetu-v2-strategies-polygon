@@ -9,7 +9,6 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter,
   Misc,
 } from '../../../../scripts/utils/Misc';
 import { BalancerIntTestUtils, IPutInitialAmountsBalancesResults, IState } from './utils/BalancerIntTestUtils';
@@ -17,11 +16,11 @@ import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import {
   BalancerComposableStableStrategy,
   BalancerComposableStableStrategy__factory,
-  ControllerV2__factory,
+  ControllerV2__factory, ConverterController__factory, IController__factory,
   IERC20__factory,
   ISplitter,
   ISplitter__factory,
-  IStrategyV2,
+  IStrategyV2, ITetuConverter__factory,
   ITetuLiquidator,
   TetuVaultV2,
 } from '../../../../typechain';
@@ -51,8 +50,7 @@ chai.use(chaiAsPromised);
 /**
  * Integration time-consuming tests, so @skip-on-coverage
  */
-// todo fix
-describe.skip('BalancerIntTest  @skip-on-coverage', function() {
+describe('BalancerIntTest @skip-on-coverage', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
 
@@ -77,14 +75,11 @@ describe.skip('BalancerIntTest  @skip-on-coverage', function() {
     addresses = Addresses.getCore();
     tetuConverterAddress = getConverterAddress();
 
-    await BalancerIntTestUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
+    await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-
-    // Disable Hundred Finance (no liquidity)
-    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
   });
 
   after(async function() {
@@ -156,6 +151,7 @@ describe.skip('BalancerIntTest  @skip-on-coverage', function() {
       vault = data.vault;
       asset = await data.vault.asset();
       strategy = data.strategy as unknown as BalancerComposableStableStrategy;
+      await ConverterUtils.addToWhitelist(signer, tetuConverterAddress, strategy.address);
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
       console.log('vault', vault.address);
@@ -1053,6 +1049,94 @@ describe.skip('BalancerIntTest  @skip-on-coverage', function() {
           );
 
           expect(ret.eq(0)).eq(true);
+        });
+      });
+    });
+
+    describe("requirePayAmountBack", () => {
+
+      /**
+       * Make deposit: make two borrows
+       * Set TetuConverter on pause
+       * Forcibly close both borrows using ITetuConverter.repayTheBorrow
+       * Ensure, that all liquidity is withdrawn from the pool.
+       */
+      describe("Forcibly close all borrows", () => {
+        it("should return expected values", async () => {
+          await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
+          const stateAfterDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'enterToVault');
+          console.log("stateAfterDeposit", stateAfterDeposit);
+
+          await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, true);
+          console.log("0");
+
+          // tetu converter as governance
+          const controller = ConverterController__factory.connect(
+            await ITetuConverter__factory.connect(tetuConverterAddress, signer).controller(),
+            signer
+          );
+          const governance = await controller.governance();
+          const tetuConverterAsGovernance = ITetuConverter__factory.connect(
+            tetuConverterAddress,
+            await Misc.impersonate(governance)
+          );
+
+          // get all borrows and forcibly close them
+          const borrowManager = await ConverterUtils.getBorrowManager(signer, tetuConverterAddress);
+          const countBorrows = (await borrowManager.listPoolAdaptersLength()).toNumber();
+          for (let i = 0; i < countBorrows; ++i) {
+            const poolAdapter = await borrowManager.listPoolAdapters(i);
+            console.log("repayTheBorrow.start");
+            await tetuConverterAsGovernance.repayTheBorrow(poolAdapter, true);
+            console.log("repayTheBorrow.finished");
+            break;
+          }
+
+          // we need to make hardwork to recalculate investedAssets amount
+          await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, false);
+          const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'middle');
+          console.log("stateMiddle", stateMiddle);
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            './tmp/npc_requirePayAmountBack1.csv',
+            [stateAfterDeposit, stateMiddle],
+          );
+
+
+          await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
+
+          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
+          console.log("stateFinal", stateFinal);
+
+          const ret = [
+            stateAfterDeposit.gauge.strategyBalance.gt(0),
+            stateAfterDeposit.converter.amountToRepayDai.gt(0),
+            stateAfterDeposit.converter.amountToRepayUsdt.gt(0),
+            stateAfterDeposit.converter.collateralForDai.gt(0),
+            stateAfterDeposit.converter.collateralForUsdt.gt(0),
+
+            stateFinal.gauge.strategyBalance.eq(0),
+            stateFinal.converter.amountToRepayDai.eq(0),
+            stateFinal.converter.amountToRepayUsdt.eq(0),
+            stateFinal.converter.collateralForDai.eq(0),
+            stateFinal.converter.collateralForUsdt.eq(0),
+
+            stateAfterDeposit.vault.sharePrice.eq(stateFinal.vault.sharePrice)
+          ].join("\n");
+
+          const expected = [
+            true, true, true, true, true,
+            true, true, true, true, true,
+            true
+          ].join("\n");
+
+          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+            './tmp/npc_requirePayAmountBack.csv',
+            [stateAfterDeposit, stateFinal],
+          );
+
+          expect(ret).eq(expected);
+
         });
       });
     });

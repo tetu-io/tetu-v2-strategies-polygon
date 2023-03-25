@@ -44,4 +44,6 @@ library AppErrors {
   string public constant REPAY_MAKES_SWAP = "TS-17 can not convert back";
 
   string public constant NO_INVESTMENTS = "TS-18 no investments";
+
+  string public constant INCORRECT_LENGTHS = "TS-19 lengths";
 }

@@ -13,7 +13,6 @@ import { ConverterUtils } from '../../../../baseUT/utils/ConverterUtils';
 import {
   getAaveTwoPlatformAdapter,
   getDForcePlatformAdapter,
-  getHundredFinancePlatformAdapter,
   Misc,
 } from '../../../../../scripts/utils/Misc';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -35,7 +34,6 @@ export class PriceOracleUtils {
 
     // Disable all lending platforms except AAVE3
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-    await ConverterUtils.disablePlatformAdapter(signer, getHundredFinancePlatformAdapter());
     await ConverterUtils.disablePlatformAdapter(signer, getAaveTwoPlatformAdapter());
 
     //  See first event for of ACLManager (AAVE_V3_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD")

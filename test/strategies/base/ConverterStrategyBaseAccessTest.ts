@@ -1296,6 +1296,7 @@ describe('ConverterStrategyBaseAccessTest', () => {
     }
 
     async function makePrepareRewardsListTest(
+      tokens: MockToken[],
       tokensClaimedByDepositor: MockToken[],
       amountsClaimedByDepositor: BigNumber[],
       tokensClaimedByTetuConverter: MockToken[],
@@ -1314,12 +1315,14 @@ describe('ConverterStrategyBaseAccessTest', () => {
 
       const r = await strategy.callStatic._prepareRewardsListAccess(
         tetuConverter.address,
+        tokens.map(x => x.address),
         tokensClaimedByDepositor.map(x => x.address),
         amountsClaimedByDepositor,
       );
       console.log('r', r);
       const tx = await strategy._prepareRewardsListAccess(
         tetuConverter.address,
+        tokens.map(x => x.address),
         tokensClaimedByDepositor.map(x => x.address),
         amountsClaimedByDepositor,
       );
@@ -1363,6 +1366,7 @@ describe('ConverterStrategyBaseAccessTest', () => {
           ];
 
           const r = await makePrepareRewardsListTest(
+            [],
             tokensClaimedByDepositor,
             amountsClaimedByDepositor,
             tokensClaimedByTetuConverter,
@@ -1396,6 +1400,7 @@ describe('ConverterStrategyBaseAccessTest', () => {
         ];
 
         const r = await makePrepareRewardsListTest(
+          [],
           tokensClaimedByDepositor,
           amountsClaimedByDepositor,
           tokensClaimedByTetuConverter,
@@ -1443,6 +1448,7 @@ describe('ConverterStrategyBaseAccessTest', () => {
         ];
 
         const r = await makePrepareRewardsListTest(
+          [],
           tokensClaimedByDepositor,
           amountsClaimedByDepositor,
           tokensClaimedByTetuConverter,
@@ -1499,6 +1505,7 @@ describe('ConverterStrategyBaseAccessTest', () => {
         }
 
         const r = await makePrepareRewardsListTest(
+          [],
           tokensClaimedByDepositor,
           amountsClaimedByDepositor,
           tokensClaimedByTetuConverter,
@@ -1540,6 +1547,7 @@ describe('ConverterStrategyBaseAccessTest', () => {
         ];
 
         const r = await makePrepareRewardsListTest(
+          [],
           tokensClaimedByDepositor,
           amountsClaimedByDepositor,
           tokensClaimedByTetuConverter,

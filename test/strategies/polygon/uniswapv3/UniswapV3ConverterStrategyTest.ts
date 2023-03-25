@@ -26,7 +26,7 @@ import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
-import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 const { expect } = chai;
 
@@ -93,6 +93,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     let data;
+    const converterAddress = getConverterAddress();
 
     const strategyUSDCWETH500Deployer = async(_splitterAddress: string) => {
       const _strategy = UniswapV3ConverterStrategy__factory.connect(
@@ -110,7 +111,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await _strategy.init(
         core.controller,
         _splitterAddress,
-        getConverterAddress(),
+        converterAddress,
         poolAddress,
         range,
         rebalanceRange,
@@ -148,7 +149,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await _strategy.init(
         core.controller,
         _splitterAddress,
-        getConverterAddress(),
+        converterAddress,
         poolAddress,
         range,
         rebalanceRange,
@@ -185,7 +186,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await _strategy.init(
         core.controller,
         _splitterAddress,
-        getConverterAddress(),
+        converterAddress,
         poolAddress,
         range,
         rebalanceRange,
