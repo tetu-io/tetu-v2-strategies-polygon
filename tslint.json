@@ -33,6 +33,6 @@
       2
     ],
     "whitespace" : [false],
-    "quotemark": [true, "single"]
+    "quotemark": [false]
   }
 }

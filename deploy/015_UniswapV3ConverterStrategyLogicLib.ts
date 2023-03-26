@@ -13,6 +13,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
       UniswapV3Lib: (await deployments.get('UniswapV3Lib')).address,
       UniswapV3DebtLib: (await deployments.get('UniswapV3DebtLib')).address,
       ConverterStrategyBaseLib: (await deployments.get('ConverterStrategyBaseLib')).address,
+      ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
     },
     log: true,
     ...(await txParams(hre, ethers.provider)),
@@ -20,4 +21,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 }
 export default func;
 func.tags = ['UniswapV3ConverterStrategyLogicLib']
-func.dependencies = ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'UniswapV3DebtLib']
+func.dependencies = ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'UniswapV3DebtLib']

@@ -12,6 +12,12 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     log: true,
     ...(await txParams(hre, ethers.provider)),
   });
+  await deployments.deploy('ConverterStrategyBaseLib2', {
+    contract: 'ConverterStrategyBaseLib2',
+    from: deployer,
+    log: true,
+    ...(await txParams(hre, ethers.provider)),
+  });
 }
 export default func;
-func.tags = ['ConverterStrategyBaseLib']
+func.tags = ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']
