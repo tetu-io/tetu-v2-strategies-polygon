@@ -11,6 +11,8 @@ export class MaticAddresses {
   public static GOV_ADDRESS = "0xcc16d636dD05b52FF1D8B9CE09B09BC62b11412B".toLowerCase(); // TETU v1
   public static TETU_CONVERTER = "0x081735DEa3D1256881B7cb31cd37c4f7C3E95152".toLowerCase(); // beta 7
   public static TETU_LIQUIDATOR = "0xC737eaB847Ae6A92028862fE38b828db41314772".toLowerCase();
+  public static TETU_LIQUIDATOR_UNIV3_SWAPPER = "0x7b505210a0714d2a889E41B59edc260Fa1367fFe".toLowerCase();
+
   // tokens
   public static WETH_TOKEN = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619".toLowerCase();
   public static ADDY_TOKEN = "0xc3FdbadC7c795EF1D6Ba111e06fF8F16A20Ea539".toLowerCase();
