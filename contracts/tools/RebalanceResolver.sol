@@ -97,14 +97,10 @@ contract RebalanceResolver is ControllableV3 {
   function call(address[] memory _strategies) external returns (uint amountOfCalls) {
     require(operators[msg.sender], "!operator");
 
-    uint _delay = delay;
     uint strategiesLength = _strategies.length;
     uint counter;
     for (uint i; i < strategiesLength; ++i) {
       address strategy = _strategies[i];
-      if (lastRebalance(strategy) + _delay > block.timestamp) {
-        continue;
-      }
 
       try IRebalancingStrategy(strategy).rebalance() {} catch Error(string memory _err) {
         revert(string(abi.encodePacked("Strategy error: 0x", _toAsciiString(strategy), " ", _err)));
@@ -132,7 +128,7 @@ contract RebalanceResolver is ControllableV3 {
         delayAdjusted = _delay * _delayRate / DELAY_RATE_DENOMINATOR;
       }
 
-      if (IRebalancingStrategy(strategy).needRebalance() && lastRebalance(strategy) + _delay < block.timestamp) {
+      if (IRebalancingStrategy(strategy).needRebalance() && lastRebalance(strategy) + delayAdjusted < block.timestamp) {
         _strategies[i] = strategy;
         counter++;
       }
