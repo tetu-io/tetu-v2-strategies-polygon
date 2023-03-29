@@ -512,21 +512,8 @@ library ConverterStrategyBaseLib {
         vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
         vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
 
-        vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
-        vars.c1 = x * vars.c3 / y;
-
-        if (amountIn_ > vars.c1 + vars.collateral) {
-          // we have some amount for next converter
-          amountIn_ -= (vars.c1 + vars.collateral);
-
-          // protection against dust amounts, see "openPosition.dust", just leave dust amount unused
-          // we CAN NOT add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
-          if (amountIn_ < collateralThreshold_) {
-            amountIn_ = 0;
-          }
-        } else {
-          amountIn_ = 0;
-        }
+        // if leftover of the collateral is too low leave it unused
+        if (vars.collateral < collateralThreshold_ || vars.amountToBorrow == 0) break;
 
         require(
           tetuConverter_.borrow(
@@ -551,9 +538,16 @@ library ConverterStrategyBaseLib {
         borrowedAmountOut += vars.amountToBorrow;
         collateralAmountOut += vars.collateral;
 
-        if (amountIn_ == 0) {
-          break;
-        }
+        // calculate amount to be borrowed in the next converter
+        vars.c3 = vars.alpha * vars.amountToBorrow / 1e18;
+        vars.c1 = x * vars.c3 / y;
+        amountIn_ = (amountIn_ > vars.c1 + vars.collateral)
+          ? amountIn_ - (vars.c1 + vars.collateral)
+          : 0;
+
+        // protection against dust amounts, see "openPosition.dust", just leave dust amount unused
+        // we CAN NOT add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
+        if (amountIn_ < collateralThreshold_ || amountIn_ == 0) break;
       }
     }
 

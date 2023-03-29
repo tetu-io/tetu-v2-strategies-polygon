@@ -274,7 +274,10 @@ contract MockTetuConverter is ITetuConverter {
 
       return p.borrowedAmountOut;
     } else {
-      console.log("MockTetuConverter.borrow.missed, amountToBorrow_", collateralAsset_, collateralAmount_, borrowAsset_);
+      console.log("MockTetuConverter.borrow.missed.collateralAsset_", collateralAsset_);
+      console.log("MockTetuConverter.borrow.missed.collateralAmount_", collateralAmount_);
+      console.log("MockTetuConverter.borrow.missed.borrowAsset_", borrowAsset_);
+      console.log("MockTetuConverter.borrow.missed.amountToBorrow_", amountToBorrow_);
       return 0;
     }
   }
