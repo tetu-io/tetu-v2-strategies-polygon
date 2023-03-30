@@ -66,8 +66,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   //endregion before, after
 
   //region Unit tests
-  describe("openPositionEntryKind1 (SCB-621)", () => {
-
+  describe("openPositionEntryKind1", () => {
     interface IOpenPositionEntryKind1TestParams {
       threshold: number,
       borrows?: {
@@ -188,76 +187,137 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       };
     }
 
-    /**
-     * https://dashboard.tenderly.co/tx/polygon/0x00b1287431f89a85879007f8a2a80d79976f818813718e5a122c29eadf430afe/debugger?trace=0.0.1.0.0.0.2.1.2.0.2.0.0.0.0.3.11.8.0
-     * There were 3 borrows instead 1
-     */
-    async function reproduceError(threshold: number) : Promise<IOpenPositionEntryKind1TestResults> {
-      const entryData1 = "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000f4366000000000000000000000000000000000000000000000000000000000000d93e";
-      return makeOpenPositionEntryKind1Test(
-        entryData1,
-        usdc,
-        usdt,
-        BigNumber.from("194495951"),
-        {
-          threshold,
-          borrows: [
-            {
-              collateralAsset: usdc,
-              collateralAmount: BigNumber.from("13606564"),
-              borrowAsset: usdt,
-              amountToBorrow: BigNumber.from("10052591"),
-              converter: "0x14b8ffeb2484b01ca66d521b2a7a59628817aa53",
-            },
-            {
-              collateralAsset: usdc,
-              collateralAmount: BigNumber.from("2"),
-              borrowAsset: usdt,
-              amountToBorrow: BigNumber.from("1"),
-              converter: "0x7d6ad97865258f11f1f31fb3b9b8838d1bce5bce",
-            },
-          ],
-          findBorrowStrategyOutputs: [
-            {
-              converters: ["0x14b8ffeb2484b01ca66d521b2a7a59628817aa53", "0x7d6ad97865258f11f1f31fb3b9b8838d1bce5bce", "0x34a379bf1514e1a93179cdfe8dd4555d7822e91b"],
-              sourceToken: usdc.address,
-              targetToken: usdt.address,
-              entryData: entryData1,
-              aprs18: [BigNumber.from("-1481796327407567"), BigNumber.from("-192674234045099"), BigNumber.from("831344681206963")],
-              amountIn: BigNumber.from("194495951"),
-              collateralAmountsOut: [BigNumber.from("13606564"), BigNumber.from("13606564"), BigNumber.from("13606564")],
-              amountToBorrowsOut: [BigNumber.from("10052591"), BigNumber.from("10115580"), BigNumber.from("10143568")],
-            },
-          ],
-          amountCollateralForFacade: BigNumber.from("194495951"),
-          amountBorrowAssetForTetuConverter: BigNumber.from("10052592"),
-          amountInIsCollateral: true,
-          prices: {
-            collateral: BigNumber.from("1000082050000000000"),
-            borrow: BigNumber.from("1000523100000000000")
-          }
-        },
-      );
-    }
+    describe("openPositionEntryKind1 (SCB-621)", () => {
+      /**
+       * https://dashboard.tenderly.co/tx/polygon/0x00b1287431f89a85879007f8a2a80d79976f818813718e5a122c29eadf430afe/debugger?trace=0.0.1.0.0.0.2.1.2.0.2.0.0.0.0.3.11.8.0
+       * There were 3 borrows instead 1
+       */
+      async function reproduceError(threshold: number): Promise<IOpenPositionEntryKind1TestResults> {
+        const entryData1 = "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000f4366000000000000000000000000000000000000000000000000000000000000d93e";
+        return makeOpenPositionEntryKind1Test(
+          entryData1,
+          usdc,
+          usdt,
+          BigNumber.from("194495951"),
+          {
+            threshold,
+            borrows: [
+              {
+                collateralAsset: usdc,
+                collateralAmount: BigNumber.from("13606564"),
+                borrowAsset: usdt,
+                amountToBorrow: BigNumber.from("10052591"),
+                converter: "0x14b8ffeb2484b01ca66d521b2a7a59628817aa53",
+              },
+              {
+                collateralAsset: usdc,
+                collateralAmount: BigNumber.from("2"),
+                borrowAsset: usdt,
+                amountToBorrow: BigNumber.from("1"),
+                converter: "0x7d6ad97865258f11f1f31fb3b9b8838d1bce5bce",
+              },
+            ],
+            findBorrowStrategyOutputs: [
+              {
+                converters: ["0x14b8ffeb2484b01ca66d521b2a7a59628817aa53", "0x7d6ad97865258f11f1f31fb3b9b8838d1bce5bce", "0x34a379bf1514e1a93179cdfe8dd4555d7822e91b"],
+                sourceToken: usdc.address,
+                targetToken: usdt.address,
+                entryData: entryData1,
+                aprs18: [BigNumber.from("-1481796327407567"), BigNumber.from("-192674234045099"), BigNumber.from("831344681206963")],
+                amountIn: BigNumber.from("194495951"),
+                collateralAmountsOut: [BigNumber.from("13606564"), BigNumber.from("13606564"), BigNumber.from("13606564")],
+                amountToBorrowsOut: [BigNumber.from("10052591"), BigNumber.from("10115580"), BigNumber.from("10143568")],
+              },
+            ],
+            amountCollateralForFacade: BigNumber.from("194495951"),
+            amountBorrowAssetForTetuConverter: BigNumber.from("10052592"),
+            amountInIsCollateral: true,
+            prices: {
+              collateral: BigNumber.from("1000082050000000000"),
+              borrow: BigNumber.from("1000523100000000000")
+            }
+          },
+        );
+      }
 
-    async function reproduceErrorSingleBorrow() : Promise<IOpenPositionEntryKind1TestResults> {
-      return reproduceError(0);
-    }
-    async function reproduceErrorTwoBorrows() : Promise<IOpenPositionEntryKind1TestResults> {
-      return reproduceError(10);
-    }
+      async function reproduceErrorSingleBorrow(): Promise<IOpenPositionEntryKind1TestResults> {
+        return reproduceError(0);
+      }
 
-    it('should make two borrows if threshold is 0', async() => {
-      const r = await loadFixture(reproduceErrorSingleBorrow);
+      async function reproduceErrorTwoBorrows(): Promise<IOpenPositionEntryKind1TestResults> {
+        return reproduceError(10);
+      }
 
-      expect(r.collateralAmountOut).eq(BigNumber.from("13606566")); // (!) 64 + 2 = 66 (two borrows)
-      expect(r.borrowedAmountOut).eq(BigNumber.from("10052592")); // (!) 91 + 1 = 92 (two borrows)
+      it('should make two borrows if threshold is 0', async () => {
+        const r = await loadFixture(reproduceErrorSingleBorrow);
+
+        expect(r.collateralAmountOut).eq(BigNumber.from("13606566")); // (!) 64 + 2 = 66 (two borrows)
+        expect(r.borrowedAmountOut).eq(BigNumber.from("10052592")); // (!) 91 + 1 = 92 (two borrows)
+      });
+      it('should make single borrow if threshold is 10', async () => {
+        const r = await loadFixture(reproduceErrorTwoBorrows);
+
+        expect(r.collateralAmountOut).eq(BigNumber.from("13606564")); // (!) 64 (single borrow)
+        expect(r.borrowedAmountOut).eq(BigNumber.from("10052591")); // (!) 91 (single borrow)
+      });
     });
-    it('should make single borrow if threshold is 10', async() => {
-      const r = await loadFixture(reproduceErrorTwoBorrows);
+    describe("Platform with best APR has not enough resources", () => {
+      async function makeTestFirstPlatformHasNotEnoughResources(): Promise<IOpenPositionEntryKind1TestResults> {
+        // platform with the highest APR and not enough resources
+        const problemPlatform = ethers.Wallet.createRandom().address;
 
-      expect(r.collateralAmountOut).eq(BigNumber.from("13606564")); // (!) 64 (single borrow)
-      expect(r.borrowedAmountOut).eq(BigNumber.from("10052591")); // (!) 91 (single borrow)
+        const entryData1 = "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000f4366000000000000000000000000000000000000000000000000000000000000d93e";
+        return makeOpenPositionEntryKind1Test(
+          entryData1,
+          usdc,
+          usdt,
+          BigNumber.from("194495951"),
+          {
+            threshold: 10,
+            borrows: [
+              {
+                collateralAsset: usdc,
+                collateralAmount: BigNumber.from("13606564"),
+                borrowAsset: usdt,
+                amountToBorrow: BigNumber.from("10052591"),
+                converter: "0x14b8ffeb2484b01ca66d521b2a7a59628817aa53",
+              },
+              {
+                collateralAsset: usdc,
+                collateralAmount: BigNumber.from("2"),
+                borrowAsset: usdt,
+                amountToBorrow: BigNumber.from("1"),
+                converter: "0x7d6ad97865258f11f1f31fb3b9b8838d1bce5bce",
+              },
+            ],
+            findBorrowStrategyOutputs: [
+              {
+                sourceToken: usdc.address,
+                targetToken: usdt.address,
+                entryData: entryData1,
+                amountIn: BigNumber.from("194495951"),
+                converters: [problemPlatform, "0x14b8ffeb2484b01ca66d521b2a7a59628817aa53", "0x7d6ad97865258f11f1f31fb3b9b8838d1bce5bce", "0x34a379bf1514e1a93179cdfe8dd4555d7822e91b"],
+                aprs18: [parseUnits("-1", 18), BigNumber.from("-1481796327407567"), BigNumber.from("-192674234045099"), BigNumber.from("831344681206963")],
+                collateralAmountsOut: [BigNumber.from("7"), BigNumber.from("13606564"), BigNumber.from("13606564"), BigNumber.from("13606564")],
+                amountToBorrowsOut: [BigNumber.from("5"), BigNumber.from("10052591"), BigNumber.from("10115580"), BigNumber.from("10143568")],
+              },
+            ],
+            amountCollateralForFacade: BigNumber.from("194495951"),
+            amountBorrowAssetForTetuConverter: BigNumber.from("10052592"),
+            amountInIsCollateral: true,
+            prices: {
+              collateral: BigNumber.from("1000082050000000000"),
+              borrow: BigNumber.from("1000523100000000000")
+            }
+          },
+        );
+      }
+      it('should ignore first platform and make single borrow on the second platform', async () => {
+        const r = await loadFixture(makeTestFirstPlatformHasNotEnoughResources);
+
+        expect(r.collateralAmountOut).eq(BigNumber.from("13606564")); // (!) 64 (single borrow)
+        expect(r.borrowedAmountOut).eq(BigNumber.from("10052591")); // (!) 91 (single borrow)
+      });
     });
   });
 

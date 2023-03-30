@@ -464,6 +464,10 @@ library ConverterStrategyBaseLib {
     }
   }
 
+  /// @notice Open position using entry kind 1 - split provided amount on two parts according provided proportions
+  /// @param amountIn_ Amount of collateral to be divided on parts. We assume {amountIn_} > 0
+  /// @return collateralAmountOut Total collateral used to borrow {borrowedAmountOut}
+  /// @return borrowedAmountOut Total borrowed amount
   function openPositionEntryKind1(
     ITetuConverter tetuConverter_,
     bytes memory entryData_,
@@ -484,9 +488,6 @@ library ConverterStrategyBaseLib {
       _LOAN_PERIOD_IN_BLOCKS
     );
 
-    collateralAmountOut = 0;
-    borrowedAmountOut = 0;
-
     uint len = vars.converters.length;
     if (len > 0) {
       // we should split amountIn on two amounts with proportions x:y
@@ -499,21 +500,32 @@ library ConverterStrategyBaseLib {
         // the lending platform allows to convert {collateralsRequired[i]} to {amountsToBorrow[i]}
         // and give us required proportions in result
         // C = C1 + C2, C2 => B2, B2 * alpha = C3, C1/C3 must be equal to x/y
-        // C2 is collateral amount, that is converted to B2
+        // C1 is collateral amount left untouched (x)
+        // C2 is collateral amount converted to B2 (y)
         // but if lending platform doesn't have enough liquidity
         // it reduces {collateralsRequired[i]} and {amountsToBorrow[i]} proportionally to fit the limits
         // as result, remaining C1 will be too big after conversion and we need to make another borrow
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
         vars.c1 = x * vars.c3 / y;
-        vars.ratio = vars.collateralsRequired[i] + vars.c1 > amountIn_
-        ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
-        : 1e18;
-        // c2
+        vars.ratio = (vars.collateralsRequired[i] + vars.c1) > amountIn_
+          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
+          : 1e18;
+
         vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
         vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
 
-        // if leftover of the collateral is too low leave it unused
-        if (vars.collateral < collateralThreshold_ || vars.amountToBorrow == 0) break;
+        // skip any attempts to borrow zero amount or use too little collateral
+        if (vars.collateral < collateralThreshold_ || vars.amountToBorrow == 0) {
+          if (vars.collateralsRequired[i] + vars.c1 + collateralThreshold_ > amountIn_) {
+            // The lending platform has enough resources to make the borrow but amount of the borrow is too low
+            // Skip the borrow, leave leftover of collateral untouched
+            break;
+          } else {
+            // The lending platform doesn't have enough resources to make the borrow.
+            // We should try to make borrow on the next platform (if any)
+            continue;
+          }
+        }
 
         require(
           tetuConverter_.borrow(
