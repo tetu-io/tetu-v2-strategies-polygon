@@ -4,6 +4,7 @@ import {UniswapV3Pool__factory} from "../../typechain";
 import fs from "fs";
 import { createClient } from 'urql'
 import 'isomorphic-unfetch';
+import {Misc} from "./Misc";
 
 export class UniswapV3Utils {
   static SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon'
@@ -272,6 +273,39 @@ export class UniswapV3Utils {
       default:
         throw Error(`Tick spacing for fee tier ${feeTier} undefined.`)
     }
+  }
+
+  public static async getFees(pool: string, lowerTick: number, upperTick: number, owner: string, block: number = 0): Promise<[BigNumber, BigNumber]> {
+    const provider = new ethers.providers.JsonRpcProvider(process.env.TETU_MATIC_RPC_URL)
+    const overrides = block === 0 ? {} : {blockTag: block,}
+    const positionId = ethers.utils.keccak256(ethers.utils.solidityPack(["address", "int24", "int24"], [owner, lowerTick, upperTick]))
+    const univ3pool = UniswapV3Pool__factory.connect(pool, provider)
+    const slot0 = await univ3pool.slot0(overrides)
+    const position = await univ3pool.positions(positionId, overrides)
+    const lowerTickData = await univ3pool.ticks(lowerTick, overrides)
+    const upperTickData = await univ3pool.ticks(upperTick, overrides)
+    const feeGrowthGlobal0X128 = await univ3pool.feeGrowthGlobal0X128(overrides)
+    const feeGrowthGlobal1X128 = await univ3pool.feeGrowthGlobal1X128(overrides)
+
+    // compute fee0
+    const feeGrowthBelow0 = slot0.tick >= lowerTick ? lowerTickData.feeGrowthOutside0X128 : feeGrowthGlobal0X128.sub(lowerTickData.feeGrowthOutside0X128)
+    const feeGrowthAbove0 = slot0.tick < upperTick ? upperTickData.feeGrowthOutside0X128 : feeGrowthGlobal0X128.sub(upperTickData.feeGrowthOutside0X128)
+    let feeGrowthInside0 = feeGrowthGlobal0X128.sub(feeGrowthBelow0).sub(feeGrowthAbove0)
+    if (feeGrowthInside0.lt(0)) {
+      feeGrowthInside0 = BigNumber.from(Misc.MAX_UINT).sub(feeGrowthInside0.mul(-1))
+    }
+    const fee0 = position.liquidity.mul(feeGrowthInside0.sub(position.feeGrowthInside0LastX128)).div(BigNumber.from('0x100000000000000000000000000000000'))
+
+    // compute fee1
+    const feeGrowthBelow1 = slot0.tick >= lowerTick ? lowerTickData.feeGrowthOutside1X128 : feeGrowthGlobal1X128.sub(lowerTickData.feeGrowthOutside1X128)
+    const feeGrowthAbove1 = slot0.tick < upperTick ? upperTickData.feeGrowthOutside1X128 : feeGrowthGlobal1X128.sub(upperTickData.feeGrowthOutside1X128)
+    let feeGrowthInside1 = feeGrowthGlobal1X128.sub(feeGrowthBelow1).sub(feeGrowthAbove1)
+    if (feeGrowthInside1.lt(0)) {
+      feeGrowthInside1 = BigNumber.from(Misc.MAX_UINT).sub(feeGrowthInside1.mul(-1))
+    }
+    const fee1 = position.liquidity.mul(feeGrowthInside1.sub(position.feeGrowthInside1LastX128)).div(BigNumber.from('0x100000000000000000000000000000000'))
+
+    return [fee0, fee1]
   }
 }
 
