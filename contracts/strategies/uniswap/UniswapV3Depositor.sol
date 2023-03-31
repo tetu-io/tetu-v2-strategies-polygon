@@ -17,7 +17,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.0";
+  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.1";
 
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
@@ -97,7 +97,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
   /// @notice Returns the fees for the current state.
   /// @return fee0 and fee1.
-  function getFees() internal view returns (uint fee0, uint fee1) {
+  function getFees() public view returns (uint fee0, uint fee1) {
     return UniswapV3ConverterStrategyLogicLib.getFees(state);
   }
 

@@ -849,4 +849,20 @@ library UniswapV3ConverterStrategyLogicLib {
     }
     emit Rebalanced();
   }
+
+  function calcEarned(State storage state) external view returns (uint) {
+    address tokenB = state.tokenB;
+
+    (uint fee0, uint fee1) = getFees(state);
+    fee0 += state.rebalanceEarned0;
+    fee1 += state.rebalanceEarned1;
+
+    if (state.depositorSwapTokens) {
+      (fee0, fee1) = (fee1, fee0);
+    }
+
+    uint feeBinTermOfA = UniswapV3Lib.getPrice(address(state.pool), tokenB) * fee1 / 10 ** IERC20Metadata(tokenB).decimals();
+
+    return fee0 + feeBinTermOfA;
+  }
 }

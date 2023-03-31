@@ -19,7 +19,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.0.0";
+  string public constant override STRATEGY_VERSION = "1.1.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -197,14 +197,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return lost The amount of lost rewards.
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
-    uint assetBalanceBefore = _balance(asset);
+    earned = UniswapV3ConverterStrategyLogicLib.calcEarned(state);
     _claim();
     assetBalanceAfterClaim = _balance(asset);
     if (state.rebalanceLost > 0) {
       lost = state.rebalanceLost;
       state.rebalanceLost = 0;
     }
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
     return (earned, lost, assetBalanceAfterClaim);
   }
 
