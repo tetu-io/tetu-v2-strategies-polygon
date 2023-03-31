@@ -11,6 +11,7 @@ import {
   TetuConverter__factory
 } from '../../../typechain';
 import {
+  getAaveThreePlatformAdapter, getAaveTwoPlatformAdapter,
   getConverterAddress,
   getDForcePlatformAdapter,
   Misc,
@@ -42,6 +43,18 @@ export class ConverterUtils {
     console.log('disableDForce...');
     await this.disablePlatformAdapter(signer, getDForcePlatformAdapter());
     console.log('disableDForce done.\n\n');
+  }
+
+  public static async disableAaveV3(signer: SignerWithAddress) {
+    console.log('disableAaveV3...');
+    await this.disablePlatformAdapter(signer, getAaveThreePlatformAdapter());
+    console.log('disableAaveV3 done.\n\n');
+  }
+
+  public static async disableAaveV2(signer: SignerWithAddress) {
+    console.log('disableAaveV2...');
+    await this.disablePlatformAdapter(signer, getAaveTwoPlatformAdapter());
+    console.log('disableAaveV2 done.\n\n');
   }
 
   public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {

@@ -216,9 +216,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
     await asset.approve(vault3.address, Misc.MAX_UINT);
 
     // Disable platforms at TetuConverter
-    // await ConverterUtils.disableHf(signer);
-    // await ConverterUtils.disableDForce(signer);
-    // await ConverterUtils.disableAaveV2(signer);
+    await ConverterUtils.disableDForce(signer);
+    await ConverterUtils.disableAaveV2(signer);
     // await ConverterUtils.disableAaveV3(signer);
 
     swapper = ISwapper__factory.connect(MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, signer);
@@ -289,19 +288,59 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(rebalanceGasUsed.toNumber()).lessThan(5_000_000);
 
       await strategy.rebalance();
-      // expect(await strategy.isReadyToHardWork()).eq(false) // all rewards spent to cover rebalance loss
       expect(await strategy.needRebalance()).eq(false);
 
       await UniswapV3StrategyUtils.movePriceDown(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price).mul(2));
 
-      /*expect(await strategy.needRebalance()).eq(true)
-       console.log('rebalance...');
-       await strategy.rebalance()
-       expect(await strategy.needRebalance()).eq(false)*/
-
       expect(await strategy.isReadyToHardWork()).eq(true);
       await strategy.connect(splitterSigner).doHardWork();
       expect(await strategy.isReadyToHardWork()).eq(false);
+    });
+
+    it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
+      const investAmount = _10_000;
+      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      let state = await strategy3.getState();
+
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault3.splitter());
+      let price;
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6));
+
+      console.log('deposit...');
+      await vault3.deposit(investAmount, signer.address);
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+      await strategy3.rebalance();
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+
+      await UniswapV3StrategyUtils.movePriceDown(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+      await strategy3.rebalance();
+
+      await UniswapV3StrategyUtils.makeVolume(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
+
+      state = await strategy3.getState()
+
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+
+      let earnedTotal = BigNumber.from(0)
+
+      earnedTotal = state.rebalanceResults[0].add(state.rebalanceResults[1].mul(price).div(parseUnits('1', 6)))
+
+      const fees = await strategy3.getFees()
+
+      earnedTotal = earnedTotal.add(fees[0].add(fees[1].mul(price).div(parseUnits('1', 6))))
+
+      expect(await strategy3.isReadyToHardWork()).eq(true);
+
+      const hwReturns = await strategy3.connect(splitterSigner).callStatic.doHardWork()
+
+      expect(hwReturns[0].div(100)).eq(earnedTotal.div(100))
+      expect(hwReturns[1].div(10)).eq(state.rebalanceResults[2].div(10))
+
+      await strategy3.connect(splitterSigner).doHardWork();
+
+      expect(await strategy3.isReadyToHardWork()).eq(false);
     });
 
     it('Hardwork test for reverse tokens order pool', async() => {
