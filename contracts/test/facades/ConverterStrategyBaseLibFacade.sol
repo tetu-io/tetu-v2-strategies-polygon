@@ -87,6 +87,27 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
+  function openPositionEntryKind1(
+    ITetuConverter tetuConverter_,
+    bytes memory entryData_,
+    address collateralAsset_,
+    address borrowAsset_,
+    uint amountIn_,
+    uint collateralThreshold_
+  ) external returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    return ConverterStrategyBaseLib.openPositionEntryKind1(
+      tetuConverter_,
+      entryData_,
+      collateralAsset_,
+      borrowAsset_,
+      amountIn_,
+      collateralThreshold_
+    );
+  }
+
   function closePosition(
     ITetuConverter tetuConverter_,
     address collateralAsset,
