@@ -379,7 +379,9 @@ library ConverterStrategyBaseLib {
       // less than given number of tokens (event for BTC)
       thresholdAmountIn_ = DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD;
     }
-    require(amountIn_ > thresholdAmountIn_, AppErrors.WRONG_VALUE);
+    if (amountIn_ <= thresholdAmountIn_) {
+      return (0,0);
+    }
 
     OpenPositionLocal memory vars;
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)

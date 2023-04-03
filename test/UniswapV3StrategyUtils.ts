@@ -85,7 +85,7 @@ export class UniswapV3StrategyUtils {
     const gotTokenBAmount = (await TokenUtils.balanceOf(tokenB, signer.address)).sub(signerBalanceOfTokenB);
     // console.log('gotTokenBAmount', gotTokenBAmount)
     console.log('swap in pool tokenB to tokenA...');
-    console.log('Swap amount of tokenB:', formatUnits(gotTokenBAmount, 18));
+    console.log('Swap amount of tokenB:', gotTokenBAmount.toString());
     await TokenUtils.transfer(tokenB, signer, swapper.address, gotTokenBAmount.toString());
     await swapper.connect(signer).swap(state.pool, tokenB, tokenA, signer.address, 10000); // 10% slippage
     price = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);

@@ -19,7 +19,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.1.0";
+  string public constant override STRATEGY_VERSION = "1.1.1";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -252,12 +252,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
           indexAsset
         );
 
-        // make deposit, actually consumed amounts can be different from the desired amounts
-        (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
-        emit OnDepositorEnter(amounts, consumedAmounts);
+        // if something was borrowed
+        if (amounts[1] > 0) {
+          // make deposit, actually consumed amounts can be different from the desired amounts
+          (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+          emit OnDepositorEnter(amounts, consumedAmounts);
 
-        // adjust base-amounts
-        _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, - int(collateral));
+          // adjust base-amounts
+          _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, - int(collateral));
+        }
       }
 
       // adjust _investedAssets
