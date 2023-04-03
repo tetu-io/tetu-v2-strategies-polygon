@@ -23,7 +23,7 @@ import {
   IVeTetu__factory,
   IVoter__factory,
   Multicall__factory,
-  ProxyControlled__factory,
+  ProxyControlled__factory, StrategySplitterV2,
   StrategySplitterV2__factory,
   TetuVaultV2,
   TetuVaultV2__factory,
@@ -61,6 +61,7 @@ const argv = require('yargs/yargs')()
 
 export interface IVaultStrategyInfo {
   vault: TetuVaultV2,
+  splitter: StrategySplitterV2,
   strategy: IStrategyV2
 }
 
@@ -441,7 +442,7 @@ export class DeployerUtilsLocal {
 
     await splitter.addStrategies([strategy.address], [0]);
 
-    return { vault, strategy };
+    return { vault, splitter, strategy };
   }
 
   public static async deployAndInitVault<T>(
