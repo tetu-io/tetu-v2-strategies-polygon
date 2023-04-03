@@ -4,18 +4,19 @@ import {IState, Uniswapv3StateUtils} from "../../../../test/strategies/polygon/u
 import {
   ISplitter__factory,
   ITetuVaultV2__factory,
-  TetuVaultV2__factory,
+  TetuVaultV2__factory, UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory
 } from "../../../../typechain";
 import {Misc} from "../../../utils/Misc";
 import fs from "fs";
 import {MockHelper} from "../../../../test/baseUT/helpers/MockHelper";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 const STRATEGY = '0x807a528818113a6f65b7667a59a4caaac719fc12';
 const USER = "0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94";
 
 const blocks = [
-  40864194,
+  // 40864194,
   // 40864808,
   // 40865052,
   // 40865081,
@@ -37,34 +38,64 @@ const blocks = [
   // 40882452,
   // 40882485,
   // 40884858,
-  // 40890762,
-  // 40890906,
-  // 40894611,
-  // 40899049,
-  // 40899272,
-  // 40902865,
-  // 40908375,
-  // 40932662,
-  // 40936238,
-  // 40937149,
-  // 40937628,
-  // 40951809,
-  // 40959628,
-  // 40970251,
-  // 40990479,
-  // 40990582,
-  // 40990857,
-  // 40992085,
-  // 41007781,
-  // 41011130,
-  // 41058711,
-  // 41070702,
-  // 41073517,
-  // 41073620,
-  // 41073650,
-  // 41087643,
+  40890762,
+  40890906,
+  40894611,
+  40899049,
+  40899272,
+  40902865,
+  40908375,
+  40932662,
+  40936238,
+  40937149,
+  40937628,
+  40951809,
+  40959628,
+  40970251,
+  40990479,
+  40990582,
+  40990857,
+  40992085,
+  41007781,
+  41011130,
+  41058711,
+  41070702,
+  41073517,
+  41073620,
+  41073650,
+  41087643,
   41091725
 ];
+
+async function getStateForBlock(
+  signer: SignerWithAddress,
+  block: number,
+  strategy: UniswapV3ConverterStrategy,
+  vault: string,
+  prefix: string
+) : Promise<IState> {
+  await hre.network.provider.request({
+    method: "hardhat_reset",
+    params: [
+      {
+        forking: {
+          jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+          blockNumber: Number(block),
+        },
+      },
+    ],
+  });
+
+  const facade = await MockHelper.createUniswapV3LibFacade(signer);
+  return Uniswapv3StateUtils.getState(
+    signer,
+    await Misc.impersonate(USER),
+    strategy,
+    TetuVaultV2__factory.connect(vault, signer),
+    facade,
+    `${prefix}-${block.toString()}`,
+  );
+}
 
 /**
  * to run the script on stand-alone hardhat:
@@ -83,55 +114,16 @@ async function main() {
   const vault = await ISplitter__factory.connect(splitter, signer).vault();
   console.log("vault", vault);
 
-  const facade = await MockHelper.createUniswapV3LibFacade(signer);
-
   const states: IState[] = [];
 
   for (const block of blocks) {
     const blockPrev = block - 1;
     console.log("block", blockPrev);
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: Number(blockPrev),
-          },
-        },
-      ],
-    });
 
-    const statePrev = await Uniswapv3StateUtils.getState(
-      signer,
-      await Misc.impersonate(USER),
-      strategy,
-      TetuVaultV2__factory.connect(vault, signer),
-      facade,
-      `B-${blockPrev.toString()}`,
-    );
+    const statePrev = await getStateForBlock(signer, blockPrev, strategy, vault, "B");
     states.push(statePrev);
 
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: Number(block),
-          },
-        },
-      ],
-    });
-
-    const state = await Uniswapv3StateUtils.getState(
-      signer,
-      await Misc.impersonate(USER),
-      strategy,
-      TetuVaultV2__factory.connect(vault, signer),
-      facade,
-      `r-${block.toString()}`,
-    );
+    const state = await getStateForBlock(signer, block, strategy, vault, "r");
     states.push(state);
 
     if (fs.existsSync(pathOut)) {

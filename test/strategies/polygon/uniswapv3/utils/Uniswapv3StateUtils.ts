@@ -288,8 +288,8 @@ export class Uniswapv3StateUtils {
 
       0, // pool.token0
       0, // pool.token1
-      decimalsUSDC, // pool.amount0
-      decimalsUSDT, // pool.amount1
+      decimalsUSDC, // pool.amount0 TODO: decimals of token0
+      decimalsUSDT, // pool.amount1 TOCO: decimals of token1
 
       decimalsUSDC, // depositor.rebalanceEarned0
       decimalsUSDC, // depositor.rebalanceEarned1
