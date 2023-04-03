@@ -1,36 +1,18 @@
 import {
-  BalancerComposableStableStrategy,
-  BalancerComposableStableStrategy__factory,
-  IBalancerGauge__factory,
-  IERC20__factory,
+  IConverterController__factory,
+  IERC20__factory, IPriceOracle__factory,
   ISplitter__factory,
-  IStrategyV2,
-  ITetuConverter__factory,
-  ITetuLiquidator,
+  ITetuConverter__factory, IUniswapV3Pool__factory,
   StrategyBaseV2__factory,
-  TetuVaultV2,
-  VaultFactory__factory,
+  TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3LibFacade,
 } from '../../../../../typechain';
 import { MaticAddresses } from '../../../../../scripts/addresses/MaticAddresses';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { DeployerUtils } from '../../../../../scripts/utils/DeployerUtils';
-import { DeployerUtilsLocal } from '../../../../../scripts/utils/DeployerUtilsLocal';
-import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { BigNumber } from 'ethers';
 import hre from 'hardhat';
 import { writeFileSync } from 'fs';
 import { formatUnits } from 'ethers/lib/utils';
-import { UniversalTestUtils } from '../../../../baseUT/utils/UniversalTestUtils';
-import { StrategyTestUtils } from '../../../../baseUT/utils/StrategyTestUtils';
 import { writeFileSyncRestoreFolder } from '../../../../baseUT/utils/FileUtils';
-
-export interface ISetThresholdsInputParams {
-  reinvestThresholdPercent?: number;
-  rewardLiquidationThresholds?: {
-    asset: string,
-    threshold: BigNumber
-  }[];
-}
 
 /**
  * All balances
@@ -39,15 +21,13 @@ export interface IState {
   title: string;
   block: number;
   blockTimestamp: number;
-  signer: {
-    usdc: BigNumber;
-  };
   user: {
     usdc: BigNumber;
   };
   strategy: {
     usdc: BigNumber;
     usdt: BigNumber;
+    df: BigNumber;
     totalAssets: BigNumber;
     investedAssets: BigNumber;
   };
@@ -58,13 +38,19 @@ export interface IState {
     lowerTick: number;
     upperTick: number;
     rebalanceTickRange: number;
-    totalLiquidity: number;
+    totalLiquidity: BigNumber;
     isFuseTriggered: boolean;
     fuseThreshold: BigNumber;
     rebalanceEarned0: BigNumber; // rebalanceResults[0]
     rebalanceEarned1: BigNumber; // rebalanceResults[1]
     rebalanceLost: BigNumber; // rebalanceResults[2]
   };
+  pool: {
+    token0: string,
+    token1: string,
+    amount0: BigNumber,
+    amount1: BigNumber
+  },
   splitter: {
     usdc: BigNumber;
     totalAssets: BigNumber;
@@ -72,9 +58,7 @@ export interface IState {
   vault: {
     usdc: BigNumber;
     userShares: BigNumber;
-    signerShares: BigNumber;
     userUsdc: BigNumber;
-    signerUsdc: BigNumber;
     sharePrice: BigNumber;
     totalSupply: BigNumber;
     totalAssets: BigNumber;
@@ -85,16 +69,16 @@ export interface IState {
   baseAmounts: {
     usdc: BigNumber;
     usdt: BigNumber;
+    df: BigNumber;
   };
   converter: {
     collateralForUsdt: BigNumber,
     amountToRepayUsdt: BigNumber
   };
-}
-
-export interface IPutInitialAmountsBalancesResults {
-  balanceUser: BigNumber;
-  balanceSigner: BigNumber;
+  prices: {
+    usdc: BigNumber,
+    usdt: BigNumber
+  }
 }
 
 /**
@@ -105,67 +89,52 @@ export class Uniswapv3StateUtils {
   public static async getState(
     signer: SignerWithAddress,
     user: SignerWithAddress,
-    strategy: BalancerComposableStableStrategy,
+    strategy: UniswapV3ConverterStrategy,
     vault: TetuVaultV2,
+    facade: UniswapV3LibFacade,
     title?: string,
   ): Promise<IState> {
-    const gauge = '0x1c514fEc643AdD86aeF0ef14F4add28cC3425306';
-    const balancerPool = '0x48e6b98ef6329f8f0a30ebb8c7c960330d648085';
-    const bbAmDai = '0x178E029173417b1F9C8bC16DCeC6f697bC323746';
-    const bbAmUsdc = '0xF93579002DBE8046c43FEfE86ec78b1112247BB8';
-    const bbAmUsdt = '0xFf4ce5AAAb5a627bf82f4A571AB1cE94Aa365eA6';
     const splitterAddress = await vault.splitter();
     const insurance = await vault.insurance();
     const block = await hre.ethers.provider.getBlock('latest');
 
-    const debtsDai = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
-      strategy.address,
-      MaticAddresses.USDC_TOKEN,
-      MaticAddresses.DAI_TOKEN,
-    );
-    const debtsUsdt = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
+    const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
+    const debtsUsdt = await converter.getDebtAmountStored(
       strategy.address,
       MaticAddresses.USDC_TOKEN,
       MaticAddresses.USDT_TOKEN,
     );
 
-    const dest = {
+    const depositorState = await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer).getState();
+
+    const pool = await IUniswapV3Pool__factory.connect(depositorState.pool, signer);
+    const slot0 = await pool.slot0();
+
+    console.log("slot0", slot0);
+    console.log("state", depositorState);
+    const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
+      slot0.sqrtPriceX96,
+      depositorState.lowerTick,
+      depositorState.upperTick,
+      depositorState.totalLiquidity
+    );
+
+    const converterController = IConverterController__factory.connect(await converter.controller(), signer);
+    const priceOracle = IPriceOracle__factory.connect(await converterController.priceOracle(), signer);
+
+    const dest: IState = {
       title: title || 'no-name',
       block: block.number,
       blockTimestamp: block.timestamp,
-      signer: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(signer.address),
-      },
       user: {
         usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(user.address),
       },
-      strategy: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(strategy.address),
-        usdt: await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, user).balanceOf(strategy.address),
-        dai: await IERC20__factory.connect(MaticAddresses.DAI_TOKEN, user).balanceOf(strategy.address),
-        bal: await IERC20__factory.connect(MaticAddresses.BAL_TOKEN, user).balanceOf(strategy.address),
-        bptPool: await IERC20__factory.connect(balancerPool, user).balanceOf(strategy.address),
-        totalAssets: await strategy.totalAssets(),
-        investedAssets: await StrategyBaseV2__factory.connect(strategy.address, user).investedAssets(),
-      },
-      gauge: {
-        strategyBalance: await IBalancerGauge__factory.connect(gauge, user).balanceOf(strategy.address),
-      },
-      balancerPool: {
-        bbAmUsdc: await IERC20__factory.connect(bbAmUsdc, user).balanceOf(balancerPool),
-        bbAmUsdt: await IERC20__factory.connect(bbAmUsdt, user).balanceOf(balancerPool),
-        bbAmDai: await IERC20__factory.connect(bbAmDai, user).balanceOf(balancerPool),
-      },
-      splitter: {
-        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(splitterAddress),
-        totalAssets: await ISplitter__factory.connect(splitterAddress, user).totalAssets(),
-      },
       vault: {
         usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(vault.address),
+
         userShares: await vault.balanceOf(user.address),
-        signerShares: await vault.balanceOf(signer.address),
         userUsdc: await vault.convertToAssets(await vault.balanceOf(user.address)),
-        signerUsdc: await vault.convertToAssets(await vault.balanceOf(signer.address)),
+
         sharePrice: await vault.sharePrice(),
         totalSupply: await vault.totalSupply(),
         totalAssets: await vault.totalAssets(),
@@ -173,18 +142,50 @@ export class Uniswapv3StateUtils {
       insurance: {
         usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(insurance),
       },
+      strategy: {
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(strategy.address),
+        usdt: await IERC20__factory.connect(MaticAddresses.USDT_TOKEN, user).balanceOf(strategy.address),
+        df: await IERC20__factory.connect(MaticAddresses.DF_TOKEN, user).balanceOf(strategy.address),
+        totalAssets: await strategy.totalAssets(),
+        investedAssets: await StrategyBaseV2__factory.connect(strategy.address, user).investedAssets(),
+      },
+      depositor: {
+        tokenA: depositorState.tokenA,
+        tokenB: depositorState.tokenB,
+        tickSpacing: depositorState.tickSpacing,
+        lowerTick: depositorState.lowerTick,
+        upperTick: depositorState.upperTick,
+        rebalanceTickRange: depositorState.rebalanceTickRange,
+        totalLiquidity: depositorState.totalLiquidity,
+        isFuseTriggered: depositorState.isFuseTriggered,
+        fuseThreshold: depositorState.fuseThreshold,
+        rebalanceEarned0: depositorState.rebalanceResults[0],
+        rebalanceEarned1: depositorState.rebalanceResults[1],
+        rebalanceLost: depositorState.rebalanceResults[2],
+      },
+      pool: {
+        token0: await pool.token0(),
+        token1: await pool.token1(),
+        amount0: poolAmountsForLiquidity.amount0,
+        amount1: poolAmountsForLiquidity.amount1
+      },
+      splitter: {
+        usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(splitterAddress),
+        totalAssets: await ISplitter__factory.connect(splitterAddress, user).totalAssets(),
+      },
       baseAmounts: {
         usdc: await strategy.baseAmounts(MaticAddresses.USDC_TOKEN),
         usdt: await strategy.baseAmounts(MaticAddresses.USDT_TOKEN),
-        dai: await strategy.baseAmounts(MaticAddresses.DAI_TOKEN),
-        bal: await strategy.baseAmounts(MaticAddresses.BAL_TOKEN),
+        df: await strategy.baseAmounts(MaticAddresses.DF_TOKEN),
       },
       converter: {
-        collateralForDai: debtsDai.totalCollateralAmountOut,
-        amountToRepayDai: debtsDai.totalDebtAmountOut,
         collateralForUsdt: debtsUsdt.totalCollateralAmountOut,
         amountToRepayUsdt: debtsUsdt.totalDebtAmountOut,
       },
+      prices: {
+        usdc: await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN),
+        usdt: await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN),
+      }
     };
 
     // console.log("State", dest);
@@ -197,14 +198,11 @@ export class Uniswapv3StateUtils {
       'block',
       'timestamp',
 
-      'signer.usdc',
       'user.usdc',
+      'vault.usdc',
 
       'vault.user.shares',
-      'vault.signer.shares',
-
       'vault.user.usdc',
-      'vault.signer.usdc',
 
       'vault.sharePrice',
       'vault.totalSupply',
@@ -214,73 +212,101 @@ export class Uniswapv3StateUtils {
 
       'strategy.usdc',
       'strategy.usdt',
-      'strategy.dai',
-      'strategy.bal',
-      'strategy.bptp',
+      'strategy.df',
       'strategy.totalAssets',
       'strategy.investedAssets',
 
-      'gauge.bptp',
+      'depositor.tokenA',
+      'depositor.tokenB',
+      'depositor.tickSpacing',
+      'depositor.lowerTick',
+      'depositor.upperTick',
+      'depositor.rebalanceTickRange',
+      'depositor.totalLiquidity',
+      'depositor.isFuseTriggered',
+      'depositor.fuseThreshold',
+      'depositor.rebalanceEarned0',
+      'depositor.rebalanceEarned1',
+      'depositor.rebalanceLost',
 
-      'vault.usdc',
+      "pool.token0",
+      "pool.token1",
+      "pool.amount0",
+      "pool.amount1",
 
       'splitter.usdc',
       'splitter.totalAssets',
 
-      'converter.collateralDai',
-      'converter.toRepayDai',
+      'baseAmounts.usdc',
+      'baseAmounts.usdt',
+      'baseAmounts.df',
+
       'converter.collateralUsdt',
       'converter.toRepayUsdt',
 
-      'pool.bbAmUsdc',
-      'pool.bbAmUsdt',
-      'pool.bbAmDai',
+      'price.usdc',
+      'price.usdt',
     ];
 
     const decimalsSharedPrice = 6;
     const decimalsUSDC = 6;
     const decimalsUSDT = 6;
-    const decimalsDAI = 18;
-    const decimalsBAL = 18;
-    const decimalsBbAmUsdc = 18;
-    const decimalsBbAmUsdt = 18;
-    const decimalsBbAmDai = 18;
-    const decimalsBptp = 18;
+    const decimalsDF = 18;
 
     const stateDecimals = [
       0,
       0,
       0,
-      decimalsUSDC, // signer.usdc
+
       decimalsUSDC, // user.usdc
+      decimalsUSDC, // vault.usdc
+
       decimalsUSDC, // vault.userShares
-      decimalsUSDC, // vault.signerShares
       decimalsUSDC, // vault.userUsdc
-      decimalsUSDC, // vault.signerUsdc
+
       decimalsSharedPrice, // shared price
       decimalsUSDC, // vault.totlaSupply
       decimalsUSDC, // vault.totalAssets
+
       decimalsUSDC, // insurance.usdc
+
       decimalsUSDC, // strategy.usdc
       decimalsUSDT, // strategy.usdt
-      decimalsDAI, // strategy.dai
-      decimalsBAL, // strategy.bal
-      decimalsBptp, // strategy.bptPool
+      decimalsDF, // strategy.df
       decimalsUSDC, // strategy.totalAssets
       decimalsUSDC, // strategy.investedAssets
-      decimalsBptp, // gauge.strategyBalance
-      decimalsUSDC, // vault.usdc
+
+      0, // depositor.tokenA
+      0, // depositor.tokenB
+      0, // depositor.tickSpacing
+      0, // depositor.lowerTick
+      0, // depositor.upperTick
+      0, // depositor.rebalanceTickRange
+      decimalsUSDC, // depositor.totalLiquidity
+      0, // depositor.isFuseTriggered
+      18, // depositor.fuseThreshold
+
+      0, // pool.token0
+      0, // pool.token1
+      decimalsUSDC, // pool.amount0
+      decimalsUSDT, // pool.amount1
+
+      decimalsUSDC, // depositor.rebalanceEarned0
+      decimalsUSDC, // depositor.rebalanceEarned1
+      decimalsUSDC, // depositor.rebalanceLost
+
       decimalsUSDC, // splitter.usdc
       decimalsUSDC, // splitter.totalAssets,
 
-      decimalsUSDC, // collateral for dai
-      decimalsDAI, // amount to repay, dai
+      decimalsUSDC, // baseAmounts.usdc
+      decimalsUSDT, // baseAmounts.usdt
+      decimalsDF, // baseAmounts.df
+
       decimalsUSDC, // collateral for usdt
       decimalsUSDT, // amount to repay, usdt
 
-      decimalsBbAmUsdc,
-      decimalsBbAmUsdt,
-      decimalsBbAmDai,
+      18,
+      18,
     ];
 
     return { stateHeaders, stateDecimals };
@@ -298,40 +324,54 @@ export class Uniswapv3StateUtils {
         item.block,
         item.blockTimestamp,
 
-        item.signer.usdc,
         item.user.usdc,
+        item.vault.usdc,
 
         item.vault.userShares,
-        item.vault.signerShares,
-
         item.vault.userUsdc,
-        item.vault.signerUsdc,
 
         item.vault.sharePrice,
         item.vault.totalSupply,
         item.vault.totalAssets,
 
         item.insurance.usdc,
+
         item.strategy.usdc,
         item.strategy.usdt,
-        item.strategy.dai,
-        item.strategy.bal,
-        item.strategy.bptPool,
+        item.strategy.df,
         item.strategy.totalAssets,
         item.strategy.investedAssets,
-        item.gauge.strategyBalance,
-        item.vault.usdc,
+
+        item.depositor.tokenA,
+        item.depositor.tokenB,
+        item.depositor.tickSpacing,
+        item.depositor.lowerTick,
+        item.depositor.upperTick,
+        item.depositor.rebalanceTickRange,
+        item.depositor.totalLiquidity,
+        item.depositor.isFuseTriggered,
+        item.depositor.fuseThreshold,
+        item.depositor.rebalanceEarned0,
+        item.depositor.rebalanceEarned1,
+        item.depositor.rebalanceLost,
+
+        item.pool.token0,
+        item.pool.token1,
+        item.pool.amount0,
+        item.pool.amount1,
+
         item.splitter.usdc,
         item.splitter.totalAssets,
 
-        item.converter.collateralForDai,
-        item.converter.amountToRepayDai,
+        item.baseAmounts.usdc,
+        item.baseAmounts.usdt,
+        item.baseAmounts.df,
+
         item.converter.collateralForUsdt,
         item.converter.amountToRepayUsdt,
 
-        item.balancerPool.bbAmUsdc,
-        item.balancerPool.bbAmUsdt,
-        item.balancerPool.bbAmDai,
+        item.prices.usdc,
+        item.prices.usdt
       ];
       writeFileSync(
         pathOut,
@@ -359,40 +399,54 @@ export class Uniswapv3StateUtils {
       item.block,
       item.blockTimestamp,
 
-      item.signer.usdc,
       item.user.usdc,
+      item.vault.usdc,
 
       item.vault.userShares,
-      item.vault.signerShares,
-
       item.vault.userUsdc,
-      item.vault.signerUsdc,
 
       item.vault.sharePrice,
       item.vault.totalSupply,
       item.vault.totalAssets,
 
       item.insurance.usdc,
+
       item.strategy.usdc,
       item.strategy.usdt,
-      item.strategy.dai,
-      item.strategy.bal,
-      item.strategy.bptPool,
+      item.strategy.df,
       item.strategy.totalAssets,
       item.strategy.investedAssets,
-      item.gauge.strategyBalance,
-      item.vault.usdc,
+
+      item.depositor.tokenA,
+      item.depositor.tokenB,
+      item.depositor.tickSpacing,
+      item.depositor.lowerTick,
+      item.depositor.upperTick,
+      item.depositor.rebalanceTickRange,
+      item.depositor.totalLiquidity,
+      item.depositor.isFuseTriggered,
+      item.depositor.fuseThreshold,
+      item.depositor.rebalanceEarned0,
+      item.depositor.rebalanceEarned1,
+      item.depositor.rebalanceLost,
+
+      item.pool.token0,
+      item.pool.token1,
+      item.pool.amount0,
+      item.pool.amount1,
+
       item.splitter.usdc,
       item.splitter.totalAssets,
 
-      item.converter.collateralForDai,
-      item.converter.amountToRepayDai,
+      item.baseAmounts.usdc,
+      item.baseAmounts.usdt,
+      item.baseAmounts.df,
+
       item.converter.collateralForUsdt,
       item.converter.amountToRepayUsdt,
 
-      item.balancerPool.bbAmUsdc,
-      item.balancerPool.bbAmUsdt,
-      item.balancerPool.bbAmDai,
+      item.prices.usdc,
+      item.prices.usdt
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' });
@@ -412,8 +466,6 @@ export class Uniswapv3StateUtils {
 
   public static getTotalUsdAmount(state: IState): BigNumber {
     return state.user.usdc.add(
-      state.signer.usdc,
-    ).add(
       state.vault.usdc,
     ).add(
       state.insurance.usdc,
