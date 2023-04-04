@@ -129,24 +129,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       }
     }
 
-    (
-    uint receivedA,
-    uint spentA,
-    uint receivedB,
-    uint spentB
-    ) = UniswapV3ConverterStrategyLogicLib.getUpdateInfo(state, baseAmounts);
-
-    _updateBaseAmountsForAsset(
-      state.tokenA,
-      receivedA,
-      spentA
-    );
-    _updateBaseAmountsForAsset(
-      state.tokenB,
-      receivedB,
-      spentB
-    );
-
     //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
   }
@@ -240,12 +222,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         uint[] memory tokenAmounts = new uint[](2);
         tokenAmounts[0] = amount_;
         emit OnDepositorEnter(tokenAmounts, tokenAmounts);
-        _updateBaseAmountsForAsset(state.tokenA, amount_, 0);
       } else {
         (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
         // prepare array of amounts ready to deposit, borrow missed amounts
-        (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
+        (uint[] memory amounts,,) = _beforeDeposit(
           converter,
           amount_,
           tokens,
@@ -255,9 +236,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         // make deposit, actually consumed amounts can be different from the desired amounts
         (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
         emit OnDepositorEnter(amounts, consumedAmounts);
-
-        // adjust base-amounts
-        _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, - int(collateral));
       }
 
       // adjust _investedAssets

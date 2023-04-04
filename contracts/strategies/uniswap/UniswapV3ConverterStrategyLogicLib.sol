@@ -156,34 +156,6 @@ library UniswapV3ConverterStrategyLogicLib {
     return oldPrice > newPrice ? (oldPrice - newPrice) > fuseThreshold : (newPrice - oldPrice) > fuseThreshold;
   }
 
-  /// @dev Gets the update information for the strategy, including token amounts received and spent.
-  /// @param state The State storage object.
-  /// @param baseAmounts Mapping of token addresses to their base amounts on the strategy balance (not rewards).
-  /// @return receivedA The amount of tokenA received.
-  /// @return spentA The amount of tokenA spent.
-  /// @return receivedB The amount of tokenB received.
-  /// @return spentB The amount of tokenB spent.
-  function getUpdateInfo(State storage state, mapping(address => uint) storage baseAmounts) external view returns (
-    uint receivedA,
-    uint spentA,
-    uint receivedB,
-    uint spentB
-  ){
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    bool depositorSwapTokens = state.depositorSwapTokens;
-    //updating baseAmounts (token amounts on strategy balance which are not rewards)
-    uint balanceOfTokenABefore = baseAmounts[tokenA];
-    uint balanceOfTokenBBefore = baseAmounts[tokenB];
-    uint balanceOfTokenAAfter = _balance(tokenA) - (depositorSwapTokens ? state.rebalanceEarned1 : state.rebalanceEarned0);
-    uint balanceOfTokenBAfter = _balance(tokenB) - (depositorSwapTokens ? state.rebalanceEarned0 : state.rebalanceEarned1);
-
-    receivedA = balanceOfTokenABefore > balanceOfTokenAAfter ? 0 : balanceOfTokenAAfter - balanceOfTokenABefore;
-    spentA = balanceOfTokenABefore > balanceOfTokenAAfter ? balanceOfTokenABefore - balanceOfTokenAAfter : 0;
-    receivedB = balanceOfTokenBBefore > balanceOfTokenBAfter ? 0 : balanceOfTokenBAfter - balanceOfTokenBBefore;
-    spentB = balanceOfTokenBBefore > balanceOfTokenBAfter ? balanceOfTokenBBefore - balanceOfTokenBAfter : 0;
-  }
-
   function initStrategyState(State storage state, address controller_, address converter) external {
     address liquidator = IController(controller_).liquidator();
     IERC20(state.tokenA).approve(liquidator, type(uint).max);

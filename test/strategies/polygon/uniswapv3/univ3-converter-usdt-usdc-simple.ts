@@ -7,7 +7,8 @@ import {
   IController__factory,
   IERC20__factory,
   IERC20Metadata__factory,
-  IStrategyV2, StrategySplitterV2,
+  IStrategyV2,
+  StrategySplitterV2,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
@@ -16,7 +17,7 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
-import { parseUnits } from 'ethers/lib/utils';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
@@ -115,10 +116,22 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const depositAmount1 = parseUnits('1000', decimals);
 
-    await vault.connect(signer).deposit(depositAmount1, signer.address);
-    expect(await strategy.investedAssets()).above(0);
-    expect(await strategy.baseAmounts(MaticAddresses.USDC_TOKEN)).eq(0);
-    expect(await strategy.baseAmounts(MaticAddresses.USDT_TOKEN)).eq(0);
+    const sharePriceBefore = await vault.sharePrice();
+
+    for (let i = 0; i < 1; i++) {
+
+      await vault.connect(signer).deposit(depositAmount1, signer.address);
+
+      const investedAssets = await strategy.investedAssets();
+      console.log('investedAssets', formatUnits(investedAssets, decimals));
+      expect(investedAssets).above(0);
+      expect(await strategy.baseAmounts(MaticAddresses.USDC_TOKEN)).eq(0);
+      expect(await strategy.baseAmounts(MaticAddresses.USDT_TOKEN)).eq(0);
+
+      const sharePriceAfterDeposit = await vault.sharePrice();
+      expect(sharePriceAfterDeposit).eq(sharePriceBefore);
+
+    }
 
   });
 

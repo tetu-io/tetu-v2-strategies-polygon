@@ -39,15 +39,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
-  function _updateBaseAmountsAccess(
-    address[] memory tokens_,
-    uint[] memory receivedAmounts_,
-    uint[] memory spentAmounts_,
-    uint indexAsset_,
-    int amountAsset_
-  ) external {
-    return _updateBaseAmounts(tokens_, receivedAmounts_, spentAmounts_, indexAsset_, amountAsset_);
-  }
 
   function _convertAfterWithdrawAccess(
     address[] memory tokens_,
@@ -237,12 +228,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, rewardTokens_, rewardAmounts_, baseAmounts);
+    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, rewardTokens_, rewardAmounts_, asset, 0);
   }
 
   function _recycleAccess(address[] memory tokens, uint[] memory amounts) external returns (
-    uint[] memory receivedAmounts,
-    uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
     return _recycle(tokens, amounts);
