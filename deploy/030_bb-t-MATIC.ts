@@ -22,11 +22,12 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const stMaticLinearPool = await deployments.get('bbTstMATIC4626LinearPool')
 
   const tWmaticStrategy = await deployments.get('tWMaticStrategy')
-  const tStMaticStrategy = await deployments.get('tStMaticStrategy')
+
+  const stMaticRateProvider = await deployments.get('stMaticRateProvider')
 
   const poolData = [
-    { pool: wmaticLinearPool.address, strategy: tWmaticStrategy.address },
-    { pool: stMaticLinearPool.address, strategy: tStMaticStrategy.address }
+    { pool: wmaticLinearPool.address, rateProvider: tWmaticStrategy.address },
+    { pool: stMaticLinearPool.address, rateProvider: stMaticRateProvider.address }
   ]
 
   poolData.sort((a, b) => a.pool.localeCompare(b.pool))
@@ -36,8 +37,8 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     'bb-t-MATIC',
     poolData.map(p => p.pool),
     '50', // amplificationParameter
-    poolData.map(p => p.strategy), // strategy implements IRatesProvider interface
-    ['21600', '21600'], // tokenRateCacheDurations
+    poolData.map(p => p.rateProvider),
+    ['900', '900'], // tokenRateCacheDurations
     [false, false], // exemptFromYieldProtocolFeeFlags
     '100000000000000', // swapFeePercentage
     Consts.BAL_DELEGATED_OWNER_ADDRESS
@@ -158,4 +159,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 }
 export default func
 func.tags = ['bbTMaticComposablePool']
-func.dependencies = ['bbTWMATIC4626LinearPool', 'bbTstMATIC4626LinearPool']
+func.dependencies = ['bbTWMATIC4626LinearPool', 'bbTstMATIC4626LinearPool', 'stMaticRateProvider']
