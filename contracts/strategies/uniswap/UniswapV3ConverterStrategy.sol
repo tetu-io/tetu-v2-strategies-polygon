@@ -19,7 +19,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.1.0";
+  string public constant override STRATEGY_VERSION = "1.2.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -43,6 +43,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     UniswapV3ConverterStrategyLogicLib.initStrategyState(state, controller_, converter_);
+
+    // set minimum thresholds for liquidation
+    liquidationThresholds[state.tokenA] = 10_000;
+    emit LiquidationThresholdChanged(state.tokenA, 10_000);
+    liquidationThresholds[state.tokenB] = 10_000;
+    emit LiquidationThresholdChanged(state.tokenB, 10_000);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -233,13 +239,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
           indexAsset
         );
 
-        // make deposit, actually consumed amounts can be different from the desired amounts
-        (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
-        emit OnDepositorEnter(amounts, consumedAmounts);
+        if(amounts[0] > 0 || amounts[1] > 0) {
+          // make deposit, actually consumed amounts can be different from the desired amounts
+          (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+          emit OnDepositorEnter(amounts, consumedAmounts);
+        }
       }
 
       // adjust _investedAssets
-      _updateInvestedAssets();
+      totalAssetsDelta += int(updatedInvestedAssets) - int(_updateInvestedAssets());
     }
   }
 }

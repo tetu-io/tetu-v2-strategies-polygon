@@ -339,10 +339,8 @@ library UniswapV3ConverterStrategyLogicLib {
       state.totalLiquidityFillup
     );
 
-    (uint fee0, uint fee1) = getFees(state);
-
-    reserves[0] += amount0CurrentFillup + fee0 + _balance(state.pool.token0());
-    reserves[1] += amount1CurrentFillup + fee1 + _balance(state.pool.token1());
+    reserves[0] += amount0CurrentFillup;
+    reserves[1] += amount1CurrentFillup;
 
     if (state.depositorSwapTokens) {
       (reserves[0], reserves[1]) = (reserves[1], reserves[0]);

@@ -50,7 +50,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.0.1";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.0";
 
   uint internal constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
 
@@ -105,6 +105,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) internal onlyInitializing {
     __StrategyBase_init(controller_, splitter_);
     converter = ITetuConverter(converter_);
+
+    // 1% by default
+    reinvestThresholdPercent = REINVEST_THRESHOLD_DENOMINATOR / 100;
+    emit ReinvestThresholdPercentChanged(REINVEST_THRESHOLD_DENOMINATOR / 100);
   }
 
   function setLiquidationThreshold(address token, uint amount) external {
@@ -153,7 +157,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
       emit OnDepositorEnter(amounts, consumedAmounts);
       // adjust _investedAssets
-      _updateInvestedAssets();
+      totalAssetsDelta += int(updatedInvestedAssets) - int(_updateInvestedAssets());
+
     }
   }
 
