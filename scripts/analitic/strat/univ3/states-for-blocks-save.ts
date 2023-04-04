@@ -1,9 +1,7 @@
-import { univ3ConverterData } from './univ3-converter-data';
 import hre, { ethers } from 'hardhat';
 import {IState, Uniswapv3StateUtils} from "../../../../test/strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
 import {
   ISplitter__factory,
-  ITetuVaultV2__factory,
   TetuVaultV2__factory, UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory
 } from "../../../../typechain";
@@ -38,8 +36,8 @@ const blocks = [
   // 40882452,
   // 40882485,
   // 40884858,
-  40890762,
-  40890906,
+  // 40890762,
+  // 40890906,
   40894611,
   40899049,
   40899272,
@@ -64,7 +62,10 @@ const blocks = [
   41073620,
   41073650,
   41087643,
-  41091725
+  41093262,
+  41099058,
+  41105009,
+  41107404,
 ];
 
 async function getStateForBlock(
