@@ -1114,8 +1114,7 @@ library ConverterStrategyBaseLib {
     address[] memory tokens_,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_,
-    address underlying,
-    uint underlyingBalanceBefore
+    uint[] memory balancesBefore
   ) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut
@@ -1127,17 +1126,17 @@ library ConverterStrategyBaseLib {
     (tokensOut, amountsOut) = TokenAmountsLib.combineArrays(
       rewardTokens_, rewardAmounts_,
       tokensTC, amountsTC,
-      // by default, depositor assets have zero amounts here .. but probably they have airdrops (see below)
+      // by default, depositor assets have zero amounts here
       tokens_, new uint[](tokens_.length)
     );
 
-    // set fresh balances
+    // set fresh balances for depositor tokens
     uint len = tokensOut.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if(underlying == tokensOut[i]) {
-        amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - underlyingBalanceBefore;
-      } else {
-        amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this));
+      for(uint j; j < tokens_.length; j = AppLib.uncheckedInc(j)) {
+        if (tokensOut[i] == tokens_[j]) {
+          amountsOut[i] = IERC20(tokens_[j]).balanceOf(address(this)) - balancesBefore[j];
+        }
       }
     }
 

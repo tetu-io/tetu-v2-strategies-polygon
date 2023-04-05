@@ -206,7 +206,8 @@ contract MockDepositor is DepositorBase, Initializable {
 
   function _depositorClaimRewards() override internal virtual returns (
     address[] memory rewardTokens,
-    uint[] memory rewardAmounts
+    uint[] memory rewardAmounts,
+    uint[] memory balancesBefore
   ) {
     uint len = depositorClaimRewardsParams.rewardTokens.length;
     rewardTokens = depositorClaimRewardsParams.rewardTokens;
@@ -216,7 +217,7 @@ contract MockDepositor is DepositorBase, Initializable {
       IMockToken token = IMockToken(depositorClaimRewardsParams.rewardTokens[i]);
       token.mint(address(this), depositorClaimRewardsParams.rewardAmounts[i]);
     }
-    return (rewardTokens, rewardAmounts);
+    return (rewardTokens, rewardAmounts, balancesBefore);
   }
 
   function setDepositorClaimRewards(address[] memory rewardTokens_, uint[] memory rewardAmounts_) external {
