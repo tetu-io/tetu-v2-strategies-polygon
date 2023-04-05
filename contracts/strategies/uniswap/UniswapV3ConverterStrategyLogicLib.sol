@@ -635,8 +635,15 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 upperTickFillup,
     uint rebalanceEarned0,
     uint rebalanceEarned1,
-    bool _depositorSwapTokens
-  ) external returns (uint[] memory amountsOut) {
+    bool _depositorSwapTokens,
+    address[] memory tokensOut
+  ) external returns (uint[] memory amountsOut, uint[] memory balancesBefore) {
+
+    balancesBefore = new uint[](2);
+    for(uint i = 0; i < tokensOut.length; i++) {
+      balancesBefore[i] = IERC20(tokensOut[i]).balanceOf(address(this));
+    }
+
     amountsOut = new uint[](2);
     pool.burn(lowerTick, upperTick, 0);
     (amountsOut[0], amountsOut[1]) = pool.collect(

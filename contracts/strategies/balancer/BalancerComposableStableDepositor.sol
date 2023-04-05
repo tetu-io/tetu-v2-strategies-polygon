@@ -193,7 +193,8 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   /// @dev Claim all possible rewards.
   function _depositorClaimRewards() override internal virtual returns (
     address[] memory tokensOut,
-    uint[] memory amountsOut
+    uint[] memory amountsOut,
+    uint[] memory depositorBalancesBefore
   ) {
     return BalancerLogicLib.depositorClaimRewards(_gauge, _rewardTokens);
   }

@@ -192,14 +192,27 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @return amountsOut An array containing the amounts of the reward tokens.
   function _depositorClaimRewards() override internal virtual returns (
     address[] memory tokensOut,
-    uint[] memory amountsOut
+    uint[] memory amountsOut,
+    uint[] memory balancesBefore
   ) {
-    amountsOut = UniswapV3ConverterStrategyLogicLib.claimRewards(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.rebalanceEarned0, state.rebalanceEarned1, state.depositorSwapTokens);
-    state.rebalanceEarned0 = 0;
-    state.rebalanceEarned1 = 0;
+
     tokensOut = new address[](2);
     tokensOut[0] = state.tokenA;
     tokensOut[1] = state.tokenB;
+
+    (amountsOut, balancesBefore) = UniswapV3ConverterStrategyLogicLib.claimRewards(
+      state.pool,
+      state.lowerTick,
+      state.upperTick,
+      state.lowerTickFillup,
+      state.upperTickFillup,
+      state.rebalanceEarned0,
+      state.rebalanceEarned1,
+      state.depositorSwapTokens,
+      tokensOut
+    );
+    state.rebalanceEarned0 = 0;
+    state.rebalanceEarned1 = 0;
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new

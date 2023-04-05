@@ -51,8 +51,12 @@ abstract contract DepositorBase is ERC20Helpers {
   }
 
   /// @notice Claim all possible rewards.
+  /// @return rewardTokens todo
+  /// @return rewardAmounts todo
+  /// @return depositorBalancesBefore Must have the same length as _depositorPoolAssets and represent balances before claim in the same order
   function _depositorClaimRewards() internal virtual returns (
     address[] memory rewardTokens,
-    uint[] memory rewardAmounts
+    uint[] memory rewardAmounts,
+    uint[] memory depositorBalancesBefore
   );
 }

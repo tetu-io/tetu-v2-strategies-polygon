@@ -403,19 +403,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual {
-    address _asset = asset;
-    // todo collect all balances
-    uint underlyingBalanceBefore = _balance(_asset);
     // get rewards from the Depositor
-    (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts) = _depositorClaimRewards();
+    (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts, uint[] memory depositorBalancesBefore) = _depositorClaimRewards();
 
     (address[] memory rewardTokens, uint[] memory amounts) = ConverterStrategyBaseLib.prepareRewardsList(
       converter,
       _depositorPoolAssets(),
       depositorRewardTokens,
       depositorRewardAmounts,
-      _asset,
-      underlyingBalanceBefore
+      depositorBalancesBefore
     );
 
     uint len = rewardTokens.length;

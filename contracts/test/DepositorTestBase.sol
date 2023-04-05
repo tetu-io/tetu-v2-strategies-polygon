@@ -38,8 +38,8 @@ abstract contract DepositorTestBase is DepositorBase {
 
   /// @dev Claim all possible rewards.
   function depositorClaimRewards()
-  external returns (address[] memory rewardTokens, uint[] memory rewardAmounts) {
-    (rewardTokens, rewardAmounts) = _depositorClaimRewards();
+  external returns (address[] memory rewardTokens, uint[] memory rewardAmounts, uint[] memory depositorBalancesBefore) {
+    (rewardTokens, rewardAmounts, depositorBalancesBefore) = _depositorClaimRewards();
     _claimedRewardTokens = rewardTokens;
     _claimedRewardAmounts = rewardAmounts;
   }
