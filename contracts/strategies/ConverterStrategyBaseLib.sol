@@ -21,12 +21,9 @@ library ConverterStrategyBaseLib {
   /// @notice Local vars for {_recycle}, workaround for stack too deep
   struct RecycleLocalParams {
     uint amountToCompound;
-    uint amountToForward;
     address rewardToken;
     uint liquidationThresholdAsset;
     uint len;
-    uint baseAmountIn;
-    uint totalRewardAmounts;
     uint spentAmountIn;
     uint receivedAmountOut;
   }
@@ -183,8 +180,7 @@ library ConverterStrategyBaseLib {
     uint[] memory weights_,
     uint totalWeight_,
     uint indexAsset_,
-    IPriceOracle priceOracle,
-    mapping(address => uint) storage baseAmounts_
+    IPriceOracle priceOracle
   ) external view returns (
     uint[] memory tokenAmountsOut
   ) {
@@ -208,7 +204,7 @@ library ConverterStrategyBaseLib {
         / prices[i]
         / decs[indexAsset_];
 
-        uint tokenBalance = baseAmounts_[tokens_[i]];
+        uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
         if (tokenBalance < tokenAmountToBeBorrowed) {
           tokenAmountsOut[i] = amountAssetForToken * (tokenAmountToBeBorrowed - tokenBalance) / tokenAmountToBeBorrowed;
         }
@@ -256,11 +252,9 @@ library ConverterStrategyBaseLib {
   /// @dev This is a writable function with read-only behavior (because of the quote-call)
   /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy
   ///                      0 - withdraw all
-  /// @param baseAmounts_ Available balances of the converted assets
   /// @param strategy_ Address of the strategy
   function getLiquidityAmountRatio(
     uint targetAmount_,
-    mapping(address => uint) storage baseAmounts_,
     address strategy_,
     address[] memory tokens,
     uint indexAsset,
@@ -278,7 +272,7 @@ library ConverterStrategyBaseLib {
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) continue;
 
-      uint baseAmount = baseAmounts_[tokens[i]];
+      uint baseAmount = IERC20(tokens[i]).balanceOf(address(this));
       if (baseAmount != 0) {
         // let's estimate collateral that we received back after repaying baseAmount
         uint expectedCollateral = converter.quoteRepay(
@@ -379,7 +373,9 @@ library ConverterStrategyBaseLib {
       // less than given number of tokens (event for BTC)
       thresholdAmountIn_ = DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD;
     }
-    require(amountIn_ > thresholdAmountIn_, AppErrors.WRONG_VALUE);
+    if (amountIn_ <= thresholdAmountIn_) {
+      return (0,0);
+    }
 
     OpenPositionLocal memory vars;
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
@@ -743,8 +739,7 @@ library ConverterStrategyBaseLib {
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     uint liquidationThresholdForTargetAsset_,
-    uint overswap_,
-    mapping(address => uint) storage baseAmounts_
+    uint overswap_
   ) external returns (
     uint[] memory spentAmounts,
     uint[] memory withdrawnAmountsOut
@@ -757,7 +752,7 @@ library ConverterStrategyBaseLib {
 
     v.availableAmounts = new uint[](v.len);
     for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
-      v.availableAmounts[v.i] = withdrawnAmounts_[v.i] + baseAmounts_[tokens_[v.i]];
+      v.availableAmounts[v.i] = withdrawnAmounts_[v.i] + IERC20(tokens_[v.i]).balanceOf(address(this));
     }
     (spentAmounts, v.receivedAmounts) = _swapToGivenAmount(
       SwapToGivenAmountInputParams({
@@ -878,12 +873,6 @@ library ConverterStrategyBaseLib {
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
-  /// @param baseAmounts_ Base amounts for rewards tokens
-  ///                     The base amounts allow to separate just received and previously received rewards.
-  /// @return receivedAmounts Received amounts of the tokens
-  ///         This array has +1 item at the end: received amount of the main asset
-  ///                                            there was no possibility to use separate var for it, stack too deep
-  /// @return spentAmounts Spent amounts of the tokens
   /// @return amountsToForward Amounts to be sent to forwarder
   function recycle(
     address asset_,
@@ -891,23 +880,19 @@ library ConverterStrategyBaseLib {
     address[] memory tokens_,
     ITetuLiquidator liquidator_,
     mapping(address => uint) storage liquidationThresholds_,
-    mapping(address => uint) storage baseAmounts_,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
-    uint[] memory receivedAmounts,
-    uint[] memory spentAmounts,
     uint[] memory amountsToForward
   ) {
-    (receivedAmounts, spentAmounts, amountsToForward) = _recycle(
+    amountsToForward = _recycle(
       asset_,
       compoundRatio_,
       tokens_,
       liquidator_,
       rewardTokens_,
       rewardAmounts_,
-      liquidationThresholds_,
-      baseAmounts_
+      liquidationThresholds_
     );
   }
 
@@ -919,13 +904,8 @@ library ConverterStrategyBaseLib {
     ITetuLiquidator liquidator,
     address[] memory rewardTokens,
     uint[] memory rewardAmounts,
-    mapping(address => uint) storage liquidationThresholds,
-    mapping(address => uint) storage baseAmounts
-  ) internal returns (
-    uint[] memory receivedAmounts,
-    uint[] memory spentAmounts,
-    uint[] memory amountsToForward
-  ) {
+    mapping(address => uint) storage liquidationThresholds
+  ) internal returns (uint[] memory amountsToForward) {
     RecycleLocalParams memory p;
 
     p.len = rewardTokens.length;
@@ -934,8 +914,6 @@ library ConverterStrategyBaseLib {
     p.liquidationThresholdAsset = liquidationThresholds[asset];
 
     amountsToForward = new uint[](p.len);
-    receivedAmounts = new uint[](p.len + 1);
-    spentAmounts = new uint[](p.len);
 
     // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
     for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
@@ -945,15 +923,11 @@ library ConverterStrategyBaseLib {
       if (p.amountToCompound > 0) {
         if (ConverterStrategyBaseLib.getAssetIndex(tokens, p.rewardToken) != type(uint).max) {
           // The asset is in the list of depositor's assets, liquidation is not allowed
-          receivedAmounts[i] += p.amountToCompound;
+          // just keep on the balance, should be handled later
         } else {
-          p.baseAmountIn = baseAmounts[p.rewardToken];
-          // total amount that can be liquidated
-          p.totalRewardAmounts = p.amountToCompound + p.baseAmountIn;
-
-          if (p.totalRewardAmounts < liquidationThresholds[p.rewardToken]) {
+          if (p.amountToCompound < liquidationThresholds[p.rewardToken]) {
             // amount is too small, liquidation is not allowed
-            receivedAmounts[i] += p.amountToCompound;
+            // just keep on the balance, should be handled later
           } else {
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
@@ -962,30 +936,15 @@ library ConverterStrategyBaseLib {
               liquidator,
               p.rewardToken,
               asset,
-              p.totalRewardAmounts,
+              p.amountToCompound,
               _REWARD_LIQUIDATION_SLIPPAGE,
               p.liquidationThresholdAsset
             );
-
-            // Adjust amounts after liquidation
-            if (p.receivedAmountOut > 0) {
-              receivedAmounts[p.len] += p.receivedAmountOut;
-            }
-            if (p.spentAmountIn == 0) {
-              receivedAmounts[i] += p.amountToCompound;
-            } else {
-              require(p.spentAmountIn == p.amountToCompound + p.baseAmountIn, StrategyLib.WRONG_VALUE);
-              spentAmounts[i] += p.baseAmountIn;
-            }
           }
         }
       }
-
-      p.amountToForward = rewardAmounts[i] - p.amountToCompound;
-      amountsToForward[i] = p.amountToForward;
+      amountsToForward[i] = rewardAmounts[i] - p.amountToCompound;
     }
-
-    return (receivedAmounts, spentAmounts, amountsToForward);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -998,8 +957,7 @@ library ConverterStrategyBaseLib {
     address[] memory tokens,
     uint[] memory amountsOut,
     uint indexAsset,
-    ITetuConverter converter_,
-    mapping(address => uint) storage baseAmounts
+    ITetuConverter converter_
   ) external returns (
     uint amountOut
   ) {
@@ -1021,7 +979,7 @@ library ConverterStrategyBaseLib {
         amountOut += amountsOut[i];
       } else {
         // available amount to repay
-        uint toRepay = baseAmounts[tokens[i]] + amountsOut[i];
+        uint toRepay = IERC20(tokens[i]).balanceOf(address(this)) + amountsOut[i];
 
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), tokens[indexAsset], tokens[i]);
         amountOut += collateral;
@@ -1106,8 +1064,7 @@ library ConverterStrategyBaseLib {
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory collaterals_,
-    uint thresholdMainAsset_,
-    mapping(address => uint) storage baseAmounts_
+    uint thresholdMainAsset_
   ) external returns (
     uint[] memory tokenAmountsOut,
     uint[] memory borrowedAmounts,
@@ -1138,7 +1095,7 @@ library ConverterStrategyBaseLib {
           // zero amount are possible (conversion is not available) but it's not suitable for depositor
           require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
         }
-        tokenAmountsOut[i] = baseAmounts_[tokens_[i]] + borrowedAmounts[i];
+        tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
       }
     }
 
@@ -1157,7 +1114,8 @@ library ConverterStrategyBaseLib {
     address[] memory tokens_,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_,
-    mapping(address => uint) storage baseAmounts_
+    address underlying,
+    uint underlyingBalanceBefore
   ) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut
@@ -1173,10 +1131,14 @@ library ConverterStrategyBaseLib {
       tokens_, new uint[](tokens_.length)
     );
 
-    // Add airdrops
+    // set fresh balances
     uint len = tokensOut.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - baseAmounts_[tokensOut[i]];
+      if(underlying == tokensOut[i]) {
+        amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this)) - underlyingBalanceBefore;
+      } else {
+        amountsOut[i] = IERC20(tokensOut[i]).balanceOf(address(this));
+      }
     }
 
     // filter zero amounts out

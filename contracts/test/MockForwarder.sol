@@ -5,7 +5,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "hardhat/console.sol";
 
-contract MockForwarder is IForwarder {
+contract MockForwarder {
   address[] private lastRegisterIncomeTokens;
   uint[] private lastRegisterIncomeAmounts;
 

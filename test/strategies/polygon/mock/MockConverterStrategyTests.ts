@@ -93,8 +93,6 @@ describe.skip('Mock Converter Strategy tests', function() {
       depositorTokens,
       [],
       [],
-      [],
-      [],
     );
 
     await splitter.addStrategies([strategy.address], [0]);
