@@ -195,59 +195,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return (earned, lost, assetBalanceAfterClaim);
   }
 
-  /// @notice Withdraw given amount from the pool.
-  /// @param amount Amount to be withdrawn in terms of the asset.
-  /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
-  /// @return assetPrice Price of the {asset} from the price oracle
-  /// @return totalAssetsDelta The {strategy} updates its totalAssets amount internally before withdrawing
-  ///                          Return [totalAssets-before-withdraw - totalAssets-before-call-of-_withdrawFromPool]
-  function _withdrawFromPool(uint amount) override internal virtual returns (
-    uint investedAssetsUSD,
-    uint assetPrice,
-    int totalAssetsDelta
-  ) {
-    uint updatedInvestedAssets;
-    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(true);
-    require(updatedInvestedAssets != 0, AppErrors.NO_INVESTMENTS);
-    (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
-  }
-
   /// @notice Deposit given amount to the pool.
   /// @param amount_ The amount to be deposited.
   /// @param updateTotalAssetsBeforeInvest_ A boolean indicating if the total assets should be updated before investing.
-  /// @return totalAssetsDelta The change in total assets after the deposit.
+  /// @return strategyLoss Loss should be covered from Insurance
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
-    int totalAssetsDelta
+    uint strategyLoss
   ) {
-    uint updatedInvestedAssets;
-    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
-
-    // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
-      if (state.isFuseTriggered) {
-        uint[] memory tokenAmounts = new uint[](2);
-        tokenAmounts[0] = amount_;
-        emit OnDepositorEnter(tokenAmounts, tokenAmounts);
-      } else {
-        (address[] memory tokens, uint indexAsset) = _getTokens(asset);
-
-        // prepare array of amounts ready to deposit, borrow missed amounts
-        (uint[] memory amounts,,) = _beforeDeposit(
-          converter,
-          amount_,
-          tokens,
-          indexAsset
-        );
-
-        if(amounts[0] > 0 || amounts[1] > 0) {
-          // make deposit, actually consumed amounts can be different from the desired amounts
-          (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
-          emit OnDepositorEnter(amounts, consumedAmounts);
-        }
-      }
-
-      // adjust _investedAssets
-      totalAssetsDelta += int(updatedInvestedAssets) - int(_updateInvestedAssets());
+    if (state.isFuseTriggered) {
+      uint[] memory tokenAmounts = new uint[](2);
+      tokenAmounts[0] = amount_;
+      emit OnDepositorEnter(tokenAmounts, tokenAmounts);
+      return 0;
+    } else {
+      return super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
     }
   }
 }

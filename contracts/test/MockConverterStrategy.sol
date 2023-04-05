@@ -79,11 +79,12 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     _updateInvestedAssets();
   }
 
-  function withdrawUniversalTestAccess(uint amount, bool all, uint investedAssets_) external returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+  function withdrawUniversalTestAccess(uint amount, bool all) external returns (
+    uint expectedWithdrewUSD,
+    uint assetPrice,
+    uint strategyLoss
   ) {
-    return _withdrawUniversal(amount, all, investedAssets_);
+    return _withdrawUniversal(amount, all);
   }
 
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
@@ -146,19 +147,19 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     bool initialized;
     int balanceChange;
     address providerBalanceChange;
-    int totalAssetsDelta;
+    uint loss;
   }
 
   MockedDepositToPoolParams internal depositToPoolParams;
 
   function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns (
-    int totalAssetsDelta
+    uint loss
   ) {
     return _depositToPool(amount_, updateTotalAssetsBeforeInvest_);
   }
 
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
-    int totalAssetsDelta
+    uint loss
   ){
     if (depositToPoolParams.initialized) {
       //      console.log("_depositToPool.mocked-version is called");
@@ -174,18 +175,18 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- depositToPoolParams.balanceChange)
         );
       }
-      totalAssetsDelta = depositToPoolParams.totalAssetsDelta;
+      loss = depositToPoolParams.loss;
     } else {
-      totalAssetsDelta = super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
+      loss = super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
     }
   }
 
-  function setMockedDepositToPool(int balanceChange, address providerBalanceChange, int totalAssetsDelta_) external {
+  function setMockedDepositToPool(int balanceChange, address providerBalanceChange, uint loss) external {
     depositToPoolParams = MockedDepositToPoolParams({
     initialized : true,
     balanceChange : balanceChange,
     providerBalanceChange : providerBalanceChange,
-    totalAssetsDelta : totalAssetsDelta_
+    loss : loss
     });
   }
 
