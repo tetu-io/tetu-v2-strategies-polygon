@@ -210,10 +210,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-  function setBaseAmountAccess(address token_, uint amount_) external {
-    baseAmounts[token_] = amount_;
-  }
-
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
   }
