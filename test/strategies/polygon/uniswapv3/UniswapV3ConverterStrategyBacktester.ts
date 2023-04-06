@@ -13,6 +13,8 @@ import {
   ControllerV2__factory,
   ConverterController,
   ForwarderV3__factory,
+  HfPlatformAdapter,
+  HfPoolAdapter,
   IERC20Metadata__factory,
   InvestFundV2__factory,
   IUniswapV3Pool__factory,
@@ -78,7 +80,7 @@ const argv = require('yargs/yargs')()
   }).argv;
 
 
-describe.skip('UmiswapV3 converter strategy backtester', function() {
+describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
   // 38500000 - Jan-25-2023 07:13:46 AM +UTC
   // 39000000 - Feb-07-2023 01:57:19 AM +UTC
@@ -91,8 +93,10 @@ describe.skip('UmiswapV3 converter strategy backtester', function() {
   // 40360000 - Mar-15-2023 03:54:49 AM +UTC (after USDC price drop end)
   // 40410000 - Mar-16-2023 11:34:58 AM +UTC
   // 40448000 - Mar-17-2023 10:54:46 AM +UTC
-  const backtestStartBlock = 40410000;
-  const backtestEndBlock = 40448000;
+  // 41100000 - Apr-03-2023 03:29:23 PM +UTC
+  // 41210000 - Apr-06-2023 11:23:04 AM +UTC
+  const backtestStartBlock = 41100000;
+  const backtestEndBlock = 41210000;
   const investAmount = parseUnits('1000', 6); // 1k USDC
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
@@ -475,7 +479,7 @@ describe.skip('UmiswapV3 converter strategy backtester', function() {
     // deploy tetu converter and setup
     const converterController = await DeployerUtils.deployContract(
       signer,
-      '@tetu_io/tetu-converter/contracts/core/Controller.sol:Controller',
+      'ConverterController',
       liquidator.address,
       priceOracleImitator.address,
     ) as ConverterController;
@@ -529,19 +533,19 @@ describe.skip('UmiswapV3 converter strategy backtester', function() {
       swapManager.address,
       1000
     );
-    // const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
-    // const platformAdapter = await DeployerUtils.deployContract(
-    //   signer,
-    //   'HfPlatformAdapter',
-    //   converterController.address,
-    //   borrowManager.address,
-    //   comptroller.address,
-    //   poolAdapter.address,
-    //   [cUSDC.address, cWETH.address, cWMATIC.address, cDAI.address, cUSDT.address],
-    // ) as HfPlatformAdapter;
-    // const assetsPairs = generateAssetPairs([USDC.address, WETH.address, WMATIC.address, DAI.address, USDT.address]);
-    // tx = await borrowManager.addAssetPairs(platformAdapter.address, assetsPairs.leftAssets, assetsPairs.rightAssets);
-    // await tx.wait();
+    const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
+    const platformAdapter = await DeployerUtils.deployContract(
+      signer,
+      'HfPlatformAdapter',
+      converterController.address,
+      borrowManager.address,
+      comptroller.address,
+      poolAdapter.address,
+      [cUSDC.address, cWETH.address, cWMATIC.address, cDAI.address, cUSDT.address],
+    ) as HfPlatformAdapter;
+    const assetsPairs = generateAssetPairs([USDC.address, WETH.address, WMATIC.address, DAI.address, USDT.address]);
+    tx = await borrowManager.addAssetPairs(platformAdapter.address, assetsPairs.leftAssets, assetsPairs.rightAssets);
+    await tx.wait();
 
     // deploy Tetu V2 system
     const controllerLogic = await DeployerUtils.deployContract(signer, 'ControllerV2') as ControllerV2;
@@ -734,6 +738,8 @@ describe.skip('UmiswapV3 converter strategy backtester', function() {
     await wmaticUsdc005Strategy.connect(platformVoterSigner).setCompoundRatio(100000); // 100%
     await usdcDai001Strategy.connect(platformVoterSigner).setCompoundRatio(100000); // 100%
     await usdcUsdt001Strategy.connect(platformVoterSigner).setCompoundRatio(100000); // 100%
+
+    await converterController.setWhitelistValues([usdcWeth005Strategy.address, wmaticUsdc005Strategy.address, usdcDai001Strategy.address, usdcUsdt001Strategy.address], true)
   });
 
   after(async function() {
