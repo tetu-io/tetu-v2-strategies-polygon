@@ -264,7 +264,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
     describe('Good paths', () => {
       describe('partial', () => {
-        describe('zero base amounts', () => {
+        describe('zero balances', () => {
           it('should return expected liquidityRatioOut and zero amounts to convert', async() => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits('5', 6),
@@ -284,9 +284,9 @@ describe('ConverterStrategyBaseLibTest', () => {
             await expect(ret).eq(expected);
           });
         });
-        describe('base amount of first asset is enough to get the required amount', () => {
+        describe('amount of first asset is enough to get the required amount', () => {
           it('should return expected values', async() => {
-            const tokens = [dai.address, usdc.address, usdt.address];
+            const tokens = [dai, usdc, usdt];
             const amountsToRepay = [
               parseUnits('17', 18),
               parseUnits('27', 6),
@@ -298,13 +298,13 @@ describe('ConverterStrategyBaseLibTest', () => {
               parseUnits('14', 6),
             ];
             for (let i = 0; i < tokens.length; ++i) {
-              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+              await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits('5', 6),
               ethers.Wallet.createRandom().address,
-              tokens,
+              tokens.map(x => x.address),
               1,
               getTetuConverter([dai, usdc, usdt], 1, amountsToRepay, amountsCollateralOut),
               parseUnits('500', 6),
@@ -321,9 +321,9 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           });
         });
-        describe('base amount of two assets is enough to get the required amount', () => {
+        describe('amount of two assets is enough to get the required amount', () => {
           it('should return expected values', async() => {
-            const tokens = [dai.address, usdc.address, usdt.address];
+            const tokens = [dai, usdc, usdt];
             const amountsToRepay = [
               parseUnits('17', 18),
               parseUnits('27', 6),
@@ -335,13 +335,13 @@ describe('ConverterStrategyBaseLibTest', () => {
               parseUnits('2', 6), // 2 + 7 == 9
             ];
             for (let i = 0; i < tokens.length; ++i) {
-              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+              await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits('9', 6),
               ethers.Wallet.createRandom().address,
-              tokens,
+              tokens.map(x => x.address),
               1,
               getTetuConverter([dai, usdc, usdt], 1, amountsToRepay, amountsCollateralOut),
               parseUnits('500', 6),
@@ -358,9 +358,9 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           });
         });
-        describe('base amount of two assets is NOT enough to get the required amount', () => {
+        describe('amount of two assets is NOT enough to get the required amount', () => {
           it('should return expected values', async() => {
-            const tokens = [dai.address, usdc.address, usdt.address];
+            const tokens = [dai, usdc, usdt];
             const amountsToRepay = [
               parseUnits('17', 18),
               parseUnits('27', 6),
@@ -372,13 +372,13 @@ describe('ConverterStrategyBaseLibTest', () => {
               parseUnits('2', 6), // 2 + 7 < 19
             ];
             for (let i = 0; i < tokens.length; ++i) {
-              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+              await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits('19', 6),
               ethers.Wallet.createRandom().address,
-              tokens,
+              tokens.map(x => x.address),
               1,
               getTetuConverter([dai, usdc, usdt], 1, amountsToRepay, amountsCollateralOut),
               parseUnits('500', 6),
@@ -397,7 +397,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         });
       });
       describe('all', () => {
-        describe('zero base amounts', () => {
+        describe('zero balances', () => {
           it('should return expected liquidityRatioOut and zero amounts to convert', async() => {
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits('0', 6),
@@ -417,9 +417,9 @@ describe('ConverterStrategyBaseLibTest', () => {
             await expect(ret).eq(expected);
           });
         });
-        describe('base amount are not zero', () => {
+        describe('balance is not zero', () => {
           it('should return expected values', async() => {
-            const tokens = [dai.address, usdc.address, usdt.address];
+            const tokens = [dai, usdc, usdt];
             const amountsToRepay = [
               parseUnits('17', 18),
               parseUnits('27', 6),
@@ -431,13 +431,13 @@ describe('ConverterStrategyBaseLibTest', () => {
               parseUnits('14', 6),
             ];
             for (let i = 0; i < tokens.length; ++i) {
-              await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+              await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
             const r = await facade.callStatic.getLiquidityAmountRatio(
               parseUnits('0', 6), // all
               ethers.Wallet.createRandom().address,
-              tokens,
+              tokens.map(x => x.address),
               1,
               getTetuConverter([dai, usdc, usdt], 1, amountsToRepay, amountsCollateralOut),
               parseUnits('500', 6),
@@ -460,7 +460,7 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
     describe('Gas estimation @skip-on-coverage', () => {
       it('should not exceed gas limits', async() => {
-        const tokens = [dai.address, usdc.address, usdt.address];
+        const tokens = [dai, usdc, usdt];
         const amountsToRepay = [
           parseUnits('17', 18),
           parseUnits('27', 6),
@@ -472,13 +472,13 @@ describe('ConverterStrategyBaseLibTest', () => {
           parseUnits('2', 6), // 2 + 7 < 19
         ];
         for (let i = 0; i < tokens.length; ++i) {
-          await facade.setBaseAmounts(tokens[i], amountsToRepay[i]);
+          await tokens[i].mint(facade.address, amountsToRepay[i]);
         }
 
         const gasUsed = await facade.estimateGas.getLiquidityAmountRatio(
           parseUnits('19', 6),
           ethers.Wallet.createRandom().address,
-          tokens,
+          tokens.map(x => x.address),
           1,
           getTetuConverter([dai, usdc, usdt], 1, amountsToRepay, amountsCollateralOut),
           parseUnits('500', 6),
@@ -565,7 +565,6 @@ describe('ConverterStrategyBaseLibTest', () => {
           ];
           for (let i = 0; i < assets.length; ++i) {
             await assets[i].mint(facade.address, amountsOnBalance[i]);
-            await facade.setBaseAmounts(assets[i].address, amountsOnBalance[i]);
           }
 
           const ret = await facade.getCollaterals(
@@ -1793,7 +1792,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       tokens: MockToken[];
       amountsOut?: string[];
       indexAsset: number;
-      baseAmounts?: string[];
+      balances?: string[];
       prices: string[];
       debts?: {
         borrowAsset: MockToken;
@@ -1813,12 +1812,9 @@ describe('ConverterStrategyBaseLibTest', () => {
           async x => x.decimals(),
         ),
       );
-      if (params.baseAmounts) {
+      if (params.balances) {
         for (let i = 0; i < params.tokens.length; ++i) {
-          await facade.setBaseAmounts(
-            params.tokens[i].address,
-            parseUnits(params.baseAmounts[i], decimals[i]),
-          );
+          await params.tokens[i].mint(facade.address, parseUnits(params.balances[i], decimals[i]));
         }
       }
       const tc = await MockHelper.createMockTetuConverter(signer);
@@ -1871,7 +1867,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             const ret = (await makeCalcInvestedAssetsTest({
               tokens: [dai, usdc, usdt],
               indexAsset: 1,
-              baseAmounts: ['100', '1987', '300'],
+              balances: ['100', '1987', '300'],
               prices: ['20', '10', '60'],
             })).amountOut;
             const expected = 100 * 20 / 10 + 300 * 60 / 10;
@@ -1885,7 +1881,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               const ret = (await makeCalcInvestedAssetsTest({
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
-                baseAmounts: ['117', '1987', '300'],
+                balances: ['117', '1987', '300'],
                 prices: ['20', '10', '60'],
                 debts: [
                   {
@@ -1905,7 +1901,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               const ret = (await makeCalcInvestedAssetsTest({
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
-                baseAmounts: ['117', '1987', '300'],
+                balances: ['117', '1987', '300'],
                 prices: ['20', '10', '60'],
                 debts: [
                   {
@@ -1925,7 +1921,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               const ret = (await makeCalcInvestedAssetsTest({
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
-                baseAmounts: ['117', '1987', '300'],
+                balances: ['117', '1987', '300'],
                 prices: ['20', '10', '60'],
                 debts: [
                   {
@@ -1947,7 +1943,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               const ret = (await makeCalcInvestedAssetsTest({
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
-                baseAmounts: ['117', '1987', '300'],
+                balances: ['117', '1987', '300'],
                 prices: ['20', '10', '60'],
                 debts: [
                   {
@@ -1972,7 +1968,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokens: [dai, usdc, usdt],
             indexAsset: 1,
             amountsOut: ['100', '200', '300'],
-            baseAmounts: ['0', '0', '0'],
+            balances: ['0', '0', '0'],
             prices: ['20', '10', '60'],
           })).amountOut;
           const expected = 200 + 100 * 20 / 10 + 300 * 60 / 10;
@@ -1985,7 +1981,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           const ret = (await makeCalcInvestedAssetsTest({
             tokens: [dai, usdc, usdt],
             indexAsset: 1,
-            baseAmounts: ['100', '1987', '300'],
+            balances: ['100', '1987', '300'],
             amountsOut: ['700', '1000', '400'],
             prices: ['20', '10', '60'],
             debts: [
@@ -2008,7 +2004,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           const ret = (await makeCalcInvestedAssetsTest({
             tokens: [dai, usdc, usdt],
             indexAsset: 1,
-            baseAmounts: ['100', '1987', '300'],
+            balances: ['100', '1987', '300'],
             amountsOut: ['700', '1000', '400'],
             prices: ['20', '10', '60'],
             debts: [
@@ -2032,7 +2028,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         const r = await makeCalcInvestedAssetsTest({
           tokens: [dai, usdc, usdt],
           indexAsset: 1,
-          baseAmounts: ['100', '1987', '300'],
+          balances: ['100', '1987', '300'],
           prices: ['20', '10', '60'],
         });
 
@@ -2044,7 +2040,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         const r = await makeCalcInvestedAssetsTest({
           tokens: [dai, usdc, usdt],
           indexAsset: 1,
-          baseAmounts: ['100', '1987', '300'],
+          balances: ['100', '1987', '300'],
           amountsOut: ['700', '1000', '400'],
           prices: ['20', '10', '60'],
           debts: [
@@ -2712,7 +2708,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       amounts: string[];
       prices: string[];
       liquidations: ILiquidationParams[];
-      baseAmounts: string[];
+      balances: string[];
       airdrops: string[];
     }
     interface ISwapToGivenAmountResults {
@@ -2730,9 +2726,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         // withdrawn amounts
         await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
 
-        // base amounts
-        await p.tokens[i].mint(facade.address, parseUnits(p.baseAmounts[i], d));
-        await facade.setBaseAmounts(p.tokens[i].address, parseUnits(p.baseAmounts[i], d));
+        // balances
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
 
         // airdrops
         await p.tokens[i].mint(facade.address, parseUnits(p.airdrops[i], d));
@@ -2800,8 +2795,8 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokenIn: usdt,
             tokenOut: tetu
           }],
-          // we assume, that base amount of target asset < targetAmount, see requirePayAmountBack implementation
-          baseAmounts: ["100", "200", "400", "500"],
+          // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
+          balances: ["100", "200", "400", "500"],
           // these amounts should never be used
           airdrops: ["100000", "100000", "100000", "100000"],
         });
@@ -2853,8 +2848,8 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokenOut: tetu
           },
         ],
-        // we assume, that base amount of target asset < targetAmount, see requirePayAmountBack implementation
-        baseAmounts: ["100", "200", "400", "500"],
+        // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
+        balances: ["100", "200", "400", "500"],
         // these amounts should never be used
         airdrops: ["100000", "100000", "100000", "100000"],
       });
