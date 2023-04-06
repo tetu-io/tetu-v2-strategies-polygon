@@ -35,7 +35,7 @@ library UniswapV3DebtLib {
   /// @param tokenB The address of tokenB.
   /// @return totalCollateralAmountOut The total collateral amount out for the token pair.
   function getDeptTotalCollateralAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalCollateralAmountOut) {
-    (, totalCollateralAmountOut) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
+    (, totalCollateralAmountOut) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, false);
   }
 
   /// @dev Returns the total debt amount out for the given token pair.
@@ -44,7 +44,7 @@ library UniswapV3DebtLib {
   /// @param tokenB The address of tokenB.
   /// @return totalDebtAmountOut The total debt amount out for the token pair.
   function getDeptTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalDebtAmountOut) {
-    (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB);
+    (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, false);
   }
 
   /// @dev Closes the debt positions for the given token pair.
