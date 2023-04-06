@@ -19,7 +19,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.1.1";
+  string public constant override STRATEGY_VERSION = "1.2.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -43,6 +43,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     UniswapV3ConverterStrategyLogicLib.initStrategyState(state, controller_, converter_);
+
+    // set minimum thresholds for liquidation
+    liquidationThresholds[state.tokenA] = 10_000;
+    emit LiquidationThresholdChanged(state.tokenA, 10_000);
+    liquidationThresholds[state.tokenB] = 10_000;
+    emit LiquidationThresholdChanged(state.tokenB, 10_000);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -129,24 +135,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       }
     }
 
-    (
-    uint receivedA,
-    uint spentA,
-    uint receivedB,
-    uint spentB
-    ) = UniswapV3ConverterStrategyLogicLib.getUpdateInfo(state, baseAmounts);
-
-    _updateBaseAmountsForAsset(
-      state.tokenA,
-      receivedA,
-      spentA
-    );
-    _updateBaseAmountsForAsset(
-      state.tokenB,
-      receivedB,
-      spentB
-    );
-
     //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
   }
@@ -207,64 +195,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return (earned, lost, assetBalanceAfterClaim);
   }
 
-  /// @notice Withdraw given amount from the pool.
-  /// @param amount Amount to be withdrawn in terms of the asset.
-  /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
-  /// @return assetPrice Price of the {asset} from the price oracle
-  /// @return totalAssetsDelta The {strategy} updates its totalAssets amount internally before withdrawing
-  ///                          Return [totalAssets-before-withdraw - totalAssets-before-call-of-_withdrawFromPool]
-  function _withdrawFromPool(uint amount) override internal virtual returns (
-    uint investedAssetsUSD,
-    uint assetPrice,
-    int totalAssetsDelta
-  ) {
-    uint updatedInvestedAssets;
-    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(true);
-    require(updatedInvestedAssets != 0, AppErrors.NO_INVESTMENTS);
-    (investedAssetsUSD, assetPrice) = _withdrawUniversal(amount, false, updatedInvestedAssets);
-  }
-
   /// @notice Deposit given amount to the pool.
   /// @param amount_ The amount to be deposited.
   /// @param updateTotalAssetsBeforeInvest_ A boolean indicating if the total assets should be updated before investing.
-  /// @return totalAssetsDelta The change in total assets after the deposit.
+  /// @return strategyLoss Loss should be covered from Insurance
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
-    int totalAssetsDelta
+    uint strategyLoss
   ) {
-    uint updatedInvestedAssets;
-    (updatedInvestedAssets, totalAssetsDelta) = _updateInvestedAssetsAndGetDelta(updateTotalAssetsBeforeInvest_);
-
-    // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
-      if (state.isFuseTriggered) {
-        uint[] memory tokenAmounts = new uint[](2);
-        tokenAmounts[0] = amount_;
-        emit OnDepositorEnter(tokenAmounts, tokenAmounts);
-        _updateBaseAmountsForAsset(state.tokenA, amount_, 0);
-      } else {
-        (address[] memory tokens, uint indexAsset) = _getTokens(asset);
-
-        // prepare array of amounts ready to deposit, borrow missed amounts
-        (uint[] memory amounts, uint[] memory borrowedAmounts, uint collateral) = _beforeDeposit(
-          converter,
-          amount_,
-          tokens,
-          indexAsset
-        );
-
-        // if something was borrowed
-        if (amounts[1] > 0) {
-          // make deposit, actually consumed amounts can be different from the desired amounts
-          (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
-          emit OnDepositorEnter(amounts, consumedAmounts);
-
-          // adjust base-amounts
-          _updateBaseAmounts(tokens, borrowedAmounts, consumedAmounts, indexAsset, - int(collateral));
-        }
-      }
-
-      // adjust _investedAssets
-      _updateInvestedAssets();
+    if (state.isFuseTriggered) {
+      uint[] memory tokenAmounts = new uint[](2);
+      tokenAmounts[0] = amount_;
+      emit OnDepositorEnter(tokenAmounts, tokenAmounts);
+      return 0;
+    } else {
+      return super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
     }
   }
 }
