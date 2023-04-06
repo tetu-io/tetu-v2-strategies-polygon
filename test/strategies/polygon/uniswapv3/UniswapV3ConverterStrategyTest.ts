@@ -59,6 +59,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
   let signer3: SignerWithAddress;
+  let operator: SignerWithAddress;
   let controller: IController;
   let asset: IERC20;
   let vault: TetuVaultV2;
@@ -231,7 +232,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     await ConverterUtils.whitelist([strategy.address, strategy2.address, strategy3.address]);
 
-    const operator = await UniversalTestUtils.getAnOperator(strategy3.address, signer)
+    operator = await UniversalTestUtils.getAnOperator(strategy3.address, signer)
     await strategy3.connect(operator).setReinvestThresholdPercent(10) // 0.01%
   });
 
@@ -267,6 +268,13 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await s.needRebalance()).eq(true)
       await s.rebalance()
       expect((await s.getState()).isFuseTriggered).eq(true)
+      expect(await s.needRebalance()).eq(false)
+
+      await s.connect(operator).disableFuse()
+      expect((await s.getState()).isFuseTriggered).eq(false)
+      expect(await s.needRebalance()).eq(true)
+      await s.rebalance()
+      expect((await s.getState()).isFuseTriggered).eq(false)
     })
 
     it('Rebalance and hardwork', async() => {
