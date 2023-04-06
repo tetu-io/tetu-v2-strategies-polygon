@@ -527,6 +527,7 @@ describe.skip('UmiswapV3 converter strategy backtester', function() {
       debtMonitor.address,
       keeper.address,
       swapManager.address,
+      1000
     );
     // const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
     // const platformAdapter = await DeployerUtils.deployContract(
