@@ -29,6 +29,7 @@ import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {PriceOracleUtils} from "../balancer/utils/PriceOracleUtils";
 
 const { expect } = chai;
 
@@ -247,27 +248,28 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    /*it('Fuse test', async() => {
-     const s = strategy3
-     const v = vault3
-     const investAmount = _1_000;
-     const swapAssetValueForPriceMove = parseUnits('3000000', 6);
-     let price;
-     price = await swapper.getPrice(await s.pool(), await s.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-     console.log('tokenB price', formatUnits(price, 6))
+    it('Fuse test', async() => {
+      const s = strategy3
+      const v = vault3
+      const investAmount = _1_000;
+      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
 
-     console.log('deposit...');
-     await v.deposit(investAmount, signer.address);
+      const priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, await s.converter());
+      console.log('Price USDT in oracle', (await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
 
-     expect(await s.fuse()).eq(false)
-     await movePriceUp(signer2, s.address, swapAssetValueForPriceMove)
-     if (await s.needRebalance()) {
-     await s.rebalance()
-     expect(await s.fuse()).eq(true)
-     }
-     })*/
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
 
-    /*it('Rebalance and hardwork', async() => {
+      await PriceOracleUtils.incPriceUsdt(priceOracles, 4);
+      console.log('Price USDT in oracle', (await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
+      expect((await s.getState()).isFuseTriggered).eq(false)
+      expect(await s.needRebalance()).eq(true)
+      await s.rebalance()
+      expect((await s.getState()).isFuseTriggered).eq(true)
+    })
+
+    it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
       const state = await strategy.getState();
@@ -302,7 +304,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy.isReadyToHardWork()).eq(true);
       await strategy.connect(splitterSigner).doHardWork();
       expect(await strategy.isReadyToHardWork()).eq(false);
-    });*/
+    });
 
     it('Loop with rebalance, hardwork, deposit and withdraw', async() => {
       const investAmount = _1_000;
@@ -362,7 +364,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await vault3.withdrawAll();
     });
 
-    /*it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
+    it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
       let state = await strategy3.getState();
@@ -406,9 +408,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await strategy3.connect(splitterSigner).doHardWork();
 
       expect(await strategy3.isReadyToHardWork()).eq(false);
-    });*/
+    });
 
-    /*it('Hardwork test for reverse tokens order pool', async() => {
+    it('Hardwork test for reverse tokens order pool', async() => {
       const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
       await strategy2.connect(platformVoter).setCompoundRatio(100000); // 100%
       const converter = TetuConverter__factory.connect(getConverterAddress(), signer);
@@ -444,7 +446,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('Vault totalAssets', await vault2.totalAssets());
       console.log('Strategy totalAssets', await strategy2.totalAssets());
-    });*/
+    });
 
     /*it('deposit / withdraw, fees, totalAssets + check insurance and LossCovered', async() => {
      // after insurance logic changed this test became incorrect
