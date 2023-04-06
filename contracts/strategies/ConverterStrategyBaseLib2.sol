@@ -24,7 +24,7 @@ library ConverterStrategyBaseLib2 {
     uint[] memory amountsToConvert = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) continue;
-      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this)); // todo baseAmounts??
+      amountsToConvert[i] = IERC20(tokens_[i]).balanceOf(address(this));
     }
     return amountsToConvert;
   }

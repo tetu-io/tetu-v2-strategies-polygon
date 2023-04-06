@@ -15,39 +15,6 @@ const log: Logger<undefined> = new Logger(logSettings);
 
 export class StrategyTestUtils {
 
-  public static async deploy(
-    signer: SignerWithAddress,
-    core: ICoreContractsWrapper,
-    asset: string,
-    vaultName: string,
-    strategyDeployer: (vaultAddress: string) => Promise<IStrategyV2>,
-    buffer = 0,
-    depositFee = 0,
-    withdrawFee = 0,
-  ): Promise<IVaultStrategyInfo> {
-
-    const start = Date.now();
-    log.info('Starting deploy');
-    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
-      asset,
-      vaultName,
-      strategyDeployer,
-      core.controller,
-      signer,
-      buffer,
-      depositFee,
-      withdrawFee,
-    );
-    const vault = data.vault;
-    const strategy = data.strategy;
-
-    expect((await strategy.asset()).toLowerCase()).is.eq(asset.toLowerCase());
-    expect((await vault.asset()).toLowerCase()).is.eq(asset.toLowerCase());
-
-    Misc.printDuration('Vault and strategy deployed and initialized', start);
-    return { vault, strategy };
-  }
-
   public static async checkStrategyRewardsBalance(strategy: IStrategyV2, balances: string[]) {
     const tokens: string[] = []; // await strategy.rewardTokens(); // TODO
     const cRatio = await strategy.compoundRatio();

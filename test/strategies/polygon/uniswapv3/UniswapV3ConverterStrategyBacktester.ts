@@ -13,8 +13,6 @@ import {
   ControllerV2__factory,
   ConverterController,
   ForwarderV3__factory,
-  HfPlatformAdapter,
-  HfPoolAdapter,
   IERC20Metadata__factory,
   InvestFundV2__factory,
   IUniswapV3Pool__factory,
@@ -530,19 +528,19 @@ describe.skip('UmiswapV3 converter strategy backtester', function() {
       keeper.address,
       swapManager.address,
     );
-    const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
-    const platformAdapter = await DeployerUtils.deployContract(
-      signer,
-      'HfPlatformAdapter',
-      converterController.address,
-      borrowManager.address,
-      comptroller.address,
-      poolAdapter.address,
-      [cUSDC.address, cWETH.address, cWMATIC.address, cDAI.address, cUSDT.address],
-    ) as HfPlatformAdapter;
-    const assetsPairs = generateAssetPairs([USDC.address, WETH.address, WMATIC.address, DAI.address, USDT.address]);
-    tx = await borrowManager.addAssetPairs(platformAdapter.address, assetsPairs.leftAssets, assetsPairs.rightAssets);
-    await tx.wait();
+    // const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
+    // const platformAdapter = await DeployerUtils.deployContract(
+    //   signer,
+    //   'HfPlatformAdapter',
+    //   converterController.address,
+    //   borrowManager.address,
+    //   comptroller.address,
+    //   poolAdapter.address,
+    //   [cUSDC.address, cWETH.address, cWMATIC.address, cDAI.address, cUSDT.address],
+    // ) as HfPlatformAdapter;
+    // const assetsPairs = generateAssetPairs([USDC.address, WETH.address, WMATIC.address, DAI.address, USDT.address]);
+    // tx = await borrowManager.addAssetPairs(platformAdapter.address, assetsPairs.leftAssets, assetsPairs.rightAssets);
+    // await tx.wait();
 
     // deploy Tetu V2 system
     const controllerLogic = await DeployerUtils.deployContract(signer, 'ControllerV2') as ControllerV2;

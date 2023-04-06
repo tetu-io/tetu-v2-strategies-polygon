@@ -39,6 +39,7 @@ chai.use(chaiAsPromised);
 /**
  * We need to skip it in npm.run.test
  */
+// todo fix
 describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;

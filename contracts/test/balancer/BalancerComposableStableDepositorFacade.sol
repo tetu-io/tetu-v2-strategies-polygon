@@ -83,9 +83,10 @@ contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepo
 
   function _depositorClaimRewardsAccess() external virtual returns (
     address[] memory tokensOut,
-    uint[] memory amountsOut
+    uint[] memory amountsOut,
+    uint[] memory depositorBalancesBefore
   ) {
-    (tokensOut, amountsOut) = _depositorClaimRewards();
+    (tokensOut, amountsOut, depositorBalancesBefore) = _depositorClaimRewards();
     console.log("_depositorClaimRewardsAccess.tokensOut", tokensOut.length);
     console.log("_depositorClaimRewardsAccess.amountsOut", amountsOut.length);
     lastRewardsAmountsOut = amountsOut;

@@ -19,7 +19,7 @@ contract BalancerComposableStableStrategyAccess is BalancerComposableStableStrat
   //////////////////////////////////////////////////////////////////////////////////////////////////////
 
   function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns (
-    int totalAssetsDelta
+    uint loss
   ) {
     return _depositToPool(amount_, updateTotalAssetsBeforeInvest_);
   }
@@ -27,7 +27,7 @@ contract BalancerComposableStableStrategyAccess is BalancerComposableStableStrat
   function _withdrawFromPoolAccess(uint amount) external returns (
     uint investedAssetsUSD,
     uint assetPrice,
-    int totalAssetsDelta
+    uint loss
   ) {
     return _withdrawFromPool(amount);
   }
@@ -35,7 +35,7 @@ contract BalancerComposableStableStrategyAccess is BalancerComposableStableStrat
   function _withdrawAllFromPoolAccess() external returns (
     uint investedAssetsUSD,
     uint assetPrice,
-    int totalAssetsDelta
+    uint loss
   ) {
     return _withdrawAllFromPool();
   }

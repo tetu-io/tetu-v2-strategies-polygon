@@ -656,9 +656,13 @@ library BalancerLogicLib {
 
   function depositorClaimRewards(IBalancerGauge gauge_, address[] memory rewardTokens_) external returns (
     address[] memory tokensOut,
-    uint[] memory amountsOut
+    uint[] memory amountsOut,
+    uint[] memory depositorBalancesBefore
   ) {
     uint len = rewardTokens_.length;
+
+    // todo handle balancesBefore if necessary
+    depositorBalancesBefore = new uint[](0);
 
     tokensOut = new address[](len);
     amountsOut = new uint[](len);

@@ -37,7 +37,6 @@ contract ConverterStrategyBaseLibFacade {
   ) {
     return ConverterStrategyBaseLib.getLiquidityAmountRatio(
       targetAmount_,
-      baseAmounts,
       strategy_,
       tokens,
       indexAsset,
@@ -61,8 +60,7 @@ contract ConverterStrategyBaseLibFacade {
       weights_,
       totalWeight_,
       indexAsset_,
-      priceOracle,
-      baseAmounts
+      priceOracle
     );
   }
 
@@ -169,8 +167,7 @@ contract ConverterStrategyBaseLibFacade {
       tokens,
       amountsOut,
       indexAsset,
-      converter_,
-      baseAmounts
+      converter_
     );
   }
 
@@ -214,8 +211,7 @@ contract ConverterStrategyBaseLibFacade {
       converter_,
       liquidator_,
       liquidationThresholdForTargetAsset_,
-      overswap_,
-      baseAmounts
+      overswap_
     );
   }
 
