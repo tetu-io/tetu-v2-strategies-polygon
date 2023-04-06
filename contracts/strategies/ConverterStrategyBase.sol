@@ -39,7 +39,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address converter;
     address[] tokens;
     uint indexTheAsset;
-    uint theAssetBaseAmount;
+    uint balance;
     uint[] withdrawnAmounts;
     uint[] spentAmounts;
     uint liquidity;
@@ -149,7 +149,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
-      (uint[] memory amounts,,) = _beforeDeposit(
+      uint[] memory amounts = _beforeDeposit(
         converter,
         amount_,
         tokens,
@@ -182,17 +182,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
   /// @return tokenAmounts Amounts of depositor's assets ready to invest (this array can be passed to depositorEnter)
-  /// @return borrowedAmounts Amounts that were borrowed to prepare {tokenAmounts}
-  /// @return spentCollateral Total collateral spent to get {borrowedAmounts}
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
     uint amount_,
     address[] memory tokens_,
     uint indexAsset_
   ) internal virtual returns (
-    uint[] memory tokenAmounts,
-    uint[] memory borrowedAmounts,
-    uint spentCollateral
+    uint[] memory tokenAmounts
   ) {
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
@@ -207,14 +203,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     );
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts
-    (tokenAmounts, borrowedAmounts, spentCollateral) = ConverterStrategyBaseLib.getTokenAmounts(
+    tokenAmounts = ConverterStrategyBaseLib.getTokenAmounts(
       tetuConverter_,
       tokens_,
       indexAsset_,
       tokenAmounts,
       liquidationThresholds[tokens_[indexAsset_]]
     );
-    return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -587,14 +582,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     v.len = v.tokens.length;
 
     // get amount of target asset available to be sent
-    v.theAssetBaseAmount = _balance(theAsset_);
+    v.balance = _balance(theAsset_);
 
     // follow array can be re-created below but it's safer to initialize them here
     v.withdrawnAmounts = new uint[](v.len);
     v.spentAmounts = new uint[](v.len);
 
     // withdraw from the pool
-    if (v.theAssetBaseAmount < amount_) {
+    if (v.balance < amount_) {
       // the strategy doesn't have enough target asset on balance
       // withdraw all from the pool but don't convert assets to underlying
       v.liquidity = _depositorLiquidity();
@@ -605,9 +600,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
 
     // convert withdrawn assets to the target asset
-    if (v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset] < amount_) {
+    if (v.balance + v.withdrawnAmounts[v.indexTheAsset] < amount_) {
       (v.spentAmounts, v.withdrawnAmounts) = ConverterStrategyBaseLib.swapToGivenAmount(
-        amount_ - (v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset]),
+        amount_ - (v.balance + v.withdrawnAmounts[v.indexTheAsset]),
         v.tokens,
         v.indexTheAsset,
         asset, // underlying === main asset
@@ -620,7 +615,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
 
     // send amount to converter and update baseAmounts
-    amountOut = Math.min(v.theAssetBaseAmount + v.withdrawnAmounts[v.indexTheAsset], amount_);
+    amountOut = Math.min(v.balance + v.withdrawnAmounts[v.indexTheAsset], amount_);
     IERC20(theAsset_).safeTransfer(v.converter, amountOut);
 
     // There are two cases of calling requirePayAmountBack by converter:

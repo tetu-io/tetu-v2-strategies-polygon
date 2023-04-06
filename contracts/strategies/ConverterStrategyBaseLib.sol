@@ -100,6 +100,8 @@ library ConverterStrategyBaseLib {
   /// @notice Allow to swap more then required (i.e. 1_000 => +1%) inside {swapToGivenAmount}
   ///         to avoid additional swap if the swap will return amount a bit less than we expected
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
+  /// @dev Absolute value for any token
+  uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 10_000;
 
   /////////////////////////////////////////////////////////////////////
   ///                         Events
@@ -272,14 +274,14 @@ library ConverterStrategyBaseLib {
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) continue;
 
-      uint baseAmount = IERC20(tokens[i]).balanceOf(address(this));
-      if (baseAmount != 0) {
+      uint balance = IERC20(tokens[i]).balanceOf(address(this));
+      if (balance != 0) {
         // let's estimate collateral that we received back after repaying baseAmount
         uint expectedCollateral = converter.quoteRepay(
           strategy_,
           tokens[indexAsset],
           tokens[i],
-          baseAmount
+          balance
         );
 
         if (all || targetAmount_ != 0) {
@@ -288,7 +290,7 @@ library ConverterStrategyBaseLib {
           // what amount should be repaid to get given amount of collateral.
           // And it's too dangerous to assume that we can calculate this amount
           // by reducing baseAmount proportionally to expectedCollateral/targetAmount_
-          amountsToConvertOut[i] = baseAmount;
+          amountsToConvertOut[i] = balance;
         }
 
         if (targetAmount_ > expectedCollateral) {
@@ -763,7 +765,7 @@ library ConverterStrategyBaseLib {
         amounts: v.availableAmounts,
         converter: converter_,
         liquidator: liquidator_,
-        liquidationThresholdForTargetAsset: liquidationThresholdForTargetAsset_,
+        liquidationThresholdForTargetAsset: Math.max(liquidationThresholdForTargetAsset_, DEFAULT_LIQUIDATION_THRESHOLD),
         overswap: overswap_
       })
     );
@@ -911,7 +913,7 @@ library ConverterStrategyBaseLib {
     p.len = rewardTokens.length;
     require(p.len == rewardAmounts.length, AppErrors.WRONG_LENGTHS);
 
-    p.liquidationThresholdAsset = liquidationThresholds[asset];
+    p.liquidationThresholdAsset = Math.max(liquidationThresholds[asset], DEFAULT_LIQUIDATION_THRESHOLD);
 
     amountsToForward = new uint[](p.len);
 
@@ -925,7 +927,7 @@ library ConverterStrategyBaseLib {
           // The asset is in the list of depositor's assets, liquidation is not allowed
           // just keep on the balance, should be handled later
         } else {
-          if (p.amountToCompound < liquidationThresholds[p.rewardToken]) {
+          if (p.amountToCompound < Math.max(liquidationThresholds[p.rewardToken], DEFAULT_LIQUIDATION_THRESHOLD)) {
             // amount is too small, liquidation is not allowed
             // just keep on the balance, should be handled later
           } else {
@@ -1063,8 +1065,6 @@ library ConverterStrategyBaseLib {
   /// @notice Make borrow and save amounts of tokens available for deposit to tokenAmounts
   /// @param thresholdMainAsset_ Min allowed value of collateral in terms of main asset, 0 - use default min value
   /// @return tokenAmountsOut Amounts available for deposit
-  /// @return borrowedAmounts Amounts borrowed for {spendCollateral}
-  /// @return spentCollateral Total collateral amount spent for borrowing
   function getTokenAmounts(
     ITetuConverter tetuConverter_,
     address[] memory tokens_,
@@ -1072,13 +1072,12 @@ library ConverterStrategyBaseLib {
     uint[] memory collaterals_,
     uint thresholdMainAsset_
   ) external returns (
-    uint[] memory tokenAmountsOut,
-    uint[] memory borrowedAmounts,
-    uint spentCollateral
+    uint[] memory tokenAmountsOut
   ) {
     // content of tokenAmounts will be modified in place
     uint len = tokens_.length;
-    borrowedAmounts = new uint[](len);
+    uint[] memory borrowedAmounts = new uint[](len);
+    uint spentCollateral;
     tokenAmountsOut = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset_) {
@@ -1093,7 +1092,7 @@ library ConverterStrategyBaseLib {
             tokens_[indexAsset_],
             tokens_[i],
             collaterals_[i],
-            thresholdMainAsset_
+            Math.max(thresholdMainAsset_, DEFAULT_LIQUIDATION_THRESHOLD)
           );
           // collateral should be equal to tokenAmounts[i] here because we use default entry kind
           spentCollateral += collateral;
@@ -1104,8 +1103,6 @@ library ConverterStrategyBaseLib {
         tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
       }
     }
-
-    return (tokenAmountsOut, borrowedAmounts, spentCollateral);
   }
 
   /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
@@ -1261,7 +1258,7 @@ library ConverterStrategyBaseLib {
           vars.asset,
           amountsToConvert[i] - repaidAmountsOut[i],
           _ASSET_LIQUIDATION_SLIPPAGE,
-          liquidationThreshold
+          Math.max(liquidationThreshold, DEFAULT_LIQUIDATION_THRESHOLD)
         );
         if (vars.receivedAmountOut != 0) {
           collateralOut += vars.receivedAmountOut;

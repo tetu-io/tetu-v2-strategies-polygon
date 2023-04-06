@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "./UniswapV3Lib.sol";
 import "./UniswapV3DebtLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
 
@@ -13,6 +14,7 @@ library UniswapV3ConverterStrategyLogicLib {
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_STABLE = 100;
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE = 500;
   uint internal constant HARD_WORK_USD_FEE_THRESHOLD = 100;
+  /// @dev 0.5% by default
   uint public constant DEFAULT_FUSE_THRESHOLD = 5e15;
 
   //////////////////////////////////////////
@@ -23,6 +25,7 @@ library UniswapV3ConverterStrategyLogicLib {
   event Rebalanced();
   event DisableFuse();
   event NewFuseThreshold(uint newFuseThreshold);
+  event UniV3FeesClaimed(uint fee0, uint fee1);
 
   //////////////////////////////////////////
   //            STRUCTURES
@@ -168,11 +171,14 @@ library UniswapV3ConverterStrategyLogicLib {
     if (isStablePool(state.pool)) {
       /// for stable pools fuse can be enabled
       state.isStablePool = true;
-      // 0.5% price change
       state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
       emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
       state.lastPrice = getOracleAssetsPrice(ITetuConverter(converter), state.tokenA, state.tokenB);
     }
+  }
+
+  function createSpecificName(State storage state) external view returns (string memory) {
+    return string(abi.encodePacked("UniV3 ", IERC20Metadata(state.tokenA).symbol(), "/", IERC20Metadata(state.tokenB).symbol(), "-", StringLib._toString(state.pool.fee())));
   }
 
   //////////////////////////////////////////
@@ -640,7 +646,7 @@ library UniswapV3ConverterStrategyLogicLib {
   ) external returns (uint[] memory amountsOut, uint[] memory balancesBefore) {
 
     balancesBefore = new uint[](2);
-    for(uint i = 0; i < tokensOut.length; i++) {
+    for (uint i = 0; i < tokensOut.length; i++) {
       balancesBefore[i] = IERC20(tokensOut[i]).balanceOf(address(this));
     }
 
@@ -665,6 +671,9 @@ library UniswapV3ConverterStrategyLogicLib {
       amountsOut[0] += fillup0;
       amountsOut[1] += fillup1;
     }
+
+    emit UniV3FeesClaimed(amountsOut[0], amountsOut[1]);
+
     amountsOut[0] += rebalanceEarned0;
     amountsOut[1] += rebalanceEarned1;
     if (_depositorSwapTokens) {
@@ -718,36 +727,36 @@ library UniswapV3ConverterStrategyLogicLib {
     isNeedFillup = false;
 
     RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-    upperTick : state.upperTick,
-    lowerTick : state.lowerTick,
-    tickSpacing : state.tickSpacing,
-    pool : state.pool,
-    tokenA : state.tokenA,
-    tokenB : state.tokenB,
-    lastPrice : state.lastPrice,
-    fuseThreshold : state.fuseThreshold,
-    depositorSwapTokens : state.depositorSwapTokens,
-    rebalanceEarned0 : state.rebalanceEarned0,
-    rebalanceEarned1 : state.rebalanceEarned1,
+      upperTick: state.upperTick,
+      lowerTick: state.lowerTick,
+      tickSpacing: state.tickSpacing,
+      pool: state.pool,
+      tokenA: state.tokenA,
+      tokenB: state.tokenB,
+      lastPrice: state.lastPrice,
+      fuseThreshold: state.fuseThreshold,
+      depositorSwapTokens: state.depositorSwapTokens,
+      rebalanceEarned0: state.rebalanceEarned0,
+      rebalanceEarned1: state.rebalanceEarned1,
     // setup initial values
-    newRebalanceEarned0 : 0,
-    newRebalanceEarned1 : 0,
-    notCoveredLoss : 0,
-    newLowerTick : 0,
-    newUpperTick : 0,
-    fillUp : state.fillUp,
-    isStablePool : state.isStablePool,
-    newPrice : 0
+      newRebalanceEarned0: 0,
+      newRebalanceEarned1: 0,
+      notCoveredLoss: 0,
+      newLowerTick: 0,
+      newUpperTick: 0,
+      fillUp: state.fillUp,
+      isStablePool: state.isStablePool,
+      newPrice: 0
     });
 
     require(needRebalance(
-        state.isFuseTriggered,
-        vars.pool,
-        vars.lowerTick,
-        vars.upperTick,
-        vars.tickSpacing,
-        state.rebalanceTickRange
-      ), "No rebalancing needed");
+      state.isFuseTriggered,
+      vars.pool,
+      vars.lowerTick,
+      vars.upperTick,
+      vars.tickSpacing,
+      state.rebalanceTickRange
+    ), "No rebalancing needed");
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
@@ -773,10 +782,6 @@ library UniswapV3ConverterStrategyLogicLib {
       vars.newLowerTick = vars.lowerTick;
       vars.newUpperTick = vars.upperTick;
     } else {
-      if (vars.isStablePool) {
-        state.lastPrice = vars.newPrice;
-      }
-
       /// rebalancing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
       UniswapV3DebtLib.rebalanceDebt(
         converter,
@@ -824,6 +829,12 @@ library UniswapV3ConverterStrategyLogicLib {
         isNeedFillup = true;
       }
     }
+
+    // need to update last price only for stables coz only stables have fuse mechanic
+    if (vars.isStablePool) {
+      state.lastPrice = vars.newPrice;
+    }
+
     emit Rebalanced();
   }
 
