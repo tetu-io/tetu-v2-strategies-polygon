@@ -84,7 +84,8 @@ export class CoreContractsHelper {
       borrowManager,
       debtMonitor,
       keeper,
-      swapManager
+      swapManager,
+      1000
     );
     return controller;
   }

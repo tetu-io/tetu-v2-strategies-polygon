@@ -466,11 +466,14 @@ contract MockTetuConverter is ITetuConverter {
   function getDebtAmountCurrent(
     address user_,
     address collateralAsset_,
-    address borrowAsset_
+    address borrowAsset_,
+    bool useDebtGap_
   ) external view returns (
     uint totalDebtAmountOut,
     uint totalCollateralAmountOut
   ) {
+    useDebtGap_;
+
     console.log("MockTetuConverter.getDebtAmountCurrent user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
 
     bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_));
@@ -519,12 +522,14 @@ contract MockTetuConverter is ITetuConverter {
   function getDebtAmountStored(
     address user_,
     address collateralAsset_,
-    address borrowAsset_
+    address borrowAsset_,
+    bool useDebtGap_
   ) external view returns (
     uint totalDebtAmountOut,
     uint totalCollateralAmountOut
   ) {
     console.log("MockTetuConverter.getDebtAmountStored user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
+    useDebtGap_;
 
     if (
       getDebtAmountStoredParams.user == user_

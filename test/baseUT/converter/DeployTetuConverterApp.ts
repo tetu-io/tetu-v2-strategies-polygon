@@ -19,6 +19,7 @@ export interface IControllerSetupParams {
   disableAave3: boolean;
   disableAaveTwo: boolean;
   disableDForce: boolean;
+  debtGap: BigNumber;
 }
 
 export interface IBorrowManagerSetupParams {
@@ -289,6 +290,7 @@ export class DeployTetuConverterApp {
         debtMonitor,
         keeper,
         swapManager,
+        controllerSetupParams.debtGap,
         {gasLimit: GAS_DEPLOY_LIMIT}
       )
     );
