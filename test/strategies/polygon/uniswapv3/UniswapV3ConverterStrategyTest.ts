@@ -28,6 +28,8 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {PriceOracleUtils} from "../balancer/utils/PriceOracleUtils";
 
 const { expect } = chai;
 
@@ -56,6 +58,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let gov: SignerWithAddress;
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
+  let signer3: SignerWithAddress;
+  let operator: SignerWithAddress;
   let controller: IController;
   let asset: IERC20;
   let vault: TetuVaultV2;
@@ -75,7 +79,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let FEE_DENOMINATOR: BigNumber;
 
   before(async function() {
-    [signer, signer2] = await ethers.getSigners();
+    [signer, signer2, signer3] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     snapshotBefore = await TimeUtils.snapshot();
@@ -202,22 +206,24 @@ describe('UniswapV3ConverterStrategyTests', function() {
       controller,
       gov,
       bufferRate,
-      0,
-      0,
+      300,
+      300,
       false,
     );
     vault3 = data.vault.connect(signer);
     strategy3 = data.strategy as unknown as UniswapV3ConverterStrategy;
 
     await TokenUtils.getToken(asset.address, signer.address, _100_000);
+    await TokenUtils.getToken(asset.address, signer3.address, _100_000);
     // await TokenUtils.getToken(asset.address, signer2.address, _100_000);
     await asset.approve(vault.address, Misc.MAX_UINT);
     await asset.approve(vault2.address, Misc.MAX_UINT);
     await asset.approve(vault3.address, Misc.MAX_UINT);
+    await asset.connect(signer3).approve(vault3.address, Misc.MAX_UINT);
 
     // Disable platforms at TetuConverter
-    await ConverterUtils.disableDForce(signer);
-    await ConverterUtils.disableAaveV2(signer);
+    // await ConverterUtils.disableDForce(signer);
+    // await ConverterUtils.disableAaveV2(signer);
     // await ConverterUtils.disableAaveV3(signer);
 
     swapper = ISwapper__factory.connect(MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, signer);
@@ -225,6 +231,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
     FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
 
     await ConverterUtils.whitelist([strategy.address, strategy2.address, strategy3.address]);
+
+    operator = await UniversalTestUtils.getAnOperator(strategy3.address, signer)
+    await strategy3.connect(operator).setReinvestThresholdPercent(10) // 0.01%
   });
 
   after(async function() {
@@ -240,25 +249,33 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    /*it('Fuse test', async() => {
-     const s = strategy3
-     const v = vault3
-     const investAmount = _1_000;
-     const swapAssetValueForPriceMove = parseUnits('3000000', 6);
-     let price;
-     price = await swapper.getPrice(await s.pool(), await s.tokenB(), MaticAddresses.ZERO_ADDRESS, 0);
-     console.log('tokenB price', formatUnits(price, 6))
+    it('Fuse test', async() => {
+      const s = strategy3
+      const v = vault3
+      const investAmount = _1_000;
+      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
 
-     console.log('deposit...');
-     await v.deposit(investAmount, signer.address);
+      const priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, await s.converter());
+      console.log('Price USDT in oracle', (await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
 
-     expect(await s.fuse()).eq(false)
-     await movePriceUp(signer2, s.address, swapAssetValueForPriceMove)
-     if (await s.needRebalance()) {
-     await s.rebalance()
-     expect(await s.fuse()).eq(true)
-     }
-     })*/
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      await PriceOracleUtils.incPriceUsdt(priceOracles, 4);
+      console.log('Price USDT in oracle', (await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
+      expect((await s.getState()).isFuseTriggered).eq(false)
+      expect(await s.needRebalance()).eq(true)
+      await s.rebalance()
+      expect((await s.getState()).isFuseTriggered).eq(true)
+      expect(await s.needRebalance()).eq(false)
+
+      await s.connect(operator).disableFuse()
+      expect((await s.getState()).isFuseTriggered).eq(false)
+      expect(await s.needRebalance()).eq(true)
+      await s.rebalance()
+      expect((await s.getState()).isFuseTriggered).eq(false)
+    })
 
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
@@ -297,9 +314,67 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy.isReadyToHardWork()).eq(false);
     });
 
+    it('Loop with rebalance, hardwork, deposit and withdraw', async() => {
+      const investAmount = _1_000;
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const state = await strategy3.getState();
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault3.splitter());
+      let price;
+      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      console.log('tokenB price', formatUnits(price, 6));
+      const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
+      await strategy3.connect(platformVoter).setCompoundRatio(50000);
+
+      console.log('initial deposits...');
+      await vault3.deposit(investAmount, signer.address);
+      await vault3.connect(signer3).deposit(_1_000, signer3.address);
+
+      let lastDirectionUp = false
+      for (let i = 0; i < 10; i++) {
+        await UniswapV3StrategyUtils.makeVolume(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
+
+        if (i % 3) {
+          if (!lastDirectionUp) {
+            await UniswapV3StrategyUtils.movePriceUp(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+          } else {
+            await UniswapV3StrategyUtils.movePriceDown(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+          }
+          lastDirectionUp = !lastDirectionUp
+        }
+
+        if (await strategy3.needRebalance()) {
+          console.log('Rebalance..')
+          await strategy3.rebalance();
+        }
+
+        if (i % 5) {
+          console.log('Hardwork..')
+          await strategy3.connect(splitterSigner).doHardWork();
+        }
+
+        if (i % 2) {
+          console.log('Deposit..')
+          await vault3.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address);
+        } else {
+          console.log('Withdraw..')
+          const toWithdraw = parseUnits('100.111437', 6)
+          const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
+          await vault3.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address)
+          const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
+          console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
+        }
+      }
+
+      console.log('withdrawAll as signer3...');
+      await vault3.connect(signer3).withdrawAll();
+
+      console.log('withdrawAll...');
+      await vault3.withdrawAll();
+    });
+
     it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
       const investAmount = _10_000;
-      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
       let state = await strategy3.getState();
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault3.splitter());

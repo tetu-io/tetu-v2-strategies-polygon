@@ -57,6 +57,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function disableFuse() external {
     StrategyLib.onlyOperators(controller());
     state.isFuseTriggered = false;
+    state.lastPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
 
     UniswapV3ConverterStrategyLogicLib.emitDisableFuse();
   }
@@ -105,7 +106,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     StrategyLib.onlyOperators(_controller);
 
     /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
-    _depositorEmergencyExit();
+    /// after disableFuse() liquidity is zero
+    if (state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
 
     (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
