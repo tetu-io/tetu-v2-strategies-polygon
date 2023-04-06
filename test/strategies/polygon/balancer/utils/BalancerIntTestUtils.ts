@@ -161,16 +161,16 @@ export class BalancerIntTestUtils {
     const insurance = await vault.insurance();
     const block = await hre.ethers.provider.getBlock('latest');
 
-    const debtsDai = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
-      strategy.address,
-      MaticAddresses.USDC_TOKEN,
-      MaticAddresses.DAI_TOKEN,
-    );
-    const debtsUsdt = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
-      strategy.address,
-      MaticAddresses.USDC_TOKEN,
-      MaticAddresses.USDT_TOKEN,
-    );
+    // const debtsDai = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
+    //   strategy.address,
+    //   MaticAddresses.USDC_TOKEN,
+    //   MaticAddresses.DAI_TOKEN,
+    // );
+    // const debtsUsdt = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
+    //   strategy.address,
+    //   MaticAddresses.USDC_TOKEN,
+    //   MaticAddresses.USDT_TOKEN,
+    // );
 
     const dest = {
       title: title || 'no-name',
@@ -223,10 +223,14 @@ export class BalancerIntTestUtils {
         bal: await strategy.baseAmounts(MaticAddresses.BAL_TOKEN),
       },
       converter: {
-        collateralForDai: debtsDai.totalCollateralAmountOut,
-        amountToRepayDai: debtsDai.totalDebtAmountOut,
-        collateralForUsdt: debtsUsdt.totalCollateralAmountOut,
-        amountToRepayUsdt: debtsUsdt.totalDebtAmountOut,
+        // collateralForDai: debtsDai.totalCollateralAmountOut,
+        // amountToRepayDai: debtsDai.totalDebtAmountOut,
+        // collateralForUsdt: debtsUsdt.totalCollateralAmountOut,
+        // amountToRepayUsdt: debtsUsdt.totalDebtAmountOut,
+        collateralForDai: BigNumber.from(0),
+        amountToRepayDai: BigNumber.from(0),
+        collateralForUsdt: BigNumber.from(0),
+        amountToRepayUsdt: BigNumber.from(0),
       },
     };
 
