@@ -105,11 +105,11 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await ConverterUtils.disableAaveV2(signer);
 
     // ---
-    await TokenUtils.getToken(asset, signer.address, parseUnits('10000', decimals));
-    await TokenUtils.getToken(asset, signer2.address, parseUnits('10000', decimals));
+    await TokenUtils.getToken(asset, signer.address, parseUnits('1000000', decimals));
+    await TokenUtils.getToken(asset, signer2.address, parseUnits('1000000', decimals));
 
-    await IERC20__factory.connect(asset, signer).approve(vault.address, parseUnits('10000', decimals));
-    await IERC20__factory.connect(asset, signer2).approve(vault.address, parseUnits('10000', decimals));
+    await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
+    await IERC20__factory.connect(asset, signer2).approve(vault.address, Misc.MAX_UINT);
 
     await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
   });
@@ -133,7 +133,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
   it('deposit and full exit should not change share price', async function() {
 
-    const depositAmount1 = parseUnits('1000', decimals);
+    const depositAmount1 = parseUnits('100000', decimals);
 
     const sharePriceBefore = await vault.sharePrice();
 
