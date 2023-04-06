@@ -44,11 +44,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     UniswapV3ConverterStrategyLogicLib.initStrategyState(state, controller_, converter_);
 
-    // set minimum thresholds for liquidation
-    liquidationThresholds[state.tokenA] = 10_000;
-    emit LiquidationThresholdChanged(state.tokenA, 10_000);
-    liquidationThresholds[state.tokenB] = 10_000;
-    emit LiquidationThresholdChanged(state.tokenB, 10_000);
+    // setup specific name for UI
+    strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);
+    emit StrategySpecificNameChanged(strategySpecificName);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -106,7 +104,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
-    /// @dev withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
+    /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
     _depositorEmergencyExit();
 
     (
@@ -149,12 +147,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address[] memory /*tokens_*/,
     uint /*indexAsset_*/
   ) override internal virtual returns (
-    uint[] memory tokenAmounts,
-    uint[] memory borrowedAmounts,
-    uint spentCollateral
+    uint[] memory tokenAmounts
   ) {
     tokenAmounts = new uint[](2);
-    borrowedAmounts = new uint[](2);
+    uint spentCollateral;
 
     bytes memory entryData = UniswapV3ConverterStrategyLogicLib.getEntryData(
       state.pool,
@@ -165,7 +161,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     AppLib.approveIfNeeded(state.tokenA, amount_, address(tetuConverter_));
-    (spentCollateral, borrowedAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+    (spentCollateral, tokenAmounts[1]) = ConverterStrategyBaseLib.openPosition(
       tetuConverter_,
       entryData,
       state.tokenA,
@@ -175,9 +171,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     tokenAmounts[0] = amount_ - spentCollateral;
-    tokenAmounts[1] = borrowedAmounts[1];
-
-    return (tokenAmounts, borrowedAmounts, spentCollateral);
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts

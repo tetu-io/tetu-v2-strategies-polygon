@@ -200,9 +200,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address[] memory tokens_,
     uint indexAsset_
   ) external returns (
-    uint[] memory tokenAmounts,
-    uint[] memory borrowedAmounts,
-    uint spentCollateral
+    uint[] memory tokenAmounts
   ) {
     return _beforeDeposit(
       tetuConverter_,

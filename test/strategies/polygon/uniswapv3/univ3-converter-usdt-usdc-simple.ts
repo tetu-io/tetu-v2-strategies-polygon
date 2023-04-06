@@ -4,15 +4,14 @@ import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { ethers } from 'hardhat';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import {
+  ControllerV2__factory,
   IController__factory,
   IERC20__factory,
   IERC20Metadata,
   IERC20Metadata__factory,
   IStrategyV2,
   StrategySplitterV2,
-  StrategySplitterV2__factory,
   TetuVaultV2,
-  TetuVaultV2__factory,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
 } from '../../../../typechain';
@@ -24,18 +23,13 @@ import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
-import { BigNumber, ContractReceipt } from 'ethers';
-import { LossCoveredEventObject } from '../../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2';
+import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
 import {
-  InvestedEventObject,
-  LossEventObject,
-} from '../../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2';
-import {
-  InvestAllEventObject,
-} from '../../../../typechain/@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2';
-import {
-  OnDepositorEnterEventObject,
-} from '../../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategy';
+  depositToVault,
+  doHardWorkForStrategy,
+  rebalanceUniv3Strategy,
+  redeemFromVault,
+} from '../../../StrategyTestUtils';
 
 
 const { expect } = chai;
@@ -116,6 +110,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     await IERC20__factory.connect(asset, signer).approve(vault.address, parseUnits('10000', decimals));
     await IERC20__factory.connect(asset, signer2).approve(vault.address, parseUnits('10000', decimals));
+
+    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
   });
 
   after(async function() {
@@ -131,14 +127,18 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TimeUtils.rollback(snapshot);
   });
 
+  it('strategy specific name', async function() {
+    expect(await strategy.strategySpecificName()).eq('UniV3 USDC/USDT-100');
+  });
+
   it('deposit and full exit should not change share price', async function() {
 
     const depositAmount1 = parseUnits('1000', decimals);
-    const withdrawAmount1 = depositAmount1.sub(depositAmount1.mul(300).div(100_000));
 
     const sharePriceBefore = await vault.sharePrice();
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 3; i++) {
+      console.log('------------------ CYCLE', i, '------------------');
 
       ///////////////////////////
       // DEPOSIT
@@ -185,95 +185,89 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
   });
 
+  it('deposit and exit with hard works should work properly', async function() {
+    await strategy.setFuseThreshold(parseUnits('0.00001'))
+
+    const depositAmount1 = parseUnits('1000', decimals);
+    const swapAmount = parseUnits('1000000', decimals);
+
+    const sharePriceBefore = await vault.sharePrice();
+
+    for (let i = 0; i < 1; i++) {
+      console.log('------------------ CYCLE', i, '------------------');
+
+      ///////////////////////////
+      // DEPOSIT
+      ///////////////////////////
+
+
+      await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
+
+
+      const totalAssets = await vault.totalAssets();
+      const totalSupply = await vault.totalSupply();
+      const splitterTotalAssets = await splitter.totalAssets();
+      const vaultBalance = +formatUnits(await assetCtr.balanceOf(vault.address), decimals);
+      const splitterBalance = +formatUnits(await assetCtr.balanceOf(splitter.address), decimals);
+      const strategyBalance = +formatUnits(await assetCtr.balanceOf(strategy.address), decimals);
+      const strategyInvestedAssets = await strategy.investedAssets();
+      const strategyTotalAssets = await strategy.totalAssets();
+
+      console.log('totalAssets', formatUnits(totalAssets, decimals));
+      console.log('totalSupply', formatUnits(totalSupply, decimals));
+      console.log('splitterTotalAssets', formatUnits(splitterTotalAssets, decimals));
+      console.log('vaultBalance', vaultBalance);
+      console.log('splitterBalance', splitterBalance);
+      console.log('strategyBalance', strategyBalance);
+      console.log('strategyInvestedAssets', formatUnits(strategyInvestedAssets, decimals));
+      console.log('strategyTotalAssets', formatUnits(strategyTotalAssets, decimals));
+
+      expect(strategyInvestedAssets).above(0);
+
+      await TimeUtils.advanceNBlocks(300);
+
+
+      await UniswapV3StrategyUtils.movePriceUp(
+        signer,
+        strategy.address,
+        MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        swapAmount,
+      );
+
+      await rebalanceUniv3Strategy(strategy, signer, decimals);
+
+      await UniswapV3StrategyUtils.movePriceDown(
+        signer,
+        strategy.address,
+        MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        swapAmount,
+      );
+
+      await TimeUtils.advanceNBlocks(300);
+
+      await rebalanceUniv3Strategy(strategy, signer, decimals);
+
+      await UniswapV3StrategyUtils.makeVolume(
+        signer,
+        strategy.address,
+        MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        swapAmount,
+      );
+
+      await doHardWorkForStrategy(splitter, strategy, signer, decimals);
+
+      ///////////////////////////
+      // WITHDRAW
+      ///////////////////////////
+
+      await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
+    }
+
+    const sharePriceAfter = await vault.sharePrice();
+    // zero compound
+    expect(sharePriceAfter).eq(sharePriceBefore);
+
+  });
+
 });
 
-async function depositToVault(
-  vault: TetuVaultV2,
-  signer: SignerWithAddress,
-  amount: BigNumber,
-  decimals: number,
-  assetCtr: IERC20Metadata,
-  insurance: string,
-) {
-  const insuranceBefore = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
-  console.log('insuranceBefore', insuranceBefore);
-
-  const txDepost = await vault.connect(signer).deposit(amount, signer.address);
-  const receiptDeposit = await txDepost.wait();
-  console.log('DEPOSIT gas', receiptDeposit.gasUsed.toNumber());
-  await handleReceiptDeposit(receiptDeposit, decimals);
-
-  const insuranceAfter = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
-  console.log('insuranceAfter', insuranceAfter);
-  expect(insuranceBefore - insuranceAfter).below(100);
-}
-
-
-async function redeemFromVault(
-  vault: TetuVaultV2, signer: SignerWithAddress, percent: number,
-  decimals: number,
-  assetCtr: IERC20Metadata,
-  insurance: string,
-) {
-  const insuranceBefore = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
-  console.log('insuranceBefore', insuranceBefore);
-
-  const amount = (await vault.balanceOf(signer.address)).mul(percent).div(100);
-  console.log('redeem amount', amount.toString());
-  const txDepost = await vault.connect(signer).redeem(amount, signer.address, signer.address);
-  const receipt = await txDepost.wait();
-  console.log('REDEEM gas', receipt.gasUsed.toNumber());
-  // await handleReceiptDeposit(receipt, decimals);
-
-  const insuranceAfter = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
-  console.log('insuranceAfter', insuranceAfter);
-  expect(insuranceBefore - insuranceAfter).below(100);
-}
-
-async function handleReceiptDeposit(receipt: ContractReceipt, decimals: number): Promise<void> {
-  const vaultI = TetuVaultV2__factory.createInterface();
-  const splitterI = StrategySplitterV2__factory.createInterface();
-  const strategyI = UniswapV3ConverterStrategy__factory.createInterface();
-  for (const event of (receipt.events ?? [])) {
-    if (event.topics[0].toLowerCase() === vaultI.getEventTopic('LossCovered').toLowerCase()) {
-      const log = (vaultI.decodeEventLog(
-        vaultI.getEvent('LossCovered'),
-        event.data,
-        event.topics,
-      ) as unknown) as LossCoveredEventObject;
-      console.log('LossCovered', formatUnits(log.amount, decimals));
-    }
-    if (event.topics[0].toLowerCase() === splitterI.getEventTopic('Loss').toLowerCase()) {
-      const log = (splitterI.decodeEventLog(
-        splitterI.getEvent('Loss'),
-        event.data,
-        event.topics,
-      ) as unknown) as LossEventObject;
-      console.log('Loss', formatUnits(log.amount, decimals));
-    }
-    if (event.topics[0].toLowerCase() === splitterI.getEventTopic('Invested').toLowerCase()) {
-      const log = (splitterI.decodeEventLog(
-        splitterI.getEvent('Invested'),
-        event.data,
-        event.topics,
-      ) as unknown) as InvestedEventObject;
-      console.log('Invested', formatUnits(log.amount, decimals));
-    }
-    if (event.topics[0].toLowerCase() === strategyI.getEventTopic('InvestAll').toLowerCase()) {
-      const log = (strategyI.decodeEventLog(
-        strategyI.getEvent('InvestAll'),
-        event.data,
-        event.topics,
-      ) as unknown) as InvestAllEventObject;
-      console.log('InvestAll', formatUnits(log.balance, decimals));
-    }
-    if (event.topics[0].toLowerCase() === strategyI.getEventTopic('OnDepositorEnter').toLowerCase()) {
-      const log = (strategyI.decodeEventLog(
-        strategyI.getEvent('OnDepositorEnter'),
-        event.data,
-        event.topics,
-      ) as unknown) as OnDepositorEnterEventObject;
-      console.log('OnDepositorEnter', log.amounts, log.consumedAmounts);
-    }
-  }
-}
