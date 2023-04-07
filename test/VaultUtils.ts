@@ -1,9 +1,18 @@
-import { IERC20__factory, IStrategyV2__factory, StrategySplitterV2__factory, TetuVaultV2 } from '../typechain';
+import {
+  IERC20__factory,
+  IERC20Metadata,
+  IStrategyV2__factory,
+  StrategyBaseV2,
+  StrategySplitterV2,
+  StrategySplitterV2__factory,
+  TetuVaultV2,
+} from '../typechain';
 import { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { TokenUtils } from '../scripts/utils/TokenUtils';
 import { BigNumber, ContractTransaction, utils } from 'ethers';
 import { Misc } from '../scripts/utils/Misc';
+import { formatUnits } from 'ethers/lib/utils';
 
 /** Amounts earned/lost by the given strategies during the hardwork */
 export interface IDoHardworkAndCheckResults {
@@ -111,6 +120,35 @@ export class VaultUtils {
     Misc.printDuration('doHardWorkAndCheck completed', start);
 
     return dest;
+  }
+
+  public static async printVaultState(
+    vault: TetuVaultV2,
+    splitter: StrategySplitterV2,
+    strategy: StrategyBaseV2,
+    assetCtr: IERC20Metadata,
+    decimals: number,
+  ) {
+    const totalAssets = await vault.totalAssets();
+    const totalSupply = await vault.totalSupply();
+    const splitterTotalAssets = await splitter.totalAssets();
+    const vaultBalance = +formatUnits(await assetCtr.balanceOf(vault.address), decimals);
+    const splitterBalance = +formatUnits(await assetCtr.balanceOf(splitter.address), decimals);
+    const strategyBalance = +formatUnits(await assetCtr.balanceOf(strategy.address), decimals);
+    const strategyInvestedAssets = await strategy.investedAssets();
+    const strategyTotalAssets = await strategy.totalAssets();
+
+    console.log('---------- VAULT STATE ----------');
+    console.log('sharePrice', formatUnits(await vault.sharePrice(), decimals));
+    console.log('totalAssets', formatUnits(totalAssets, decimals));
+    console.log('totalSupply', formatUnits(totalSupply, decimals));
+    console.log('splitterTotalAssets', formatUnits(splitterTotalAssets, decimals));
+    console.log('vaultBalance', vaultBalance);
+    console.log('splitterBalance', splitterBalance);
+    console.log('strategyBalance', strategyBalance);
+    console.log('strategyInvestedAssets', formatUnits(strategyInvestedAssets, decimals));
+    console.log('strategyTotalAssets', formatUnits(strategyTotalAssets, decimals));
+    console.log('-----------------------------------');
   }
 
 }

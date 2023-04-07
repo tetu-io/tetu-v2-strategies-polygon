@@ -1,9 +1,12 @@
 import {
   IERC20Metadata,
-  StrategySplitterV2, StrategySplitterV2__factory,
+  StrategySplitterV2,
+  StrategySplitterV2__factory,
   TetuVaultV2,
   TetuVaultV2__factory,
-  UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3ConverterStrategyLogicLib__factory,
+  UniswapV3ConverterStrategy,
+  UniswapV3ConverterStrategy__factory,
+  UniswapV3ConverterStrategyLogicLib__factory,
 } from '../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber, ContractReceipt } from 'ethers';
@@ -23,7 +26,7 @@ import {
   OnDepositorExitEventObject,
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategy';
 import {
-  UniV3FeesClaimedEventObject
+  UniV3FeesClaimedEventObject,
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
 
@@ -58,7 +61,7 @@ export async function rebalanceUniv3Strategy(
   await printStateDifference(decimals, stateBefore, stateAfter);
 }
 
-export  async function printStateDifference(
+export async function printStateDifference(
   decimals: number,
   stateBefore: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; isFuseTriggered: boolean; fuseThreshold: BigNumber; rebalanceResults: BigNumber[] },
   stateAfter: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; isFuseTriggered: boolean; fuseThreshold: BigNumber; rebalanceResults: BigNumber[] },
@@ -89,6 +92,12 @@ export async function depositToVault(
   const insuranceBefore = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
   console.log('insuranceBefore', insuranceBefore);
 
+  const sharesBefore = await vault.balanceOf(signer.address);
+  let expectedShares = await vault.previewDeposit(amount);
+  if((await vault.totalSupply()).isZero()) {
+    expectedShares = expectedShares.sub(1000);
+  }
+
   const txDepost = await vault.connect(signer).deposit(amount, signer.address);
   const receiptDeposit = await txDepost.wait();
   console.log('DEPOSIT gas', receiptDeposit.gasUsed.toNumber());
@@ -97,6 +106,7 @@ export async function depositToVault(
   const insuranceAfter = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
   console.log('insuranceAfter', insuranceAfter);
   expect(insuranceBefore - insuranceAfter).below(100);
+  expect(sharesBefore.add(expectedShares)).eq(await vault.balanceOf(signer.address));
 }
 
 
@@ -110,9 +120,20 @@ export async function redeemFromVault(
   const insuranceBefore = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
   console.log('insuranceBefore', insuranceBefore);
 
+  const assetsBefore = await assetCtr.balanceOf(signer.address);
+  let expectedAssets;
+
   const amount = (await vault.balanceOf(signer.address)).mul(percent).div(100);
   console.log('redeem amount', amount.toString());
-  const txDepost = await vault.connect(signer).redeem(amount, signer.address, signer.address);
+  let txDepost;
+  if (percent === 100) {
+    expectedAssets = await vault.previewRedeem(await vault.balanceOf(signer.address));
+    txDepost = await vault.connect(signer).withdrawAll();
+  } else {
+    const toRedeem = amount.sub(1);
+    expectedAssets = await vault.previewRedeem(toRedeem);
+    txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address);
+  }
   const receipt = await txDepost.wait();
   console.log('REDEEM gas', receipt.gasUsed.toNumber());
   await handleReceiptRedeem(receipt, decimals);
@@ -120,6 +141,7 @@ export async function redeemFromVault(
   const insuranceAfter = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
   console.log('insuranceAfter', insuranceAfter);
   expect(insuranceBefore - insuranceAfter).below(100);
+  expect(assetsBefore.add(expectedAssets)).eq(await assetCtr.balanceOf(signer.address));
 }
 
 export async function handleReceiptDeposit(receipt: ContractReceipt, decimals: number): Promise<void> {

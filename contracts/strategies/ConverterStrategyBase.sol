@@ -353,7 +353,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Convert all available amounts of {tokens_} to the main {asset}
-  /// @dev todo SCB-587
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
   /// @return collateralOut Total amount of collateral returned after closing positions

@@ -582,6 +582,8 @@ library UniswapV3ConverterStrategyLogicLib {
   ) external returns (uint[] memory amountsOut, uint128 totalLiquidity, uint128 totalLiquidityFillup) {
     totalLiquidityFillup = 0;
 
+    require(liquidity >= liquidityAmountToExit, "Wrong liquidity");
+
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, liquidityAmountToExit);
     // all fees will be collected but not returned in amountsOut
@@ -611,7 +613,6 @@ library UniswapV3ConverterStrategyLogicLib {
       totalLiquidityFillup = liquidityFillup - toRemoveFillUpAmount;
     }
 
-    require(liquidity >= liquidityAmountToExit, "Wrong liquidity");
     totalLiquidity = liquidity - liquidityAmountToExit;
 
     if (_depositorSwapTokens) {

@@ -10,6 +10,7 @@ import {
   IERC20Metadata,
   IERC20Metadata__factory,
   IStrategyV2,
+  StrategyBaseV2__factory,
   StrategySplitterV2,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
@@ -30,6 +31,9 @@ import {
   rebalanceUniv3Strategy,
   redeemFromVault,
 } from '../../../StrategyTestUtils';
+import { IPriceOracles, PriceOracleUtils } from '../balancer/utils/PriceOracleUtils';
+import { VaultUtils } from '../../../VaultUtils';
+import { BigNumber } from 'ethers';
 
 
 const { expect } = chai;
@@ -52,6 +56,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let asset: string;
   let assetCtr: IERC20Metadata;
   let decimals: number;
+  let priceOracles: IPriceOracles;
 
 
   before(async function() {
@@ -100,18 +105,16 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    // Disable platforms at TetuConverter
-    await ConverterUtils.disableDForce(signer);
-    await ConverterUtils.disableAaveV2(signer);
+    priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, await strategy.converter());
 
     // ---
-    await TokenUtils.getToken(asset, signer.address, parseUnits('1000000', decimals));
-    await TokenUtils.getToken(asset, signer2.address, parseUnits('1000000', decimals));
 
     await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
     await IERC20__factory.connect(asset, signer2).approve(vault.address, Misc.MAX_UINT);
 
     await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
+
+    await vault.setWithdrawRequestBlocks(0);
   });
 
   after(async function() {
@@ -132,8 +135,95 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   });
 
   it('deposit and full exit should not change share price', async function() {
+    await vault.setDoHardWorkOnInvest(false);
+    await TokenUtils.getToken(asset, signer2.address, BigNumber.from(10000));
+    await vault.connect(signer2).deposit(10000, signer2.address);
 
+    const cycles = 3;
     const depositAmount1 = parseUnits('100000', decimals);
+    await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
+
+    const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
+
+    for (let i = 0; i < cycles; i++) {
+      console.log('------------------ CYCLE', i, '------------------');
+
+      const sharePriceBefore = await vault.sharePrice();
+
+      ///////////////////////////
+      // DEPOSIT
+      ///////////////////////////
+
+
+      await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
+
+      await VaultUtils.printVaultState(
+        vault,
+        splitter,
+        StrategyBaseV2__factory.connect(strategy.address, signer),
+        assetCtr,
+        decimals,
+      );
+
+      expect(await strategy.investedAssets()).above(0);
+
+      const sharePriceAfterDeposit = await vault.sharePrice();
+      expect(sharePriceAfterDeposit).eq(sharePriceBefore);
+
+      ///////////////////////////
+      // WITHDRAW
+      ///////////////////////////
+
+      await redeemFromVault(vault, signer, 50, decimals, assetCtr, insurance);
+      await VaultUtils.printVaultState(
+        vault,
+        splitter,
+        StrategyBaseV2__factory.connect(strategy.address, signer),
+        assetCtr,
+        decimals,
+      );
+
+      const sharePriceAfterWithdraw = await vault.sharePrice();
+      expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, 100);
+
+      await redeemFromVault(vault, signer, 99, decimals, assetCtr, insurance);
+      await VaultUtils.printVaultState(
+        vault,
+        splitter,
+        StrategyBaseV2__factory.connect(strategy.address, signer),
+        assetCtr,
+        decimals,
+      );
+
+      const sharePriceAfterWithdraw2 = await vault.sharePrice();
+      expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, 100);
+
+      await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
+      await VaultUtils.printVaultState(
+        vault,
+        splitter,
+        StrategyBaseV2__factory.connect(strategy.address, signer),
+        assetCtr,
+        decimals,
+      );
+
+      const sharePriceAfterWithdraw3 = await vault.sharePrice();
+      expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, 1000);
+    }
+
+    const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
+    console.log('balanceBefore', balanceBefore);
+    console.log('balanceAfter', balanceAfter);
+    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), cycles);
+
+  });
+
+  it('deposit and exit with hard works should work properly', async function() {
+    await strategy.setFuseThreshold(parseUnits('1'));
+
+    const depositAmount1 = parseUnits('1000', decimals);
+    await TokenUtils.getToken(asset, signer.address, depositAmount1);
+    const swapAmount = parseUnits('500000', decimals);
 
     const sharePriceBefore = await vault.sharePrice();
 
@@ -146,63 +236,13 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
 
       await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
-
-
-      const totalAssets = await vault.totalAssets();
-      const totalSupply = await vault.totalSupply();
-      const splitterTotalAssets = await splitter.totalAssets();
-      const vaultBalance = +formatUnits(await assetCtr.balanceOf(vault.address), decimals);
-      const splitterBalance = +formatUnits(await assetCtr.balanceOf(splitter.address), decimals);
-      const strategyBalance = +formatUnits(await assetCtr.balanceOf(strategy.address), decimals);
-      const strategyInvestedAssets = await strategy.investedAssets();
-      const strategyTotalAssets = await strategy.totalAssets();
-
-      console.log('totalAssets', formatUnits(totalAssets, decimals));
-      console.log('totalSupply', formatUnits(totalSupply, decimals));
-      console.log('splitterTotalAssets', formatUnits(splitterTotalAssets, decimals));
-      console.log('vaultBalance', vaultBalance);
-      console.log('splitterBalance', splitterBalance);
-      console.log('strategyBalance', strategyBalance);
-      console.log('strategyInvestedAssets', formatUnits(strategyInvestedAssets, decimals));
-      console.log('strategyTotalAssets', formatUnits(strategyTotalAssets, decimals));
-
-      expect(strategyInvestedAssets).above(0);
-      expect(await strategy.baseAmounts(MaticAddresses.USDC_TOKEN)).eq(0);
-      expect(await strategy.baseAmounts(MaticAddresses.USDT_TOKEN)).eq(0);
-
-      const sharePriceAfterDeposit = await vault.sharePrice();
-      expect(sharePriceAfterDeposit).eq(sharePriceBefore);
-
-      ///////////////////////////
-      // WITHDRAW
-      ///////////////////////////
-
-      await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
-
-      const sharePriceAfterWithdraw = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw).eq(sharePriceAfterDeposit);
-    }
-
-  });
-
-  it('deposit and exit with hard works should work properly', async function() {
-    await strategy.setFuseThreshold(parseUnits('0.00001'))
-
-    const depositAmount1 = parseUnits('1000', decimals);
-    const swapAmount = parseUnits('1000000', decimals);
-
-    const sharePriceBefore = await vault.sharePrice();
-
-    for (let i = 0; i < 1; i++) {
-      console.log('------------------ CYCLE', i, '------------------');
-
-      ///////////////////////////
-      // DEPOSIT
-      ///////////////////////////
-
-
-      await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
-
+      await VaultUtils.printVaultState(
+        vault,
+        splitter,
+        StrategyBaseV2__factory.connect(strategy.address, signer),
+        assetCtr,
+        decimals,
+      );
 
       const totalAssets = await vault.totalAssets();
       const totalSupply = await vault.totalSupply();
@@ -243,6 +283,12 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         swapAmount,
       );
 
+      if (i % 2 === 0) {
+        await PriceOracleUtils.incPriceUsdt(priceOracles, 1);
+      } else {
+        await PriceOracleUtils.incPriceUsdt(priceOracles, -1);
+      }
+
       await TimeUtils.advanceNBlocks(300);
 
       await rebalanceUniv3Strategy(strategy, signer, decimals);
@@ -261,6 +307,13 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       ///////////////////////////
 
       await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
+      await VaultUtils.printVaultState(
+        vault,
+        splitter,
+        StrategyBaseV2__factory.connect(strategy.address, signer),
+        assetCtr,
+        decimals,
+      );
     }
 
     const sharePriceAfter = await vault.sharePrice();

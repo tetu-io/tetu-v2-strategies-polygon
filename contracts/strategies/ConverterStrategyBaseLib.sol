@@ -264,7 +264,7 @@ library ConverterStrategyBaseLib {
     uint investedAssets,
     uint depositorLiquidity
   ) external returns (
-    uint liquidityRatioOut,
+    uint resultAmount,
     uint[] memory amountsToConvertOut
   ) {
     bool all = targetAmount_ == 0;
@@ -309,7 +309,7 @@ library ConverterStrategyBaseLib {
 
     require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
 
-    liquidityRatioOut = all
+    uint liquidityRatioOut = all
       ? 1e18
       : ((targetAmount_ == 0)
         ? 0
@@ -320,8 +320,9 @@ library ConverterStrategyBaseLib {
     );
 
     if (liquidityRatioOut != 0) {
-      // liquidityAmount temporary contains ratio...
-      liquidityRatioOut = liquidityRatioOut * depositorLiquidity / 1e18;
+      resultAmount = Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity);
+    } else {
+      resultAmount = 0;
     }
   }
 
