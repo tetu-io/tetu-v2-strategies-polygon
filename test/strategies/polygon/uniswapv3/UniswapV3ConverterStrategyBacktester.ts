@@ -59,6 +59,7 @@ import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
+import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 
 const { expect } = chai;
 
@@ -1205,6 +1206,11 @@ async function deployAndInitVaultAndUniswapV3Strategy<T>(
   wait = false,
 ): Promise<IVaultUniswapV3StrategyInfo> {
   console.log('deployAndInitVaultAndUniswapV3Strategy', vaultName);
+
+  const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
+  const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
+  await vaultFactory.connect(await Misc.impersonate(PolygonAddresses.GOVERNANCE)).setVaultImpl(vaultLogic.address);
+  await vaultFactory.connect(await Misc.impersonate(PolygonAddresses.GOVERNANCE)).setSplitterImpl(splitterLogic.address);
 
   await RunHelper.runAndWait(() => vaultFactory.createVault(
     asset,
