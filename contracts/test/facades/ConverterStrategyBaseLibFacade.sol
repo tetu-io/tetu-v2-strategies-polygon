@@ -18,12 +18,6 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
   }
 
-  mapping(address => uint) public baseAmounts;
-
-  function setBaseAmounts(address asset, uint amount) external {
-    baseAmounts[asset] = amount;
-  }
-
   function getLiquidityAmountRatio(
     uint targetAmount_,
     address strategy_,
