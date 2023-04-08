@@ -32,11 +32,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint liquidityAmount;
     uint assetPrice;
     uint[] amountsToConvert;
-    uint balanceBefore;
-    ITetuConverter converter;
-    address asset;
-    uint indexAsset;
-    address[] tokens;
   }
 
   struct RequirePayAmountBackLocal {
@@ -260,28 +255,24 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     if ((all || amount != 0) && investedAssetsBeforeWithdraw != 0) {
 
+      address[] memory tokens = _depositorPoolAssets();
+      address _asset = asset;
+      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, _asset);
+      ITetuConverter _converter = converter;
+      uint balanceBefore = _balance(_asset);
+
       WithdrawUniversalLocal memory vars;
-
-      vars.tokens = _depositorPoolAssets();
-      vars.asset = asset;
-      vars.indexAsset = ConverterStrategyBaseLib.getAssetIndex(vars.tokens, vars.asset);
-      vars.converter = converter;
-      vars.assetPrice = ConverterStrategyBaseLib.getAssetPriceFromConverter(vars.converter, vars.asset);
-      vars.balanceBefore = _balance(vars.asset);
-
       vars.reserves = _depositorPoolReserves();
       vars.totalSupply = _depositorTotalSupply();
       vars.depositorLiquidity = _depositorLiquidity();
-      vars.liquidityAmount = 0;
-      vars.amountsToConvert = new uint[](0);
-
+      vars.assetPrice = ConverterStrategyBaseLib.getAssetPriceFromConverter(_converter, _asset);
 
       (vars.liquidityAmount, vars.amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmountRatio(
         all ? 0 : amount,
         address(this),
-        vars.tokens,
-        vars.indexAsset,
-        vars.converter,
+        tokens,
+        indexAsset,
+        _converter,
         investedAssetsBeforeWithdraw,
         vars.depositorLiquidity
       );
@@ -303,9 +294,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           vars.liquidityAmount,
           vars.totalSupply,
           vars.amountsToConvert,
-          vars.tokens,
-          vars.indexAsset,
-          vars.converter,
+          tokens,
+          indexAsset,
+          _converter,
           _depositorLiquidity(),
           withdrawnAmounts
         );
@@ -313,23 +304,23 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
         (withdrawnAmounts, expectedAmountMainAsset) = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
-          vars.tokens,
-          vars.indexAsset,
-          vars.converter,
-          new uint[](vars.tokens.length), // array with all zero values
+          tokens,
+          indexAsset,
+          _converter,
+          new uint[](tokens.length), // array with all zero values
           vars.amountsToConvert
         );
       }
 
       // convert amounts to main asset
-      _convertAfterWithdraw(vars.tokens, vars.indexAsset, vars.amountsToConvert, vars.converter);
+      _convertAfterWithdraw(tokens, indexAsset, vars.amountsToConvert, _converter);
 
       uint investedAssetsAfterWithdraw = _updateInvestedAssets();
-      uint balanceAfterWithdraw = _balance(vars.asset);
+      uint balanceAfterWithdraw = _balance(_asset);
 
       // we need to compensate difference if during withdraw we lost some assets
-      if ((investedAssetsAfterWithdraw + balanceAfterWithdraw) < (investedAssetsBeforeWithdraw + vars.balanceBefore)) {
-        strategyLoss += (investedAssetsBeforeWithdraw + vars.balanceBefore) - (investedAssetsAfterWithdraw + balanceAfterWithdraw);
+      if ((investedAssetsAfterWithdraw + balanceAfterWithdraw) < (investedAssetsBeforeWithdraw + balanceBefore)) {
+        strategyLoss += (investedAssetsBeforeWithdraw + balanceBefore) - (investedAssetsAfterWithdraw + balanceAfterWithdraw);
       }
 
       return (
