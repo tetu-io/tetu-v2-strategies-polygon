@@ -1,5 +1,9 @@
 import {
+  ControllerV2__factory,
+  ForwarderV3__factory,
+  IERC20__factory,
   IERC20Metadata,
+  StrategyBaseV2,
   StrategySplitterV2,
   StrategySplitterV2__factory,
   TetuVaultV2,
@@ -29,17 +33,61 @@ import {
   UniV3FeesClaimedEventObject,
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
+import { Misc } from '../scripts/utils/Misc';
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
-  strategy: UniswapV3ConverterStrategy,
+  strategy: StrategyBaseV2,
   signer: SignerWithAddress,
   decimals: number,
 ) {
+  const asset = await strategy.asset();
+  const controller = await splitter.controller();
+  const platformVoter = await ControllerV2__factory.connect(controller, splitter.provider).platformVoter();
+  const investFund = await ControllerV2__factory.connect(controller, splitter.provider).investFund();
+  const voter = await ControllerV2__factory.connect(controller, splitter.provider).voter();
+  const forwarder = await ControllerV2__factory.connect(controller, splitter.provider).forwarder();
+  const bribe = await ForwarderV3__factory.connect(forwarder, splitter.provider).bribe();
+  const tetu = await ForwarderV3__factory.connect(forwarder, splitter.provider).tetu();
+  const investFundTetuBalance = await IERC20__factory.connect(tetu, splitter.provider).balanceOf(investFund);
+  const voterTetuBalance = await IERC20__factory.connect(tetu, splitter.provider).balanceOf(voter);
+  const bribeTetuBalance = await IERC20__factory.connect(tetu, splitter.provider).balanceOf(bribe);
+  const aprBefore = await splitter.strategiesAPR(strategy.address);
+  const strategyTVLBefore = await strategy.totalAssets();
+
+  await ForwarderV3__factory.connect(forwarder, await Misc.impersonate(platformVoter)).setInvestFundRatio(10_000);
+  await ForwarderV3__factory.connect(forwarder, await Misc.impersonate(platformVoter)).setGaugesRatio(50_000);
+  await ForwarderV3__factory.connect(forwarder, splitter.signer).setTetuThreshold(0);
+
   console.log('### DO HARD WORK CALL ###');
   const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true);
   const receipt = await tx.wait();
   await handleReceiptDoHardWork(receipt, decimals);
+
+  const aprAfter = await splitter.strategiesAPR(strategy.address);
+
+  if (!aprBefore.eq(aprAfter)) {
+    const compoundRatio = await strategy.compoundRatio();
+    if (!compoundRatio.isZero()) {
+      const strategyTVLAfter = await strategy.totalAssets();
+
+      expect(strategyTVLAfter).above(strategyTVLBefore, 'Strategy TVL should increase after hardwork');
+    }
+
+    if (!compoundRatio.eq(100_000)) {
+      const investFundTetuBalanceAfter = await IERC20__factory.connect(tetu, splitter.provider).balanceOf(investFund);
+      const voterTetuBalanceAfter = await IERC20__factory.connect(tetu, splitter.provider).balanceOf(voter);
+      const bribeTetuBalanceAfter = await IERC20__factory.connect(tetu, splitter.provider).balanceOf(bribe);
+
+      console.log('investFundTetuBalance diff', formatUnits(investFundTetuBalanceAfter.sub(investFundTetuBalance)));
+      console.log('voterTetuBalance diff', formatUnits(voterTetuBalanceAfter.sub(voterTetuBalance)));
+      console.log('bribeTetuBalance diff', formatUnits(bribeTetuBalanceAfter.sub(bribeTetuBalance)));
+
+      expect(investFundTetuBalanceAfter).above(investFundTetuBalance);
+      expect(voterTetuBalanceAfter).above(voterTetuBalance);
+      expect(bribeTetuBalanceAfter).above(bribeTetuBalance);
+    }
+  }
 }
 
 const { expect } = chai;
@@ -87,6 +135,7 @@ export async function depositToVault(
   assetCtr: IERC20Metadata,
   insurance: string,
 ) {
+  expect(await assetCtr.balanceOf(signer.address)).greaterThanOrEqual(amount, 'not enough balance for deposit');
   console.log('### DEPOSIT CALL ###');
 
   const insuranceBefore = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
@@ -94,7 +143,7 @@ export async function depositToVault(
 
   const sharesBefore = await vault.balanceOf(signer.address);
   let expectedShares = await vault.previewDeposit(amount);
-  if((await vault.totalSupply()).isZero()) {
+  if ((await vault.totalSupply()).isZero()) {
     expectedShares = expectedShares.sub(1000);
   }
 
@@ -306,4 +355,33 @@ export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals
     }
   }
   console.log('*************');
+}
+
+export async function printVaultState(
+  vault: TetuVaultV2,
+  splitter: StrategySplitterV2,
+  strategy: StrategyBaseV2,
+  assetCtr: IERC20Metadata,
+  decimals: number,
+) {
+  const totalAssets = await vault.totalAssets();
+  const totalSupply = await vault.totalSupply();
+  const splitterTotalAssets = await splitter.totalAssets();
+  const vaultBalance = +formatUnits(await assetCtr.balanceOf(vault.address), decimals);
+  const splitterBalance = +formatUnits(await assetCtr.balanceOf(splitter.address), decimals);
+  const strategyBalance = +formatUnits(await assetCtr.balanceOf(strategy.address), decimals);
+  const strategyInvestedAssets = await strategy.investedAssets();
+  const strategyTotalAssets = await strategy.totalAssets();
+
+  console.log('---------- VAULT STATE ----------');
+  console.log('sharePrice', formatUnits(await vault.sharePrice(), decimals));
+  console.log('totalAssets', formatUnits(totalAssets, decimals));
+  console.log('totalSupply', formatUnits(totalSupply, decimals));
+  console.log('splitterTotalAssets', formatUnits(splitterTotalAssets, decimals));
+  console.log('vaultBalance', vaultBalance);
+  console.log('splitterBalance', splitterBalance);
+  console.log('strategyBalance', strategyBalance);
+  console.log('strategyInvestedAssets', formatUnits(strategyInvestedAssets, decimals));
+  console.log('strategyTotalAssets', formatUnits(strategyTotalAssets, decimals));
+  console.log('-----------------------------------');
 }

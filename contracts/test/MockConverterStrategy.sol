@@ -111,8 +111,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       }
       return (handleRewardsParams.earned, handleRewardsParams.lost, _balance(asset));
     } else {
-      return super._handleRewards();
+      return __handleRewards();
     }
+  }
+
+  function __handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+    uint assetBalanceBefore = _balance(asset);
+    (address[] memory rewardTokens, uint[] memory amounts) = _claim();
+    _rewardsLiquidation(rewardTokens, amounts);
+    assetBalanceAfterClaim = _balance(asset);
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
+    return (earned, lost, assetBalanceAfterClaim);
   }
 
   struct MockedHandleRewardsParams {
@@ -132,11 +141,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address providerBalanceChange
   ) external {
     handleRewardsParams = MockedHandleRewardsParams({
-        initialized: true,
-        earned: earned,
-        lost: lost,
-        assetBalanceChange: assetBalanceChange,
-        providerBalanceChange: providerBalanceChange
+      initialized: true,
+      earned: earned,
+      lost: lost,
+      assetBalanceChange: assetBalanceChange,
+      providerBalanceChange: providerBalanceChange
     });
   }
 
@@ -183,10 +192,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
 
   function setMockedDepositToPool(int balanceChange, address providerBalanceChange, uint loss) external {
     depositToPoolParams = MockedDepositToPoolParams({
-    initialized : true,
-    balanceChange : balanceChange,
-    providerBalanceChange : providerBalanceChange,
-    loss : loss
+      initialized: true,
+      balanceChange: balanceChange,
+      providerBalanceChange: providerBalanceChange,
+      loss: loss
     });
   }
 
@@ -223,7 +232,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     address[] memory tokensOut,
     uint[] memory amountsOut
   ) {
-    return ConverterStrategyBaseLib.prepareRewardsList(tetuConverter_, tokens_, rewardTokens_, rewardAmounts_, new uint[](0));
+    return ConverterStrategyBaseLib.claimConverterRewards(tetuConverter_, tokens_, rewardTokens_, rewardAmounts_, new uint[](0));
   }
 
   function _recycleAccess(address[] memory tokens, uint[] memory amounts) external returns (

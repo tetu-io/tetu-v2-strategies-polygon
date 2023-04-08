@@ -82,13 +82,13 @@ export class PriceOracleUtils {
 
   public static async decPriceDai(priceOracles: IPriceOracles, percent: number) {
     const daiPrice = await priceOracles.daiPriceSource.price();
-    const daiNewPrice = daiPrice.mul(100 - percent).div(100);
+    const daiNewPrice = daiPrice.mul(1e9 - +(1e9 * percent).toFixed(0)).div(1e9);
     await priceOracles.daiPriceSource.setPrice(daiNewPrice);
   }
 
   public static async incPriceUsdt(priceOracles: IPriceOracles, percent: number) {
     const usdtPrice = await priceOracles.usdtPriceSource.price();
-    const usdtNewPrice = usdtPrice.mul(100 + percent).div(100);
+    const usdtNewPrice = usdtPrice.mul(1e9 + (1e9 * percent).toFixed(0)).div(1e9);
     await priceOracles.usdtPriceSource.setPrice(usdtNewPrice);
   }
 }

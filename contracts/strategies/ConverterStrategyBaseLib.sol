@@ -377,7 +377,7 @@ library ConverterStrategyBaseLib {
       thresholdAmountIn_ = DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD;
     }
     if (amountIn_ <= thresholdAmountIn_) {
-      return (0,0);
+      return (0, 0);
     }
 
     OpenPositionLocal memory vars;
@@ -878,37 +878,16 @@ library ConverterStrategyBaseLib {
   /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
   /// @return amountsToForward Amounts to be sent to forwarder
   function recycle(
-    address asset_,
-    uint compoundRatio_,
-    address[] memory tokens_,
-    ITetuLiquidator liquidator_,
-    mapping(address => uint) storage liquidationThresholds_,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) external returns (
-    uint[] memory amountsToForward
-  ) {
-    amountsToForward = _recycle(
-      asset_,
-      compoundRatio_,
-      tokens_,
-      liquidator_,
-      rewardTokens_,
-      rewardAmounts_,
-      liquidationThresholds_
-    );
-  }
-
-  /// @dev Implementation of {recycle}
-  function _recycle(
     address asset,
     uint compoundRatio,
     address[] memory tokens,
     ITetuLiquidator liquidator,
+    mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens,
-    uint[] memory rewardAmounts,
-    mapping(address => uint) storage liquidationThresholds
-  ) internal returns (uint[] memory amountsToForward) {
+    uint[] memory rewardAmounts
+  ) external returns (
+    uint[] memory amountsToForward
+  ) {
     RecycleLocalParams memory p;
 
     p.len = rewardTokens.length;
@@ -1113,7 +1092,7 @@ library ConverterStrategyBaseLib {
   /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
   /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
   /// @param amountsOut Amounts of available rewards
-  function prepareRewardsList(
+  function claimConverterRewards(
     ITetuConverter tetuConverter_,
     address[] memory tokens_,
     address[] memory rewardTokens_,
@@ -1137,7 +1116,7 @@ library ConverterStrategyBaseLib {
     // set fresh balances for depositor tokens
     uint len = tokensOut.length;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      for(uint j; j < tokens_.length; j = AppLib.uncheckedInc(j)) {
+      for (uint j; j < tokens_.length; j = AppLib.uncheckedInc(j)) {
         if (tokensOut[i] == tokens_[j]) {
           amountsOut[i] = IERC20(tokens_[j]).balanceOf(address(this)) - balancesBefore[j];
         }
