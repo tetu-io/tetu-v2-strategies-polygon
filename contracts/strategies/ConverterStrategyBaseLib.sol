@@ -872,10 +872,10 @@ library ConverterStrategyBaseLib {
   ///   Compound-part of Rewards-2 can be liquidated
   ///   Compound part of Rewards-1 should be just added to baseAmounts
   /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
-  /// @param tokens_ tokens received from {_depositorPoolAssets}
-  /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
-  /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
-  /// @param liquidationThresholds_ Liquidation thresholds for rewards tokens
+  /// @param tokens tokens received from {_depositorPoolAssets}
+  /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
+  /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
+  /// @param liquidationThresholds Liquidation thresholds for rewards tokens
   /// @return amountsToForward Amounts to be sent to forwarder
   function recycle(
     address asset,
