@@ -312,6 +312,7 @@ export class MaticAddresses {
   public static UNISWAPV3_WMATIC_WETH_500 = '0x86f1d8390222A3691C28938eC7404A1661E618e0'.toLowerCase()
   public static UNISWAPV3_USDC_DAI_100 = '0x5645dCB64c059aa11212707fbf4E7F984440a8Cf'.toLowerCase()
   public static UNISWAPV3_USDC_USDT_100 = '0xDaC8A8E6DBf8c690ec6815e0fF03491B2770255D'.toLowerCase()
+  public static UNISWAPV3_USDC_miMATIC_100 = '0x7de263D0Ad6e5D208844E65118c3a02A9A5D56B6'.toLowerCase()
 
   public static BLUE_CHIPS = new Set<string>([
     MaticAddresses.USDC_TOKEN,
