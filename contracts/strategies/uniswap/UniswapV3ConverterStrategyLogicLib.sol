@@ -496,19 +496,23 @@ library UniswapV3ConverterStrategyLogicLib {
     uint128 totalLiquidity,
     bool _depositorSwapTokens
   ) external returns (uint[] memory amountsConsumed, uint liquidityOut, uint128 totalLiquidityNew) {
-
     amountsConsumed = new uint[](2);
-    if (_depositorSwapTokens) {
-      (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
+
+    if (amountsDesired_[1] > 0) {
+      if (_depositorSwapTokens) {
+        (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
+      }
+      uint128 newLiquidity;
+      (amountsConsumed[0], amountsConsumed[1], newLiquidity) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, amountsDesired_[0], amountsDesired_[1]);
+      pool.mint(address(this), lowerTick, upperTick, newLiquidity, "");
+      liquidityOut = uint(newLiquidity);
+      totalLiquidityNew = totalLiquidity + newLiquidity;
+      if (_depositorSwapTokens) {
+        (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
+      }
     }
-    uint128 newLiquidity;
-    (amountsConsumed[0], amountsConsumed[1], newLiquidity) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, amountsDesired_[0], amountsDesired_[1]);
-    pool.mint(address(this), lowerTick, upperTick, newLiquidity, "");
-    liquidityOut = uint(newLiquidity);
-    totalLiquidityNew = totalLiquidity + newLiquidity;
-    if (_depositorSwapTokens) {
-      (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
-    }
+
+    return (amountsConsumed, liquidityOut, totalLiquidityNew);
   }
 
   /// @notice Add liquidity to a Uniswap V3 pool in a specified tick range according fill up rules.

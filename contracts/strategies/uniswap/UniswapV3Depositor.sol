@@ -161,9 +161,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   function _depositorEnter(
     uint[] memory amountsDesired_
   ) override internal virtual returns (uint[] memory amountsConsumed, uint liquidityOut) {
-    if(amountsDesired_[1] > 0) {
-      (amountsConsumed, liquidityOut, state.totalLiquidity) = UniswapV3ConverterStrategyLogicLib.enter(state.pool, state.lowerTick, state.upperTick, amountsDesired_, state.totalLiquidity, state.depositorSwapTokens);
-    }
+    (amountsConsumed, liquidityOut, state.totalLiquidity) = UniswapV3ConverterStrategyLogicLib.enter(state.pool, state.lowerTick, state.upperTick, amountsDesired_, state.totalLiquidity, state.depositorSwapTokens);
   }
 
   /// @notice Handles the withdrawal operation.
