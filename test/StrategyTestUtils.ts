@@ -147,7 +147,7 @@ export async function depositToVault(
     expectedShares = expectedShares.sub(1000);
   }
 
-  const txDepost = await vault.connect(signer).deposit(amount, signer.address);
+  const txDepost = await vault.connect(signer).deposit(amount, signer.address, { gasLimit: 10_000_000 });
   const receiptDeposit = await txDepost.wait();
   console.log('DEPOSIT gas', receiptDeposit.gasUsed.toNumber());
   await handleReceiptDeposit(receiptDeposit, decimals);
@@ -177,10 +177,10 @@ export async function redeemFromVault(
   let txDepost;
   if (percent === 100) {
     expectedAssets = await vault.previewRedeem(await vault.balanceOf(signer.address));
-    txDepost = await vault.connect(signer).withdrawAll();
+    txDepost = await vault.connect(signer).withdrawAll({ gasLimit: 10_000_000 });
   } else {
     const toRedeem = amount.sub(1);
-    expectedAssets = await vault.previewRedeem(toRedeem);
+    expectedAssets = await vault.previewRedeem(toRedeem, { gasLimit: 10_000_000 });
     txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address);
   }
   const receipt = await txDepost.wait();

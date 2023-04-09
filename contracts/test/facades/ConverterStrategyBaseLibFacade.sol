@@ -29,7 +29,7 @@ contract ConverterStrategyBaseLibFacade {
     uint liquidityRatioOut,
     uint[] memory amountsToConvertOut
   ) {
-    return ConverterStrategyBaseLib.getLiquidityAmountRatio(
+    return ConverterStrategyBaseLib.getLiquidityAmount(
       targetAmount_,
       strategy_,
       tokens,

@@ -219,9 +219,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
 
-    const cycles = 1;
+    const cycles = 3;
 
-    const depositAmount1 = parseUnits('1000', decimals);
+    const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
     const swapAmount = parseUnits('100000', decimals);
 
@@ -250,12 +250,21 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await TimeUtils.advanceNBlocks(300);
 
 
-      await UniswapV3StrategyUtils.movePriceDown(
-        signer2,
-        strategy.address,
-        MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        swapAmount,
-      );
+      if(i % 2 === 0) {
+        await UniswapV3StrategyUtils.movePriceUp(
+          signer2,
+          strategy.address,
+          MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          swapAmount,
+        );
+      } else {
+        await UniswapV3StrategyUtils.movePriceDown(
+          signer2,
+          strategy.address,
+          MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          swapAmount,
+        );
+      }
 
       // await rebalanceUniv3Strategy(strategy, signer, decimals);
       // await VaultUtils.printVaultState(

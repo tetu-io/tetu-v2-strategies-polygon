@@ -135,6 +135,8 @@ library ConverterStrategyBaseLib {
     uint receivedAmountOut
   );
 
+  event ReturnAssetToConverter(address asset, uint amount);
+
   /////////////////////////////////////////////////////////////////////
   ///                      View functions
   /////////////////////////////////////////////////////////////////////
@@ -160,7 +162,6 @@ library ConverterStrategyBaseLib {
         ? 1e18
         : 1e18 * liquidityAmount_ / totalSupply_
     );
-    // we need brackets here for npm.run.coverage
 
     uint len = reserves_.length;
     withdrawnAmountsOut = new uint[](len);
@@ -241,7 +242,7 @@ library ConverterStrategyBaseLib {
     return type(uint).max;
   }
 
-  /// @notice Get a ratio to calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
+  /// @notice Calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
   ///               liquidityAmount = _depositorLiquidity() * {liquidityRatioOut} / 1e18
   ///         User needs to withdraw {targetAmount_} in main asset.
   ///         There are two kinds of available liquidity:
@@ -255,7 +256,7 @@ library ConverterStrategyBaseLib {
   /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy
   ///                      0 - withdraw all
   /// @param strategy_ Address of the strategy
-  function getLiquidityAmountRatio(
+  function getLiquidityAmount(
     uint targetAmount_,
     address strategy_,
     address[] memory tokens,
@@ -722,6 +723,50 @@ library ConverterStrategyBaseLib {
   ///                 requirePayAmountBack
   /////////////////////////////////////////////////////////////////////
 
+  function swapToGivenAmountAndSendToConverter(
+    uint amount_,
+    uint indexTheAsset,
+    address[] memory tokens,
+    uint[] memory withdrawnAmounts,
+    address converter,
+    address controller,
+    address asset,
+    address theAsset_,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (uint amountOut) {
+    require(msg.sender == converter, StrategyLib.DENIED);
+
+    amountOut = IERC20(theAsset_).balanceOf(address(this));
+
+    // convert withdrawn assets to the target asset if not enough
+    if (amountOut < amount_) {
+      (, withdrawnAmounts) = ConverterStrategyBaseLib.swapToGivenAmount(
+        amount_ - amountOut,
+        tokens,
+        indexTheAsset,
+        asset, // underlying === main asset
+        withdrawnAmounts,
+        ITetuConverter(converter),
+        ITetuLiquidator(IController(controller).liquidator()),
+        liquidationThresholds[theAsset_],
+        OVERSWAP
+      );
+      amountOut = IERC20(theAsset_).balanceOf(address(this));
+    }
+
+    // we should send the asset as is even if it is lower than requested
+    if (amountOut != 0) {
+      IERC20(theAsset_).safeTransfer(converter, amountOut);
+    }
+
+    // There are two cases of calling requirePayAmountBack by converter:
+    // 1) close a borrow: we will receive collateral back and amount of investedAssets almost won't change
+    // 2) rebalancing: we have real loss, it will be taken into account at next hard work
+    emit ReturnAssetToConverter(theAsset_, amountOut);
+
+    // let's leave any leftovers un-invested, they will be reinvested at next hardwork
+  }
+
   /// @notice Swap available {amounts_} of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
   /// @param targetAmount_ Required amount of tokens[indexTheAsset_] that should be received by swap(s)
   /// @param tokens_ tokens received from {_depositorPoolAssets}
@@ -743,7 +788,7 @@ library ConverterStrategyBaseLib {
     ITetuLiquidator liquidator_,
     uint liquidationThresholdForTargetAsset_,
     uint overswap_
-  ) external returns (
+  ) internal returns (
     uint[] memory spentAmounts,
     uint[] memory withdrawnAmountsOut
   ) {
@@ -1132,10 +1177,10 @@ library ConverterStrategyBaseLib {
   /////////////////////////////////////////////////////////////////////
 
   function postWithdrawActions(
-    uint[] memory reserves,
+    uint[] memory reservesBeforeWithdraw,
     uint depositorLiquidity,
-    uint liquidityAmount,
-    uint totalSupply,
+    uint liquidityAmountWithdrew,
+    uint totalSupplyBeforeWithdraw,
     uint[] memory amountsToConvert,
 
     address[] memory tokens,
@@ -1152,18 +1197,20 @@ library ConverterStrategyBaseLib {
     // so, we need to fix liquidityAmount on this amount
 
     // we assume here, that liquidity cannot increase in _depositorExit
+    // use what exactly was withdrew instead of the expectation
     uint depositorLiquidityDelta = depositorLiquidity - _depositorLiquidityNew;
-    if (liquidityAmount > depositorLiquidityDelta) {
-      liquidityAmount = depositorLiquidityDelta;
+    if (liquidityAmountWithdrew > depositorLiquidityDelta) {
+      liquidityAmountWithdrew = depositorLiquidityDelta;
     }
 
     // now we can estimate expected amount of assets to be withdrawn
     uint[] memory expectedWithdrawAmounts = getExpectedWithdrawnAmounts(
-      reserves,
-      liquidityAmount,
-      totalSupply
+      reservesBeforeWithdraw,
+      liquidityAmountWithdrew,
+      totalSupplyBeforeWithdraw
     );
 
+    // from received amounts after withdraw calculate how much we receive from converter for them in terms of the underlying asset
     uint expectedAmountMainAsset = getExpectedAmountMainAsset(
       tokens,
       indexAsset,
