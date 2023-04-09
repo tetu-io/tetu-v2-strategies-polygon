@@ -221,7 +221,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const cycles = 3;
 
-    const depositAmount1 = parseUnits('10000', decimals);
+    const depositAmount1 = parseUnits('1000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
     const swapAmount = parseUnits('100000', decimals);
 
@@ -250,48 +250,49 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await TimeUtils.advanceNBlocks(300);
 
 
-      if(i % 2 === 0) {
-        await UniswapV3StrategyUtils.movePriceUp(
+      if (i % 2 === 0) {
+        const priceChange = await UniswapV3StrategyUtils.movePriceUp(
           signer2,
           strategy.address,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
+        const usdtPrice = await priceOracles.usdtPriceSource.price();
+        console.log('/// ORACLE usdtPrice', usdtPrice.toString());
+        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
+        console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
+        await priceOracles.usdtPriceSource.setPrice(usdtPricenew);
+
+        const usdcPrice = await priceOracles.usdcPriceSource.price();
+        console.log('/// ORACLE usdcPrice', usdcPrice.toString());
+        const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
+        console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
+        await priceOracles.usdcPriceSource.setPrice(usdcPricenew);
+
       } else {
-        await UniswapV3StrategyUtils.movePriceDown(
+        const priceChange = await UniswapV3StrategyUtils.movePriceDown(
           signer2,
           strategy.address,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
+
+        const usdtPrice = await priceOracles.usdtPriceSource.price();
+        console.log('/// ORACLE usdtPrice', usdtPrice.toString());
+        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
+        console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
+        await priceOracles.usdtPriceSource.setPrice(usdtPricenew);
+
+        const usdcPrice = await priceOracles.usdcPriceSource.price();
+        console.log('/// ORACLE usdcPrice', usdcPrice.toString());
+        const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
+        console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
+        await priceOracles.usdcPriceSource.setPrice(usdcPricenew);
       }
 
+      // todo !!!
       // await rebalanceUniv3Strategy(strategy, signer, decimals);
-      // await VaultUtils.printVaultState(
-      //   vault,
-      //   splitter,
-      //   StrategyBaseV2__factory.connect(strategy.address, signer),
-      //   assetCtr,
-      //   decimals,
-      // );
-
-      // await UniswapV3StrategyUtils.movePriceUp(
-      //   signer2,
-      //   strategy.address,
-      //   MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-      //   swapAmount,
-      // );
-
-      // if (i % 2 === 0) {
-      //   await PriceOracleUtils.incPriceUsdt(priceOracles, 1);
-      // } else {
-      //   await PriceOracleUtils.incPriceUsdt(priceOracles, -1);
-      // }
-
-      // await TimeUtils.advanceNBlocks(300);
-
-      // await rebalanceUniv3Strategy(strategy, signer, decimals);
-      // await VaultUtils.printVaultState(
+      // await printVaultState(
       //   vault,
       //   splitter,
       //   StrategyBaseV2__factory.connect(strategy.address, signer),

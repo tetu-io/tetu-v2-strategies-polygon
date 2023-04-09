@@ -43,7 +43,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _convertAfterWithdrawAccess(
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory amountsToConvert_
+    uint[] memory amountsToConvert_,
+    uint requestedAmount
   ) external returns (
     uint collateralOut,
     uint[] memory repaidAmountsOut
@@ -51,9 +52,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return ConverterStrategyBaseLib.convertAfterWithdraw(
       converter,
       ITetuLiquidator(IController(controller()).liquidator()),
-      liquidationThresholds[tokens_[indexAsset_]],
-      tokens_,
       indexAsset_,
+      liquidationThresholds[tokens_[indexAsset_]],
+      requestedAmount,
+      tokens_,
       amountsToConvert_
     );
   }
@@ -84,7 +86,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint assetPrice,
     uint strategyLoss
   ) {
-    return _withdrawUniversal(amount, all);
+    return _withdrawUniversal(all ? type(uint).max : amount);
   }
 
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {

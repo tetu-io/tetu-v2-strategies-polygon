@@ -24,12 +24,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   struct WithdrawUniversalLocal {
+    bool all;
+    uint investedAssetsBeforeWithdraw;
     uint[] reservesBeforeWithdraw;
     uint totalSupplyBeforeWithdraw;
     uint depositorLiquidity;
     uint liquidityAmountToWithdraw;
     uint assetPrice;
     uint[] amountsToConvert;
+    uint expectedAmountMainAsset;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -212,7 +215,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(amount, false);
+    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(amount);
   }
 
   /// @notice Withdraw all from the pool.
@@ -224,22 +227,22 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(0, true);
+    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(type(uint).max);
   }
 
-  /// @param amount Amount to be withdrawn. 0 is ok if we withdraw all.
-  /// @param all Withdraw all
+  /// @param amount Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
   /// @return expectedWithdrewUSD The value that we should receive after withdrawing in terms of USD value of each asset in the pool
   /// @return __assetPrice Price of the {asset} taken from the price oracle
-  function _withdrawUniversal(uint amount, bool all) internal returns (
+  function _withdrawUniversal(uint amount) internal returns (
     uint expectedWithdrewUSD,
     uint __assetPrice,
     uint strategyLoss
   ) {
-    uint investedAssetsBeforeWithdraw;
-    (investedAssetsBeforeWithdraw, strategyLoss) = _updateInvestedAssetsAndGetLoss(true);
+    WithdrawUniversalLocal memory vars;
+    vars.all = amount == type(uint).max;
+    (vars.investedAssetsBeforeWithdraw, strategyLoss) = _updateInvestedAssetsAndGetLoss(true);
 
-    if ((all || amount != 0) && investedAssetsBeforeWithdraw != 0) {
+    if ((vars.all || amount != 0) && vars.investedAssetsBeforeWithdraw != 0) {
 
       // --- init variables ---
       address[] memory tokens = _depositorPoolAssets();
@@ -248,7 +251,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, _asset);
       uint balanceBefore = _balance(_asset);
 
-      WithdrawUniversalLocal memory vars;
       vars.reservesBeforeWithdraw = _depositorPoolReserves();
       vars.totalSupplyBeforeWithdraw = _depositorTotalSupply();
       vars.depositorLiquidity = _depositorLiquidity();
@@ -257,17 +259,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // calculate how much liquidity we need to withdraw for getting the requested amount
       (vars.liquidityAmountToWithdraw, vars.amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmount(
-        all ? 0 : amount,
+        vars.all ? 0 : amount,
         address(this),
         tokens,
         indexAsset,
         _converter,
-        investedAssetsBeforeWithdraw,
+        vars.investedAssetsBeforeWithdraw,
         vars.depositorLiquidity
       );
 
       uint[] memory withdrawnAmounts;
-      uint expectedAmountMainAsset;
 
       if (vars.liquidityAmountToWithdraw != 0) {
 
@@ -280,7 +281,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // we need to call expectation after withdraw for calculate it based on the real liquidity amount that was withdrew
         // it should be called BEFORE the converter will touch our positions coz we need to call quote the estimations
         // amountsToConvert should contains amounts was withdrawn from the pool and amounts received from the converter
-        (expectedAmountMainAsset, vars.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
+        (vars.expectedAmountMainAsset, vars.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
           vars.reservesBeforeWithdraw,
           vars.depositorLiquidity,
           vars.liquidityAmountToWithdraw,
@@ -295,7 +296,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
-        (withdrawnAmounts, expectedAmountMainAsset) = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+        // todo expected amount should include possible closed positions during _convertAfterWithdraw()
+        (withdrawnAmounts, vars.expectedAmountMainAsset) = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
           tokens,
           indexAsset,
           _converter,
@@ -306,18 +308,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // convert amounts to main asset
       // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts
-      _convertAfterWithdraw(tokens, indexAsset, vars.amountsToConvert, _converter);
+      // todo need to somehow include possible closed positions to expectedAmountMainAsset
+      _convertAfterWithdraw(tokens, indexAsset, vars.amountsToConvert, _converter, amount);
 
       uint investedAssetsAfterWithdraw = _updateInvestedAssets();
       uint balanceAfterWithdraw = _balance(_asset);
 
       // we need to compensate difference if during withdraw we lost some assets
-      if ((investedAssetsAfterWithdraw + balanceAfterWithdraw) < (investedAssetsBeforeWithdraw + balanceBefore)) {
-        strategyLoss += (investedAssetsBeforeWithdraw + balanceBefore) - (investedAssetsAfterWithdraw + balanceAfterWithdraw);
+      if ((investedAssetsAfterWithdraw + balanceAfterWithdraw) < (vars.investedAssetsBeforeWithdraw + balanceBefore)) {
+        strategyLoss += (vars.investedAssetsBeforeWithdraw + balanceBefore) - (investedAssetsAfterWithdraw + balanceAfterWithdraw);
       }
 
       return (
-      expectedAmountMainAsset * vars.assetPrice / 1e18,
+      vars.expectedAmountMainAsset * vars.assetPrice / 1e18,
       vars.assetPrice,
       strategyLoss
       );
@@ -354,19 +357,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] memory amountsToConvert = ConverterStrategyBaseLib2.getAvailableBalances(tokens_, indexAsset_);
 
     // convert amounts to the main asset
-    (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert, converter);
+    (collateralOut, repaidAmounts) = _convertAfterWithdraw(tokens_, indexAsset_, amountsToConvert, converter, _investedAssets);
   }
 
   /// @notice Convert {amountsToConvert_} to the main {asset}
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @param requestedAmount Desired amount for withdraw. Max uint means attempt to withdraw all possible invested assets.
   /// @return collateralOut Total amount of collateral returned after closing positions
   /// @return repaidAmountsOut What amounts were spent in exchange of the {collateralOut}
   function _convertAfterWithdraw(
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory amountsToConvert_,
-    ITetuConverter _converter
+    ITetuConverter _converter,
+    uint requestedAmount
   ) internal returns (
     uint collateralOut,
     uint[] memory repaidAmountsOut
@@ -374,9 +379,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return ConverterStrategyBaseLib.convertAfterWithdraw(
       _converter,
       ITetuLiquidator(IController(controller()).liquidator()),
-      liquidationThresholds[tokens_[indexAsset_]],
-      tokens_,
       indexAsset_,
+      liquidationThresholds[tokens_[indexAsset_]],
+      requestedAmount,
+      tokens_,
       amountsToConvert_
     );
   }
