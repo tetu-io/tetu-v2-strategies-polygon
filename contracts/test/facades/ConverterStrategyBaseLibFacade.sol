@@ -29,7 +29,7 @@ contract ConverterStrategyBaseLibFacade {
     uint liquidityRatioOut,
     uint[] memory amountsToConvertOut
   ) {
-    return ConverterStrategyBaseLib.getLiquidityAmount(
+    return ConverterStrategyBaseLib2.getLiquidityAmount(
       targetAmount_,
       strategy_,
       tokens,
@@ -48,7 +48,7 @@ contract ConverterStrategyBaseLibFacade {
     uint indexAsset_,
     IPriceOracle priceOracle
   ) external view returns (uint[] memory tokenAmountsOut) {
-    return ConverterStrategyBaseLib.getCollaterals(
+    return ConverterStrategyBaseLib2.getCollaterals(
       amount_,
       tokens_,
       weights_,

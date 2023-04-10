@@ -490,6 +490,10 @@ export class DeployerUtilsLocal {
         vault.setFees(depositFee, withdrawFee),
       true, wait,
     );
+    await RunHelper.runAndWait(() =>
+        vault.setWithdrawRequestBlocks(0),
+      true, wait,
+    );
 
     console.log('registerVault');
     await RunHelper.runAndWait(() =>

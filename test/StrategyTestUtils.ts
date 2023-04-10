@@ -41,7 +41,7 @@ export async function doHardWorkForStrategy(
   signer: SignerWithAddress,
   decimals: number,
 ) {
-  const asset = await strategy.asset();
+  // const asset = await strategy.asset();
   const controller = await splitter.controller();
   const platformVoter = await ControllerV2__factory.connect(controller, splitter.provider).platformVoter();
   const investFund = await ControllerV2__factory.connect(controller, splitter.provider).investFund();
@@ -60,7 +60,7 @@ export async function doHardWorkForStrategy(
   await ForwarderV3__factory.connect(forwarder, splitter.signer).setTetuThreshold(0);
 
   console.log('### DO HARD WORK CALL ###');
-  const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true);
+  const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true, {gasLimit: 10_000_000});
   const receipt = await tx.wait();
   await handleReceiptDoHardWork(receipt, decimals);
 
@@ -100,7 +100,7 @@ export async function rebalanceUniv3Strategy(
   console.log('### REBALANCE CALL ###');
   const stateBefore = await strategy.getState();
 
-  const tx = await strategy.connect(signer).rebalance();
+  const tx = await strategy.connect(signer).rebalance({gasLimit: 10_000_000});
   const receipt = await tx.wait();
   await handleReceiptRebalance(receipt, decimals);
 
@@ -176,12 +176,13 @@ export async function redeemFromVault(
   console.log('redeem amount', amount.toString());
   let txDepost;
   if (percent === 100) {
-    expectedAssets = await vault.previewRedeem(await vault.balanceOf(signer.address));
-    txDepost = await vault.connect(signer).withdrawAll({ gasLimit: 10_000_000 });
+    const toRedeem = (await vault.balanceOf(signer.address)).sub(1);
+    expectedAssets = await vault.previewRedeem(toRedeem);
+    txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address, { gasLimit: 10_000_000 });
   } else {
     const toRedeem = amount.sub(1);
-    expectedAssets = await vault.previewRedeem(toRedeem, { gasLimit: 10_000_000 });
-    txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address);
+    expectedAssets = await vault.previewRedeem(toRedeem, );
+    txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address, { gasLimit: 10_000_000 });
   }
   const receipt = await txDepost.wait();
   console.log('REDEEM gas', receipt.gasUsed.toNumber());
