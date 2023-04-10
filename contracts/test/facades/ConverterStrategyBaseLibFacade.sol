@@ -227,4 +227,27 @@ contract ConverterStrategyBaseLibFacade {
   ) {
     return ConverterStrategyBaseLib._swapToGetAmount(receivedTargetAmount, p, v, indexTokenIn);
   }
+
+  function convertAfterWithdraw(
+    ITetuConverter tetuConverter,
+    ITetuLiquidator liquidator,
+    uint indexAsset,
+    uint liquidationThreshold,
+    uint requestedAmount,
+    address[] memory tokens,
+    uint[] memory amountsToConvert
+  ) external returns (
+    uint collateralOut,
+    uint[] memory repaidAmountsOut
+  ) {
+    return ConverterStrategyBaseLib.convertAfterWithdraw(
+      tetuConverter,
+      liquidator,
+      indexAsset,
+      liquidationThreshold,
+      requestedAmount,
+      tokens,
+      amountsToConvert
+    );
+  }
 }

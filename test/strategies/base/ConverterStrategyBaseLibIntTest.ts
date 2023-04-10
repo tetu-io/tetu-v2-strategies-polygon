@@ -42,7 +42,7 @@ describe.skip('ConverterStrategyBaseLibIntTest', () => {
   before(async function() {
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
-    facade = await MockHelper.createConverterStrategyBaseFacade(signer);
+    facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
 
     tetuConverter = ITetuConverter__factory.connect(getConverterAddress(), signer);
   });

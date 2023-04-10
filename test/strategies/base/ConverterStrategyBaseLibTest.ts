@@ -45,7 +45,7 @@ describe('ConverterStrategyBaseLibTest', () => {
   before(async function() {
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
-    facade = await MockHelper.createConverterStrategyBaseFacade(signer);
+    facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
     tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
     dai = await DeployerUtils.deployMockToken(signer, 'DAI');

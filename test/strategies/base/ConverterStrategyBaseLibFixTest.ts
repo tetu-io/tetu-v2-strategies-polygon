@@ -24,6 +24,7 @@ import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
 import {ILiquidationParams} from "../../baseUT/utils/TestDataTypes";
 import {setupMockedLiquidation} from "./utils/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
+import {tetuConverter} from "../../../typechain/@tetu_io";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -47,7 +48,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   before(async function() {
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
-    facade = await MockHelper.createConverterStrategyBaseFacade(signer);
+    facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
     tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
     dai = await DeployerUtils.deployMockToken(signer, 'DAI');
@@ -67,6 +68,10 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
   //region Unit tests
   describe("openPositionEntryKind1", () => {
+    let snapshot: string;
+    before(async function() { snapshot = await TimeUtils.snapshot(); });
+    after(async function() { await TimeUtils.rollback(snapshot); });
+
     interface IOpenPositionEntryKind1TestParams {
       threshold: number,
       borrows?: {
@@ -321,5 +326,150 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
+  describe("convertAfterWithdraw", () => {
+    interface IConvertAfterWithdrawResults {
+      collateralOut: string;
+      repaidAmountsOut: string[];
+      gasUsed: BigNumber;
+      balances: string[];
+    }
+    interface IConvertAfterWithdrawParams {
+      tokens: MockToken[];
+      indexAsset: number;
+      requestedAmount: string;
+      liquidationThreshold: string;
+      amountsToConvert: string[];
+      balances: string[];
+      prices: string[];
+      liquidations: ILiquidationParams[];
+    }
+    async function makeConvertAfterWithdrawTest(p: IConvertAfterWithdrawParams) : Promise<IConvertAfterWithdrawResults> {
+      // set up balances
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        const d = await p.tokens[i].decimals()
+        decimals.push(d);
+
+        // set up current balances
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
+        console.log("mint", i, p.balances[i]);
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      const priceOracle = (await DeployerUtils.deployContract(
+        signer,
+        'PriceOracleMock',
+        p.tokens.map(x => x.address),
+        p.prices.map(x => parseUnits(x, 18))
+      )) as PriceOracleMock;
+      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(tetuConverterController.address);
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+      }
+
+      // make test
+      const ret = await facade.callStatic.convertAfterWithdraw(
+        converter.address,
+        liquidator.address,
+        p.indexAsset,
+        p.liquidationThreshold,
+        parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+        p.tokens.map(x => x.address),
+        p.amountsToConvert.map(
+          (x, index) => parseUnits(x, decimals[index])
+        )
+      );
+
+      const tx = await facade.convertAfterWithdraw(
+        converter.address,
+        liquidator.address,
+        p.indexAsset,
+        p.liquidationThreshold,
+        parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+        p.tokens.map(x => x.address),
+        p.amountsToConvert.map(
+          (x, index) => parseUnits(x, decimals[index])
+        )
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        collateralOut: formatUnits(ret.collateralOut, decimals[p.indexAsset]),
+        repaidAmountsOut: ret.repaidAmountsOut.map(
+          (amount, index) => formatUnits(amount, decimals[index])
+        ),
+        gasUsed,
+        balances: await Promise.all(
+          p.tokens.map(
+            async (token, index) => formatUnits(await token.balanceOf(facade.address), decimals[index])
+          )
+        )
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("dai, usdc, usdt", () => {
+        describe("Amount provided by closing positions is exactly equal to requestedAmount", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          it("should return expected values", async () => {
+
+          });
+        });
+        describe("Amount provided by closing positions is less than requestedAmount", () => {
+          describe("There are opened borrows", () => {
+            describe("It's enough to repay single borrow", () => {
+              it("should return expected values", async () => {
+
+              });
+            });
+            describe("It's necessary to repay two borrows", () => {
+              it("should return expected values", async () => {
+
+              });
+            });
+            describe("Full repay of all borrows is not enough to get requestedAmount", () => {
+              it("should return expected values", async () => {
+
+              });
+            });
+          });
+          describe("There are no opened borrows", () => {
+            it("should return expected values", async () => {
+
+            });
+          });
+        });
+        describe("Not zero leftovers", () => {
+          describe("Leftover is less than liquidation threshold", () => {
+            it("should return expected values", async () => {
+
+            });
+          });
+          describe("Leftover is greater or equal to the liquidation threshold", () => {
+            it("should return expected values", async () => {
+
+            });
+          });
+        });
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+    describe("Gas estimation @skip-on-coverage", () => {
+
+    });
+  });
 //endregion Unit tests
 });
