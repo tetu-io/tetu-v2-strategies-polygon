@@ -30,7 +30,7 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import { BalancerDaiUsdcUsdtPoolUtils } from './utils/BalancerDaiUsdcUsdtPoolUtils';
 import { LiquidatorUtils } from './utils/LiquidatorUtils';
-import { PriceOracleManagerBuilder } from '../../../baseUT/converter/PriceOracleManagerBuilder';
+import { PriceOracleManagerUtils } from '../../../baseUT/converter/PriceOracleManagerUtils';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {IPriceOracleManager} from "../../../baseUT/converter/PriceOracleManager";
 
@@ -73,7 +73,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
-    priceOracleManager = await PriceOracleManagerBuilder.build(signer, tetuConverterAddress);
+    priceOracleManager = await PriceOracleManagerUtils.build(signer, tetuConverterAddress);
   });
 
   after(async function() {

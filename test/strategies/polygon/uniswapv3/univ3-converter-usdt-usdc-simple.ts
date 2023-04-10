@@ -25,7 +25,7 @@ import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
-import { PriceOracleManagerBuilder } from '../../../baseUT/converter/PriceOracleManagerBuilder';
+import { PriceOracleManagerUtils } from '../../../baseUT/converter/PriceOracleManagerUtils';
 import {
   depositToVault,
   doHardWorkForStrategy,
@@ -106,7 +106,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    priceOracleManager = await PriceOracleManagerBuilder.build(signer, await strategy.converter());
+    priceOracleManager = await PriceOracleManagerUtils.build(signer, await strategy.converter());
 
     // ---
 

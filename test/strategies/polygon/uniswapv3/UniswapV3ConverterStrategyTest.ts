@@ -29,7 +29,7 @@ import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {PriceOracleManagerBuilder} from "../../../baseUT/converter/PriceOracleManagerBuilder";
+import {PriceOracleManagerUtils} from "../../../baseUT/converter/PriceOracleManagerUtils";
 
 const { expect } = chai;
 
@@ -255,7 +255,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const investAmount = _1_000;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
 
-      const priceOracleManager = await PriceOracleManagerBuilder.build(signer, await s.converter());
+      const priceOracleManager = await PriceOracleManagerUtils.build(signer, await s.converter());
       console.log('Price USDT in oracle', (await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
 
       console.log('deposit...');

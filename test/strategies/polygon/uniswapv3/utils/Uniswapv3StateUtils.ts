@@ -66,11 +66,6 @@ export interface IState {
   insurance: {
     usdc: BigNumber;
   };
-  baseAmounts: {
-    usdc: BigNumber;
-    usdt: BigNumber;
-    df: BigNumber;
-  };
   converter: {
     collateralForUsdt: BigNumber,
     amountToRepayUsdt: BigNumber
@@ -103,6 +98,7 @@ export class Uniswapv3StateUtils {
       strategy.address,
       MaticAddresses.USDC_TOKEN,
       MaticAddresses.USDT_TOKEN,
+      false
     );
 
     const depositorState = await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer).getState();
@@ -173,11 +169,6 @@ export class Uniswapv3StateUtils {
         usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(splitterAddress),
         totalAssets: await ISplitter__factory.connect(splitterAddress, user).totalAssets(),
       },
-      baseAmounts: {
-        usdc: await strategy.baseAmounts(MaticAddresses.USDC_TOKEN),
-        usdt: await strategy.baseAmounts(MaticAddresses.USDT_TOKEN),
-        df: await strategy.baseAmounts(MaticAddresses.DF_TOKEN),
-      },
       converter: {
         collateralForUsdt: debtsUsdt.totalCollateralAmountOut,
         amountToRepayUsdt: debtsUsdt.totalDebtAmountOut,
@@ -237,10 +228,6 @@ export class Uniswapv3StateUtils {
       'splitter.usdc',
       'splitter.totalAssets',
 
-      'baseAmounts.usdc',
-      'baseAmounts.usdt',
-      'baseAmounts.df',
-
       'converter.collateralUsdt',
       'converter.toRepayUsdt',
 
@@ -297,10 +284,6 @@ export class Uniswapv3StateUtils {
 
       decimalsUSDC, // splitter.usdc
       decimalsUSDC, // splitter.totalAssets,
-
-      decimalsUSDC, // baseAmounts.usdc
-      decimalsUSDT, // baseAmounts.usdt
-      decimalsDF, // baseAmounts.df
 
       decimalsUSDC, // collateral for usdt
       decimalsUSDT, // amount to repay, usdt
@@ -362,10 +345,6 @@ export class Uniswapv3StateUtils {
 
         item.splitter.usdc,
         item.splitter.totalAssets,
-
-        item.baseAmounts.usdc,
-        item.baseAmounts.usdt,
-        item.baseAmounts.df,
 
         item.converter.collateralForUsdt,
         item.converter.amountToRepayUsdt,
@@ -437,10 +416,6 @@ export class Uniswapv3StateUtils {
 
       item.splitter.usdc,
       item.splitter.totalAssets,
-
-      item.baseAmounts.usdc,
-      item.baseAmounts.usdt,
-      item.baseAmounts.df,
 
       item.converter.collateralForUsdt,
       item.converter.amountToRepayUsdt,
