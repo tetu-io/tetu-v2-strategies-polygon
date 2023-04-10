@@ -26,8 +26,9 @@ import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
 import { depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault } from '../../../StrategyTestUtils';
-import { IPriceOracles, PriceOracleUtils } from '../balancer/utils/PriceOracleUtils';
+import { PriceOracleManagerBuilder } from '../../../baseUT/converter/PriceOracleManagerBuilder';
 import { BigNumber } from 'ethers';
+import {IPriceOracleManager} from "../../../baseUT/converter/PriceOracleManager";
 
 
 const { expect } = chai;
@@ -50,7 +51,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let asset: string;
   let assetCtr: IERC20Metadata;
   let decimals: number;
-  let priceOracles: IPriceOracles;
+  let priceOracleManager: IPriceOracleManager;
 
 
   before(async function() {
@@ -99,7 +100,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, await strategy.converter());
+    priceOracleManager = await PriceOracleManagerBuilder.build(signer, await strategy.converter());
 
     // ---
 
@@ -257,17 +258,17 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
-        const usdtPrice = await priceOracles.usdtPriceSource.price();
+        const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.DAI_TOKEN).priceOriginal;
         console.log('/// ORACLE usdtPrice', usdtPrice.toString());
         const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
         console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
-        await priceOracles.usdtPriceSource.setPrice(usdtPricenew);
+        await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPricenew);
 
-        const usdcPrice = await priceOracles.usdcPriceSource.price();
+        const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
         console.log('/// ORACLE usdcPrice', usdcPrice.toString());
         const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
         console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
-        await priceOracles.usdcPriceSource.setPrice(usdcPricenew);
+        await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
 
       } else {
         const priceChange = await UniswapV3StrategyUtils.movePriceDown(
@@ -277,17 +278,17 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           swapAmount,
         );
 
-        const usdtPrice = await priceOracles.usdtPriceSource.price();
+        const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN).priceOriginal;
         console.log('/// ORACLE usdtPrice', usdtPrice.toString());
         const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
         console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
-        await priceOracles.usdtPriceSource.setPrice(usdtPricenew);
+        await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPricenew);
 
-        const usdcPrice = await priceOracles.usdcPriceSource.price();
+        const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
         console.log('/// ORACLE usdcPrice', usdcPrice.toString());
         const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
         console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
-        await priceOracles.usdcPriceSource.setPrice(usdcPricenew);
+        await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
       }
 
       // todo !!!

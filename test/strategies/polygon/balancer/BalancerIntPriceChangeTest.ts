@@ -30,8 +30,9 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import { BalancerDaiUsdcUsdtPoolUtils } from './utils/BalancerDaiUsdcUsdtPoolUtils';
 import { LiquidatorUtils } from './utils/LiquidatorUtils';
-import { IPriceOracles, PriceOracleUtils } from './utils/PriceOracleUtils';
+import { PriceOracleManagerBuilder } from '../../../baseUT/converter/PriceOracleManagerBuilder';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
+import {IPriceOracleManager} from "../../../baseUT/converter/PriceOracleManager";
 
 chai.use(chaiAsPromised);
 
@@ -55,7 +56,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
   let tetuConverterAddress: string;
   let user: SignerWithAddress;
 
-  let priceOracles: IPriceOracles;
+  let priceOracleManager: IPriceOracleManager;
 
   //endregion Constants and variables
 
@@ -72,7 +73,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
-    priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, tetuConverterAddress);
+    priceOracleManager = await PriceOracleManagerBuilder.build(signer, tetuConverterAddress);
   });
 
   after(async function() {
@@ -137,8 +138,8 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
 
       if (!skipOracleChanges) {
         // change prices ~4% in price oracles
-        await PriceOracleUtils.decPriceDai(priceOracles, 4);
-        await PriceOracleUtils.incPriceUsdt(priceOracles, 4);
+        await priceOracleManager.decPrice(MaticAddresses.DAI_TOKEN, 4);
+        await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, 4);
       }
       const investedAssetsAfterOracles = await strategy.callStatic.calcInvestedAssets();
 
@@ -248,31 +249,31 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
     describe('DAI and USDT price are reduced a bit', () => {
       it('should change prices in AAVE3 and TC oracles', async() => {
         // prices before
-        const daiPriceAave3 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceAave3 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceAave3 = await priceOracleManager.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceAave3 = await priceOracleManager.priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
-        const daiPriceTC = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceTC = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceTC = await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceTC = await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
         // reduce prices
-        const daiPrice = await priceOracles.daiPriceSource.price();
+        const daiPrice = await priceOracleManager.sourceInfo(MaticAddresses.DAI_TOKEN).priceOriginal;
         const daiNewPrice = daiPrice.mul(90).div(100);
-        await priceOracles.daiPriceSource.setPrice(daiNewPrice);
+        await priceOracleManager.setPrice(MaticAddresses.DAI_TOKEN, daiNewPrice);
         const daiPrice18 = daiPrice.mul(parseUnits('1', 10)); // see PriceOracle impl in TC
         const daiNewPrice18 = daiNewPrice.mul(parseUnits('1', 10)); // see PriceOracle impl in TC
 
-        const usdtPrice = await priceOracles.usdtPriceSource.price();
+        const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN).priceOriginal;
         const usdtNewPrice = usdtPrice.mul(90).div(100);
-        await priceOracles.usdtPriceSource.setPrice(usdtNewPrice);
+        await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtNewPrice);
         const usdtPrice18 = usdtPrice.mul(parseUnits('1', 10)); // see PriceOracle impl in TC
         const usdtNewPrice18 = usdtNewPrice.mul(parseUnits('1', 10)); // see PriceOracle impl in TC
 
         // prices after
-        const daiPriceAave31 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceAave31 = await priceOracles.priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceAave31 = await priceOracleManager.priceOracleAave3.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceAave31 = await priceOracleManager.priceOracleAave3.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
-        const daiPriceTC1 = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
-        const usdtPriceTC1 = await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
+        const daiPriceTC1 = await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.DAI_TOKEN);
+        const usdtPriceTC1 = await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN);
 
         // compare
         const ret = [

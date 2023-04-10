@@ -29,7 +29,7 @@ import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {PriceOracleUtils} from "../balancer/utils/PriceOracleUtils";
+import {PriceOracleManagerBuilder} from "../../../baseUT/converter/PriceOracleManagerBuilder";
 
 const { expect } = chai;
 
@@ -255,14 +255,14 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const investAmount = _1_000;
       const swapAssetValueForPriceMove = parseUnits('1000000', 6);
 
-      const priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, await s.converter());
-      console.log('Price USDT in oracle', (await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
+      const priceOracleManager = await PriceOracleManagerBuilder.build(signer, await s.converter());
+      console.log('Price USDT in oracle', (await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
 
       console.log('deposit...');
       await v.deposit(investAmount, signer.address);
 
-      await PriceOracleUtils.incPriceUsdt(priceOracles, 4);
-      console.log('Price USDT in oracle', (await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
+      await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, 4);
+      console.log('Price USDT in oracle', (await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
       await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
       expect((await s.getState()).isFuseTriggered).eq(false)
       expect(await s.needRebalance()).eq(true)
