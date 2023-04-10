@@ -10,11 +10,7 @@ import {
 import { MaticAddresses } from '../../../../../scripts/addresses/MaticAddresses';
 import { MockHelper } from '../../../../baseUT/helpers/MockHelper';
 import { ConverterUtils } from '../../../../baseUT/utils/ConverterUtils';
-import {
-  getAaveTwoPlatformAdapter,
-  getDForcePlatformAdapter,
-  Misc,
-} from '../../../../../scripts/utils/Misc';
+import { getAaveTwoPlatformAdapter, getDForcePlatformAdapter, Misc } from '../../../../../scripts/utils/Misc';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
 export interface IPriceOracles {
@@ -57,9 +53,10 @@ export class PriceOracleUtils {
     const usdcPriceSource = await MockHelper.createAave3AggregatorInterfaceMock(signer, priceUsdc);
     const usdtPriceSource = await MockHelper.createAave3AggregatorInterfaceMock(signer, priceUsdt);
 
-    await priceOracleAsPoolOwner.setAssetSources([MaticAddresses.DAI_TOKEN], [daiPriceSource.address]);
-    await priceOracleAsPoolOwner.setAssetSources([MaticAddresses.USDC_TOKEN], [usdcPriceSource.address]);
-    await priceOracleAsPoolOwner.setAssetSources([MaticAddresses.USDT_TOKEN], [usdtPriceSource.address]);
+    await priceOracleAsPoolOwner.setAssetSources(
+      [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
+      [daiPriceSource.address, usdcPriceSource.address, usdtPriceSource.address],
+    );
 
     const priceOracleAave3 = priceOracleAsPoolOwner.connect(signer);
 
@@ -82,13 +79,13 @@ export class PriceOracleUtils {
 
   public static async decPriceDai(priceOracles: IPriceOracles, percent: number) {
     const daiPrice = await priceOracles.daiPriceSource.price();
-    const daiNewPrice = daiPrice.mul(100 - percent).div(100);
+    const daiNewPrice = daiPrice.mul(1e9 - +(1e9 * percent).toFixed(0)).div(1e9);
     await priceOracles.daiPriceSource.setPrice(daiNewPrice);
   }
 
   public static async incPriceUsdt(priceOracles: IPriceOracles, percent: number) {
     const usdtPrice = await priceOracles.usdtPriceSource.price();
-    const usdtNewPrice = usdtPrice.mul(100 + percent).div(100);
+    const usdtNewPrice = usdtPrice.mul(1e9 + (1e9 * percent).toFixed(0)).div(1e9);
     await priceOracles.usdtPriceSource.setPrice(usdtNewPrice);
   }
 }

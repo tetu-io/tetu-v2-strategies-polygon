@@ -1,9 +1,18 @@
-import { IERC20__factory, IStrategyV2__factory, StrategySplitterV2__factory, TetuVaultV2 } from '../typechain';
+import {
+  IERC20__factory,
+  IERC20Metadata,
+  IStrategyV2__factory,
+  StrategyBaseV2,
+  StrategySplitterV2,
+  StrategySplitterV2__factory,
+  TetuVaultV2,
+} from '../typechain';
 import { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { TokenUtils } from '../scripts/utils/TokenUtils';
 import { BigNumber, ContractTransaction, utils } from 'ethers';
 import { Misc } from '../scripts/utils/Misc';
+import { formatUnits } from 'ethers/lib/utils';
 
 /** Amounts earned/lost by the given strategies during the hardwork */
 export interface IDoHardworkAndCheckResults {

@@ -184,13 +184,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     earned = UniswapV3ConverterStrategyLogicLib.calcEarned(state);
-    _claim();
-    assetBalanceAfterClaim = _balance(asset);
+    (address[] memory rewardTokens, uint[] memory amounts) = _claim();
+    _rewardsLiquidation(rewardTokens, amounts);
+
     if (state.rebalanceLost > 0) {
       lost = state.rebalanceLost;
       state.rebalanceLost = 0;
     }
-    return (earned, lost, assetBalanceAfterClaim);
+    return (earned, lost, _balance(asset));
   }
 
   /// @notice Deposit given amount to the pool.

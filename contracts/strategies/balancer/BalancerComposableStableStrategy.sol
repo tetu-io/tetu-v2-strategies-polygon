@@ -25,4 +25,13 @@ contract BalancerComposableStableStrategy is ConverterStrategyBase, BalancerComp
     __BalancerBoostedAaveUsdDepositor_init(POOL_ID, rewardTokens);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
   }
+
+  function _handleRewards() internal virtual override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+    uint assetBalanceBefore = _balance(asset);
+    (address[] memory rewardTokens, uint[] memory amounts) = _claim();
+    _rewardsLiquidation(rewardTokens, amounts);
+    assetBalanceAfterClaim = _balance(asset);
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
+    return (earned, lost, assetBalanceAfterClaim);
+  }
 }

@@ -23,7 +23,8 @@ import {
   IVeTetu__factory,
   IVoter__factory,
   Multicall__factory,
-  ProxyControlled__factory, StrategySplitterV2,
+  ProxyControlled__factory,
+  StrategySplitterV2,
   StrategySplitterV2__factory,
   TetuVaultV2,
   TetuVaultV2__factory,
@@ -35,6 +36,8 @@ import { IToolsContractsWrapper } from '../../test/ToolsContractsWrapper';
 import { RunHelper } from './RunHelper';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { ToolsAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses';
+import { DeployerUtils } from './DeployerUtils';
+import { Misc } from './Misc';
 
 // tslint:disable-next-line:no-var-requires
 const hre = require('hardhat');
@@ -465,6 +468,11 @@ export class DeployerUtilsLocal {
 
     const factory = VaultFactory__factory.connect(core.vaultFactory, signer);
 
+    const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
+    const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
+    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b')).setVaultImpl(vaultLogic.address);
+    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b')).setSplitterImpl(splitterLogic.address);
+
     await RunHelper.runAndWait(() => factory.createVault(
       assetAddress,
       vaultName,
@@ -480,6 +488,10 @@ export class DeployerUtilsLocal {
     console.log('setFees', depositFee, withdrawFee);
     await RunHelper.runAndWait(() =>
         vault.setFees(depositFee, withdrawFee),
+      true, wait,
+    );
+    await RunHelper.runAndWait(() =>
+        vault.setWithdrawRequestBlocks(0),
       true, wait,
     );
 
