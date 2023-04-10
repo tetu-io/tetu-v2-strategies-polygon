@@ -475,7 +475,7 @@ library ConverterStrategyBaseLib {
     // We shouldn't try to pay more than we actually need to repay
     // The leftover will be swapped inside TetuConverter, it's inefficient.
     // Let's limit amountToRepay by needToRepay-amount
-    (uint needToRepay, uint totalCollateralAmountOut) = tetuConverter_.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
+    (uint needToRepay,) = tetuConverter_.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
 
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
@@ -1169,7 +1169,7 @@ library ConverterStrategyBaseLib {
         tetuConverter,
         vars.asset,
         tokens[i],
-        amountsToConvert[i] * 105 / 100 // add a gap for close dust positions
+        amountsToConvert[i]
       );
     }
 
