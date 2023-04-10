@@ -107,7 +107,6 @@ describe('RebalanceResolver tests', function () {
     resolver = RebalanceResolver__factory.connect(await DeployerUtils.deployProxy(signer, 'RebalanceResolver'), signer)
     await resolver.init(controller.address)
     await resolver.changeOperatorStatus(signer.address, true)
-    await resolver.changeStrategyStatus(strategy.address, true)
   })
   after(async function () {
     await TimeUtils.rollback(snapshotBefore);

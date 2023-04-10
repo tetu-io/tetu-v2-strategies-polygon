@@ -3,17 +3,18 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/proxy/ControllableV3.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/EnumerableSet.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
 import "../interfaces/IRebalancingStrategy.sol";
+import "../libs/AppPlatforms.sol";
 
 /// @title Gelato resolver for rebalancing strategies
 /// @author a17
 contract RebalanceResolver is ControllableV3 {
-  using EnumerableSet for EnumerableSet.AddressSet;
-
   // --- CONSTANTS ---
 
-  string public constant VERSION = "1.0.0";
+  string public constant VERSION = "1.1.0";
   uint public constant DELAY_RATE_DENOMINATOR = 100_000;
 
   // --- VARIABLES ---
@@ -26,8 +27,6 @@ contract RebalanceResolver is ControllableV3 {
   mapping(address => uint) internal _lastRebalance;
   mapping(address => uint) public delayRate;
   mapping(address => bool) public operators;
-
-  EnumerableSet.AddressSet internal strategies;
 
   // --- INIT ---
 
@@ -42,10 +41,6 @@ contract RebalanceResolver is ControllableV3 {
   modifier onlyOwner() {
     require(msg.sender == owner, "!owner");
     _;
-  }
-
-  function allStrategies() external view returns (address[] memory) {
-    return strategies.values();
   }
 
   // --- OWNER FUNCTIONS ---
@@ -78,16 +73,6 @@ contract RebalanceResolver is ControllableV3 {
     operators[operator] = status;
   }
 
-  function changeStrategyStatus(address strategy, bool add) external {
-    require(operators[msg.sender], "!operator");
-
-    if (add) {
-      require(strategies.add(strategy), 'exist');
-    } else {
-      require(strategies.remove(strategy), '!exist');
-    }
-  }
-
   // --- MAIN LOGIC ---
 
   function lastRebalance(address strategy) public view returns (uint lastRebalanceTimestamp) {
@@ -115,37 +100,50 @@ contract RebalanceResolver is ControllableV3 {
   }
 
   function checker() external view returns (bool canExec, bytes memory execPayload) {
-    uint _delay = delay;
-    uint strategiesLength = strategies.length();
-    address[] memory _strategies = new address[](strategiesLength);
+    IController _controller = IController(controller());
+    uint vaultsLength = _controller.vaultsListLength();
+
     uint counter;
-    for (uint i; i < strategiesLength; ++i) {
-      address strategy = strategies.at(i);
-
-      uint delayAdjusted = _delay;
-      uint _delayRate = delayRate[strategy];
-      if (_delayRate != 0) {
-        delayAdjusted = _delay * _delayRate / DELAY_RATE_DENOMINATOR;
-      }
-
-      if (IRebalancingStrategy(strategy).needRebalance() && lastRebalance(strategy) + delayAdjusted < block.timestamp) {
-        _strategies[i] = strategy;
-        counter++;
+    for (uint i; i < vaultsLength; ++i) {
+      ISplitter splitter = ITetuVaultV2(_controller.vaults(i)).splitter();
+      for (uint k; k < splitter.strategiesLength(); ++k) {
+        if (_needRebalance(splitter.strategies(k))) {
+          ++counter;
+        }
       }
     }
+
     if (counter == 0) {
       return (false, bytes("No ready strategies"));
     } else {
       address[] memory strategiesResult = new address[](counter);
       uint j;
-      for (uint i; i < strategiesLength; ++i) {
-        if (_strategies[i] != address(0)) {
-          strategiesResult[j] = _strategies[i];
-          ++j;
+      for (uint i; i < vaultsLength; ++i) {
+        ISplitter splitter = ITetuVaultV2(_controller.vaults(i)).splitter();
+        for (uint k; k < splitter.strategiesLength(); ++k) {
+          if (_needRebalance(splitter.strategies(k))) {
+            strategiesResult[j] = splitter.strategies(k);
+            ++j;
+          }
         }
       }
       return (true, abi.encodeWithSelector(RebalanceResolver.call.selector, strategiesResult));
     }
+  }
+
+  function _needRebalance(address strategy_) internal view returns (bool) {
+    IStrategyV2 strategyV2 = IStrategyV2(strategy_);
+    if (keccak256(bytes(strategyV2.PLATFORM())) == keccak256(bytes(AppPlatforms.UNIV3)) && IRebalancingStrategy(strategy_).needRebalance()) {
+      uint delayAdjusted = delay;
+      uint _delayRate = delayRate[strategy_];
+      if (_delayRate != 0) {
+        delayAdjusted = delay * _delayRate / DELAY_RATE_DENOMINATOR;
+      }
+      if (lastRebalance(strategy_) + delayAdjusted < block.timestamp) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// @dev Inspired by OraclizeAPI's implementation - MIT license
