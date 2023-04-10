@@ -113,9 +113,13 @@ library UniswapV3DebtLib {
       uint availableBalanceTokenA = _balance(tokenA);
       uint availableBalanceTokenB = _balance(tokenB);
 
-      require(availableBalanceTokenA >= feeA && availableBalanceTokenB >= feeB, "Wrong balance");
-      availableBalanceTokenA -= feeA;
-      availableBalanceTokenB -= feeB;
+      // exclude fees if it is possible
+      if(availableBalanceTokenA > feeA) {
+        availableBalanceTokenA -= feeA;
+      }
+      if(availableBalanceTokenB > feeB) {
+        availableBalanceTokenB -= feeB;
+      }
 
       if (availableBalanceTokenB < debtAmount) {
 

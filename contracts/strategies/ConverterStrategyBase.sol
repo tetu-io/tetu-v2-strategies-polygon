@@ -182,7 +182,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
     // temporary save collateral to tokensAmounts
-    tokenAmounts = ConverterStrategyBaseLib.getCollaterals(
+    tokenAmounts = ConverterStrategyBaseLib2.getCollaterals(
       amount_,
       tokens_,
       weights,
@@ -258,7 +258,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // -----------------------
 
       // calculate how much liquidity we need to withdraw for getting the requested amount
-      (vars.liquidityAmountToWithdraw, vars.amountsToConvert) = ConverterStrategyBaseLib.getLiquidityAmount(
+      (vars.liquidityAmountToWithdraw, vars.amountsToConvert) = ConverterStrategyBaseLib2.getLiquidityAmount(
         vars.all ? 0 : amount,
         address(this),
         tokens,
