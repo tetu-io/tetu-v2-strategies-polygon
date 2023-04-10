@@ -264,7 +264,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const s = strategy3
       const v = vault3
       const investAmount = _1_000;
-      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
 
       const priceOracles = await PriceOracleUtils.setupMockedPriceOracleSources(signer, await s.converter());
       console.log('Price USDT in oracle', (await priceOracles.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
