@@ -210,16 +210,11 @@ library UniswapV3ConverterStrategyLogicLib {
     bool _depositorSwapTokens
   ) {
     tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
-    (, int24 tick, , , , ,) = pool.slot0();
-    if (tickRange_ == 0) {
-      lowerTick = tick / tickSpacing * tickSpacing;
-      upperTick = lowerTick + tickSpacing;
-    } else {
+    if (tickRange_ != 0) {
       require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, 'Incorrect tickRange');
       require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, 'Incorrect rebalanceTickRange');
-      lowerTick = (tick - tickRange_) / tickSpacing * tickSpacing;
-      upperTick = (tick + tickRange_) / tickSpacing * tickSpacing;
     }
+    (lowerTick, upperTick) = _calcTickRange(pool, tickRange_, tickSpacing);
     require(asset_ == pool.token0() || asset_ == pool.token1(), 'Incorrect asset');
     if (asset_ == pool.token0()) {
       tokenA = pool.token0();
@@ -245,15 +240,18 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 upperTick,
     int24 tickSpacing
   ) internal view returns (int24 lowerTickNew, int24 upperTickNew) {
+    int24 fullTickRange = upperTick - lowerTick;
+    (lowerTickNew, upperTickNew) = _calcTickRange(pool, fullTickRange == tickSpacing ? int24(0) : fullTickRange / 2, tickSpacing);
+  }
+
+  function _calcTickRange(IUniswapV3Pool pool, int24 tickRange, int24 tickSpacing) internal view returns (int24 lowerTick, int24 upperTick) {
     (, int24 tick, , , , ,) = pool.slot0();
-    if (upperTick - lowerTick == tickSpacing) {
-      lowerTickNew = tick / tickSpacing * tickSpacing;
-      upperTickNew = lowerTickNew + tickSpacing;
+    if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
+      lowerTick = ((tick - tickRange) / tickSpacing - 1) * tickSpacing;
     } else {
-      int24 halfRange = (upperTick - lowerTick) / 2;
-      lowerTickNew = (tick - halfRange) / tickSpacing * tickSpacing;
-      upperTickNew = (tick + halfRange) / tickSpacing * tickSpacing;
+      lowerTick = (tick - tickRange) / tickSpacing * tickSpacing;
     }
+    upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
   }
 
   /// @dev Calculates the new fee amounts and the not covered loss, if any, after attempting to cover losses.

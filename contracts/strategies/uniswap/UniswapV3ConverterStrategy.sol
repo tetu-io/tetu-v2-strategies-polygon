@@ -5,13 +5,14 @@ import "../ConverterStrategyBase.sol";
 import "./UniswapV3Depositor.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
+import "../../interfaces/IRebalancingStrategy.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
 ///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
 ///         It also attempts to cover rebalancing losses with rewards.
 /// @author a17
-contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase {
+contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy {
 
   /////////////////////////////////////////////////////////////////////
   ///                CONSTANTS
@@ -19,7 +20,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.2.0";
+  string public constant override STRATEGY_VERSION = "1.2.1";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
