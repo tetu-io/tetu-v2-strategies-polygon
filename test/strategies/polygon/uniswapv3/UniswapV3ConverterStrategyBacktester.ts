@@ -82,6 +82,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 40360000 - Mar-15-2023 03:54:49 AM +UTC (after USDC price drop end)
   // 40600000 - Mar-21-2023 12:12:51 PM +UTC (after USDC full peg recovery)
   // 41100000 - Apr-03-2023 03:29:23 PM +UTC
+  // 41150000 - Apr-04-2023 10:43:06 PM +UTC
   // 41210000 - Apr-06-2023 11:23:04 AM +UTC
   const backtestStartBlock = 41100000;
   const backtestEndBlock = 41210000;
@@ -107,9 +108,18 @@ describe('UmiswapV3 converter strategy backtester', function() {
       poolFee: 500, // 0.05%
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*10*0.01% == +-20% price
       tickRange: 1200, // 1200*0.01% == +- 12% price
-      rebalanceTickRange: 40, // 40*0.01% == 0.4% price change
+      rebalanceTickRange: 60, // 40*0.01% == 0.4% price change
     },*/
     /*{
+      pool: MaticAddresses.UNISWAPV3_WMATIC_USDC_3000, // WMATIC_USDC_0.3%
+      token0: MaticAddresses.WMATIC_TOKEN,
+      token1: MaticAddresses.USDC_TOKEN,
+      poolFee: 3000, // 0.3%
+      liquiditySnapshotSurroundingTickSpacings: 50, // 50*60*0.01% == +-30% price
+      tickRange: 1200,
+      rebalanceTickRange: 60,
+    },*/
+    {
       pool: MaticAddresses.UNISWAPV3_USDC_DAI_100, // USDC_DAI_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.DAI_TOKEN,
@@ -117,8 +127,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
       tickRange: 0, // 1 tick
       rebalanceTickRange: 0, // 1 tick
-    },*/
-    /*{
+    },
+    {
       pool: MaticAddresses.UNISWAPV3_USDC_USDT_100, // USDC_USDT_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.USDT_TOKEN,
@@ -126,15 +136,15 @@ describe('UmiswapV3 converter strategy backtester', function() {
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
       tickRange: 0, // 1 tick
       rebalanceTickRange: 0, // 1 tick
-    },*/
+    },
     {
       pool: MaticAddresses.UNISWAPV3_USDC_miMATIC_100, // USDC_miMATIC_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.miMATIC_TOKEN,
       poolFee: 100, // 0.01%
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
-      tickRange: 0, // 1 tick
-      rebalanceTickRange: 0, // 1 tick
+      tickRange: 1, // 2 ticks
+      rebalanceTickRange: 1, // 1 tick
     },
   ]
   // =========================

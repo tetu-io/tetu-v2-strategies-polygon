@@ -15,7 +15,7 @@ import {
   TetuConverter__factory,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
+  UniswapV3ConverterStrategy__factory, VaultFactory__factory,
 } from '../../../../typechain';
 import { BigNumber } from 'ethers';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
@@ -99,6 +99,13 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     let data;
     const converterAddress = getConverterAddress();
+
+    // use the latest implementations
+    const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
+    const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
+    const vaultFactory = VaultFactory__factory.connect(core.vaultFactory, signer);
+    await vaultFactory.connect(gov).setVaultImpl(vaultLogic.address);
+    await vaultFactory.connect(gov).setSplitterImpl(splitterLogic.address);
 
     const strategyUSDCWETH500Deployer = async(_splitterAddress: string) => {
       const _strategy = UniswapV3ConverterStrategy__factory.connect(
@@ -234,6 +241,10 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     operator = await UniversalTestUtils.getAnOperator(strategy3.address, signer)
     await strategy3.connect(operator).setReinvestThresholdPercent(10) // 0.01%
+
+    await vault.connect(gov).setWithdrawRequestBlocks(0)
+    await vault2.connect(gov).setWithdrawRequestBlocks(0)
+    await vault3.connect(gov).setWithdrawRequestBlocks(0)
   });
 
   after(async function() {
@@ -359,15 +370,18 @@ describe('UniswapV3ConverterStrategyTests', function() {
           console.log('Withdraw..')
           const toWithdraw = parseUnits('100.111437', 6)
           const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
+          await vault3.connect(signer3).requestWithdraw()
           await vault3.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address)
           const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
           console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
         }
       }
 
+      await vault3.connect(signer3).requestWithdraw()
       console.log('withdrawAll as signer3...');
       await vault3.connect(signer3).withdrawAll();
 
+      await vault3.requestWithdraw()
       console.log('withdrawAll...');
       await vault3.withdrawAll();
     });
