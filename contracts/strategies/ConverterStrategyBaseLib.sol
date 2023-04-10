@@ -12,6 +12,8 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 
+import "hardhat/console.sol";
+
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -672,7 +674,7 @@ library ConverterStrategyBaseLib {
     address[] memory tokens_,
     uint indexTargetAsset_,
     address underlying_,
-    uint[] memory withdrawnAmounts_,
+    uint[] memory withdrawnAmounts_, // todo remove this var?
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     uint liquidationThresholdForTargetAsset_,
@@ -689,7 +691,10 @@ library ConverterStrategyBaseLib {
 
     v.availableAmounts = new uint[](v.len);
     for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
-      v.availableAmounts[v.i] = withdrawnAmounts_[v.i] + IERC20(tokens_[v.i]).balanceOf(address(this));
+      v.availableAmounts[v.i] = IERC20(tokens_[v.i]).balanceOf(address(this));
+      console.log("i", v.i);
+      console.log("v.availableAmounts[v.i] ", v.availableAmounts[v.i]);
+      console.log("IERC20(tokens_[v.i]).balanceOf(address(this) ", IERC20(tokens_[v.i]).balanceOf(address(this)));
     }
     (spentAmounts, v.receivedAmounts) = _swapToGivenAmount(
       SwapToGivenAmountInputParams({
@@ -779,6 +784,8 @@ library ConverterStrategyBaseLib {
         * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
         / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
       ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
+      console.log("amountIn", amountIn);
+      console.log("p.amounts[indexTokenIn]", p.amounts[indexTokenIn]);
 
       (amountSpent, amountReceived) = _liquidate(
         p.liquidator,
@@ -1067,9 +1074,10 @@ library ConverterStrategyBaseLib {
   ///                       WITHDRAW HELPERS
   /////////////////////////////////////////////////////////////////////
 
+  /// @notice Add {withdrawnAmounts} to {amountsToConvert}, calculate {expectedAmountMainAsset}
   function postWithdrawActions(
     uint[] memory reservesBeforeWithdraw,
-    uint depositorLiquidity,
+    uint depositorLiquidityBeforeWithdraw_,
     uint liquidityAmountWithdrew,
     uint totalSupplyBeforeWithdraw,
     uint[] memory amountsToConvert,
@@ -1078,7 +1086,7 @@ library ConverterStrategyBaseLib {
     uint indexAsset,
     ITetuConverter converter,
 
-    uint _depositorLiquidityNew,
+    uint depositorLiquidityAfterWithdraw_,
     uint[] memory withdrawnAmounts
   ) external returns (uint _expectedAmountMainAsset, uint[] memory _amountsToConvert){
 
@@ -1089,7 +1097,7 @@ library ConverterStrategyBaseLib {
 
     // we assume here, that liquidity cannot increase in _depositorExit
     // use what exactly was withdrew instead of the expectation
-    uint depositorLiquidityDelta = depositorLiquidity - _depositorLiquidityNew;
+    uint depositorLiquidityDelta = depositorLiquidityBeforeWithdraw_ - depositorLiquidityAfterWithdraw_;
     if (liquidityAmountWithdrew > depositorLiquidityDelta) {
       liquidityAmountWithdrew = depositorLiquidityDelta;
     }
@@ -1116,6 +1124,7 @@ library ConverterStrategyBaseLib {
     return (expectedAmountMainAsset, amountsToConvert);
   }
 
+  /// @notice return {withdrawnAmounts} with zero values and expected amount calculated using {amountsToConvert_}
   function postWithdrawActionsEmpty(
     address[] memory tokens,
     uint indexAsset,
@@ -1198,7 +1207,9 @@ library ConverterStrategyBaseLib {
 
       if (vars.toPay != 0) {
         // add 1% gap, it is safe to try to repay more than dept, should be handled in _closePosition()
-        vars.toRepayRatio = vars.usedCollateral < vars.remainingRequestedAmount ? 101e18 : ((vars.usedCollateral - vars.remainingRequestedAmount) * 101e18) / vars.remainingRequestedAmount;
+        vars.toRepayRatio = vars.usedCollateral < vars.remainingRequestedAmount
+          ? 101e18
+          : ((vars.usedCollateral - vars.remainingRequestedAmount) * 101e18) / vars.remainingRequestedAmount; // todo fix
 
 
         uint toSell = Math.min(vars.usedCollateral * vars.toRepayRatio / 100e18, IERC20(vars.asset).balanceOf(address(this)));
@@ -1208,7 +1219,7 @@ library ConverterStrategyBaseLib {
             liquidator,
             vars.asset,
             tokens[i],
-            Math.min(vars.usedCollateral * vars.toRepayRatio / 100e18, IERC20(vars.asset).balanceOf(address(this))),
+            toSell,
             _ASSET_LIQUIDATION_SLIPPAGE,
             Math.max(liquidationThreshold, DEFAULT_LIQUIDATION_THRESHOLD)
           );

@@ -296,7 +296,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
-        // todo expected amount should include possible closed positions during _convertAfterWithdraw()
         (withdrawnAmounts, vars.expectedAmountMainAsset) = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
           tokens,
           indexAsset,
@@ -305,6 +304,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           vars.amountsToConvert
         );
       }
+      // todo expected amount should include possible closed positions during _convertAfterWithdraw()
 
       // convert amounts to main asset
       // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts

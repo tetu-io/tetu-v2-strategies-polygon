@@ -2709,7 +2709,6 @@ describe('ConverterStrategyBaseLibTest', () => {
       prices: string[];
       liquidations: ILiquidationParams[];
       balances: string[];
-      airdrops: string[];
     }
     interface ISwapToGivenAmountResults {
       spentAmounts: BigNumber[];
@@ -2725,12 +2724,11 @@ describe('ConverterStrategyBaseLibTest', () => {
 
         // withdrawn amounts
         await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
+        console.log("mint", i, p.amounts[i]);
 
         // balances
         await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
-
-        // airdrops
-        await p.tokens[i].mint(facade.address, parseUnits(p.airdrops[i], d));
+        console.log("mint", i, p.balances[i]);
       }
       for (const liquidation of p.liquidations) {
         await setupMockedLiquidation(liquidator, liquidation);
@@ -2797,8 +2795,6 @@ describe('ConverterStrategyBaseLibTest', () => {
           }],
           // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
           balances: ["100", "200", "400", "500"],
-          // these amounts should never be used
-          airdrops: ["100000", "100000", "100000", "100000"],
         });
 
         const ret = [
@@ -2850,8 +2846,6 @@ describe('ConverterStrategyBaseLibTest', () => {
         ],
         // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
         balances: ["100", "200", "400", "500"],
-        // these amounts should never be used
-        airdrops: ["100000", "100000", "100000", "100000"],
       });
 
       const ret = [

@@ -164,7 +164,7 @@ library ConverterStrategyBaseLib2 {
 
       uint balance = IERC20(tokens[i]).balanceOf(address(this));
       if (balance != 0) {
-        // let's estimate collateral that we received back after repaying baseAmount
+        // let's estimate collateral that we received back after repaying balance-amount
         uint expectedCollateral = converter.quoteRepay(
           strategy_,
           tokens[indexAsset],
@@ -173,11 +173,11 @@ library ConverterStrategyBaseLib2 {
         );
 
         if (all || targetAmount_ != 0) {
-          // We always repay WHOLE available baseAmount even if it gives us much more amount then we need.
+          // We always repay WHOLE available balance-amount even if it gives us much more amount then we need.
           // We cannot repay a part of it because converter doesn't allow to know
           // what amount should be repaid to get given amount of collateral.
           // And it's too dangerous to assume that we can calculate this amount
-          // by reducing baseAmount proportionally to expectedCollateral/targetAmount_
+          // by reducing balance-amount proportionally to expectedCollateral/targetAmount_
           amountsToConvertOut[i] = balance;
         }
 
@@ -198,14 +198,14 @@ library ConverterStrategyBaseLib2 {
     require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
 
     uint liquidityRatioOut = all
-    ? 1e18
-    : ((targetAmount_ == 0)
-    ? 0
-    : 1e18
-    * 101 // add 1% on top...
-    * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-    / 100 // .. add 1% on top
-    );
+      ? 1e18
+      : ((targetAmount_ == 0)
+        ? 0
+        : 1e18
+        * 101 // add 1% on top...
+        * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
+        / 100 // .. add 1% on top
+      );
 
     if (liquidityRatioOut != 0) {
       resultAmount = Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity);
