@@ -21,8 +21,8 @@ import {Misc} from "../../../scripts/utils/Misc";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {BigNumber} from "ethers";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
-import {ILiquidationParams} from "../../baseUT/utils/TestDataTypes";
-import {setupMockedLiquidation} from "./utils/MockLiquidationUtils";
+import {ILiquidationParams} from "../../baseUT/mocks/TestDataTypes";
+import {setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade

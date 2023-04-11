@@ -1,5 +1,5 @@
-import {MockTetuLiquidatorSingleCall} from "../../../../typechain";
-import {ILiquidationParams} from "../../../baseUT/utils/TestDataTypes";
+import {MockTetuLiquidatorSingleCall} from "../../../typechain";
+import {ILiquidationParams} from "./TestDataTypes";
 import {ethers} from "hardhat";
 
 export async function setupMockedLiquidation(

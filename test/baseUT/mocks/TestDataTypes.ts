@@ -21,7 +21,11 @@ export interface IBorrowParams {
 export interface IRepayParams {
   collateralAsset: MockToken;
   borrowAsset: MockToken;
-  totalDebtAmountOut: BigNumber;
-  totalCollateralAmountOut: BigNumber;
-  amountRepay: BigNumber;
+  totalDebtAmountOut: string;
+  totalCollateralAmountOut: string;
+  amountRepay: string;
+  collateralAmountOut: string;
+  returnedBorrowAmountOut?: string;
+  swappedLeftoverCollateralOut?: string;
+  swappedLeftoverBorrowOut?: string;
 }

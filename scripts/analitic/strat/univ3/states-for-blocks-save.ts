@@ -10,7 +10,7 @@ import fs from "fs";
 import {MockHelper} from "../../../../test/baseUT/helpers/MockHelper";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
-const STRATEGY = '0x807a528818113a6f65b7667a59a4caaac719fc12';
+const STRATEGY = '0xAe9842896507ba6D926E38BD1E560c3874B9a80c';
 const USER = "0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94";
 
 const blocks = [
@@ -22,7 +22,19 @@ const blocks = [
   // 41336721,
   // 41338897,
   // 41352779,
-  41358857
+  // 41358857,
+  41374971, // 11 apr 2023
+  41381882,
+  41384214,
+  41386913,
+  41389478,
+  41389510,
+  41389540,
+  41390750,
+  41391213,
+  41400812,
+  41401353,
+  41401720
 ];
 
 async function getStateForBlock(

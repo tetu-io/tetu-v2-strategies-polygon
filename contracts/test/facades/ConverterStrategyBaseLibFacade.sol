@@ -233,7 +233,6 @@ contract ConverterStrategyBaseLibFacade {
     ITetuLiquidator liquidator,
     uint indexAsset,
     uint liquidationThreshold,
-    uint requestedAmount,
     address[] memory tokens,
     uint[] memory amountsToConvert
   ) external returns (
@@ -245,9 +244,50 @@ contract ConverterStrategyBaseLibFacade {
       liquidator,
       indexAsset,
       liquidationThreshold,
-      requestedAmount,
       tokens,
       amountsToConvert
+    );
+  }
+
+  function closePositionsToGetRequestedAmount(
+    ITetuConverter tetuConverter,
+    ITetuLiquidator liquidator,
+    uint indexAsset,
+    uint liquidationThreshold,
+    uint requestedAmount,
+    address[] memory tokens,
+    uint[] memory repaidAmounts_
+  ) external returns (
+    uint expectedAmountMainAssetOut
+  ) {
+    return ConverterStrategyBaseLib.closePositionsToGetRequestedAmount(
+      tetuConverter,
+      liquidator,
+      indexAsset,
+      liquidationThreshold,
+      requestedAmount,
+      tokens,
+      repaidAmounts_
+    );
+  }
+
+  function _closePositionUsingMainAsset(
+    ITetuConverter tetuConverter,
+    ITetuLiquidator liquidator_,
+    address asset,
+    address token,
+    uint toSell,
+    uint liquidationThreshold
+  ) internal returns (
+    uint expectedAmountOut
+  ) {
+    return ConverterStrategyBaseLib._closePositionUsingMainAsset(
+      tetuConverter,
+      liquidator_,
+      asset,
+      token,
+      toSell,
+      liquidationThreshold
     );
   }
 }

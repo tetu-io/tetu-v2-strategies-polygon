@@ -2,29 +2,16 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers } from 'hardhat';
 import { TimeUtils } from '../../../scripts/utils/TimeUtils';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
-import { defaultAbiCoder, formatUnits, parseUnits } from 'ethers/lib/utils';
+import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ConverterStrategyBaseLibFacade, MockToken, PriceOracleMock } from '../../../typechain';
 import { expect } from 'chai';
 import { MockHelper } from '../../baseUT/helpers/MockHelper';
-import { controlGasLimitsEx } from '../../../scripts/utils/GasLimitUtils';
-import {
-  GAS_CALC_INVESTED_ASSETS_NO_DEBTS,
-  GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
-  GAS_OPEN_POSITION,
-  GAS_PERFORMANCE_FEE,
-  GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS,
-  GET_GET_COLLATERALS,
-  GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT,
-  GET_LIQUIDITY_AMOUNT_RATIO
-} from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
-import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
-import {BigNumber, BigNumberish} from "ethers";
-import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
-import {ILiquidationParams} from "../../baseUT/utils/TestDataTypes";
-import {setupMockedLiquidation} from "./utils/MockLiquidationUtils";
+import {BigNumber} from "ethers";
+import {ILiquidationParams, IRepayParams} from "../../baseUT/mocks/TestDataTypes";
+import {setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {tetuConverter} from "../../../typechain/@tetu_io";
+import {setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -116,11 +103,11 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       amountIn: BigNumber,
       params: IOpenPositionEntryKind1TestParams,
     ): Promise<IOpenPositionEntryKind1TestResults> {
-      const tetuConverter = await MockHelper.createMockTetuConverter(signer);
+      const converter = await MockHelper.createMockTetuConverter(signer);
 
       if (params.borrows) {
         for (const b of params.borrows) {
-          await tetuConverter.setBorrowParams(
+          await converter.setBorrowParams(
             b.converter,
             b.collateralAsset.address,
             b.collateralAmount,
@@ -134,7 +121,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
       if (params.findBorrowStrategyOutputs) {
         for (const b of params.findBorrowStrategyOutputs) {
-          await tetuConverter.setFindBorrowStrategyOutputParams(
+          await converter.setFindBorrowStrategyOutputParams(
             b.entryData,
             b.converters,
             b.collateralAmountsOut,
@@ -154,18 +141,18 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         [params.prices.collateral, params.prices.borrow],
       );
       const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
-      await tetuConverter.setController(controller.address);
+      await converter.setController(controller.address);
 
       await collateralAsset.mint(facade.address, params.amountCollateralForFacade);
-      await borrowAsset.mint(tetuConverter.address, params.amountBorrowAssetForTetuConverter);
+      await borrowAsset.mint(converter.address, params.amountBorrowAssetForTetuConverter);
 
       if (params.amountInIsCollateral) {
-        await collateralAsset.connect(await Misc.impersonate(facade.address)).approve(tetuConverter.address, amountIn);
+        await collateralAsset.connect(await Misc.impersonate(facade.address)).approve(converter.address, amountIn);
       } else {
-        await borrowAsset.connect(await Misc.impersonate(facade.address)).approve(tetuConverter.address, amountIn);
+        await borrowAsset.connect(await Misc.impersonate(facade.address)).approve(converter.address, amountIn);
       }
       const ret = await facade.callStatic.openPositionEntryKind1(
-        tetuConverter.address,
+        converter.address,
         entryData,
         collateralAsset.address,
         borrowAsset.address,
@@ -174,7 +161,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       );
 
       const tx = await facade.openPositionEntryKind1(
-        tetuConverter.address,
+        converter.address,
         entryData,
         collateralAsset.address,
         borrowAsset.address,
@@ -187,7 +174,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         collateralAmountOut: ret.collateralAmountOut,
         borrowedAmountOut: ret.borrowedAmountOut,
         gasUsed,
-        balanceBorrowAssetTetuConverter: await borrowAsset.balanceOf(tetuConverter.address),
+        balanceBorrowAssetTetuConverter: await borrowAsset.balanceOf(converter.address),
         balanceCollateralAssetFacade: await collateralAsset.balanceOf(facade.address),
       };
     }
@@ -328,10 +315,10 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
   describe("convertAfterWithdraw", () => {
     interface IConvertAfterWithdrawResults {
-      collateralOut: string;
-      repaidAmountsOut: string[];
+      collateralOut: number;
+      repaidAmountsOut: number[];
       gasUsed: BigNumber;
-      balances: string[];
+      balances: number[];
     }
     interface IConvertAfterWithdrawParams {
       tokens: MockToken[];
@@ -342,8 +329,9 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       balances: string[];
       prices: string[];
       liquidations: ILiquidationParams[];
+      repays: IRepayParams[];
     }
-    async function makeConvertAfterWithdrawTest(p: IConvertAfterWithdrawParams) : Promise<IConvertAfterWithdrawResults> {
+    async function makeConvertAfterWithdraw(p: IConvertAfterWithdrawParams) : Promise<IConvertAfterWithdrawResults> {
       // set up balances
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -365,6 +353,11 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       )) as PriceOracleMock;
       const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await converter.setController(tetuConverterController.address);
+
+      // set up repay
+      for (const repay of p.repays) {
+        await setupMockedRepay(converter, facade.address, repay);
+      }
 
       // set up expected liquidations
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
@@ -398,14 +391,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
-        collateralOut: formatUnits(ret.collateralOut, decimals[p.indexAsset]),
+        collateralOut: +formatUnits(ret.collateralOut, decimals[p.indexAsset]),
         repaidAmountsOut: ret.repaidAmountsOut.map(
-          (amount, index) => formatUnits(amount, decimals[index])
+          (amount, index) => +formatUnits(amount, decimals[index])
         ),
         gasUsed,
         balances: await Promise.all(
           p.tokens.map(
-            async (token, index) => formatUnits(await token.balanceOf(facade.address), decimals[index])
+            async (token, index) => +formatUnits(await token.balanceOf(facade.address), decimals[index])
           )
         )
       }
@@ -413,34 +406,79 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
     describe("Good paths", () => {
       describe("dai, usdc, usdt", () => {
-        describe("Amount provided by closing positions is exactly equal to requestedAmount", () => {
+        describe("Conversion of amountsToConvert is enough to get requestedAmount", () => {
           let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
+          before(async function () {snapshot = await TimeUtils.snapshot();});
+          after(async function () {await TimeUtils.rollback(snapshot);});
 
-          it("should return expected values", async () => {
+          async function makeConvertAfterWithdrawFixture() : Promise<IConvertAfterWithdrawResults> {
+            return makeConvertAfterWithdraw({
+              indexAsset: 1, // usdc
+              tokens: [dai, usdc, usdt],
+              liquidationThreshold: "0",
+              requestedAmount: "1300", // usdc, we have: 200 on balance, 600+500 after conversion
+              prices: ["1", "1", "1"], // for simplicity of calculations all prices == 1
+              liquidations: [],
+              balances: ["400", "200", "300"],
+              amountsToConvert: ["400", "0", "300"], // 400 => 600, 300 => 500, 600+500=1100 USDC in total
+              repays: [
+                {
+                  borrowAsset: dai,
+                  collateralAsset: usdc,
+                  amountRepay: "400",
+                  collateralAmountOut: "600",
+                  totalCollateralAmountOut: "1200", // for simplicity: we convert half of the debt
+                  totalDebtAmountOut: "800",
+                },
+                {
+                  borrowAsset: usdt,
+                  collateralAsset: usdc,
+                  amountRepay: "300",
+                  collateralAmountOut: "500",
+                  totalCollateralAmountOut: "600", // for simplicity: we convert half of the debt
+                  totalDebtAmountOut: "1000",
+                },
+              ]
+            });
+          }
 
+          it("should set expected balances", async () => {
+            const ret = await loadFixture(makeConvertAfterWithdrawFixture);
+            expect(ret.balances[0]).eq(0); // all dai were converted
+            expect(ret.balances[1]).eq(1300); // we have requestedAmount amount of USDC
+            expect(ret.balances[2]).eq(0); // all usdt were converted
+          });
+          it("should return expected collateralOut", async () => {
+            const ret = await loadFixture(makeConvertAfterWithdrawFixture);
+            expect(ret.collateralOut).eq(1100); // 500 + 600
+          });
+          it("should set expected repaidAmountsOut", async () => {
+            const ret = await loadFixture(makeConvertAfterWithdrawFixture);
+            expect(ret.repaidAmountsOut[0]).eq(400); // all dai were converted
+            expect(ret.repaidAmountsOut[1]).eq(0); // there were no USDC conversions
+            expect(ret.repaidAmountsOut[2]).eq(300); // all usdt were converted
           });
         });
-        describe("Amount provided by closing positions is less than requestedAmount", () => {
+        describe("Conversion of amountsToConvert is NOT enough to get requestedAmount", () => {
           describe("There are opened borrows", () => {
-            describe("It's enough to repay single borrow", () => {
-              it("should return expected values", async () => {
+            describe("The borrows were already paid during conversion of amountsToConvert", () => {
 
-              });
             });
-            describe("It's necessary to repay two borrows", () => {
-              it("should return expected values", async () => {
+            describe("The borrows were NOT already paid", () => {
+              describe("It's enough to repay single borrow", () => {
+                it("should return expected values", async () => {
 
+                });
               });
-            });
-            describe("Full repay of all borrows is not enough to get requestedAmount", () => {
-              it("should return expected values", async () => {
+              describe("It's necessary to repay two borrows", () => {
+                it("should return expected values", async () => {
 
+                });
+              });
+              describe("Full repay of all borrows is not enough to get requestedAmount", () => {
+                it("should return expected values", async () => {
+
+                });
               });
             });
           });

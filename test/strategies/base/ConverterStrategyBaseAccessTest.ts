@@ -33,7 +33,7 @@ import {
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
-import {setupMockedLiquidation} from "./utils/MockLiquidationUtils";
+import {setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 
 /**
  * Test of ConverterStrategyBase
@@ -158,36 +158,6 @@ describe('ConverterStrategyBaseAccessTest', () => {
     await TimeUtils.rollback(snapshot);
   });
   //endregion before, after
-
-  //region Data types
-  interface ILiquidationParams {
-    tokenIn: MockToken;
-    tokenOut: MockToken;
-    amountIn: BigNumber;
-    amountOut: BigNumber;
-  }
-
-  interface ITokenAmount {
-    token: MockToken;
-    amount: BigNumber;
-  }
-
-  interface IBorrowParams {
-    collateralAsset: MockToken;
-    collateralAmount: BigNumber;
-    borrowAsset: MockToken;
-    converter: string;
-    maxTargetAmount: BigNumber;
-  }
-
-  interface IRepayParams {
-    collateralAsset: MockToken;
-    borrowAsset: MockToken;
-    totalDebtAmountOut: BigNumber;
-    totalCollateralAmountOut: BigNumber;
-    amountRepay: BigNumber;
-  }
-  //endregion Data types
 
   //region Utils
   async function setupInvestedAssets(
@@ -436,32 +406,15 @@ describe('ConverterStrategyBaseAccessTest', () => {
         await usdc.mint(tetuConverter.address, collaterals[i]);
 
         if (amountsToConvert[i].gt(debts[i]) && params?.priceOut) {
-          const pool = ethers.Wallet.createRandom().address;
-          const swapper = ethers.Wallet.createRandom().address;
-          await liquidator.setBuildRoute(
-            depositorTokens[i].address,
-            usdc.address,
-            pool,
-            swapper,
-            '',
+          await setupMockedLiquidation(
+            liquidator,
+            {
+              tokenIn: depositorTokens[i],
+              tokenOut: usdc,
+              amountIn: amountsToConvert[i].sub(debts[i]),
+              amountOut: params.priceOut[i]
+            }
           );
-          await liquidator.setGetPriceForRoute(
-            depositorTokens[i].address,
-            usdc.address,
-            pool,
-            swapper,
-            amountsToConvert[i].sub(debts[i]),
-            params.priceOut[i],
-          );
-          await liquidator.setLiquidateWithRoute(
-            depositorTokens[i].address,
-            usdc.address,
-            pool,
-            swapper,
-            amountsToConvert[i].sub(debts[i]),
-            params.priceOut[i],
-          );
-          await usdc.mint(liquidator.address, params.priceOut[i]);
 
           await tetuConverter.setIsConversionValid(
             depositorTokens[i].address,
@@ -480,11 +433,13 @@ describe('ConverterStrategyBaseAccessTest', () => {
         depositorTokens.map(x => x.address),
         indexAsset,
         amountsToConvert,
+        requestedAmount
       );
       const tx = await strategy._convertAfterWithdrawAccess(
         depositorTokens.map(x => x.address),
         indexAsset,
         amountsToConvert,
+        requestedAmount
       );
       const gasUsed = (await tx.wait()).gasUsed;
 

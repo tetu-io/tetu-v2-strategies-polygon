@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
@@ -42,6 +43,7 @@ library ConverterStrategyBaseLib2 {
     }
     return amountsToConvert;
   }
+
   /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
   /// @param performanceFee_ Max is FEE_DENOMINATOR
   /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
@@ -213,7 +215,6 @@ library ConverterStrategyBaseLib2 {
       resultAmount = 0;
     }
   }
-
 
 }
 
