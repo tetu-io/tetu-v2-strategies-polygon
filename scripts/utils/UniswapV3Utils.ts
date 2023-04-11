@@ -12,11 +12,12 @@ export class UniswapV3Utils {
   public static async getPoolTransactions(poolAddr: string, startBlock: number, endBlock: number) {
     console.log(`Get Uniswap V3 pool transactions for ${poolAddr} for blocks ${startBlock} - ${endBlock}`)
 
+    const cacheDir = 'tmp';
     const cacheFileName = `cache_uniswapV3PoolTransactions-${poolAddr}-${startBlock}-${endBlock}.json`;
 
     let r: IPoolTransaction[] = []
 
-    const fsContent = fs.existsSync(cacheFileName) ? fs.readFileSync(cacheFileName) : null
+    const fsContent = fs.existsSync(`${cacheDir}/${cacheFileName}`) ? fs.readFileSync(`${cacheDir}/${cacheFileName}`) : null
     if (fsContent) {
       r = JSON.parse(fsContent.toString())
       console.log(`Got from cache (${r.length} txs).`)
@@ -140,8 +141,11 @@ export class UniswapV3Utils {
 
       r = r.sort((a,b) => a.timestamp < b.timestamp ? -1 : 1)
 
-      fs.writeFileSync(cacheFileName, JSON.stringify(r));
-      console.log(`Done. Added to cache file ${cacheFileName}.`)
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir);
+      }
+      fs.writeFileSync(`${cacheDir}/${cacheFileName}`, JSON.stringify(r));
+      console.log(`Done. Added to cache file ${cacheDir}/${cacheFileName}.`)
     }
 
     return r
@@ -159,8 +163,9 @@ export class UniswapV3Utils {
       ticks: [],
     }
 
+    const cacheDir = 'tmp';
     const cacheFileName = `cache_uniswapV3PoolLiquiditySnapshot-${poolAddr}-${block}-${numSurroundingTicks}.json`;
-    const fsContent = fs.existsSync(cacheFileName) ? fs.readFileSync(cacheFileName) : null
+    const fsContent = fs.existsSync(`${cacheDir}/${cacheFileName}`) ? fs.readFileSync(`${cacheDir}/${cacheFileName}`) : null
     if (fsContent) {
       r = JSON.parse(fsContent.toString())
       console.log(`Got from cache.`)
@@ -213,9 +218,12 @@ export class UniswapV3Utils {
       }
       r.ticks = processedTicks.sort((a,b) => a.tickIdx < b.tickIdx ? -1 : 1)
 
-      fs.writeFileSync(cacheFileName, JSON.stringify(r));
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir);
+      }
+      fs.writeFileSync(`${cacheDir}/${cacheFileName}`, JSON.stringify(r));
       console.log('')
-      console.log(`Done. Added to cache file ${cacheFileName}.`)
+      console.log(`Done. Added to cache file ${cacheDir}/${cacheFileName}.`)
     }
 
     return r
