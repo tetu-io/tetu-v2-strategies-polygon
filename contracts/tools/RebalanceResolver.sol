@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/proxy/ControllableV3.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/EnumerableSet.sol";
 import "../interfaces/IRebalancingStrategy.sol";
 import "../libs/AppPlatforms.sol";
 
@@ -27,6 +28,8 @@ contract RebalanceResolver is ControllableV3 {
   mapping(address => uint) internal _lastRebalance;
   mapping(address => uint) public delayRate;
   mapping(address => bool) public operators;
+
+  EnumerableSet.AddressSet internal deprecated;
 
   // --- INIT ---
 
