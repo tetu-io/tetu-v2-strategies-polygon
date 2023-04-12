@@ -1272,10 +1272,10 @@ library ConverterStrategyBaseLib {
 
       (v.toPay, v.usedCollateral) = tetuConverter.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
 
-      console.log("convertAfterWithdraw vars.toPayOn/Off", i, v.toPayOn, v.toPayOff);
+      console.log("convertAfterWithdraw vars.toPayOn", i, v.toPay);
       console.log("convertAfterWithdraw vars.usedCollateral", i, v.usedCollateral);
 
-      if (v.toPayOn != 0) {
+      if (v.toPay != 0) {
         // add 1% gap, it is safe to try to repay more than dept, should be handled in _closePosition()
         v.toRepayRatio = v.usedCollateral < v.remainingRequestedAmount
           ? 101e18

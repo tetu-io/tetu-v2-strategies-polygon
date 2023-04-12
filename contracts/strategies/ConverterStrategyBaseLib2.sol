@@ -51,12 +51,17 @@ library ConverterStrategyBaseLib2 {
   function sendPerformanceFee(
     uint performanceFee_,
     address performanceReceiver_,
+    address splitter,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
     uint[] memory rewardAmounts,
     uint[] memory performanceAmounts
   ) {
+
+    // read inside lib for reduce contract space in the main contract
+    address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
+
     // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
     uint len = rewardAmounts_.length;
     rewardAmounts = new uint[](len);
@@ -65,7 +70,15 @@ library ConverterStrategyBaseLib2 {
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
       rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
-      IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
+
+      uint toPerf = performanceAmounts[i] / 2;
+      uint toInsurance = performanceAmounts[i] - toPerf;
+      if(toPerf != 0) {
+        IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, toPerf);
+      }
+      if(toInsurance != 0) {
+        IERC20(rewardTokens_[i]).safeTransfer(insurance, toInsurance);
+      }
     }
   }
 

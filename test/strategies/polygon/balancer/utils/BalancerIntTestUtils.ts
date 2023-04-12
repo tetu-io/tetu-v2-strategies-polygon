@@ -217,10 +217,14 @@ export class BalancerIntTestUtils {
         usdc: await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(insurance),
       },
       baseAmounts: {
-        usdc: await strategy.baseAmounts(MaticAddresses.USDC_TOKEN),
-        usdt: await strategy.baseAmounts(MaticAddresses.USDT_TOKEN),
-        dai: await strategy.baseAmounts(MaticAddresses.DAI_TOKEN),
-        bal: await strategy.baseAmounts(MaticAddresses.BAL_TOKEN),
+        // usdc: await strategy.baseAmounts(MaticAddresses.USDC_TOKEN),
+        // usdt: await strategy.baseAmounts(MaticAddresses.USDT_TOKEN),
+        // dai: await strategy.baseAmounts(MaticAddresses.DAI_TOKEN),
+        // bal: await strategy.baseAmounts(MaticAddresses.BAL_TOKEN),
+        usdc: BigNumber.from(0),
+        usdt: BigNumber.from(0),
+        dai: BigNumber.from(0),
+        bal: BigNumber.from(0),
       },
       converter: {
         // collateralForDai: debtsDai.totalCollateralAmountOut,

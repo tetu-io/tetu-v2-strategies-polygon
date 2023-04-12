@@ -171,6 +171,7 @@ contract ConverterStrategyBaseLibFacade {
   function sendPerformanceFee(
     uint performanceFee_,
     address performanceReceiver_,
+    address splitter,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
@@ -180,6 +181,7 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib2.sendPerformanceFee(
       performanceFee_,
       performanceReceiver_,
+      splitter,
       rewardTokens_,
       rewardAmounts_
     );
