@@ -49,12 +49,17 @@ library ConverterStrategyBaseLib2 {
   function sendPerformanceFee(
     uint performanceFee_,
     address performanceReceiver_,
+    address splitter,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
     uint[] memory rewardAmounts,
     uint[] memory performanceAmounts
   ) {
+
+    // read inside lib for reduce contract space in the main contract
+    address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
+
     // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
     uint len = rewardAmounts_.length;
     rewardAmounts = new uint[](len);
@@ -63,7 +68,15 @@ library ConverterStrategyBaseLib2 {
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
       rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
-      IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
+
+      uint toPerf = performanceAmounts[i] / 2;
+      uint toInsurance = performanceAmounts[i] - toPerf;
+      if(toPerf != 0) {
+        IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, toPerf);
+      }
+      if(toInsurance != 0) {
+        IERC20(rewardTokens_[i]).safeTransfer(insurance, toInsurance);
+      }
     }
   }
 
@@ -198,14 +211,14 @@ library ConverterStrategyBaseLib2 {
     require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
 
     uint liquidityRatioOut = all
-    ? 1e18
-    : ((targetAmount_ == 0)
-    ? 0
-    : 1e18
-    * 101 // add 1% on top...
-    * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-    / 100 // .. add 1% on top
-    );
+      ? 1e18
+      : ((targetAmount_ == 0)
+        ? 0
+        : 1e18
+        * 101 // add 1% on top...
+        * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
+        / 100 // .. add 1% on top
+      );
 
     if (liquidityRatioOut != 0) {
       resultAmount = Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity);

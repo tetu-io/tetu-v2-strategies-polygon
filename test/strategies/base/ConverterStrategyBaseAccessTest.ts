@@ -480,11 +480,13 @@ describe('ConverterStrategyBaseAccessTest', () => {
         depositorTokens.map(x => x.address),
         indexAsset,
         amountsToConvert,
+        Misc.MAX_UINT
       );
       const tx = await strategy._convertAfterWithdrawAccess(
         depositorTokens.map(x => x.address),
         indexAsset,
         amountsToConvert,
+        Misc.MAX_UINT
       );
       const gasUsed = (await tx.wait()).gasUsed;
 

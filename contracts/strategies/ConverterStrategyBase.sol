@@ -436,6 +436,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (uint[] memory rewardAmounts, uint[] memory performanceAmounts) = ConverterStrategyBaseLib2.sendPerformanceFee(
       performanceFee,
       performanceReceiver,
+      splitter,
       rewardTokens_,
       rewardAmounts_
     );
