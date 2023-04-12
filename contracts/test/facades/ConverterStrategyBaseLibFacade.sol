@@ -278,7 +278,7 @@ contract ConverterStrategyBaseLibFacade {
     address token,
     uint toSell,
     uint liquidationThreshold
-  ) internal returns (
+  ) external returns (
     uint expectedAmountOut
   ) {
     return ConverterStrategyBaseLib._closePositionUsingMainAsset(

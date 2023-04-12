@@ -8,13 +8,16 @@ import { expect } from 'chai';
 import { MockHelper } from '../../baseUT/helpers/MockHelper';
 import {Misc} from "../../../scripts/utils/Misc";
 import {BigNumber} from "ethers";
-import {ILiquidationParams, IRepayParams} from "../../baseUT/mocks/TestDataTypes";
+import {ILiquidationParams, IQuoteRepayParams, IRepayParams} from "../../baseUT/mocks/TestDataTypes";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
+import {setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
-import {GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW} from "../../baseUT/GasLimits";
+import {
+  GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET,
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
+} from "../../baseUT/GasLimits";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -656,33 +659,288 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
-  describe("convertAfterWithdraw2", () => {
-    interface IConvertAfterWithdrawResults {
-      collateralOut: number;
-      repaidAmountsOut: number[];
+  describe("_closePositionUsingMainAsset", () => {
+    interface IClosePositionUsingMainAssetResults {
+      expectedAmountOut: number;
       gasUsed: BigNumber;
-      balances: number[];
+      balanceAsset: number;
+      balanceToken: number;
     }
-    interface IConvertAfterWithdrawParams {
-      tokens: MockToken[];
-      indexAsset: number;
-      requestedAmount: string;
+    interface IClosePositionUsingMainAssetParams {
+      assetToken: MockToken[];
       liquidationThreshold: string;
-      amountsToConvert: string[];
       balances: string[];
+      toSell: string;
       prices: string[];
       liquidations: ILiquidationParams[];
+      quoteRepays: IQuoteRepayParams[];
       repays: IRepayParams[];
+      isConversionValid?: boolean;
     }
-    async function makeConvertAfterWithdraw(p: IConvertAfterWithdrawParams) : Promise<IConvertAfterWithdrawResults> {
+    async function makeClosePositionUsingMainAssetTest(
+      p: IClosePositionUsingMainAssetParams
+    ) : Promise<IClosePositionUsingMainAssetResults> {
       // set up balances
       const decimals: number[] = [];
-      for (let i = 0; i < p.tokens.length; ++i) {
-        const d = await p.tokens[i].decimals()
+      for (let i = 0; i < p.assetToken.length; ++i) {
+        const d = await p.assetToken[i].decimals()
         decimals.push(d);
 
         // set up current balances
-        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
+        await p.assetToken[i].mint(facade.address, parseUnits(p.balances[i], d));
+        console.log("mint", i, p.balances[i]);
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      const priceOracle = (await DeployerUtils.deployContract(
+        signer,
+        'PriceOracleMock',
+        p.assetToken.map(x => x.address),
+        p.prices.map(x => parseUnits(x, 18))
+      )) as PriceOracleMock;
+      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(tetuConverterController.address);
+
+      // set up repay
+      for (const repay of p.repays) {
+        await setupMockedRepay(converter, facade.address, repay);
+      }
+      for (const quoteRepay of p.quoteRepays) {
+        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
+      }
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        await setupIsConversionValid(
+          converter,
+          liquidation,
+          p.isConversionValid === undefined
+            ? true
+            : p.isConversionValid
+        )
+      }
+
+      // make test
+      const ret = await facade.callStatic._closePositionUsingMainAsset(
+        converter.address,
+        liquidator.address,
+        p.assetToken[0].address,
+        p.assetToken[1].address,
+        parseUnits(p.toSell, decimals[0]),
+        parseUnits(p.liquidationThreshold, decimals[0]),
+      );
+
+      const tx = await facade._closePositionUsingMainAsset(
+        converter.address,
+        liquidator.address,
+        p.assetToken[0].address,
+        p.assetToken[1].address,
+        parseUnits(p.toSell, decimals[0]),
+        parseUnits(p.liquidationThreshold, decimals[0]),
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        expectedAmountOut: +formatUnits(ret, decimals[0]),
+        gasUsed,
+        balanceAsset: +formatUnits(await p.assetToken[0].balanceOf(facade.address), decimals[0]),
+        balanceToken: +formatUnits(await p.assetToken[1].balanceOf(facade.address), decimals[1]),
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("No debt-gap", () => {
+        describe("Amount to repay is higher than liquidation threshold", () => {
+          describe("Expected collateral is higher than amount to sell (normal case)", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeClosePositionUsingMainAssetFixture(): Promise<IClosePositionUsingMainAssetResults> {
+              return makeClosePositionUsingMainAssetTest({
+                assetToken: [usdc, dai],
+                balances: ["200", "91"], // usdc, dai
+                liquidationThreshold: "400", // it's lower than collateralAmountOut=401
+                toSell: "107",
+                liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
+                quoteRepays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  amountRepay: "305",
+                  collateralAmountOut: "401"
+                }],
+                repays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  amountRepay: "305",
+                  collateralAmountOut: "401",
+                  totalDebtAmountOut: "610",
+                  totalCollateralAmountOut: "802"
+                }],
+                prices: ["1", "1"] // for simplicity
+              });
+            }
+
+            it("should return expected value of expectedAmountOut", async () => {
+              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
+              expect(r.expectedAmountOut).eq(294); // -107 + 401
+            });
+            it("should set expected balances", async () => {
+              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
+              expect(r.balanceAsset).eq(494); // 200 - 107 + 401
+              expect(r.balanceToken).eq(91); // 91 + 305 - 305
+            });
+            it('should not exceed gas limits @skip-on-coverage', async () => {
+              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
+              controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET, (u, t) => {
+                expect(u).to.be.below(t + 1);
+              });
+            });
+          });
+          describe("Expected collateral is lower than amount to sell (weird case)", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeClosePositionUsingMainAssetFixture(): Promise<IClosePositionUsingMainAssetResults> {
+              return makeClosePositionUsingMainAssetTest({
+                assetToken: [usdc, dai],
+                balances: ["200", "91"], // usdc, dai
+                liquidationThreshold: "0",
+                toSell: "107",
+                liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
+                quoteRepays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  amountRepay: "305",
+                  collateralAmountOut: "106" // (!) weird, we paid 107 but get 106...
+                }],
+                repays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  amountRepay: "305",
+                  collateralAmountOut: "106",
+                  totalDebtAmountOut: "610",
+                  totalCollateralAmountOut: "802"
+                }],
+                prices: ["1", "1"] // for simplicity
+              });
+            }
+
+            it("should return zero expectedAmountOut", async () => {
+              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
+              expect(r.expectedAmountOut).eq(0);
+            });
+            it("should not change balances", async () => {
+              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
+              expect(r.balanceAsset).eq(200); // unchanged
+              expect(r.balanceToken).eq(91); // unchanged
+            });
+          });
+        });
+        describe("Amount to repay is lower than liquidation threshold", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeClosePositionUsingMainAssetFixture(): Promise<IClosePositionUsingMainAssetResults> {
+            return makeClosePositionUsingMainAssetTest({
+              assetToken: [usdc, dai],
+              balances: ["200", "91"], // usdc, dai
+              liquidationThreshold: "402", // (!) it's higher than collateralAmountOut==401
+              toSell: "107",
+              liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
+              quoteRepays: [{collateralAsset: usdc, borrowAsset: dai, amountRepay: "305", collateralAmountOut: "401"}],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "305",
+                collateralAmountOut: "401",
+                totalDebtAmountOut: "610",
+                totalCollateralAmountOut: "802"
+              }],
+              prices: ["1", "1"] // for simplicity
+            });
+          }
+
+          it("should return zero expectedAmountOut", async () => {
+            const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
+            expect(r.expectedAmountOut).eq(0);
+          });
+          it("should not change balances", async () => {
+            const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
+            expect(r.balanceAsset).eq(200); // unchanged
+            expect(r.balanceToken).eq(91); // unchanged
+          });
+        });
+      });
+      describe("There is debt-gap", () => {
+        // todo
+      });
+    });
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
+      afterEach(async function () {await TimeUtils.rollback(snapshot);});
+
+      it("should revert if no liquidation rote", async () => {
+        await expect(makeClosePositionUsingMainAssetTest({
+          assetToken: [usdc, dai],
+          balances: ["200", "91"], // usdc, dai
+          liquidationThreshold: "400", // it's lower than collateralAmountOut=401
+          toSell: "107",
+          liquidations: [], // (!) no liquidation
+          quoteRepays: [{collateralAsset: usdc, borrowAsset: dai, amountRepay: "305", collateralAmountOut: "401"}],
+          repays: [{
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountRepay: "305",
+            collateralAmountOut: "401",
+            totalDebtAmountOut: "610",
+            totalCollateralAmountOut: "802"
+          }],
+          prices: ["1", "1"] // for simplicity
+        })).revertedWith("TS-15 No liquidation route"); // NO_LIQUIDATION_ROUTE
+      });
+    });
+  });
+
+  describe("liquidate", () => {
+    interface ILiquidationTestResults {
+      spentAmountIn: number;
+      receivedAmountOut: number;
+      gasUsed: BigNumber;
+      balanceTokenIn: number;
+      balanceTokenOut: number;
+    }
+    interface ILiquidationTestParams {
+      tokens: MockToken[];
+      balances: string[];
+      prices: string[];
+      liquidationThreshold: string;
+      liquidation: ILiquidationParams;
+      isConversionValid?: boolean;
+      slippage?: number;
+    }
+    async function makeLiquidationTest(p: ILiquidationTestParams) : Promise<ILiquidationTestResults> {
+      // set up balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        // set up current balances
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
         console.log("mint", i, p.balances[i]);
       }
 
@@ -697,157 +955,139 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await converter.setController(tetuConverterController.address);
 
-      // set up repay
-      for (const repay of p.repays) {
-        await setupMockedRepay(converter, facade.address, repay);
-      }
-
       // set up expected liquidations
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      for (const liquidation of p.liquidations) {
-        await setupMockedLiquidation(liquidator, liquidation);
-      }
+      await setupMockedLiquidation(liquidator, p.liquidation);
+      await setupIsConversionValid(
+        converter,
+        p.liquidation,
+        p.isConversionValid === undefined
+          ? true
+          : p.isConversionValid
+      )
 
       // make test
-      const ret = await facade.callStatic.convertAfterWithdraw(
-        converter.address,
+      const ret = await facade.callStatic.liquidate(
+        // converter.address,
         liquidator.address,
-        p.indexAsset,
-        p.liquidationThreshold,
-        p.tokens.map(x => x.address),
-        p.amountsToConvert.map(
-          (x, index) => parseUnits(x, decimals[index])
-        )
+        p.liquidation.tokenIn.address,
+        p.liquidation.tokenOut.address,
+        parseUnits(p.liquidation.amountIn, await p.liquidation.tokenIn.decimals()),
+        p.slippage || 10_000,
+        parseUnits(p.liquidationThreshold, await p.liquidation.tokenOut.decimals()),
       );
 
-      const tx = await facade.convertAfterWithdraw(
-        converter.address,
+      const tx = await facade.liquidate(
+        // converter.address,
         liquidator.address,
-        p.indexAsset,
-        p.liquidationThreshold,
-        p.tokens.map(x => x.address),
-        p.amountsToConvert.map(
-          (x, index) => parseUnits(x, decimals[index])
-        )
+        p.liquidation.tokenIn.address,
+        p.liquidation.tokenOut.address,
+        parseUnits(p.liquidation.amountIn, await p.liquidation.tokenIn.decimals()),
+        p.slippage || 10_000,
+        parseUnits(p.liquidationThreshold, await p.liquidation.tokenOut.decimals()),
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
-        collateralOut: +formatUnits(ret.collateralOut, decimals[p.indexAsset]),
-        repaidAmountsOut: ret.repaidAmountsOut.map(
-          (amount, index) => +formatUnits(amount, decimals[index])
-        ),
+        spentAmountIn: +formatUnits(ret.spentAmountIn, await p.liquidation.tokenIn.decimals()),
+        receivedAmountOut: +formatUnits(ret.receivedAmountOut, await p.liquidation.tokenOut.decimals()),
         gasUsed,
-        balances: await Promise.all(
-          p.tokens.map(
-            async (token, index) => +formatUnits(await token.balanceOf(facade.address), decimals[index])
-          )
-        )
+        balanceTokenIn: +formatUnits(await p.liquidation.tokenIn.balanceOf(facade.address), await p.liquidation.tokenIn.decimals()),
+        balanceTokenOut: +formatUnits(await p.liquidation.tokenOut.balanceOf(facade.address), await p.liquidation.tokenOut.decimals()),
       }
     }
 
     describe("Good paths", () => {
-      describe("dai, usdc, usdt", () => {
-        describe("Conversion of amountsToConvert is enough to get requestedAmount", () => {
-          let snapshot: string;
-          before(async function () {snapshot = await TimeUtils.snapshot();});
-          after(async function () {await TimeUtils.rollback(snapshot);});
-
-          async function makeConvertAfterWithdrawFixture() : Promise<IConvertAfterWithdrawResults> {
-            return makeConvertAfterWithdraw({
-              indexAsset: 1, // usdc
-              tokens: [dai, usdc, usdt],
-              liquidationThreshold: "0",
-              requestedAmount: "1300", // usdc, we have: 200 on balance, 600+500 after conversion
-              prices: ["1", "1", "1"], // for simplicity of calculations all prices == 1
-              liquidations: [],
-              balances: ["400", "200", "300"],
-              amountsToConvert: ["400", "0", "300"], // 400 => 600, 300 => 500, 600+500=1100 USDC in total
-              repays: [
-                {
-                  borrowAsset: dai,
-                  collateralAsset: usdc,
-                  amountRepay: "400",
-                  collateralAmountOut: "600",
-                  totalCollateralAmountOut: "1200", // for simplicity: we convert half of the debt
-                  totalDebtAmountOut: "800",
-                },
-                {
-                  borrowAsset: usdt,
-                  collateralAsset: usdc,
-                  amountRepay: "300",
-                  collateralAmountOut: "500",
-                  totalCollateralAmountOut: "600", // for simplicity: we convert half of the debt
-                  totalDebtAmountOut: "1000",
-                },
-              ]
-            });
-          }
-
-          it("should set expected balances", async () => {
-            const ret = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(ret.balances[0]).eq(0); // all dai were converted
-            expect(ret.balances[1]).eq(1300); // we have requestedAmount amount of USDC
-            expect(ret.balances[2]).eq(0); // all usdt were converted
-          });
-          it("should return expected collateralOut", async () => {
-            const ret = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(ret.collateralOut).eq(1100); // 500 + 600
-          });
-          it("should set expected repaidAmountsOut", async () => {
-            const ret = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(ret.repaidAmountsOut[0]).eq(400); // all dai were converted
-            expect(ret.repaidAmountsOut[1]).eq(0); // there were no USDC conversions
-            expect(ret.repaidAmountsOut[2]).eq(300); // all usdt were converted
-          });
+      describe("Amount out > liquidation threshold", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
         });
-        describe("Conversion of amountsToConvert is NOT enough to get requestedAmount", () => {
-          describe("There are opened borrows", () => {
-            describe("The borrows were already paid during conversion of amountsToConvert", () => {
-
-            });
-            describe("The borrows were NOT already paid", () => {
-              describe("It's enough to repay single borrow", () => {
-                it("should return expected values", async () => {
-
-                });
-              });
-              describe("It's necessary to repay two borrows", () => {
-                it("should return expected values", async () => {
-
-                });
-              });
-              describe("Full repay of all borrows is not enough to get requestedAmount", () => {
-                it("should return expected values", async () => {
-
-                });
-              });
-            });
-          });
-          describe("There are no opened borrows", () => {
-            it("should return expected values", async () => {
-
-            });
-          });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
         });
-        describe("Not zero leftovers", () => {
-          describe("Leftover is less than liquidation threshold", () => {
-            it("should return expected values", async () => {
 
-            });
+        async function makeLiquidationFixture() : Promise<ILiquidationTestResults> {
+          return makeLiquidationTest({
+            tokens: [usdc, dai],
+            balances: ["1000", "2000"],
+            prices: ["1", "1"],
+            liquidation: {
+              tokenIn: usdc,
+              tokenOut: dai,
+              amountIn: "400",
+              amountOut: "800",
+            },
+            liquidationThreshold: "799",
           });
-          describe("Leftover is greater or equal to the liquidation threshold", () => {
-            it("should return expected values", async () => {
+        }
 
-            });
+        it("should return expected amounts", async () => {
+          const r = await loadFixture(makeLiquidationFixture);
+          expect(r.spentAmountIn).eq(400);
+          expect(r.receivedAmountOut).eq(800);
+        });
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeLiquidationFixture);
+          expect(r.balanceTokenIn).eq(600);
+          expect(r.balanceTokenOut).eq(2800);
+        });
+      });
+      describe("Amount out < liquidation threshold", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeLiquidationFixture() : Promise<ILiquidationTestResults> {
+          return makeLiquidationTest({
+            tokens: [usdc, dai],
+            balances: ["1000", "2000"],
+            prices: ["1", "1"],
+            liquidation: {
+              tokenIn: usdc,
+              tokenOut: dai,
+              amountIn: "400",
+              amountOut: "800",
+            },
+            liquidationThreshold: "801", // (!)
           });
+        }
+
+        it("should return expected amounts", async () => {
+          const r = await loadFixture(makeLiquidationFixture);
+          expect(r.spentAmountIn).eq(0);
+          expect(r.receivedAmountOut).eq(0);
+        });
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeLiquidationFixture);
+          expect(r.balanceTokenIn).eq(1000);
+          expect(r.balanceTokenOut).eq(2000);
         });
       });
     });
     describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
+      afterEach(async function () {await TimeUtils.rollback(snapshot);});
 
-    });
-    describe("Gas estimation @skip-on-coverage", () => {
-
+      it("should revert if price impact is too high", async () => {
+        await expect(makeLiquidationTest({
+          tokens: [usdc, dai],
+          balances: ["1000", "2000"],
+          prices: ["1", "1"],
+          liquidation: {
+            tokenIn: usdc,
+            tokenOut: dai,
+            amountIn: "400",
+            amountOut: "800",
+          },
+          liquidationThreshold: "799",
+          isConversionValid: false // (!) price impact is too high
+        })).revertedWith("TS-16 price impact"); // PRICE_IMPACT
+      });
     });
   });
 //endregion Unit tests

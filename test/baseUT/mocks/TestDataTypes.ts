@@ -29,3 +29,9 @@ export interface IRepayParams {
   swappedLeftoverCollateralOut?: string;
   swappedLeftoverBorrowOut?: string;
 }
+export interface IQuoteRepayParams {
+  collateralAsset: MockToken;
+  borrowAsset: MockToken;
+  amountRepay: string;
+  collateralAmountOut: string;
+}

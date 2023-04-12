@@ -1,5 +1,5 @@
 import {MockTetuConverter} from "../../../typechain";
-import {IRepayParams} from "./TestDataTypes";
+import {IQuoteRepayParams, IRepayParams} from "./TestDataTypes";
 import {parseUnits} from "ethers/lib/utils";
 
 export async function setupMockedRepay(
@@ -29,5 +29,17 @@ export async function setupMockedRepay(
   await p.collateralAsset.mint(
     tetuConverter.address,
     parseUnits(p.collateralAmountOut, decimalsCollateral)
+  );
+}
+
+export async function setupMockedQuoteRepay(tetuConverter: MockTetuConverter, user: string, p: IQuoteRepayParams) {
+  const decimalsCollateral = await p.collateralAsset.decimals();
+  const decimalsBorrow = await p.borrowAsset.decimals();
+  await tetuConverter.setQuoteRepay(
+    user,
+    p.collateralAsset.address,
+    p.borrowAsset.address,
+    parseUnits(p.amountRepay, decimalsBorrow),
+    parseUnits(p.collateralAmountOut, decimalsCollateral),
   );
 }

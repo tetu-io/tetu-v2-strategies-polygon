@@ -1172,10 +1172,10 @@ library ConverterStrategyBaseLib {
   /// @notice Convert {amountsToConvert_} (available on balance) to the main asset
   ///         Swap leftovers if any.
   ///         Result amount can be less than requested one, we don't try to close any other debts here
-  /// @notice indexAsset Index of the main asset in {tokens}
-  /// @notice liquidationThreshold Min allowed amount of main asset to be liquidated in {liquidator}
+  /// @param indexAsset Index of the main asset in {tokens}
+  /// @param liquidationThreshold Min allowed amount of main asset to be liquidated in {liquidator}
   /// @param tokens Tokens received from {_depositorPoolAssets}
-  /// @notice amountsToConvert Amounts to convert, the order of asset is same as in {tokens}
+  /// @param amountsToConvert Amounts to convert, the order of asset is same as in {tokens}
   /// @return collateralOut Total amount of main asset returned after closing positions
   /// @return repaidAmountsOut What amounts were spent in exchange of the {collateralOut}
   function convertAfterWithdraw(
@@ -1294,11 +1294,12 @@ library ConverterStrategyBaseLib {
     return expectedAmountMainAssetOut;
   }
 
-  /// @notice Swap amount {toSell} of main asset to token, repay result amount and get collateral in return
-  /// @param toSell Amount of main asset to sell
+  /// @notice Swap amount {toSell} of main asset to {token}, repay result amount and get collateral in return
+  /// @param asset Main asset (==underlying, == collateral)
   /// @param token Main asset is swapped to the {token}
-  /// @param liquidationThreshold Threshold for the main asset
-  /// @return expectedAmountOut Estimated amount of main asset that should be received on balance
+  /// @param toSell Amount of main asset to sell
+  /// @param liquidationThreshold Min allowed amount of main asset to be liquidated in {liquidator}
+  /// @return expectedAmountOut Estimated amount of main asset that should be added to balance = collateral - {toSell}
   function _closePositionUsingMainAsset(
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator_,
@@ -1313,20 +1314,18 @@ library ConverterStrategyBaseLib {
     require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
 
     uint amountToRepay = liquidator_.getPriceForRoute(route, toSell);
-    if (amountToRepay > Math.max(liquidationThreshold, DEFAULT_LIQUIDATION_THRESHOLD)) {
 
-      // quoteRepay requires amount-to-pay without debt-gap
-      // we assume here that toSell calculated with and without debt-gap are almost same
-      // and difference doesn't matter for our estimation here
-      uint expectedCollateralAmount = tetuConverter.quoteRepay(address(this), asset, token, amountToRepay);
+    // quoteRepay requires amount-to-pay without debt-gap
+    // we assume here that toSell calculated with and without debt-gap are almost same
+    // and difference doesn't matter for our estimation here
+    uint amountOut = tetuConverter.quoteRepay(address(this), asset, token, amountToRepay);
 
-      // we should get more than we spent
-      if (expectedCollateralAmount > toSell) {
-        (, uint toRepay) = _liquidateWithRoute(route, liquidator_, asset, token, toSell, _ASSET_LIQUIDATION_SLIPPAGE);
+    // we should get more than liquidation threshold for the main asset and more than we spent
+    if (amountOut > Math.max(liquidationThreshold, DEFAULT_LIQUIDATION_THRESHOLD) && amountOut > toSell) {
+      (, uint toRepay) = _liquidateWithRoute(route, liquidator_, asset, token, toSell, _ASSET_LIQUIDATION_SLIPPAGE);
 
-        _closePosition(tetuConverter, asset, token, toRepay);
-        expectedAmountOut = expectedCollateralAmount - toSell;
-      }
+      _closePosition(tetuConverter, asset, token, toRepay);
+      expectedAmountOut = amountOut - toSell;
     }
 
     return expectedAmountOut;

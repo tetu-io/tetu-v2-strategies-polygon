@@ -82,7 +82,7 @@ export class MockHelper {
       signer,
       'BalancerComposableStableDepositorFacade',
     )) as BalancerComposableStableDepositorFacade;
-    ret.init(poolId, rewardTokens);
+    await ret.init(poolId, rewardTokens);
     return ret;
   }
 
