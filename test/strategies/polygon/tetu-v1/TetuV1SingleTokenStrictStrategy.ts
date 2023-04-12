@@ -33,7 +33,7 @@ const USDC_BIG_HOLDER_ADDRESS = '0xe7804c37c13166ff0b37f5ae0bb07a3aebb6e245';
 const TETU_ADDRESS = '0x255707B70BF90aa112006E1b07B9AeA6De021424';
 const TETU_BIG_HOLDER_ADDRESS = '0x8d7e07b1a346ac29e922ac01fa34cb2029f536b9';
 const X_TETU_ADDRESS = '0x225084D30cc297F3b177d9f93f5C3Ab8fb6a1454';
-const X_TETU_BIG_HOLDER_ADDRESS = '0x10feb6f3111197336bc64ad3d0a123f22719d58a';
+const X_TETU_BIG_HOLDER_ADDRESS = '0x7d229c09bca15b660a867b91be3a00d4304462a5';
 
 const X_USDC_VAULT_ADDRESS = '0xeE3B4Ce32A6229ae15903CDa0A5Da92E739685f7';
 const LIQUIDATOR_ADDRESS = '0xC737eaB847Ae6A92028862fE38b828db41314772';
@@ -49,8 +49,7 @@ async function simulateRewards(strategy: TetuV1SingleTokenStrictStrategy, reward
   }
 }
 
-// todo fix
-describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
+describe('TetuV1 Single Token Strict Strategy tests', async() => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -108,10 +107,10 @@ describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
     let impersonatedSigner = await ethers.getImpersonatedSigner(TETU_BIG_HOLDER_ADDRESS);
     await tetu.connect(impersonatedSigner).transfer(owner.address, ethers.utils.parseUnits('1000', 18));
 
-    // transfer some xTETU to owner
+    // // transfer some xTETU to owner
     const xtetu = await ethers.getContractAt('@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol:IERC20', X_TETU_ADDRESS);
     impersonatedSigner = await ethers.getImpersonatedSigner(X_TETU_BIG_HOLDER_ADDRESS);
-    await xtetu.connect(impersonatedSigner).transfer(owner.address, ethers.utils.parseUnits('1000', 18));
+    await xtetu.connect(impersonatedSigner).transfer(owner.address, ethers.utils.parseUnits('100', 18));
 
 
     // transfer some USDC to owner
@@ -148,8 +147,8 @@ describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
     });
   });
 
-  describe('withdraw tests', function() {
-    it('Simple withdraw test', async function() {
+  describe('redeem tests', function() {
+    it('Simple redeem test', async function() {
       const { strictVault, strategy, smartVault, owner, otherAccount, usdc } = await loadFixture(deployContracts);
       const depositAmount = ethers.utils.parseUnits('1000', 6);
 
@@ -158,12 +157,13 @@ describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
 
       const ownerBalance = await strictVault.balanceOf(owner.address);
       const maxWithdrawAmount = await strictVault.maxWithdraw(owner.address);
+      const maxRedeemAmount = await strictVault.maxRedeem(owner.address);
       expect(maxWithdrawAmount).approximately(ownerBalance, 1);
 
       const balanceBefore = await usdc.balanceOf(owner.address);
 
       // rounding issues need to check maxWithdrawAmount
-      await strictVault.withdraw(maxWithdrawAmount, owner.address, owner.address);
+      await strictVault.redeem(maxRedeemAmount, owner.address, owner.address);
       const balanceAfter = await usdc.balanceOf(owner.address);
       expect(balanceAfter.sub(balanceBefore)).approximately(depositAmount, 1);
       expect(await smartVault.underlyingBalanceWithInvestmentForHolder(strategy.address)).approximately(0, 1);
@@ -225,7 +225,7 @@ describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
   describe('rebalance tests', function() {
     it('simple rebalance test', async function() {
       const { vault, usdcLinerPool, owner, usdc } = await loadFixture(deployContracts);
-      const depositAmount = ethers.utils.parseUnits('100', 6);
+      const depositAmount = ethers.utils.parseUnits('100000', 6);
       await usdc.approve(vault.address, depositAmount);
 
       expect(await usdcLinerPool.balanceOf(owner.address)).eq(0);
@@ -251,12 +251,12 @@ describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
       expect(await usdcLinerPool.balanceOf(owner.address)).gt(0);
       const tokenInfo = await vault.getPoolTokenInfo(await usdcLinerPool.getPoolId(), usdc.address);
       const poolCashBefore = tokenInfo[0];
-      console.log(poolCashBefore);
+      expect(poolCashBefore).is.eq("100000000000");
       const rebalancer = new ethers.Contract(tokenInfo[3], LinearPoolRebalancerABI, owner);
       await rebalancer.rebalance(owner.address);
       const tokenInfo2 = await vault.getPoolTokenInfo(await usdcLinerPool.getPoolId(), usdc.address);
       const poolCashAfter = tokenInfo2[0];
-      console.log(poolCashAfter);
+      expect(poolCashAfter).is.eq("25000000000");
     });
 
   });
