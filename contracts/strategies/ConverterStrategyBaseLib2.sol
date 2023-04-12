@@ -229,5 +229,46 @@ library ConverterStrategyBaseLib2 {
     }
   }
 
+  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
+  /// @dev The post-processing is rewards conversion to the main asset
+  /// @param tokens_ tokens received from {_depositorPoolAssets}
+  /// @param rewardTokens_ List of rewards claimed from the internal pool
+  /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
+  /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
+  /// @param amountsOut Amounts of available rewards
+  function claimConverterRewards(
+    ITetuConverter tetuConverter_,
+    address[] memory tokens_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_,
+    uint[] memory balancesBefore
+  ) external returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
+    // Rewards from TetuConverter
+    (address[] memory tokensTC, uint[] memory amountsTC) = tetuConverter_.claimRewards(address(this));
+
+    // Join arrays and recycle tokens
+    (tokensOut, amountsOut) = TokenAmountsLib.combineArrays(
+      rewardTokens_, rewardAmounts_,
+      tokensTC, amountsTC,
+      // by default, depositor assets have zero amounts here
+      tokens_, new uint[](tokens_.length)
+    );
+
+    // set fresh balances for depositor tokens
+    uint len = tokensOut.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      for (uint j; j < tokens_.length; j = AppLib.uncheckedInc(j)) {
+        if (tokensOut[i] == tokens_[j]) {
+          amountsOut[i] = IERC20(tokens_[j]).balanceOf(address(this)) - balancesBefore[j];
+        }
+      }
+    }
+
+    // filter zero amounts out
+    (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
+  }
 }
 

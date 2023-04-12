@@ -95,13 +95,14 @@ library ConverterStrategyBaseLib {
     uint collateral;
     uint spentAmountIn;
     uint receivedAmount;
-    uint remainingRequestedAmount;
-    uint toRepayRatio;
     uint balance;
     uint[] tokensBalancesBefore;
 
     uint toPay;
     uint usedCollateral;
+
+    uint[] prices;
+    uint[] decs;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -193,7 +194,7 @@ library ConverterStrategyBaseLib {
     }
   }
 
-  /// @return prices Prices with decimals 18
+  /// @return prices Asset prices in USD, decimals 18
   /// @return decs 10**decimals
   function _getPricesAndDecs(IPriceOracle priceOracle, address[] memory tokens_, uint len) internal view returns (
     uint[] memory prices,
@@ -1057,48 +1058,6 @@ library ConverterStrategyBaseLib {
     }
   }
 
-  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
-  /// @dev The post-processing is rewards conversion to the main asset
-  /// @param tokens_ tokens received from {_depositorPoolAssets}
-  /// @param rewardTokens_ List of rewards claimed from the internal pool
-  /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
-  /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
-  /// @param amountsOut Amounts of available rewards
-  function claimConverterRewards(
-    ITetuConverter tetuConverter_,
-    address[] memory tokens_,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_,
-    uint[] memory balancesBefore
-  ) external returns (
-    address[] memory tokensOut,
-    uint[] memory amountsOut
-  ) {
-    // Rewards from TetuConverter
-    (address[] memory tokensTC, uint[] memory amountsTC) = tetuConverter_.claimRewards(address(this));
-
-    // Join arrays and recycle tokens
-    (tokensOut, amountsOut) = TokenAmountsLib.combineArrays(
-      rewardTokens_, rewardAmounts_,
-      tokensTC, amountsTC,
-      // by default, depositor assets have zero amounts here
-      tokens_, new uint[](tokens_.length)
-    );
-
-    // set fresh balances for depositor tokens
-    uint len = tokensOut.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      for (uint j; j < tokens_.length; j = AppLib.uncheckedInc(j)) {
-        if (tokensOut[i] == tokens_[j]) {
-          amountsOut[i] = IERC20(tokens_[j]).balanceOf(address(this)) - balancesBefore[j];
-        }
-      }
-    }
-
-    // filter zero amounts out
-    (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
-  }
-
   /////////////////////////////////////////////////////////////////////
   ///                       WITHDRAW HELPERS
   /////////////////////////////////////////////////////////////////////
@@ -1260,39 +1219,42 @@ library ConverterStrategyBaseLib {
     v.asset = tokens[indexAsset];
     v.len = tokens.length;
 
+    (v.prices, v.decs) = _getPricesAndDecs(
+      IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle()),
+      tokens,
+      v.len
+    );
+
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
       // if we already closed position for an asset we can not close it again in the same block
       if (i == indexAsset || repaidAmounts_[i] != 0) continue;
 
       v.balance = IERC20(v.asset).balanceOf(address(this));
-      console.log("closeDebtsForRequiredAmount vars.balance", i, v.balance);
-      if (v.balance >= requestedAmount) break;
+      if (v.balance >= requestedAmount || v.balance == 0) break;
 
-      v.remainingRequestedAmount = requestedAmount - v.balance;
-
+      // we need to increase balance on the following amount: requestedAmount - v.balance;
+      // we have following borrow: amount-to-pay and corresponded collateral
       (v.toPay, v.usedCollateral) = tetuConverter.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
-
-      console.log("convertAfterWithdraw vars.toPayOn", i, v.toPay);
-      console.log("convertAfterWithdraw vars.usedCollateral", i, v.usedCollateral);
 
       if (v.toPay != 0) {
         // add 1% gap, it is safe to try to repay more than dept, should be handled in _closePosition()
-        v.toRepayRatio = v.usedCollateral < v.remainingRequestedAmount
-          ? 101e18
-          : (v.remainingRequestedAmount * 101e18) / v.usedCollateral;
+        uint toSell = _getAmountToSell(
+          requestedAmount - v.balance,
+          v.toPay,
+          v.usedCollateral,
+          v.prices,
+          v.decs,
+          indexAsset,
+          i
+        ) * 101 / 100;
 
-        // Actually we need to pay S = v.toPayOn * ratio then repay(S) and get v.usedCollateral * ratio of collateral.
-        // But we don't know how to convert S => toSell.
-        // So, for simplicity we sell more collateral then necessary: v.usedCollateral * ratio
-
-        uint toSell = Math.min(v.usedCollateral * v.toRepayRatio / 100e18, v.balance);
         if (toSell != 0) {
           expectedAmountMainAssetOut += _closePositionUsingMainAsset(
             tetuConverter,
             liquidator,
             v.asset,
             tokens[i],
-            toSell,
+            Math.min(toSell, v.balance),
             liquidationThreshold
           );
         }
@@ -1300,6 +1262,31 @@ library ConverterStrategyBaseLib {
     }
 
     return expectedAmountMainAssetOut;
+  }
+
+  function _getAmountToSell(
+    uint remainingRequestedAmount,
+    uint totalDebt,
+    uint totalCollateral,
+    uint[] memory prices,
+    uint[] memory decs,
+    uint indexCollateral,
+    uint indexBorrowAsset
+  ) internal pure returns (
+    uint amountOut
+  ) {
+    // for definiteness: usdc - collateral asset, dai - borrow asset
+    // Pc = price of the USDC, Pb = price of the DAI, alpha = Pc / Pb (assume decimals are fixed) [DAI / USDC]
+    // S [USDC] - amount to sell, R [DAI] = alpha * S - amount to repay
+    // After repaying R we get: alpha * S * C / R
+    // Balance should be increased on: requestedAmount = alpha * S * C / R - S
+    // So, we should sell: S = requestedAmount / (alpha * C / R - 1))
+    // We can lost some amount on liquidation of S => R, so we need to use some gap, i.e. 1%
+    uint alpha18 = 1e18 * (prices[indexCollateral] * decs[indexBorrowAsset])
+                   / prices[indexBorrowAsset] * decs[indexCollateral];
+    return alpha18 * totalCollateral / totalDebt > 1
+      ? remainingRequestedAmount * 1e18 / (alpha18 * totalCollateral / totalDebt - 1e18)
+      : 0;
   }
 
   /// @notice Swap amount {toSell} of main asset to {token}, repay result amount and get collateral in return

@@ -295,4 +295,26 @@ contract ConverterStrategyBaseLibFacade {
       liquidationThreshold
     );
   }
+
+  function _getAmountToSell(
+    uint remainingRequestedAmount,
+    uint totalDebt,
+    uint totalCollateral,
+    uint[] memory prices,
+    uint[] memory decs,
+    uint indexCollateral,
+    uint indexBorrowAsset
+  ) external pure returns (
+    uint amountOut
+  ) {
+    return ConverterStrategyBaseLib._getAmountToSell(
+      remainingRequestedAmount,
+      totalDebt,
+      totalCollateral,
+      prices,
+      decs,
+      indexCollateral,
+      indexBorrowAsset
+    );
+  }
 }

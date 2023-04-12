@@ -403,7 +403,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // get rewards from the Depositor
     (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts, uint[] memory depositorBalancesBefore) = _depositorClaimRewards();
 
-    (rewardTokens, amounts) = ConverterStrategyBaseLib.claimConverterRewards(
+    (rewardTokens, amounts) = ConverterStrategyBaseLib2.claimConverterRewards(
       converter,
       _depositorPoolAssets(),
       depositorRewardTokens,
