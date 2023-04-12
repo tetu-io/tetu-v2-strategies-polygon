@@ -4,6 +4,7 @@ import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-etherscan';
 import '@nomiclabs/hardhat-web3';
 import '@nomiclabs/hardhat-solhint';
+import '@openzeppelin/hardhat-upgrades';
 import '@typechain/hardhat';
 import 'hardhat-contract-sizer';
 import 'hardhat-gas-reporter';
@@ -37,6 +38,10 @@ const argv = require('yargs/yargs')()
     maticForkBlock: {
       type: 'number',
       default: 0,
+    },
+    hardhatLogsEnabled: {
+      type: 'boolean',
+      default: true,
     },
   }).argv;
 
@@ -73,7 +78,7 @@ export default {
         path: 'm/44\'/60\'/0\'/0',
         accountsBalance: '100000000000000000000000000000',
       },
-      // loggingEnabled: true,
+      loggingEnabled: argv.hardhatLogsEnabled,
     },
     matic: {
       url: argv.maticRpcUrl || '',
