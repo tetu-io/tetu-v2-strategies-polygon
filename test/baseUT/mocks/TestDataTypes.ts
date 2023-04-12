@@ -4,8 +4,8 @@ import {BigNumber} from "ethers";
 export interface ILiquidationParams {
   tokenIn: MockToken;
   tokenOut: MockToken;
-  amountIn: BigNumber;
-  amountOut: BigNumber;
+  amountIn: string;
+  amountOut: string;
 }
 export interface ITokenAmount {
   token: MockToken;

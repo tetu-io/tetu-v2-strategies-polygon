@@ -2223,8 +2223,8 @@ describe('ConverterStrategyBaseLibTest', () => {
             indexTokenIn: 2,
             receivedTargetAmount: "17", // assume that we already received 100 USDT
             liquidations: [{
-              amountIn: parseUnits("200", 18), // we need 200 tetu to get 100 USDT
-              amountOut: parseUnits("99", 6), // assume that we lost 1 USDT on conversion
+              amountIn: "200", // we need 200 tetu to get 100 USDT
+              amountOut: "99", // assume that we lost 1 USDT on conversion
               tokenIn: tetu,
               tokenOut: usdt
             }]
@@ -2262,8 +2262,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           indexTokenIn: 2,
           receivedTargetAmount: "17", // assume that we already received 100 USDT
           liquidations: [{
-            amountIn: parseUnits("200", 18), // we need 200 tetu to get 100 USDT
-            amountOut: parseUnits("99", 6), // assume that we lost 1 USDT on conversion
+            amountIn: "200", // we need 200 tetu to get 100 USDT
+            amountOut: "99", // assume that we lost 1 USDT on conversion
             tokenIn: tetu,
             tokenOut: usdt
           }]
@@ -2300,8 +2300,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           indexTokenIn: 2,
           receivedTargetAmount: "17", // assume that we already received 100 USDT
           liquidations: [{
-            amountIn: parseUnits("300", 18), // we need 200 tetu to get 100 USDT
-            amountOut: parseUnits("198", 6), // assume that we lost some USDT on conversion
+            amountIn: "300", // we need 200 tetu to get 100 USDT
+            amountOut: "198",// assume that we lost some USDT on conversion
             tokenIn: tetu,
             tokenOut: usdt
           }]
@@ -2338,8 +2338,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           indexTokenIn: 2,
           receivedTargetAmount: "17", // assume that we already received 100 USDT
           liquidations: [{
-            amountIn: parseUnits("200", 18), // we need 200 tetu to get 100 USDT
-            amountOut: parseUnits("99", 6), // assume that we lost some USDT on conversion
+            amountIn: "200", // we need 200 tetu to get 100 USDT
+            amountOut: "99", // assume that we lost some USDT on conversion
             tokenIn: tetu,
             tokenOut: usdt
           }]
@@ -2451,8 +2451,8 @@ describe('ConverterStrategyBaseLibTest', () => {
             amounts: ["0", "1000"],
             prices: ["1", "0.5"],
             liquidations: [{
-              amountIn: parseUnits("300", 18), // we need to converter 200 tetu + overswap 50% = 300 tetu
-              amountOut: parseUnits("127", 6),
+              amountIn: "300",// we need to converter 200 tetu + overswap 50% = 300 tetu
+              amountOut: "127",
               tokenIn: tetu,
               tokenOut: usdc
             }]
@@ -2490,8 +2490,8 @@ describe('ConverterStrategyBaseLibTest', () => {
             amounts: ["1000", "0"],
             prices: ["1", "0.5"],
             liquidations: [{
-              amountIn: parseUnits("150", 6), // we need to converter 100 usdc + overswap 50% = 150 usdc
-              amountOut: parseUnits("210", 18),
+              amountIn: "150", // we need to converter 100 usdc + overswap 50% = 150 usdc
+              amountOut: "210",
               tokenIn: usdc,
               tokenOut: tetu
             }]
@@ -2531,8 +2531,8 @@ describe('ConverterStrategyBaseLibTest', () => {
             amounts: ["1000", "0", "1000"],
             prices: ["1", "0.5", "2"],
             liquidations: [{
-              amountIn: parseUnits("75", 18), // we need to converter 50 weth + overswap 50% = 75 weth
-              amountOut: parseUnits("250", 18),
+              amountIn: "75", // we need to converter 50 weth + overswap 50% = 75 weth
+              amountOut: "250",
               tokenIn: weth,
               tokenOut: tetu
             }]
@@ -2578,14 +2578,14 @@ describe('ConverterStrategyBaseLibTest', () => {
               // After the conversion we have 200 tetu on balance and need 1800 tetu more
               // we need to make one more conversion: 1800 tetu => $900 + 50% of overswap = 1350 usdc
               {
-                amountIn: parseUnits("50", 18),
-                amountOut: parseUnits("200", 18),
+                amountIn: "50",
+                amountOut: "200",
                 tokenIn: weth,
                 tokenOut: tetu
               },
               {
-                amountIn: parseUnits("1350", 6),
-                amountOut: parseUnits("2700", 18),
+                amountIn: "1350",
+                amountOut: "2700",
                 tokenIn: usdc,
                 tokenOut: tetu
               },
@@ -2633,14 +2633,14 @@ describe('ConverterStrategyBaseLibTest', () => {
               // we need to make one more conversion: 1800 tetu => $900 + 50% of overswap = 1350 usdc
               // but we have only 150 usdc...
               {
-                amountIn: parseUnits("50", 18),
-                amountOut: parseUnits("200", 18),
+                amountIn: "50",
+                amountOut: "200",
                 tokenIn: weth,
                 tokenOut: tetu
               },
               {
-                amountIn: parseUnits("150", 6),
-                amountOut: parseUnits("300", 18),
+                amountIn: "150",
+                amountOut: "300",
                 tokenIn: usdc,
                 tokenOut: tetu
               },
@@ -2682,8 +2682,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           amounts: ["1000", "0"],
           prices: ["1", "0.5"],
           liquidations: [{
-            amountIn: parseUnits("150", 6), // we need to converter 100 usdc + overswap 50% = 150 usdc
-            amountOut: parseUnits("210", 18),
+            amountIn: "150", // we need to converter 100 usdc + overswap 50% = 150 usdc
+            amountOut: "210",
             tokenIn: usdc,
             tokenOut: tetu
           }]
@@ -2788,8 +2788,8 @@ describe('ConverterStrategyBaseLibTest', () => {
           amounts: ["1000", "2000", "4000", "5000"], // == $100, $400, $1600, $2500
           prices: ["0.1", "0.2", "0.4", "0.5"],
           liquidations: [{
-            amountIn: parseUnits("3.75", 6),
-            amountOut: parseUnits("15", 18), // 10 tetu + 50% of overswap
+            amountIn: "3.75",
+            amountOut: "15",// 10 tetu + 50% of overswap
             tokenIn: usdt,
             tokenOut: tetu
           }],
@@ -2832,14 +2832,14 @@ describe('ConverterStrategyBaseLibTest', () => {
         prices: ["0.1", "0.2", "0.4", "0.5"],
         liquidations: [
           {
-            amountIn: parseUnits("4000", 6),
-            amountOut: parseUnits("16000", 18),
+            amountIn: "4000",
+            amountOut: "16000",
             tokenIn: usdt,
             tokenOut: tetu
           },
           {
-            amountIn: parseUnits("3", 18),
-            amountOut: parseUnits("15", 18),
+            amountIn: "3",
+            amountOut: "15",
             tokenIn: dai,
             tokenOut: tetu
           },

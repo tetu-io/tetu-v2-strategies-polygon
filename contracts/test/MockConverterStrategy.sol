@@ -39,25 +39,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
-
-  function _convertAfterWithdrawAccess(
-    address[] memory tokens_,
-    uint indexAsset_,
-    uint[] memory amountsToConvert_
-  ) external returns (
-    uint collateralOut,
-    uint[] memory repaidAmountsOut
-  ) {
-    return ConverterStrategyBaseLib.convertAfterWithdraw(
-      converter,
-      ITetuLiquidator(IController(controller()).liquidator()),
-      indexAsset_,
-      liquidationThresholds[tokens_[indexAsset_]],
-      tokens_,
-      amountsToConvert_
-    );
-  }
-
   function closePositionTestAccess(address collateralAsset, address borrowAsset, uint amountToRepay) external returns (
     uint returnedAssetAmount,
     uint leftover

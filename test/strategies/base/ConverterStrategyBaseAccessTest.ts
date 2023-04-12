@@ -34,6 +34,7 @@ import {
 import {Misc} from "../../../scripts/utils/Misc";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
+import {ILiquidationParams, IRepayParams, ITokenAmount} from "../../baseUT/mocks/TestDataTypes";
 
 /**
  * Test of ConverterStrategyBase
@@ -352,533 +353,230 @@ describe('ConverterStrategyBaseAccessTest', () => {
   //   });
   // });
 
-  describe('_convertAfterWithdraw', () => {
-    interface IMakeConvertAfterWithdrawTestResults {
-      repaidAmountsOut: BigNumber[];
-      collateralOut: BigNumber;
-      gasUsed: BigNumber;
-    }
-
-    interface IMakeConvertAfterWithdrawParams {
-      returnedBorrowedAmountOut?: BigNumber[];
-      swappedLeftoverCollateralOut?: BigNumber[];
-      swappedLeftoverBorrowOut?: BigNumber[];
-      priceOut?: BigNumber[];
-      initialStrategyBalances?: BigNumber[];
-      isConversionValid?: boolean;
-    }
-
-    async function makeConvertAfterWithdrawTest(
-      amountsToConvert: BigNumber[],
-      debts: BigNumber[],
-      collaterals: BigNumber[],
-      params?: IMakeConvertAfterWithdrawParams,
-    ): Promise<IMakeConvertAfterWithdrawTestResults> {
-      // Set up Tetu Converter mock and liquidator mock
-      // we assume, that inputAmount will be divided on 3 equal parts
-      for (let i = 0; i < depositorTokens.length; ++i) {
-        if (params?.initialStrategyBalances) {
-          await depositorTokens[i].mint(strategy.address, params?.initialStrategyBalances[i]);
-        }
-        if (i === indexAsset) {
-          continue;
-        }
-        await tetuConverter.setGetDebtAmountCurrent(
-          strategy.address,
-          usdc.address,
-          depositorTokens[i].address,
-          debts[i],
-          collaterals[i],
-        );
-        await tetuConverter.setRepay(
-          usdc.address,
-          depositorTokens[i].address,
-          amountsToConvert[i].gt(debts[i])
-            ? debts[i]
-            : amountsToConvert[i],
-          strategy.address,
-          collaterals[i],
-          params?.returnedBorrowedAmountOut ? params.returnedBorrowedAmountOut[i] : 0,
-          params?.swappedLeftoverCollateralOut ? params.swappedLeftoverCollateralOut[i] : 0,
-          params?.swappedLeftoverBorrowOut ? params.swappedLeftoverBorrowOut[i] : 0,
-        );
-        await depositorTokens[i].mint(strategy.address, amountsToConvert[i]);
-        await usdc.mint(tetuConverter.address, collaterals[i]);
-
-        if (amountsToConvert[i].gt(debts[i]) && params?.priceOut) {
-          await setupMockedLiquidation(
-            liquidator,
-            {
-              tokenIn: depositorTokens[i],
-              tokenOut: usdc,
-              amountIn: amountsToConvert[i].sub(debts[i]),
-              amountOut: params.priceOut[i]
-            }
-          );
-
-          await tetuConverter.setIsConversionValid(
-            depositorTokens[i].address,
-            amountsToConvert[i].sub(debts[i]),
-            usdc.address,
-            params.priceOut[i],
-            params.isConversionValid === undefined
-              ? true
-              : params.isConversionValid,
-          );
-        }
-      }
-
-      // call convertAfterWithdraw
-      const r = await strategy.callStatic._convertAfterWithdrawAccess(
-        depositorTokens.map(x => x.address),
-        indexAsset,
-        amountsToConvert,
-        requestedAmount
-      );
-      const tx = await strategy._convertAfterWithdrawAccess(
-        depositorTokens.map(x => x.address),
-        indexAsset,
-        amountsToConvert,
-        requestedAmount
-      );
-      const gasUsed = (await tx.wait()).gasUsed;
-
-      return {
-        collateralOut: r.collateralOut,
-        repaidAmountsOut: r.repaidAmountsOut,
-        gasUsed,
-      };
-    }
-
-    describe('Good paths', () => {
-      describe('Repay only, no liquidation (amountsToConvert == repaidAmountsOut)', () => {
-        it('should return expected values', async() => {
-          const amountsToConvert = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('500', 6), // usdt
-          ];
-          const debts = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('900', 6), // usdt
-          ];
-          const collaterals = [
-            parseUnits('401', 6),
-            parseUnits('0', 6),
-            parseUnits('1003', 6),
-          ];
-          const r = await makeConvertAfterWithdrawTest(
-            amountsToConvert,
-            debts,
-            collaterals,
-          );
-
-          const ret = [
-            r.collateralOut.toString(),
-            r.repaidAmountsOut.map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-          const expected = [
-            parseUnits('1404', 6), // 401 + 1003
-            [
-              parseUnits('200', 18), // dai
-              parseUnits('0', 6), // usdc, not used
-              parseUnits('500', 6), // usdt
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-
-          expect(ret).eq(expected);
-        });
-      });
-      describe('Repay + liquidation (amountsToConvert > repaidAmountsOut)', () => {
-        it('should return expected values', async() => {
-          const amountsToConvert = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('500', 6), // usdt
-          ];
-          const debts = [
-            parseUnits('100', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('100', 6), // usdt
-          ];
-          const collaterals = [
-            parseUnits('401', 6),
-            parseUnits('0', 6),
-            parseUnits('1003', 6),
-          ];
-          const r = await makeConvertAfterWithdrawTest(
-            amountsToConvert,
-            debts,
-            collaterals,
-            {
-              priceOut: [
-                parseUnits('717', 6),
-                parseUnits('0', 6),
-                parseUnits('999', 6),
-              ],
-            },
-          );
-
-          const ret = [
-            r.collateralOut.toString(),
-            r.repaidAmountsOut.map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-          const expected = [
-            parseUnits('3120', 6), // 401 + 1003 + 717 + 999
-            [
-              parseUnits('200', 18), // dai
-              parseUnits('0', 6), // usdc, not used
-              parseUnits('500', 6), // usdt
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-
-          expect(ret).eq(expected);
-        });
-        describe('Not zero initial balances', () => {
-          it('should return expected values', async() => {
-            const amountsToConvert = [
-              parseUnits('200', 18), // dai
-              parseUnits('0', 6), // usdc
-              parseUnits('500', 6), // usdt
-            ];
-            const debts = [
-              parseUnits('100', 18), // dai
-              parseUnits('0', 6), // usdc
-              parseUnits('100', 6), // usdt
-            ];
-            const collaterals = [
-              parseUnits('401', 6),
-              parseUnits('0', 6),
-              parseUnits('1003', 6),
-            ];
-            const r = await makeConvertAfterWithdrawTest(
-              amountsToConvert,
-              debts,
-              collaterals,
-              {
-                initialStrategyBalances: [
-                  parseUnits('2200', 18), // dai
-                  parseUnits('2220', 6), // usdc
-                  parseUnits('2222', 6), // usdt
-                ],
-                priceOut: [
-                  parseUnits('717', 6),
-                  parseUnits('0', 6),
-                  parseUnits('999', 6),
-                ],
-              },
-            );
-
-            const ret = [
-              r.collateralOut.toString(),
-              r.repaidAmountsOut.map(x => BalanceUtils.toString(x)).join(),
-            ].join('\n');
-            const expected = [
-              parseUnits('3120', 6), // 401 + 1003 + 717 + 999
-              [
-                parseUnits('200', 18), // dai
-                parseUnits('0', 6), // usdc, not used
-                parseUnits('500', 6), // usdt
-              ].map(x => BalanceUtils.toString(x)).join(),
-            ].join('\n');
-
-            expect(ret).eq(expected);
-          });
-        });
-      });
-    });
-    describe('Bad paths', () => {
-      describe('Liquidation of leftovers happens with too high price impact', () => {
-        it('should revert', async() => {
-          const amountsToConvert = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('500', 6), // usdt
-          ];
-          const debts = [
-            parseUnits('100', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('100', 6), // usdt
-          ];
-          const collaterals = [
-            parseUnits('401', 6),
-            parseUnits('0', 6),
-            parseUnits('1003', 6),
-          ];
-          await expect(
-            makeConvertAfterWithdrawTest(
-              amountsToConvert,
-              debts,
-              collaterals,
-              {
-                priceOut: [
-                  parseUnits('717', 6),
-                  parseUnits('0', 6),
-                  parseUnits('999', 6),
-                ],
-                isConversionValid: false,
-              },
-            ),
-          ).revertedWith('TS-16 price impact'); // PRICE_IMPACT
-        });
-      });
-    });
-    describe('Gas estimation @skip-on-coverage', () => {
-      describe('Repay only, no liquidation', () => {
-        it('should not exceed gas limits', async() => {
-          const amountsToConvert = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('500', 6), // usdt
-          ];
-          const debts = [
-            parseUnits('1200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('1900', 6), // usdt
-          ];
-          const collaterals = [
-            parseUnits('401', 6),
-            parseUnits('0', 6),
-            parseUnits('1003', 6),
-          ];
-          const r = await makeConvertAfterWithdrawTest(
-            amountsToConvert,
-            debts,
-            collaterals,
-          );
-          controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW, (u, t) => {
-            expect(u).to.be.below(t + 1);
-          });
-        });
-      });
-    });
-  });
-
-  describe('_convertAfterWithdrawAll', () => {
-    interface IMakeConvertAfterWithdrawTestResults {
-      repaidAmountsOut: BigNumber[];
-      collateralOut: BigNumber;
-      gasUsed: BigNumber;
-    }
-
-    interface IMakeConvertAfterWithdrawParams {
-      returnedBorrowedAmountOut?: BigNumber[];
-      swappedLeftoverCollateralOut?: BigNumber[];
-      swappedLeftoverBorrowOut?: BigNumber[];
-      priceOut?: BigNumber[];
-      isConversionValid?: boolean;
-    }
-
-    async function makeConvertAfterWithdrawTest(
-      strategyBalances: BigNumber[],
-      debts: BigNumber[],
-      collaterals: BigNumber[],
-      params?: IMakeConvertAfterWithdrawParams,
-    ): Promise<IMakeConvertAfterWithdrawTestResults> {
-      // Set up Tetu Converter mock and liquidator mock
-      // we assume, that inputAmount will be divided on 3 equal parts
-      for (let i = 0; i < depositorTokens.length; ++i) {
-        if (i === indexAsset) {
-          continue;
-        }
-        await tetuConverter.setGetDebtAmountCurrent(
-          strategy.address,
-          usdc.address,
-          depositorTokens[i].address,
-          debts[i],
-          collaterals[i],
-        );
-        await tetuConverter.setRepay(
-          usdc.address,
-          depositorTokens[i].address,
-          strategyBalances[i].gt(debts[i])
-            ? debts[i]
-            : strategyBalances[i],
-          strategy.address,
-          collaterals[i],
-          params?.returnedBorrowedAmountOut ? params.returnedBorrowedAmountOut[i] : 0,
-          params?.swappedLeftoverCollateralOut ? params.swappedLeftoverCollateralOut[i] : 0,
-          params?.swappedLeftoverBorrowOut ? params.swappedLeftoverBorrowOut[i] : 0,
-        );
-        await depositorTokens[i].mint(strategy.address, strategyBalances[i]);
-        await usdc.mint(tetuConverter.address, collaterals[i]);
-
-        if (strategyBalances[i].gt(debts[i]) && params?.priceOut) {
-          const pool = ethers.Wallet.createRandom().address;
-          const swapper = ethers.Wallet.createRandom().address;
-          await liquidator.setBuildRoute(
-            depositorTokens[i].address,
-            usdc.address,
-            pool,
-            swapper,
-            '',
-          );
-          await liquidator.setGetPriceForRoute(
-            depositorTokens[i].address,
-            usdc.address,
-            pool,
-            swapper,
-            strategyBalances[i].sub(debts[i]),
-            params.priceOut[i],
-          );
-          await liquidator.setLiquidateWithRoute(
-            depositorTokens[i].address,
-            usdc.address,
-            pool,
-            swapper,
-            strategyBalances[i].sub(debts[i]),
-            params.priceOut[i],
-          );
-          await usdc.mint(liquidator.address, params.priceOut[i]);
-
-          await tetuConverter.setIsConversionValid(
-            depositorTokens[i].address,
-            strategyBalances[i].sub(debts[i]),
-            usdc.address,
-            params.priceOut[i],
-            params.isConversionValid === undefined
-              ? true
-              : params.isConversionValid,
-          );
-        }
-      }
-
-      // call convertAfterWithdraw
-      const r = await strategy.callStatic._convertAfterWithdrawAllAccess(
-        depositorTokens.map(x => x.address),
-        indexAsset,
-      );
-      const tx = await strategy._convertAfterWithdrawAllAccess(
-        depositorTokens.map(x => x.address),
-        indexAsset,
-      );
-      const gasUsed = (await tx.wait()).gasUsed;
-
-      return {
-        collateralOut: r.collateralOut,
-        repaidAmountsOut: r.repaidAmountsOut,
-        gasUsed,
-      };
-    }
-
-    describe('Good paths', () => {
-      describe('Repay only, no liquidation (amountsToConvert == repaidAmountsOut)', () => {
-        it('should return expected values', async() => {
-          const amountsToConvert = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('500', 6), // usdt
-          ];
-          const debts = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('900', 6), // usdt
-          ];
-          const collaterals = [
-            parseUnits('401', 6),
-            parseUnits('0', 6),
-            parseUnits('1003', 6),
-          ];
-          const r = await makeConvertAfterWithdrawTest(
-            amountsToConvert,
-            debts,
-            collaterals,
-          );
-
-          const ret = [
-            r.collateralOut.toString(),
-            r.repaidAmountsOut.map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-          const expected = [
-            parseUnits('1404', 6), // 401 + 1003
-            [
-              parseUnits('200', 18), // dai
-              parseUnits('0', 6), // usdc, not used
-              parseUnits('500', 6), // usdt
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-
-          expect(ret).eq(expected);
-        });
-      });
-      describe('Repay + liquidation (amountsToConvert > repaidAmountsOut)', () => {
-        it('should return expected values', async() => {
-          const amountsToConvert = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('500', 6), // usdt
-          ];
-          const debts = [
-            parseUnits('100', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('100', 6), // usdt
-          ];
-          const collaterals = [
-            parseUnits('401', 6),
-            parseUnits('0', 6),
-            parseUnits('1003', 6),
-          ];
-          const r = await makeConvertAfterWithdrawTest(
-            amountsToConvert,
-            debts,
-            collaterals,
-            {
-              priceOut: [
-                parseUnits('717', 6),
-                parseUnits('0', 6),
-                parseUnits('999', 6),
-              ],
-            },
-          );
-
-          const ret = [
-            r.collateralOut.toString(),
-            r.repaidAmountsOut.map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-          const expected = [
-            parseUnits('3120', 6), // 401 + 1003 + 717 + 999
-            [
-              parseUnits('200', 18), // dai
-              parseUnits('0', 6), // usdc, not used
-              parseUnits('500', 6), // usdt
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join('\n');
-
-          expect(ret).eq(expected);
-        });
-      });
-    });
-    describe('Gas estimation @skip-on-coverage', () => {
-      describe('Repay only, no liquidation', () => {
-        it('should not exceed gas limits', async() => {
-          const amountsToConvert = [
-            parseUnits('200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('500', 6), // usdt
-          ];
-          const debts = [
-            parseUnits('1200', 18), // dai
-            parseUnits('0', 6), // usdc
-            parseUnits('1900', 6), // usdt
-          ];
-          const collaterals = [
-            parseUnits('401', 6),
-            parseUnits('0', 6),
-            parseUnits('1003', 6),
-          ];
-          const r = await makeConvertAfterWithdrawTest(
-            amountsToConvert,
-            debts,
-            collaterals,
-          );
-          controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW_ALL, (u, t) => {
-            expect(u).to.be.below(t + 1);
-          });
-        });
-      });
-    });
-  });
+  // describe('_convertAfterWithdrawAll', () => {
+  //   interface IMakeConvertAfterWithdrawTestResults {
+  //     repaidAmountsOut: BigNumber[];
+  //     collateralOut: BigNumber;
+  //     gasUsed: BigNumber;
+  //   }
+  //
+  //   interface IMakeConvertAfterWithdrawParams {
+  //     returnedBorrowedAmountOut?: BigNumber[];
+  //     swappedLeftoverCollateralOut?: BigNumber[];
+  //     swappedLeftoverBorrowOut?: BigNumber[];
+  //     priceOut?: BigNumber[];
+  //     isConversionValid?: boolean;
+  //   }
+  //
+  //   async function makeConvertAfterWithdrawTest(
+  //     strategyBalances: BigNumber[],
+  //     debts: BigNumber[],
+  //     collaterals: BigNumber[],
+  //     params?: IMakeConvertAfterWithdrawParams,
+  //   ): Promise<IMakeConvertAfterWithdrawTestResults> {
+  //     // Set up Tetu Converter mock and liquidator mock
+  //     // we assume, that inputAmount will be divided on 3 equal parts
+  //     for (let i = 0; i < depositorTokens.length; ++i) {
+  //       if (i === indexAsset) {
+  //         continue;
+  //       }
+  //       await tetuConverter.setGetDebtAmountCurrent(
+  //         strategy.address,
+  //         usdc.address,
+  //         depositorTokens[i].address,
+  //         debts[i],
+  //         collaterals[i],
+  //       );
+  //       await tetuConverter.setRepay(
+  //         usdc.address,
+  //         depositorTokens[i].address,
+  //         strategyBalances[i].gt(debts[i])
+  //           ? debts[i]
+  //           : strategyBalances[i],
+  //         strategy.address,
+  //         collaterals[i],
+  //         params?.returnedBorrowedAmountOut ? params.returnedBorrowedAmountOut[i] : 0,
+  //         params?.swappedLeftoverCollateralOut ? params.swappedLeftoverCollateralOut[i] : 0,
+  //         params?.swappedLeftoverBorrowOut ? params.swappedLeftoverBorrowOut[i] : 0,
+  //       );
+  //       await depositorTokens[i].mint(strategy.address, strategyBalances[i]);
+  //       await usdc.mint(tetuConverter.address, collaterals[i]);
+  //
+  //       if (strategyBalances[i].gt(debts[i]) && params?.priceOut) {
+  //         const pool = ethers.Wallet.createRandom().address;
+  //         const swapper = ethers.Wallet.createRandom().address;
+  //         await liquidator.setBuildRoute(
+  //           depositorTokens[i].address,
+  //           usdc.address,
+  //           pool,
+  //           swapper,
+  //           '',
+  //         );
+  //         await liquidator.setGetPriceForRoute(
+  //           depositorTokens[i].address,
+  //           usdc.address,
+  //           pool,
+  //           swapper,
+  //           strategyBalances[i].sub(debts[i]),
+  //           params.priceOut[i],
+  //         );
+  //         await liquidator.setLiquidateWithRoute(
+  //           depositorTokens[i].address,
+  //           usdc.address,
+  //           pool,
+  //           swapper,
+  //           strategyBalances[i].sub(debts[i]),
+  //           params.priceOut[i],
+  //         );
+  //         await usdc.mint(liquidator.address, params.priceOut[i]);
+  //
+  //         await tetuConverter.setIsConversionValid(
+  //           depositorTokens[i].address,
+  //           strategyBalances[i].sub(debts[i]),
+  //           usdc.address,
+  //           params.priceOut[i],
+  //           params.isConversionValid === undefined
+  //             ? true
+  //             : params.isConversionValid,
+  //         );
+  //       }
+  //     }
+  //
+  //     // call convertAfterWithdraw
+  //     const r = await strategy.callStatic._convertAfterWithdrawAllAccess(
+  //       depositorTokens.map(x => x.address),
+  //       indexAsset,
+  //     );
+  //     const tx = await strategy._convertAfterWithdrawAllAccess(
+  //       depositorTokens.map(x => x.address),
+  //       indexAsset,
+  //     );
+  //     const gasUsed = (await tx.wait()).gasUsed;
+  //
+  //     return {
+  //       collateralOut: r.collateralOut,
+  //       repaidAmountsOut: r.repaidAmountsOut,
+  //       gasUsed,
+  //     };
+  //   }
+  //
+  //   describe('Good paths', () => {
+  //     describe('Repay only, no liquidation (amountsToConvert == repaidAmountsOut)', () => {
+  //       it('should return expected values', async() => {
+  //         const amountsToConvert = [
+  //           parseUnits('200', 18), // dai
+  //           parseUnits('0', 6), // usdc
+  //           parseUnits('500', 6), // usdt
+  //         ];
+  //         const debts = [
+  //           parseUnits('200', 18), // dai
+  //           parseUnits('0', 6), // usdc
+  //           parseUnits('900', 6), // usdt
+  //         ];
+  //         const collaterals = [
+  //           parseUnits('401', 6),
+  //           parseUnits('0', 6),
+  //           parseUnits('1003', 6),
+  //         ];
+  //         const r = await makeConvertAfterWithdrawTest(
+  //           amountsToConvert,
+  //           debts,
+  //           collaterals,
+  //         );
+  //
+  //         const ret = [
+  //           r.collateralOut.toString(),
+  //           r.repaidAmountsOut.map(x => BalanceUtils.toString(x)).join(),
+  //         ].join('\n');
+  //         const expected = [
+  //           parseUnits('1404', 6), // 401 + 1003
+  //           [
+  //             parseUnits('200', 18), // dai
+  //             parseUnits('0', 6), // usdc, not used
+  //             parseUnits('500', 6), // usdt
+  //           ].map(x => BalanceUtils.toString(x)).join(),
+  //         ].join('\n');
+  //
+  //         expect(ret).eq(expected);
+  //       });
+  //     });
+  //     describe('Repay + liquidation (amountsToConvert > repaidAmountsOut)', () => {
+  //       it('should return expected values', async() => {
+  //         const amountsToConvert = [
+  //           parseUnits('200', 18), // dai
+  //           parseUnits('0', 6), // usdc
+  //           parseUnits('500', 6), // usdt
+  //         ];
+  //         const debts = [
+  //           parseUnits('100', 18), // dai
+  //           parseUnits('0', 6), // usdc
+  //           parseUnits('100', 6), // usdt
+  //         ];
+  //         const collaterals = [
+  //           parseUnits('401', 6),
+  //           parseUnits('0', 6),
+  //           parseUnits('1003', 6),
+  //         ];
+  //         const r = await makeConvertAfterWithdrawTest(
+  //           amountsToConvert,
+  //           debts,
+  //           collaterals,
+  //           {
+  //             priceOut: [
+  //               parseUnits('717', 6),
+  //               parseUnits('0', 6),
+  //               parseUnits('999', 6),
+  //             ],
+  //           },
+  //         );
+  //
+  //         const ret = [
+  //           r.collateralOut.toString(),
+  //           r.repaidAmountsOut.map(x => BalanceUtils.toString(x)).join(),
+  //         ].join('\n');
+  //         const expected = [
+  //           parseUnits('3120', 6), // 401 + 1003 + 717 + 999
+  //           [
+  //             parseUnits('200', 18), // dai
+  //             parseUnits('0', 6), // usdc, not used
+  //             parseUnits('500', 6), // usdt
+  //           ].map(x => BalanceUtils.toString(x)).join(),
+  //         ].join('\n');
+  //
+  //         expect(ret).eq(expected);
+  //       });
+  //     });
+  //   });
+  //   describe('Gas estimation @skip-on-coverage', () => {
+  //     describe('Repay only, no liquidation', () => {
+  //       it('should not exceed gas limits', async() => {
+  //         const amountsToConvert = [
+  //           parseUnits('200', 18), // dai
+  //           parseUnits('0', 6), // usdc
+  //           parseUnits('500', 6), // usdt
+  //         ];
+  //         const debts = [
+  //           parseUnits('1200', 18), // dai
+  //           parseUnits('0', 6), // usdc
+  //           parseUnits('1900', 6), // usdt
+  //         ];
+  //         const collaterals = [
+  //           parseUnits('401', 6),
+  //           parseUnits('0', 6),
+  //           parseUnits('1003', 6),
+  //         ];
+  //         const r = await makeConvertAfterWithdrawTest(
+  //           amountsToConvert,
+  //           debts,
+  //           collaterals,
+  //         );
+  //         controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW_ALL, (u, t) => {
+  //           expect(u).to.be.below(t + 1);
+  //         });
+  //       });
+  //     });
+  //   });
+  // });
 
   describe('_prepareRewardsList', () => {
     interface IPrepareRewardsListTestResults {
@@ -2951,8 +2649,8 @@ describe('ConverterStrategyBaseAccessTest', () => {
                   ],
                   liquidations: [
                     {
-                      amountIn: parseUnits("1.025", 18), // assume that all prices are 1 and overswap is 2500
-                      amountOut: parseUnits("5", 6), // assume that all prices are 1
+                      amountIn: "1.025", // assume that all prices are 1 and overswap is 2500
+                      amountOut: "5", // assume that all prices are 1
                       tokenIn: dai,
                       tokenOut: usdc
                     },
@@ -3018,8 +2716,8 @@ describe('ConverterStrategyBaseAccessTest', () => {
                   ],
                   liquidations: [
                     {
-                      amountIn: parseUnits("1000", 6),
-                      amountOut: parseUnits("1005", 6),
+                      amountIn: "1000",
+                      amountOut: "1005",
                       tokenIn: usdt,
                       tokenOut: usdc
                     },
@@ -3083,8 +2781,8 @@ describe('ConverterStrategyBaseAccessTest', () => {
                   ],
                   liquidations: [
                     {
-                      amountIn: parseUnits("500", 6),
-                      amountOut: parseUnits("505", 6),
+                      amountIn: "500",
+                      amountOut: "505",
                       tokenIn: usdt,
                       tokenOut: usdc
                     },
