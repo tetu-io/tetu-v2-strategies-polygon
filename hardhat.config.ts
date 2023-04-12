@@ -4,6 +4,7 @@ import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-etherscan';
 import '@nomiclabs/hardhat-web3';
 import '@nomiclabs/hardhat-solhint';
+import '@openzeppelin/hardhat-upgrades';
 import '@typechain/hardhat';
 import 'hardhat-contract-sizer';
 import 'hardhat-gas-reporter';

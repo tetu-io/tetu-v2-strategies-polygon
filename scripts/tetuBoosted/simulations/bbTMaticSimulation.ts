@@ -1,5 +1,5 @@
 import { ethers } from 'hardhat'
-import { IBalancerBoostedAavePool, IBVault, ILendingPool, IStMATIC } from '../../../typechain'
+import { IBalancerBoostedAavePool, IBVault } from '../../../typechain'
 
 
 async function main() {
