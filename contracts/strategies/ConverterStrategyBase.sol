@@ -449,6 +449,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // send other part of rewards to forwarder/compound
     (amountsToForward) = ConverterStrategyBaseLib.recycle(
+      converter,
       asset,
       compoundRatio,
       _depositorPoolAssets(),

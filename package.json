@@ -18,7 +18,8 @@
     "update-block": "ts-node scripts/utils/UpdateBlock.ts",
     "deploy-prod": "hardhat deploy --network matic --write true",
     "verify-all": "hardhat etherscan-verify --network matic",
-    "deploy-local": "hardhat deploy --write true --reset"
+    "deploy-local": "hardhat deploy --write true --reset",
+    "solhint": "solhint \"contracts/**/*.sol\""
   },
   "keywords": [
     "solidity",

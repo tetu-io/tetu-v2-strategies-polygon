@@ -5,6 +5,7 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib.sol";
 import "../../strategies/ConverterStrategyBaseLib2.sol";
+import "../../integrations/tetu-v1/ITetuV1Controller.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
@@ -118,6 +119,7 @@ contract ConverterStrategyBaseLibFacade {
   }
 
   function liquidate(
+    ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     address tokenIn,
     address tokenOut,
@@ -129,6 +131,7 @@ contract ConverterStrategyBaseLibFacade {
     uint receivedAmountOut
   ) {
     return ConverterStrategyBaseLib.liquidate(
+      converter_,
       liquidator_,
       tokenIn,
       tokenOut,

@@ -545,23 +545,25 @@ library ConverterStrategyBaseLib {
   /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
   function liquidate(
+    ITetuConverter converter,
     ITetuLiquidator liquidator_,
     address tokenIn_,
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_
+    uint liquidationThresholdTokenOut_
   ) external returns (
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
-    return _liquidate(liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, liquidationThresholdForTokenOut_);
+    return _liquidate(converter, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, liquidationThresholdTokenOut_);
   }
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
   function _liquidate(
+    ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     address tokenIn_,
     address tokenOut_,
@@ -581,11 +583,12 @@ library ConverterStrategyBaseLib {
 
     // if the expected value is higher than threshold distribute to destinations
     return amountOut > liquidationThresholdForTokenOut_
-      ? _liquidateWithRoute(route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_)
+      ? _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_)
       : (0, 0);
   }
 
   function _liquidateWithRoute(
+    ITetuConverter converter_,
     ITetuLiquidator.PoolData[] memory route,
     ITetuLiquidator liquidator_,
     address tokenIn_,
@@ -612,17 +615,16 @@ library ConverterStrategyBaseLib {
     : 0;
     spentAmountIn = amountIn_;
 
-    // todo check validity
-    //      require(
-    //        tetuConverter.isConversionValid(
-    //          tokens[i],
-    //          vars.spentAmountIn,
-    //          vars.asset,
-    //          vars.receivedAmountOut,
-    //          PRICE_IMPACT_TOLERANCE
-    //        ),
-    //        AppErrors.PRICE_IMPACT
-    //      );
+    require(
+      converter_.isConversionValid(
+        tokenIn_,
+        amountIn_,
+        tokenOut_,
+        receivedAmountOut,
+        PRICE_IMPACT_TOLERANCE
+      ),
+      AppErrors.PRICE_IMPACT
+    );
 
     emit Liquidation(
       tokenIn_,
@@ -811,6 +813,7 @@ library ConverterStrategyBaseLib {
       console.log("p.amounts[indexTokenIn]", p.amounts[indexTokenIn]);
 
       (amountSpent, amountReceived) = _liquidate(
+        p.converter,
         p.liquidator,
         p.tokens[indexTokenIn],
         p.tokens[p.indexTargetAsset],
@@ -842,6 +845,7 @@ library ConverterStrategyBaseLib {
   /// @param liquidationThresholds Liquidation thresholds for rewards tokens
   /// @return amountsToForward Amounts to be sent to forwarder
   function recycle(
+    ITetuConverter converter_,
     address asset,
     uint compoundRatio,
     address[] memory tokens,
@@ -879,6 +883,7 @@ library ConverterStrategyBaseLib {
             // We assume here, that {token} cannot be equal to {_asset}
             // because the {_asset} is always included to the list of depositor's assets
             (p.spentAmountIn, p.receivedAmountOut) = _liquidate(
+              converter_,
               liquidator,
               p.rewardToken,
               asset,
@@ -1206,6 +1211,7 @@ library ConverterStrategyBaseLib {
       if (i == indexAsset || amountsToConvert[i] == 0) continue;
       if (amountsToConvert[i] > repaidAmountsOut[i]) {
         (v.spent, v.received) = _liquidate(
+          tetuConverter,
           liquidator,
           tokens[i],
           v.asset,
@@ -1301,7 +1307,7 @@ library ConverterStrategyBaseLib {
   /// @param liquidationThreshold Min allowed amount of main asset to be liquidated in {liquidator}
   /// @return expectedAmountOut Estimated amount of main asset that should be added to balance = collateral - {toSell}
   function _closePositionUsingMainAsset(
-    ITetuConverter tetuConverter,
+    ITetuConverter converter,
     ITetuLiquidator liquidator_,
     address asset,
     address token,
@@ -1318,13 +1324,21 @@ library ConverterStrategyBaseLib {
     // quoteRepay requires amount-to-pay without debt-gap
     // we assume here that toSell calculated with and without debt-gap are almost same
     // and difference doesn't matter for our estimation here
-    uint amountOut = tetuConverter.quoteRepay(address(this), asset, token, amountToRepay);
+    uint amountOut = converter.quoteRepay(address(this), asset, token, amountToRepay);
 
     // we should get more than liquidation threshold for the main asset and more than we spent
     if (amountOut > Math.max(liquidationThreshold, DEFAULT_LIQUIDATION_THRESHOLD) && amountOut > toSell) {
-      (, uint toRepay) = _liquidateWithRoute(route, liquidator_, asset, token, toSell, _ASSET_LIQUIDATION_SLIPPAGE);
+      (, uint toRepay) = _liquidateWithRoute(
+        converter,
+        route,
+        liquidator_,
+        asset,
+        token,
+        toSell,
+        _ASSET_LIQUIDATION_SLIPPAGE
+      );
 
-      _closePosition(tetuConverter, asset, token, toRepay);
+      _closePosition(converter, asset, token, toRepay);
       expectedAmountOut = amountOut - toSell;
     }
 

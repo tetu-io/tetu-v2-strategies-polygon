@@ -968,7 +968,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
       // make test
       const ret = await facade.callStatic.liquidate(
-        // converter.address,
+        converter.address,
         liquidator.address,
         p.liquidation.tokenIn.address,
         p.liquidation.tokenOut.address,
@@ -978,7 +978,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       );
 
       const tx = await facade.liquidate(
-        // converter.address,
+        converter.address,
         liquidator.address,
         p.liquidation.tokenIn.address,
         p.liquidation.tokenOut.address,
