@@ -95,12 +95,13 @@ library ConverterStrategyBaseLib {
     uint collateral;
     uint spentAmountIn;
     uint receivedAmount;
-    uint toPay;
-    uint usedCollateral;
     uint remainingRequestedAmount;
     uint toRepayRatio;
     uint balance;
     uint[] tokensBalancesBefore;
+
+    uint toPay;
+    uint usedCollateral;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -1240,8 +1241,10 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
+  /// @param liquidationThreshold Min allowed amount of main asset to be liquidated in {liquidator}
   /// @param requestedAmount Requested amount of main asset
   /// @param repaidAmounts_ Already repaid amounts, two repays in single block are not allowed (see AAVE3)
+  /// @return expectedAmountMainAssetOut How much main asset is expected to be received on balance
   function closePositionsToGetRequestedAmount(
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
@@ -1256,32 +1259,31 @@ library ConverterStrategyBaseLib {
     CloseDebtsForRequiredAmountLocal memory v;
     v.asset = tokens[indexAsset];
     v.len = tokens.length;
+
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
       // if we already closed position for an asset we can not close it again in the same block
-      if (i == indexAsset || repaidAmounts_[i] != 0) {
-        continue;
-      }
+      if (i == indexAsset || repaidAmounts_[i] != 0) continue;
 
       v.balance = IERC20(v.asset).balanceOf(address(this));
       console.log("closeDebtsForRequiredAmount vars.balance", i, v.balance);
-
-      if (v.balance >= requestedAmount) {
-        break;
-      }
+      if (v.balance >= requestedAmount) break;
 
       v.remainingRequestedAmount = requestedAmount - v.balance;
-      console.log("convertAfterWithdraw vars.remainingRequestedAmount", i, v.remainingRequestedAmount);
 
       (v.toPay, v.usedCollateral) = tetuConverter.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
-      console.log("convertAfterWithdraw vars.toPay", i, v.toPay);
+
+      console.log("convertAfterWithdraw vars.toPayOn/Off", i, v.toPayOn, v.toPayOff);
       console.log("convertAfterWithdraw vars.usedCollateral", i, v.usedCollateral);
 
-      if (v.toPay != 0) {
+      if (v.toPayOn != 0) {
         // add 1% gap, it is safe to try to repay more than dept, should be handled in _closePosition()
         v.toRepayRatio = v.usedCollateral < v.remainingRequestedAmount
           ? 101e18
           : (v.remainingRequestedAmount * 101e18) / v.usedCollateral;
 
+        // Actually we need to pay S = v.toPayOn * ratio then repay(S) and get v.usedCollateral * ratio of collateral.
+        // But we don't know how to convert S => toSell.
+        // So, for simplicity we sell more collateral then necessary: v.usedCollateral * ratio
 
         uint toSell = Math.min(v.usedCollateral * v.toRepayRatio / 100e18, v.balance);
         if (toSell != 0) {

@@ -12,7 +12,6 @@ import {ILiquidationParams, IQuoteRepayParams, IRepayParams} from "../../baseUT/
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
-import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
   GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET,
@@ -714,13 +713,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
       for (const liquidation of p.liquidations) {
         await setupMockedLiquidation(liquidator, liquidation);
-        await setupIsConversionValid(
-          converter,
-          liquidation,
-          p.isConversionValid === undefined
-            ? true
-            : p.isConversionValid
-        )
+        const isConversionValid = p.isConversionValid === undefined ? true : p.isConversionValid;
+        await setupIsConversionValid(converter, liquidation, isConversionValid)
       }
 
       // make test
@@ -916,6 +910,122 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           prices: ["1", "1"] // for simplicity
         })).revertedWith("TS-15 No liquidation route"); // NO_LIQUIDATION_ROUTE
       });
+    });
+  });
+
+  describe("closePositionsToGetRequestedAmount", () => {
+    interface IClosePositionToGetRequestedAmountResults {
+      expectedAmountMainAssetOut: number;
+      gasUsed: BigNumber;
+      balances: string[];
+    }
+    interface IClosePositionToGetRequestedAmountParams {
+      requestedAmount: string;
+      tokens: MockToken[];
+      indexAsset: number;
+      balances: string[];
+      repaidAmounts: string[];
+      prices: string[];
+      liquidationThreshold: string;
+      liquidations: ILiquidationParams[];
+      quoteRepays: IQuoteRepayParams[];
+      repays: IRepayParams[];
+      isConversionValid?: boolean;
+    }
+    async function makeClosePositionToGetRequestedAmountTest(
+      p: IClosePositionToGetRequestedAmountParams
+    ) : Promise<IClosePositionToGetRequestedAmountResults> {
+      // set up balances
+      const decimals: number[] = [];
+      for (let i = 0; i < p.assetToken.length; ++i) {
+        const d = await p.assetToken[i].decimals()
+        decimals.push(d);
+
+        // set up current balances
+        await p.assetToken[i].mint(facade.address, parseUnits(p.balances[i], d));
+        console.log("mint", i, p.balances[i]);
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      const priceOracle = (await DeployerUtils.deployContract(
+        signer,
+        'PriceOracleMock',
+        p.assetToken.map(x => x.address),
+        p.prices.map(x => parseUnits(x, 18))
+      )) as PriceOracleMock;
+      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(tetuConverterController.address);
+
+      // set up repay
+      for (const repay of p.repays) {
+        await setupMockedRepay(converter, facade.address, repay);
+      }
+      for (const quoteRepay of p.quoteRepays) {
+        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
+      }
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        const isConversionValid = p.isConversionValid === undefined ? true : p.isConversionValid;
+        await setupIsConversionValid(converter, liquidation, isConversionValid)
+      }
+
+      // make test
+      const ret = await facade.callStatic._closePositionUsingMainAsset(
+        converter.address,
+        liquidator.address,
+        p.assetToken[0].address,
+        p.assetToken[1].address,
+        parseUnits(p.toSell, decimals[0]),
+        parseUnits(p.liquidationThreshold, decimals[0]),
+      );
+
+      const tx = await facade._closePositionUsingMainAsset(
+        converter.address,
+        liquidator.address,
+        p.assetToken[0].address,
+        p.assetToken[1].address,
+        parseUnits(p.toSell, decimals[0]),
+        parseUnits(p.liquidationThreshold, decimals[0]),
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        expectedAmountOut: +formatUnits(ret, decimals[0]),
+        gasUsed,
+        balanceAsset: +formatUnits(await p.assetToken[0].balanceOf(facade.address), decimals[0]),
+        balanceToken: +formatUnits(await p.assetToken[1].balanceOf(facade.address), decimals[1]),
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("repaidAmounts_ is zero", () => {
+        describe("Partial repayment", () => {
+          it("should", async () => {
+
+          });
+        });
+        describe("Full repayment", () => {
+          it("should", async () => {
+
+          });
+        });
+      });
+      describe("repaidAmounts_ is not zero", () => {
+        it("should not close any debts", async () => {
+
+        });
+      });
+      describe("There are no debts", () => {
+        it("should not close any debts", async () => {
+
+        });
+      });
+    });
+    describe("Bad paths", () => {
+
     });
   });
 

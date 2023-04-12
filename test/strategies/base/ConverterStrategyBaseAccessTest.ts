@@ -2491,6 +2491,7 @@ describe('ConverterStrategyBaseAccessTest', () => {
             repayment.borrowAsset.address,
             repayment.totalDebtAmountOut,
             repayment.totalCollateralAmountOut,
+            true
           );
           await tetuConverter.setRepay(
             repayment.collateralAsset.address,

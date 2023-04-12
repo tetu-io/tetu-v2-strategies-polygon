@@ -458,9 +458,10 @@ contract MockTetuConverter is ITetuConverter {
     address borrowAsset;
     uint totalDebtAmountOut;
     uint totalCollateralAmountOut;
+    bool useDebtGap;
   }
 
-  /// @notice keccak256(user_, collateralAsset_, borrowAsset_) => results
+  /// @notice keccak256(user_, collateralAsset_, borrowAsset_, useDebtGap_) => results
   mapping(bytes32 => GetDebtAmountParams) public getDebtAmountCurrentParams;
 
   function getDebtAmountCurrent(
@@ -472,11 +473,9 @@ contract MockTetuConverter is ITetuConverter {
     uint totalDebtAmountOut,
     uint totalCollateralAmountOut
   ) {
-    useDebtGap_;
-
     console.log("MockTetuConverter.getDebtAmountCurrent user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
 
-    bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_));
+    bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap_));
     GetDebtAmountParams memory p = getDebtAmountCurrentParams[key];
     if (
       p.user == user_
@@ -488,11 +487,12 @@ contract MockTetuConverter is ITetuConverter {
         p.totalCollateralAmountOut
       );
       return (
-      p.totalDebtAmountOut,
-      p.totalCollateralAmountOut
+        p.totalDebtAmountOut,
+        p.totalCollateralAmountOut
       );
     } else {
       console.log("MockTetuConverter.getDebtAmountCurrent.missed user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
+      console.log("MockTetuConverter.getDebtAmountCurrent.missed useDebtGap", useDebtGap_);
       return (0, 0);
     }
   }
@@ -502,22 +502,25 @@ contract MockTetuConverter is ITetuConverter {
     address collateralAsset_,
     address borrowAsset_,
     uint totalDebtAmountOut,
-    uint totalCollateralAmountOut
+    uint totalCollateralAmountOut,
+    bool useDebtGap
   ) external {
-    bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_));
+    bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap));
     getDebtAmountCurrentParams[key] = GetDebtAmountParams({
-    user : user_,
-    collateralAsset : collateralAsset_,
-    borrowAsset : borrowAsset_,
-    totalCollateralAmountOut : totalCollateralAmountOut,
-    totalDebtAmountOut : totalDebtAmountOut
+      user: user_,
+      collateralAsset: collateralAsset_,
+      borrowAsset: borrowAsset_,
+      totalCollateralAmountOut: totalCollateralAmountOut,
+      totalDebtAmountOut: totalDebtAmountOut,
+      useDebtGap: useDebtGap
     });
   }
 
   //////////////////////////////////////////////////////////
   ///  getDebtAmountStored
   //////////////////////////////////////////////////////////
-  GetDebtAmountParams public getDebtAmountStoredParams;
+  /// @notice keccak256(user_, collateralAsset_, borrowAsset_, useDebtGap_) => results
+  mapping(bytes32 => GetDebtAmountParams) public getDebtAmountStoredParams;
 
   function getDebtAmountStored(
     address user_,
@@ -529,18 +532,22 @@ contract MockTetuConverter is ITetuConverter {
     uint totalCollateralAmountOut
   ) {
     console.log("MockTetuConverter.getDebtAmountStored user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
-    useDebtGap_;
 
-    if (
-      getDebtAmountStoredParams.user == user_
-      && getDebtAmountStoredParams.collateralAsset == collateralAsset_
-      && getDebtAmountStoredParams.borrowAsset == borrowAsset_
-    ) {
+    bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap_));
+    GetDebtAmountParams memory p = getDebtAmountCurrentParams[key];
+    if (p.user == user_) {
+      console.log("MockTetuConverter.getDebtAmountStored totalDebtAmountOut,totalCollateralAmountOut,useDebtGap_",
+        p.totalDebtAmountOut,
+        p.totalCollateralAmountOut,
+        useDebtGap_
+      );
       return (
-      getDebtAmountStoredParams.totalDebtAmountOut,
-      getDebtAmountStoredParams.totalCollateralAmountOut
+        p.totalDebtAmountOut,
+        p.totalCollateralAmountOut
       );
     } else {
+      console.log("MockTetuConverter.getDebtAmountStored.missed user,collateral,borrow", user_, collateralAsset_, borrowAsset_);
+      console.log("MockTetuConverter.getDebtAmountStored.missed useDebtGap_", useDebtGap_);
       return (0, 0);
     }
   }
@@ -550,13 +557,18 @@ contract MockTetuConverter is ITetuConverter {
     address collateralAsset_,
     address borrowAsset_,
     uint totalDebtAmountOut,
-    uint totalCollateralAmountOut
+    uint totalCollateralAmountOut,
+    bool useDebtGap
   ) external {
-    getDebtAmountStoredParams.user = user_;
-    getDebtAmountStoredParams.collateralAsset = collateralAsset_;
-    getDebtAmountStoredParams.borrowAsset = borrowAsset_;
-    getDebtAmountStoredParams.totalCollateralAmountOut = totalCollateralAmountOut;
-    getDebtAmountStoredParams.totalDebtAmountOut = totalDebtAmountOut;
+    bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap));
+    getDebtAmountStoredParams[key] = GetDebtAmountParams({
+      user: user_,
+      collateralAsset: collateralAsset_,
+      borrowAsset: borrowAsset_,
+      totalCollateralAmountOut: totalCollateralAmountOut,
+      totalDebtAmountOut: totalDebtAmountOut,
+      useDebtGap: useDebtGap
+    });
   }
 
   //////////////////////////////////////////////////////////

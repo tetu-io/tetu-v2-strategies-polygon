@@ -1826,6 +1826,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             params.debts[i].borrowAsset.address,
             parseUnits(params.debts[i].debtAmount, decimals[i]),
             parseUnits(params.debts[i].collateralAmount, decimals[params.indexAsset]),
+            false
           );
         }
       }
