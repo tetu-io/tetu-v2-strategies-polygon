@@ -123,6 +123,8 @@ library ConverterStrategyBaseLib {
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
   /// @dev Absolute value for any token
   uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 100_000;
+  /// @dev 1% gap in calculation of amount-to-sell in {closePositionsToGetRequestedAmount}
+  uint internal constant GAP_AMOUNT_TO_SELL = 1_000;
 
   /////////////////////////////////////////////////////////////////////
   ///                         Events
@@ -1264,29 +1266,45 @@ library ConverterStrategyBaseLib {
     return expectedAmountMainAssetOut;
   }
 
+  /// @notice What amount of collateral should be sold to pay the debt and receive {requestedAmount}
+  /// @param requestedAmount We need to increase balance (of collateral asset) on this amount
+  /// @param totalDebt Total debt of the borrow in terms of borrow asset
+  /// @param totalCollateral Total collateral of the borrow in terms of collateral asset
+  /// @param prices Cost of $1 in terms of the asset, decimals 18
+  /// @param decs 10**decimals for each asset
+  /// @param indexCollateral Index of the collateral asset in {prices} and {decs}
+  /// @param indexBorrowAsset Index of the borrow asset in {prices} and {decs}
   function _getAmountToSell(
-    uint remainingRequestedAmount,
+    uint requestedAmount,
     uint totalDebt,
     uint totalCollateral,
     uint[] memory prices,
     uint[] memory decs,
     uint indexCollateral,
     uint indexBorrowAsset
-  ) internal pure returns (
+  ) internal view returns (
     uint amountOut
   ) {
     // for definiteness: usdc - collateral asset, dai - borrow asset
-    // Pc = price of the USDC, Pb = price of the DAI, alpha = Pc / Pb (assume decimals are fixed) [DAI / USDC]
+    // Pc = price of the USDC, Pb = price of the DAI, alpha = Pc / Pb [DAI / USDC]
     // S [USDC] - amount to sell, R [DAI] = alpha * S - amount to repay
     // After repaying R we get: alpha * S * C / R
     // Balance should be increased on: requestedAmount = alpha * S * C / R - S
     // So, we should sell: S = requestedAmount / (alpha * C / R - 1))
-    // We can lost some amount on liquidation of S => R, so we need to use some gap, i.e. 1%
-    uint alpha18 = 1e18 * (prices[indexCollateral] * decs[indexBorrowAsset])
-                   / prices[indexBorrowAsset] * decs[indexCollateral];
-    return alpha18 * totalCollateral / totalDebt > 1
-      ? remainingRequestedAmount * 1e18 / (alpha18 * totalCollateral / totalDebt - 1e18)
+    // We can lost some amount on liquidation of S => R, so we need to use some gap = {GAP_AMOUNT_TO_SELL}
+    // Same formula: S * h = S + requestedAmount, where h = health factor => s = requestedAmount / (h - 1)
+    // h = alpha * C / R
+    uint alpha18 = prices[indexCollateral] * decs[indexBorrowAsset] * 1e18
+                 / prices[indexBorrowAsset] / decs[indexCollateral];
+
+    amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18
+      ? (GAP_AMOUNT_TO_SELL + DENOMINATOR) * requestedAmount * 1e18
+         / (alpha18 * totalCollateral / totalDebt - 1e18) / DENOMINATOR
       : 0;
+    // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
+    return amountOut == 0
+      ? 0
+      : Math.min(amountOut, totalDebt * 1e18 / alpha18);
   }
 
   /// @notice Swap amount {toSell} of main asset to {token}, repay result amount and get collateral in return

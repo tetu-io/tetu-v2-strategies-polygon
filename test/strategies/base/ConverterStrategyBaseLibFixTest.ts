@@ -1283,20 +1283,91 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     }
 
     describe("Good paths", () => {
-      it("should return expected values", async () => {
-        const r = await makeGetAmountToSellTest({
-          indexCollateral: 0,
-          decimals: [6, 18], // usdc, dai
-          prices: ["1", "0.5"],
-          totalDebt: "1000",
-          totalCollateral: "3000",
-          remainingRequestedAmount: "800"
+      describe("usdc=$1, dai=$0.5", () => {
+        describe("collateral > requested amount", () => {
+          it("should return expected value", async () => {
+            const r = await makeGetAmountToSellTest({
+              indexCollateral: 0,
+              decimals: [6, 18], // usdc, dai
+              prices: ["1", "0.5"], // assume prices 1:2
+              totalDebt: "1000",
+              totalCollateral: "3000", // assume health factor is 1.5
+              remainingRequestedAmount: "800"
+            });
+            // alpha = 2e30, (alpha18 * totalCollateral / totalDebt - 1e18) = 5e18
+            expect(r.amountOut).eq(161.6); // 160 * 101/100
+          });
         });
-        expect(r.amountOut).eq(400);
+        describe("collateral = requested amount", () => {
+          it("should return expected value", async () => {
+            const r = await makeGetAmountToSellTest({
+              indexCollateral: 0,
+              decimals: [6, 18], // usdc, dai
+              prices: ["1", "0.5"], // assume prices 1:2
+              totalDebt: "1000", // [dai] == 500 USDC
+              totalCollateral: "3000", // assume health factor is 1.5
+              remainingRequestedAmount: "3000"
+            });
+            // alpha = 2e30, (alpha18 * totalCollateral / totalDebt - 1e18) = 5e18
+            expect(r.amountOut).eq(500); // 600 * 101/100 = 606 > max allowed 500 usdc, so 500
+          });
+        });
+      });
+      describe("tetu=$0.02, usdt=$2", () => {
+        describe("collateral > requested amount", () => {
+          it("should return expected value", async () => {
+            const r = await makeGetAmountToSellTest({
+              indexCollateral: 0,
+              decimals: [18, 6], // tetu, usdt
+              prices: ["0.02", "2"],
+              totalDebt: "400", // === $800
+              totalCollateral: "50000", // === $1000
+              remainingRequestedAmount: "25000" // === $500
+            });
+            // 2500e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 10100
+            expect(r.amountOut).eq(10100);
+          });
+        });
+        describe("collateral = requested amount", () => {
+          it("should return expected value", async () => {
+            const r = await makeGetAmountToSellTest({
+              indexCollateral: 0,
+              decimals: [18, 6], // tetu, usdt
+              prices: ["0.02", "2"],
+              totalDebt: "400", // === $800
+              totalCollateral: "50000", // === $1000
+              remainingRequestedAmount: "50000" // === $1000
+            });
+            // 50000e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 202000 > 50000
+            // 400e6*1e18/(0.02*1e6*1e18/2/1e18)/1e18 = 40000 === $800
+            expect(r.amountOut).eq(40000); // == $800 == totalDebt
+          });
+        });
       });
     });
     describe("Bad paths", () => {
-
+      it("should return zero if the debt is zero", async () => {
+        const r = await makeGetAmountToSellTest({
+          indexCollateral: 0,
+          decimals: [6, 18],
+          prices: ["1", "0.5"],
+          totalDebt: "0", // (!) all debts were already paid
+          totalCollateral: "3000",
+          remainingRequestedAmount: "800"
+        });
+        expect(r.amountOut).eq(0);
+      });
+      it("should return zero if the collateral is zero", async () => {
+        const r = await makeGetAmountToSellTest({
+          indexCollateral: 0,
+          decimals: [6, 18],
+          prices: ["1", "0.5"],
+          totalDebt: "1000",
+          totalCollateral: "0", // (!) liquidation happens
+          remainingRequestedAmount: "800"
+        });
+        expect(r.amountOut).eq(0);
+      });
     });
   });
 //endregion Unit tests
