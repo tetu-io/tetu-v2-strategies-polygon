@@ -98,10 +98,12 @@ library ConverterStrategyBaseLib {
     uint balance;
     uint[] tokensBalancesBefore;
 
-    uint toPay;
-    uint usedCollateral;
+    uint totalDebt;
+    uint totalCollateral;
 
+    /// @notice Cost of $1 in terms of the assets, decimals 18
     uint[] prices;
+    /// @notice 10**decimal for the assets
     uint[] decs;
   }
 
@@ -1221,12 +1223,6 @@ library ConverterStrategyBaseLib {
     v.asset = tokens[indexAsset];
     v.len = tokens.length;
 
-    (v.prices, v.decs) = _getPricesAndDecs(
-      IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle()),
-      tokens,
-      v.len
-    );
-
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
       // if we already closed position for an asset we can not close it again in the same block
       if (i == indexAsset || repaidAmounts_[i] != 0) continue;
@@ -1236,21 +1232,32 @@ library ConverterStrategyBaseLib {
 
       // we need to increase balance on the following amount: requestedAmount - v.balance;
       // we have following borrow: amount-to-pay and corresponded collateral
-      (v.toPay, v.usedCollateral) = tetuConverter.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
+      (v.totalDebt, v.totalCollateral) = tetuConverter.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
 
-      if (v.toPay != 0) {
-        // add 1% gap, it is safe to try to repay more than dept, should be handled in _closePosition()
+      if (v.totalDebt != 0) { // _getAmountToSell checks totalCollateral !=0, it is unreal case
+        //lazy initialization of the prices and decs
+        if (v.prices.length == 0) {
+          (v.prices, v.decs) = _getPricesAndDecs(
+            IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle()),
+            tokens,
+            v.len
+          );
+        }
+
+        // what amount of main asset we should sell to pay the debt
         uint toSell = _getAmountToSell(
           requestedAmount - v.balance,
-          v.toPay,
-          v.usedCollateral,
+          v.totalDebt,
+          v.totalCollateral,
           v.prices,
           v.decs,
           indexAsset,
           i
-        ) * 101 / 100;
+        );
 
         if (toSell != 0) {
+          // sell {toSell}, repay the debt, return collateral back
+          // we should receive amount > toSell
           expectedAmountMainAssetOut += _closePositionUsingMainAsset(
             tetuConverter,
             liquidator,
@@ -1267,6 +1274,7 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice What amount of collateral should be sold to pay the debt and receive {requestedAmount}
+  /// @dev It doesn't allow to sell more than the amount of total debt in the borrow
   /// @param requestedAmount We need to increase balance (of collateral asset) on this amount
   /// @param totalDebt Total debt of the borrow in terms of borrow asset
   /// @param totalCollateral Total collateral of the borrow in terms of collateral asset
@@ -1282,7 +1290,7 @@ library ConverterStrategyBaseLib {
     uint[] memory decs,
     uint indexCollateral,
     uint indexBorrowAsset
-  ) internal view returns (
+  ) internal pure returns (
     uint amountOut
   ) {
     // for definiteness: usdc - collateral asset, dai - borrow asset
@@ -1297,10 +1305,12 @@ library ConverterStrategyBaseLib {
     uint alpha18 = prices[indexCollateral] * decs[indexBorrowAsset] * 1e18
                  / prices[indexBorrowAsset] / decs[indexCollateral];
 
+    // if totalCollateral is zero (liquidation happens) we will have zero amount (the debt shouldn't be paid)
     amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18
       ? (GAP_AMOUNT_TO_SELL + DENOMINATOR) * requestedAmount * 1e18
          / (alpha18 * totalCollateral / totalDebt - 1e18) / DENOMINATOR
       : 0;
+
     // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
     return amountOut == 0
       ? 0

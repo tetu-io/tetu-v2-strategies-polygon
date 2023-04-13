@@ -304,7 +304,7 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory decs,
     uint indexCollateral,
     uint indexBorrowAsset
-  ) external view returns (
+  ) external pure returns (
     uint amountOut
   ) {
     return ConverterStrategyBaseLib._getAmountToSell(
