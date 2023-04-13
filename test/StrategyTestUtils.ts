@@ -63,7 +63,7 @@ export async function doHardWorkForStrategy(
   await ForwarderV3__factory.connect(forwarder, splitter.signer).setTetuThreshold(0);
 
   console.log('### DO HARD WORK CALL ###');
-  const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true, {gasLimit: 10_000_000});
+  const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true, { gasLimit: 10_000_000 });
   const receipt = await tx.wait();
   await handleReceiptDoHardWork(receipt, decimals);
 
@@ -103,13 +103,15 @@ export async function rebalanceUniv3Strategy(
   console.log('### REBALANCE CALL ###');
   const stateBefore = await strategy.getState();
 
-  const tx = await strategy.connect(signer).rebalance({gasLimit: 10_000_000});
+  const tx = await strategy.connect(signer).rebalance({ gasLimit: 10_000_000 });
   const receipt = await tx.wait();
   await handleReceiptRebalance(receipt, decimals);
 
   const stateAfter = await strategy.getState();
 
   await printStateDifference(decimals, stateBefore, stateAfter);
+
+  // todo check that balance on the strategy is empty after rebalance call
 }
 
 export async function printStateDifference(
@@ -184,7 +186,7 @@ export async function redeemFromVault(
     txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address, { gasLimit: 10_000_000 });
   } else {
     const toRedeem = amount.sub(1);
-    expectedAssets = await vault.previewRedeem(toRedeem, );
+    expectedAssets = await vault.previewRedeem(toRedeem);
     txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address, { gasLimit: 10_000_000 });
   }
   const receipt = await txDepost.wait();

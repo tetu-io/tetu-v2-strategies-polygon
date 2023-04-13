@@ -184,7 +184,7 @@ library ConverterStrategyBaseLib {
       : (liquidityAmount_ >= totalSupply_
         ? 1e18
         : 1e18 * liquidityAmount_ / totalSupply_
-    );
+      );
 
     uint len = reserves_.length;
     withdrawnAmountsOut = new uint[](len);
@@ -308,21 +308,21 @@ library ConverterStrategyBaseLib {
             // we have exact amount of total collateral amount
             // Case ENTRY_KIND_EXACT_PROPORTION_1 is here too because we consider first platform only
             vars.collateral = amountIn_ < vars.collateralsRequired[i]
-            ? amountIn_
-            : vars.collateralsRequired[i];
+              ? amountIn_
+              : vars.collateralsRequired[i];
             vars.amountToBorrow = amountIn_ < vars.collateralsRequired[i]
-            ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
-            : vars.amountsToBorrow[i];
+              ? vars.amountsToBorrow[i] * amountIn_ / vars.collateralsRequired[i]
+              : vars.amountsToBorrow[i];
             amountIn_ -= vars.collateral;
           } else {
             // assume here that entryKind == EntryKinds.ENTRY_KIND_EXACT_BORROW_OUT_FOR_MIN_COLLATERAL_IN_2
             // we have exact amount of total amount-to-borrow
             vars.amountToBorrow = amountIn_ < vars.amountsToBorrow[i]
-            ? amountIn_
-            : vars.amountsToBorrow[i];
+              ? amountIn_
+              : vars.amountsToBorrow[i];
             vars.collateral = amountIn_ < vars.amountsToBorrow[i]
-            ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
-            : vars.collateralsRequired[i];
+              ? vars.collateralsRequired[i] * amountIn_ / vars.amountsToBorrow[i]
+              : vars.collateralsRequired[i];
             amountIn_ -= vars.amountToBorrow;
           }
 
@@ -519,8 +519,8 @@ library ConverterStrategyBaseLib {
 
     // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (dust tokens)
     repaidAmountOut = balanceBefore > balanceAfter
-    ? balanceBefore - balanceAfter
-    : 0;
+      ? balanceBefore - balanceAfter
+      : 0;
 
     require(returnedBorrowAmountOut == 0, StrategyLib.WRONG_VALUE);
   }
@@ -615,8 +615,8 @@ library ConverterStrategyBaseLib {
 
     // assign correct values to
     receivedAmountOut = balanceAfter > balanceBefore
-    ? balanceAfter - balanceBefore
-    : 0;
+      ? balanceAfter - balanceBefore
+      : 0;
     spentAmountIn = amountIn_;
 
     require(
@@ -1004,6 +1004,10 @@ library ConverterStrategyBaseLib {
       }
     }
 
+    // todo need to somehow calculate additional amountsToConvert_ if we will withdraw not enough
+    // todo it should cover a rare case when user exit from the vault before rebalance
+    // todo however, if user will exit between rebalances and the gap will be lower than withdraw fee, we will put the fee to vault balance and increase share price
+
     return amountOut;
   }
 
@@ -1203,7 +1207,7 @@ library ConverterStrategyBaseLib {
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
-    mapping (address => uint) storage liquidationThresholds,
+    mapping(address => uint) storage liquidationThresholds,
     uint requestedAmount,
     address[] memory tokens,
     uint[] memory repaidAmounts_
@@ -1225,7 +1229,7 @@ library ConverterStrategyBaseLib {
       // we have following borrow: amount-to-pay and corresponded collateral
       (v.totalDebt, v.totalCollateral) = tetuConverter.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
 
-      if (v.totalDebt != 0) { // _getAmountToSell checks totalCollateral !=0, it is unreal case
+      if (v.totalDebt != 0) {// _getAmountToSell checks totalCollateral !=0, it is unreal case
         //lazy initialization of the prices and decs
         if (v.prices.length == 0) {
           (v.prices, v.decs) = _getPricesAndDecs(
@@ -1294,12 +1298,12 @@ library ConverterStrategyBaseLib {
     // Same formula: S * h = S + requestedAmount, where h = health factor => s = requestedAmount / (h - 1)
     // h = alpha * C / R
     uint alpha18 = prices[indexCollateral] * decs[indexBorrowAsset] * 1e18
-                 / prices[indexBorrowAsset] / decs[indexCollateral];
+    / prices[indexBorrowAsset] / decs[indexCollateral];
 
     // if totalCollateral is zero (liquidation happens) we will have zero amount (the debt shouldn't be paid)
     amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18
       ? (GAP_AMOUNT_TO_SELL + DENOMINATOR) * requestedAmount * 1e18
-         / (alpha18 * totalCollateral / totalDebt - 1e18) / DENOMINATOR
+      / (alpha18 * totalCollateral / totalDebt - 1e18) / DENOMINATOR
       : 0;
 
     // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
@@ -1320,7 +1324,7 @@ library ConverterStrategyBaseLib {
     address asset,
     address token,
     uint toSell,
-    mapping (address => uint) storage liquidationThresholds
+    mapping(address => uint) storage liquidationThresholds
   ) internal returns (
     uint expectedAmountOut
   ) {

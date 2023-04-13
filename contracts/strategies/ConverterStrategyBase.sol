@@ -39,7 +39,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint balanceAfterWithdraw;
     address[] tokens;
     address asset;
-}
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                        CONSTANTS
@@ -211,6 +211,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                     Withdraw from the pool
   /////////////////////////////////////////////////////////////////////
 
+  function _beforeWithdraw(uint /*amount*/) internal virtual {
+    // do nothing
+  }
+
   /// @notice Withdraw given amount from the pool.
   /// @param amount Amount to be withdrawn in terms of the asset.
   /// @return expectedWithdrewUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
@@ -244,6 +248,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint __assetPrice,
     uint strategyLoss
   ) {
+    _beforeWithdraw(amount);
+
     WithdrawUniversalLocal memory v;
     v.all = amount == type(uint).max;
     (v.investedAssetsBeforeWithdraw, strategyLoss) = _updateInvestedAssetsAndGetLoss(true);
@@ -559,12 +565,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint __investedAssets = _investedAssets;
 
     updatedInvestedAssets = updateTotalAssetsBeforeInvest_
-    ? _updateInvestedAssets()
-    : __investedAssets;
+      ? _updateInvestedAssets()
+      : __investedAssets;
 
     loss = updateTotalAssetsBeforeInvest_
-    ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
-    : uint(0);
+      ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
+      : uint(0);
   }
 
   /////////////////////////////////////////////////////////////////////

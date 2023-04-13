@@ -73,10 +73,10 @@ library ConverterStrategyBaseLib2 {
 
       uint toPerf = performanceAmounts[i] / 2;
       uint toInsurance = performanceAmounts[i] - toPerf;
-      if(toPerf != 0) {
+      if (toPerf != 0) {
         IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, toPerf);
       }
-      if(toInsurance != 0) {
+      if (toInsurance != 0) {
         IERC20(rewardTokens_[i]).safeTransfer(insurance, toInsurance);
       }
     }
