@@ -9,6 +9,12 @@ import "../../integrations/tetu-v1/ITetuV1Controller.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
+  mapping (address => uint) public liquidationThresholds;
+
+  function setLiquidationThreshold(address asset, uint values) external {
+    liquidationThresholds[asset] = values;
+  }
+
   function getExpectedWithdrawnAmounts(
     uint[] memory reserves_,
     uint liquidityAmount_,
@@ -258,7 +264,6 @@ contract ConverterStrategyBaseLibFacade {
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
-    uint liquidationThreshold,
     uint requestedAmount,
     address[] memory tokens,
     uint[] memory repaidAmounts_
@@ -269,7 +274,7 @@ contract ConverterStrategyBaseLibFacade {
       tetuConverter,
       liquidator,
       indexAsset,
-      liquidationThreshold,
+      liquidationThresholds,
       requestedAmount,
       tokens,
       repaidAmounts_
@@ -281,8 +286,7 @@ contract ConverterStrategyBaseLibFacade {
     ITetuLiquidator liquidator_,
     address asset,
     address token,
-    uint toSell,
-    uint liquidationThreshold
+    uint toSell
   ) external returns (
     uint expectedAmountOut
   ) {
@@ -292,7 +296,7 @@ contract ConverterStrategyBaseLibFacade {
       asset,
       token,
       toSell,
-      liquidationThreshold
+      liquidationThresholds
     );
   }
 

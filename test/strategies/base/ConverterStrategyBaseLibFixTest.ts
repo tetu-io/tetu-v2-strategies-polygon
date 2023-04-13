@@ -667,7 +667,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     }
     interface IClosePositionUsingMainAssetParams {
       assetToken: MockToken[];
-      liquidationThreshold: string;
+      liquidationThresholdForToken: string;
       balances: string[];
       toSell: string;
       prices: string[];
@@ -717,6 +717,9 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         await setupIsConversionValid(converter, liquidation, isConversionValid)
       }
 
+      // set up liquidation threshold for token
+      await facade.setLiquidationThreshold(p.assetToken[1].address, parseUnits(p.liquidationThresholdForToken, decimals[1]));
+
       // make test
       const ret = await facade.callStatic._closePositionUsingMainAsset(
         converter.address,
@@ -724,7 +727,6 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.assetToken[0].address,
         p.assetToken[1].address,
         parseUnits(p.toSell, decimals[0]),
-        parseUnits(p.liquidationThreshold, decimals[0]),
       );
 
       const tx = await facade._closePositionUsingMainAsset(
@@ -733,7 +735,6 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.assetToken[0].address,
         p.assetToken[1].address,
         parseUnits(p.toSell, decimals[0]),
-        parseUnits(p.liquidationThreshold, decimals[0]),
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
@@ -760,9 +761,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               return makeClosePositionUsingMainAssetTest({
                 assetToken: [usdc, dai],
                 balances: ["200", "91"], // usdc, dai
-                liquidationThreshold: "400", // it's lower than collateralAmountOut=401
+                liquidationThresholdForToken: "304", // it's lower than amountOut=305
                 toSell: "107",
-                liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
+                liquidations: [{
+                  amountIn: "107",
+                  amountOut: "305",
+                  tokenIn: usdc,
+                  tokenOut: dai
+                }],
                 quoteRepays: [{
                   collateralAsset: usdc,
                   borrowAsset: dai,
@@ -810,7 +816,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               return makeClosePositionUsingMainAssetTest({
                 assetToken: [usdc, dai],
                 balances: ["200", "91"], // usdc, dai
-                liquidationThreshold: "0",
+                liquidationThresholdForToken: "0",
                 toSell: "107",
                 liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
                 quoteRepays: [{
@@ -855,7 +861,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             return makeClosePositionUsingMainAssetTest({
               assetToken: [usdc, dai],
               balances: ["200", "91"], // usdc, dai
-              liquidationThreshold: "402", // (!) it's higher than collateralAmountOut==401
+              liquidationThresholdForToken: "402", // (!) it's higher than collateralAmountOut==401
               toSell: "107",
               liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
               quoteRepays: [{collateralAsset: usdc, borrowAsset: dai, amountRepay: "305", collateralAmountOut: "401"}],
@@ -895,7 +901,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         await expect(makeClosePositionUsingMainAssetTest({
           assetToken: [usdc, dai],
           balances: ["200", "91"], // usdc, dai
-          liquidationThreshold: "400", // it's lower than collateralAmountOut=401
+          liquidationThresholdForToken: "400", // it's lower than collateralAmountOut=401
           toSell: "107",
           liquidations: [], // (!) no liquidation
           quoteRepays: [{collateralAsset: usdc, borrowAsset: dai, amountRepay: "305", collateralAmountOut: "401"}],
@@ -926,7 +932,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       balances: string[];
       repaidAmounts: string[];
       prices: string[];
-      liquidationThreshold: string;
+      liquidationThresholds: string[];
       liquidations: ILiquidationParams[];
       quoteRepays: IQuoteRepayParams[];
       repays: IRepayParams[];
@@ -944,6 +950,9 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         // set up current balances
         await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
         console.log("mint", i, p.balances[i]);
+
+        // set up liquidation threshold for token
+        await facade.setLiquidationThreshold(p.tokens[i].address, parseUnits(p.liquidationThresholds[i], d));
       }
 
       // set up TetuConverter
@@ -978,7 +987,6 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         converter.address,
         liquidator.address,
         p.indexAsset,
-        parseUnits(p.liquidationThreshold, decimals[p.indexAsset]),
         parseUnits(p.requestedAmount, decimals[p.indexAsset]),
         p.tokens.map(x => x.address),
         p.repaidAmounts.map((x, index) => parseUnits(p.repaidAmounts[index], decimals[index]))
@@ -988,7 +996,6 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         converter.address,
         liquidator.address,
         p.indexAsset,
-        parseUnits(p.liquidationThreshold, decimals[p.indexAsset]),
         parseUnits(p.requestedAmount, decimals[p.indexAsset]),
         p.tokens.map(x => x.address),
         p.repaidAmounts.map((x, index) => parseUnits(p.repaidAmounts[index], decimals[index]))
@@ -1020,7 +1027,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               balances: ["2000", "910"], // usdc, dai
               repaidAmounts: ["0", "0"], // usdc, dai
               prices: ["1", "1"], // for simplicity
-              liquidationThreshold: "0",
+              liquidationThresholds: ["0", "0"],
               liquidations: [{
                 amountIn: "1010", // usdc, 500/(1.5-1)*101/100
                 amountOut: "1010", // dai, for simplicity we assume same prices
@@ -1045,7 +1052,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           }
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq("505"); // 1515 - 1010
+            expect(r.expectedAmountMainAssetOut).eq(505); // 1515 - 1010
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1065,7 +1072,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               balances: ["300", "910"], // usdc, dai
               repaidAmounts: ["0", "0"], // usdc, dai
               prices: ["1", "1"], // for simplicity
-              liquidationThreshold: "0",
+              liquidationThresholds: ["0", "0"],
               liquidations: [{
                 amountIn: "300", // usdc, 500/(1.5-1)*101/100=1010, but we have only 300 on balance
                 amountOut: "300", // dai, for simplicity we assume same prices
@@ -1110,7 +1117,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
               repaidAmounts: ["0", "0"], // usdc, dai
               prices: ["1", "1"], // for simplicity
-              liquidationThreshold: "0",
+              liquidationThresholds: ["0", "0"],
               liquidations: [{
                 amountIn: "2000", // usdc
                 amountOut: "2000", // dai
@@ -1155,7 +1162,52 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
               repaidAmounts: ["0", "0"], // usdc, dai
               prices: ["1", "1"], // for simplicity
-              liquidationThreshold: "0",
+              liquidationThresholds: ["0", "0"],
+              liquidations: [{
+                amountIn: "2000", // usdc
+                amountOut: "2000", // dai
+                tokenIn: usdc,
+                tokenOut: dai
+              }],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "2000",
+                collateralAmountOut: "2800" // (!) 3000
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "2000", // dai
+                collateralAmountOut: "3000", // usdc
+                totalDebtAmountOut: "2000",
+                totalCollateralAmountOut: "3000"
+              }],
+            });
+          }
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
+            expect(r.expectedAmountMainAssetOut).eq(800); // 2800 - 2000
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
+            expect(r.balances.join()).eq([6000, 910].join());
+          });
+        });
+        describe("Not zero liquidation threshold", () => {
+          let snapshot: string;
+          before(async function () { snapshot = await TimeUtils.snapshot();});
+          after(async function () { await TimeUtils.rollback(snapshot); });
+
+          async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
+            return makeClosePositionToGetRequestedAmountTest({
+              requestedAmount: "1000000", // usdc - we need as much as possible USDC
+              tokens: [usdc, dai],
+              indexAsset: 0,
+              balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
+              repaidAmounts: ["0", "0"], // usdc, dai
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "1999"], // (!) less than amoutOut in liquidation
               liquidations: [{
                 amountIn: "2000", // usdc
                 amountOut: "2000", // dai
@@ -1203,7 +1255,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             balances: ["0", "910"], // usdc, dai - we don't have USDC at all
             repaidAmounts: ["0", "0"], // usdc, dai
             prices: ["1", "1"], // for simplicity
-            liquidationThreshold: "0",
+            liquidationThresholds: ["0", "0"],
             liquidations: [],
             quoteRepays: [],
             repays: [],
@@ -1215,7 +1267,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([5000, 910].join());
+          expect(r.balances.join()).eq([0, 910].join());
         });
       });
       describe("repaidAmounts_ is not zero", () => {
@@ -1231,7 +1283,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             balances: ["5000", "910"], // usdc, dai
             repaidAmounts: ["0", "1"], // usdc, dai (!) DAI borrow was already repaid, we cannot make second repay in the same block
             prices: ["1", "1"], // for simplicity
-            liquidationThreshold: "0",
+            liquidationThresholds: ["0", "0"],
             liquidations: [],
             quoteRepays: [],
             repays: [],
@@ -1259,7 +1311,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
             repaidAmounts: ["0", "0"], // usdc, dai
             prices: ["1", "1"], // for simplicity
-            liquidationThreshold: "0",
+            liquidationThresholds: ["0", "0"],
             liquidations: [],
             quoteRepays: [{
               collateralAsset: usdc,
@@ -1299,7 +1351,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
             repaidAmounts: ["0", "0"], // usdc, dai
             prices: ["1", "1"], // for simplicity
-            liquidationThreshold: "2001", // (!) the threshold is higher than amountOut in liquidation
+            liquidationThresholds: ["0", "2001"], // (!) the threshold for dai is higher than amountOut
             liquidations: [{
               amountIn: "2000", // usdc
               amountOut: "2000", // dai
@@ -1574,7 +1626,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               prices: ["0.02", "2"],
               totalDebt: "400", // === $800
               totalCollateral: "50000", // === $1000
-              remainingRequestedAmount: "25000" // === $500
+              remainingRequestedAmount: "2500" // === $50
             });
             // 2500e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 10100
             expect(r.amountOut).eq(10100);

@@ -1204,7 +1204,7 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
-  /// @param liquidationThreshold Min allowed amount of main asset to be liquidated in {liquidator}
+  /// @param liquidationThresholds Min allowed amounts-out for liquidations
   /// @param requestedAmount Requested amount of main asset
   /// @param repaidAmounts_ Already repaid amounts, two repays in single block are not allowed (see AAVE3)
   /// @return expectedAmountMainAssetOut How much main asset is expected to be received on balance
@@ -1212,7 +1212,7 @@ library ConverterStrategyBaseLib {
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
-    uint liquidationThreshold,
+    mapping (address => uint) storage liquidationThresholds,
     uint requestedAmount,
     address[] memory tokens,
     uint[] memory repaidAmounts_
@@ -1264,7 +1264,7 @@ library ConverterStrategyBaseLib {
             v.asset,
             tokens[i],
             Math.min(toSell, v.balance),
-            liquidationThreshold
+            liquidationThresholds
           );
         }
       }
@@ -1321,7 +1321,7 @@ library ConverterStrategyBaseLib {
   /// @param asset Main asset (==underlying, == collateral)
   /// @param token Main asset is swapped to the {token}
   /// @param toSell Amount of main asset to sell
-  /// @param liquidationThreshold Min allowed amount of main asset to be liquidated in {liquidator}
+  /// @param liquidationThresholds Min allowed amounts-out for liquidations
   /// @return expectedAmountOut Estimated amount of main asset that should be added to balance = collateral - {toSell}
   function _closePositionUsingMainAsset(
     ITetuConverter converter,
@@ -1329,7 +1329,7 @@ library ConverterStrategyBaseLib {
     address asset,
     address token,
     uint toSell,
-    uint liquidationThreshold
+    mapping (address => uint) storage liquidationThresholds
   ) internal returns (
     uint expectedAmountOut
   ) {
@@ -1337,26 +1337,27 @@ library ConverterStrategyBaseLib {
     require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
 
     uint amountToRepay = liquidator_.getPriceForRoute(route, toSell);
+    if (amountToRepay > Math.max(liquidationThresholds[token], DEFAULT_LIQUIDATION_THRESHOLD)) {
+      // quoteRepay requires amount-to-pay without debt-gap
+      // we assume here that toSell calculated with and without debt-gap are almost same
+      // and difference doesn't matter for our estimation here
+      uint amountOut = converter.quoteRepay(address(this), asset, token, amountToRepay);
 
-    // quoteRepay requires amount-to-pay without debt-gap
-    // we assume here that toSell calculated with and without debt-gap are almost same
-    // and difference doesn't matter for our estimation here
-    uint amountOut = converter.quoteRepay(address(this), asset, token, amountToRepay);
+      // we should get more than liquidation threshold for the main asset and more than we spent
+      if (amountOut > toSell) {
+        (, uint toRepay) = _liquidateWithRoute(
+          converter,
+          route,
+          liquidator_,
+          asset,
+          token,
+          toSell,
+          _ASSET_LIQUIDATION_SLIPPAGE
+        );
 
-    // we should get more than liquidation threshold for the main asset and more than we spent
-    if (amountOut > Math.max(liquidationThreshold, DEFAULT_LIQUIDATION_THRESHOLD) && amountOut > toSell) {
-      (, uint toRepay) = _liquidateWithRoute(
-        converter,
-        route,
-        liquidator_,
-        asset,
-        token,
-        toSell,
-        _ASSET_LIQUIDATION_SLIPPAGE
-      );
-
-      _closePosition(converter, asset, token, toRepay);
-      expectedAmountOut = amountOut - toSell;
+        _closePosition(converter, asset, token, toRepay);
+        expectedAmountOut = amountOut - toSell;
+      }
     }
 
     return expectedAmountOut;

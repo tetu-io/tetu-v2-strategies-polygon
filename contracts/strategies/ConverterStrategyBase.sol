@@ -369,13 +369,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint expectedAmountMainAssetInc
   ) {
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
-    uint liquidationThreshold = liquidationThresholds[tokens_[indexAsset_]];
 
     (, uint[] memory repaidAmounts) = ConverterStrategyBaseLib.convertAfterWithdraw(
       _converter,
       liquidator,
       indexAsset_,
-      liquidationThreshold,
+      liquidationThresholds[tokens_[indexAsset_]],
       tokens_,
       amountsToConvert_
     );
@@ -387,7 +386,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _converter,
       liquidator,
       indexAsset_,
-      liquidationThreshold,
+      liquidationThresholds,
       requestedAmount,
       tokens_,
       repaidAmounts
