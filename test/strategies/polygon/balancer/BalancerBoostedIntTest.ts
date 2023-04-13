@@ -509,23 +509,25 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
 
           const tetuAfter = await IERC20__factory.connect(MaticAddresses.TETU_TOKEN, signer).balanceOf(forwarder);
 
-          expect(stateAfterDeposit.strategy.assetBalance).gt(stateAfterHardwork.strategy.assetBalance)
-          expect(stateAfterDeposit.strategy.borrowAssetsBalances[0]).gte(stateAfterHardwork.strategy.borrowAssetsBalances[0])
-          expect(stateAfterDeposit.strategy.borrowAssetsBalances[1].gt(stateAfterHardwork.strategy.borrowAssetsBalances[1]) || stateAfterHardwork.strategy.borrowAssetsBalances[1].eq(0)).eq(true)
-          expect(stateAfterHardwork.strategy.investedAssets).gt(stateBeforeDeposit.strategy.investedAssets)
-
-          // strategy - bal: some rewards were received, claimed but not compounded because of the high thresholds
-          // expect(stateAfterHardwork.strategy.rewardTokensBalances[0]).gt(0)
-
-          expect(stateAfterHardwork.gauge.strategyBalance).eq(stateBeforeDeposit.gauge.strategyBalance || 0)
-          expect(stateAfterDeposit.splitter.totalAssets).lte(stateAfterHardwork.splitter.totalAssets)
-
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDeposit', stateAfterDeposit);
           console.log('stateAfterHardwork', stateAfterHardwork);
           console.log('distributed', distributed);
           console.log('tetuBefore', tetuBefore);
           console.log('tetuAfter', tetuAfter);
+
+          expect(stateAfterDeposit.strategy.assetBalance).gt(stateAfterHardwork.strategy.assetBalance)
+          expect(stateAfterDeposit.strategy.borrowAssetsBalances[0]).gte(stateAfterHardwork.strategy.borrowAssetsBalances[0])
+          expect(stateAfterDeposit.strategy.borrowAssetsBalances[1].gt(stateAfterHardwork.strategy.borrowAssetsBalances[1]) || stateAfterHardwork.strategy.borrowAssetsBalances[1].eq(0)).eq(true)
+          expect(stateAfterHardwork.strategy.investedAssets).gt(stateBeforeDeposit.strategy.investedAssets)
+
+          // strategy - bal: some rewards were received, claimed but not compounded because of the high thresholds
+          expect(await IERC20__factory.connect(MaticAddresses.BAL_TOKEN, signer).balanceOf(strategy.address)).gt(0)
+
+          expect(stateAfterDeposit.gauge.strategyBalance).gt(0)
+          expect(stateAfterHardwork.gauge.strategyBalance).gt(stateAfterDeposit.gauge.strategyBalance)
+
+          expect(stateAfterDeposit.splitter.totalAssets).lt(stateAfterHardwork.splitter.totalAssets)
         });
         it('should not exceed gas limits @skip-on-coverage', async() => {
           await TimeUtils.advanceNBlocks(20_000);
@@ -573,7 +575,7 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
 
     describe('Deposit, hardwork, withdraw', () => {
       describe('deposit, several hardworks, withdraw', () => {
-        it.skip('should be profitable', async() => {
+        it('should be profitable', async() => {
           const countLoops = 2;
           const stepInBlocks = 20_000;
           const stateAfterDeposit = await enterToVault();
@@ -612,7 +614,8 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
         });
       });
       describe('loopEndActions from DoHardWorkLoopBase', () => {
-        it.skip('should be profitable', async() => {
+        // todo fix this problem
+        it('should be profitable', async() => {
           const countLoops = 20;
           const stepInBlocks = 5_000;
           const stateAfterDeposit = await enterToVault();
