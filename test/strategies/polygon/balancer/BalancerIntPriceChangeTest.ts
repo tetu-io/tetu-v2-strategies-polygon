@@ -7,11 +7,10 @@ import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/Co
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
-import { BalancerIntTestUtils, IPutInitialAmountsBalancesResults, IState } from './utils/BalancerIntTestUtils';
 import {
-  BalancerComposableStableStrategy,
+  BalancerBoostedStrategy, BalancerBoostedStrategy__factory,
   ControllerV2__factory,
-  IERC20__factory,
+  IERC20__factory, IERC20Metadata__factory,
   ISplitter,
   ISplitter__factory,
   IStrategyV2,
@@ -22,7 +21,7 @@ import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { ICoreContractsWrapper } from '../../../CoreContractsWrapper';
 import { IToolsContractsWrapper } from '../../../ToolsContractsWrapper';
-import { BigNumber } from 'ethers';
+import {BigNumber, Signer} from 'ethers';
 import { VaultUtils } from '../../../VaultUtils';
 import { parseUnits } from 'ethers/lib/utils';
 import { BalanceUtils } from '../../../baseUT/utils/BalanceUtils';
@@ -32,6 +31,9 @@ import { BalancerDaiUsdcUsdtPoolUtils } from './utils/BalancerDaiUsdcUsdtPoolUti
 import { LiquidatorUtils } from './utils/LiquidatorUtils';
 import { PriceOracleManagerUtils } from '../../../baseUT/converter/PriceOracleManagerUtils';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {Provider} from "@ethersproject/providers";
 import {IPriceOracleManager} from "../../../baseUT/converter/PriceOracleManager";
 
 chai.use(chaiAsPromised);
@@ -47,6 +49,7 @@ chai.use(chaiAsPromised);
 describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
+  const pool: string = MaticAddresses.BALANCER_POOL_T_USD;
   const PERCENT_CHANGE_PRICES = 2; // 2%
 
   let snapshotBefore: string;
@@ -57,6 +60,8 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
   let user: SignerWithAddress;
 
   let priceOracleManager: IPriceOracleManager;
+
+  let stateParams: IStateParams
 
   //endregion Constants and variables
 
@@ -71,8 +76,11 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
     tetuConverterAddress = getConverterAddress();
 
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
-    await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
+    await StrategyTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
+    stateParams = {
+      mainAssetSymbol: await IERC20Metadata__factory.connect(MAIN_ASSET, signer).symbol()
+    }
     priceOracleManager = await PriceOracleManagerUtils.build(signer, tetuConverterAddress);
   });
 
@@ -104,7 +112,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
     let core: ICoreContractsWrapper;
     let tools: IToolsContractsWrapper;
     let vault: TetuVaultV2;
-    let strategy: BalancerComposableStableStrategy;
+    let strategy: BalancerBoostedStrategy;
     let asset: string;
     let splitter: ISplitter;
     let stateBeforeDeposit: IState;
@@ -119,7 +127,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
       await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-      return BalancerIntTestUtils.getState(signer, user, strategy, vault);
+      return StateUtils.getState(signer, user, strategy, vault);
     }
 
     interface IChangePricesResults {
@@ -187,12 +195,17 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       core = await DeployerUtilsLocal.getCoreAddressesWrapper(signer);
       tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
 
-      const data = await UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
+      const data = await UniversalTestUtils.makeStrategyDeployer(
         signer,
         addresses,
-        MAIN_ASSET,
+        asset,
         tetuConverterAddress,
-        'BalancerComposableStableStrategy',
+        'BalancerBoostedStrategy',
+        async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
+          const strategyContract = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
+          await strategyContract.init(addresses.controller, splitterAddress, tetuConverterAddress, pool);
+          return strategyContract as unknown as IStrategyV2;
+        },
         {
           depositFee: DEPOSIT_FEE,
           buffer: BUFFER,
@@ -202,7 +215,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
 
       vault = data.vault;
       asset = await data.vault.asset();
-      strategy = data.strategy as unknown as BalancerComposableStableStrategy;
+      strategy = data.strategy as unknown as BalancerBoostedStrategy;
       await ConverterUtils.addToWhitelist(signer, tetuConverterAddress, strategy.address);
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
@@ -212,13 +225,13 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       console.log('forwarder', forwarder);
 
       await UniversalTestUtils.setCompoundRatio(strategy as unknown as IStrategyV2, user, COMPOUND_RATIO);
-      await BalancerIntTestUtils.setThresholds(
+      await StrategyTestUtils.setThresholds(
         strategy as unknown as IStrategyV2,
         user,
         { reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT },
       );
 
-      initialBalances = await BalancerIntTestUtils.putInitialAmountsToBalances(
+      initialBalances = await StrategyTestUtils.putInitialAmountsToBalances(
         asset,
         user,
         signer,
@@ -226,7 +239,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         DEPOSIT_AMOUNT,
       );
 
-      stateBeforeDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+      stateBeforeDeposit = await StateUtils.getState(signer, user, strategy, vault);
     });
 
     after(async function() {
@@ -317,9 +330,9 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
             .transfer(strategy.address, parseUnits('10000', 6));
 
           // change prices
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault);
           const r = await changePrices(PERCENT_CHANGE_PRICES);
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault);
 
           // check states
           console.log('stateBefore', stateBefore);
@@ -351,10 +364,10 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // prices were changed, but calcInvestedAssets were not called
           await changePrices(PERCENT_CHANGE_PRICES);
@@ -368,7 +381,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           ).transfer(user.address, parseUnits('1', 6));
           await VaultUtils.deposit(user, vault, parseUnits('1', 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
           console.log('State before', stateBefore);
           console.log('State after', stateAfter);
@@ -376,14 +389,15 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/pc_deposit_small.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
           const ret = [
             stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc),
+            stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
           ].join();
           const expected = [true, true].join();
           expect(ret).eq(expected);
@@ -394,10 +408,10 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // prices were changed, but calcInvestedAssets were not called
           await changePrices(PERCENT_CHANGE_PRICES);
@@ -411,7 +425,7 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           ).transfer(user.address, parseUnits('50000', 6));
           await VaultUtils.deposit(user, vault, parseUnits('50000', 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
           console.log('State before', stateBefore);
           console.log('State after', stateAfter);
@@ -419,14 +433,15 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/pc_deposit_huge.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
           const ret = [
             stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc),
+            stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
           ].join();
           const expected = [true, true].join();
           expect(ret).eq(expected);
@@ -440,10 +455,10 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
           await changePrices(PERCENT_CHANGE_PRICES);
@@ -457,21 +472,22 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           console.log('amountToWithdraw', amountToWithdraw);
           await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
           console.log('stateBefore', stateBefore);
           console.log('stateAfter', stateAfter);
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/pc_withdraw.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
           const ret = [
             stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc),
+            stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
           ].join();
           const expected = [true, true].join();
           expect(ret).eq(expected);
@@ -485,31 +501,32 @@ describe.skip('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
           await changePrices(PERCENT_CHANGE_PRICES);
 
           await vault.connect(user).withdrawAll();
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
           console.log('stateBefore', stateBefore);
           console.log('stateAfter', stateAfter);
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/pc_withdraw_all.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
           const ret = [
             stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-            stateAfter.insurance.usdc.gt(stateBefore.insurance.usdc),
+            stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
           ].join();
           const expected = [true, true].join();
           expect(ret).eq(expected);

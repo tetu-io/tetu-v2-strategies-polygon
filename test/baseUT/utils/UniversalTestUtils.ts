@@ -1,6 +1,5 @@
 import { BigNumber, ContractReceipt, Signer } from 'ethers';
 import {
-  BalancerComposableStableStrategy__factory,
   ControllerV2__factory,
   IController__factory,
   IStrategyV2,
@@ -69,29 +68,6 @@ export class UniversalTestUtils {
       params?.depositFee || 250,
       params?.withdrawFee || 500,
       params?.wait || false,
-    );
-  }
-
-  public static async makeBalancerComposableStableStrategyDeployer(
-    signer: SignerWithAddress,
-    core: CoreAddresses,
-    asset: string,
-    tetuConverterAddress: string,
-    strategyName: string,
-    params?: IMakeStrategyDeployerInputParams,
-  ): Promise<IVaultStrategyInfo> {
-    return this.makeStrategyDeployer(
-      signer,
-      core,
-      asset,
-      tetuConverterAddress,
-      strategyName,
-      async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
-        const strategy = BalancerComposableStableStrategy__factory.connect(strategyProxy, signer);
-        await strategy.init(core.controller, splitterAddress, tetuConverterAddress);
-        return strategy as unknown as IStrategyV2;
-      },
-      params,
     );
   }
 

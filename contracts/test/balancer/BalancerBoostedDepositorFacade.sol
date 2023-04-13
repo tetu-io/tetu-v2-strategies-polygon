@@ -2,18 +2,17 @@
 pragma solidity 0.8.17;
 
 import "../../integrations/balancer/IBVault.sol";
-import "../../strategies/balancer/BalancerComposableStableDepositor.sol";
+import "../../strategies/balancer/BalancerBoostedDepositor.sol";
 
 import "hardhat/console.sol";
 
-/// @notice Provide direct access to internal functions of {BalancerBoostedAaveStableDepositor}
-contract BalancerComposableStableDepositorFacade is BalancerComposableStableDepositor {
+/// @notice Provide direct access to internal functions of {BalancerBoostedDepositor}
+contract BalancerBoostedDepositorFacade is BalancerBoostedDepositor {
   function init(
-    bytes32 poolId,
-    address[] memory rewardTokens_
+    address pool
   ) external initializer {
-    console.log("BalancerComposableStableDepositorFacade.init", rewardTokens_.length);
-    __BalancerBoostedAaveUsdDepositor_init(poolId, rewardTokens_);
+    console.log("BalancerBoostedDepositorFacade.init", pool);
+    __BalancerBoostedDepositor_init(pool);
   }
 
   function _depositorPoolAssetsAccess() external virtual view returns (address[] memory poolAssets) {

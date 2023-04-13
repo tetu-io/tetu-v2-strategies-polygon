@@ -46,7 +46,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.1";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.2";
 
   uint internal constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
 

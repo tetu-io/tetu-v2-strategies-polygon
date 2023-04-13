@@ -625,7 +625,7 @@ library ConverterStrategyBaseLib {
         amountIn_,
         tokenOut_,
         receivedAmountOut,
-        PRICE_IMPACT_TOLERANCE
+        slippage_
       ),
       AppErrors.PRICE_IMPACT
     );

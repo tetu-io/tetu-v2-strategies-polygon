@@ -13,6 +13,8 @@ import { TokenUtils } from '../scripts/utils/TokenUtils';
 import { BigNumber, ContractTransaction, utils } from 'ethers';
 import { Misc } from '../scripts/utils/Misc';
 import { formatUnits } from 'ethers/lib/utils';
+import {DeployerUtils} from "../scripts/utils/DeployerUtils";
+import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
 
 /** Amounts earned/lost by the given strategies during the hardwork */
 export interface IDoHardworkAndCheckResults {
@@ -79,6 +81,7 @@ export class VaultUtils {
     console.log('start hard works');
     const splitterAddress = await vault.splitter();
     const splitter = StrategySplitterV2__factory.connect(splitterAddress, vault.signer);
+    const splitterSigner = await DeployerUtilsLocal.impersonate(splitterAddress)
 
     const subStrategies = await splitter.allStrategies();
     for (const subStrategy of subStrategies) {
@@ -87,8 +90,8 @@ export class VaultUtils {
       console.log(`Call doHardWork, strategy=${strategyName}`);
 
       // handle HardWork-event to extract earned and lost values
-      const { earned, lost } = await strategy.connect(splitter.address).callStatic.doHardWork();
-      await strategy.doHardWork();
+      const { earned, lost } = await strategy.connect(splitterSigner).callStatic.doHardWork();
+      await strategy.connect(splitterSigner).doHardWork();
       console.log(`Strategy=${strategyName} step earned=${earned} lost=${lost}`);
 
       dest.strategy.push(strategy.address);

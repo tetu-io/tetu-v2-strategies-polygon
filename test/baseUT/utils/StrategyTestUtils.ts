@@ -1,17 +1,40 @@
-import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { IForwarder, IStrategyV2, ITetuLiquidator, TetuVaultV2 } from '../../../typechain';
-import { BigNumber, utils } from 'ethers';
-import { expect } from 'chai';
-import { Misc } from '../../../scripts/utils/Misc';
-import { DeployInfo } from './DeployInfo';
+import {SignerWithAddress} from '@nomiclabs/hardhat-ethers/signers';
+import {
+  ConverterStrategyBase__factory,
+  IERC20__factory,
+  IForwarder,
+  IStrategyV2,
+  ITetuLiquidator,
+  TetuVaultV2,
+  VaultFactory__factory
+} from '../../../typechain';
+import {BigNumber, utils} from 'ethers';
+import {expect} from 'chai';
+import {Misc} from '../../../scripts/utils/Misc';
+import {DeployInfo} from './DeployInfo';
 import logSettings from '../../../log_settings';
-import { Logger } from 'tslog';
-import { PriceCalculatorUtils } from '../../PriceCalculatorUtils';
-import { TokenUtils } from '../../../scripts/utils/TokenUtils';
-import { DeployerUtilsLocal, IVaultStrategyInfo } from '../../../scripts/utils/DeployerUtilsLocal';
+import {Logger} from 'tslog';
+import {PriceCalculatorUtils} from '../../PriceCalculatorUtils';
+import {TokenUtils} from '../../../scripts/utils/TokenUtils';
+import {DeployerUtilsLocal} from '../../../scripts/utils/DeployerUtilsLocal';
+import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
+import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {UniversalTestUtils} from "./UniversalTestUtils";
 
 const log: Logger<undefined> = new Logger(logSettings);
+
+export interface ISetThresholdsInputParams {
+  reinvestThresholdPercent?: number;
+  rewardLiquidationThresholds?: {
+    asset: string,
+    threshold: BigNumber
+  }[];
+}
+
+export interface IPutInitialAmountsBalancesResults {
+  balanceUser: BigNumber;
+  balanceSigner: BigNumber;
+}
 
 export class StrategyTestUtils {
 
@@ -142,4 +165,51 @@ export class StrategyTestUtils {
     return signerUnderlyingBalanceFinal;
   }
 
+  public static async deployAndSetCustomSplitter(signer: SignerWithAddress, core: CoreAddresses) {
+    const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
+    await VaultFactory__factory.connect(
+      core.vaultFactory,
+      await DeployerUtilsLocal.getControllerGovernance(signer),
+    ).setSplitterImpl(splitterImpl.address);
+  }
+
+  /**
+   * Set reinvest and reward-liquidation thresholds
+   */
+  public static async setThresholds(
+    strategy: IStrategyV2,
+    user: SignerWithAddress,
+    params?: ISetThresholdsInputParams,
+  ) {
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, user);
+    const strategyAsOperator = await ConverterStrategyBase__factory.connect(strategy.address, operator);
+    if (params?.rewardLiquidationThresholds) {
+      for (const p of params?.rewardLiquidationThresholds) {
+        await strategyAsOperator.setLiquidationThreshold(p.asset, p.threshold);
+      }
+    }
+
+    if (params?.reinvestThresholdPercent) {
+      await strategyAsOperator.setReinvestThresholdPercent(params.reinvestThresholdPercent); // 100_000 / 100
+    }
+  }
+
+  /**
+   *  put DEPOSIT_AMOUNT => user, DEPOSIT_AMOUNT/2 => signer, DEPOSIT_AMOUNT/2 => liquidator
+   */
+  public static async putInitialAmountsToBalances(
+    asset: string,
+    user: SignerWithAddress,
+    signer: SignerWithAddress,
+    liquidator: ITetuLiquidator,
+    amount: number,
+  ): Promise<IPutInitialAmountsBalancesResults> {
+    // put half of signer's balance to liquidator
+    const signerBalance = await StrategyTestUtils.getUnderlying(user, asset, amount, liquidator, [signer.address]);
+    await IERC20__factory.connect(asset, signer).transfer(liquidator.address, signerBalance.div(2));
+    return {
+      balanceSigner: await IERC20__factory.connect(asset, signer).balanceOf(signer.address),
+      balanceUser: await IERC20__factory.connect(asset, signer).balanceOf(user.address),
+    }
+  }
 }

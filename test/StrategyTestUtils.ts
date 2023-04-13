@@ -10,7 +10,7 @@ import {
   TetuVaultV2__factory,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-  UniswapV3ConverterStrategyLogicLib__factory,
+  UniswapV3ConverterStrategyLogicLib__factory, VaultFactory__factory,
 } from '../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber, ContractReceipt } from 'ethers';
@@ -34,6 +34,9 @@ import {
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
 import { Misc } from '../scripts/utils/Misc';
+import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
+import {DeployerUtils} from "../scripts/utils/DeployerUtils";
+import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
