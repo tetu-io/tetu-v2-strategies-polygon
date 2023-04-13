@@ -263,8 +263,7 @@ contract ConverterStrategyBaseLibFacade {
     ITetuLiquidator liquidator,
     uint indexAsset,
     uint requestedAmount,
-    address[] memory tokens,
-    uint[] memory repaidAmounts_
+    address[] memory tokens
   ) external returns (
     uint expectedAmountMainAssetOut
   ) {
@@ -274,8 +273,7 @@ contract ConverterStrategyBaseLibFacade {
       indexAsset,
       liquidationThresholds,
       requestedAmount,
-      tokens,
-      repaidAmounts_
+      tokens
     );
   }
 

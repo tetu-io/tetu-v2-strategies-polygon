@@ -543,6 +543,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       quoteRepays: IQuoteRepayParams[];
       repays: IRepayParams[];
       isConversionValid?: boolean;
+      expectedMainAssetAmounts: string[];
     }
     async function makeRequestedAmountTest(
       p: IMakeRequestedAmountParams
@@ -582,7 +583,8 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         tetuConverter.address,
-        parseUnits(p.requestedAmount, decimals[p.indexAsset])
+        parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+        p.expectedMainAssetAmounts.map(x=> parseUnits(p.expectedMainAssetAmounts[p.indexAsset], decimals[p.indexAsset])),
       );
 
       const tx = await strategy._makeRequestedAmountAccess(
@@ -590,7 +592,8 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         tetuConverter.address,
-        parseUnits(p.requestedAmount, decimals[p.indexAsset])
+        parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+        p.expectedMainAssetAmounts.map(x=> parseUnits(p.expectedMainAssetAmounts[p.indexAsset], decimals[p.indexAsset])),
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
@@ -644,6 +647,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 totalDebtAmountOut: "2000",
                 totalCollateralAmountOut: "3000"
               }],
+              expectedMainAssetAmounts: ["0", "0"]
             });
           }
 
@@ -700,6 +704,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 totalDebtAmountOut: "20000",
                 totalCollateralAmountOut: "30000"
               }],
+              expectedMainAssetAmounts: ["0", "0", "3000"]
             });
           }
 
@@ -711,6 +716,60 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             const r = await loadFixture(makeRequestedAmountFixture);
             expect(r.balances.join()).eq([7357.5, 0, 0].join());
           });
+        });
+      });
+      describe("Amounts to convert are not zero + additional debts should be closed", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        /**
+         * Convert usdt => usdc
+         * Swap all usdc to dai
+         * repay dai
+         * get collateral back
+         */
+        async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+          return makeRequestedAmountTest({
+            requestedAmount: "10000", // usdc, we need to get as much as possible
+            tokens: [usdc, usdt],
+            indexAsset: 0,
+            balances: ["8999", "1"], // usdc, usdt
+            amountsToConvert: ["8999", "1"], // usdc, usdt
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["0", "0"],
+            liquidations: [
+              {amountIn: "3000", amountOut: "2900", tokenIn: usdt, tokenOut: usdc},
+            ],
+            quoteRepays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "1000",
+              collateralAmountOut: "1181"
+            }],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "1000", // usdt
+              collateralAmountOut: "1181", // usdc
+              totalDebtAmountOut: "3216",
+              totalCollateralAmountOut: "3795"
+            }],
+            expectedMainAssetAmounts: ["8999", "1"]
+          });
+        }
+
+        it("should return expected amount", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.expectedAmountMainAssetInc).eq(10000);
+        });
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.balances.join()).eq([10000, 0, 0].join());
         });
       });
     });

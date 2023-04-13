@@ -12,7 +12,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 
-
+import "hardhat/console.sol";
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -982,7 +982,7 @@ library ConverterStrategyBaseLib {
   /// @notice Calculate expected amount of the main asset after withdrawing
   /// @param withdrawnAmounts_ Expected amounts to be withdrawn from the pool
   /// @param amountsToConvert_ Amounts on balance initially available for the conversion
-  /// @return amountOut Expected amount of the main asset
+  /// @return amountsOut Expected amounts of the main asset received after conversion withdrawnAmounts+amountsToConvert
   function getExpectedAmountMainAsset(
     address[] memory tokens,
     uint indexAsset,
@@ -990,21 +990,22 @@ library ConverterStrategyBaseLib {
     uint[] memory withdrawnAmounts_,
     uint[] memory amountsToConvert_
   ) internal returns (
-    uint amountOut
+    uint[] memory amountsOut
   ) {
     uint len = tokens.length;
+    amountsOut = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) {
-        amountOut += withdrawnAmounts_[i];
+        amountsOut[i] = withdrawnAmounts_[i];
       } else {
         uint amount = withdrawnAmounts_[i] + amountsToConvert_[i];
         if (amount != 0) {
-          amountOut += converter.quoteRepay(address(this), tokens[indexAsset], tokens[i], amount);
+          amountsOut[i] = converter.quoteRepay(address(this), tokens[indexAsset], tokens[i], amount);
         }
       }
     }
 
-    return amountOut;
+    return amountsOut;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -1071,7 +1072,10 @@ library ConverterStrategyBaseLib {
 
     uint depositorLiquidityAfterWithdraw_,
     uint[] memory withdrawnAmounts
-  ) external returns (uint _expectedAmountMainAsset, uint[] memory _amountsToConvert){
+  ) external returns (
+    uint[] memory expectedMainAssetAmounts,
+    uint[] memory _amountsToConvert
+  ) {
 
     // estimate, how many assets should be withdrawn
     // the depositor is able to use less liquidity than it was asked
@@ -1093,7 +1097,7 @@ library ConverterStrategyBaseLib {
     );
 
     // from received amounts after withdraw calculate how much we receive from converter for them in terms of the underlying asset
-    uint expectedAmountMainAsset = getExpectedAmountMainAsset(
+    expectedMainAssetAmounts = getExpectedAmountMainAsset(
       tokens,
       indexAsset,
       converter,
@@ -1104,7 +1108,7 @@ library ConverterStrategyBaseLib {
       amountsToConvert[i] += withdrawnAmounts[i];
     }
 
-    return (expectedAmountMainAsset, amountsToConvert);
+    return (expectedMainAssetAmounts, amountsToConvert);
   }
 
   /// @notice return {withdrawnAmounts} with zero values and expected amount calculated using {amountsToConvert_}
@@ -1114,9 +1118,12 @@ library ConverterStrategyBaseLib {
     ITetuConverter converter,
     uint[] memory withdrawnAmounts_,
     uint[] memory amountsToConvert_
-  ) external returns (uint[] memory withdrawnAmounts, uint expectedAmountMainAsset){
+  ) external returns (
+    uint[] memory withdrawnAmounts,
+    uint[] memory expectedAmountsMainAsset
+  ) {
     withdrawnAmounts = withdrawnAmounts_;
-    expectedAmountMainAsset = getExpectedAmountMainAsset(
+    expectedAmountsMainAsset = getExpectedAmountMainAsset(
       tokens,
       indexAsset,
       converter,
@@ -1197,7 +1204,6 @@ library ConverterStrategyBaseLib {
   /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
   /// @param liquidationThresholds Min allowed amounts-out for liquidations
   /// @param requestedAmount Requested amount of main asset
-  /// @param repaidAmounts_ Already repaid amounts, two repays in single block are not allowed (see AAVE3)
   /// @return expectedAmountMainAssetOut How much main asset is expected to be received on balance
   function closePositionsToGetRequestedAmount(
     ITetuConverter tetuConverter,
@@ -1205,18 +1211,19 @@ library ConverterStrategyBaseLib {
     uint indexAsset,
     mapping (address => uint) storage liquidationThresholds,
     uint requestedAmount,
-    address[] memory tokens,
-    uint[] memory repaidAmounts_
+    address[] memory tokens
   ) external returns (
     uint expectedAmountMainAssetOut
   ) {
+    console.log("closePositionsToGetRequestedAmount balances", IERC20(tokens[0]).balanceOf(address(this)), IERC20(tokens[1]).balanceOf(address(this)));
+    console.log("closePositionsToGetRequestedAmount requestedAmount", requestedAmount);
     CloseDebtsForRequiredAmountLocal memory v;
     v.asset = tokens[indexAsset];
     v.len = tokens.length;
 
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
       // if we already closed position for an asset we can not close it again in the same block
-      if (i == indexAsset || repaidAmounts_[i] != 0) continue;
+      if (i == indexAsset) continue;
 
       v.balance = IERC20(v.asset).balanceOf(address(this));
       if (v.balance >= requestedAmount || v.balance == 0) break;

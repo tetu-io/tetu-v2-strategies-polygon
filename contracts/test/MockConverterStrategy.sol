@@ -217,10 +217,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint indexAsset_,
     uint[] memory amountsToConvert_,
     ITetuConverter converter_,
-    uint requestedAmount
+    uint requestedAmount,
+    uint[] memory expectedMainAssetAmounts
   ) external returns (
-    uint expectedAmountMainAssetInc
+    uint expectedTotalAmountMainAsset
   ) {
-    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount);
+    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount, expectedMainAssetAmounts);
   }
 }
