@@ -127,7 +127,7 @@ library UniswapV3DebtLib {
         // add 1% gap for price impact
         needToSellTokenA += needToSellTokenA / SELL_GAP;
 
-        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, Math.min(needToSellTokenA, availableBalanceTokenA), liquidatorSwapSlippage, 0);
+        ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, Math.min(needToSellTokenA, availableBalanceTokenA), liquidatorSwapSlippage, 0);
         availableBalanceTokenB = _balance(tokenB);
         if(availableBalanceTokenB > feeB) {
           availableBalanceTokenB -= feeB;
@@ -145,7 +145,7 @@ library UniswapV3DebtLib {
       if(availableBalanceTokenB > feeB) {
         availableBalanceTokenB -= feeB;
       }
-      ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, availableBalanceTokenB, liquidatorSwapSlippage, 0);
+      ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, availableBalanceTokenB, liquidatorSwapSlippage, 0);
     }
   }
 
@@ -211,7 +211,7 @@ library UniswapV3DebtLib {
 
         vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
 
-        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, vars.availableBalanceTokenB, liquidatorSwapSlippage, 0);
+        ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, vars.availableBalanceTokenB, liquidatorSwapSlippage, 0);
 
         vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
 
@@ -237,7 +237,7 @@ library UniswapV3DebtLib {
         uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * vars.needToBorrowOrFreeFromBorrow / 10 ** IERC20Metadata(tokenB).decimals();
         // add % gap for price impact
         needToSellTokenA += needToSellTokenA / SELL_GAP;
-        ConverterStrategyBaseLib.liquidate(ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
+        ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
 
         vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
 

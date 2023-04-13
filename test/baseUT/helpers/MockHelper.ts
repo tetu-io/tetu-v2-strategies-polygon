@@ -66,7 +66,7 @@ export class MockHelper {
     return (await DeployerUtils.deployContract(signer, 'BalancerLogicLibFacade')) as BalancerLogicLibFacade;
   }
 
-  public static async createConverterStrategyBaseFacade(signer: SignerWithAddress): Promise<ConverterStrategyBaseLibFacade> {
+  public static async createConverterStrategyBaseLibFacade(signer: SignerWithAddress): Promise<ConverterStrategyBaseLibFacade> {
     return (await DeployerUtils.deployContract(
       signer,
       'ConverterStrategyBaseLibFacade',
@@ -82,7 +82,7 @@ export class MockHelper {
       signer,
       'BalancerComposableStableDepositorFacade',
     )) as BalancerComposableStableDepositorFacade;
-    ret.init(poolId, rewardTokens);
+    await ret.init(poolId, rewardTokens);
     return ret;
   }
 
