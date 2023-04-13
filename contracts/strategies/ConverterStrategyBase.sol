@@ -364,7 +364,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory amountsToConvert_,
-    ITetuConverter _converter,
+    ITetuConverter converter_,
     uint requestedAmount
   ) internal returns (
     uint expectedAmountMainAssetInc
@@ -372,7 +372,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
 
     (, uint[] memory repaidAmounts) = ConverterStrategyBaseLib.convertAfterWithdraw(
-      _converter,
+      converter_,
       liquidator,
       indexAsset_,
       liquidationThresholds[tokens_[indexAsset_]],
@@ -382,9 +382,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // total result amount can be less than {amount} here
     // f.e. pool returns only one asset and we need to close a debt for the other asset
-    // to be able to return its collateral and get enough result amount
+    //      to be able to return its collateral and get enough result amount
     return ConverterStrategyBaseLib.closePositionsToGetRequestedAmount(
-      _converter,
+      converter_,
       liquidator,
       indexAsset_,
       liquidationThresholds,

@@ -17,7 +17,6 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
 } from "../../baseUT/GasLimits";
-import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade

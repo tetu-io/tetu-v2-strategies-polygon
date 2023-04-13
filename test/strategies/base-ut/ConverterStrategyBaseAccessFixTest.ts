@@ -32,9 +32,9 @@ import {
 import {Misc} from "../../../scripts/utils/Misc";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
-import {ILiquidationParams, IRepayParams, ITokenAmount} from "../../baseUT/mocks/TestDataTypes";
+import {ILiquidationParams, IQuoteRepayParams, IRepayParams, ITokenAmount} from "../../baseUT/mocks/TestDataTypes";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
+import {setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 
 /**
  * Test of ConverterStrategyBase
@@ -522,6 +522,200 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         ).revertedWith("SB: Wrong value"); // StrategyLib.WRONG_VALUE
       });
 
+    });
+  });
+
+  describe("_makeRequestedAmount", () => {
+    interface IMakeRequestedAmountResults {
+      expectedAmountMainAssetInc: number;
+      gasUsed: BigNumber;
+      balances: number[];
+    }
+    interface IMakeRequestedAmountParams {
+      requestedAmount: string;
+      tokens: MockToken[];
+      indexAsset: number;
+      balances: string[];
+      amountsToConvert: string[];
+      prices: string[];
+      liquidationThresholds: string[];
+      liquidations: ILiquidationParams[];
+      quoteRepays: IQuoteRepayParams[];
+      repays: IRepayParams[];
+      isConversionValid?: boolean;
+    }
+    async function makeRequestedAmountTest(
+      p: IMakeRequestedAmountParams
+    ) : Promise<IMakeRequestedAmountResults> {
+      // set up balances
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        const d = await p.tokens[i].decimals()
+        decimals.push(d);
+
+        // set up current balances
+        await p.tokens[i].mint(strategy.address, parseUnits(p.balances[i], d));
+        console.log("mint", i, p.balances[i]);
+
+        // set up liquidation threshold for token
+        await strategy.setLiquidationThreshold(p.tokens[i].address, parseUnits(p.liquidationThresholds[i], d));
+      }
+
+      // set up repay
+      for (const repay of p.repays) {
+        await setupMockedRepay(tetuConverter, strategy.address, repay);
+      }
+      for (const quoteRepay of p.quoteRepays) {
+        await setupMockedQuoteRepay(tetuConverter, strategy.address, quoteRepay);
+      }
+
+      // set up expected liquidations
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        const isConversionValid = p.isConversionValid === undefined ? true : p.isConversionValid;
+        await setupIsConversionValid(tetuConverter, liquidation, isConversionValid)
+      }
+
+      // make test
+      const ret = await strategy.callStatic._makeRequestedAmountAccess(
+        p.tokens.map(x => x.address),
+        p.indexAsset,
+        p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
+        tetuConverter.address,
+        parseUnits(p.requestedAmount, decimals[p.indexAsset])
+      );
+
+      const tx = await strategy._makeRequestedAmountAccess(
+        p.tokens.map(x => x.address),
+        p.indexAsset,
+        p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
+        tetuConverter.address,
+        parseUnits(p.requestedAmount, decimals[p.indexAsset])
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        expectedAmountMainAssetInc: +formatUnits(ret, decimals[p.indexAsset]),
+        gasUsed,
+        balances: await Promise.all(
+          p.tokens.map(
+            async (token, index) => +formatUnits(await token.balanceOf(strategy.address), decimals[index])
+          )
+        )
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("Amounts to convert are zero", () => {
+        describe("Partial repayment, balance > toSell", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "2500", // usdc
+              tokens: [usdc, dai],
+              indexAsset: 0,
+              balances: ["2000", "910"], // usdc, dai
+              amountsToConvert: ["0", "0"], // usdc, dai
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [{
+                amountIn: "1010", // usdc, 500/(1.5-1)*101/100
+                amountOut: "1010", // dai, for simplicity we assume same prices
+                tokenIn: usdc,
+                tokenOut: dai
+              }],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "1010",
+                collateralAmountOut: "1515"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "1010", // dai
+                collateralAmountOut: "1515", // 1010 / 2000 * 3000
+                totalDebtAmountOut: "2000",
+                totalCollateralAmountOut: "3000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAssetInc).eq(505); // 1515 - 1010
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([2505, 910].join());
+          });
+        });
+      });
+      describe("One amount to convert is not zero", () => {
+        describe("Get as much as possible", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          /**
+           * Convert usdt => usdc
+           * Swap all usdc to dai
+           * repay dai
+           * get collateral back
+           */
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "100000000000000", // usdc, we need to get as much as possible
+              tokens: [usdc, dai, usdt],
+              indexAsset: 0,
+              balances: ["2000", "0", "3000"], // usdc, dai, usdt
+              amountsToConvert: ["0", "0", "3000"], // usdc, dai, usdt
+              prices: ["1", "1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0", "0"],
+              liquidations: [
+                {amountIn: "3000", amountOut: "2900", tokenIn: usdt, tokenOut: usdc},
+                {amountIn: "4900", amountOut: "4905", tokenIn: usdc, tokenOut: dai},
+              ],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "4905",
+                collateralAmountOut: "7350"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "4905", // dai
+                collateralAmountOut: "7357.5", // usdc
+                totalDebtAmountOut: "20000",
+                totalCollateralAmountOut: "30000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAssetInc).eq(2450); // 7350 - 2000 - 2900 = 2450
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([7357.5, 0, 0].join());
+          });
+        });
+      });
+    });
+    describe("Bad paths", () => {
+// todo
     });
   });
   //endregion Unit tests

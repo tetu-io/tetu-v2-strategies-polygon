@@ -31,8 +31,6 @@ import {
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
-import {setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
-import {ILiquidationParams, IRepayParams, ITokenAmount} from "../../baseUT/mocks/TestDataTypes";
 
 /**
  * Test of ConverterStrategyBase

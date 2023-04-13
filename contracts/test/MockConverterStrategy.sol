@@ -211,4 +211,16 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ) {
     return _recycle(tokens, amounts);
   }
+
+  function _makeRequestedAmountAccess(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory amountsToConvert_,
+    ITetuConverter converter_,
+    uint requestedAmount
+  ) external returns (
+    uint expectedAmountMainAssetInc
+  ) {
+    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount);
+  }
 }
