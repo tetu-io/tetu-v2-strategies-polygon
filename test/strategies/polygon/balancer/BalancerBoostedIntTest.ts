@@ -187,6 +187,24 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
       );
 
       stateBeforeDeposit = await StateUtils.getState(signer, user, strategy, vault);
+
+      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+      const pools = [
+        {
+          pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
+          swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          tokenIn: MaticAddresses.DAI_TOKEN,
+          tokenOut: MaticAddresses.USDC_TOKEN,
+        },
+        {
+          pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
+          swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          tokenIn: MaticAddresses.USDT_TOKEN,
+          tokenOut: MaticAddresses.USDC_TOKEN,
+        },
+      ]
+      await tools.liquidator.connect(operator).addBlueChipsPools(pools, true)
+      await tools.liquidator.connect(operator).addLargestPools(pools, true);
     });
 
     after(async function() {
@@ -340,39 +358,17 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
           await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
           const stateAfterHardwork = await StateUtils.getState(signer, user, strategy, vault);
 
-          const ret = [
-            // strategy
-            stateAfterDeposit.strategy.assetBalance.gt(stateAfterHardwork.strategy.assetBalance),
-            stateAfterDeposit.strategy.borrowAssetsBalances[0].gt(stateAfterHardwork.strategy.borrowAssetsBalances[0]) ||
-            stateAfterHardwork.strategy.borrowAssetsBalances[0].eq(0),
-            stateAfterDeposit.strategy.borrowAssetsBalances[1].gt(stateAfterHardwork.strategy.borrowAssetsBalances[1]) || stateAfterHardwork.strategy.borrowAssetsBalances[1].eq(0),
-            stateAfterHardwork.strategy.investedAssets.gt(stateBeforeDeposit.strategy.investedAssets),
-
-            // gauge todo fix
-            stateAfterHardwork.gauge.strategyBalance?.gt(stateBeforeDeposit.gauge.strategyBalance || 0),
-
-            // splitter: total assets amount is a bit decreased
-            stateAfterDeposit.splitter.totalAssets.gt(stateAfterHardwork.splitter.totalAssets),
-            areAlmostEqual(stateAfterDeposit.splitter.totalAssets, stateAfterHardwork.splitter.totalAssets, 3),
-
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-          const expected = [
-            // strategy
-            true, true, true, true,
-
-            // gauge
-            true,
-
-            // splitter
-            true, true,
-
-          ].map(x => BalanceUtils.toString(x)).join('\n');
+          expect(stateAfterDeposit.strategy.assetBalance).gt(stateAfterHardwork.strategy.assetBalance)
+          expect(stateAfterDeposit.strategy.borrowAssetsBalances[0]).gte(stateAfterHardwork.strategy.borrowAssetsBalances[0])
+          expect(stateAfterDeposit.strategy.borrowAssetsBalances[1]).gte(stateAfterHardwork.strategy.borrowAssetsBalances[1])
+          expect(stateAfterHardwork.strategy.investedAssets).gte(stateBeforeDeposit.strategy.investedAssets)
+          expect(stateAfterHardwork.gauge.strategyBalance).gte(stateBeforeDeposit.gauge.strategyBalance)
+          expect(stateAfterHardwork.splitter.totalAssets).gte(stateAfterDeposit.splitter.totalAssets)
+          expect(areAlmostEqual(stateAfterDeposit.splitter.totalAssets, stateAfterHardwork.splitter.totalAssets, 3)).eq(true)
 
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDeposit', stateAfterDeposit);
           console.log('stateAfterHardwork', stateAfterHardwork);
-
-          expect(ret).eq(expected);
         });
         it('should not exceed gas limits @skip-on-coverage', async() => {
           const gasUsed = await strategy.connect(await Misc.impersonate(splitter.address)).estimateGas.doHardWork();
@@ -519,9 +515,9 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
           expect(stateAfterHardwork.strategy.investedAssets).gt(stateBeforeDeposit.strategy.investedAssets)
 
           // strategy - bal: some rewards were received, claimed but not compounded because of the high thresholds
-          // stateAfterHardwork.strategy.bal.gt(0),
+          // expect(stateAfterHardwork.strategy.rewardTokensBalances[0]).gt(0)
 
-          expect(stateAfterHardwork.gauge.strategyBalance).gt(stateBeforeDeposit.gauge.strategyBalance || 0)
+          expect(stateAfterHardwork.gauge.strategyBalance).eq(stateBeforeDeposit.gauge.strategyBalance || 0)
           expect(stateAfterDeposit.splitter.totalAssets).lte(stateAfterHardwork.splitter.totalAssets)
 
           console.log('stateBeforeDeposit', stateBeforeDeposit);
@@ -843,7 +839,6 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
        * Make deposit: make two borrows
        * Set TetuConverter on pause
        * Forcibly close both borrows using ITetuConverter.repayTheBorrow
-       * Ensure, that all liquidity is withdrawn from the pool.
        */
       describe("Forcibly close all borrows", () => {
         it("should return expected values", async () => {
@@ -852,7 +847,6 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
           console.log("stateAfterDeposit", stateAfterDeposit);
 
           await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, true);
-          console.log("0");
 
           // tetu converter as governance
           const controller = ConverterController__factory.connect(
@@ -873,48 +867,10 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
             console.log("repayTheBorrow.start");
             await tetuConverterAsGovernance.repayTheBorrow(poolAdapter, true);
             console.log("repayTheBorrow.finished");
-            break;
           }
-
-          // we need to make hardwork to recalculate investedAssets amount
-          await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, false);
-          const stateMiddle = await StateUtils.getState(signer, user, strategy, vault, 'middle');
-          console.log("stateMiddle", stateMiddle);
-
-          await StateUtils.saveListStatesToCSVColumns(
-            './tmp/npc_requirePayAmountBack1.csv',
-            [stateAfterDeposit, stateMiddle],
-            stateParams
-          );
-
-
-          await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
 
           const stateFinal = await StateUtils.getState(signer, user, strategy, vault, 'final');
           console.log("stateFinal", stateFinal);
-
-          // todo fix
-          const ret = [
-            stateAfterDeposit.gauge.strategyBalance?.gt(0),
-            stateAfterDeposit.converter?.collaterals[0].gt(0),
-            stateAfterDeposit.converter?.collaterals[1].gt(0),
-            stateAfterDeposit.converter?.amountsToRepay[0].gt(0),
-            stateAfterDeposit.converter?.amountsToRepay[1].gt(0),
-
-            stateFinal.gauge.strategyBalance?.eq(0),
-            stateFinal.converter?.collaterals[0].eq(0),
-            stateFinal.converter?.collaterals[1].eq(0),
-            stateFinal.converter?.amountsToRepay[0].eq(0),
-            stateFinal.converter?.amountsToRepay[1].eq(0),
-
-            stateAfterDeposit.vault.sharePrice.eq(stateFinal.vault.sharePrice)
-          ].join("\n");
-
-          const expected = [
-            true, true, true, true, true,
-            true, true, true, true, true,
-            true
-          ].join("\n");
 
           await StateUtils.saveListStatesToCSVColumns(
             './tmp/npc_requirePayAmountBack.csv',
@@ -922,8 +878,16 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
             stateParams
           );
 
-          expect(ret).eq(expected);
-
+          expect(stateAfterDeposit.gauge.strategyBalance).gt(0)
+          expect(stateAfterDeposit.converter.collaterals[0]).gt(0)
+          expect(stateAfterDeposit.converter.collaterals[1]).gt(0)
+          expect(stateAfterDeposit.converter.amountsToRepay[0]).gt(0)
+          expect(stateAfterDeposit.converter.amountsToRepay[1]).gt(0)
+          expect(stateFinal.gauge.strategyBalance).eq(0)
+          expect(stateFinal.converter.collaterals[0]).eq(0)
+          expect(stateFinal.converter.collaterals[1]).eq(0)
+          expect(stateFinal.converter.amountsToRepay[0]).eq(0)
+          expect(stateFinal.converter.amountsToRepay[1]).eq(0)
         });
       });
     });

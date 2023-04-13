@@ -1,7 +1,6 @@
 /* tslint:disable:no-trailing-whitespace */
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { startDefaultStrategyTest } from '../../base-universal/DefaultSingleTokenStrategyTest';
 import { config as dotEnvConfig } from 'dotenv';
 import { DeployInfo } from '../../../baseUT/utils/DeployInfo';
 import { StrategyTestUtils } from '../../../baseUT/utils/StrategyTestUtils';
@@ -11,7 +10,6 @@ import {
   getConverterAddress,
   getDForcePlatformAdapter,
 } from '../../../../scripts/utils/Misc';
-import { IUniversalStrategyInputParams } from '../../base-universal/UniversalStrategyTest';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { ethers } from 'hardhat';
 import {
@@ -26,6 +24,8 @@ import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
+import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires

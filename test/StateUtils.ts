@@ -56,7 +56,7 @@ export interface IState {
   insurance: {
     assetBalance: BigNumber;
   };
-  converter?: {
+  converter: {
     collaterals: BigNumber[];
     amountsToRepay: BigNumber[];
   };
@@ -100,7 +100,7 @@ export class StateUtils {
       borrowAssets = borrowAssets.filter(a => a !== asset.address)
       for (const item of borrowAssets) {
         borrowAssetsBalances.push(await IERC20__factory.connect(item, signer).balanceOf(strategy.address))
-        const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).getDebtAmountStored(
+        const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountCurrent(
           strategy.address,
           asset.address,
           item,
