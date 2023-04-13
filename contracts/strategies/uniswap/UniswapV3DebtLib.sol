@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3Lib.sol";
+import "./Uni3StrategyErrors.sol";
 
 library UniswapV3DebtLib {
 
@@ -34,7 +35,7 @@ library UniswapV3DebtLib {
   /// @param tokenA The address of tokenA.
   /// @param tokenB The address of tokenB.
   /// @return totalCollateralAmountOut The total collateral amount out for the token pair.
-  function getDeptTotalCollateralAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalCollateralAmountOut) {
+  function getDebtTotalCollateralAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalCollateralAmountOut) {
     (, totalCollateralAmountOut) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, false);
   }
 
@@ -43,7 +44,7 @@ library UniswapV3DebtLib {
   /// @param tokenA The address of tokenA.
   /// @param tokenB The address of tokenB.
   /// @return totalDebtAmountOut The total debt amount out for the token pair.
-  function getDeptTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalDebtAmountOut) {
+  function getDebtTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalDebtAmountOut) {
     (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, false);
   }
 
@@ -106,7 +107,7 @@ library UniswapV3DebtLib {
     uint feeB,
     uint liquidatorSwapSlippage
   ) internal {
-    uint debtAmount = getDeptTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
+    uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
 
     /// after disableFuse() debt can be zero
     if (debtAmount > 0) {
@@ -184,7 +185,7 @@ library UniswapV3DebtLib {
     uint liquidatorSwapSlippage
   ) internal {
     RebalanceDebtFillUpLocalVariables memory vars;
-    vars.debtAmount = getDeptTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
+    vars.debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
 
     vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
     vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
@@ -312,7 +313,7 @@ library UniswapV3DebtLib {
   /// @return balanceWithoutFees The token balance without the specified fee amount.
   function getBalanceWithoutFees(address token, uint fee) internal view returns (uint balanceWithoutFees) {
     balanceWithoutFees = _balance(token);
-    require(balanceWithoutFees >= fee, "Balance lower than fee");
+    require(balanceWithoutFees >= fee, Uni3StrategyErrors.BALANCE_LOWER_THAN_FEE);
     balanceWithoutFees -= fee;
   }
 
