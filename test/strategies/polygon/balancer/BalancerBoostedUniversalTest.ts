@@ -1,7 +1,7 @@
 /* tslint:disable:no-trailing-whitespace */
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { startDefaultStrategyTest } from '../../base/DefaultSingleTokenStrategyTest';
+import { startDefaultStrategyTest } from '../../base-universal/DefaultSingleTokenStrategyTest';
 import { config as dotEnvConfig } from 'dotenv';
 import { DeployInfo } from '../../../baseUT/utils/DeployInfo';
 import { StrategyTestUtils } from '../../../baseUT/utils/StrategyTestUtils';
@@ -11,7 +11,7 @@ import {
   getConverterAddress,
   getDForcePlatformAdapter,
 } from '../../../../scripts/utils/Misc';
-import { IUniversalStrategyInputParams } from '../../base/UniversalStrategyTest';
+import { IUniversalStrategyInputParams } from '../../base-universal/UniversalStrategyTest';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { ethers } from 'hardhat';
 import {

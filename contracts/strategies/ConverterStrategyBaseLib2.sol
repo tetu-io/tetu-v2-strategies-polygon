@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
@@ -42,6 +43,7 @@ library ConverterStrategyBaseLib2 {
     }
     return amountsToConvert;
   }
+
   /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
   /// @param performanceFee_ Max is FEE_DENOMINATOR
   /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
@@ -49,12 +51,17 @@ library ConverterStrategyBaseLib2 {
   function sendPerformanceFee(
     uint performanceFee_,
     address performanceReceiver_,
+    address splitter,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
     uint[] memory rewardAmounts,
     uint[] memory performanceAmounts
   ) {
+
+    // read inside lib for reduce contract space in the main contract
+    address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
+
     // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
     uint len = rewardAmounts_.length;
     rewardAmounts = new uint[](len);
@@ -63,7 +70,15 @@ library ConverterStrategyBaseLib2 {
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
       rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
-      IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, performanceAmounts[i]);
+
+      uint toPerf = performanceAmounts[i] / 2;
+      uint toInsurance = performanceAmounts[i] - toPerf;
+      if(toPerf != 0) {
+        IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, toPerf);
+      }
+      if(toInsurance != 0) {
+        IERC20(rewardTokens_[i]).safeTransfer(insurance, toInsurance);
+      }
     }
   }
 
@@ -164,7 +179,7 @@ library ConverterStrategyBaseLib2 {
 
       uint balance = IERC20(tokens[i]).balanceOf(address(this));
       if (balance != 0) {
-        // let's estimate collateral that we received back after repaying baseAmount
+        // let's estimate collateral that we received back after repaying balance-amount
         uint expectedCollateral = converter.quoteRepay(
           strategy_,
           tokens[indexAsset],
@@ -173,11 +188,11 @@ library ConverterStrategyBaseLib2 {
         );
 
         if (all || targetAmount_ != 0) {
-          // We always repay WHOLE available baseAmount even if it gives us much more amount then we need.
+          // We always repay WHOLE available balance-amount even if it gives us much more amount then we need.
           // We cannot repay a part of it because converter doesn't allow to know
           // what amount should be repaid to get given amount of collateral.
           // And it's too dangerous to assume that we can calculate this amount
-          // by reducing baseAmount proportionally to expectedCollateral/targetAmount_
+          // by reducing balance-amount proportionally to expectedCollateral/targetAmount_
           amountsToConvertOut[i] = balance;
         }
 
@@ -198,14 +213,14 @@ library ConverterStrategyBaseLib2 {
     require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
 
     uint liquidityRatioOut = all
-    ? 1e18
-    : ((targetAmount_ == 0)
-    ? 0
-    : 1e18
-    * 101 // add 1% on top...
-    * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-    / 100 // .. add 1% on top
-    );
+      ? 1e18
+      : ((targetAmount_ == 0)
+        ? 0
+        : 1e18
+        * 101 // add 1% on top...
+        * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
+        / 100 // .. add 1% on top
+      );
 
     if (liquidityRatioOut != 0) {
       resultAmount = Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity);
@@ -214,6 +229,46 @@ library ConverterStrategyBaseLib2 {
     }
   }
 
+  /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
+  /// @dev The post-processing is rewards conversion to the main asset
+  /// @param tokens_ tokens received from {_depositorPoolAssets}
+  /// @param rewardTokens_ List of rewards claimed from the internal pool
+  /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
+  /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
+  /// @param amountsOut Amounts of available rewards
+  function claimConverterRewards(
+    ITetuConverter tetuConverter_,
+    address[] memory tokens_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_,
+    uint[] memory balancesBefore
+  ) external returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
+    // Rewards from TetuConverter
+    (address[] memory tokensTC, uint[] memory amountsTC) = tetuConverter_.claimRewards(address(this));
 
+    // Join arrays and recycle tokens
+    (tokensOut, amountsOut) = TokenAmountsLib.combineArrays(
+      rewardTokens_, rewardAmounts_,
+      tokensTC, amountsTC,
+      // by default, depositor assets have zero amounts here
+      tokens_, new uint[](tokens_.length)
+    );
+
+    // set fresh balances for depositor tokens
+    uint len = tokensOut.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      for (uint j; j < tokens_.length; j = AppLib.uncheckedInc(j)) {
+        if (tokensOut[i] == tokens_[j]) {
+          amountsOut[i] = IERC20(tokens_[j]).balanceOf(address(this)) - balancesBefore[j];
+        }
+      }
+    }
+
+    // filter zero amounts out
+    (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
+  }
 }
 

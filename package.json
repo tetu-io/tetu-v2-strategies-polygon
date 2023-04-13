@@ -18,7 +18,8 @@
     "update-block": "ts-node scripts/utils/UpdateBlock.ts",
     "deploy-prod": "hardhat deploy --network matic --write true",
     "verify-all": "hardhat etherscan-verify --network matic",
-    "deploy-local": "hardhat deploy --write true --reset"
+    "deploy-local": "hardhat deploy --write true --reset",
+    "solhint": "solhint \"contracts/**/*.sol\""
   },
   "keywords": [
     "solidity",
@@ -39,7 +40,10 @@
     "@nomiclabs/hardhat-etherscan": "^3.1.7",
     "@nomiclabs/hardhat-solhint": "^3.0.0",
     "@nomiclabs/hardhat-web3": "^2.0.0",
-    "@tetu_io/tetu-contracts-v2": "2.0.5",
+    "@tetu_io/tetu-contracts-v2": "2.0.6",
+    "@openzeppelin/contracts": "^4.8.2",
+    "@openzeppelin/contracts-upgradeable": "^4.8.2",
+    "@openzeppelin/hardhat-upgrades": "^1.22.1",
     "@tetu_io/tetu-converter": "0.0.4",
     "@tetu_io/tetu-liquidator": "1.0.0",
     "@typechain/ethers-v5": "^10.2.0",

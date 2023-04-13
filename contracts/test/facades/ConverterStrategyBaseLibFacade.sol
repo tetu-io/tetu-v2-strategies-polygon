@@ -5,9 +5,16 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib.sol";
 import "../../strategies/ConverterStrategyBaseLib2.sol";
+import "../../integrations/tetu-v1/ITetuV1Controller.sol";
 
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
+  mapping (address => uint) public liquidationThresholds;
+
+  function setLiquidationThreshold(address asset, uint values) external {
+    liquidationThresholds[asset] = values;
+  }
+
   function getExpectedWithdrawnAmounts(
     uint[] memory reserves_,
     uint liquidityAmount_,
@@ -118,6 +125,7 @@ contract ConverterStrategyBaseLibFacade {
   }
 
   function liquidate(
+    ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     address tokenIn,
     address tokenOut,
@@ -129,6 +137,7 @@ contract ConverterStrategyBaseLibFacade {
     uint receivedAmountOut
   ) {
     return ConverterStrategyBaseLib.liquidate(
+      converter_,
       liquidator_,
       tokenIn,
       tokenOut,
@@ -168,6 +177,7 @@ contract ConverterStrategyBaseLibFacade {
   function sendPerformanceFee(
     uint performanceFee_,
     address performanceReceiver_,
+    address splitter,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
@@ -177,6 +187,7 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib2.sendPerformanceFee(
       performanceFee_,
       performanceReceiver_,
+      splitter,
       rewardTokens_,
       rewardAmounts_
     );
@@ -187,21 +198,19 @@ contract ConverterStrategyBaseLibFacade {
     address[] memory tokens_,
     uint indexTargetAsset_,
     address underlying_,
-    uint[] memory withdrawnAmounts_,
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     uint liquidationThresholdForTargetAsset_,
     uint overswap_
   ) external returns (
     uint[] memory spentAmounts,
-    uint[] memory withdrawnAmountsOut
+    uint[] memory receivedAmounts
   ) {
     return ConverterStrategyBaseLib.swapToGivenAmount(
       targetAmount_,
       tokens_,
       indexTargetAsset_,
       underlying_,
-      withdrawnAmounts_,
       converter_,
       liquidator_,
       liquidationThresholdForTargetAsset_,
@@ -226,5 +235,88 @@ contract ConverterStrategyBaseLibFacade {
     uint amountReceived
   ) {
     return ConverterStrategyBaseLib._swapToGetAmount(receivedTargetAmount, p, v, indexTokenIn);
+  }
+
+  function convertAfterWithdraw(
+    ITetuConverter tetuConverter,
+    ITetuLiquidator liquidator,
+    uint indexAsset,
+    uint liquidationThreshold,
+    address[] memory tokens,
+    uint[] memory amountsToConvert
+  ) external returns (
+    uint collateralOut,
+    uint[] memory repaidAmountsOut
+  ) {
+    return ConverterStrategyBaseLib.convertAfterWithdraw(
+      tetuConverter,
+      liquidator,
+      indexAsset,
+      liquidationThreshold,
+      tokens,
+      amountsToConvert
+    );
+  }
+
+  function closePositionsToGetRequestedAmount(
+    ITetuConverter tetuConverter,
+    ITetuLiquidator liquidator,
+    uint indexAsset,
+    uint requestedAmount,
+    address[] memory tokens,
+    uint[] memory repaidAmounts_
+  ) external returns (
+    uint expectedAmountMainAssetOut
+  ) {
+    return ConverterStrategyBaseLib.closePositionsToGetRequestedAmount(
+      tetuConverter,
+      liquidator,
+      indexAsset,
+      liquidationThresholds,
+      requestedAmount,
+      tokens,
+      repaidAmounts_
+    );
+  }
+
+  function _closePositionUsingMainAsset(
+    ITetuConverter tetuConverter,
+    ITetuLiquidator liquidator_,
+    address asset,
+    address token,
+    uint toSell
+  ) external returns (
+    uint expectedAmountOut
+  ) {
+    return ConverterStrategyBaseLib._closePositionUsingMainAsset(
+      tetuConverter,
+      liquidator_,
+      asset,
+      token,
+      toSell,
+      liquidationThresholds
+    );
+  }
+
+  function _getAmountToSell(
+    uint remainingRequestedAmount,
+    uint totalDebt,
+    uint totalCollateral,
+    uint[] memory prices,
+    uint[] memory decs,
+    uint indexCollateral,
+    uint indexBorrowAsset
+  ) external pure returns (
+    uint amountOut
+  ) {
+    return ConverterStrategyBaseLib._getAmountToSell(
+      remainingRequestedAmount,
+      totalDebt,
+      totalCollateral,
+      prices,
+      decs,
+      indexCollateral,
+      indexBorrowAsset
+    );
   }
 }

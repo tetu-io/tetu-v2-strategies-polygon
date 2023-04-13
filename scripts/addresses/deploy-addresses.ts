@@ -86,4 +86,8 @@ export const deployAddresses = {
     "hardhat": "0x217dB66Dc9300AaCE215beEdc1Aa26741e58CC67",
     "matic": "0x217dB66Dc9300AaCE215beEdc1Aa26741e58CC67"
   },
+  ST_MATIC_RATE_PROVIDER_ADDRESS: {
+    "hardhat": "0xdEd6C522d803E35f65318a9a4d7333a22d582199",
+    "matic": "0xdEd6C522d803E35f65318a9a4d7333a22d582199"
+  }
 }
