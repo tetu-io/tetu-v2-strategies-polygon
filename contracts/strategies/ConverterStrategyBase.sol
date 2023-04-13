@@ -7,7 +7,6 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -593,8 +592,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       if (liquidity != 0) {
         withdrawnAmounts = _depositorExit(liquidity);
         emit OnDepositorExit(liquidity, withdrawnAmounts);
-        console.log("requirePayAmountBack.liquidity", liquidity);
-        console.log("requirePayAmountBack.withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1], withdrawnAmounts[2]);
       }
     }
 

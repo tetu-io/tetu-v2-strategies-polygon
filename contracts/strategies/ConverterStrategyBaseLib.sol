@@ -12,7 +12,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -666,8 +665,6 @@ library ConverterStrategyBaseLib {
 
     // convert withdrawn assets to the target asset if not enough
     if (amountOut < amount_) {
-      console.log("swapToGivenAmountAndSendToConverter amount_", amount_);
-      console.log("swapToGivenAmountAndSendToConverter amountOut", amountOut);
       ConverterStrategyBaseLib.swapToGivenAmount(
         amount_ - amountOut,
         tokens,
@@ -679,14 +676,12 @@ library ConverterStrategyBaseLib {
         OVERSWAP
       );
       amountOut = IERC20(theAsset).balanceOf(address(this));
-      console.log("swapToGivenAmountAndSendToConverter amountOut result", amountOut);
     }
 
     // we should send the asset as is even if it is lower than requested
     // but shouldn't sent more amount than requested
     amountOut = Math.min(amount_, amountOut);
     if (amountOut != 0) {
-      console.log("swapToGivenAmountAndSendToConverter amountOut transfer", amountOut);
       IERC20(theAsset).safeTransfer(converter, amountOut);
     }
 
@@ -694,7 +689,6 @@ library ConverterStrategyBaseLib {
     // 1) close a borrow: we will receive collateral back and amount of investedAssets almost won't change
     // 2) rebalancing: we have real loss, it will be taken into account at next hard work
     emit ReturnAssetToConverter(theAsset, amountOut);
-    console.log("swapToGivenAmountAndSendToConverter amountOut event", amountOut);
 
     // let's leave any leftovers un-invested, they will be reinvested at next hardwork
   }
@@ -727,7 +721,6 @@ library ConverterStrategyBaseLib {
     v.availableAmounts = new uint[](v.len);
     for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
       v.availableAmounts[v.i] = IERC20(tokens_[v.i]).balanceOf(address(this));
-      console.log("swapToGivenAmount.availableAmounts", v.i, v.availableAmounts[v.i]);
     }
 
     (spentAmounts, receivedAmounts) = _swapToGivenAmount(
@@ -815,8 +808,6 @@ library ConverterStrategyBaseLib {
         * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
         / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
       ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
-      console.log("amountIn indexTokenIn", amountIn, indexTokenIn);
-      console.log("p.amounts[indexTokenIn]", p.amounts[indexTokenIn]);
 
       (amountSpent, amountReceived) = _liquidate(
         p.converter,
