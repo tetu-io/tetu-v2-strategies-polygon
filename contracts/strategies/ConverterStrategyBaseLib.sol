@@ -85,7 +85,6 @@ library ConverterStrategyBaseLib {
   struct SwapToGivenAmountLocal {
     uint len;
     uint[] availableAmounts;
-    uint[] receivedAmounts;
     uint i;
   }
 
@@ -645,89 +644,93 @@ library ConverterStrategyBaseLib {
   ///                 requirePayAmountBack
   /////////////////////////////////////////////////////////////////////
 
+  /// @param amountOut Amount of the main asset requested by converter
+  /// @param indexTheAsset Index of the asset required by converter in the {tokens}
+  /// @param asset Main asset or underlying
+  /// @return amountOut Amount of the main asset sent to converter
   function swapToGivenAmountAndSendToConverter(
     uint amount_,
     uint indexTheAsset,
     address[] memory tokens,
-    uint[] memory withdrawnAmounts,
     address converter,
     address controller,
     address asset,
-    address theAsset_,
     mapping(address => uint) storage liquidationThresholds
-  ) external returns (uint amountOut) {
+  ) external returns (
+    uint amountOut
+  ) {
     require(msg.sender == converter, StrategyLib.DENIED);
+    address theAsset = tokens[indexTheAsset];
 
-    amountOut = IERC20(theAsset_).balanceOf(address(this));
+    amountOut = IERC20(theAsset).balanceOf(address(this));
 
     // convert withdrawn assets to the target asset if not enough
     if (amountOut < amount_) {
-      (, withdrawnAmounts) = ConverterStrategyBaseLib.swapToGivenAmount(
+      console.log("swapToGivenAmountAndSendToConverter amount_", amount_);
+      console.log("swapToGivenAmountAndSendToConverter amountOut", amountOut);
+      ConverterStrategyBaseLib.swapToGivenAmount(
         amount_ - amountOut,
         tokens,
         indexTheAsset,
         asset, // underlying === main asset
-        withdrawnAmounts,
         ITetuConverter(converter),
         ITetuLiquidator(IController(controller).liquidator()),
-        liquidationThresholds[theAsset_],
+        liquidationThresholds[theAsset],
         OVERSWAP
       );
-      amountOut = IERC20(theAsset_).balanceOf(address(this));
+      amountOut = IERC20(theAsset).balanceOf(address(this));
+      console.log("swapToGivenAmountAndSendToConverter amountOut result", amountOut);
     }
 
     // we should send the asset as is even if it is lower than requested
+    // but shouldn't sent more amount than requested
+    amountOut = Math.min(amount_, amountOut);
     if (amountOut != 0) {
-      IERC20(theAsset_).safeTransfer(converter, amountOut);
+      console.log("swapToGivenAmountAndSendToConverter amountOut transfer", amountOut);
+      IERC20(theAsset).safeTransfer(converter, amountOut);
     }
 
     // There are two cases of calling requirePayAmountBack by converter:
     // 1) close a borrow: we will receive collateral back and amount of investedAssets almost won't change
     // 2) rebalancing: we have real loss, it will be taken into account at next hard work
-    emit ReturnAssetToConverter(theAsset_, amountOut);
+    emit ReturnAssetToConverter(theAsset, amountOut);
+    console.log("swapToGivenAmountAndSendToConverter amountOut event", amountOut);
 
     // let's leave any leftovers un-invested, they will be reinvested at next hardwork
   }
 
-  /// @notice Swap available {amounts_} of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
+  /// @notice Swap available amounts of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
   /// @param targetAmount_ Required amount of tokens[indexTheAsset_] that should be received by swap(s)
   /// @param tokens_ tokens received from {_depositorPoolAssets}
   /// @param indexTargetAsset_ Index of target asset in tokens_ array
   /// @param underlying_ Index of underlying
-  /// @param withdrawnAmounts_ Amounts withdrawn from the pool
   /// @param liquidationThresholdForTargetAsset_ Liquidation thresholds for the target asset
   /// @param overswap_ Allow to swap more then required (i.e. 1_000 => +1%)
   ///                  to avoid additional swap if the swap return amount a bit less than we expected
   /// @return spentAmounts Any amounts spent during the swaps
-  /// @return withdrawnAmountsOut withdrawnAmounts + any amounts received during the swaps
   function swapToGivenAmount(
     uint targetAmount_,
     address[] memory tokens_,
     uint indexTargetAsset_,
     address underlying_,
-    uint[] memory withdrawnAmounts_, // todo remove this var?
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     uint liquidationThresholdForTargetAsset_,
     uint overswap_
   ) internal returns (
     uint[] memory spentAmounts,
-    uint[] memory withdrawnAmountsOut
+    uint[] memory receivedAmounts
   ) {
     SwapToGivenAmountLocal memory v;
     v.len = tokens_.length;
 
-    spentAmounts = new uint[](v.len);
-    withdrawnAmountsOut = new uint[](v.len);
-
     v.availableAmounts = new uint[](v.len);
     for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
       v.availableAmounts[v.i] = IERC20(tokens_[v.i]).balanceOf(address(this));
-      console.log("i", v.i);
-      console.log("v.availableAmounts[v.i] ", v.availableAmounts[v.i]);
-      console.log("IERC20(tokens_[v.i]).balanceOf(address(this) ", IERC20(tokens_[v.i]).balanceOf(address(this)));
+      console.log("swapToGivenAmount.availableAmounts", v.i, v.availableAmounts[v.i]);
     }
-    (spentAmounts, v.receivedAmounts) = _swapToGivenAmount(
+
+    (spentAmounts, receivedAmounts) = _swapToGivenAmount(
       SwapToGivenAmountInputParams({
         targetAmount: targetAmount_,
         tokens: tokens_,
@@ -740,9 +743,6 @@ library ConverterStrategyBaseLib {
         overswap: overswap_
       })
     );
-    for (v.i = 0; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
-      withdrawnAmountsOut[v.i] = withdrawnAmounts_[v.i] + v.receivedAmounts[v.i];
-    }
   }
 
   /// @notice Swap available {amounts_} of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
@@ -815,7 +815,7 @@ library ConverterStrategyBaseLib {
         * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
         / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
       ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
-      console.log("amountIn", amountIn);
+      console.log("amountIn indexTokenIn", amountIn, indexTokenIn);
       console.log("p.amounts[indexTokenIn]", p.amounts[indexTokenIn]);
 
       (amountSpent, amountReceived) = _liquidate(

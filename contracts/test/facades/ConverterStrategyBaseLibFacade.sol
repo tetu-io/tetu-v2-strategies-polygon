@@ -198,21 +198,19 @@ contract ConverterStrategyBaseLibFacade {
     address[] memory tokens_,
     uint indexTargetAsset_,
     address underlying_,
-    uint[] memory withdrawnAmounts_,
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     uint liquidationThresholdForTargetAsset_,
     uint overswap_
   ) external returns (
     uint[] memory spentAmounts,
-    uint[] memory withdrawnAmountsOut
+    uint[] memory receivedAmounts
   ) {
     return ConverterStrategyBaseLib.swapToGivenAmount(
       targetAmount_,
       tokens_,
       indexTargetAsset_,
       underlying_,
-      withdrawnAmounts_,
       converter_,
       liquidator_,
       liquidationThresholdForTargetAsset_,

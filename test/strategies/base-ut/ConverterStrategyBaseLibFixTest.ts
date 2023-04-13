@@ -17,6 +17,7 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
 } from "../../baseUT/GasLimits";
+import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -1674,5 +1675,189 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
     });
   });
+
+  describe("swapToGivenAmount", () => {
+    interface ISwapToGivenAmountParams {
+      targetAmount: string;
+      tokens: MockToken[];
+      indexTargetAsset: number;
+      underlying: MockToken;
+      liquidationThresholdForTargetAsset: string;
+      overswap: number;
+
+      amounts: string[];
+      prices: string[];
+      liquidations: ILiquidationParams[];
+      balances: string[];
+    }
+    interface ISwapToGivenAmountResults {
+      spentAmounts: number[];
+      receivedAmounts: number[];
+      balances: number[];
+      gasUsed: BigNumber;
+    }
+    async function makeSwapToGivenAmountTest(p: ISwapToGivenAmountParams) : Promise<ISwapToGivenAmountResults> {
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        const d = await p.tokens[i].decimals()
+        decimals.push(d);
+
+        // withdrawn amounts
+        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
+        console.log("mint", i, p.amounts[i]);
+
+        // balances
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
+        console.log("mint", i, p.balances[i]);
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      const priceOracle = (await DeployerUtils.deployContract(
+        signer,
+        'PriceOracleMock',
+        p.tokens.map(x => x.address),
+        p.prices.map(x => parseUnits(x, 18))
+      )) as PriceOracleMock;
+      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(tetuConverterController.address);
+
+      // set up expected liquidations
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        await setupIsConversionValid(converter, liquidation, true);
+      }
+
+      const r = await facade.callStatic.swapToGivenAmountAccess(
+        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
+        p.tokens.map(x => x.address),
+        p.indexTargetAsset,
+        p.underlying.address,
+        converter.address,
+        liquidator.address,
+        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        p.overswap
+      );
+      console.log("r", r);
+      const tx = await facade.swapToGivenAmountAccess(
+        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
+        p.tokens.map(x => x.address),
+        p.indexTargetAsset,
+        p.underlying.address,
+        converter.address,
+        liquidator.address,
+        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        p.overswap
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        spentAmounts: r.spentAmounts.map( (x, index) => +formatUnits(x, decimals[index])),
+        receivedAmounts: r.receivedAmounts.map( (x, index) => +formatUnits(x, decimals[index])),
+        balances: await Promise.all(
+          p.tokens.map(
+            async (token, index) => +formatUnits(await token.balanceOf(facade.address), decimals[index])
+          )
+        ),
+        gasUsed
+      }
+    }
+
+    describe("single liquidation is required", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeSwapToGivenAmountFixture() : Promise<ISwapToGivenAmountResults> {
+        return makeSwapToGivenAmountTest({
+          targetAmount: "10",
+          tokens: [tetu, usdc, usdt, dai],
+          indexTargetAsset: 0, // TETU
+          underlying: usdc,
+          liquidationThresholdForTargetAsset: "0",
+          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
+
+          amounts: ["1000", "2000", "4000", "5000"], // == $100, $400, $1600, $2500
+          prices: ["0.1", "0.2", "0.4", "0.5"],
+          liquidations: [{
+            amountIn: "3.75",
+            amountOut: "15",// 10 tetu + 50% of overswap
+            tokenIn: usdt,
+            tokenOut: tetu
+          }],
+          // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
+          balances: ["100", "200", "400", "500"],
+        });
+      }
+      it("should return expected spentAmounts", async () => {
+        const r = await loadFixture(makeSwapToGivenAmountFixture);
+        expect(r.spentAmounts.join()).eq([0, 0, 3.75, 0].join());
+      });
+      it("should return expected receivedAmounts", async () => {
+        const r = await loadFixture(makeSwapToGivenAmountFixture);
+        expect(r.receivedAmounts.join()).eq([15, 0, 0, 0].join());
+      });
+      it("should return expected balances", async () => {
+        const r = await loadFixture(makeSwapToGivenAmountFixture);
+        // initial balances + amounts (withdrawn) +/- liquidation amounts
+        expect(r.balances.join()).eq([1115, 2200, 4396.25, 5500].join());
+      });
+    });
+    describe("two liquidations are required", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+      async function makeSwapToGivenAmountFixture() : Promise<ISwapToGivenAmountResults> {
+        return makeSwapToGivenAmountTest({
+          targetAmount: "16010",
+          tokens: [tetu, usdc, usdt, dai],
+          indexTargetAsset: 0, // TETU
+          underlying: usdc,
+          liquidationThresholdForTargetAsset: "0",
+          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
+
+          amounts: ["900", "1800", "3600", "4500"], // == $100, $400, $1600, $2500
+          prices: ["0.1", "0.2", "0.4", "0.5"],
+          liquidations: [
+            {
+              amountIn: "4000",
+              amountOut: "16000",
+              tokenIn: usdt,
+              tokenOut: tetu
+            },
+            {
+              amountIn: "3",
+              amountOut: "15",
+              tokenIn: dai,
+              tokenOut: tetu
+            },
+          ],
+          // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
+          balances: ["100", "200", "400", "500"],
+        });
+      }
+      it("should return expected spentAmounts", async () => {
+        const r = await loadFixture(makeSwapToGivenAmountFixture);
+        expect(r.spentAmounts.join()).eq([0, 0, 4000, 3].join());
+      });
+      it("should return expected receivedAmounts", async () => {
+        const r = await loadFixture(makeSwapToGivenAmountFixture);
+        expect(r.receivedAmounts.join()).eq([16015, 0, 0, 0].join()); // 16000 + 15
+      });
+      it("should return expected balances", async () => {
+        const r = await loadFixture(makeSwapToGivenAmountFixture);
+        expect(r.balances.join()).eq([17015, 2000, 0, 4997].join());
+      });
+    });
+  });
+
 //endregion Unit tests
 });

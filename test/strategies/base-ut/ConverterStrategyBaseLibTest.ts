@@ -22,7 +22,7 @@ import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {BigNumber} from "ethers";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
 import {ILiquidationParams} from "../../baseUT/mocks/TestDataTypes";
-import {setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
+import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -2186,8 +2186,11 @@ describe('ConverterStrategyBaseLibTest', () => {
         decimals.push(d);
         await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
       }
+
+      const converter = await MockHelper.createMockTetuConverter(signer);
       for (const liquidation of p.liquidations) {
         await setupMockedLiquidation(liquidator, liquidation);
+        await setupIsConversionValid(converter, liquidation, true);
       }
       const params = {
         targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
@@ -2195,7 +2198,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         indexTargetAsset: p.indexTargetAsset,
         underlying: p.underlying.address,
         amounts: p.amounts.map((x, index) => parseUnits(x, decimals[index])),
-        converter: ethers.Wallet.createRandom().address,
+        converter: converter.address,
         liquidator: liquidator.address,
         liquidationThresholdForTargetAsset: parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
         overswap: p.overswap
@@ -2207,7 +2210,12 @@ describe('ConverterStrategyBaseLibTest', () => {
         debts: [] // not used
       };
       const receivedTargetAmount = parseUnits(p.receivedTargetAmount, decimals[p.indexTargetAsset]);
-      const r = await facade.callStatic.swapToGetAmountAccess(receivedTargetAmount, params, vars, p.indexTokenIn);
+      const r = await facade.callStatic.swapToGetAmountAccess(
+        receivedTargetAmount,
+        params,
+        vars,
+        p.indexTokenIn
+      );
       await facade.swapToGetAmountAccess(receivedTargetAmount, params, vars, p.indexTokenIn);
       return {
         amountReceived: r.amountReceived,
@@ -2398,9 +2406,6 @@ describe('ConverterStrategyBaseLibTest', () => {
         decimals.push(d);
         await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
       }
-      for (const liquidation of p.liquidations) {
-        await setupMockedLiquidation(liquidator, liquidation);
-      }
 
       // set up TetuConverter
       const converter = await MockHelper.createMockTetuConverter(signer);
@@ -2412,6 +2417,12 @@ describe('ConverterStrategyBaseLibTest', () => {
       )) as PriceOracleMock;
       const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
       await converter.setController(tetuConverterController.address);
+
+      // set up liquidator
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        await setupIsConversionValid(converter, liquidation, true);
+      }
 
       const r = await facade.callStatic._swapToGivenAmountAccess({
         targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
@@ -2699,183 +2710,6 @@ describe('ConverterStrategyBaseLibTest', () => {
           expect(u).to.be.below(t + 1);
         });
       });
-    });
-  });
-
-  describe("swapToGivenAmount", () => {
-    interface ISwapToGivenAmountParams {
-      targetAmount: string;
-      tokens: MockToken[];
-      indexTargetAsset: number;
-      underlying: MockToken;
-      liquidationThresholdForTargetAsset: string;
-      overswap: number;
-
-      amounts: string[];
-      prices: string[];
-      liquidations: ILiquidationParams[];
-      balances: string[];
-    }
-    interface ISwapToGivenAmountResults {
-      spentAmounts: BigNumber[];
-      withdrawnAmountsOut: BigNumber[];
-      gasUsed: BigNumber;
-    }
-    async function makeSwapToGivenAmountTest(p: ISwapToGivenAmountParams) : Promise<ISwapToGivenAmountResults> {
-      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      const decimals: number[] = [];
-      for (let i = 0; i < p.tokens.length; ++i) {
-        const d = await p.tokens[i].decimals()
-        decimals.push(d);
-
-        // withdrawn amounts
-        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
-        console.log("mint", i, p.amounts[i]);
-
-        // balances
-        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
-        console.log("mint", i, p.balances[i]);
-      }
-      for (const liquidation of p.liquidations) {
-        await setupMockedLiquidation(liquidator, liquidation);
-      }
-
-      // set up TetuConverter
-      const converter = await MockHelper.createMockTetuConverter(signer);
-      const priceOracle = (await DeployerUtils.deployContract(
-        signer,
-        'PriceOracleMock',
-        p.tokens.map(x => x.address),
-        p.prices.map(x => parseUnits(x, 18))
-      )) as PriceOracleMock;
-      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
-      await converter.setController(tetuConverterController.address);
-
-      const r = await facade.callStatic.swapToGivenAmountAccess(
-        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
-        p.tokens.map(x => x.address),
-        p.indexTargetAsset,
-        p.underlying.address,
-        p.amounts.map((x, index) => parseUnits(x, decimals[index])),
-        converter.address,
-        liquidator.address,
-        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
-        p.overswap
-      );
-      console.log("r", r);
-      const tx = await facade.swapToGivenAmountAccess(
-        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
-        p.tokens.map(x => x.address),
-        p.indexTargetAsset,
-        p.underlying.address,
-        p.amounts.map((x, index) => parseUnits(x, decimals[index])),
-        converter.address,
-        liquidator.address,
-        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
-        p.overswap
-      );
-      const gasUsed = (await tx.wait()).gasUsed;
-      return {
-        spentAmounts: r.spentAmounts,
-        withdrawnAmountsOut: r.withdrawnAmountsOut,
-        gasUsed
-      }
-    }
-
-    it("should return amount from balance, single liquidation is required", async () => {
-        const r = await makeSwapToGivenAmountTest({
-          targetAmount: "10",
-          tokens: [tetu, usdc, usdt, dai],
-          indexTargetAsset: 0, // TETU
-          underlying: usdc,
-          liquidationThresholdForTargetAsset: "0",
-          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-          amounts: ["1000", "2000", "4000", "5000"], // == $100, $400, $1600, $2500
-          prices: ["0.1", "0.2", "0.4", "0.5"],
-          liquidations: [{
-            amountIn: "3.75",
-            amountOut: "15",// 10 tetu + 50% of overswap
-            tokenIn: usdt,
-            tokenOut: tetu
-          }],
-          // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
-          balances: ["100", "200", "400", "500"],
-        });
-
-        const ret = [
-          r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-          r.withdrawnAmountsOut.map(x => BalanceUtils.toString(x)).join()
-        ].join("\n");
-
-        const expected = [
-          [
-            parseUnits("0", 18),
-            parseUnits("0", 6),
-            parseUnits("3.75", 6),
-            parseUnits("0", 18),
-          ].map(x => BalanceUtils.toString(x)).join(),
-          [
-            parseUnits("1015", 18),
-            parseUnits("2000", 6),
-            parseUnits("4000", 6),
-            parseUnits("5000", 18),
-          ].map(x => BalanceUtils.toString(x)).join(),
-        ].join("\n");
-
-        expect(ret).eq(expected);
-      });
-    // todo fix
-    it.skip("should return amount from balance, two liquidations are required", async () => {
-      const r = await makeSwapToGivenAmountTest({
-        targetAmount: "16010",
-        tokens: [tetu, usdc, usdt, dai],
-        indexTargetAsset: 0, // TETU
-        underlying: usdc,
-        liquidationThresholdForTargetAsset: "0",
-        overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-        amounts: ["900", "1800", "3600", "4500"], // == $100, $400, $1600, $2500
-        prices: ["0.1", "0.2", "0.4", "0.5"],
-        liquidations: [
-          {
-            amountIn: "4000",
-            amountOut: "16000",
-            tokenIn: usdt,
-            tokenOut: tetu
-          },
-          {
-            amountIn: "3",
-            amountOut: "15",
-            tokenIn: dai,
-            tokenOut: tetu
-          },
-        ],
-        // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
-        balances: ["100", "200", "400", "500"],
-      });
-
-      const ret = [
-        r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-        r.withdrawnAmountsOut.map(x => BalanceUtils.toString(x)).join()
-      ].join("\n");
-
-      const expected = [
-        [
-          parseUnits("0", 18),
-          parseUnits("0", 6),
-          parseUnits("4000", 6),
-          parseUnits("3", 18),
-        ].map(x => BalanceUtils.toString(x)).join(),
-        [
-          parseUnits("16915", 18), // 900 + 16000 + 15
-          parseUnits("1800", 6),
-          parseUnits("3600", 6),
-          parseUnits("4500", 18),
-        ].map(x => BalanceUtils.toString(x)).join(),
-      ].join("\n");
-
-      expect(ret).eq(expected);
     });
   });
 
