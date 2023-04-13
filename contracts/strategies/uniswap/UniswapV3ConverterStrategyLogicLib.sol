@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "./UniswapV3Lib.sol";
 import "./UniswapV3DebtLib.sol";
+import "./Uni3StrategyErrors.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
@@ -133,7 +134,7 @@ library UniswapV3ConverterStrategyLogicLib {
     uint earned0 = (depositorSwapTokens ? state.rebalanceEarned1 : state.rebalanceEarned0);
     uint earned1 = (depositorSwapTokens ? state.rebalanceEarned0 : state.rebalanceEarned1);
 
-    require(amountA >= earned0 && amountB >= earned1, "Wrong balance");
+    require(amountA >= earned0 && amountB >= earned1, Uni3StrategyErrors.WRONG_BALANCE);
     amountA -= earned0;
     amountB -= earned1;
   }
@@ -211,11 +212,11 @@ library UniswapV3ConverterStrategyLogicLib {
   ) {
     tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
     if (tickRange_ != 0) {
-      require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, 'Incorrect tickRange');
-      require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, 'Incorrect rebalanceTickRange');
+      require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_TICK_RANGE);
+      require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
     }
     (lowerTick, upperTick) = _calcTickRange(pool, tickRange_, tickSpacing);
-    require(asset_ == pool.token0() || asset_ == pool.token1(), 'Incorrect asset');
+    require(asset_ == pool.token0() || asset_ == pool.token1(), Uni3StrategyErrors.INCORRECT_ASSET);
     if (asset_ == pool.token0()) {
       tokenA = pool.token0();
       tokenB = pool.token1();
@@ -534,7 +535,7 @@ library UniswapV3ConverterStrategyLogicLib {
     uint balance0 = _balance(pool.token0());
     uint balance1 = _balance(pool.token1());
 
-    require(balance0 >= fee0 && balance1 >= fee1, "Wrong fee");
+    require(balance0 >= fee0 && balance1 >= fee1, Uni3StrategyErrors.WRONG_FEE);
     balance0 -= fee0;
     balance1 -= fee1;
 
@@ -584,7 +585,7 @@ library UniswapV3ConverterStrategyLogicLib {
   ) external returns (uint[] memory amountsOut, uint128 totalLiquidity, uint128 totalLiquidityFillup) {
     totalLiquidityFillup = 0;
 
-    require(liquidity >= liquidityAmountToExit, "Wrong liquidity");
+    require(liquidity >= liquidityAmountToExit, Uni3StrategyErrors.WRONG_LIQUIDITY);
 
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, liquidityAmountToExit);
@@ -611,7 +612,7 @@ library UniswapV3ConverterStrategyLogicLib {
       amountsOut[0] += amountsOutFillup0;
       amountsOut[1] += amountsOutFillup1;
 
-      require(liquidityFillup >= toRemoveFillUpAmount, "Wrong fillup");
+      require(liquidityFillup >= toRemoveFillUpAmount, Uni3StrategyErrors.WRONG_FILLUP);
       totalLiquidityFillup = liquidityFillup - toRemoveFillUpAmount;
     }
 
@@ -759,7 +760,7 @@ library UniswapV3ConverterStrategyLogicLib {
       vars.upperTick,
       vars.tickSpacing,
       state.rebalanceTickRange
-    ), "No rebalancing needed");
+    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
@@ -810,7 +811,7 @@ library UniswapV3ConverterStrategyLogicLib {
           vars.rebalanceEarned1,
           oldInvestedAssets
         ),
-        UniswapV3DebtLib.getDeptTotalCollateralAmountOut(converter, vars.tokenA, vars.tokenB)
+        UniswapV3DebtLib.getDebtTotalCollateralAmountOut(converter, vars.tokenA, vars.tokenB)
       );
       state.rebalanceEarned0 = vars.newRebalanceEarned0;
       state.rebalanceEarned1 = vars.newRebalanceEarned1;

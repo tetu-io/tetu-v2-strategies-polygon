@@ -34,7 +34,7 @@ import {
   redeemFromVault,
 } from '../../../StrategyTestUtils';
 import { BigNumber } from 'ethers';
-import {IPriceOracleManager} from "../../../baseUT/converter/PriceOracleManager";
+import { IPriceOracleManager } from '../../../baseUT/converter/PriceOracleManager';
 
 
 const { expect } = chai;
@@ -227,11 +227,11 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
 
     // todo test on higher value
-    const cycles = 5;
+    const cycles = 10;
 
-    const depositAmount1 = parseUnits('10000', decimals);
+    const depositAmount1 = parseUnits('100000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    const swapAmount = parseUnits('100000', decimals);
+    const swapAmount = parseUnits('1000000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -318,17 +318,21 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
       }
 
-      // we will repair share price with rebalance and hard work will not have profit
+
+      await rebalanceUniv3Strategy(strategy, signer, decimals);
+      await printVaultState(
+        vault,
+        splitter,
+        StrategyBaseV2__factory.connect(strategy.address, signer),
+        assetCtr,
+        decimals,
+      );
+
       if (i % 5 === 0) {
-        await rebalanceUniv3Strategy(strategy, signer, decimals);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
-      } else {
+        // todo currently we are suppose rebalance happens every major price change
+      }
+
+      if (i % 2 === 0) {
         await doHardWorkForStrategy(
           splitter,
           StrategyBaseV2__factory.connect(strategy.address, signer),
@@ -349,7 +353,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       // WITHDRAW
       ///////////////////////////
 
-      if (true) {
+      if (i % 7 === 0) {
         await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
         await printVaultState(
           vault,
@@ -380,8 +384,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
-      // todo need to check after estimation fix
-      // expect(sharePriceAfter).approximately(sharePriceBefore, 10_000);
+      expect(sharePriceAfter).approximately(sharePriceBefore, 10_000);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
