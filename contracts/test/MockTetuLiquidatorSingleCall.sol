@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "hardhat/console.sol";
 
 /// @notice Mock of ITetuLiquidator, each function saves input params and has customizable output value
@@ -33,7 +34,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     PoolData[] memory route,
     string memory errorMessage
   ) {
-    console.log("MockTetuLiquidatorSingleCall.buildRoute", tokenIn, tokenOut);
+    console.log("MockTetuLiquidatorSingleCall.buildRoute", _tokenName(tokenIn), _tokenName(tokenOut));
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut));
     BuildRouteParams memory p = buildRouteParams[key];
 
@@ -49,7 +50,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
         route[0].swapper = p.swapper;
         return (route, errorMessage);
       } else {
-        console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found", tokenIn, tokenOut);
+        console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found", _tokenName(tokenIn), _tokenName(tokenOut));
         return (route, "route not found");
       }
     }
@@ -231,4 +232,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     revert("addBlueChipsPools is not implemented");
   }
 
+  function _tokenName(address token) internal view returns (string memory) {
+    return IERC20Metadata(token).symbol();
+  }
 }

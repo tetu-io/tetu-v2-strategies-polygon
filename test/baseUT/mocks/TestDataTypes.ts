@@ -4,8 +4,8 @@ import {BigNumber} from "ethers";
 export interface ILiquidationParams {
   tokenIn: MockToken;
   tokenOut: MockToken;
-  amountIn: BigNumber;
-  amountOut: BigNumber;
+  amountIn: string;
+  amountOut: string;
 }
 export interface ITokenAmount {
   token: MockToken;
@@ -21,7 +21,17 @@ export interface IBorrowParams {
 export interface IRepayParams {
   collateralAsset: MockToken;
   borrowAsset: MockToken;
-  totalDebtAmountOut: BigNumber;
-  totalCollateralAmountOut: BigNumber;
-  amountRepay: BigNumber;
+  totalDebtAmountOut: string;
+  totalCollateralAmountOut: string;
+  amountRepay: string;
+  collateralAmountOut: string;
+  returnedBorrowAmountOut?: string;
+  swappedLeftoverCollateralOut?: string;
+  swappedLeftoverBorrowOut?: string;
+}
+export interface IQuoteRepayParams {
+  collateralAsset: MockToken;
+  borrowAsset: MockToken;
+  amountRepay: string;
+  collateralAmountOut: string;
 }
