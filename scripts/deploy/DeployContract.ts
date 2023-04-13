@@ -11,7 +11,7 @@ export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 
 const libraries = new Map<string, string[]>([
   ['VeTetu', ['VeTetuLogo']],
-  ['BalancerComposableStableDepositorFacade', ['BalancerLogicLib']],
+  ['BalancerBoostedDepositorFacade', ['BalancerLogicLib']],
   ['BalancerComposableStableStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib']],
   ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib']],
   ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
@@ -20,6 +20,7 @@ const libraries = new Map<string, string[]>([
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'UniswapV3DebtLib']],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
+  ['BalancerBoostedStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(

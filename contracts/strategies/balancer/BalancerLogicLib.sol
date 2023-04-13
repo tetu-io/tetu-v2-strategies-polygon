@@ -7,13 +7,13 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "../../libs/AppErrors.sol";
 import "../../libs/AppLib.sol";
 import "../../libs/TokenAmountsLib.sol";
-import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
-import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
+import "../../integrations/balancer/IComposableStablePool.sol";
+import "../../integrations/balancer/ILinearPool.sol";
 import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
-/// @notice Functions of BalancerComposableStableDepositor
+/// @notice Functions of BalancerBoostedDepositor
 /// @dev Many of functions are declared as external to reduce contract size
 library BalancerLogicLib {
   using SafeERC20 for IERC20;
@@ -131,7 +131,7 @@ library BalancerLogicLib {
     amountsOut = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i != indexBpt_) {
-        IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens_[i]));
+        ILinearPool linearPool = ILinearPool(address(tokens_[i]));
         (, uint[] memory balances,) = vault_.getPoolTokens(linearPool.getPoolId());
 
         amountsOut[i] =
@@ -186,14 +186,14 @@ library BalancerLogicLib {
   /////////////////////////////////////////////////////////////////////
   ///             Depositor view logic
   /////////////////////////////////////////////////////////////////////
-  /// @notice Total amounts of the main assets under control of the pool, i.e amounts of DAI, USDC, USDT
-  /// @return reservesOut Total amounts of embedded assets, i.e. for "Balancer Boosted Aave USD" we return:
-  ///                     0: balance DAI + (balance amDAI recalculated to DAI)
-  ///                     1: balance USDC + (amUSDC recalculated to USDC)
-  ///                     2: balance USDT + (amUSDT recalculated to USDT)
+  /// @notice Total amounts of the main assets under control of the pool, i.e amounts of USDT, USDC, DAI
+  /// @return reservesOut Total amounts of embedded assets, i.e. for "Balancer Boosted Tetu USD" we return:
+  ///                     0: balance USDT + (tUSDT recalculated to USDT)
+  ///                     1: balance USDC + (tUSDC recalculated to USDC)
+  ///                     2: balance DAI + (balance tDAI recalculated to DAI)
   function depositorPoolReserves(IBVault vault_, bytes32 poolId_) external view returns (uint[] memory reservesOut) {
     (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
-    uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+    uint bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
     uint len = tokens.length;
     // exclude pool-BPT
     reservesOut = new uint[](len - 1);
@@ -201,16 +201,16 @@ library BalancerLogicLib {
     uint k;
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == bptIndex) continue;
-      IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(tokens[i]));
+      ILinearPool linearPool = ILinearPool(address(tokens[i]));
 
-      // Each bb-am-* returns (main-token, wrapped-token, bb-am-itself), the order of tokens is arbitrary
-      // i.e. (DAI + amDAI + bb-am-DAI) or (bb-am-USDC, amUSDC, USDC)
+      // Each bb-t-* returns (main-token, wrapped-token, bb-t-itself), the order of tokens is arbitrary
+      // i.e. (DAI + tDAI + bb-t-DAI) or (bb-t-USDC, tUSDC, USDC)
 
       // get balances of all tokens of bb-am-XXX token, i.e. balances of (DAI, amDAI, bb-am-DAI)
       (, uint256[] memory balances,) = vault_.getPoolTokens(linearPool.getPoolId());
       // DAI
       uint mainIndex = linearPool.getMainIndex();
-      // amDAI
+      // tDAI
       uint wrappedIndex = linearPool.getWrappedIndex();
 
       reservesOut[k] = balances[mainIndex] + balances[wrappedIndex] * linearPool.getWrappedTokenRate() / 1e18;
@@ -221,7 +221,7 @@ library BalancerLogicLib {
   /// @notice Returns pool assets, same as getPoolTokens but without pool-bpt
   function depositorPoolAssets(IBVault vault_, bytes32 poolId_) external view returns (address[] memory poolAssets) {
     (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
-    uint bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+    uint bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
     uint len = tokens.length;
 
     poolAssets = new address[](len - 1);
@@ -229,7 +229,7 @@ library BalancerLogicLib {
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == bptIndex) continue;
 
-      poolAssets[k] = IBalancerBoostedAavePool(address(tokens[i])).getMainToken();
+      poolAssets[k] = ILinearPool(address(tokens[i])).getMainToken();
       ++k;
     }
   }
@@ -270,10 +270,10 @@ library BalancerLogicLib {
     //    bb-am-dai, bb-am-usd, bb-am-usdc, bb-am-usdt
     (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
     p.len = p.tokens.length;
-    p.bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+    p.bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
 
     // temporary save current liquidity
-    liquidityOut = IBalancerBoostedAaveStablePool(address(p.tokens[p.bptIndex])).balanceOf(address(this));
+    liquidityOut = IComposableStablePool(address(p.tokens[p.bptIndex])).balanceOf(address(this));
 
     // Original amounts can have any values.
     // But we need amounts in such proportions that won't move the current balances
@@ -284,10 +284,10 @@ library BalancerLogicLib {
 
     // we can create funds_ once and use it several times
     IBVault.FundManagement memory funds = IBVault.FundManagement({
-    sender : address(this),
-    fromInternalBalance : false,
-    recipient : payable(address(this)),
-    toInternalBalance : false
+      sender : address(this),
+      fromInternalBalance : false,
+      recipient : payable(address(this)),
+      toInternalBalance : false
     });
 
     // swap all tokens XX => bb-am-XX
@@ -300,8 +300,8 @@ library BalancerLogicLib {
       if (i == p.bptIndex) continue;
       amountsToDeposit[i] = BalancerLogicLib.swap(
         vault_,
-        IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
-        IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
+        ILinearPool(address(p.tokens[i])).getPoolId(),
+        ILinearPool(address(p.tokens[i])).getMainToken(),
         address(p.tokens[i]),
         amountsConsumedOut[k],
         funds
@@ -317,11 +317,11 @@ library BalancerLogicLib {
       address(this),
       address(this),
       IBVault.JoinPoolRequest({
-    assets : asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
-    maxAmountsIn : amountsToDeposit,
-    userData : abi.encode(IBVault.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, userDataAmounts, 0),
-    fromInternalBalance : false
-    })
+        assets : asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        maxAmountsIn : amountsToDeposit,
+        userData : abi.encode(IBVault.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, userDataAmounts, 0),
+        fromInternalBalance : false
+      })
     );
 
     uint liquidityAfter = IERC20(address(p.tokens[p.bptIndex])).balanceOf(address(this));
@@ -340,7 +340,7 @@ library BalancerLogicLib {
   ) {
     DepositorLocal memory p;
 
-    p.bptIndex = IBalancerBoostedAaveStablePool(getPoolAddress(poolId_)).getBptIndex();
+    p.bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
     (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
     p.len = p.tokens.length;
 
@@ -353,15 +353,11 @@ library BalancerLogicLib {
       address(this),
       payable(address(this)),
       IBVault.ExitPoolRequest({
-    assets : asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
-    minAmountsOut : new uint[](p.len), // todo: no limits?
-    userData : abi.encode(
-        IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
-        BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, p.balances, p.bptIndex),
-        liquidityAmount_
-      ),
-    toInternalBalance : false
-    })
+        assets : asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        minAmountsOut : new uint[](p.len), // no limits
+        userData : abi.encode(IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT, liquidityAmount_),
+        toInternalBalance : false
+      })
     );
 
     // now we have amBbXXX tokens; swap them to XXX assets
@@ -382,9 +378,9 @@ library BalancerLogicLib {
       if (amountIn != 0) {
         amountsOut[k] = swap(
           vault_,
-          IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
+          ILinearPool(address(p.tokens[i])).getPoolId(),
           address(p.tokens[i]),
-          IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
+          ILinearPool(address(p.tokens[i])).getMainToken(),
           amountIn,
           funds
         );
@@ -404,17 +400,17 @@ library BalancerLogicLib {
   ) {
     DepositorLocal memory p;
 
-    p.bptIndex = IBalancerBoostedAaveStablePool(getPoolAddress(poolId_)).getBptIndex();
+    p.bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
     (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
     p.len = p.tokens.length;
     amountsOut = new uint[](p.len - 1);
 
     // we can create funds_ once and use it several times
     IBVault.FundManagement memory funds = IBVault.FundManagement({
-    sender : address(this),
-    fromInternalBalance : false,
-    recipient : payable(address(this)),
-    toInternalBalance : false
+      sender : address(this),
+      fromInternalBalance : false,
+      recipient : payable(address(this)),
+      toInternalBalance : false
     });
 
     uint liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
@@ -428,15 +424,11 @@ library BalancerLogicLib {
           address(this),
           payable(address(this)),
           IBVault.ExitPoolRequest({
-        assets : asIAsset(p.tokens),
-        minAmountsOut : new uint[](p.len), // todo: no limits?
-        userData : abi.encode(
-            IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
-            BalancerLogicLib.getBtpAmountsOut(liquidityAmount, p.balances, p.bptIndex),
-            liquidityAmount
-          ),
-        toInternalBalance : false
-        })
+            assets : asIAsset(p.tokens),
+            minAmountsOut : new uint[](p.len), // no limits
+            userData : abi.encode(IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT, liquidityAmount),
+            toInternalBalance : false
+          })
         );
         liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
         if (liquidityAmount < liquidityThreshold || i == 1) {
@@ -454,9 +446,9 @@ library BalancerLogicLib {
         if (amountIn != 0) {
           amountsOut[k] = swap(
             vault_,
-            IBalancerBoostedAavePool(address(p.tokens[i])).getPoolId(),
+            ILinearPool(address(p.tokens[i])).getPoolId(),
             address(p.tokens[i]),
-            IBalancerBoostedAavePool(address(p.tokens[i])).getMainToken(),
+            ILinearPool(address(p.tokens[i])).getMainToken(),
             amountIn,
             funds
           );
@@ -501,9 +493,9 @@ library BalancerLogicLib {
     );
     amountOut = swap(
       vault_,
-      IBalancerBoostedAavePool(address(p.tokens[indexTargetAmBpt_])).getPoolId(),
+      ILinearPool(address(p.tokens[indexTargetAmBpt_])).getPoolId(),
       address(p.tokens[indexTargetAmBpt_]),
-      IBalancerBoostedAavePool(address(p.tokens[indexTargetAmBpt_])).getMainToken(),
+      ILinearPool(address(p.tokens[indexTargetAmBpt_])).getMainToken(),
       amountAmBpt,
       funds
     );
@@ -522,7 +514,7 @@ library BalancerLogicLib {
   ) {
     DepositorLocal memory p;
 
-    p.bptIndex = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId_)).getBptIndex();
+    p.bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
     (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
     p.len = p.tokens.length;
 
@@ -533,11 +525,10 @@ library BalancerLogicLib {
       address(this),
       payable(address(this)),
       IBVault.ExitPoolRequest({
-    assets : asIAsset(p.tokens),
-    minAmountsOut : new uint[](p.len), // todo: no limits?
-    userData : abi.encode(
-        IBVault.ExitKindComposableStable.BPT_IN_FOR_EXACT_TOKENS_OUT,
-        BalancerLogicLib.getBtpAmountsOut(liquidityAmount_, p.balances, p.bptIndex),
+        assets : asIAsset(p.tokens),
+        minAmountsOut : new uint[](p.len), // no limits
+        userData : abi.encode(
+        IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT,
         liquidityAmount_
       ),
     toInternalBalance : false
@@ -572,7 +563,7 @@ library BalancerLogicLib {
           : 0;
         }
       }
-      IBalancerBoostedAavePool linearPool = IBalancerBoostedAavePool(address(p.tokens[i]));
+      ILinearPool linearPool = ILinearPool(address(p.tokens[i]));
       steps[k].poolId = linearPool.getPoolId();
       steps[k].assetInIndex = 2 * k + 1;
       steps[k].assetOutIndex = 2 * k;
@@ -654,20 +645,23 @@ library BalancerLogicLib {
   ///             Rewards
   /////////////////////////////////////////////////////////////////////
 
-  function depositorClaimRewards(IBalancerGauge gauge_, address[] memory rewardTokens_) external returns (
+  function depositorClaimRewards(IBalancerGauge gauge_, address[] memory tokens_, address[] memory rewardTokens_) external returns (
     address[] memory tokensOut,
     uint[] memory amountsOut,
     uint[] memory depositorBalancesBefore
   ) {
-    uint len = rewardTokens_.length;
+    uint tokensLen = tokens_.length;
+    uint rewardTokensLen = rewardTokens_.length;
 
-    // todo handle balancesBefore if necessary
-    depositorBalancesBefore = new uint[](0);
+    tokensOut = new address[](rewardTokensLen);
+    amountsOut = new uint[](rewardTokensLen);
+    depositorBalancesBefore = new uint[](tokensLen);
 
-    tokensOut = new address[](len);
-    amountsOut = new uint[](len);
+    for (uint i; i < tokensLen; i = AppLib.uncheckedInc(i)) {
+      depositorBalancesBefore[i] = IERC20(tokens_[i]).balanceOf(address(this));
+    }
 
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+    for (uint i; i < rewardTokensLen; i = AppLib.uncheckedInc(i)) {
       tokensOut[i] = rewardTokens_[i];
 
       // temporary store current reward balance
@@ -676,7 +670,7 @@ library BalancerLogicLib {
 
     gauge_.claim_rewards();
 
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+    for (uint i; i < rewardTokensLen; i = AppLib.uncheckedInc(i)) {
       amountsOut[i] = IERC20(rewardTokens_[i]).balanceOf(address(this)) - amountsOut[i];
     }
 

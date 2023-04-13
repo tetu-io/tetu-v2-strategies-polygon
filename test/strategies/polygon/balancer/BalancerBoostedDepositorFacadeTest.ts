@@ -6,12 +6,10 @@ import { parseUnits } from 'ethers/lib/utils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import {
-  BalancerComposableStableDepositorFacade,
-  IBalancerBoostedAavePool__factory,
-  IBalancerBoostedAaveStablePool__factory,
+  BalancerBoostedDepositorFacade,
   IBalancerGauge__factory,
-  IBVault__factory,
-  IERC20__factory,
+  IBVault__factory, IComposableStablePool__factory,
+  IERC20__factory, ILinearPool__factory,
 } from '../../../../typechain';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { BigNumber } from 'ethers';
@@ -31,17 +29,16 @@ import {
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_QUOTE_EXIT,
 } from '../../../baseUT/GasLimits';
 
-describe('BalancerComposableStableDepositorFacadeTest', function() {
+describe('BalancerBoostedDepositorFacadeTest', function() {
   //region Constants
-  const balancerVault = '0xBA12222222228d8Ba445958a75a0704d566BF2C8';
-  /** Balancer Boosted Aave USD pool ID */
-  const poolBoostedId = '0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b';
-  const poolAmDaiId = '0x178e029173417b1f9c8bc16dcec6f697bc323746000000000000000000000758';
-  const poolAmUsdcId = '0xf93579002dbe8046c43fefe86ec78b1112247bb8000000000000000000000759';
-  const poolAmUsdtId = '0xff4ce5aaab5a627bf82f4a571ab1ce94aa365ea600000000000000000000075a';
-  const gauge = '0x1c514fEc643AdD86aeF0ef14F4add28cC3425306';
+  const balancerVault = MaticAddresses.BALANCER_VAULT;
+  /** Balancer Boosted Tetu USD pool ID */
+  const poolBoostedId = MaticAddresses.BALANCER_POOL_T_USD_ID;
+  const poolAmDaiId = MaticAddresses.BALANCER_POOL_T_DAI_ID;
+  const poolAmUsdcId = MaticAddresses.BALANCER_POOL_T_USDC_ID;
+  const poolAmUsdtId = MaticAddresses.BALANCER_POOL_T_USDT_ID;
+  const gauge = MaticAddresses.BALANCER_GAUGE_T_USD;
 
-  const BB_AM_USD = '0x48e6b98ef6329f8f0a30ebb8c7c960330d648085';
   //endregion Constants
 
   //region Variables
@@ -127,9 +124,9 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     amountsConsumedOut: BigNumber[];
     liquidityOut: BigNumber;
     gasUsed: BigNumber;
-    /** DAI, USDC, USDT */
+    /** USDT, USDC, DAI */
     balancesBefore: BigNumber[];
-    /** DAI, USDC, USDT */
+    /** USDT, USDC, DAI */
     balancesAfter: BigNumber[];
   }
 
@@ -139,25 +136,25 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
   }
 
   async function makeDepositorEnterTest(
-    facade: BalancerComposableStableDepositorFacade,
+    facade: BalancerBoostedDepositorFacade,
     params?: IMakeDepositorEnterBadParams,
   ): Promise<IDepositorEnterTestResults> {
-    const assets = [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN];
-    const holders = [MaticHolders.HOLDER_DAI, MaticHolders.HOLDER_USDC, MaticHolders.HOLDER_USDT];
+    const assets = [MaticAddresses.USDT_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN,];
+    const holders = [MaticHolders.HOLDER_USDT, MaticHolders.HOLDER_USDC, MaticHolders.HOLDER_DAI,];
     const vault = IBVault__factory.connect(balancerVault, signer);
 
     const amountsDesired = params?.amountsDesired
       || (
         params?.amount
           ? [
-            parseUnits(params.amount, 18), // dai
+            parseUnits(params.amount, 6), // usdt
             parseUnits(params.amount, 6),  // usdc
-            parseUnits(params.amount, 6),   // usdt
+            parseUnits(params.amount, 18),   // dai
           ]
           : [
-            parseUnits('1', 18), // dai
+            parseUnits('1', 6), // usdt
             parseUnits('1', 6),  // usdc
-            parseUnits('1', 6),   // usdt
+            parseUnits('1', 18),   // dai
           ]
       );
 
@@ -209,10 +206,10 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
   }
 
   async function makeDepositorExitTest(
-    facade: BalancerComposableStableDepositorFacade,
+    facade: BalancerBoostedDepositorFacade,
     liquidityAmountToWithdraw?: string,
   ): Promise<IDepositorExitTestResults> {
-    const assets = [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN];
+    const assets = [MaticAddresses.USDT_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN,];
     const vault = IBVault__factory.connect(balancerVault, signer);
 
     const balanceFacadeAssetsBefore = await BalanceUtils.getBalances(signer, facade.address, assets);
@@ -255,9 +252,8 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
   }
 
   async function makeDepositorClaimRewardsTest(
-    facade: BalancerComposableStableDepositorFacade,
+    facade: BalancerBoostedDepositorFacade,
   ): Promise<IDepositorClaimRewardsTestResults> {
-    const assets = [MaticAddresses.DAI_TOKEN, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN];
     const vault = IBVault__factory.connect(balancerVault, signer);
 
     const poolTokensBefore = await vault.getPoolTokens(poolBoostedId);
@@ -280,21 +276,21 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
   //endregion Utils enter/exit
 
   //region Unit tests
-  describe('BalancerComposableStableDepositorFacadeTest', () => {
+  describe('BalancerBoostedDepositorFacadeTest', () => {
     describe('_depositorPoolAssets', () => {
       it('should return expected list of assets', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const ret = (await facade._depositorPoolAssetsAccess()).map(x => x.toLowerCase()).join('\n');
         const expected = [
-          MaticAddresses.DAI_TOKEN.toLowerCase(),
-          MaticAddresses.USDC_TOKEN.toLowerCase(),
           MaticAddresses.USDT_TOKEN.toLowerCase(),
+          MaticAddresses.USDC_TOKEN.toLowerCase(),
+          MaticAddresses.DAI_TOKEN.toLowerCase(),
         ].join('\n');
 
         expect(ret).eq(expected);
       });
       it('should not exceed gas limits @skip-on-coverage', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const gasUsed = await facade.estimateGas._depositorPoolAssetsAccess();
 
         controlGasLimitsEx(gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_ASSETS, (u, t) => {
@@ -304,7 +300,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     });
     describe('_depositorPoolWeights', () => {
       it('should return all weights equal to 1', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const r = await facade._depositorPoolWeightsAccess();
         const ret = [
           r.totalWeight,
@@ -318,7 +314,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
         expect(ret).eq(expected);
       });
       it('should not exceed gas limits @skip-on-coverage', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const gasUsed = await facade.estimateGas._depositorPoolWeightsAccess();
 
         controlGasLimitsEx(gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_WEIGHTS, (u, t) => {
@@ -328,13 +324,13 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     });
     describe('_depositorPoolReserves', () => {
       it('should return expected amounts', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const r = await facade._depositorPoolReservesAccess();
 
         const vault = IBVault__factory.connect(balancerVault, signer);
-        const poolDai = IBalancerBoostedAavePool__factory.connect((await vault.getPool(poolAmDaiId))[0], signer);
-        const poolUsdc = IBalancerBoostedAavePool__factory.connect((await vault.getPool(poolAmUsdcId))[0], signer);
-        const poolUsdt = IBalancerBoostedAavePool__factory.connect((await vault.getPool(poolAmUsdtId))[0], signer);
+        const poolDai = ILinearPool__factory.connect((await vault.getPool(poolAmDaiId))[0], signer);
+        const poolUsdc = ILinearPool__factory.connect((await vault.getPool(poolAmUsdcId))[0], signer);
+        const poolUsdt = ILinearPool__factory.connect((await vault.getPool(poolAmUsdtId))[0], signer);
 
         const daiBalances = await vault.getPoolTokens(poolAmDaiId);
         const usdcBalances = await vault.getPoolTokens(poolAmUsdcId);
@@ -342,21 +338,21 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
 
         const ret = r.map(x => BalanceUtils.toString(x)).join('\n');
         const expected = [
+          usdtBalances.balances[2].add(
+            usdtBalances.balances[1].mul(await poolUsdt.getWrappedTokenRate()).div(Misc.ONE18),
+          ),
+          usdcBalances.balances[2].add(
+            usdcBalances.balances[1].mul(await poolUsdc.getWrappedTokenRate()).div(Misc.ONE18),
+          ),
           daiBalances.balances[1].add(
             daiBalances.balances[2].mul(await poolDai.getWrappedTokenRate()).div(Misc.ONE18),
-          ),
-          usdcBalances.balances[1].add(
-            usdcBalances.balances[0].mul(await poolUsdc.getWrappedTokenRate()).div(Misc.ONE18),
-          ),
-          usdtBalances.balances[1].add(
-            usdtBalances.balances[0].mul(await poolUsdt.getWrappedTokenRate()).div(Misc.ONE18),
           ),
         ].map(x => BalanceUtils.toString(x)).join('\n');
 
         expect(ret).eq(expected);
       });
       it('should not exceed gas limits @skip-on-coverage', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const gasUsed = await facade.estimateGas._depositorPoolReservesAccess();
 
         controlGasLimitsEx(gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_RESERVES, (u, t) => {
@@ -366,7 +362,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     });
     describe('_depositorLiquidity', () => {
       it('should return not zero liquidity after deposit', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const before = await facade._depositorLiquidityAccess();
         await makeDepositorEnterTest(facade);
         const after = await facade._depositorLiquidityAccess();
@@ -378,7 +374,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
         expect(ret).eq(expected);
       });
       it('should not exceed gas limits @skip-on-coverage', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const gasUsed = await facade.estimateGas._depositorLiquidityAccess();
 
         controlGasLimitsEx(gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_LIQUIDITY, (u, t) => {
@@ -388,18 +384,18 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
     });
     describe('_depositorTotalSupply', () => {
       it('should return actual supply', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const ret = await facade._depositorTotalSupplyAccess();
 
         const vault = IBVault__factory.connect(balancerVault, signer);
-        const expected = await IBalancerBoostedAaveStablePool__factory.connect(
+        const expected = await IComposableStablePool__factory.connect(
           (await vault.getPool(poolBoostedId))[0],
           signer,
         ).getActualSupply();
         expect(ret.eq(expected)).eq(true);
       });
       it('should not exceed gas limits @skip-on-coverage', async() => {
-        const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const gasUsed = await facade.estimateGas._depositorTotalSupplyAccess();
 
         controlGasLimitsEx(gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_TOTAL_SUPPLY, (u, t) => {
@@ -412,7 +408,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       describe('Good paths', () => {
         describe('Deposit to balanceR pool', () => {
           it('should return expected values', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
 
             const balanceGaugeBefore = await IBalancerGauge__factory.connect(gauge, signer).balanceOf(facade.address);
             const r = await makeDepositorEnterTest(facade);
@@ -469,7 +465,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
          */
         describe.skip('Ensure that deposit doesn\'t change proportions too much', () => {
           it('$1', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, { amount: '1' });
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
@@ -477,14 +473,14 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             expect(maxPercentDeltas.abs().lt(1e7)).eq(true);
           });
           it('$10_000', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, { amount: '10000' });
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
             expect(maxPercentDeltas.abs().lt(1e11)).eq(true);
           });
           it('$1_000_000', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, { amount: '1000000' });
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
@@ -494,7 +490,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       });
       describe('Bad paths', () => {
         it('should revert if zero desired amount', async() => {
-          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
           await expect(makeDepositorEnterTest(
               facade,
               {
@@ -510,7 +506,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       });
       describe('Gas estimation @skip-on-coverage', () => {
         it('should not exceed gas limits', async() => {
-          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
           const r = await makeDepositorEnterTest(facade);
 
           controlGasLimitsEx(r.gasUsed, BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_ENTER, (u, t) => {
@@ -524,7 +520,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       describe('Good paths', () => {
         describe('Withdraw full', () => {
           it('should return expected values', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
 
             const retEnter = await makeDepositorEnterTest(facade, { amount: '1000' });
             console.log('retEnter', retEnter);
@@ -577,21 +573,21 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
          */
         describe.skip('Ensure that the withdrawing doesn\'t change proportions too much', () => {
           it('$1', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             await makeDepositorEnterTest(facade, { amount: '1' });
             const r = await makeDepositorExitTest(facade);
             const maxPercentDeltas = getMaxPercentDelta(r);
             expect(maxPercentDeltas.abs().lt(1e9)).eq(true);
           });
           it('$10_000', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             await makeDepositorEnterTest(facade, { amount: '10000' });
             const r = await makeDepositorExitTest(facade);
             const maxPercentDeltas = getMaxPercentDelta(r);
             expect(maxPercentDeltas.abs().lt(1e10)).eq(true);
           });
           it('$1_000_000', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             await makeDepositorEnterTest(facade, { amount: '1000000' });
             const r = await makeDepositorExitTest(facade);
             const maxPercentDeltas = getMaxPercentDelta(r);
@@ -604,7 +600,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       });
       describe('Gas estimation @skip-on-coverage', () => {
         it('withdraw $1 should not exceed gas limits @skip-on-coverage', async() => {
-          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
           await makeDepositorEnterTest(facade, { amount: '1' });
           const retExit = await makeDepositorExitTest(facade);
 
@@ -613,7 +609,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
           });
         });
         it('withdraw $100_000 should not exceed gas limits @skip-on-coverage', async() => {
-          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
           await makeDepositorEnterTest(facade, { amount: '100000' });
           const retExit = await makeDepositorExitTest(facade);
 
@@ -632,7 +628,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       }
 
       async function makeQuoteExitTest(
-        facade: BalancerComposableStableDepositorFacade,
+        facade: BalancerBoostedDepositorFacade,
         amount: string,
       ): Promise<IQuoteExitTestResults> {
         const retEnter = await makeDepositorEnterTest(facade, { amount: '1000' });
@@ -655,7 +651,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       describe('Good paths', () => {
         describe('Withdraw full', () => {
           it('should return almost same values as on real exit, $1', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             const r = await makeQuoteExitTest(facade, '1');
             console.log('results', r);
 
@@ -676,7 +672,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
             expect(ret).eq(expected);
           });
           it('should return almost same values as on real exit, $100_000', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             const r = await makeQuoteExitTest(facade, '100000');
             console.log('results', r);
 
@@ -703,7 +699,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       });
       describe('Gas estimation @skip-on-coverage', () => {
         it('withdraw $1 should not exceed gas limits @skip-on-coverage', async() => {
-          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
           await makeDepositorEnterTest(facade, { amount: '1' });
           const retExit = await makeQuoteExitTest(facade, '1');
 
@@ -712,7 +708,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
           });
         });
         it('withdraw $100_000 should not exceed gas limits @skip-on-coverage', async() => {
-          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
           await makeDepositorEnterTest(facade, { amount: '100000' });
           const retExit = await makeQuoteExitTest(facade, '100000');
 
@@ -728,7 +724,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       describe('Good paths', () => {
         describe('Withdraw full', () => {
           it('should return expected values', async() => {
-            const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+            const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
 
             const retEnter = await makeDepositorEnterTest(facade, { amount: '1000' });
             console.log('retEnter', retEnter);
@@ -763,7 +759,7 @@ describe('BalancerComposableStableDepositorFacadeTest', function() {
       });
       describe('Gas estimation @skip-on-coverage', () => {
         it('claiming rewards for $1 should not exceed gas limits @skip-on-coverage', async() => {
-          const facade = await MockHelper.createBalancerComposableStableDepositorFacade(signer);
+          const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
           await makeDepositorEnterTest(facade, { amount: '1' });
           const retExit = await makeDepositorClaimRewardsTest(facade);
 

@@ -10,6 +10,7 @@ import { TimeUtils } from '../../../scripts/utils/TimeUtils';
 import { expect } from 'chai';
 import { PriceCalculatorUtils } from '../../PriceCalculatorUtils';
 import { UniversalTestUtils } from './UniversalTestUtils';
+import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 
 export interface IBalances {
   userBalance: BigNumber;
@@ -403,7 +404,8 @@ export class DoHardWorkLoopBase {
     // expect(await this.strategy.totalAssets()).is.eq(0); // Converter strategy may have dust
 
     // need to call hard work to sell a little excess rewards
-    await this.strategy.doHardWork();
+    const splitterSigner = await DeployerUtilsLocal.impersonate(await this.strategy.splitter())
+    await this.strategy.connect(splitterSigner).doHardWork();
 
 
     // strategy should not contain any tokens in the end

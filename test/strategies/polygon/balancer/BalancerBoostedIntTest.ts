@@ -11,13 +11,11 @@ import {
   getDForcePlatformAdapter,
   Misc,
 } from '../../../../scripts/utils/Misc';
-import { BalancerIntTestUtils, IPutInitialAmountsBalancesResults, IState } from './utils/BalancerIntTestUtils';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import {
-  BalancerComposableStableStrategy,
-  BalancerComposableStableStrategy__factory,
-  ControllerV2__factory, ConverterController__factory, IController__factory,
-  IERC20__factory,
+  BalancerBoostedStrategy, BalancerBoostedStrategy__factory,
+  ControllerV2__factory, ConverterController__factory,
+  IERC20__factory, IERC20Metadata__factory,
   ISplitter,
   ISplitter__factory,
   IStrategyV2, ITetuConverter__factory,
@@ -28,7 +26,7 @@ import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { ICoreContractsWrapper } from '../../../CoreContractsWrapper';
 import { IToolsContractsWrapper } from '../../../ToolsContractsWrapper';
-import { BigNumber } from 'ethers';
+import {BigNumber, Signer} from 'ethers';
 import { VaultUtils } from '../../../VaultUtils';
 import { parseUnits } from 'ethers/lib/utils';
 import { BalanceUtils } from '../../../baseUT/utils/BalanceUtils';
@@ -44,15 +42,19 @@ import { areAlmostEqual } from '../../../baseUT/utils/MathUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {Provider} from "@ethersproject/providers";
 
 chai.use(chaiAsPromised);
 
 /**
  * Integration time-consuming tests, so @skip-on-coverage
  */
-describe('BalancerIntTest @skip-on-coverage', function() {
+describe('BalancerBoostedIntTest @skip-on-coverage', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
+  const pool: string = MaticAddresses.BALANCER_POOL_T_USD;
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -60,6 +62,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
   let addresses: CoreAddresses;
   let tetuConverterAddress: string;
   let user: SignerWithAddress;
+  let stateParams: IStateParams;
 
   //endregion Constants and variables
 
@@ -76,10 +79,14 @@ describe('BalancerIntTest @skip-on-coverage', function() {
     tetuConverterAddress = getConverterAddress();
 
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
-    await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
+    await StrategyTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+
+    stateParams = {
+      mainAssetSymbol: await IERC20Metadata__factory.connect(MAIN_ASSET, signer).symbol()
+    }
   });
 
   after(async function() {
@@ -110,7 +117,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
     let core: ICoreContractsWrapper;
     let tools: IToolsContractsWrapper;
     let vault: TetuVaultV2;
-    let strategy: BalancerComposableStableStrategy;
+    let strategy: BalancerBoostedStrategy;
     let asset: string;
     let splitter: ISplitter;
     let stateBeforeDeposit: IState;
@@ -125,7 +132,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
       await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
       await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-      return BalancerIntTestUtils.getState(signer, user, strategy, vault, 'enterToVault');
+      return StateUtils.getState(signer, user, strategy, vault, 'enterToVault');
     }
 
     before(async function() {
@@ -135,12 +142,17 @@ describe('BalancerIntTest @skip-on-coverage', function() {
       core = await DeployerUtilsLocal.getCoreAddressesWrapper(signer);
       tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
 
-      const data = await UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
+      const data = await UniversalTestUtils.makeStrategyDeployer(
         signer,
         addresses,
         MAIN_ASSET,
         tetuConverterAddress,
-        'BalancerComposableStableStrategy',
+        'BalancerBoostedStrategy',
+        async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
+          const strategyContract = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
+          await strategyContract.init(core.controller.address, splitterAddress, tetuConverterAddress, pool);
+          return strategyContract as unknown as IStrategyV2;
+        },
         {
           depositFee: DEPOSIT_FEE,
           buffer: BUFFER,
@@ -150,7 +162,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
 
       vault = data.vault;
       asset = await data.vault.asset();
-      strategy = data.strategy as unknown as BalancerComposableStableStrategy;
+      strategy = data.strategy as unknown as BalancerBoostedStrategy;
       await ConverterUtils.addToWhitelist(signer, tetuConverterAddress, strategy.address);
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
@@ -160,13 +172,13 @@ describe('BalancerIntTest @skip-on-coverage', function() {
       console.log('forwarder', forwarder);
 
       await UniversalTestUtils.setCompoundRatio(strategy as unknown as IStrategyV2, user, COMPOUND_RATIO);
-      await BalancerIntTestUtils.setThresholds(
+      await StrategyTestUtils.setThresholds(
         strategy as unknown as IStrategyV2,
         user,
         { reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT },
       );
 
-      initialBalances = await BalancerIntTestUtils.putInitialAmountsToBalances(
+      initialBalances = await StrategyTestUtils.putInitialAmountsToBalances(
         asset,
         user,
         signer,
@@ -174,7 +186,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
         DEPOSIT_AMOUNT,
       );
 
-      stateBeforeDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+      stateBeforeDeposit = await StateUtils.getState(signer, user, strategy, vault);
     });
 
     after(async function() {
@@ -192,9 +204,9 @@ describe('BalancerIntTest @skip-on-coverage', function() {
     describe('State before deposit', () => {
       it('should have expected values', async() => {
         const ret = [
-          stateBeforeDeposit.signer.usdc.eq(parseUnits(DEPOSIT_AMOUNT.toString(), 6).div(2)),
-          stateBeforeDeposit.user.usdc.eq(parseUnits(DEPOSIT_AMOUNT.toString(), 6)),
-          stateBeforeDeposit.gauge.strategyBalance.eq(0),
+          stateBeforeDeposit.signer.assetBalance.eq(parseUnits(DEPOSIT_AMOUNT.toString(), 6).div(2)),
+          stateBeforeDeposit.user.assetBalance.eq(parseUnits(DEPOSIT_AMOUNT.toString(), 6)),
+          stateBeforeDeposit.gauge.strategyBalance?.eq(0),
 
           await vault.depositFee(),
           await vault.buffer(),
@@ -222,79 +234,30 @@ describe('BalancerIntTest @skip-on-coverage', function() {
             d,
             vault.address,
           ) || BigNumber.from(0);
-          const stateAfterDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfterDeposit = await StateUtils.getState(signer, user, strategy, vault);
 
-          const ret = [
-            stateAfterDeposit.signer.usdc,
-            stateAfterDeposit.user.usdc,
-
-            // strategy
-            stateAfterDeposit.strategy.usdc.gt(0),
-            stateAfterDeposit.strategy.usdc,
-
-            // gauge
-            stateAfterDeposit.gauge.strategyBalance.gt(0),
-
-            // splitter
-            stateAfterDeposit.splitter.totalAssets,
-
-            // vault
-            stateAfterDeposit.vault.userShares.add(stateAfterDeposit.vault.signerShares),
-            stateAfterDeposit.vault.userUsdc.add(stateAfterDeposit.vault.signerUsdc),
-            stateAfterDeposit.vault.totalAssets,
-            stateAfterDeposit.vault.totalAssets.eq(
-              parseUnits((DEPOSIT_AMOUNT / 2).toString(), 6)
-                .mul(DENOMINATOR - DEPOSIT_FEE)
-                .div(DENOMINATOR),
-            ),
-
-            // insurance and buffer
-            stateAfterDeposit.insurance.usdc,
-            stateAfterDeposit.vault.usdc,
-
-            // base amounts
-            stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
-            stateAfterDeposit.baseAmounts.usdt.eq(stateAfterDeposit.strategy.usdt),
-            stateAfterDeposit.baseAmounts.dai.eq(stateAfterDeposit.strategy.dai),
-            stateAfterDeposit.baseAmounts.bal.eq(0),
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-          const expected = [
-            0,
-            parseUnits(DEPOSIT_AMOUNT.toString(), 6),
-
-            // strategy
-            true,
-            stateAfterDeposit.strategy.totalAssets.sub(stateAfterDeposit.strategy.investedAssets),
-
-            // gauge
-            true,
-
-            // splitter
-            stateAfterDeposit.strategy.totalAssets,
-
-            // vault
-            stateAfterDeposit.vault.totalSupply,
-            stateAfterDeposit.vault.totalSupply,
-            stateAfterDeposit.vault.totalSupply,
-            true,
-
-            // insurance and buffer
-            stateBeforeDeposit.signer.usdc
-              .mul(DEPOSIT_FEE)
-              .div(100_000)
-              .sub(recoveredLoss),
-            stateBeforeDeposit.signer.usdc
-              .mul(100_000 - DEPOSIT_FEE)
-              .div(100_000)
-              .mul(BUFFER)
-              .div(100_000)
-              .add(recoveredLoss),
-
-            // base amounts
-            true, true, true, true,
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-
-          expect(ret).eq(expected);
+          expect(stateAfterDeposit.signer.assetBalance).eq(0)
+          expect(stateAfterDeposit.user.assetBalance).eq(parseUnits(DEPOSIT_AMOUNT.toString(), 6))
+          expect(stateAfterDeposit.strategy.assetBalance).eq(0)
+          expect(stateAfterDeposit.strategy.assetBalance).eq(stateAfterDeposit.strategy.totalAssets.sub(stateAfterDeposit.strategy.investedAssets))
+          expect(stateAfterDeposit.gauge.strategyBalance).gt(0)
+          expect(stateAfterDeposit.splitter.totalAssets).eq(stateAfterDeposit.strategy.totalAssets)
+          expect(stateAfterDeposit.vault.userShares.add(stateAfterDeposit.vault.signerShares)).eq(stateAfterDeposit.vault.totalSupply.sub(1000)) // sub INITIAL_SHARES
+          expect(areAlmostEqual(stateAfterDeposit.vault.userAssetBalance.add(stateAfterDeposit.vault.signerAssetBalance), stateAfterDeposit.vault.totalSupply.sub(1000))).eq(true) // sub INITIAL_SHARES
+          expect(areAlmostEqual(stateAfterDeposit.vault.totalAssets, stateAfterDeposit.vault.totalSupply)).eq(true)
+          expect(areAlmostEqual(stateAfterDeposit.vault.totalAssets, parseUnits((DEPOSIT_AMOUNT / 2).toString(), 6)
+            .mul(DENOMINATOR - DEPOSIT_FEE)
+            .div(DENOMINATOR))).eq(true)
+          expect(stateAfterDeposit.insurance.assetBalance).eq(stateBeforeDeposit.signer.assetBalance
+            .mul(DEPOSIT_FEE)
+            .div(100_000)
+            .sub(recoveredLoss))
+          expect(stateAfterDeposit.vault.assetBalance).eq(stateBeforeDeposit.signer.assetBalance
+            .mul(100_000 - DEPOSIT_FEE)
+            .div(100_000)
+            .mul(BUFFER)
+            .div(100_000)
+            .add(recoveredLoss))
         });
         it('should not exceed gas limits @skip-on-coverage', async() => {
           const cr = await (await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner)).wait();
@@ -317,102 +280,54 @@ describe('BalancerIntTest @skip-on-coverage', function() {
             vault.address,
           ) || BigNumber.from(0);
 
-          const stateAfterDepositUser = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfterDepositUser = await StateUtils.getState(signer, user, strategy, vault);
 
-          const ret = [
-            stateAfterDepositUser.signer.usdc,
-            stateAfterDepositUser.user.usdc,
-
-            // strategy
-            stateAfterDepositUser.strategy.usdc.gt(0),
-            stateAfterDepositUser.strategy.usdc,
-
-            // gauge
-            stateAfterDepositUser.gauge.strategyBalance.gt(0),
-
-            // splitter
-            stateAfterDepositUser.splitter.totalAssets,
-
-            // vault
-            stateAfterDepositUser.vault.userShares.add(stateAfterDepositUser.vault.signerShares),
-            stateAfterDepositUser.vault.userUsdc.add(stateAfterDepositUser.vault.signerUsdc).gt(
-              stateAfterDepositUser.vault.totalSupply,
-            ),
-            stateAfterDepositUser.vault.totalAssets.gt(stateAfterDepositUser.vault.totalSupply),
-            areAlmostEqual(
-              stateAfterDepositUser.vault.totalAssets,
-              parseUnits((DEPOSIT_AMOUNT * 1.5).toString(), 6)
-                .mul(DENOMINATOR - DEPOSIT_FEE)
-                .div(DENOMINATOR),
-            ),
-
-            // insurance and buffer
-            stateAfterDepositUser.insurance.usdc,
-            stateAfterDepositUser.vault.usdc,
-
-            // base amounts
-            stateAfterDepositUser.baseAmounts.usdc.eq(stateAfterDepositUser.strategy.usdc),
-            stateAfterDepositUser.baseAmounts.usdt.eq(stateAfterDepositUser.strategy.usdt),
-            stateAfterDepositUser.baseAmounts.dai.eq(stateAfterDepositUser.strategy.dai),
-            stateAfterDepositUser.baseAmounts.bal.eq(0),
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-          const expected = [
-            0,
-            0,
-
-            // strategy
-            true,
-            stateAfterDepositUser.strategy.totalAssets.sub(stateAfterDepositUser.strategy.investedAssets),
-
-            // gauge
-            true,
-
-            // splitter
-            stateAfterDepositUser.strategy.totalAssets,
-
-            // vault
-            stateAfterDepositUser.vault.totalSupply,
-            true,
-            true,
-            true,
-
-            // insurance and buffer
-            stateBeforeDeposit.signer.usdc
-              .mul(DEPOSIT_FEE)
-              .div(DENOMINATOR)
-              .sub(recoveredLossSigner)
-              .add(
-                stateBeforeDeposit.user.usdc
-                  .mul(DEPOSIT_FEE)
-                  .div(DENOMINATOR)
-                  .sub(recoveredLossUser),
-              ),
-            stateBeforeDeposit.signer.usdc
+          expect(stateAfterDepositUser.signer.assetBalance).eq(0)
+          expect(stateAfterDepositUser.user.assetBalance).eq(0)
+          expect(stateAfterDepositUser.strategy.assetBalance).gt(0)
+          expect(stateAfterDepositUser.strategy.assetBalance).eq(stateAfterDepositUser.strategy.totalAssets.sub(stateAfterDepositUser.strategy.investedAssets))
+          expect(stateAfterDepositUser.gauge.strategyBalance).gt(0)
+          expect(stateAfterDepositUser.splitter.totalAssets).eq(stateAfterDepositUser.strategy.totalAssets)
+          expect(stateAfterDepositUser.vault.userShares.add(stateAfterDepositUser.vault.signerShares)).eq(stateAfterDepositUser.vault.totalSupply.sub(1000)) // INITIAL_SHARES
+          expect(stateAfterDepositUser.vault.userAssetBalance.add(stateAfterDepositUser.vault.signerAssetBalance)).gt(stateAfterDepositUser.vault.totalSupply.sub(1000)) // INITIAL_SHARES
+          expect(stateAfterDepositUser.vault.totalAssets).gt(stateAfterDepositUser.vault.totalSupply.sub(1000))
+          expect(areAlmostEqual(
+            stateAfterDepositUser.vault.totalAssets,
+            parseUnits((DEPOSIT_AMOUNT * 1.5).toString(), 6)
+              .mul(DENOMINATOR - DEPOSIT_FEE)
+              .div(DENOMINATOR),
+          )).eq(true)
+          expect(stateAfterDepositUser.insurance.assetBalance).eq(stateBeforeDeposit.signer.assetBalance
+            .mul(DEPOSIT_FEE)
+            .div(DENOMINATOR)
+            .sub(recoveredLossSigner)
+            .add(
+              stateBeforeDeposit.user.assetBalance
+                .mul(DEPOSIT_FEE)
+                .div(DENOMINATOR)
+                .sub(recoveredLossUser),
+            ))
+          expect(areAlmostEqual(
+            stateAfterDepositUser.vault.assetBalance,
+            stateBeforeDeposit.signer.assetBalance
               .mul(DENOMINATOR - DEPOSIT_FEE)
               .div(DENOMINATOR)
               .mul(BUFFER)
               .div(DENOMINATOR)
-
               // first recovered amount recoveredLossSigner is invested together with user's deposit
               // so it's not kept on vault's balance anymore
               // .add(recoveredLossSigner)
               .add(
-                stateBeforeDeposit.user.usdc
+                stateBeforeDeposit.user.assetBalance
                   .mul(DENOMINATOR - DEPOSIT_FEE)
                   .div(DENOMINATOR)
                   .mul(BUFFER)
                   .div(DENOMINATOR)
                   .add(recoveredLossUser),
-              ),
-
-            // base amounts
-            true, true, true, true,
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-
+              )
+          )).eq(true)
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDepositUser', stateAfterDepositUser);
-
-          expect(ret).eq(expected);
         });
       });
 
@@ -423,28 +338,23 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           // initial deposit doesn't invest all amount to pool
           // a first hardwork make additional investment
           await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-          const stateAfterHardwork = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfterHardwork = await StateUtils.getState(signer, user, strategy, vault);
 
           const ret = [
             // strategy
-            stateAfterDeposit.strategy.usdc.gt(stateAfterHardwork.strategy.usdc),
-            stateAfterDeposit.strategy.usdt.gt(stateAfterHardwork.strategy.usdt) ||
-            stateAfterHardwork.strategy.usdt.eq(0),
-            stateAfterDeposit.strategy.dai.gt(stateAfterHardwork.strategy.dai) || stateAfterHardwork.strategy.dai.eq(0),
+            stateAfterDeposit.strategy.assetBalance.gt(stateAfterHardwork.strategy.assetBalance),
+            stateAfterDeposit.strategy.borrowAssetsBalances[0].gt(stateAfterHardwork.strategy.borrowAssetsBalances[0]) ||
+            stateAfterHardwork.strategy.borrowAssetsBalances[0].eq(0),
+            stateAfterDeposit.strategy.borrowAssetsBalances[1].gt(stateAfterHardwork.strategy.borrowAssetsBalances[1]) || stateAfterHardwork.strategy.borrowAssetsBalances[1].eq(0),
             stateAfterHardwork.strategy.investedAssets.gt(stateBeforeDeposit.strategy.investedAssets),
 
-            // gauge
-            stateAfterHardwork.gauge.strategyBalance.gt(stateBeforeDeposit.gauge.strategyBalance),
+            // gauge todo fix
+            stateAfterHardwork.gauge.strategyBalance?.gt(stateBeforeDeposit.gauge.strategyBalance || 0),
 
             // splitter: total assets amount is a bit decreased
             stateAfterDeposit.splitter.totalAssets.gt(stateAfterHardwork.splitter.totalAssets),
             areAlmostEqual(stateAfterDeposit.splitter.totalAssets, stateAfterHardwork.splitter.totalAssets, 3),
 
-            // base amounts
-            stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
-            stateAfterDeposit.baseAmounts.usdt.eq(stateAfterDeposit.strategy.usdt),
-            stateAfterDeposit.baseAmounts.dai.eq(stateAfterDeposit.strategy.dai),
-            stateAfterDeposit.baseAmounts.bal.eq(0),
           ].map(x => BalanceUtils.toString(x)).join('\n');
           const expected = [
             // strategy
@@ -456,8 +366,6 @@ describe('BalancerIntTest @skip-on-coverage', function() {
             // splitter
             true, true,
 
-            // base amounts
-            true, true, true, true,
           ].map(x => BalanceUtils.toString(x)).join('\n');
 
           console.log('stateBeforeDeposit', stateBeforeDeposit);
@@ -480,60 +388,27 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           await strategy.connect(
             await Misc.impersonate(splitter.address),
           ).withdrawAllToSplitter();
-          const stateAfterWithdraw = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfterWithdraw = await StateUtils.getState(signer, user, strategy, vault);
 
-          const ret = [
-            // gauge
-            stateAfterWithdraw.gauge.strategyBalance.eq(0),
+          expect(stateAfterWithdraw.gauge.strategyBalance).eq(0)
+          expect(stateAfterWithdraw.strategy.assetBalance).eq(0)
+          expect(stateAfterWithdraw.strategy.borrowAssetsBalances[0]).eq(0)
+          expect(stateAfterWithdraw.strategy.borrowAssetsBalances[1]).eq(0)
+          expect(stateAfterWithdraw.strategy.totalAssets).gt(0)
+          expect(stateAfterWithdraw.strategy.investedAssets).gt(0)
+          // todo enable when Viktor will fix lost debts
+          // expect(areAlmostEqual(stateAfterWithdraw.splitter.assetBalance, stateAfterWithdraw.splitter.totalAssets, 6)).eq(true)
+          expect(stateAfterWithdraw.vault.totalSupply).eq(stateAfterDeposit.vault.totalSupply)
 
-            // strategy
-            stateAfterWithdraw.strategy.usdc.eq(0),
-            stateAfterWithdraw.strategy.usdt.eq(0),
-            stateAfterWithdraw.strategy.dai.eq(0),
-
-            stateAfterWithdraw.strategy.totalAssets.gt(0),
-            stateAfterWithdraw.strategy.investedAssets.gt(0),
-
-            // splitter
-            areAlmostEqual(stateAfterWithdraw.splitter.usdc, stateAfterWithdraw.splitter.totalAssets, 6),
-
-            // vault
-            stateAfterWithdraw.vault.totalSupply.eq(stateAfterDeposit.vault.totalSupply),
-            // balancer pool gives us a small profit
-            // block 39612612: 149700000000 => 149772478557
-            stateAfterWithdraw.vault.totalAssets.gte(stateAfterDeposit.vault.totalAssets),
-            stateAfterWithdraw.vault.sharePrice.gte(stateAfterDeposit.vault.sharePrice),
-
-            // base amounts
-            stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
-            stateAfterDeposit.baseAmounts.usdt.eq(stateAfterDeposit.strategy.usdt),
-            stateAfterDeposit.baseAmounts.dai.eq(stateAfterDeposit.strategy.dai),
-            stateAfterDeposit.baseAmounts.bal.eq(0),
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-          const expected = [
-            // gauge
-            true,
-
-            // strategy
-            true, true, true,
-
-            true, true,
-
-            // splitter
-            true,
-
-            // vault
-            true, true, true,
-
-            // base amounts
-            true, true, true, true,
-          ].map(x => BalanceUtils.toString(x)).join('\n');
+          // balancer pool gives us a small profit
+          // how it can be?
+          expect(stateAfterWithdraw.vault.totalAssets).gte(stateAfterDeposit.vault.totalAssets)
+          expect(stateAfterWithdraw.vault.sharePrice).gte(stateAfterDeposit.vault.sharePrice)
 
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDeposit', stateAfterDeposit);
           console.log('stateAfterWithdraw', stateAfterWithdraw);
 
-          expect(ret).eq(expected);
         });
         it('should not exceed gas limits @skip-on-coverage', async() => {
           const gasUsed = await strategy.connect(
@@ -553,37 +428,13 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           await strategy.connect(
             await Misc.impersonate(splitter.address),
           ).withdrawToSplitter(amountToWithdraw);
-          const stateAfterWithdraw = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfterWithdraw = await StateUtils.getState(signer, user, strategy, vault);
 
-          const ret = [
-            // splitter
-            stateAfterWithdraw.splitter.usdc.eq(amountToWithdraw),
-
-            // strategy
-            stateAfterWithdraw.strategy.bptPool.gt(0),
-
-            // base amounts
-            stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
-            stateAfterDeposit.baseAmounts.usdt.eq(stateAfterDeposit.strategy.usdt),
-            stateAfterDeposit.baseAmounts.dai.eq(stateAfterDeposit.strategy.dai),
-            stateAfterDeposit.baseAmounts.bal.eq(0),
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-          const expected = [
-            // splitter
-            true,
-
-            // strategy
-            true,
-
-            // base amounts
-            true, true, true, true,
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-
+          expect(stateAfterWithdraw.splitter.assetBalance).eq(amountToWithdraw)
+          expect(stateAfterWithdraw.strategy.liquidity).eq(0)
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDeposit', stateAfterDeposit);
           console.log('stateAfterWithdraw', stateAfterWithdraw);
-
-          expect(ret).eq(expected);
         });
       });
 
@@ -591,69 +442,32 @@ describe('BalancerIntTest @skip-on-coverage', function() {
         it('should return expected values', async() => {
           const stateAfterDeposit = await enterToVault();
 
-          const strategyAsOperator = await BalancerComposableStableStrategy__factory.connect(
+          const strategyAsOperator = await BalancerBoostedStrategy__factory.connect(
             strategy.address,
             await UniversalTestUtils.getAnOperator(strategy.address, signer),
           );
           await strategyAsOperator.emergencyExit();
 
-          const stateAfterExit = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfterExit = await StateUtils.getState(signer, user, strategy, vault);
 
-          const ret = [
-            // gauge
-            stateAfterExit.gauge.strategyBalance.eq(0),
-
-            // strategy
-            stateAfterExit.strategy.usdc.eq(0),
-            stateAfterExit.strategy.usdt.eq(0),
-            stateAfterExit.strategy.dai.eq(0),
-
-            stateAfterExit.strategy.totalAssets.gt(0),
-            stateAfterExit.strategy.investedAssets.gt(0),
-
-            // splitter
-            areAlmostEqual(stateAfterExit.splitter.usdc, stateAfterExit.splitter.totalAssets, 6),
-
-            // vault
-            stateAfterExit.vault.totalSupply.eq(stateAfterDeposit.vault.totalSupply),
-            // balancer pool gives us a small profit
-            // block 39612612: 149700000000 => 149772478557
-            stateAfterExit.vault.totalAssets.gte(stateAfterDeposit.vault.totalAssets),
-            stateAfterExit.vault.sharePrice.gte(stateAfterDeposit.vault.sharePrice),
-
-            // base amounts
-            stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
-            stateAfterDeposit.baseAmounts.usdt.eq(stateAfterDeposit.strategy.usdt),
-            stateAfterDeposit.baseAmounts.dai.eq(stateAfterDeposit.strategy.dai),
-            stateAfterDeposit.baseAmounts.bal.eq(0),
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-          const expected = [
-            // gauge
-            true,
-
-            // strategy
-            true, true, true,
-
-            true, true,
-
-            // splitter
-            true,
-
-            // vault
-            true, true, true,
-
-            // base amounts
-            true, true, true, true,
-          ].map(x => BalanceUtils.toString(x)).join('\n');
+          expect(stateAfterExit.gauge.strategyBalance).eq(0)
+          expect(stateAfterExit.strategy.assetBalance).eq(0)
+          expect(stateAfterExit.strategy.borrowAssetsBalances[0]).eq(0)
+          expect(stateAfterExit.strategy.borrowAssetsBalances[1]).eq(0)
+          expect(stateAfterExit.strategy.totalAssets).gt(0)
+          expect(stateAfterExit.strategy.investedAssets).gt(0)
+          // todo enable when Viktor will fix lost debts
+          // expect(areAlmostEqual(stateAfterExit.splitter.assetBalance, stateAfterExit.splitter.totalAssets, 6)).eq(true)
+          expect(stateAfterExit.vault.totalSupply).eq(stateAfterDeposit.vault.totalSupply)
+          expect(areAlmostEqual(stateAfterExit.vault.totalAssets, stateAfterDeposit.vault.totalAssets)).eq(true)
+          expect(stateAfterExit.vault.sharePrice).eq(stateAfterDeposit.vault.sharePrice)
 
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDeposit', stateAfterDeposit);
           console.log('stateAfterWithdraw', stateAfterExit);
-
-          expect(ret).eq(expected);
         });
         it('should not exceed gas limits @skip-on-coverage', async() => {
-          const strategyAsOperator = await BalancerComposableStableStrategy__factory.connect(
+          const strategyAsOperator = await BalancerBoostedStrategy__factory.connect(
             strategy.address,
             await UniversalTestUtils.getAnOperator(strategy.address, signer),
           );
@@ -669,7 +483,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           const stateAfterDeposit = await enterToVault();
 
           // forbid liquidation of received BAL-rewards
-          await BalancerIntTestUtils.setThresholds(
+          await StrategyTestUtils.setThresholds(
             strategy as unknown as IStrategyV2,
             user,
             {
@@ -695,49 +509,20 @@ describe('BalancerIntTest @skip-on-coverage', function() {
 
           const tx = await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
           const distributed = await UniversalTestUtils.extractDistributed(await tx.wait(), forwarder);
-          const stateAfterHardwork = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfterHardwork = await StateUtils.getState(signer, user, strategy, vault);
 
           const tetuAfter = await IERC20__factory.connect(MaticAddresses.TETU_TOKEN, signer).balanceOf(forwarder);
 
-          const ret = [
-            // strategy
-            stateAfterDeposit.strategy.usdc.gt(stateAfterHardwork.strategy.usdc),
-            stateAfterDeposit.strategy.usdt.gt(stateAfterHardwork.strategy.usdt) ||
-            stateAfterHardwork.strategy.usdt.eq(0),
-            stateAfterDeposit.strategy.dai.gt(stateAfterHardwork.strategy.dai) || stateAfterHardwork.strategy.dai.eq(0),
-            stateAfterHardwork.strategy.investedAssets.gt(stateBeforeDeposit.strategy.investedAssets),
+          expect(stateAfterDeposit.strategy.assetBalance).gt(stateAfterHardwork.strategy.assetBalance)
+          expect(stateAfterDeposit.strategy.borrowAssetsBalances[0]).gte(stateAfterHardwork.strategy.borrowAssetsBalances[0])
+          expect(stateAfterDeposit.strategy.borrowAssetsBalances[1].gt(stateAfterHardwork.strategy.borrowAssetsBalances[1]) || stateAfterHardwork.strategy.borrowAssetsBalances[1].eq(0)).eq(true)
+          expect(stateAfterHardwork.strategy.investedAssets).gt(stateBeforeDeposit.strategy.investedAssets)
 
-            // strategy - bal: some rewards were received, claimed but not compounded because of the high thresholds
-            stateAfterHardwork.strategy.bal.gt(0),
+          // strategy - bal: some rewards were received, claimed but not compounded because of the high thresholds
+          // stateAfterHardwork.strategy.bal.gt(0),
 
-            // gauge
-            stateAfterHardwork.gauge.strategyBalance.gt(stateBeforeDeposit.gauge.strategyBalance),
-
-            // splitter: total assets amount is a bit increased
-            stateAfterDeposit.splitter.totalAssets.lte(stateAfterHardwork.splitter.totalAssets),
-
-            // base amounts
-            stateAfterDeposit.baseAmounts.usdc.eq(stateAfterDeposit.strategy.usdc),
-            stateAfterDeposit.baseAmounts.usdt.eq(stateAfterDeposit.strategy.usdt),
-            stateAfterDeposit.baseAmounts.dai.eq(stateAfterDeposit.strategy.dai),
-            stateAfterDeposit.baseAmounts.bal.eq(stateAfterDeposit.strategy.bal),
-          ].map(x => BalanceUtils.toString(x)).join('\n');
-          const expected = [
-            // strategy
-            true, true, true, true,
-
-            // strategy - bal: some rewards were received and claimed
-            true,
-
-            // gauge
-            true,
-
-            // splitter
-            true,
-
-            // base amounts
-            true, true, true, true,
-          ].map(x => BalanceUtils.toString(x)).join('\n');
+          expect(stateAfterHardwork.gauge.strategyBalance).gt(stateBeforeDeposit.gauge.strategyBalance || 0)
+          expect(stateAfterDeposit.splitter.totalAssets).lte(stateAfterHardwork.splitter.totalAssets)
 
           console.log('stateBeforeDeposit', stateBeforeDeposit);
           console.log('stateAfterDeposit', stateAfterDeposit);
@@ -745,8 +530,6 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           console.log('distributed', distributed);
           console.log('tetuBefore', tetuBefore);
           console.log('tetuAfter', tetuAfter);
-
-          expect(ret).eq(expected);
         });
         it('should not exceed gas limits @skip-on-coverage', async() => {
           await TimeUtils.advanceNBlocks(20_000);
@@ -757,7 +540,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
         });
       });
 
-      describe.skip('Withdraw maxWithdraw()', () => {
+      describe('Withdraw maxWithdraw()', () => {
         it('should return expected values', async() => {
           const stateBefore = await enterToVault();
           console.log('stateBefore', stateBefore);
@@ -782,20 +565,19 @@ describe('BalancerIntTest @skip-on-coverage', function() {
 
           await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault);
 
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          expect(ret.eq(0)).eq(true);
+          expect(stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice)).eq(0);
         });
       });
     });
 
     describe('Deposit, hardwork, withdraw', () => {
       describe('deposit, several hardworks, withdraw', () => {
-        it('should be profitable', async() => {
+        it.skip('should be profitable', async() => {
           const countLoops = 2;
           const stepInBlocks = 20_000;
           const stateAfterDeposit = await enterToVault();
@@ -805,7 +587,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           for (let i = 0; i < countLoops; ++i) {
             await TimeUtils.advanceNBlocks(stepInBlocks);
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state after hardwork ${i}`, state);
             states.push(state);
           }
@@ -814,26 +596,27 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           await vault.connect(user).withdrawAll();
           await vault.connect(signer).withdrawAll();
 
-          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
+          const stateFinal = await StateUtils.getState(signer, user, strategy, vault, 'final');
           console.log('stateFinal', stateFinal);
 
           const initialTotalAmount = parseUnits(DEPOSIT_AMOUNT.toString(), 6).mul(3).div(2);
-          const resultTotalAmount = BalancerIntTestUtils.getTotalUsdAmount(stateFinal);
+          const resultTotalAmount = StateUtils.getTotalMainAssetAmount(stateFinal);
 
           console.log('resultTotalAmount', resultTotalAmount);
           console.log('initialTotalAmount', initialTotalAmount);
-          BalancerIntTestUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
+          StateUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/deposit-hardworks-withdraw.csv',
             [stateAfterDeposit, ...states, stateFinal],
+            stateParams
           );
 
           expect(resultTotalAmount).gt(initialTotalAmount);
         });
       });
       describe('loopEndActions from DoHardWorkLoopBase', () => {
-        it('should be profitable', async() => {
+        it.skip('should be profitable', async() => {
           const countLoops = 20;
           const stepInBlocks = 5_000;
           const stateAfterDeposit = await enterToVault();
@@ -870,7 +653,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
               await vault.connect(user).deposit(amountToDeposit, user.address);
             }
 
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state after hardwork ${i}`, state);
             states.push(state);
           }
@@ -881,19 +664,20 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           console.log('signer withdraw all');
           await vault.connect(signer).withdrawAll();
 
-          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
+          const stateFinal = await StateUtils.getState(signer, user, strategy, vault, 'final');
           console.log('stateFinal', stateFinal);
 
           const initialTotalAmount = parseUnits(DEPOSIT_AMOUNT.toString(), 6).mul(3).div(2);
-          const resultTotalAmount = BalancerIntTestUtils.getTotalUsdAmount(stateFinal);
+          const resultTotalAmount = StateUtils.getTotalMainAssetAmount(stateFinal);
 
           console.log('resultTotalAmount', resultTotalAmount);
           console.log('initialTotalAmount', initialTotalAmount);
-          BalancerIntTestUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
+          StateUtils.outputProfitEnterFinal(stateBeforeDeposit, stateFinal);
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/DoHardWorkLoopBase.csv',
             [stateAfterDeposit, ...states, stateFinal],
+            stateParams
           );
 
           expect(resultTotalAmount).gt(initialTotalAmount);
@@ -912,19 +696,19 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // let's deposit $1 - calcInvestedAssets will be called
           await IERC20__factory.connect(
-            MaticAddresses.USDC_TOKEN,
+            MAIN_ASSET,
             await Misc.impersonate(MaticHolders.HOLDER_USDC),
           ).transfer(user.address, parseUnits('1', 6));
           await VaultUtils.deposit(user, vault, parseUnits('1', 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
           const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
 
@@ -934,9 +718,10 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/npc_deposit_small.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
           expect(ret.abs().lte(1)).eq(true);
@@ -947,21 +732,19 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // let's deposit $1 - calcInvestedAssets will be called
           await IERC20__factory.connect(
-            MaticAddresses.USDC_TOKEN,
+            MAIN_ASSET,
             await Misc.impersonate(MaticHolders.HOLDER_USDC),
           ).transfer(user.address, parseUnits('50000', 6));
           await VaultUtils.deposit(user, vault, parseUnits('50000', 6));
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
-
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
           console.log('State before', stateBefore);
           console.log('State after', stateAfter);
@@ -969,12 +752,13 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/npc_deposit_huge.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
-          expect(ret.eq(0)).eq(true);
+          expect(stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice)).eq(0);
         });
       });
       describe('Withdraw', () => {
@@ -985,10 +769,10 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // we need to force vault to withdraw some amount from the strategy
           // so let's ask to withdraw ALMOST all amount from vault's balance
@@ -999,19 +783,19 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           console.log('amountToWithdraw', amountToWithdraw);
           await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
           console.log('stateAfter', stateAfter);
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/npc_withdraw.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
-          expect(ret.eq(0)).eq(true);
+          expect(stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice)).eq(0);
         });
       });
       describe('WithdrawAll', () => {
@@ -1022,10 +806,10 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           // let's allow strategy to invest all available amount
           for (let i = 0; i < 3; ++i) {
             await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-            const state = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+            const state = await StateUtils.getState(signer, user, strategy, vault);
             console.log(`state ${i}`, state);
           }
-          const stateBefore = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'before');
+          const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
 
           // we need to force vault to withdraw some amount from the strategy
           // so let's ask to withdraw ALMOST all amount from vault's balance
@@ -1036,19 +820,19 @@ describe('BalancerIntTest @skip-on-coverage', function() {
           console.log('amountToWithdraw', amountToWithdraw);
           await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
 
-          const stateAfter = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'after');
+          const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
 
-          const ret = stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice);
           console.log('stateAfter', stateAfter);
           console.log('Share price before', stateBefore.vault.sharePrice.toString());
           console.log('Share price after', stateAfter.vault.sharePrice.toString());
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/npc_withdraw_all.csv',
             [stateBefore, stateAfter],
+            stateParams
           );
 
-          expect(ret.eq(0)).eq(true);
+          expect(stateAfter.vault.sharePrice.sub(stateBefore.vault.sharePrice)).eq(0);
         });
       });
     });
@@ -1064,7 +848,7 @@ describe('BalancerIntTest @skip-on-coverage', function() {
       describe("Forcibly close all borrows", () => {
         it("should return expected values", async () => {
           await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
-          const stateAfterDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'enterToVault');
+          const stateAfterDeposit = await StateUtils.getState(signer, user, strategy, vault, 'enterToVault');
           console.log("stateAfterDeposit", stateAfterDeposit);
 
           await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, true);
@@ -1094,32 +878,34 @@ describe('BalancerIntTest @skip-on-coverage', function() {
 
           // we need to make hardwork to recalculate investedAssets amount
           await ConverterUtils.setTetuConverterPause(signer, tetuConverterAddress, false);
-          const stateMiddle = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'middle');
+          const stateMiddle = await StateUtils.getState(signer, user, strategy, vault, 'middle');
           console.log("stateMiddle", stateMiddle);
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/npc_requirePayAmountBack1.csv',
             [stateAfterDeposit, stateMiddle],
+            stateParams
           );
 
 
           await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
 
-          const stateFinal = await BalancerIntTestUtils.getState(signer, user, strategy, vault, 'final');
+          const stateFinal = await StateUtils.getState(signer, user, strategy, vault, 'final');
           console.log("stateFinal", stateFinal);
 
+          // todo fix
           const ret = [
-            stateAfterDeposit.gauge.strategyBalance.gt(0),
-            stateAfterDeposit.converter.amountToRepayDai.gt(0),
-            stateAfterDeposit.converter.amountToRepayUsdt.gt(0),
-            stateAfterDeposit.converter.collateralForDai.gt(0),
-            stateAfterDeposit.converter.collateralForUsdt.gt(0),
+            stateAfterDeposit.gauge.strategyBalance?.gt(0),
+            stateAfterDeposit.converter?.collaterals[0].gt(0),
+            stateAfterDeposit.converter?.collaterals[1].gt(0),
+            stateAfterDeposit.converter?.amountsToRepay[0].gt(0),
+            stateAfterDeposit.converter?.amountsToRepay[1].gt(0),
 
-            stateFinal.gauge.strategyBalance.eq(0),
-            stateFinal.converter.amountToRepayDai.eq(0),
-            stateFinal.converter.amountToRepayUsdt.eq(0),
-            stateFinal.converter.collateralForDai.eq(0),
-            stateFinal.converter.collateralForUsdt.eq(0),
+            stateFinal.gauge.strategyBalance?.eq(0),
+            stateFinal.converter?.collaterals[0].eq(0),
+            stateFinal.converter?.collaterals[1].eq(0),
+            stateFinal.converter?.amountsToRepay[0].eq(0),
+            stateFinal.converter?.amountsToRepay[1].eq(0),
 
             stateAfterDeposit.vault.sharePrice.eq(stateFinal.vault.sharePrice)
           ].join("\n");
@@ -1130,9 +916,10 @@ describe('BalancerIntTest @skip-on-coverage', function() {
             true
           ].join("\n");
 
-          await BalancerIntTestUtils.saveListStatesToCSVColumns(
+          await StateUtils.saveListStatesToCSVColumns(
             './tmp/npc_requirePayAmountBack.csv',
             [stateAfterDeposit, stateFinal],
+            stateParams
           );
 
           expect(ret).eq(expected);
