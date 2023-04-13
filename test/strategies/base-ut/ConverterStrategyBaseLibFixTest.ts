@@ -1858,5 +1858,107 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
+  describe("registerIncome", () => {
+    it("should return expected values if after > before", async () => {
+      const r = await facade.registerIncome(1, 2, 30, 40);
+      expect(r._earned.toNumber()).eq(31);
+      expect(r._lost.toNumber()).eq(40);
+    });
+    it("should return expected values if after < before", async () => {
+      const r = await facade.registerIncome(2, 1, 30, 40);
+      expect(r._earned.toNumber()).eq(30);
+      expect(r._lost.toNumber()).eq(41);
+    });
+  });
+
+  describe("sendTokensToForwarder", () => {
+    let snapshot: string;
+    before(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    after(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    interface ISendTokensToForwarderResults {
+      allowanceForForwarder: number[];
+      tokensToForwarder: string[];
+      amountsToForwarder: number[];
+      splitterToForwarder: string;
+      isDistributeToForwarder: boolean;
+    }
+    interface ISendTokensToForwarderParams {
+      tokens: MockToken[];
+      amounts: string[];
+      vault: string;
+    }
+    async function makeSendTokensToForwarderTest(p: ISendTokensToForwarderParams): Promise<ISendTokensToForwarderResults> {
+      const controller = await  MockHelper.createMockController(signer);
+      const forwarder = await MockHelper.createMockForwarder(signer);
+      await controller.setForwarder(forwarder.address);
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setVault(p.vault);
+
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        decimals.push(await p.tokens[i].decimals());
+        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], decimals[i]));
+      }
+
+      await facade.sendTokensToForwarder(
+        controller.address,
+        splitter.address,
+        p.tokens.map(x => x.address),
+        p.amounts.map((amount, index) => parseUnits(amount, decimals[index]))
+      );
+
+      const r = await forwarder.getLastRegisterIncomeResults();
+      return {
+        amountsToForwarder: r.amounts.map((amount, index) => +formatUnits(amount, decimals[index])),
+        tokensToForwarder: r.tokens,
+        isDistributeToForwarder: r.isDistribute,
+        splitterToForwarder: r.vault,
+        allowanceForForwarder: await Promise.all(
+          p.tokens.map(
+            async (token, index) => +formatUnits(
+              await token.allowance(facade.address, forwarder.address),
+              decimals[index])
+            ),
+        )
+      }
+    }
+
+    describe("normal case", () => {
+      const VAULT = ethers.Wallet.createRandom().address;
+      async function makeSendTokensToForwarderFixture(): Promise<ISendTokensToForwarderResults> {
+        return makeSendTokensToForwarderTest({
+          tokens: [usdc, usdt, dai, tetu],
+          amounts: ["100", "1", "5000", "0"],
+          vault: VAULT
+        });
+      }
+      it("forwarder should receive expected tokens", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.tokensToForwarder.join()).eq([usdc.address, usdt.address, dai.address, tetu.address].join());
+      });
+      it("forwarder should receive expected amounts", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.amountsToForwarder.join()).eq([100, 1, 5000, 0].join());
+      });
+      it("forwarder should receive expected allowance", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        const gt: boolean[] = [];
+        for (let i = 0; i < r.tokensToForwarder.length; ++i) {
+          gt.push(r.allowanceForForwarder[i] >= r.amountsToForwarder[i]);
+        }
+        expect(gt.join()).eq([true, true, true, true].join());
+      });
+      it("forwarder should receive isDistribute=true", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.isDistributeToForwarder).eq(true);
+      });
+    });
+  });
+
 //endregion Unit tests
 });

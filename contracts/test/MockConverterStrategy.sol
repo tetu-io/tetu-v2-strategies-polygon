@@ -3,7 +3,7 @@
 pragma solidity 0.8.17;
 
 import "../strategies/ConverterStrategyBase.sol";
-import "./MockDepositor.sol";
+import "./mocks/MockDepositor.sol";
 
 /// @title Mock Converter Strategy with MockDepositor
 /// @author bogdoslav

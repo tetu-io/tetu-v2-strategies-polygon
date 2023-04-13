@@ -239,7 +239,7 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
-  describe('getLiquidityAmountRatio', () => {
+  describe('getLiquidityAmount', () => {
     async function getTetuConverter(
       tokens: MockToken[],
       indexAsset: number,
@@ -266,7 +266,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       describe('partial', () => {
         describe('zero balances', () => {
           it('should return expected liquidityRatioOut and zero amounts to convert', async() => {
-            const r = await facade.callStatic.getLiquidityAmountRatio(
+            const r = await facade.callStatic.getLiquidityAmount(
               parseUnits('5', 6),
               ethers.Wallet.createRandom().address,
               [dai.address, usdc.address, usdt.address],
@@ -301,7 +301,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
-            const r = await facade.callStatic.getLiquidityAmountRatio(
+            const r = await facade.callStatic.getLiquidityAmount(
               parseUnits('5', 6),
               ethers.Wallet.createRandom().address,
               tokens.map(x => x.address),
@@ -338,7 +338,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
-            const r = await facade.callStatic.getLiquidityAmountRatio(
+            const r = await facade.callStatic.getLiquidityAmount(
               parseUnits('9', 6),
               ethers.Wallet.createRandom().address,
               tokens.map(x => x.address),
@@ -375,7 +375,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
-            const r = await facade.callStatic.getLiquidityAmountRatio(
+            const r = await facade.callStatic.getLiquidityAmount(
               parseUnits('19', 6),
               ethers.Wallet.createRandom().address,
               tokens.map(x => x.address),
@@ -399,7 +399,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       describe('all', () => {
         describe('zero balances', () => {
           it('should return expected liquidityRatioOut and zero amounts to convert', async() => {
-            const r = await facade.callStatic.getLiquidityAmountRatio(
+            const r = await facade.callStatic.getLiquidityAmount(
               parseUnits('0', 6),
               ethers.Wallet.createRandom().address,
               [dai.address, usdc.address, usdt.address],
@@ -434,7 +434,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               await tokens[i].mint(facade.address, amountsToRepay[i]);
             }
 
-            const r = await facade.callStatic.getLiquidityAmountRatio(
+            const r = await facade.callStatic.getLiquidityAmount(
               parseUnits('0', 6), // all
               ethers.Wallet.createRandom().address,
               tokens.map(x => x.address),
@@ -475,7 +475,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           await tokens[i].mint(facade.address, amountsToRepay[i]);
         }
 
-        const gasUsed = await facade.estimateGas.getLiquidityAmountRatio(
+        const gasUsed = await facade.estimateGas.getLiquidityAmount(
           parseUnits('19', 6),
           ethers.Wallet.createRandom().address,
           tokens.map(x => x.address),

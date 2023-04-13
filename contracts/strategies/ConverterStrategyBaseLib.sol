@@ -1362,12 +1362,10 @@ library ConverterStrategyBaseLib {
     return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
   }
 
-  function registerIncome(
-    uint assetBefore,
-    uint assetAfter,
-    uint earned,
-    uint lost
-  ) internal pure returns (uint _earned, uint _lost) {
+  function registerIncome(uint assetBefore, uint assetAfter, uint earned, uint lost) internal pure returns (
+    uint _earned,
+    uint _lost
+  ) {
     if (assetAfter > assetBefore) {
       earned += assetAfter - assetBefore;
     } else {
