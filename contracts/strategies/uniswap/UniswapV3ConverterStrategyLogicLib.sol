@@ -444,33 +444,15 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param pool The Uniswap V3 pool instance.
   /// @param lowerTick The lower tick of the pool's main range.
   /// @param upperTick The upper tick of the pool's main range.
-  /// @param tickSpacing The tick spacing of the pool.
   /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
   /// @return entryData A byte array containing the entry data for the pool.
   function getEntryData(
     IUniswapV3Pool pool,
     int24 lowerTick,
     int24 upperTick,
-    int24 tickSpacing,
     bool depositorSwapTokens
   ) public view returns (bytes memory entryData) {
-    address token1 = pool.token1();
-    uint token1Price = UniswapV3Lib.getPrice(address(pool), token1);
-    (lowerTick, upperTick) = _calcNewTickRange(pool, lowerTick, upperTick, tickSpacing);
-
-    uint token1Decimals = IERC20Metadata(token1).decimals();
-
-    uint token0Desired = token1Price;
-    uint token1Desired = 10 ** token1Decimals;
-
-    // calculate proportions
-    (uint consumed0, uint consumed1,) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
-
-    if (depositorSwapTokens) {
-      entryData = abi.encode(1, consumed1 * token1Price / token1Desired, consumed0);
-    } else {
-      entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
-    }
+    return UniswapV3DebtLib.getEntryData(pool, lowerTick, upperTick, depositorSwapTokens);
   }
 
   //////////////////////////////////////////
@@ -780,12 +762,12 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.rebalanceEarned1,
         _getLiquidatorSwapSlippage(vars.pool)
       );
-
-      vars.newRebalanceEarned0 = vars.rebalanceEarned0;
-      vars.newRebalanceEarned1 = vars.rebalanceEarned1;
-      vars.newLowerTick = vars.lowerTick;
-      vars.newUpperTick = vars.upperTick;
     } else {
+      // calculate and set new tick range
+      (vars.newLowerTick, vars.newUpperTick) = _calcNewTickRange(vars.pool, vars.lowerTick, vars.upperTick, vars.tickSpacing);
+      state.lowerTick = vars.newLowerTick;
+      state.upperTick = vars.newUpperTick;
+
       /// rebalancing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
       UniswapV3DebtLib.rebalanceDebt(
         converter,
@@ -796,7 +778,9 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.fillUp,
         (vars.depositorSwapTokens ? vars.rebalanceEarned1 : vars.rebalanceEarned0),
         (vars.depositorSwapTokens ? vars.rebalanceEarned0 : vars.rebalanceEarned1),
-        getEntryData(vars.pool, vars.lowerTick, vars.upperTick, vars.tickSpacing, vars.depositorSwapTokens),
+        vars.newLowerTick,
+        vars.newUpperTick,
+        vars.depositorSwapTokens,
         _getLiquidatorSwapSlippage(vars.pool)
       );
 
@@ -818,12 +802,6 @@ library UniswapV3ConverterStrategyLogicLib {
       if (vars.notCoveredLoss != 0) {
         state.rebalanceLost += vars.notCoveredLoss;
       }
-
-      // calculate and set new tick range
-      (vars.newLowerTick, vars.newUpperTick) = _calcNewTickRange(vars.pool, vars.lowerTick, vars.upperTick, vars.tickSpacing);
-      state.lowerTick = vars.newLowerTick;
-      state.upperTick = vars.newUpperTick;
-
 
       tokenAmounts = new uint[](2);
       tokenAmounts[0] = _balance(vars.tokenA) - (vars.depositorSwapTokens ? vars.newRebalanceEarned1 : vars.newRebalanceEarned0);

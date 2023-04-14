@@ -83,14 +83,41 @@ library UniswapV3DebtLib {
     bool fillUp,
     uint tokenAFee,
     uint tokenBFee,
-    bytes memory entryData,
+    int24 lowerTick,
+    int24 upperTick,
+    bool depositorSwapTokens,
     uint liquidatorSwapSlippage
   ) external {
     if (fillUp) {
       _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
     } else {
       _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
+      bytes memory entryData = getEntryData(pool, lowerTick, upperTick, depositorSwapTokens);
       _openDebt(tetuConverter, tokenA, tokenB, entryData, tokenAFee);
+    }
+  }
+
+  function getEntryData(
+    IUniswapV3Pool pool,
+    int24 lowerTick,
+    int24 upperTick,
+    bool depositorSwapTokens
+  ) public view returns (bytes memory entryData) {
+    address token1 = pool.token1();
+    uint token1Price = UniswapV3Lib.getPrice(address(pool), token1);
+
+    uint token1Decimals = IERC20Metadata(token1).decimals();
+
+    uint token0Desired = token1Price;
+    uint token1Desired = 10 ** token1Decimals;
+
+    // calculate proportions
+    (uint consumed0, uint consumed1,) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
+
+    if (depositorSwapTokens) {
+      entryData = abi.encode(1, consumed1 * token1Price / token1Desired, consumed0);
+    } else {
+      entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
     }
   }
 

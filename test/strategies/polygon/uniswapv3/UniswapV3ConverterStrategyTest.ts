@@ -272,7 +272,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('deposit...');
       await v.deposit(investAmount, signer.address);
 
-      await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, 4);
+      await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, 1);
       console.log('Price USDT in oracle', (await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
       await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
       expect((await s.getState()).isFuseTriggered).eq(false)
