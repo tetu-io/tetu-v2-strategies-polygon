@@ -94,6 +94,7 @@ contract BoostedPoolsRebalanceResolver is OwnableUpgradeable {
     }
 
     lastCall = block.timestamp;
+    lastCallPerRebalancer[balancerRebalancer] = block.timestamp;
   }
 
   function maxGasAdjusted() public view returns (uint) {
@@ -131,7 +132,7 @@ contract BoostedPoolsRebalanceResolver is OwnableUpgradeable {
       (uint lowerTarget, uint upperTarget) = pool.getTargets();
       uint middleTarget = (lowerTarget + upperTarget) / 2;
       uint tetuLowerTarget = middleTarget - (upperTarget - middleTarget) * tetuNominator / TETU_DENOMINATOR;
-      uint tetuUpperTarget = middleTarget + (upperTarget - middleTarget) * tetuNominator / TETU_DENOMINATOR;
+//      uint tetuUpperTarget = middleTarget + (upperTarget - middleTarget) * tetuNominator / TETU_DENOMINATOR;
 
 //      console.log('mainBalanceAdjusted', mainBalanceAdjusted / 1e18);
 //      console.log('wrappedBalanceAdjusted', wrappedBalanceAdjusted / 1e18);
@@ -146,13 +147,14 @@ contract BoostedPoolsRebalanceResolver is OwnableUpgradeable {
         continue;
       } else {
 
-        // 29k > 50k || 29k < 0
         if (mainBalanceAdjusted > upperTarget || mainBalanceAdjusted < lowerTarget) {
           return (true, abi.encodeCall(BoostedPoolsRebalanceResolver.rebalance, (rebalancers[i], DEFAULT_EXTRA_MAIN * 10 ** mainDecimals, false)));
         }
 
-        // 29k > 37.5k || 29k < 12.5k
-        if (mainBalanceAdjusted > tetuUpperTarget || mainBalanceAdjusted < tetuLowerTarget) {
+        if (
+          /*mainBalanceAdjusted > tetuUpperTarget ||*/
+          mainBalanceAdjusted < (tetuLowerTarget / 2)
+        ) {
           return (true, abi.encodeCall(BoostedPoolsRebalanceResolver.rebalance, (rebalancers[i], DEFAULT_EXTRA_MAIN * 10 ** mainDecimals, true)));
         }
       }
