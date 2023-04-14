@@ -290,7 +290,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
-      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
       const state = await strategy.getState();
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
@@ -456,7 +456,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('Strategy totalAssets', await strategy2.totalAssets());
       // console.log(await strategy2.callStatic.calcInvestedAssets())
 
-      await UniswapV3StrategyUtils.makeVolume(signer2, strategy2.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('1000000', 6));
+      await UniswapV3StrategyUtils.makeVolume(signer2, strategy2.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
       console.log('Vault totalAssets', await vault2.totalAssets());
       console.log('Strategy totalAssets', await strategy2.totalAssets());

@@ -215,7 +215,7 @@ library UniswapV3ConverterStrategyLogicLib {
       require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_TICK_RANGE);
       require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
     }
-    (lowerTick, upperTick) = _calcTickRange(pool, tickRange_, tickSpacing);
+    (lowerTick, upperTick) = UniswapV3DebtLib.calcTickRange(pool, tickRange_, tickSpacing);
     require(asset_ == pool.token0() || asset_ == pool.token1(), Uni3StrategyErrors.INCORRECT_ASSET);
     if (asset_ == pool.token0()) {
       tokenA = pool.token0();
@@ -226,33 +226,6 @@ library UniswapV3ConverterStrategyLogicLib {
       tokenB = pool.token0();
       _depositorSwapTokens = true;
     }
-  }
-
-  /// @notice Calculate the new tick range for a Uniswap V3 pool.
-  /// @param pool The Uniswap V3 pool to calculate the new tick range for.
-  /// @param lowerTick The current lower tick value for the pool.
-  /// @param upperTick The current upper tick value for the pool.
-  /// @param tickSpacing The tick spacing for the pool.
-  /// @return lowerTickNew The new lower tick value for the pool.
-  /// @return upperTickNew The new upper tick value for the pool.
-  function _calcNewTickRange(
-    IUniswapV3Pool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 tickSpacing
-  ) internal view returns (int24 lowerTickNew, int24 upperTickNew) {
-    int24 fullTickRange = upperTick - lowerTick;
-    (lowerTickNew, upperTickNew) = _calcTickRange(pool, fullTickRange == tickSpacing ? int24(0) : fullTickRange / 2, tickSpacing);
-  }
-
-  function _calcTickRange(IUniswapV3Pool pool, int24 tickRange, int24 tickSpacing) internal view returns (int24 lowerTick, int24 upperTick) {
-    (, int24 tick, , , , ,) = pool.slot0();
-    if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
-      lowerTick = ((tick - tickRange) / tickSpacing - 1) * tickSpacing;
-    } else {
-      lowerTick = (tick - tickRange) / tickSpacing * tickSpacing;
-    }
-    upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
   }
 
   /// @dev Calculates the new fee amounts and the not covered loss, if any, after attempting to cover losses.
@@ -763,24 +736,12 @@ library UniswapV3ConverterStrategyLogicLib {
         _getLiquidatorSwapSlippage(vars.pool)
       );
     } else {
-      // calculate and set new tick range
-      (vars.newLowerTick, vars.newUpperTick) = _calcNewTickRange(vars.pool, vars.lowerTick, vars.upperTick, vars.tickSpacing);
-      state.lowerTick = vars.newLowerTick;
-      state.upperTick = vars.newUpperTick;
-
       /// rebalancing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
+      /// setting new tick range
       UniswapV3DebtLib.rebalanceDebt(
         converter,
         controller,
-        vars.pool,
-        vars.tokenA,
-        vars.tokenB,
-        vars.fillUp,
-        (vars.depositorSwapTokens ? vars.rebalanceEarned1 : vars.rebalanceEarned0),
-        (vars.depositorSwapTokens ? vars.rebalanceEarned0 : vars.rebalanceEarned1),
-        vars.newLowerTick,
-        vars.newUpperTick,
-        vars.depositorSwapTokens,
+        state,
         _getLiquidatorSwapSlippage(vars.pool)
       );
 

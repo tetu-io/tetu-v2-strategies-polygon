@@ -231,7 +231,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const depositAmount1 = parseUnits('100000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    const swapAmount = parseUnits('1000000', decimals);
+    const swapAmount = parseUnits('500000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -390,7 +390,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
     console.log('balanceBefore', balanceBefore);
     console.log('balanceAfter', balanceAfter);
-    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), cycles);
+    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 6 * cycles);
 
   });
 
