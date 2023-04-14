@@ -306,13 +306,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         v.depositorLiquidity
       );
 
-      uint[] memory withdrawnAmounts;
-
       if (v.liquidityAmountToWithdraw != 0) {
 
         // =============== WITHDRAW =====================
         // make withdraw
-        withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
+        uint[] memory withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
         emit OnDepositorExit(v.liquidityAmountToWithdraw, withdrawnAmounts);
         // ==============================================
 
@@ -333,11 +331,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         );
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
-        (withdrawnAmounts, v.expectedMainAssetAmounts) = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+        v.expectedMainAssetAmounts = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
           v.tokens,
           indexAsset,
           _converter,
-          new uint[](v.tokens.length), // array with all zero values
           v.amountsToConvert
         );
       }
@@ -405,7 +402,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
   /// @param requestedAmount Desired amount for withdraw. Max uint means attempt to withdraw all possible invested assets.
-  /// @return expectedTotalMainAssetAmount Expected total amount of main asset after all conversions, swaps and repays
+  /// @param amountsToConvert_ Amounts available for conversion after withdrawing from the pool
+  /// @param expectedMainAssetAmounts Amounts of main asset that we expect to receive after conversion amountsToConvert_
+  /// @return expectedAmount Expected total amount of main asset after all conversions, swaps and repays
   function _makeRequestedAmount(
     address[] memory tokens_,
     uint indexAsset_,
@@ -414,25 +413,26 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint requestedAmount,
     uint[] memory expectedMainAssetAmounts
   ) internal returns (
-    uint expectedTotalMainAssetAmount
+    uint expectedAmount
   ) {
     console.log("_makeRequestedAmount balances.1", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
     console.log("_makeRequestedAmount v.amountsToConvert", amountsToConvert_[0], amountsToConvert_[1]);
     console.log("_makeRequestedAmount requestedAmount", requestedAmount);
     console.log("_makeRequestedAmount expectedMainAssetAmounts", expectedMainAssetAmounts[0], expectedMainAssetAmounts[1]);
 
-    ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
-
+    // get the total expected amount
     for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
-      expectedTotalMainAssetAmount += expectedMainAssetAmounts[i];
+      expectedAmount += expectedMainAssetAmounts[i];
     }
-    console.log("_makeRequestedAmount expectedTotalMainAssetAmount", expectedTotalMainAssetAmount);
+    console.log("_makeRequestedAmount expectedTotalMainAssetAmount", expectedAmount);
 
     // we cannot repay a debt twice
     // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
     // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
 
-    if (expectedTotalMainAssetAmount * 101/100 > requestedAmount) {
+    ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
+    if (expectedAmount * 101/100 > requestedAmount) {
+      // amountsToConvert_ are enough to get requestedAmount
       (, uint[] memory repaidAmounts) = ConverterStrategyBaseLib.convertAfterWithdraw(
         converter_,
         liquidator,
@@ -444,10 +444,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       console.log("_makeRequestedAmount repaidAmounts", repaidAmounts[0], repaidAmounts[1]);
       console.log("_makeRequestedAmount balances.2", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
     } else {
-      // total result amount can be less than {amount} here
-      // f.e. pool returns only one asset and we need to close a debt for the other asset
-      //      to be able to return its collateral and get enough result amount
-      expectedTotalMainAssetAmount = ConverterStrategyBaseLib.closePositionsToGetRequestedAmount(
+      // amountsToConvert_ are NOT enough to get requestedAmount
+      // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
+      // We should try to close the exist debts instead:
+      //    convert a part of main assets to get amount of secondary assets required to repay the debts
+      // and only then make conversion.
+      expectedAmount = ConverterStrategyBaseLib.closePositionsToGetAmount(
         converter_,
         liquidator,
         indexAsset_,
@@ -457,6 +459,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       ) + expectedMainAssetAmounts[indexAsset_];
       console.log("_makeRequestedAmount balances.3", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
     }
+
+    return expectedAmount;
   }
 
   /////////////////////////////////////////////////////////////////////

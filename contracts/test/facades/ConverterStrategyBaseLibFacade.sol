@@ -258,7 +258,7 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function closePositionsToGetRequestedAmount(
+  function closePositionsToGetAmount(
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
@@ -267,7 +267,7 @@ contract ConverterStrategyBaseLibFacade {
   ) external returns (
     uint expectedAmountMainAssetOut
   ) {
-    return ConverterStrategyBaseLib.closePositionsToGetRequestedAmount(
+    return ConverterStrategyBaseLib.closePositionsToGetAmount(
       tetuConverter,
       liquidator,
       indexAsset,
@@ -282,7 +282,8 @@ contract ConverterStrategyBaseLibFacade {
     ITetuLiquidator liquidator_,
     address asset,
     address token,
-    uint toSell
+    uint toSell,
+    uint tokenBalance
   ) external returns (
     uint expectedAmountOut
   ) {
@@ -292,7 +293,8 @@ contract ConverterStrategyBaseLibFacade {
       asset,
       token,
       toSell,
-      liquidationThresholds
+      liquidationThresholds,
+      tokenBalance
     );
   }
 
@@ -303,8 +305,9 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory prices,
     uint[] memory decs,
     uint indexCollateral,
-    uint indexBorrowAsset
-  ) external pure returns (
+    uint indexBorrowAsset,
+    uint balanceBorrowAsset
+  ) external view returns (
     uint amountOut
   ) {
     return ConverterStrategyBaseLib._getAmountToSell(
@@ -314,7 +317,8 @@ contract ConverterStrategyBaseLibFacade {
       prices,
       decs,
       indexCollateral,
-      indexBorrowAsset
+      indexBorrowAsset,
+      balanceBorrowAsset
     );
   }
 
