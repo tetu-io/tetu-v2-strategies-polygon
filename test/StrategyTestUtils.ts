@@ -10,7 +10,7 @@ import {
   TetuVaultV2__factory,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-  UniswapV3ConverterStrategyLogicLib__factory,
+  UniswapV3ConverterStrategyLogicLib__factory, VaultFactory__factory,
 } from '../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber, ContractReceipt } from 'ethers';
@@ -34,6 +34,9 @@ import {
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
 import { Misc } from '../scripts/utils/Misc';
+import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
+import {DeployerUtils} from "../scripts/utils/DeployerUtils";
+import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -60,7 +63,7 @@ export async function doHardWorkForStrategy(
   await ForwarderV3__factory.connect(forwarder, splitter.signer).setTetuThreshold(0);
 
   console.log('### DO HARD WORK CALL ###');
-  const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true, {gasLimit: 10_000_000});
+  const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true, { gasLimit: 10_000_000 });
   const receipt = await tx.wait();
   await handleReceiptDoHardWork(receipt, decimals);
 
@@ -100,13 +103,15 @@ export async function rebalanceUniv3Strategy(
   console.log('### REBALANCE CALL ###');
   const stateBefore = await strategy.getState();
 
-  const tx = await strategy.connect(signer).rebalance({gasLimit: 10_000_000});
+  const tx = await strategy.connect(signer).rebalance({ gasLimit: 10_000_000 });
   const receipt = await tx.wait();
   await handleReceiptRebalance(receipt, decimals);
 
   const stateAfter = await strategy.getState();
 
   await printStateDifference(decimals, stateBefore, stateAfter);
+
+  // todo check that balance on the strategy is empty after rebalance call
 }
 
 export async function printStateDifference(
@@ -181,7 +186,7 @@ export async function redeemFromVault(
     txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address, { gasLimit: 10_000_000 });
   } else {
     const toRedeem = amount.sub(1);
-    expectedAssets = await vault.previewRedeem(toRedeem, );
+    expectedAssets = await vault.previewRedeem(toRedeem);
     txDepost = await vault.connect(signer).redeem(toRedeem, signer.address, signer.address, { gasLimit: 10_000_000 });
   }
   const receipt = await txDepost.wait();

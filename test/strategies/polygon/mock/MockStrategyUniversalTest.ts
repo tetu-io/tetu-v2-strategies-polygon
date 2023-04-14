@@ -1,6 +1,5 @@
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { startDefaultStrategyTest } from '../../base-universal/DefaultSingleTokenStrategyTest';
 import { config as dotEnvConfig } from 'dotenv';
 import { DeployInfo } from '../../../baseUT/utils/DeployInfo';
 import { StrategyTestUtils } from '../../../baseUT/utils/StrategyTestUtils';

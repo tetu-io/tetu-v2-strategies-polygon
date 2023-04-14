@@ -6,6 +6,7 @@ import "./UniswapV3Depositor.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingStrategy.sol";
+import "./Uni3StrategyErrors.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -84,7 +85,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if the strategy needs rebalancing.
-  function needRebalance() external view returns (bool) {
+  function needRebalance() public view returns (bool) {
     return UniswapV3ConverterStrategyLogicLib.needRebalance(
       state.isFuseTriggered,
       state.pool,
@@ -209,5 +210,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     } else {
       return super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
     }
+  }
+
+  function _beforeWithdraw(uint /*amount*/) internal view override {
+    require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
   }
 }

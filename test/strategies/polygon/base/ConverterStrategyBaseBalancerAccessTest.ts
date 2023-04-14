@@ -4,8 +4,8 @@ import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { parseUnits } from 'ethers/lib/utils';
 import {
-  BalancerComposableStableStrategyAccess,
-  BalancerComposableStableStrategyAccess__factory,
+  BalancerBoostedStrategyAccess,
+  BalancerBoostedStrategyAccess__factory,
   ControllerV2__factory,
   IConverterController__factory,
   IERC20__factory,
@@ -27,11 +27,6 @@ import {
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
-import {
-  BalancerIntTestUtils,
-  IPutInitialAmountsBalancesResults,
-  IState,
-} from '../balancer/utils/BalancerIntTestUtils';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { ICoreContractsWrapper } from '../../../CoreContractsWrapper';
 import { IToolsContractsWrapper } from '../../../ToolsContractsWrapper';
@@ -41,14 +36,17 @@ import { Signer } from 'ethers';
 import { Provider } from '@ethersproject/providers';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { expect } from 'chai';
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+import {StateUtils, IState, IPutInitialAmountsBalancesResults} from "../../../StateUtils";
 
 /**
  * Test of ConverterStrategyBase using direct access to internal functions
- * through BalancerComposableStableStrategyAccess (so, real depositor is used)
+ * through BalancerBoostedStrategyAccess (so, real depositor is used)
  */
 describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
+  const pool: string = MaticAddresses.BALANCER_POOL_T_USD;
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -72,7 +70,7 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
     tetuConverterAddress = getConverterAddress();
 
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
-    await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, addresses);
+    await StrategyTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
@@ -106,7 +104,7 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
     let core: ICoreContractsWrapper;
     let tools: IToolsContractsWrapper;
     let vault: TetuVaultV2;
-    let strategy: BalancerComposableStableStrategyAccess;
+    let strategy: BalancerBoostedStrategyAccess;
     let asset: string;
     let splitter: ISplitter;
     let stateBeforeDeposit: IState;
@@ -123,7 +121,7 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
       await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
       await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-      return BalancerIntTestUtils.getState(signer, user, strategy, vault, 'enterToVault');
+      return StateUtils.getState(signer, user, strategy, vault, 'enterToVault');
     }
 
     before(async function() {
@@ -138,10 +136,10 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
         addresses,
         MAIN_ASSET,
         tetuConverterAddress,
-        'BalancerComposableStableStrategyAccess',
+        'BalancerBoostedStrategyAccess',
         async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
-          const _strategy = BalancerComposableStableStrategyAccess__factory.connect(strategyProxy, signer);
-          await _strategy.init(addresses.controller, splitterAddress, tetuConverterAddress);
+          const _strategy = BalancerBoostedStrategyAccess__factory.connect(strategyProxy, signer);
+          await _strategy.init(addresses.controller, splitterAddress, tetuConverterAddress, pool);
           return _strategy as unknown as IStrategyV2;
         },
         {
@@ -153,7 +151,7 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
 
       vault = data.vault;
       asset = await data.vault.asset();
-      strategy = data.strategy as unknown as BalancerComposableStableStrategyAccess;
+      strategy = data.strategy as unknown as BalancerBoostedStrategyAccess;
       await ConverterUtils.addToWhitelist(signer, tetuConverterAddress, strategy.address);
       splitter = ISplitter__factory.connect(await vault.splitter(), signer);
       forwarder = await ControllerV2__factory.connect(await vault.controller(), signer).forwarder();
@@ -163,13 +161,13 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
       console.log('forwarder', forwarder);
 
       await UniversalTestUtils.setCompoundRatio(strategy as unknown as IStrategyV2, user, COMPOUND_RATIO);
-      await BalancerIntTestUtils.setThresholds(
+      await StrategyTestUtils.setThresholds(
         strategy as unknown as IStrategyV2,
         user,
         { reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT },
       );
 
-      initialBalances = await BalancerIntTestUtils.putInitialAmountsToBalances(
+      initialBalances = await StrategyTestUtils.putInitialAmountsToBalances(
         asset,
         user,
         signer,
@@ -177,7 +175,7 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
         DEPOSIT_AMOUNT,
       );
 
-      stateBeforeDeposit = await BalancerIntTestUtils.getState(signer, user, strategy, vault);
+      stateBeforeDeposit = await StateUtils.getState(signer, user, strategy, vault);
 
       const tetuConverter = ITetuConverter__factory.connect(await strategy.converter(), signer);
       const tetuController = IConverterController__factory.connect(await tetuConverter.controller(), signer);

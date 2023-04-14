@@ -12,8 +12,13 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     return
   }
 
-  const TETU_NOMINATOR = '500' // 50% from the target
-  const rebalancerWithExtraMain = await deployments.get('RebalancerWithExtraMain')
+  const rebalancers = [
+    '0x47Ada091aB72627AF6a7EAd768aD2e39e085A342', // DAI
+    '0x9756549A334Bd48423457D057e8EDbFAf2104b16', // USDC
+    '0xf30d0756053734128849666E01a0a4C04A5603C6', // USDT
+    '0x65c574A3e3ceae1CB8c9d46d92aE4b32F3f33D3c', // stMATIC
+    '0xC9c3bA34aBd888C7Bb68EA1d2f5650965b543Fbc', // MATIC
+  ]
 
   await deploy('BoostedPoolsRebalanceResolver', {
     contract: 'BoostedPoolsRebalanceResolver',
@@ -25,7 +30,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
       execute: {
         init: {
           methodName: 'initialize',
-          args: [rebalancerWithExtraMain.address, TETU_NOMINATOR]
+          args: [rebalancers]
         }
       }
     },
@@ -35,4 +40,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 }
 export default func
 func.tags = ['BoostedPoolsRebalanceResolver']
-func.dependencies = ['RebalancerWithExtraMain']
+func.dependencies = []

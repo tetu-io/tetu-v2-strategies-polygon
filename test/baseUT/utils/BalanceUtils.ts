@@ -14,7 +14,7 @@ export class BalanceUtils {
    * Convert string or number to string.
    * Use BigNumber.toString() for big-numbers
    */
-  static toString(n: number | string | BigNumber | boolean): string {
+  static toString(n: number | string | BigNumber | boolean | undefined): string {
     return typeof n === 'object'
       ? n.toString()
       : '' + n;

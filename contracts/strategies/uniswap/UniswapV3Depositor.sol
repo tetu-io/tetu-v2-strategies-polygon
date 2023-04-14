@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "../DepositorBase.sol";
+import "./Uni3StrategyErrors.sol";
 import "../../integrations/uniswap/IUniswapV3MintCallback.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
 
@@ -148,7 +149,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint amount1Owed,
     bytes calldata /*_data*/
   ) external override {
-    require(msg.sender == address(state.pool), "callback caller");
+    require(msg.sender == address(state.pool), Uni3StrategyErrors.NOT_CALLBACK_CALLER);
     if (amount0Owed > 0) IERC20(state.depositorSwapTokens ? state.tokenB : state.tokenA).safeTransfer(msg.sender, amount0Owed);
     if (amount1Owed > 0) IERC20(state.depositorSwapTokens ? state.tokenA : state.tokenB).safeTransfer(msg.sender, amount1Owed);
   }

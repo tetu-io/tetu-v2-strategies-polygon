@@ -3,29 +3,27 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Initializable.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../DepositorBase.sol";
 import "./BalancerLogicLib.sol";
 import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
-import "../../integrations/balancer/IBalancerBoostedAavePool.sol";
-import "../../integrations/balancer/IBalancerBoostedAaveStablePool.sol";
+import "../../integrations/balancer/IComposableStablePool.sol";
 import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
 
-/// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Aave USD"
-/// @dev See https://app.balancer.fi/#/polygon/pool/0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
-///            bb-am-DAI (DAI + amDAI) + bb-am-USDC (USDC + amUSDC) + bb-am-USDT (USDT + amUSDT)
+/// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Tetu USD"
+/// @dev See https://app.balancer.fi/polygon#/polygon/pool/0xb3d658d5b95bf04e2932370dd1ff976fe18dd66a000000000000000000000ace
+///            bb-t-DAI (DAI + tDAI) + bb-t-USDC (USDC + tUSDC) + bb-t-USDT (USDT + tUSDT)
 ///      See https://docs.balancer.fi/products/balancer-pools/boosted-pools for explanation of Boosted Pools on BalanceR.
 ///      Terms
-///         bb-a-USD = pool bpt
-///         bb-a-DAI, bb-a-USDC, etc = underlying bpt
-abstract contract BalancerComposableStableDepositor is DepositorBase, Initializable {
+///         bb-t-USD = pool bpt
+///         bb-t-DAI, bb-t-USDC, bb-t-USDT = underlying bpt
+abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant BALANCER_COMPOSABLE_STABLE_DEPOSITOR_VERSION = "1.0.0";
+  string public constant BALANCER_BOOSTED_DEPOSITOR_VERSION = "1.0.0";
 
   /// @dev https://dev.balancer.fi/references/contracts/deployment-addresses
   IBVault internal constant BALANCER_VAULT = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
@@ -35,29 +33,23 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
   address internal constant CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY = 0x3b8cA519122CdD8efb272b0D3085453404B25bD0;
 
   /// @notice i.e. for "Balancer Boosted Aave USD": 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
+  /// @notice i.e. for "Balancer Boosted Tetu USD": 0xb3d658d5b95bf04e2932370dd1ff976fe18dd66a000000000000000000000ace
   bytes32 public poolId;
-  IBalancerGauge internal _gauge;
-  address[] internal _rewardTokens;
+  IBalancerGauge public gauge;
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
 
-  function __BalancerBoostedAaveUsdDepositor_init(
-    bytes32 poolId_,
-    address[] memory rewardTokens_
-  ) internal onlyInitializing {
-    poolId = poolId_;
+  function __BalancerBoostedDepositor_init(address pool_) internal onlyInitializing {
+    poolId = IComposableStablePool(pool_).getPoolId();
 
-    _gauge = IBalancerGauge(
+    gauge = IBalancerGauge(
       IChildChainLiquidityGaugeFactory(
         CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY
-      ).getPoolGauge(BalancerLogicLib.getPoolAddress(poolId_))
+      ).getPoolGauge(pool_)
     );
     // infinite approve of pool-BPT to the gauge todo is it safe for the external gauge?
-    IERC20(BalancerLogicLib.getPoolAddress(poolId_)).safeApprove(address(_gauge), type(uint).max);
-
-    // we can get list of reward tokens from the gauge, but it's more cheaper to get it outside
-    _rewardTokens = rewardTokens_;
+    IERC20(pool_).safeApprove(address(gauge), type(uint).max);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -87,15 +79,14 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
 
   /// @notice Returns depositor's pool shares / lp token amount
   function _depositorLiquidity() override internal virtual view returns (uint liquidityOut) {
-    liquidityOut = _gauge.balanceOf(address(this))
-    + IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this));
+    liquidityOut = gauge.balanceOf(address(this))
+    + IComposableStablePool(BalancerLogicLib.getPoolAddress(poolId)).balanceOf(address(this));
   }
 
   //// @notice Total amount of liquidity (LP tokens) in the depositor
   function _depositorTotalSupply() override internal view returns (uint totalSupplyOut) {
-    totalSupplyOut = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(poolId)).getActualSupply();
+    totalSupplyOut = IComposableStablePool(BalancerLogicLib.getPoolAddress(poolId)).getActualSupply();
   }
-
 
   /////////////////////////////////////////////////////////////////////
   ///             Enter, exit
@@ -113,14 +104,14 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint liquidityOut
   ) {
     bytes32 _poolId = poolId;
-    IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
+    IComposableStablePool pool = IComposableStablePool(BalancerLogicLib.getPoolAddress(_poolId));
 
     // join to the pool, receive pool-BPTs
     (amountsConsumedOut, liquidityOut) = BalancerLogicLib.depositorEnter(BALANCER_VAULT, _poolId, amountsDesired_);
 
     // stake all available pool-BPTs to the gauge
     // we can have pool-BPTs on depositor's balance after previous exit, stake them too
-    _gauge.deposit(pool.balanceOf(address(this)));
+    gauge.deposit(pool.balanceOf(address(this)));
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -133,8 +124,8 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint[] memory amountsOut
   ) {
     bytes32 _poolId = poolId;
-    IBalancerGauge __gauge = _gauge;
-    IBalancerBoostedAaveStablePool pool = IBalancerBoostedAaveStablePool(BalancerLogicLib.getPoolAddress(_poolId));
+    IBalancerGauge __gauge = gauge;
+    IComposableStablePool pool = IComposableStablePool(BalancerLogicLib.getPoolAddress(_poolId));
 
     // we need to withdraw pool-BPTs from the _gauge
     // at first, let's try to use exist pool-BPTs on the depositor balance, probably it's enough
@@ -196,14 +187,22 @@ abstract contract BalancerComposableStableDepositor is DepositorBase, Initializa
     uint[] memory amountsOut,
     uint[] memory depositorBalancesBefore
   ) {
-    return BalancerLogicLib.depositorClaimRewards(_gauge, _rewardTokens);
+    return BalancerLogicLib.depositorClaimRewards(gauge, _depositorPoolAssets(), rewardTokens());
   }
 
   /// @dev Returns reward token addresses array.
-  function rewardTokens() external view returns (address[] memory tokens) {
-    return _rewardTokens;
+  function rewardTokens() public view returns (address[] memory tokens) {
+    uint total;
+    for (; total < 8; ++total) {
+      if (gauge.reward_tokens(total) == address(0)) {
+        break;
+      }
+    }
+    tokens = new address[](total);
+    for (uint i; i < total; ++i) {
+      tokens[i] = gauge.reward_tokens(i);
+    }
   }
-
 
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.

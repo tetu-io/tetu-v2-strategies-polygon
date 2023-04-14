@@ -1,22 +1,31 @@
+/* tslint:disable:no-trailing-whitespace */
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { startDefaultStrategyTest } from '../../base-universal/DefaultSingleTokenStrategyTest';
 import { config as dotEnvConfig } from 'dotenv';
 import { DeployInfo } from '../../../baseUT/utils/DeployInfo';
 import { StrategyTestUtils } from '../../../baseUT/utils/StrategyTestUtils';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
-import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import {
   getConverterAddress,
   getDForcePlatformAdapter,
 } from '../../../../scripts/utils/Misc';
-import { IUniversalStrategyInputParams } from '../../base-universal/UniversalStrategyTest';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
-import { BalancerIntTestUtils, IState } from './utils/BalancerIntTestUtils';
 import { ethers } from 'hardhat';
-import { BalancerComposableStableStrategy, IStrategyV2, TetuVaultV2 } from '../../../../typechain';
+import {
+  BalancerBoostedStrategy,
+  BalancerBoostedStrategy__factory,
+  IERC20Metadata__factory,
+  IStrategyV2,
+  TetuVaultV2
+} from '../../../../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import {Signer} from "ethers";
+import {Provider} from "@ethersproject/providers";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+import {IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
+import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -36,44 +45,44 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-/**
- * We need to skip it in npm.run.test
- */
-// todo fix
-describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
+describe('BalancerBoostedUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
 
+  // [asset, pool]
+  const targets = [
+    [MaticAddresses.USDC_TOKEN, MaticAddresses.BALANCER_POOL_T_USD],
+  ]
+
   const deployInfo: DeployInfo = new DeployInfo();
-  const states: IState[] = [];
   const core = Addresses.getCore();
   const tetuConverterAddress = getConverterAddress();
+  const states: {[poolId: string]: IState[]} = {};
+  const statesParams: {[poolId: string]: IStateParams} = {}
 
   before(async function() {
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
-    console.log('Liquidator', deployInfo.tools?.liquidator);
-    console.log(deployInfo.tools?.converter);
 
     const [signer] = await ethers.getSigners();
 
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
-    await BalancerIntTestUtils.deployAndSetCustomSplitter(signer, core);
+    await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
   });
 
-  /** Save collected states to csv, compute profit */
   after(async function() {
-    const pathOut = './tmp/ts2-snapshots.csv';
-    await BalancerIntTestUtils.saveListStatesToCSVRows(pathOut, states);
-    BalancerIntTestUtils.outputProfit(states);
+    for (const poolId of Object.keys(states)) {
+      const pathOut = `./tmp/balancer-boosted-universal-${poolId}-snapshots.csv`;
+      await StateUtils.saveListStatesToCSVColumns(pathOut, states[poolId], statesParams[poolId])
+      await StateUtils.outputProfit(states[poolId])
+    }
   });
 
-  describe('tests', async() => {
-    const strategyName = 'BalancerComposableStableStrategy';
-    const assetName = 'USDC';
-    const asset = PolygonAddresses.USDC_TOKEN;
+  targets.forEach(t => {
+    const strategyName = 'BalancerBoostedStrategy';
+    const asset = t[0];
     const reinvestThresholdPercent = 1_000; // 1%
     const params: IUniversalStrategyInputParams = {
       ppfsDecreaseAllowed: false,
@@ -87,42 +96,58 @@ describe.skip('BalancerComposableStableUniversalTest @skip-on-coverage', () => {
         compoundRate: 100_000, // 50%
       },
       stateRegistrar: async(title, h) => {
-        states.push(await BalancerIntTestUtils.getState(
+        const strategy = h.strategy as unknown as BalancerBoostedStrategy
+        const poolId = await strategy.poolId()
+        if (!states[poolId]) {
+          states[poolId] = []
+        }
+        states[poolId].push(await StateUtils.getState(
           h.signer,
           h.user,
-          h.strategy as unknown as BalancerComposableStableStrategy,
+          strategy,
           h.vault,
           title,
         ));
       },
       strategyInit: async(strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
-        await BalancerIntTestUtils.setThresholds(
+        await StrategyTestUtils.setThresholds(
           strategy as unknown as IStrategyV2,
           user,
           { reinvestThresholdPercent },
         );
+        await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
       },
     };
 
-    const deployer = async(signer: SignerWithAddress) => UniversalTestUtils.makeBalancerComposableStableStrategyDeployer(
+    const deployer = async(signer: SignerWithAddress) => UniversalTestUtils.makeStrategyDeployer(
       signer,
       core,
       asset,
       tetuConverterAddress,
       strategyName,
+      async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
+        const strategy = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
+        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1]);
+        const mainAssetSymbol = await IERC20Metadata__factory.connect(t[0], signer).symbol()
+        statesParams[await strategy.poolId()] = {
+          mainAssetSymbol,
+        }
+        return strategy as unknown as IStrategyV2;
+      },
       {
-        vaultName: 'tetu' + assetName,
+        vaultName: 'tetu' + await IERC20Metadata__factory.connect(t[0], signer).symbol(),
       },
     );
 
     /* tslint:disable:no-floating-promises */
-    await startDefaultStrategyTest(
+    startDefaultStrategyTest(
       strategyName,
       asset,
-      assetName,
+      asset,
       deployInfo,
       deployer,
       params,
     );
-  });
+  })
+
 });

@@ -250,6 +250,12 @@ export class MaticAddresses {
   public static BALANCER_POOL_tetuBAL_BPT = '0xb797adfb7b268faeaa90cadbfed464c76ee599cd'.toLowerCase();
   public static BALANCER_GAUGE_tetuBAL_BPT = '0xAA59736b80cf77d1E7D56B7bbA5A8050805F5064'.toLowerCase();
 
+  public static BALANCER_POOL_T_USD = '0xb3d658d5b95BF04E2932370DD1FF976fe18dd66A'.toLowerCase();
+  public static BALANCER_POOL_T_USD_ID = '0xb3d658d5b95bf04e2932370dd1ff976fe18dd66a000000000000000000000ace'.toLowerCase();
+  public static BALANCER_POOL_T_USDC_ID = '0xae646817e458c0be890b81e8d880206710e3c44e000000000000000000000acb'.toLowerCase();
+  public static BALANCER_POOL_T_USDT_ID = '0x7c82a23b4c48d796dee36a9ca215b641c6a8709d000000000000000000000acd'.toLowerCase();
+  public static BALANCER_POOL_T_DAI_ID = '0xda1cd1711743e57dd57102e9e61b75f3587703da000000000000000000000acc'.toLowerCase();
+  public static BALANCER_GAUGE_T_USD = '0xd95e4DfcF7eb4897918dD3750447aFc5a10F9BC0'.toLowerCase()
 
   // KLIMA
   public static KLIMA_STAKING = '0x25d28a24Ceb6F81015bB0b2007D795ACAc411b4d'.toLowerCase();

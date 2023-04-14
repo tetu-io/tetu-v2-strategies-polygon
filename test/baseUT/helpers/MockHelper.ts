@@ -1,7 +1,5 @@
 import {
-  Aave3AggregatorInterfaceMock,
-  BalancerComposableStableDepositorFacade,
-  BalancerComposableStableStrategyAccess,
+  Aave3AggregatorInterfaceMock, BalancerBoostedDepositorFacade,
   BalancerLogicLibFacade,
   ConverterStrategyBaseLibFacade, MockController,
   MockConverterStrategy,
@@ -15,6 +13,7 @@ import {
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber } from 'ethers';
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export class MockHelper {
   public static async createMockConverterStrategy(signer: SignerWithAddress): Promise<MockConverterStrategy> {
@@ -73,16 +72,15 @@ export class MockHelper {
     )) as ConverterStrategyBaseLibFacade;
   }
 
-  public static async createBalancerComposableStableDepositorFacade(
+  public static async createBalancerBoostedDepositorFacade(
     signer: SignerWithAddress,
-    poolId: string = '0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b',
-    rewardTokens: string[] = ['0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3'],
-  ): Promise<BalancerComposableStableDepositorFacade> {
+    pool: string = MaticAddresses.BALANCER_POOL_T_USD
+  ): Promise<BalancerBoostedDepositorFacade> {
     const ret = (await DeployerUtils.deployContract(
       signer,
-      'BalancerComposableStableDepositorFacade',
-    )) as BalancerComposableStableDepositorFacade;
-    await ret.init(poolId, rewardTokens);
+      'BalancerBoostedDepositorFacade',
+    )) as BalancerBoostedDepositorFacade;
+    await ret.init(pool);
     return ret;
   }
 
@@ -107,13 +105,6 @@ export class MockHelper {
       'Aave3AggregatorInterfaceMock',
       price,
     )) as Aave3AggregatorInterfaceMock;
-  }
-
-  public static async createBalancerComposableStableStrategyAccess(signer: SignerWithAddress): Promise<BalancerComposableStableStrategyAccess> {
-    return (await DeployerUtils.deployContract(
-      signer,
-      'BalancerComposableStableStrategyAccess',
-    )) as BalancerComposableStableStrategyAccess;
   }
 
   public static async createUniswapV3LibFacade(signer: SignerWithAddress): Promise<UniswapV3LibFacade> {

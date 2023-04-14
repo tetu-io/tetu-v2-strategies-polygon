@@ -40,14 +40,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint balanceAfterWithdraw;
     address[] tokens;
     address asset;
-}
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                        CONSTANTS
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.1";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.2";
 
   uint internal constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
 
@@ -212,6 +212,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                     Withdraw from the pool
   /////////////////////////////////////////////////////////////////////
 
+  function _beforeWithdraw(uint /*amount*/) internal virtual {
+    // do nothing
+  }
+
   /// @notice Withdraw given amount from the pool.
   /// @param amount Amount to be withdrawn in terms of the asset.
   /// @return expectedWithdrewUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
@@ -270,6 +274,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint __assetPrice,
     uint strategyLoss
   ) {
+    _beforeWithdraw(amount);
+
     WithdrawUniversalLocal memory v;
     v.all = amount == type(uint).max;
     (v.investedAssetsBeforeWithdraw, strategyLoss) = _updateInvestedAssetsAndGetLoss(true);
@@ -619,12 +625,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint __investedAssets = _investedAssets;
 
     updatedInvestedAssets = updateTotalAssetsBeforeInvest_
-    ? _updateInvestedAssets()
-    : __investedAssets;
+      ? _updateInvestedAssets()
+      : __investedAssets;
 
     loss = updateTotalAssetsBeforeInvest_
-    ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
-    : uint(0);
+      ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
+      : uint(0);
   }
 
   /////////////////////////////////////////////////////////////////////
