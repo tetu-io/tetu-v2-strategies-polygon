@@ -226,7 +226,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    console.log("WITHDRAW USDT balance", IERC20(asset).balanceOf(0xc2132D05D31c914a87C6611C10748AEb04B58e8F));
+    console.log("WITHDRAW USDT balance", IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F).balanceOf(address(this)));
     console.log("WITHDRAW amount", amount);
     console.log("WITHDRAW _investedAssets", _investedAssets);
     uint balBefore = IERC20(asset).balanceOf(address(this));
@@ -248,7 +248,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log("WITHDRAW _investedAssets", _investedAssets);
     console.log("WITHDRAW balAfter", IERC20(asset).balanceOf(address(this)));
     console.log("WITHDRAW _investedAssets fresh", IERC20(asset).balanceOf(address(this)) + _calcInvestedAssets());
-    console.log("WITHDRAW USDT balance", IERC20(asset).balanceOf(0xc2132D05D31c914a87C6611C10748AEb04B58e8F));
+    console.log("WITHDRAW USDT balance", IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F).balanceOf(address(this)));
     (debtUSDT, debtUSDTCol) = converter.getDebtAmountCurrent(address(this), asset, 0xc2132D05D31c914a87C6611C10748AEb04B58e8F, false);
     console.log("WITHDRAW USDT dept", debtUSDT);
     console.log("WITHDRAW USDT coll", debtUSDTCol);
@@ -431,7 +431,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
 
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
-    if (expectedAmount * 101/100 > requestedAmount) {
+    if (expectedAmount > requestedAmount * 101/100) {
       // amountsToConvert_ are enough to get requestedAmount
       (, uint[] memory repaidAmounts) = ConverterStrategyBaseLib.convertAfterWithdraw(
         converter_,

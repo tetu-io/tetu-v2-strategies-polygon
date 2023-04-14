@@ -267,6 +267,7 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    console.log("_openPosition");
     if (thresholdAmountIn_ == 0) {
       // zero threshold is not allowed because round-issues are possible, see openPosition.dust test
       // we assume here, that it's useless to borrow amount using collateral/borrow amount
@@ -375,6 +376,7 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    console.log("openPositionEntryKind1 amountIn_", amountIn_);
     OpenPositionEntryKind1Local memory vars;
     (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
       entryData_,
@@ -423,6 +425,7 @@ library ConverterStrategyBaseLib {
           }
         }
 
+        console.log("openPositionEntryKind1.borrow", vars.amountToBorrow);
         require(
           tetuConverter_.borrow(
             vars.converters[i],
@@ -434,6 +437,7 @@ library ConverterStrategyBaseLib {
           ) == vars.amountToBorrow,
           StrategyLib.WRONG_VALUE
         );
+        console.log("openPositionEntryKind1.borrow.done");
         emit OpenPosition(
           vars.converters[i],
           collateralAsset_,
@@ -489,13 +493,16 @@ library ConverterStrategyBaseLib {
     uint repaidAmountOut
   ) {
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
-
+    console.log("_closePosition.balanceBefore", balanceBefore);
+    console.log("_closePosition.amountToRepay", amountToRepay);
 
     // We shouldn't try to pay more than we actually need to repay
     // The leftover will be swapped inside TetuConverter, it's inefficient.
     // Let's limit amountToRepay by needToRepay-amount
     (uint needToRepay,) = tetuConverter_.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
+    console.log("_closePosition.needToRepay", needToRepay);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("_closePosition.amountRepay", amountRepay);
 
     // Make full/partial repayment
     IERC20(borrowAsset).safeTransfer(address(tetuConverter_), amountRepay);
@@ -507,6 +514,7 @@ library ConverterStrategyBaseLib {
       amountRepay,
       address(this)
     );
+    console.log("_closePosition.returnedBorrowAmountOut", returnedBorrowAmountOut);
     emit ClosePosition(
       collateralAsset,
       borrowAsset,
@@ -516,11 +524,13 @@ library ConverterStrategyBaseLib {
       returnedBorrowAmountOut
     );
     uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
+    console.log("_closePosition.balanceAfter", balanceAfter);
 
     // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (dust tokens)
     repaidAmountOut = balanceBefore > balanceAfter
       ? balanceBefore - balanceAfter
       : 0;
+    console.log("_closePosition.repaidAmountOut", repaidAmountOut);
 
     require(returnedBorrowAmountOut == 0, StrategyLib.WRONG_VALUE);
   }
@@ -1026,6 +1036,7 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint[] memory tokenAmountsOut
   ) {
+    console.log("getTokenAmounts");
     // content of tokenAmounts will be modified in place
     uint len = tokens_.length;
     uint[] memory borrowedAmounts = new uint[](len);
@@ -1329,8 +1340,11 @@ library ConverterStrategyBaseLib {
         // there is some borrow asset on balance
         // it will be used to cover the debt
         // let's reduce the size of totalDebt/Collateral to exclude balanceBorrowAsset
-        totalCollateral -= totalCollateral * balanceBorrowAsset / totalDebt;
-        totalDebt -= balanceBorrowAsset;
+        uint sub = Math.min(balanceBorrowAsset, totalDebt);
+        totalCollateral -= totalCollateral * sub / totalDebt;
+        totalDebt -= sub;
+        console.log("_getAmountToSell.totalCollateral.reduced", totalCollateral);
+        console.log("_getAmountToSell.totalDebt.reduced", totalDebt);
       }
 
       // for definiteness: usdc - collateral asset, dai - borrow asset
@@ -1344,16 +1358,21 @@ library ConverterStrategyBaseLib {
       // h = alpha * C / R
       uint alpha18 = prices[indexCollateral] * decs[indexBorrowAsset] * 1e18
       / prices[indexBorrowAsset] / decs[indexCollateral];
+      console.log("_getAmountToSell.alpha18", alpha18);
 
       // if totalCollateral is zero (liquidation happens) we will have zero amount (the debt shouldn't be paid)
       amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18
-        ? (GAP_AMOUNT_TO_SELL + DENOMINATOR) * requestedAmount * 1e18
-        / (alpha18 * totalCollateral / totalDebt - 1e18) / DENOMINATOR
+        ? (GAP_AMOUNT_TO_SELL + DENOMINATOR)
+          * Math.min(requestedAmount, totalCollateral) * 1e18
+          / (alpha18 * totalCollateral / totalDebt - 1e18)
+          / DENOMINATOR
         : 0;
+      console.log("_getAmountToSell.amountOut", amountOut);
 
       // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
       if (amountOut != 0) {
         amountOut = Math.min(amountOut, totalDebt * 1e18 / alpha18);
+        console.log("_getAmountToSell.amountOut.2", amountOut);
       }
     }
 
@@ -1394,7 +1413,7 @@ library ConverterStrategyBaseLib {
       // we should get more than liquidation threshold for the main asset and more than we spent
       // we don't know exact amount of main asset corresponding to tokenBalance, we estimate it roughly
       if (amountOut > toSell + (toSell * tokenBalance / (amountToRepay - tokenBalance))) {
-        (, uint toRepay) = _liquidateWithRoute(
+        (uint spentAmountIn, uint toRepay) = _liquidateWithRoute(
           converter,
           route,
           liquidator_,
@@ -1403,7 +1422,11 @@ library ConverterStrategyBaseLib {
           toSell,
           _ASSET_LIQUIDATION_SLIPPAGE
         );
-        console.log("_closePositionUsingMainAsset toRepay", toRepay + tokenBalance);
+        console.log("_closePositionUsingMainAsset._liquidateWithRoute spentAmountIn", spentAmountIn);
+        console.log("_closePositionUsingMainAsset._liquidateWithRoute toRepay", toRepay);
+        console.log("_closePositionUsingMainAsset._liquidateWithRoute tokenBalance", tokenBalance);
+        console.log("_closePositionUsingMainAsset._liquidateWithRoute toRepay+tokenBalance", tokenBalance);
+        console.log("_closePositionUsingMainAsset._liquidateWithRoute toSell", toSell);
 
         _closePosition(converter, asset, token, toRepay + tokenBalance);
         expectedAmountOut = amountOut - toSell;

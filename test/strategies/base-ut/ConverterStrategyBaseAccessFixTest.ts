@@ -542,6 +542,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
    * 6.      y            y              no debts  (2 * y < X)
    * 7.      y            y                  y     (3 * y > X)
    * 8.      y            y                  y     (3 * y < X)
+   * 9.      y            y1                 y2    (full debt repay amount < y1 + y2, but y + y1 + y2 > X)
    */
   describe("_makeRequestedAmount", () => {
     interface IMakeRequestedAmountResults {
@@ -960,6 +961,54 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             }],
             expectedMainAssetAmounts: ["3000", "2000"]
           });
+        }
+
+        it("should return expected amount", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.expectedAmountMainAsset).eq(10000); // 3000 - 3000 + 10000
+        });
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.balances.join()).eq([10000, 0].join()); // 3000 - 3000 + 10000
+        });
+      });
+      describe("9. Balance=y0, Pool=y1, Debt=y2, full debt repay amount < y1 + y2, y0 + y1 + y2 > X", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+          return makeRequestedAmountTest({
+            requestedAmount: "9969", // usdc, we need to get as much as possible
+            tokens: [usdc, usdt],
+            indexAsset: 0,
+            balances: ["8000", "1400"], // usdc, usdt
+            amountsToConvert: ["8000", "1400"], // usdc, usdt
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["0", "0"],
+            liquidations: [
+              {amountIn: "1600", amountOut: "1650", tokenIn: usdc, tokenOut: usdt},
+            ],
+            quoteRepays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "3050",
+              collateralAmountOut: "6050"
+            }],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "1600", // usdt
+              collateralAmountOut: "3200", // usdc
+              totalDebtAmountOut: "3000",
+              totalCollateralAmountOut: "3200"
+            }],
+            expectedMainAssetAmounts: ["7867", "1526"]
+          }); // alpha18 999450384623840082
         }
 
         it("should return expected amount", async () => {
