@@ -9,6 +9,8 @@ import "../integrations/balancer/ILinearPoolSimple.sol";
 import "../integrations/balancer/IBVault.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 
+//import "hardhat/console.sol";
+
 contract BoostedPoolsRebalanceResolver is OwnableUpgradeable {
   using SafeERC20 for IERC20;
 
@@ -17,7 +19,7 @@ contract BoostedPoolsRebalanceResolver is OwnableUpgradeable {
   ///////////////////////////////////////////////////
 
   uint public constant TETU_DENOMINATOR = 1000;
-  uint public constant DEFAULT_EXTRA_MAIN = 1000000;
+  uint public constant DEFAULT_EXTRA_MAIN = 5;
 
   ///////////////////////////////////////////////////
   //             VARIABLES
@@ -131,12 +133,28 @@ contract BoostedPoolsRebalanceResolver is OwnableUpgradeable {
       uint tetuLowerTarget = middleTarget - (upperTarget - middleTarget) * tetuNominator / TETU_DENOMINATOR;
       uint tetuUpperTarget = middleTarget + (upperTarget - middleTarget) * tetuNominator / TETU_DENOMINATOR;
 
+//      console.log('mainBalanceAdjusted', mainBalanceAdjusted / 1e18);
+//      console.log('wrappedBalanceAdjusted', wrappedBalanceAdjusted / 1e18);
+//      console.log('lowerTarget', lowerTarget / 1e18);
+//      console.log('upperTarget', upperTarget / 1e18);
+//      console.log('middleTarget', middleTarget / 1e18);
+//      console.log('tetuLowerTarget', tetuLowerTarget / 1e18);
+//      console.log('tetuUpperTarget', tetuUpperTarget / 1e18);
+
       if (mainBalanceAdjusted + wrappedBalanceAdjusted < middleTarget) {
         // not enough liquidity, skipping the pool
         continue;
       } else {
-        bool extra = mainBalanceAdjusted > tetuUpperTarget || mainBalanceAdjusted < tetuLowerTarget;
-        return (true, abi.encodeCall(BoostedPoolsRebalanceResolver.rebalance, (rebalancers[i], DEFAULT_EXTRA_MAIN, extra)));
+
+        // 29k > 50k || 29k < 0
+        if (mainBalanceAdjusted > upperTarget || mainBalanceAdjusted < lowerTarget) {
+          return (true, abi.encodeCall(BoostedPoolsRebalanceResolver.rebalance, (rebalancers[i], DEFAULT_EXTRA_MAIN * 10 ** mainDecimals, false)));
+        }
+
+        // 29k > 37.5k || 29k < 12.5k
+        if (mainBalanceAdjusted > tetuUpperTarget || mainBalanceAdjusted < tetuLowerTarget) {
+          return (true, abi.encodeCall(BoostedPoolsRebalanceResolver.rebalance, (rebalancers[i], DEFAULT_EXTRA_MAIN * 10 ** mainDecimals, true)));
+        }
       }
     }
     return (false, "all pools in range");
