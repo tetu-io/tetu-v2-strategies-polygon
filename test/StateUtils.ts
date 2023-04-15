@@ -4,15 +4,14 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
   BalancerBoostedStrategy__factory,
   ConverterStrategyBase, IBalancerGauge__factory,
-  IERC20__factory, IERC20Metadata__factory, ISplitter__factory, ITetuConverter__factory,
-  TetuVaultV2
+  IERC20__factory, ISplitter__factory, ITetuConverter__factory,
+  TetuVaultV2, UniswapV3ConverterStrategy__factory
 } from "../typechain";
 import hre from "hardhat";
 import {MockHelper} from "./baseUT/helpers/MockHelper";
 import {formatUnits} from "ethers/lib/utils";
 import {writeFileSyncRestoreFolder} from "./baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
-import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
 
 
 export interface IState {
@@ -111,6 +110,19 @@ export class StateUtils {
       }
       gaugeStrategyBalance = await IBalancerGauge__factory.connect(await boostedStrategy.gauge(), user).balanceOf(strategy.address)
 
+    } else if (await strategy.PLATFORM() === 'UniswapV3')  {
+      const uniswapV3Stratety = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer)
+      const state = await uniswapV3Stratety.getState()
+      liquidity = state.totalLiquidity
+      borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
+      const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountCurrent(
+        strategy.address,
+        asset.address,
+        state.tokenB,
+        false
+      )
+      collaterals.push(debtStored[1])
+      amountsToRepay.push(debtStored[0])
     } else {
       throw new Error('Not supported')
     }

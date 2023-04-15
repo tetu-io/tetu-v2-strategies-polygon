@@ -601,7 +601,9 @@ library UniswapV3ConverterStrategyLogicLib {
     uint rebalanceEarned0,
     uint rebalanceEarned1,
     bool _depositorSwapTokens,
-    address[] memory tokensOut
+    address[] memory tokensOut,
+    uint128 liquidity,
+    uint128 liquidityFillup
   ) external returns (uint[] memory amountsOut, uint[] memory balancesBefore) {
 
     balancesBefore = new uint[](2);
@@ -610,15 +612,17 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     amountsOut = new uint[](2);
-    pool.burn(lowerTick, upperTick, 0);
-    (amountsOut[0], amountsOut[1]) = pool.collect(
-      address(this),
-      lowerTick,
-      upperTick,
-      type(uint128).max,
-      type(uint128).max
-    );
-    if (lowerTickFillup != upperTickFillup) {
+    if (liquidity > 0) {
+      pool.burn(lowerTick, upperTick, 0);
+      (amountsOut[0], amountsOut[1]) = pool.collect(
+        address(this),
+        lowerTick,
+        upperTick,
+        type(uint128).max,
+        type(uint128).max
+      );
+    }
+    if (liquidityFillup > 0) {
       pool.burn(lowerTickFillup, upperTickFillup, 0);
       (uint fillup0, uint fillup1) = pool.collect(
         address(this),
