@@ -278,23 +278,18 @@ contract ConverterStrategyBaseLibFacade {
   }
 
   function _closePositionUsingMainAsset(
-    ITetuConverter tetuConverter,
-    ITetuLiquidator liquidator_,
-    address asset,
-    address token,
-    uint toSell,
-    uint tokenBalance
+    ITetuConverter converter,
+    address collateralAsset,
+    address borrowAsset,
+    uint amountToRepay
   ) external returns (
     uint expectedAmountOut
   ) {
-    return ConverterStrategyBaseLib._closePositionUsingMainAsset(
-      tetuConverter,
-      liquidator_,
-      asset,
-      token,
-      toSell,
-      liquidationThresholds,
-      tokenBalance
+    return ConverterStrategyBaseLib._repayDebt(
+      converter,
+      collateralAsset,
+      borrowAsset,
+      amountToRepay
     );
   }
 

@@ -23,14 +23,8 @@ import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
-import { BalanceUtils } from '../../baseUT/utils/BalanceUtils';
 import { expect } from 'chai';
-import { controlGasLimitsEx } from '../../../scripts/utils/GasLimitUtils';
-import {
-  GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST,
-} from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
-import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {ILiquidationParams, IQuoteRepayParams, IRepayParams, ITokenAmount} from "../../baseUT/mocks/TestDataTypes";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
@@ -536,13 +530,15 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
    *     Balance       Pool        Debts in converter
    * 1.      X           any                any
    * 2.      y            X                 any
-   * 3.      y            y                 any    (2 * y > X)
+   * 3.      y1          y2               (y2=>y3) (y1 + y3 > X)  expectedAmount > requestedAmount * 101/100
+   * 3.1     y1          y2               (y2=>y3) (y1 + y3 > X)  requestedAmount < expectedAmount < requestedAmount * 101/100
    * 4.      y            y                  X     (2 * y < X)
    * 5.      y            y              no debts  (2 * y > X)
    * 6.      y            y              no debts  (2 * y < X)
    * 7.      y            y                  y     (3 * y > X)
    * 8.      y            y                  y     (3 * y < X)
    * 9.      y            y1                 y2    (full debt repay amount < y1 + y2, but y + y1 + y2 > X)
+   * 9.      y            y1                 y2    (full debt repay amount < y1 + y2, no leftovers)
    */
   describe("_makeRequestedAmount", () => {
     interface IMakeRequestedAmountResults {
@@ -644,13 +640,13 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             liquidations: [],
             quoteRepays: [],
             repays: [],
-            expectedMainAssetAmounts: ["2500", "0"],
+            expectedMainAssetAmounts: ["0", "0"],
           });
         }
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.expectedAmountMainAsset).eq(2500);
+          expect(r.expectedAmountMainAsset).eq(0);
         });
         it("should provide requested amount on balance", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
@@ -671,7 +667,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             requestedAmount: "2500", // usdc
             tokens: [usdc, usdt],
             indexAsset: 0,
-            balances: ["100", "2000"], // usdc, usdt
+            balances: ["107", "2000"], // usdc, usdt
             amountsToConvert: ["100", "2000"], // usdc, usdt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
@@ -700,10 +696,10 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.balances.join()).eq([4100, 0].join()); // 4000 + 1000
+          expect(r.balances.join()).eq([4107, 0].join()); // 4000 + 1000
         });
       });
-      describe("3. Balance + pool provide requested amount, Balance=y, Pool=y, 2*y > X, debt", () => {
+      describe("3. Balance=y1, Pool=y2, Debt=(y2=>y3), y1+y3>X, use convertAfterWithdraw", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -717,24 +713,70 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             requestedAmount: "2000", // usdc
             tokens: [usdc, usdt],
             indexAsset: 0,
-            balances: ["1000", "2000"], // usdc, usdt
-            amountsToConvert: ["1000", "500"], // usdc, usdt
+            balances: ["1004", "2000"], // usdc, usdt
+            amountsToConvert: ["1000", "1100"], // usdc, usdt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
             liquidations: [],
             quoteRepays: [{
               collateralAsset: usdc,
               borrowAsset: usdt,
-              amountRepay: "500",
-              collateralAmountOut: "1000"
+              amountRepay: "1100",
+              collateralAmountOut: "1102"
             }],
             repays: [{
               collateralAsset: usdc,
               borrowAsset: usdt,
-              amountRepay: "500", // usdt
-              collateralAmountOut: "1000", // usdc
-              totalDebtAmountOut: "500",
-              totalCollateralAmountOut: "1000"
+              amountRepay: "1100", // usdt
+              collateralAmountOut: "1102", // usdc
+              totalDebtAmountOut: "1100",
+              totalCollateralAmountOut: "1102"
+            }],
+            expectedMainAssetAmounts: ["1000", "1101"]
+          });
+        }
+
+        it("should return expected amount", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.expectedAmountMainAsset).eq(2101);
+        });
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.balances.join()).eq([2106, 900].join());
+        });
+      });
+      describe("3.1. Balance=y1, Pool=y2, Debt=(y2=>y3), y1+y3>X, use closePositionsToGetAmount", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+          return makeRequestedAmountTest({
+            requestedAmount: "2000", // usdc
+            tokens: [usdc, usdt],
+            indexAsset: 0,
+            balances: ["1000", "1000"], // usdc, usdt
+            amountsToConvert: ["1000", "1000"], // usdc, usdt
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["0", "0"],
+            liquidations: [{amountIn: "950", amountOut: "950", tokenIn: usdt, tokenOut: usdc}],
+            quoteRepays: [{  // this debt is not used
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "50",
+              collateralAmountOut: "100"
+            }],
+            repays: [{  // this debt is not used
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "50", // usdt
+              collateralAmountOut: "100", // usdc
+              totalDebtAmountOut: "50",
+              totalCollateralAmountOut: "100"
             }],
             expectedMainAssetAmounts: ["1000", "1000"]
           });
@@ -742,11 +784,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.expectedAmountMainAsset).eq(2000); // 3999+100
+          expect(r.expectedAmountMainAsset).eq(2050);
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.balances.join()).eq([2000, 1500].join()); // 4000 + 1000
+          expect(r.balances.join()).eq([2050, 0].join());
         });
       });
       describe("4. Debt provides requested amount, Balance=y, Pool=y, Debt=X, 2*y < X", () => {
@@ -797,14 +839,10 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           expect(r.balances.join()).eq([12041, 0].join()); // 10081 - 4040 + 6000
         });
       });
-      describe("5. Balance + pool provide requested amount, Balance=y, Pool=y, 2*y > X, swap", () => {
+      describe("5. Balance + pool provide requested amount, Balance=y, Pool=y, 2*y > X, swap, use convertAfterWithdraw", () => {
         let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
 
         async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
           return makeRequestedAmountTest({
@@ -812,28 +850,53 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             tokens: [usdc, usdt],
             indexAsset: 0,
             balances: ["1000", "2000"], // usdc, usdt
-            amountsToConvert: ["1000", "500"], // usdc, usdt
+            amountsToConvert: ["1000", "1000"], // usdc, usdt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
-            liquidations: [{
-              amountIn: "500",
-              amountOut: "1000",
-              tokenIn: usdt,
-              tokenOut: usdc
-            }],
+            liquidations: [{amountIn: "1000", amountOut: "1001", tokenIn: usdt, tokenOut: usdc}],
             quoteRepays: [],
             repays: [],
-            expectedMainAssetAmounts: ["1000", "1000"]
+            expectedMainAssetAmounts: ["1300", "1200"]
           });
         }
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.expectedAmountMainAsset).eq(2000);
+          expect(r.expectedAmountMainAsset).eq(2500);
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.balances.join()).eq([2000, 1500].join());
+          expect(r.balances.join()).eq([2001, 1000].join());
+        });
+      });
+      describe("5.1 Balance + pool provide requested amount, Balance=y, Pool=y, 2*y > X, swap, use closePositionsToGetAmount", () => {
+        let snapshot: string;
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
+
+        async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+          return makeRequestedAmountTest({
+            requestedAmount: "2000", // usdc
+            tokens: [usdc, usdt],
+            indexAsset: 0,
+            balances: ["1004", "1002"], // usdc, usdt
+            amountsToConvert: ["1001", "1002"], // usdc, usdt
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["0", "0"],
+            liquidations: [{amountIn: "1002", amountOut: "1003", tokenIn: usdt, tokenOut: usdc}],
+            quoteRepays: [],
+            repays: [],
+            expectedMainAssetAmounts: ["700", "700"]
+          });
+        }
+
+        it("should return expected amount", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.expectedAmountMainAsset).eq(1002+700);
+        });
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.balances.join()).eq([1004+1003, 0].join());
         });
       });
       describe("6. Balance + pool provide requested amount, Balance=y, Pool=y, 2*y < X, swap", () => {
@@ -890,12 +953,12 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             requestedAmount: "8000", // usdc, we need to get as much as possible
             tokens: [usdc, usdt],
             indexAsset: 0,
-            balances: ["3000", "2000"], // usdc, usdt
+            balances: ["3001", "2000"], // usdc, usdt
             amountsToConvert: ["3000", "2000"], // usdc, usdt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
             liquidations: [
-              {amountIn: "3000", amountOut: "4000", tokenIn: usdc, tokenOut: usdt},
+              {amountIn: "3001", amountOut: "4000", tokenIn: usdc, tokenOut: usdt},
             ],
             quoteRepays: [{
               collateralAsset: usdc,
@@ -917,11 +980,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.expectedAmountMainAsset).eq(12000); // 3000 - 3000 + 12000
+          expect(r.expectedAmountMainAsset).eq(3000 - 3001 + 12000);
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.balances.join()).eq([12000, 0].join()); // 3000 - 3000 + 12000
+          expect(r.balances.join()).eq([3001 - 3001 + 12000, 0].join());
         });
       });
       describe("8. Balance=y, Pool=y, Debt=y, 3*y < X", () => {
@@ -972,7 +1035,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           expect(r.balances.join()).eq([10000, 0].join()); // 3000 - 3000 + 10000
         });
       });
-      describe("9. Balance=y0, Pool=y1, Debt=y2, full debt repay amount < y1 + y2, y0 + y1 + y2 > X", () => {
+      describe("9. Balance=y0, Pool=y1, Debt=y2, y2 is closed by y0 with leftovers", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -983,41 +1046,90 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
         async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
           return makeRequestedAmountTest({
-            requestedAmount: "9969", // usdc, we need to get as much as possible
+            requestedAmount: "200000", // usdc
             tokens: [usdc, usdt],
             indexAsset: 0,
-            balances: ["8000", "1400"], // usdc, usdt
-            amountsToConvert: ["8000", "1400"], // usdc, usdt
+            balances: ["100", "8000"], // usdc, usdt
+            amountsToConvert: ["100", "8000"], // usdc, usdt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
             liquidations: [
-              {amountIn: "1600", amountOut: "1650", tokenIn: usdc, tokenOut: usdt},
+            //  {amountIn: "100", amountOut: "110", tokenIn: usdc, tokenOut: usdt},
+              {amountIn: "7000", amountOut: "7001", tokenIn: usdt, tokenOut: usdc},
             ],
             quoteRepays: [{
               collateralAsset: usdc,
               borrowAsset: usdt,
-              amountRepay: "3050",
-              collateralAmountOut: "6050"
+              amountRepay: "1000",
+              collateralAmountOut: "2000"
             }],
             repays: [{
               collateralAsset: usdc,
               borrowAsset: usdt,
-              amountRepay: "1600", // usdt
-              collateralAmountOut: "3200", // usdc
-              totalDebtAmountOut: "3000",
-              totalCollateralAmountOut: "3200"
+              amountRepay: "1000", // usdt
+              collateralAmountOut: "2000", // usdc
+              totalDebtAmountOut: "1000",
+              totalCollateralAmountOut: "2000"
             }],
-            expectedMainAssetAmounts: ["7867", "1526"]
-          }); // alpha18 999450384623840082
+            expectedMainAssetAmounts: ["100", "8000"]
+          });
         }
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.expectedAmountMainAsset).eq(10000); // 3000 - 3000 + 10000
+          expect(r.expectedAmountMainAsset).eq(9100);
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeRequestedAmountFixture);
-          expect(r.balances.join()).eq([10000, 0].join()); // 3000 - 3000 + 10000
+          expect(r.balances.join()).eq([9101, 0].join());
+        });
+      });
+      describe("9.1 Balance=y0, Pool=y1, Debt=y2, debt is fully repaid, no leftovers", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+          return makeRequestedAmountTest({
+            requestedAmount: "200000", // usdc
+            tokens: [usdc, usdt],
+            indexAsset: 0,
+            balances: ["1000", "1500"], // usdc, usdt
+            amountsToConvert: ["0", "1500"], // usdc, usdt
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["0", "0"],
+            liquidations: [
+              {amountIn: "500", amountOut: "500", tokenIn: usdc, tokenOut: usdt},
+            ],
+            quoteRepays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "2000",
+              collateralAmountOut: "4000"
+            }],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "2000", // usdt
+              collateralAmountOut: "4000", // usdc
+              totalDebtAmountOut: "2000",
+              totalCollateralAmountOut: "4000"
+            }],
+            expectedMainAssetAmounts: ["0", "1500"]
+          });
+        }
+
+        it("should return expected amount", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.expectedAmountMainAsset).eq(4000-500);
+        });
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeRequestedAmountFixture);
+          expect(r.balances.join()).eq([1000-500+4000, 0].join());
         });
       });
     });
