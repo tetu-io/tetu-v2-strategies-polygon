@@ -36,7 +36,7 @@ export class UniswapV3StrategyUtils {
     console.log(tokenBName, 'tokenB price', formatUnits(priceBBefore, 6));
     console.log('swap in pool tokenA to tokenB...', tokenAName, '->', tokenBName);
     await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString());
-    await swapper.connect(signer).swap(state.pool, tokenA, tokenB, signer.address, 90000); // 90% slippage
+    await swapper.connect(signer).swap(state.pool, tokenA, tokenB, signer.address, 99000); // 99% slippage
     priceA = await swapper.getPrice(state.pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceB = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log(tokenBName, 'tokenB new price', formatUnits(priceB, 6));
