@@ -19,6 +19,15 @@ export async function setupMockedRepay(
     true
   );
 
+  await tetuConverter.setGetDebtAmountCurrent(
+    user,
+    p.collateralAsset.address,
+    p.borrowAsset.address,
+    parseUnits(p.totalDebtAmountOut, decimalsBorrow),
+    parseUnits(p.totalCollateralAmountOut, decimalsCollateral),
+    false
+  );
+
   await tetuConverter.setRepay(
     p.collateralAsset.address,
     p.borrowAsset.address,

@@ -246,7 +246,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    const swapAmount = parseUnits('50000', decimals);
+    const swapAmount = parseUnits('100000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -302,15 +302,15 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         );
         const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN).priceOriginal;
         console.log('/// ORACLE usdtPrice', usdtPrice.toString());
-        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(2e9).div(1e9));
+        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
         console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
         await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPricenew);
 
-        // const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
-        // console.log('/// ORACLE usdcPrice', usdcPrice.toString());
-        // const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
-        // console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
-        // await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
+        const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
+        console.log('/// ORACLE usdcPrice', usdcPrice.toString());
+        const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
+        console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
+        await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
 
       } else {
         const priceChange = await UniswapV3StrategyUtils.movePriceDown(
@@ -322,19 +322,19 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
         const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN).priceOriginal;
         console.log('/// ORACLE usdtPrice', usdtPrice.toString());
-        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(2e9).div(1e9));
+        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
         console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
         await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPricenew);
-        //
-        // const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
-        // console.log('/// ORACLE usdcPrice', usdcPrice.toString());
-        // const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
-        // console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
-        // await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
+
+        const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
+        console.log('/// ORACLE usdcPrice', usdcPrice.toString());
+        const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
+        console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
+        await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
       }
 
 
-      // await rebalanceUniv3Strategy(strategy, signer, decimals);
+      await rebalanceUniv3Strategy(strategy, signer, decimals);
       await printVaultState(
         vault,
         splitter,

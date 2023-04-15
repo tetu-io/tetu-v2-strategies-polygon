@@ -415,7 +415,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) internal returns (
     uint expectedAmount
   ) {
-    console.log("_makeRequestedAmount balances.1", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
+    console.log("_makeRequestedAmount balances.0", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
     console.log("_makeRequestedAmount v.amountsToConvert", amountsToConvert_[0], amountsToConvert_[1]);
     console.log("_makeRequestedAmount requestedAmount", requestedAmount);
     console.log("_makeRequestedAmount expectedMainAssetAmounts", expectedMainAssetAmounts[0], expectedMainAssetAmounts[1]);
@@ -424,7 +424,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
       expectedAmount += expectedMainAssetAmounts[i];
     }
-    console.log("_makeRequestedAmount expectedTotalMainAssetAmount", expectedAmount);
+    console.log("_makeRequestedAmount sumExpectedAmount", expectedAmount);
 
     // we cannot repay a debt twice
     // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
@@ -432,6 +432,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
     if (expectedAmount > requestedAmount * 101/100) {
+      console.log("_makeRequestedAmount.path.1");
       // amountsToConvert_ are enough to get requestedAmount
       (, uint[] memory repaidAmounts) = ConverterStrategyBaseLib.convertAfterWithdraw(
         converter_,
@@ -442,8 +443,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         amountsToConvert_
       );
       console.log("_makeRequestedAmount repaidAmounts", repaidAmounts[0], repaidAmounts[1]);
-      console.log("_makeRequestedAmount balances.2", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
+      console.log("_makeRequestedAmount balances.1", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
+      console.log("_makeRequestedAmount.expectedAmount", expectedAmount);
     } else {
+      console.log("_makeRequestedAmount.path.2");
       // amountsToConvert_ are NOT enough to get requestedAmount
       // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
       // We should try to close the exist debts instead:
@@ -457,7 +460,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         requestedAmount,
         tokens_
       ) + expectedMainAssetAmounts[indexAsset_];
-      console.log("_makeRequestedAmount balances.3", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
+      console.log("_makeRequestedAmount balances.2", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
+      console.log("_makeRequestedAmount.expectedAmount", expectedAmount, expectedMainAssetAmounts[indexAsset_]);
     }
 
     return expectedAmount;

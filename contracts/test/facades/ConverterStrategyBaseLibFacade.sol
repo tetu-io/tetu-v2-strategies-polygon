@@ -277,26 +277,21 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function _closePositionUsingMainAsset(
-    ITetuConverter tetuConverter,
-    ITetuLiquidator liquidator_,
-    address asset,
-    address token,
-    uint toSell,
-    uint tokenBalance
-  ) external returns (
-    uint expectedAmountOut
-  ) {
-    return ConverterStrategyBaseLib._closePositionUsingMainAsset(
-      tetuConverter,
-      liquidator_,
-      asset,
-      token,
-      toSell,
-      liquidationThresholds,
-      tokenBalance
-    );
-  }
+//  function _closePositionUsingMainAsset(
+//    ITetuConverter converter,
+//    address collateralAsset,
+//    address borrowAsset,
+//    uint amountToRepay
+//  ) external returns (
+//    uint expectedAmountOut
+//  ) {
+//    return ConverterStrategyBaseLib._repayDebt(
+//      converter,
+//      collateralAsset,
+//      borrowAsset,
+//      amountToRepay
+//    );
+//  }
 
   function _getAmountToSell(
     uint remainingRequestedAmount,
