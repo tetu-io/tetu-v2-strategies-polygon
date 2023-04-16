@@ -3,11 +3,14 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "hardhat/console.sol";
 
 contract MockForwarder {
   address[] private lastRegisterIncomeTokens;
   uint[] private lastRegisterIncomeAmounts;
+  address private lastRegisterVault;
+  bool private lastRegisterIsDistribute;
 
   function tokenPerDestinationLength(address destination) external pure returns (uint) {
     destination;
@@ -30,8 +33,14 @@ contract MockForwarder {
     console.log("registerIncome", gasleft());
     lastRegisterIncomeTokens = tokens;
     lastRegisterIncomeAmounts = amounts;
+    lastRegisterVault = vault;
+    lastRegisterIsDistribute = isDistribute;
     // move all tokens to the balance of the IForwarder
     for (uint i = 0; i < tokens.length; ++i) {
+      console.log("i", i);
+      console.log("balance", IERC20(tokens[i]).balanceOf(address(this)));
+      console.log("amount", amounts[i]);
+      console.log("allowance", IERC20Metadata(tokens[i]).allowance(msg.sender, address(this)));
       IERC20(tokens[i]).transferFrom(msg.sender, address(this), amounts[i]);
     }
     vault;
@@ -41,9 +50,11 @@ contract MockForwarder {
 
   function getLastRegisterIncomeResults() external view returns (
     address[] memory tokens,
-    uint[] memory amounts
+    uint[] memory amounts,
+    address vault,
+    bool isDistribute
   ) {
-    return (lastRegisterIncomeTokens, lastRegisterIncomeAmounts);
+    return (lastRegisterIncomeTokens, lastRegisterIncomeAmounts, lastRegisterVault, lastRegisterIsDistribute);
   }
 
   function distributeAll(address destination) external pure {

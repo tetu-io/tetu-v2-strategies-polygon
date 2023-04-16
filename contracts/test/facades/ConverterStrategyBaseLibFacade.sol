@@ -7,7 +7,7 @@ import "../../strategies/ConverterStrategyBaseLib.sol";
 import "../../strategies/ConverterStrategyBaseLib2.sol";
 import "../../integrations/tetu-v1/ITetuV1Controller.sol";
 
-/// @notice Provide public access to internal functions of ConverterStrategyBaseLib
+/// @notice Provide public access to internal functions of ConverterStrategyBaseLib and ConverterStrategyBaseLib2
 contract ConverterStrategyBaseLibFacade {
   mapping (address => uint) public liquidationThresholds;
 
@@ -25,7 +25,7 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
   }
 
-  function getLiquidityAmountRatio(
+  function getLiquidityAmount(
     uint targetAmount_,
     address strategy_,
     address[] memory tokens,
@@ -258,45 +258,40 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function closePositionsToGetRequestedAmount(
+  function closePositionsToGetAmount(
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
     uint requestedAmount,
-    address[] memory tokens,
-    uint[] memory repaidAmounts_
+    address[] memory tokens
   ) external returns (
     uint expectedAmountMainAssetOut
   ) {
-    return ConverterStrategyBaseLib.closePositionsToGetRequestedAmount(
+    return ConverterStrategyBaseLib.closePositionsToGetAmount(
       tetuConverter,
       liquidator,
       indexAsset,
       liquidationThresholds,
       requestedAmount,
-      tokens,
-      repaidAmounts_
+      tokens
     );
   }
 
-  function _closePositionUsingMainAsset(
-    ITetuConverter tetuConverter,
-    ITetuLiquidator liquidator_,
-    address asset,
-    address token,
-    uint toSell
-  ) external returns (
-    uint expectedAmountOut
-  ) {
-    return ConverterStrategyBaseLib._closePositionUsingMainAsset(
-      tetuConverter,
-      liquidator_,
-      asset,
-      token,
-      toSell,
-      liquidationThresholds
-    );
-  }
+//  function _closePositionUsingMainAsset(
+//    ITetuConverter converter,
+//    address collateralAsset,
+//    address borrowAsset,
+//    uint amountToRepay
+//  ) external returns (
+//    uint expectedAmountOut
+//  ) {
+//    return ConverterStrategyBaseLib._repayDebt(
+//      converter,
+//      collateralAsset,
+//      borrowAsset,
+//      amountToRepay
+//    );
+//  }
 
   function _getAmountToSell(
     uint remainingRequestedAmount,
@@ -305,7 +300,8 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory prices,
     uint[] memory decs,
     uint indexCollateral,
-    uint indexBorrowAsset
+    uint indexBorrowAsset,
+    uint balanceBorrowAsset
   ) external pure returns (
     uint amountOut
   ) {
@@ -316,7 +312,66 @@ contract ConverterStrategyBaseLibFacade {
       prices,
       decs,
       indexCollateral,
-      indexBorrowAsset
+      indexBorrowAsset,
+      balanceBorrowAsset
+    );
+  }
+
+  function registerIncome(uint assetBefore, uint assetAfter, uint earned, uint lost) external pure returns (
+    uint _earned,
+    uint _lost
+  ) {
+    return ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter, earned, lost);
+  }
+
+  function sendTokensToForwarder(
+    address controller_,
+    address splitter_,
+    address[] memory tokens_,
+    uint[] memory amounts_
+  ) external {
+    return ConverterStrategyBaseLib2.sendTokensToForwarder(controller_, splitter_, tokens_, amounts_);
+  }
+
+  function recycle(
+    ITetuConverter converter_,
+    address asset,
+    uint compoundRatio,
+    address[] memory tokens,
+    ITetuLiquidator liquidator,
+    address[] memory rewardTokens,
+    uint[] memory rewardAmounts
+  ) external returns (
+    uint[] memory amountsToForward
+  ) {
+    return ConverterStrategyBaseLib.recycle(
+      converter_,
+      asset,
+      compoundRatio,
+      tokens,
+      liquidator,
+      liquidationThresholds,
+      rewardTokens,
+      rewardAmounts
+    );
+  }
+
+  function claimConverterRewards(
+    ITetuConverter tetuConverter_,
+    address[] memory tokens_,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_,
+    uint[] memory balancesBefore
+  ) external returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
+    return ConverterStrategyBaseLib2.claimConverterRewards(
+      tetuConverter_,
+      tokens_,
+      rewardTokens_,
+      rewardAmounts_,
+      balancesBefore
     );
   }
 }
