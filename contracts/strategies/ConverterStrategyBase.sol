@@ -3,6 +3,8 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IDebtMonitor.sol"; // todo remove
+import "@tetu_io/tetu-converter/contracts/interfaces/IPoolAdapter.sol"; // todo remove
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
@@ -395,6 +397,22 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
   ///               Convert amounts after withdraw
   /////////////////////////////////////////////////////////////////////
+  function _temp(ITetuConverter converter_, address[] memory tokens_) internal view {
+    console.log("PA balances");
+    address[] memory pas = IDebtMonitor(IConverterController(converter_.controller()).debtMonitor()).getPositions(
+      address(this),
+      tokens_[0],
+      tokens_[1]
+    );
+    for (uint i = 0; i < pas.length; ++i) {
+      address pa = pas[i];
+      console.log("pa", pa);
+      console.log("balance 0", IERC20(tokens_[0]).balanceOf(pa));
+      console.log("balance 1", IERC20(tokens_[1]).balanceOf(pa));
+      (address originConverter,,,) = IPoolAdapter(pa).getConfig();
+      console.log("pa.originConverter", pa, originConverter);
+    }
+  }
 
   /// @notice Convert {amountsToConvert_} to the main {asset}
   ///         Swap leftovers (if any) to the main asset.
@@ -416,9 +434,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint expectedAmount
   ) {
     console.log("_makeRequestedAmount balances.0", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
+    console.log("_makeRequestedAmount converter balances.0", IERC20(tokens_[0]).balanceOf(address(converter_)), IERC20(tokens_[1]).balanceOf(address(converter_)));
     console.log("_makeRequestedAmount v.amountsToConvert", amountsToConvert_[0], amountsToConvert_[1]);
     console.log("_makeRequestedAmount requestedAmount", requestedAmount);
     console.log("_makeRequestedAmount expectedMainAssetAmounts", expectedMainAssetAmounts[0], expectedMainAssetAmounts[1]);
+    _temp(converter_, tokens_);
 
     // get the total expected amount
     for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
@@ -464,6 +484,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       console.log("_makeRequestedAmount.expectedAmount", expectedAmount, expectedMainAssetAmounts[indexAsset_]);
     }
 
+    console.log("_makeRequestedAmount balances.final", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
+    console.log("_makeRequestedAmount converter balances.final", IERC20(tokens_[0]).balanceOf(address(converter_)), IERC20(tokens_[1]).balanceOf(address(converter_)));
+    _temp(converter_, tokens_);
     return expectedAmount;
   }
 

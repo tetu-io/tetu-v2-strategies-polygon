@@ -946,9 +946,11 @@ library ConverterStrategyBaseLib {
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
+        console.log("calcInvestedAssets.1.amountOut", amountOut);
       } else {
         // available amount to repay
         uint toRepay = IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
+        console.log("calcInvestedAssets.toRepay", i, toRepay);
 
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(
           address(this),
@@ -957,9 +959,13 @@ library ConverterStrategyBaseLib {
           // investedAssets is calculated using exact debts, debt-gaps are not taken into account
           false
         );
+        console.log("calcInvestedAssets.toPay", i, toPay);
+        console.log("calcInvestedAssets.collateral", i, collateral);
         amountOut += collateral;
+        console.log("calcInvestedAssets.2.amountOut", amountOut);
         if (toRepay >= toPay) {
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+          console.log("calcInvestedAssets.3.amountOut", amountOut);
         } else {
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
@@ -969,6 +975,7 @@ library ConverterStrategyBaseLib {
           }
           // to pay the following amount we need to swap some other asset at first
           v.debts[i] = toPay - toRepay;
+          console.log("calcInvestedAssets.1.debts", v.debts[i]);
         }
       }
     }
@@ -984,15 +991,19 @@ library ConverterStrategyBaseLib {
         // this estimation is approx and do not count price impact on the liquidation
         // we will able to count the real output only after withdraw process
         uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+        console.log("calcInvestedAssets.debtInAsset", debtInAsset);
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
+          console.log("calcInvestedAssets.4.amountOut", amountOut);
         } else {
           amountOut -= debtInAsset;
+          console.log("calcInvestedAssets.5.amountOut", amountOut);
         }
       }
     }
 
+    console.log("calcInvestedAssets.6.amountOut", amountOut);
     return amountOut;
   }
 
@@ -1294,8 +1305,8 @@ library ConverterStrategyBaseLib {
           // convert {toSell} amount of main asset to tokens[i]
           if (toSell != 0) {
             toSell = Math.min(toSell, v.balance);
-            console.log("_liquidate toSell");
-            _liquidate(
+            console.log("_liquidate toSell", toSell);
+            (toSell, ) = _liquidate(
               converter_,
               liquidator,
               v.asset,
@@ -1305,6 +1316,7 @@ library ConverterStrategyBaseLib {
               liquidationThresholds[tokens[i]]
             );
             tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+            console.log("after liquidation toSell, tokenBalance", toSell, tokenBalance);
           }
 
           // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
