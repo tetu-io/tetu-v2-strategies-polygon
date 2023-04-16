@@ -14,7 +14,6 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
 } from "../../baseUT/GasLimits";
 

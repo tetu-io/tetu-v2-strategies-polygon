@@ -3,8 +3,6 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
-import "@tetu_io/tetu-converter/contracts/interfaces/IDebtMonitor.sol"; // todo remove
-import "@tetu_io/tetu-converter/contracts/interfaces/IPoolAdapter.sol"; // todo remove
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
@@ -228,32 +226,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    console.log("WITHDRAW USDT balance", IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F).balanceOf(address(this)));
-    console.log("WITHDRAW amount", amount);
-    console.log("WITHDRAW _investedAssets", _investedAssets);
-    uint balBefore = IERC20(asset).balanceOf(address(this));
-    console.log("WITHDRAW balBefore", balBefore);
-    console.log("WITHDRAW _investedAssets fresh", IERC20(asset).balanceOf(address(this)) + _calcInvestedAssets());
-
-    (uint debtUSDT,uint debtUSDTCol) = converter.getDebtAmountCurrent(address(this), asset, 0xc2132D05D31c914a87C6611C10748AEb04B58e8F, false);
-    console.log("WITHDRAW USDT dept", debtUSDT);
-    console.log("WITHDRAW USDT coll", debtUSDTCol);
-
-    console.log("WITHDRAW -----------------CALL _withdrawUniversal START-----------------");
     (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(amount);
-    console.log("WITHDRAW -----------------CALL _withdrawUniversal END-----------------");
-
-
-    console.log("WITHDRAW expectedWithdrewUSD", expectedWithdrewUSD);
-    console.log("WITHDRAW strategyLoss", strategyLoss);
-    console.log("WITHDRAW withdrew", IERC20(asset).balanceOf(address(this)) - balBefore);
-    console.log("WITHDRAW _investedAssets", _investedAssets);
-    console.log("WITHDRAW balAfter", IERC20(asset).balanceOf(address(this)));
-    console.log("WITHDRAW _investedAssets fresh", IERC20(asset).balanceOf(address(this)) + _calcInvestedAssets());
-    console.log("WITHDRAW USDT balance", IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F).balanceOf(address(this)));
-    (debtUSDT, debtUSDTCol) = converter.getDebtAmountCurrent(address(this), asset, 0xc2132D05D31c914a87C6611C10748AEb04B58e8F, false);
-    console.log("WITHDRAW USDT dept", debtUSDT);
-    console.log("WITHDRAW USDT coll", debtUSDTCol);
   }
 
   /// @notice Withdraw all from the pool.
@@ -341,7 +314,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         );
       }
 
-      console.log("postWithdrawActions v.expectedMainAssetAmounts", v.expectedMainAssetAmounts[0], v.expectedMainAssetAmounts[1]);
       // convert amounts to main asset
       // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts
       v.expectedTotalMainAssetAmount += _makeRequestedAmount(
@@ -397,22 +369,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
   ///               Convert amounts after withdraw
   /////////////////////////////////////////////////////////////////////
-  function _temp(ITetuConverter converter_, address[] memory tokens_) internal view {
-    console.log("PA balances");
-    address[] memory pas = IDebtMonitor(IConverterController(converter_.controller()).debtMonitor()).getPositions(
-      address(this),
-      tokens_[0],
-      tokens_[1]
-    );
-    for (uint i = 0; i < pas.length; ++i) {
-      address pa = pas[i];
-      console.log("pa", pa);
-      console.log("balance 0", IERC20(tokens_[0]).balanceOf(pa));
-      console.log("balance 1", IERC20(tokens_[1]).balanceOf(pa));
-      (address originConverter,,,) = IPoolAdapter(pa).getConfig();
-      console.log("pa.originConverter", pa, originConverter);
-    }
-  }
 
   /// @notice Convert {amountsToConvert_} to the main {asset}
   ///         Swap leftovers (if any) to the main asset.
@@ -433,18 +389,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) internal returns (
     uint expectedAmount
   ) {
-    console.log("_makeRequestedAmount balances.0", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
-    console.log("_makeRequestedAmount converter balances.0", IERC20(tokens_[0]).balanceOf(address(converter_)), IERC20(tokens_[1]).balanceOf(address(converter_)));
-    console.log("_makeRequestedAmount v.amountsToConvert", amountsToConvert_[0], amountsToConvert_[1]);
-    console.log("_makeRequestedAmount requestedAmount", requestedAmount);
-    console.log("_makeRequestedAmount expectedMainAssetAmounts", expectedMainAssetAmounts[0], expectedMainAssetAmounts[1]);
-    _temp(converter_, tokens_);
-
     // get the total expected amount
     for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
       expectedAmount += expectedMainAssetAmounts[i];
     }
-    console.log("_makeRequestedAmount sumExpectedAmount", expectedAmount);
 
     // we cannot repay a debt twice
     // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
@@ -452,9 +400,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
     if (expectedAmount > requestedAmount * 101/100) {
-      console.log("_makeRequestedAmount.path.1");
       // amountsToConvert_ are enough to get requestedAmount
-      (, uint[] memory repaidAmounts) = ConverterStrategyBaseLib.convertAfterWithdraw(
+      ConverterStrategyBaseLib.convertAfterWithdraw(
         converter_,
         liquidator,
         indexAsset_,
@@ -462,11 +409,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         tokens_,
         amountsToConvert_
       );
-      console.log("_makeRequestedAmount repaidAmounts", repaidAmounts[0], repaidAmounts[1]);
-      console.log("_makeRequestedAmount balances.1", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
-      console.log("_makeRequestedAmount.expectedAmount", expectedAmount);
     } else {
-      console.log("_makeRequestedAmount.path.2");
       // amountsToConvert_ are NOT enough to get requestedAmount
       // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
       // We should try to close the exist debts instead:
@@ -480,13 +423,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         requestedAmount,
         tokens_
       ) + expectedMainAssetAmounts[indexAsset_];
-      console.log("_makeRequestedAmount balances.2", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
-      console.log("_makeRequestedAmount.expectedAmount", expectedAmount, expectedMainAssetAmounts[indexAsset_]);
     }
 
-    console.log("_makeRequestedAmount balances.final", IERC20(tokens_[0]).balanceOf(address(this)), IERC20(tokens_[1]).balanceOf(address(this)));
-    console.log("_makeRequestedAmount converter balances.final", IERC20(tokens_[0]).balanceOf(address(converter_)), IERC20(tokens_[1]).balanceOf(address(converter_)));
-    _temp(converter_, tokens_);
     return expectedAmount;
   }
 
