@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3Lib.sol";
 import "./Uni3StrategyErrors.sol";
+import "./UniswapV3ConverterStrategyLogicLib.sol";
 
 library UniswapV3DebtLib {
 
@@ -73,25 +74,80 @@ library UniswapV3DebtLib {
     _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
   }
 
-  /// @dev Rebalances the debt by either filling up or closing and reopening debt positions.
+  /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
   function rebalanceDebt(
     ITetuConverter tetuConverter,
     address controller,
-    IUniswapV3Pool pool,
-    address tokenA,
-    address tokenB,
-    bool fillUp,
-    uint tokenAFee,
-    uint tokenBFee,
-    bytes memory entryData,
+    UniswapV3ConverterStrategyLogicLib.State storage state,
     uint liquidatorSwapSlippage
   ) external {
-    if (fillUp) {
+    IUniswapV3Pool pool = state.pool;
+    address tokenA = state.tokenA;
+    address tokenB = state.tokenB;
+    bool depositorSwapTokens = state.depositorSwapTokens;
+    (uint tokenAFee, uint tokenBFee) = depositorSwapTokens ? (state.rebalanceEarned1, state.rebalanceEarned0) : (state.rebalanceEarned0, state.rebalanceEarned1);
+    if (state.fillUp) {
       _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
+      (state.lowerTick, state.upperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     } else {
       _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
+      (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+      bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
       _openDebt(tetuConverter, tokenA, tokenB, entryData, tokenAFee);
+      state.lowerTick = newLowerTick;
+      state.upperTick = newUpperTick;
     }
+  }
+
+  function getEntryData(
+    IUniswapV3Pool pool,
+    int24 lowerTick,
+    int24 upperTick,
+    bool depositorSwapTokens
+  ) public view returns (bytes memory entryData) {
+    address token1 = pool.token1();
+    uint token1Price = UniswapV3Lib.getPrice(address(pool), token1);
+
+    uint token1Decimals = IERC20Metadata(token1).decimals();
+
+    uint token0Desired = token1Price;
+    uint token1Desired = 10 ** token1Decimals;
+
+    // calculate proportions
+    (uint consumed0, uint consumed1,) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
+
+    if (depositorSwapTokens) {
+      entryData = abi.encode(1, consumed1 * token1Price / token1Desired, consumed0);
+    } else {
+      entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
+    }
+  }
+
+  function calcTickRange(IUniswapV3Pool pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
+    (, int24 tick, , , , ,) = pool.slot0();
+    if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
+      lowerTick = ((tick - tickRange) / tickSpacing - 1) * tickSpacing;
+    } else {
+      lowerTick = (tick - tickRange) / tickSpacing * tickSpacing;
+    }
+    upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
+  }
+
+  /// @notice Calculate the new tick range for a Uniswap V3 pool.
+  /// @param pool The Uniswap V3 pool to calculate the new tick range for.
+  /// @param lowerTick The current lower tick value for the pool.
+  /// @param upperTick The current upper tick value for the pool.
+  /// @param tickSpacing The tick spacing for the pool.
+  /// @return lowerTickNew The new lower tick value for the pool.
+  /// @return upperTickNew The new upper tick value for the pool.
+  function _calcNewTickRange(
+    IUniswapV3Pool pool,
+    int24 lowerTick,
+    int24 upperTick,
+    int24 tickSpacing
+  ) internal view returns (int24 lowerTickNew, int24 upperTickNew) {
+    int24 fullTickRange = upperTick - lowerTick;
+    (lowerTickNew, upperTickNew) = calcTickRange(pool, fullTickRange == tickSpacing ? int24(0) : fullTickRange / 2, tickSpacing);
   }
 
   /// @notice Closes debt by liquidating tokens as necessary.

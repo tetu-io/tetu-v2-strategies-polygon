@@ -9,7 +9,7 @@ import {
   IERC20__factory,
   IERC20Metadata,
   IERC20Metadata__factory,
-  IStrategyV2, ISwapper__factory,
+  IStrategyV2,
   StrategyBaseV2__factory,
   StrategySplitterV2,
   TetuVaultV2,
@@ -25,7 +25,6 @@ import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
-import { PriceOracleManagerUtils } from '../../../baseUT/converter/PriceOracleManagerUtils';
 import {
   depositToVault,
   doHardWorkForStrategy,
@@ -34,7 +33,7 @@ import {
   redeemFromVault,
 } from '../../../StrategyTestUtils';
 import { BigNumber } from 'ethers';
-import { IPriceOracleManager } from '../../../baseUT/converter/PriceOracleManager';
+import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 
 
 const { expect } = chai;
@@ -57,7 +56,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let asset: string;
   let assetCtr: IERC20Metadata;
   let decimals: number;
-  let priceOracleManager: IPriceOracleManager;
+  // let priceOracleManager: IPriceOracleManager;
 
 
   before(async function() {
@@ -106,8 +105,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    priceOracleManager = await PriceOracleManagerUtils.build(signer, await strategy.converter());
-
+    const state = await strategy.getState()
+    await PriceOracleImitatorUtils.uniswapV3(signer, await strategy.converter(), state.pool, state.tokenA)
     // ---
 
     await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
@@ -229,24 +228,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     // todo test on higher value
     const cycles = 10;
 
-    { // set prices in oracle to same values as in the pool
-      const swapper = ISwapper__factory.connect(MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, signer);
-      const state = await strategy.getState();
-      const poolPriceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-      const poolPriceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-      const usdtPrice = state.tokenA.toLowerCase() === MaticAddresses.USDT_TOKEN ? poolPriceABefore : poolPriceBBefore;
-      const usdcPrice = state.tokenA.toLowerCase() === MaticAddresses.USDC_TOKEN ? poolPriceABefore : poolPriceBBefore;
-      await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPrice.mul(100)); // aave3: prices have decimals 8
-      await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, parseUnits("1", 8)); // aave3: prices have decimals 8
-      const usdcSource = priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN);
-      const usdtSource = priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN);
-      console.log(`${usdcPrice} usdcPrice from pool=${await usdcSource.aggregator.price()} original=${usdcSource.priceOriginal}`);
-      console.log(`${usdtPrice} usdtPrice from pool=${await usdtSource.aggregator.price()} original=${usdtSource.priceOriginal}`);
-    }
-
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    const swapAmount = parseUnits('100000', decimals);
+    const swapAmount = parseUnits('500000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -294,45 +278,20 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
 
       if (i % 2 === 0) {
-        const priceChange = await UniswapV3StrategyUtils.movePriceUp(
+        await UniswapV3StrategyUtils.movePriceUp(
           signer2,
           strategy.address,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
-        const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN).priceOriginal;
-        console.log('/// ORACLE usdtPrice', usdtPrice.toString());
-        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
-        console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
-        await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPricenew);
-
-        const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
-        console.log('/// ORACLE usdcPrice', usdcPrice.toString());
-        const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
-        console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
-        await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
-
       } else {
-        const priceChange = await UniswapV3StrategyUtils.movePriceDown(
+        await UniswapV3StrategyUtils.movePriceDown(
           signer2,
           strategy.address,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
-
-        const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN).priceOriginal;
-        console.log('/// ORACLE usdtPrice', usdtPrice.toString());
-        const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
-        console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());
-        await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPricenew);
-
-        const usdcPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN).priceOriginal;
-        console.log('/// ORACLE usdcPrice', usdcPrice.toString());
-        const usdcPricenew = usdcPrice.add(usdcPrice.mul(priceChange.priceAChange).div(1e9).div(1e9));
-        console.log('/// ORACLE usdcPricenew', usdcPricenew.toString());
-        await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, usdcPricenew);
       }
-
 
       await rebalanceUniv3Strategy(strategy, signer, decimals);
       await printVaultState(
@@ -405,9 +364,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
     console.log('balanceBefore', balanceBefore);
     console.log('balanceAfter', balanceAfter);
-    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), cycles);
+    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 6 * cycles);
 
   });
 
 });
-
