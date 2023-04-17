@@ -9,7 +9,7 @@ import {
   IERC20__factory,
   IERC20Metadata,
   IERC20Metadata__factory,
-  IStrategyV2,
+  IStrategyV2, ISwapper__factory,
   StrategyBaseV2__factory,
   StrategySplitterV2,
   TetuVaultV2,
@@ -229,9 +229,24 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     // todo test on higher value
     const cycles = 10;
 
-    const depositAmount1 = parseUnits('100000', decimals);
+    { // set prices in oracle to same values as in the pool
+      const swapper = ISwapper__factory.connect(MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, signer);
+      const state = await strategy.getState();
+      const poolPriceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
+      const poolPriceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      const usdtPrice = state.tokenA.toLowerCase() === MaticAddresses.USDT_TOKEN ? poolPriceABefore : poolPriceBBefore;
+      const usdcPrice = state.tokenA.toLowerCase() === MaticAddresses.USDC_TOKEN ? poolPriceABefore : poolPriceBBefore;
+      await priceOracleManager.setPrice(MaticAddresses.USDT_TOKEN, usdtPrice.mul(100)); // aave3: prices have decimals 8
+      await priceOracleManager.setPrice(MaticAddresses.USDC_TOKEN, parseUnits("1", 8)); // aave3: prices have decimals 8
+      const usdcSource = priceOracleManager.sourceInfo(MaticAddresses.USDC_TOKEN);
+      const usdtSource = priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN);
+      console.log(`${usdcPrice} usdcPrice from pool=${await usdcSource.aggregator.price()} original=${usdcSource.priceOriginal}`);
+      console.log(`${usdtPrice} usdtPrice from pool=${await usdtSource.aggregator.price()} original=${usdtSource.priceOriginal}`);
+    }
+
+    const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    const swapAmount = parseUnits('500000', decimals);
+    const swapAmount = parseUnits('100000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -285,7 +300,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
-        const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.DAI_TOKEN).priceOriginal;
+        const usdtPrice = await priceOracleManager.sourceInfo(MaticAddresses.USDT_TOKEN).priceOriginal;
         console.log('/// ORACLE usdtPrice', usdtPrice.toString());
         const usdtPricenew = usdtPrice.add(usdtPrice.mul(priceChange.priceBChange).div(1e9).div(1e9));
         console.log('/// ORACLE usdtPricenew', usdtPricenew.toString());

@@ -1,10 +1,10 @@
 import {
   Aave3AggregatorInterfaceMock, BalancerBoostedDepositorFacade,
   BalancerLogicLibFacade,
-  ConverterStrategyBaseLibFacade,
+  ConverterStrategyBaseLibFacade, MockController,
   MockConverterStrategy,
   MockConverterStrategy__factory,
-  MockForwarder,
+  MockForwarder, MockSplitterVault,
   MockTetuConverter,
   MockTetuConverterController,
   MockTetuLiquidatorSingleCall,
@@ -85,10 +85,15 @@ export class MockHelper {
   }
 
   public static async createMockForwarder(signer: SignerWithAddress): Promise<MockForwarder> {
-    return (await DeployerUtils.deployContract(
-      signer,
-      'MockForwarder',
-    )) as MockForwarder;
+    return (await DeployerUtils.deployContract(signer, 'MockForwarder')) as MockForwarder;
+  }
+
+  public static async createMockController(signer: SignerWithAddress): Promise<MockController> {
+    return (await DeployerUtils.deployContract(signer, 'MockController')) as MockController;
+  }
+
+  public static async createMockSplitter(signer: SignerWithAddress): Promise<MockSplitterVault> {
+    return (await DeployerUtils.deployContract(signer, 'MockSplitterVault')) as MockSplitterVault;
   }
 
   public static async createAave3AggregatorInterfaceMock(

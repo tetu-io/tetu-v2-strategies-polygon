@@ -3,7 +3,7 @@
 pragma solidity 0.8.17;
 
 import "../strategies/ConverterStrategyBase.sol";
-import "./MockDepositor.sol";
+import "./mocks/MockDepositor.sol";
 
 /// @title Mock Converter Strategy with MockDepositor
 /// @author bogdoslav
@@ -217,10 +217,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint indexAsset_,
     uint[] memory amountsToConvert_,
     ITetuConverter converter_,
-    uint requestedAmount
+    uint requestedAmount,
+    uint[] memory expectedMainAssetAmounts
   ) external returns (
-    uint expectedAmountMainAssetInc
+    uint expectedTotalAmountMainAsset
   ) {
-    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount);
+    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount, expectedMainAssetAmounts);
   }
 }

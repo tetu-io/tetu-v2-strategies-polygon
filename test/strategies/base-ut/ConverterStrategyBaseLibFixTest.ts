@@ -14,7 +14,6 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET,
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
 } from "../../baseUT/GasLimits";
 
@@ -658,268 +657,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
-  describe("_closePositionUsingMainAsset", () => {
-    interface IClosePositionUsingMainAssetResults {
-      expectedAmountOut: number;
-      gasUsed: BigNumber;
-      balanceAsset: number;
-      balanceToken: number;
-    }
-    interface IClosePositionUsingMainAssetParams {
-      assetToken: MockToken[];
-      liquidationThresholdForToken: string;
-      balances: string[];
-      toSell: string;
-      prices: string[];
-      liquidations: ILiquidationParams[];
-      quoteRepays: IQuoteRepayParams[];
-      repays: IRepayParams[];
-      isConversionValid?: boolean;
-    }
-    async function makeClosePositionUsingMainAssetTest(
-      p: IClosePositionUsingMainAssetParams
-    ) : Promise<IClosePositionUsingMainAssetResults> {
-      // set up balances
-      const decimals: number[] = [];
-      for (let i = 0; i < p.assetToken.length; ++i) {
-        const d = await p.assetToken[i].decimals()
-        decimals.push(d);
-
-        // set up current balances
-        await p.assetToken[i].mint(facade.address, parseUnits(p.balances[i], d));
-        console.log("mint", i, p.balances[i]);
-      }
-
-      // set up TetuConverter
-      const converter = await MockHelper.createMockTetuConverter(signer);
-      const priceOracle = (await DeployerUtils.deployContract(
-        signer,
-        'PriceOracleMock',
-        p.assetToken.map(x => x.address),
-        p.prices.map(x => parseUnits(x, 18))
-      )) as PriceOracleMock;
-      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
-      await converter.setController(tetuConverterController.address);
-
-      // set up repay
-      for (const repay of p.repays) {
-        await setupMockedRepay(converter, facade.address, repay);
-      }
-      for (const quoteRepay of p.quoteRepays) {
-        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
-      }
-
-      // set up expected liquidations
-      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      for (const liquidation of p.liquidations) {
-        await setupMockedLiquidation(liquidator, liquidation);
-        const isConversionValid = p.isConversionValid === undefined ? true : p.isConversionValid;
-        await setupIsConversionValid(converter, liquidation, isConversionValid)
-      }
-
-      // set up liquidation threshold for token
-      await facade.setLiquidationThreshold(p.assetToken[1].address, parseUnits(p.liquidationThresholdForToken, decimals[1]));
-
-      // make test
-      const ret = await facade.callStatic._closePositionUsingMainAsset(
-        converter.address,
-        liquidator.address,
-        p.assetToken[0].address,
-        p.assetToken[1].address,
-        parseUnits(p.toSell, decimals[0]),
-      );
-
-      const tx = await facade._closePositionUsingMainAsset(
-        converter.address,
-        liquidator.address,
-        p.assetToken[0].address,
-        p.assetToken[1].address,
-        parseUnits(p.toSell, decimals[0]),
-      );
-      const gasUsed = (await tx.wait()).gasUsed;
-      return {
-        expectedAmountOut: +formatUnits(ret, decimals[0]),
-        gasUsed,
-        balanceAsset: +formatUnits(await p.assetToken[0].balanceOf(facade.address), decimals[0]),
-        balanceToken: +formatUnits(await p.assetToken[1].balanceOf(facade.address), decimals[1]),
-      }
-    }
-
-    describe("Good paths", () => {
-      describe("No debt-gap", () => {
-        describe("Amount to repay is higher than liquidation threshold", () => {
-          describe("Expected collateral is higher than amount to sell (normal case)", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeClosePositionUsingMainAssetFixture(): Promise<IClosePositionUsingMainAssetResults> {
-              return makeClosePositionUsingMainAssetTest({
-                assetToken: [usdc, dai],
-                balances: ["200", "91"], // usdc, dai
-                liquidationThresholdForToken: "304", // it's lower than amountOut=305
-                toSell: "107",
-                liquidations: [{
-                  amountIn: "107",
-                  amountOut: "305",
-                  tokenIn: usdc,
-                  tokenOut: dai
-                }],
-                quoteRepays: [{
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  amountRepay: "305",
-                  collateralAmountOut: "401"
-                }],
-                repays: [{
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  amountRepay: "305",
-                  collateralAmountOut: "401",
-                  totalDebtAmountOut: "610",
-                  totalCollateralAmountOut: "802"
-                }],
-                prices: ["1", "1"] // for simplicity
-              });
-            }
-
-            it("should return expected value of expectedAmountOut", async () => {
-              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
-              expect(r.expectedAmountOut).eq(294); // -107 + 401
-            });
-            it("should set expected balances", async () => {
-              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
-              expect(r.balanceAsset).eq(494); // 200 - 107 + 401
-              expect(r.balanceToken).eq(91); // 91 + 305 - 305
-            });
-            it('should not exceed gas limits @skip-on-coverage', async () => {
-              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
-              controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CLOSE_POSITION_USING_MAIN_ASSET, (u, t) => {
-                expect(u).to.be.below(t + 1);
-              });
-            });
-          });
-          describe("Expected collateral is lower than amount to sell (weird case)", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeClosePositionUsingMainAssetFixture(): Promise<IClosePositionUsingMainAssetResults> {
-              return makeClosePositionUsingMainAssetTest({
-                assetToken: [usdc, dai],
-                balances: ["200", "91"], // usdc, dai
-                liquidationThresholdForToken: "0",
-                toSell: "107",
-                liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
-                quoteRepays: [{
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  amountRepay: "305",
-                  collateralAmountOut: "106" // (!) weird, we paid 107 but get 106...
-                }],
-                repays: [{
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  amountRepay: "305",
-                  collateralAmountOut: "106",
-                  totalDebtAmountOut: "610",
-                  totalCollateralAmountOut: "802"
-                }],
-                prices: ["1", "1"] // for simplicity
-              });
-            }
-
-            it("should return zero expectedAmountOut", async () => {
-              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
-              expect(r.expectedAmountOut).eq(0);
-            });
-            it("should not change balances", async () => {
-              const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
-              expect(r.balanceAsset).eq(200); // unchanged
-              expect(r.balanceToken).eq(91); // unchanged
-            });
-          });
-        });
-        describe("Amount to repay is lower than liquidation threshold", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeClosePositionUsingMainAssetFixture(): Promise<IClosePositionUsingMainAssetResults> {
-            return makeClosePositionUsingMainAssetTest({
-              assetToken: [usdc, dai],
-              balances: ["200", "91"], // usdc, dai
-              liquidationThresholdForToken: "402", // (!) it's higher than collateralAmountOut==401
-              toSell: "107",
-              liquidations: [{amountIn: "107", amountOut: "305", tokenIn: usdc, tokenOut: dai}],
-              quoteRepays: [{collateralAsset: usdc, borrowAsset: dai, amountRepay: "305", collateralAmountOut: "401"}],
-              repays: [{
-                collateralAsset: usdc,
-                borrowAsset: dai,
-                amountRepay: "305",
-                collateralAmountOut: "401",
-                totalDebtAmountOut: "610",
-                totalCollateralAmountOut: "802"
-              }],
-              prices: ["1", "1"] // for simplicity
-            });
-          }
-
-          it("should return zero expectedAmountOut", async () => {
-            const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
-            expect(r.expectedAmountOut).eq(0);
-          });
-          it("should not change balances", async () => {
-            const r = await loadFixture(makeClosePositionUsingMainAssetFixture);
-            expect(r.balanceAsset).eq(200); // unchanged
-            expect(r.balanceToken).eq(91); // unchanged
-          });
-        });
-      });
-      describe("There is debt-gap", () => {
-        // todo
-      });
-    });
-    describe("Bad paths", () => {
-      let snapshot: string;
-      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
-      afterEach(async function () {await TimeUtils.rollback(snapshot);});
-
-      it("should revert if no liquidation rote", async () => {
-        await expect(makeClosePositionUsingMainAssetTest({
-          assetToken: [usdc, dai],
-          balances: ["200", "91"], // usdc, dai
-          liquidationThresholdForToken: "400", // it's lower than collateralAmountOut=401
-          toSell: "107",
-          liquidations: [], // (!) no liquidation
-          quoteRepays: [{collateralAsset: usdc, borrowAsset: dai, amountRepay: "305", collateralAmountOut: "401"}],
-          repays: [{
-            collateralAsset: usdc,
-            borrowAsset: dai,
-            amountRepay: "305",
-            collateralAmountOut: "401",
-            totalDebtAmountOut: "610",
-            totalCollateralAmountOut: "802"
-          }],
-          prices: ["1", "1"] // for simplicity
-        })).revertedWith("TS-15 No liquidation route"); // NO_LIQUIDATION_ROUTE
-      });
-    });
-  });
-
-  describe("closePositionsToGetRequestedAmount", () => {
+  describe("closePositionsToGetAmount", () => {
     interface IClosePositionToGetRequestedAmountResults {
       expectedAmountMainAssetOut: number;
       gasUsed: BigNumber;
@@ -930,7 +668,6 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       tokens: MockToken[];
       indexAsset: number;
       balances: string[];
-      repaidAmounts: string[];
       prices: string[];
       liquidationThresholds: string[];
       liquidations: ILiquidationParams[];
@@ -983,22 +720,20 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       }
 
       // make test
-      const ret = await facade.callStatic.closePositionsToGetRequestedAmount(
+      const ret = await facade.callStatic.closePositionsToGetAmount(
         converter.address,
         liquidator.address,
         p.indexAsset,
         parseUnits(p.requestedAmount, decimals[p.indexAsset]),
         p.tokens.map(x => x.address),
-        p.repaidAmounts.map((x, index) => parseUnits(p.repaidAmounts[index], decimals[index]))
       );
 
-      const tx = await facade.closePositionsToGetRequestedAmount(
+      const tx = await facade.closePositionsToGetAmount(
         converter.address,
         liquidator.address,
         p.indexAsset,
         parseUnits(p.requestedAmount, decimals[p.indexAsset]),
         p.tokens.map(x => x.address),
-        p.repaidAmounts.map((x, index) => parseUnits(p.repaidAmounts[index], decimals[index]))
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
@@ -1025,7 +760,6 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               tokens: [usdc, dai],
               indexAsset: 0,
               balances: ["2000", "910"], // usdc, dai
-              repaidAmounts: ["0", "0"], // usdc, dai
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{
@@ -1037,14 +771,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               quoteRepays: [{
                 collateralAsset: usdc,
                 borrowAsset: dai,
-                amountRepay: "1010",
-                collateralAmountOut: "1515"
+                amountRepay: "1920",
+                collateralAmountOut: "2880"
               }],
               repays: [{
                 collateralAsset: usdc,
                 borrowAsset: dai,
-                amountRepay: "1010", // dai
-                collateralAmountOut: "1515", // 1010 / 2000 * 3000
+                amountRepay: "1920", // dai // 1010 + 910
+                collateralAmountOut: "2880", // 1920 / 2000 * 3000
                 totalDebtAmountOut: "2000",
                 totalCollateralAmountOut: "3000"
               }],
@@ -1052,11 +786,11 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           }
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(505); // 1515 - 1010
+            expect(r.expectedAmountMainAssetOut).eq(1870); // 2880 - 1010
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.balances.join()).eq([2505, 910].join());
+            expect(r.balances.join()).eq([3870, 0].join()); // 2880 + 2000 - 1010
           });
         });
         describe("Partial repayment, balance < toSell", () => {
@@ -1069,8 +803,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               requestedAmount: "1500", // usdc
               tokens: [usdc, dai],
               indexAsset: 0,
-              balances: ["300", "910"], // usdc, dai
-              repaidAmounts: ["0", "0"], // usdc, dai
+              balances: ["300", "0"], // usdc, dai
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{
@@ -1101,7 +834,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.balances.join()).eq([450, 910].join());
+            expect(r.balances.join()).eq([450, 0].join());
           });
         });
         describe("Full repayment of the borrow", () => {
@@ -1114,8 +847,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               requestedAmount: "1000000", // usdc - we need as much as possible USDC
               tokens: [usdc, dai],
               indexAsset: 0,
-              balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
-              repaidAmounts: ["0", "0"], // usdc, dai
+              balances: ["5000", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{
@@ -1146,7 +878,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.balances.join()).eq([6000, 910].join());
+            expect(r.balances.join()).eq([6000, 0].join());
           });
         });
         describe("QuoteRepay != repay", () => {
@@ -1159,8 +891,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               requestedAmount: "1000000", // usdc - we need as much as possible USDC
               tokens: [usdc, dai],
               indexAsset: 0,
-              balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
-              repaidAmounts: ["0", "0"], // usdc, dai
+              balances: ["5000", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{
@@ -1191,7 +922,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.balances.join()).eq([6000, 910].join());
+            expect(r.balances.join()).eq([6000, 0].join());
           });
         });
         describe("Not zero liquidation threshold", () => {
@@ -1204,8 +935,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               requestedAmount: "1000000", // usdc - we need as much as possible USDC
               tokens: [usdc, dai],
               indexAsset: 0,
-              balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
-              repaidAmounts: ["0", "0"], // usdc, dai
+              balances: ["5000", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "1999"], // (!) less than amoutOut in liquidation
               liquidations: [{
@@ -1236,7 +966,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.balances.join()).eq([6000, 910].join());
+            expect(r.balances.join()).eq([6000, 0].join());
           });
         });
       });
@@ -1252,8 +982,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             requestedAmount: "1000000", // usdc - we need as much as possible USDC
             tokens: [usdc, dai],
             indexAsset: 0,
-            balances: ["0", "910"], // usdc, dai - we don't have USDC at all
-            repaidAmounts: ["0", "0"], // usdc, dai
+            balances: ["0", "0"], // usdc, dai - we don't have USDC at all
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
             liquidations: [],
@@ -1267,35 +996,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([0, 910].join());
-        });
-      });
-      describe("repaidAmounts_ is not zero", () => {
-        let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
-
-        async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
-          return makeClosePositionToGetRequestedAmountTest({
-            requestedAmount: "1000000", // usdc - we need as much as possible USDC
-            tokens: [usdc, dai],
-            indexAsset: 0,
-            balances: ["5000", "910"], // usdc, dai
-            repaidAmounts: ["0", "1"], // usdc, dai (!) DAI borrow was already repaid, we cannot make second repay in the same block
-            prices: ["1", "1"], // for simplicity
-            liquidationThresholds: ["0", "0"],
-            liquidations: [],
-            quoteRepays: [],
-            repays: [],
-          });
-        }
-        it("should return zero expected amount", async () => {
-          const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
-        });
-        it("should not change balances", async () => {
-          const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([5000, 910].join());
+          expect(r.balances.join()).eq([0, 0].join());
         });
       });
       describe("There are no debts", () => {
@@ -1308,8 +1009,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             requestedAmount: "1000000", // usdc - we need as much as possible USDC
             tokens: [usdc, dai],
             indexAsset: 0,
-            balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
-            repaidAmounts: ["0", "0"], // usdc, dai
+            balances: ["5000", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
             liquidations: [],
@@ -1335,7 +1035,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([5000, 910].join());
+          expect(r.balances.join()).eq([5000, 0].join());
         });
       });
       describe("Liquidation threshold is too high", () => {
@@ -1348,8 +1048,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             requestedAmount: "1000000", // usdc - we need as much as possible USDC
             tokens: [usdc, dai],
             indexAsset: 0,
-            balances: ["5000", "910"], // usdc, dai - we have enough USDC on balance to completely pay the debt
-            repaidAmounts: ["0", "0"], // usdc, dai
+            balances: ["5000", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "2001"], // (!) the threshold for dai is higher than amountOut
             liquidations: [{
@@ -1380,7 +1079,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([5000, 910].join());
+          expect(r.balances.join()).eq([5000, 0].join());
         });
       });
     });
@@ -1569,6 +1268,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       prices: string[];
       decimals: number[];
       indexCollateral: number;
+      balanceBorrowAsset: string;
     }
     async function makeGetAmountToSellTest(p: IGetAmountToSellParams) : Promise<IGetAmountToSellResults> {
       const indexBorrowAsset = p.indexCollateral === 0 ? 1 : 0;
@@ -1579,7 +1279,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.prices.map(x => parseUnits(x, 18)),
         p.decimals.map(x => parseUnits("1", x)),
         p.indexCollateral,
-        indexBorrowAsset
+        indexBorrowAsset,
+        parseUnits(p.balanceBorrowAsset, p.decimals[indexBorrowAsset]),
       );
       return {
         amountOut: +formatUnits(amountOut, p.decimals[p.indexCollateral])
@@ -1587,64 +1288,105 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     }
 
     describe("Good paths", () => {
-      describe("usdc=$1, dai=$0.5", () => {
-        describe("collateral > requested amount", () => {
-          it("should return expected value", async () => {
-            const r = await makeGetAmountToSellTest({
-              indexCollateral: 0,
-              decimals: [6, 18], // usdc, dai
-              prices: ["1", "0.5"], // assume prices 1:2
-              totalDebt: "1000",
-              totalCollateral: "3000", // assume health factor is 1.5
-              remainingRequestedAmount: "800"
+      describe("balanceBorrowAsset == 0", () => {
+        describe("usdc=$1, dai=$0.5", () => {
+          describe("collateral > requested amount", () => {
+            it("should return expected value", async () => {
+              const r = await makeGetAmountToSellTest({
+                indexCollateral: 0,
+                decimals: [6, 18], // usdc, dai
+                prices: ["1", "0.5"], // assume prices 1:2
+                totalDebt: "1000",
+                totalCollateral: "3000", // assume health factor is 1.5
+                remainingRequestedAmount: "800",
+                balanceBorrowAsset: "0"
+              });
+              // alpha = 2e30, (alpha18 * totalCollateral / totalDebt - 1e18) = 5e18
+              expect(r.amountOut).eq(161.6); // 160 * 101/100
             });
-            // alpha = 2e30, (alpha18 * totalCollateral / totalDebt - 1e18) = 5e18
-            expect(r.amountOut).eq(161.6); // 160 * 101/100
+          });
+          describe("collateral = requested amount", () => {
+            it("should return expected value", async () => {
+              const r = await makeGetAmountToSellTest({
+                indexCollateral: 0,
+                decimals: [6, 18], // usdc, dai
+                prices: ["1", "0.5"], // assume prices 1:2
+                totalDebt: "1000", // [dai] == 500 USDC
+                totalCollateral: "3000", // assume health factor is 1.5
+                remainingRequestedAmount: "3000",
+                balanceBorrowAsset: "0"
+              });
+              // alpha = 2e30, (alpha18 * totalCollateral / totalDebt - 1e18) = 5e18
+              expect(r.amountOut).eq(500); // 600 * 101/100 = 606 > max allowed 500 usdc, so 500
+            });
           });
         });
-        describe("collateral = requested amount", () => {
-          it("should return expected value", async () => {
-            const r = await makeGetAmountToSellTest({
-              indexCollateral: 0,
-              decimals: [6, 18], // usdc, dai
-              prices: ["1", "0.5"], // assume prices 1:2
-              totalDebt: "1000", // [dai] == 500 USDC
-              totalCollateral: "3000", // assume health factor is 1.5
-              remainingRequestedAmount: "3000"
+        describe("tetu=$0.02, usdt=$2", () => {
+          describe("collateral > requested amount", () => {
+            it("should return expected value", async () => {
+              const r = await makeGetAmountToSellTest({
+                indexCollateral: 0,
+                decimals: [18, 6], // tetu, usdt
+                prices: ["0.02", "2"],
+                totalDebt: "400", // === $800
+                totalCollateral: "50000", // === $1000
+                remainingRequestedAmount: "2500", // === $50
+                balanceBorrowAsset: "0"
+              });
+              // 2500e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 10100
+              expect(r.amountOut).eq(10100);
             });
-            // alpha = 2e30, (alpha18 * totalCollateral / totalDebt - 1e18) = 5e18
-            expect(r.amountOut).eq(500); // 600 * 101/100 = 606 > max allowed 500 usdc, so 500
+          });
+          describe("collateral = requested amount", () => {
+            it("should return expected value", async () => {
+              const r = await makeGetAmountToSellTest({
+                indexCollateral: 0,
+                decimals: [18, 6], // tetu, usdt
+                prices: ["0.02", "2"],
+                totalDebt: "400", // === $800
+                totalCollateral: "50000", // === $1000
+                remainingRequestedAmount: "50000", // === $1000
+                balanceBorrowAsset: "0"
+              });
+              // 50000e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 202000 > 50000
+              // 400e6*1e18/(0.02*1e6*1e18/2/1e18)/1e18 = 40000 === $800
+              expect(r.amountOut).eq(40000); // == $800 == totalDebt
+            });
           });
         });
       });
-      describe("tetu=$0.02, usdt=$2", () => {
-        describe("collateral > requested amount", () => {
-          it("should return expected value", async () => {
-            const r = await makeGetAmountToSellTest({
-              indexCollateral: 0,
-              decimals: [18, 6], // tetu, usdt
-              prices: ["0.02", "2"],
-              totalDebt: "400", // === $800
-              totalCollateral: "50000", // === $1000
-              remainingRequestedAmount: "2500" // === $50
+      describe("balanceBorrowAsset != 0", () => {
+        describe("tetu=$0.02, usdt=$2", () => {
+          describe("collateral > requested amount", () => {
+            it("should return expected value", async () => {
+              const r = await makeGetAmountToSellTest({
+                indexCollateral: 0,
+                decimals: [18, 6], // tetu, usdt
+                prices: ["0.02", "2"],
+                totalDebt: "450", // === $900
+                totalCollateral: "60000", // === $1200
+                remainingRequestedAmount: "2500", // === $50
+                balanceBorrowAsset: "45" // It will reduce debt and collateral: debt=405 ($810), collateral=54000 ($1080)
+              });
+              // 2500e18/(0.02*1e6*1e18/2/1e18*54000e18/405e6-1e18)*101/100
+              expect(r.amountOut).eq(7575);
             });
-            // 2500e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 10100
-            expect(r.amountOut).eq(10100);
           });
-        });
-        describe("collateral = requested amount", () => {
-          it("should return expected value", async () => {
-            const r = await makeGetAmountToSellTest({
-              indexCollateral: 0,
-              decimals: [18, 6], // tetu, usdt
-              prices: ["0.02", "2"],
-              totalDebt: "400", // === $800
-              totalCollateral: "50000", // === $1000
-              remainingRequestedAmount: "50000" // === $1000
+          describe("collateral = requested amount", () => {
+            it("should return expected value", async () => {
+              const r = await makeGetAmountToSellTest({
+                indexCollateral: 0,
+                decimals: [18, 6], // tetu, usdt
+                prices: ["0.02", "2"],
+                totalDebt: "450", // === $900
+                totalCollateral: "60000", // === $1200
+                remainingRequestedAmount: "50000", // === $1000
+                balanceBorrowAsset: "45" // It will reduce debt and collateral: debt=405 ($810), collateral=54000 ($1080)
+              });
+              // 50000e18/(0.02*1e6*1e18/2/1e18*54000e18/405e6-1e18)*101/100 = 151500 > 50000
+              // 405e6*1e18/(0.02*1e6*1e18/2/1e18)/1e18 = 40500 === $810
+              expect(r.amountOut).eq(40500); // == $810 == totalDebt - balanceBorrowAsset
             });
-            // 50000e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 202000 > 50000
-            // 400e6*1e18/(0.02*1e6*1e18/2/1e18)/1e18 = 40000 === $800
-            expect(r.amountOut).eq(40000); // == $800 == totalDebt
           });
         });
       });
@@ -1657,7 +1399,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           prices: ["1", "0.5"],
           totalDebt: "0", // (!) all debts were already paid
           totalCollateral: "3000",
-          remainingRequestedAmount: "800"
+          remainingRequestedAmount: "800",
+          balanceBorrowAsset: "0"
         });
         expect(r.amountOut).eq(0);
       });
@@ -1668,7 +1411,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           prices: ["1", "0.5"],
           totalDebt: "1000",
           totalCollateral: "0", // (!) liquidation happens
-          remainingRequestedAmount: "800"
+          remainingRequestedAmount: "800",
+          balanceBorrowAsset: "0"
         });
         expect(r.amountOut).eq(0);
       });
@@ -1751,8 +1495,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
-        spentAmounts: r.spentAmounts.map( (x, index) => +formatUnits(x, decimals[index])),
-        receivedAmounts: r.receivedAmounts.map( (x, index) => +formatUnits(x, decimals[index])),
+        spentAmounts: r.spentAmounts.map((x, index) => +formatUnits(x, decimals[index])),
+        receivedAmounts: r.receivedAmounts.map((x, index) => +formatUnits(x, decimals[index])),
         balances: await Promise.all(
           p.tokens.map(
             async (token, index) => +formatUnits(await token.balanceOf(facade.address), decimals[index])
@@ -1854,6 +1598,108 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       it("should return expected balances", async () => {
         const r = await loadFixture(makeSwapToGivenAmountFixture);
         expect(r.balances.join()).eq([17015, 2000, 0, 4997].join());
+      });
+    });
+  });
+
+  describe("registerIncome", () => {
+    it("should return expected values if after > before", async () => {
+      const r = await facade.registerIncome(1, 2, 30, 40);
+      expect(r._earned.toNumber()).eq(31);
+      expect(r._lost.toNumber()).eq(40);
+    });
+    it("should return expected values if after < before", async () => {
+      const r = await facade.registerIncome(2, 1, 30, 40);
+      expect(r._earned.toNumber()).eq(30);
+      expect(r._lost.toNumber()).eq(41);
+    });
+  });
+
+  describe("sendTokensToForwarder", () => {
+    let snapshot: string;
+    before(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    after(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    interface ISendTokensToForwarderResults {
+      allowanceForForwarder: number[];
+      tokensToForwarder: string[];
+      amountsToForwarder: number[];
+      splitterToForwarder: string;
+      isDistributeToForwarder: boolean;
+    }
+    interface ISendTokensToForwarderParams {
+      tokens: MockToken[];
+      amounts: string[];
+      vault: string;
+    }
+    async function makeSendTokensToForwarderTest(p: ISendTokensToForwarderParams): Promise<ISendTokensToForwarderResults> {
+      const controller = await  MockHelper.createMockController(signer);
+      const forwarder = await MockHelper.createMockForwarder(signer);
+      await controller.setForwarder(forwarder.address);
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setVault(p.vault);
+
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        decimals.push(await p.tokens[i].decimals());
+        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], decimals[i]));
+      }
+
+      await facade.sendTokensToForwarder(
+        controller.address,
+        splitter.address,
+        p.tokens.map(x => x.address),
+        p.amounts.map((amount, index) => parseUnits(amount, decimals[index]))
+      );
+
+      const r = await forwarder.getLastRegisterIncomeResults();
+      return {
+        amountsToForwarder: r.amounts.map((amount, index) => +formatUnits(amount, decimals[index])),
+        tokensToForwarder: r.tokens,
+        isDistributeToForwarder: r.isDistribute,
+        splitterToForwarder: r.vault,
+        allowanceForForwarder: await Promise.all(
+          p.tokens.map(
+            async (token, index) => +formatUnits(
+              await token.allowance(facade.address, forwarder.address),
+              decimals[index])
+            ),
+        )
+      }
+    }
+
+    describe("normal case", () => {
+      const VAULT = ethers.Wallet.createRandom().address;
+      async function makeSendTokensToForwarderFixture(): Promise<ISendTokensToForwarderResults> {
+        return makeSendTokensToForwarderTest({
+          tokens: [usdc, usdt, dai, tetu],
+          amounts: ["100", "1", "5000", "0"],
+          vault: VAULT
+        });
+      }
+      it("forwarder should receive expected tokens", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.tokensToForwarder.join()).eq([usdc.address, usdt.address, dai.address, tetu.address].join());
+      });
+      it("forwarder should receive expected amounts", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.amountsToForwarder.join()).eq([100, 1, 5000, 0].join());
+      });
+      it("forwarder should receive expected allowance", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        const gt: boolean[] = [];
+        for (let i = 0; i < r.tokensToForwarder.length; ++i) {
+          gt.push(r.allowanceForForwarder[i] >= r.amountsToForwarder[i]);
+        }
+        expect(gt.join()).eq([true, true, true, true].join());
+      });
+      it("forwarder should receive isDistribute=true", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.isDistributeToForwarder).eq(true);
       });
     });
   });
