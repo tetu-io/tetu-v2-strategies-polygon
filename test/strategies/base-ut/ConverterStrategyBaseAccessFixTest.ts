@@ -2,7 +2,6 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import {
   ControllerV2__factory,
   IController,
-  IERC20Metadata__factory,
   IStrategyV2,
   MockConverterStrategy,
   MockConverterStrategy__factory,
@@ -676,7 +675,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               collateralAsset: usdc,
               borrowAsset: usdt,
               amountRepay: "2000",
-              collateralAmountOut: "4000"
+              collateralAmountOut: "4000",
             }],
             repays: [{
               collateralAsset: usdc,

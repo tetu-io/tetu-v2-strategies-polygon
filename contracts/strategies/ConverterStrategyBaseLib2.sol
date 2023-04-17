@@ -180,7 +180,7 @@ library ConverterStrategyBaseLib2 {
       uint balance = IERC20(tokens[i]).balanceOf(address(this));
       if (balance != 0) {
         // let's estimate collateral that we received back after repaying balance-amount
-        uint expectedCollateral = converter.quoteRepay(
+        (uint expectedCollateral,) = converter.quoteRepay(
           strategy_,
           tokens[indexAsset],
           tokens[i],

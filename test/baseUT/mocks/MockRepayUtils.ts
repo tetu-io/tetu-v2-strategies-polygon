@@ -54,5 +54,6 @@ export async function setupMockedQuoteRepay(tetuConverter: MockTetuConverter, us
     p.borrowAsset.address,
     parseUnits(p.amountRepay, decimalsBorrow),
     parseUnits(p.collateralAmountOut, decimalsCollateral),
+    parseUnits(p.swappedAmountOut || "0", decimalsCollateral)
   );
 }
