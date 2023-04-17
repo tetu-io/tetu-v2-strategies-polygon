@@ -8,11 +8,16 @@ import {
   IAave3PriceOracle__factory, IUniswapV3Pool__factory
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {BigNumber} from "ethers";
 
 export class PriceOracleImitatorUtils {
+  public static async getPrice(signer: SignerWithAddress, token: string): Promise<BigNumber> {
+    const aave3Oracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, signer);
+    return aave3Oracle.getAssetPrice(token)
+  }
+
   public static async uniswapV3(
     signer: SignerWithAddress,
-    tetuConverterAddress: string,
     pool: string,
     stableToken: string,
     stableTokenPrice: string = '100000000'
@@ -27,7 +32,7 @@ export class PriceOracleImitatorUtils {
     const univ3Pool = IUniswapV3Pool__factory.connect(pool, signer)
     const token0 = await univ3Pool.token0()
     const token1 = await univ3Pool.token1()
-    const volatileToken = token0 === stableToken ? token1 : token0
+    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
     const sources: AggregatorInterface[] = [
       await DeployerUtils.deployContract(signer, 'Aave3PriceSourceFixed', stableTokenPrice) as AggregatorInterface,
       await DeployerUtils.deployContract(signer, 'Aave3PriceSourceUniswapV3', pool, volatileToken) as AggregatorInterface

@@ -46,6 +46,11 @@ export interface IUniversalStrategyInputParams {
    * A function to initialize strategy after deploy, i.e. set up various thresholds
    */
   strategyInit?: (strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => Promise<void>;
+
+  rebalancingStrategy?: boolean;
+
+  swap1?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>;
+  swap2?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>;
 }
 
 /**
@@ -159,6 +164,9 @@ async function universalStrategyTest(
         params.advanceBlocks,
         params.hwParams,
         params.stateRegistrar,
+        params.swap1,
+        params.swap2,
+        params.rebalancingStrategy,
       );
     });
 
