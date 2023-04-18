@@ -12,6 +12,8 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 
+import "hardhat/console.sol";
+
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -1229,16 +1231,23 @@ library ConverterStrategyBaseLib {
     v.len = tokens.length;
 
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      console.log("closePositionsToGetAmount.i", i, indexAsset);
       if (i == indexAsset) continue;
 
       v.balance = IERC20(v.asset).balanceOf(address(this));
-      if (v.balance >= requestedAmount || v.balance == 0) break;
+      console.log("closePositionsToGetAmount.v.balance", v.balance);
+      console.log("closePositionsToGetAmount.requestedAmount", requestedAmount);
+      if (v.balance >= requestedAmount) break;
+      console.log("closePositionsToGetAmount.v.balance", v.balance);
 
       // we need to increase balance on the following amount: requestedAmount - v.balance;
       // we have following borrow: amount-to-pay and corresponded collateral
       (v.totalDebt, v.totalCollateral) = converter_.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
+      console.log("closePositionsToGetAmount.v.totalDebt", v.totalDebt);
+      console.log("closePositionsToGetAmount.v.totalCollateral", v.totalCollateral);
 
       uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+      console.log("closePositionsToGetAmount.tokenBalance", tokenBalance);
 
       if (v.totalDebt != 0 || tokenBalance != 0) {
         //lazy initialization of the prices and decs
@@ -1263,9 +1272,10 @@ library ConverterStrategyBaseLib {
             i,
             tokenBalance
           );
+          console.log("closePositionsToGetAmount.toSell", toSell);
 
           // convert {toSell} amount of main asset to tokens[i]
-          if (toSell != 0) {
+          if (toSell != 0 && v.balance != 0) {
             toSell = Math.min(toSell, v.balance);
             (toSell, ) = _liquidate(
               converter_,
@@ -1278,6 +1288,7 @@ library ConverterStrategyBaseLib {
             );
             tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
           }
+          console.log("closePositionsToGetAmount.toSell.2", toSell);
 
           // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
           expectedAmount += _repayDebt(converter_, v.asset, tokens[i], tokenBalance) - toSell;
@@ -1381,15 +1392,21 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint expectedAmountOut
   ) {
+    console.log("_repayDebt.amountToRepay", amountToRepay);
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
+    console.log("_repayDebt.balanceBefore", balanceBefore);
 
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("_repayDebt.needToRepay", needToRepay);
+    console.log("_repayDebt.amountRepay", amountRepay);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;
     (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountRepay);
+    console.log("_repayDebt.expectedAmountOut", expectedAmountOut);
+    console.log("_repayDebt.swappedAmountOut", swappedAmountOut);
 
     if (expectedAmountOut > swappedAmountOut) {
       // Following situation is possible
@@ -1403,6 +1420,7 @@ library ConverterStrategyBaseLib {
     }
 
     // close the debt
+    console.log("_repayDebt.amountRepay", amountRepay);
     _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
 
     return expectedAmountOut;

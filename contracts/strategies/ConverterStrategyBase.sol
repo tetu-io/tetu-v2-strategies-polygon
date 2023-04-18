@@ -389,6 +389,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) internal returns (
     uint expectedAmount
   ) {
+    console.log("_makeRequestedAmount.requestedAmount", requestedAmount);
+
     // get the total expected amount
     for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
       expectedAmount += expectedMainAssetAmounts[i];

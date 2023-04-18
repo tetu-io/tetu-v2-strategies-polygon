@@ -34,6 +34,8 @@ import {
 } from '../../../StrategyTestUtils';
 import { BigNumber } from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {Uniswapv3StateUtils} from "./utils/Uniswapv3StateUtils";
 
 
 const { expect } = chai;
@@ -135,6 +137,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   });
 
   it('deposit and full exit should not change share price', async function() {
+    const facade = await MockHelper.createUniswapV3LibFacade(signer);
+
     await vault.setDoHardWorkOnInvest(false);
     await TokenUtils.getToken(asset, signer2.address, BigNumber.from(10000));
     await vault.connect(signer2).deposit(10000, signer2.address);
@@ -164,6 +168,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state1 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s1");
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -182,6 +187,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state2 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s2");
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
       expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, 100);
@@ -194,6 +200,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state3 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s3");
+      const pathOut = "./tmp/states.csv";
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3]);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, 100);
