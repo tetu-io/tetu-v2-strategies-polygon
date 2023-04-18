@@ -21,11 +21,17 @@ export interface IPriceOracleManager {
   priceOracleAave3: IAave3PriceOracle;
   priceOracleInTetuConverter: IPriceOracle;
 
+  /**
+   *
+   * @param token
+   * @param price Important issue: AAVE3 requires decimals 8
+   */
   setPrice(token: string, price: BigNumber): Promise<void>;
   resetPrice(token: string): Promise<void>;
   decPrice(token: string, percent: number): Promise<void>;
   incPrice(token: string, percent: number): Promise<void>;
   sourceInfo(token: string): IAssetSourceInfo;
+  getPrice(token: string): Promise<BigNumber>;
 }
 
 export interface IAssetSourceInfo {
@@ -59,6 +65,17 @@ export class PriceOracleManager implements IPriceOracleManager {
     return source;
   }
 
+  public getPrice(token: string): Promise<BigNumber> {
+    const source = this.getSourceInfo(token);
+    return source.aggregator.price();
+  }
+
+  /**
+   *
+   * @param token
+   * @param newPrice
+   *    AAVE 3 requires decimals 8
+   */
   public async setPrice(token: string, newPrice: BigNumber): Promise<void> {
     const source = this.getSourceInfo(token);
     await source.aggregator.setPrice(newPrice);
@@ -72,14 +89,14 @@ export class PriceOracleManager implements IPriceOracleManager {
   public async decPrice(token: string, percent: number): Promise<void> {
     const source = this.getSourceInfo(token);
     const price = await source.aggregator.price();
-    const newPrice = price.mul(1e9 - +(1e9 * percent).toFixed(0)).div(1e9);
+    const newPrice = price.mul(100 - percent).div(100);
     await source.aggregator.setPrice(newPrice);
   }
 
   public async incPrice(token: string, percent: number): Promise<void> {
     const source = this.getSourceInfo(token);
     const price = await source.aggregator.price();
-    const newPrice = price.mul(1e9 + (1e9 * percent).toFixed(0)).div(1e9);
+    const newPrice = price.mul(100 + percent).div(100);
     await source.aggregator.setPrice(newPrice);
   }
 

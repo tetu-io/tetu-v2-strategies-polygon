@@ -18,7 +18,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.1";
+  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.2";
 
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
@@ -208,7 +208,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
       state.rebalanceEarned0,
       state.rebalanceEarned1,
       state.depositorSwapTokens,
-      tokensOut
+      tokensOut,
+      state.totalLiquidity,
+      state.totalLiquidityFillup
     );
     state.rebalanceEarned0 = 0;
     state.rebalanceEarned1 = 0;

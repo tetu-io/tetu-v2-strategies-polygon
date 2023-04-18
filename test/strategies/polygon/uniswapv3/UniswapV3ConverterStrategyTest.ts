@@ -29,7 +29,7 @@ import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {PriceOracleManagerUtils} from "../../../baseUT/converter/PriceOracleManagerUtils";
+import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 
 const { expect } = chai;
 
@@ -263,18 +263,25 @@ describe('UniswapV3ConverterStrategyTests', function() {
     it('Fuse test', async() => {
       const s = strategy3
       const v = vault3
-      const investAmount = _1_000;
-      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1;
+      const swapAssetValueForPriceMove = parseUnits('400000', 6);
 
-      const priceOracleManager = await PriceOracleManagerUtils.build(signer, await s.converter());
-      console.log('Price USDT in oracle', (await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
+      const state = await s.getState()
+      await PriceOracleImitatorUtils.uniswapV3(signer, await s.converter(), state.pool, state.tokenA)
+
+      const newFuseThreshold = parseUnits('5', 14) // 0.05%
+      await s.setFuseThreshold(newFuseThreshold);
 
       console.log('deposit...');
       await v.deposit(investAmount, signer.address);
 
-      await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, 4);
-      console.log('Price USDT in oracle', (await priceOracleManager.priceOracleInTetuConverter.getAssetPrice(MaticAddresses.USDT_TOKEN)).toString())
-      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
+      for (let i = 0; i < 100; i++) {
+        const priceChange = await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
+        if (priceChange.priceBChange.gt(newFuseThreshold)) {
+          break
+        }
+      }
+
       expect((await s.getState()).isFuseTriggered).eq(false)
       expect(await s.needRebalance()).eq(true)
       await s.rebalance()
@@ -290,7 +297,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
-      const swapAssetValueForPriceMove = parseUnits('1000000', 6);
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
       const state = await strategy.getState();
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
@@ -456,7 +463,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('Strategy totalAssets', await strategy2.totalAssets());
       // console.log(await strategy2.callStatic.calcInvestedAssets())
 
-      await UniswapV3StrategyUtils.makeVolume(signer2, strategy2.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('1000000', 6));
+      await UniswapV3StrategyUtils.makeVolume(signer2, strategy2.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
       console.log('Vault totalAssets', await vault2.totalAssets());
       console.log('Strategy totalAssets', await strategy2.totalAssets());
