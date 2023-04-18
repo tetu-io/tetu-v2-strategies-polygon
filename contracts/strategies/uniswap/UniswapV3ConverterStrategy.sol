@@ -21,7 +21,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.2.1";
+  string public constant override STRATEGY_VERSION = "1.2.2";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -155,6 +155,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ) override internal virtual returns (
     uint[] memory tokenAmounts
   ) {
+    require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
+
     tokenAmounts = new uint[](2);
     uint spentCollateral;
 
@@ -162,7 +164,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       state.pool,
       state.lowerTick,
       state.upperTick,
-      state.tickSpacing,
       state.depositorSwapTokens
     );
 
