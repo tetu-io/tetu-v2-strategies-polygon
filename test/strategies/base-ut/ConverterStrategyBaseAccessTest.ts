@@ -175,11 +175,13 @@ describe('ConverterStrategyBaseAccessTest', () => {
       dai.address,
       0,
       0,
+      0,
     );
     await tetuConverter.setQuoteRepay(
       strategy.address,
       usdc.address,
       usdt.address,
+      0,
       0,
       0,
     );

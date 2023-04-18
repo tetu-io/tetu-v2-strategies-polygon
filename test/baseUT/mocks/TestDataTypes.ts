@@ -34,4 +34,5 @@ export interface IQuoteRepayParams {
   borrowAsset: MockToken;
   amountRepay: string;
   collateralAmountOut: string;
+  swappedAmountOut?: string;
 }

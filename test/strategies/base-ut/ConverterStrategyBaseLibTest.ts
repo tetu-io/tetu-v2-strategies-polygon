@@ -257,6 +257,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           tokens[i].address,
           amountsToRepay[i],
           amountsCollateralOut[i],
+          0
         );
       }
       return tc.address;
