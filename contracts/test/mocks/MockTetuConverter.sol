@@ -406,6 +406,7 @@ contract MockTetuConverter is ITetuConverter {
     address borrowAsset;
     uint amountToRepay;
     uint collateralAmountOut;
+    uint swappedAmountOut;
   }
   /// @notice keccak256(collateralAsset_, borrowAsset_, amountToRepay_) => results
   mapping(bytes32 => QuoteRepayParams) public quoteRepayParams;
@@ -416,7 +417,8 @@ contract MockTetuConverter is ITetuConverter {
     address borrowAsset_,
     uint amountToRepay_
   ) external view returns (
-    uint collateralAmountOut
+    uint collateralAmountOut,
+    uint swappedAmountOut
   ) {
     user_;
     // hide warning
@@ -425,10 +427,10 @@ contract MockTetuConverter is ITetuConverter {
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     QuoteRepayParams memory p = quoteRepayParams[key];
     if (p.collateralAsset == collateralAsset_) {
-      return p.collateralAmountOut;
+      return (p.collateralAmountOut, p.swappedAmountOut);
     } else {
       console.log("MockTetuConverter.quoteRepay.missed amountToRepay_,collateralAsset_,borrowAsset_", amountToRepay_, _tokenName(collateralAsset_), _tokenName(borrowAsset_));
-      return 0;
+      return (0, 0);
     }
   }
 
@@ -437,15 +439,17 @@ contract MockTetuConverter is ITetuConverter {
     address collateralAsset_,
     address borrowAsset_,
     uint amountToRepay_,
-    uint collateralAmountOut
+    uint collateralAmountOut,
+    uint swappedAmountOut
   ) external {
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     quoteRepayParams[key] = QuoteRepayParams({
-    user : user_,
-    collateralAsset : collateralAsset_,
-    borrowAsset : borrowAsset_,
-    amountToRepay : amountToRepay_,
-    collateralAmountOut : collateralAmountOut
+      user: user_,
+      collateralAsset: collateralAsset_,
+      borrowAsset: borrowAsset_,
+      amountToRepay: amountToRepay_,
+      collateralAmountOut: collateralAmountOut,
+      swappedAmountOut: swappedAmountOut
     });
   }
 
@@ -703,6 +707,16 @@ contract MockTetuConverter is ITetuConverter {
 
   function _tokenName(address token) internal view returns (string memory) {
     return IERC20Metadata(token).symbol();
+  }
+
+  function getPositions(address user_, address collateralToken_, address borrowedToken_) external pure returns (
+    address[] memory poolAdaptersOut
+  ) {
+    user_; // hide warning
+    collateralToken_; // hide warning
+    borrowedToken_; // hide warning
+
+    return poolAdaptersOut;
   }
 
 }

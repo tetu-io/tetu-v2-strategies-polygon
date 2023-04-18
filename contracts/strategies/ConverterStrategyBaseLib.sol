@@ -1007,7 +1007,7 @@ library ConverterStrategyBaseLib {
       } else {
         uint amount = withdrawnAmounts_[i] + amountsToConvert_[i];
         if (amount != 0) {
-          amountsOut[i] = converter.quoteRepay(address(this), tokens[indexAsset], tokens[i], amount);
+          (amountsOut[i],) = converter.quoteRepay(address(this), tokens[indexAsset], tokens[i], amount);
         }
       }
     }
@@ -1280,7 +1280,7 @@ library ConverterStrategyBaseLib {
           }
 
           // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-          expectedAmount += _repayDebt(converter_, v.asset, tokens[i], tokenBalance, v, indexAsset, i) - toSell;
+          expectedAmount += _repayDebt(converter_, v.asset, tokens[i], tokenBalance) - toSell;
 
           // we can have some leftovers after closing the debt
           tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
@@ -1377,10 +1377,7 @@ library ConverterStrategyBaseLib {
     ITetuConverter converter,
     address collateralAsset,
     address borrowAsset,
-    uint amountToRepay,
-    CloseDebtsForRequiredAmountLocal memory v,
-    uint indexCollateral,
-    uint indexBorrowAsset
+    uint amountToRepay
   ) internal returns (
     uint expectedAmountOut
   ) {
@@ -1388,26 +1385,21 @@ library ConverterStrategyBaseLib {
 
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
-    (uint needToRepayExact,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, false);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
 
     // get expected amount without debt-gap
-    expectedAmountOut = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountRepay);
+    uint swappedAmountOut;
+    (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountRepay);
 
-    // temporary fix (we need to change converter API a bit)
-    // Following situation is possible
-    //    needToRepay = 100, needToRepayExact = 90 (debt gap is 10)
-    //    1) amountRepay = 80
-    //       expectedAmountOut is calculated for 80, no problems
-    //    2) amountRepay = 99,
-    //       expectedAmountOut is calculated for 90 + 9 (90 - repay, 9 - direct swap)
-    //       expectedAmountOut must be reduced on 9 here (!)
-    if (amountRepay > needToRepayExact) {
-      uint debtGap = amountRepay - needToRepayExact;
-      uint debtGapCollateral = debtGap * v.prices[indexBorrowAsset] * v.decs[indexCollateral] / v.prices[indexCollateral] / v.decs[indexBorrowAsset];
-      expectedAmountOut = expectedAmountOut > debtGapCollateral
-        ?  expectedAmountOut - debtGapCollateral
-        : 0;
+    if (expectedAmountOut > swappedAmountOut) {
+      // Following situation is possible
+      //    needToRepay = 100, needToRepayExact = 90 (debt gap is 10)
+      //    1) amountRepay = 80
+      //       expectedAmountOut is calculated for 80, no problems
+      //    2) amountRepay = 99,
+      //       expectedAmountOut is calculated for 90 + 9 (90 - repay, 9 - direct swap)
+      //       expectedAmountOut must be reduced on 9 here (!)
+      expectedAmountOut -= swappedAmountOut;
     }
 
     // close the debt
