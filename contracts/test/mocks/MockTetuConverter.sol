@@ -709,9 +709,13 @@ contract MockTetuConverter is ITetuConverter {
     return IERC20Metadata(token).symbol();
   }
 
-  function getPositions(address user_, address collateralToken_, address borrowedToken_) external view returns (
+  function getPositions(address user_, address collateralToken_, address borrowedToken_) external pure returns (
     address[] memory poolAdaptersOut
   ) {
+    user_; // hide warning
+    collateralToken_; // hide warning
+    borrowedToken_; // hide warning
+
     return poolAdaptersOut;
   }
 
