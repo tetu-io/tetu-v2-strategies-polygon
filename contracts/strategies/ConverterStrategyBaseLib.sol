@@ -1280,7 +1280,7 @@ library ConverterStrategyBaseLib {
           }
 
           // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-          expectedAmount += _repayDebt(converter_, v.asset, tokens[i], tokenBalance, v, indexAsset, i) - toSell;
+          expectedAmount += _repayDebt(converter_, v.asset, tokens[i], tokenBalance) - toSell;
 
           // we can have some leftovers after closing the debt
           tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
@@ -1377,10 +1377,7 @@ library ConverterStrategyBaseLib {
     ITetuConverter converter,
     address collateralAsset,
     address borrowAsset,
-    uint amountToRepay,
-    CloseDebtsForRequiredAmountLocal memory v,
-    uint indexCollateral,
-    uint indexBorrowAsset
+    uint amountToRepay
   ) internal returns (
     uint expectedAmountOut
   ) {
