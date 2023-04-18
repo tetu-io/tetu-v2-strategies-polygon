@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 import "../../integrations/aave/AggregatorInterface.sol";
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
-import "hardhat/console.sol";
+//import "hardhat/console.sol";
 
 /// @notice A source of asset's price for AAVE3 price oracle
 ///         See price oracle 0xb023e699F5a33916Ea823A16485e259257cA8Bd1
@@ -73,7 +73,7 @@ contract Aave3PriceSourceUniswapV3 is AggregatorInterface {
       price = price * 10 ** (8 - tokenOutDecimals);
     }
 
-    console.log('Aave3PriceSourceUniswapV3 price', price);
+//    console.log('Aave3PriceSourceUniswapV3 price', price);
     return price;
   }
 

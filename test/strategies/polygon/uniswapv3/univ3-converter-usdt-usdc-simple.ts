@@ -33,7 +33,7 @@ import {
   redeemFromVault,
 } from '../../../StrategyTestUtils';
 import { BigNumber } from 'ethers';
-import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import { PriceOracleImitatorUtils } from '../../../baseUT/converter/PriceOracleImitatorUtils';
 
 
 const { expect } = chai;
@@ -105,8 +105,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState()
-    await PriceOracleImitatorUtils.uniswapV3(signer, await strategy.converter(), state.pool, state.tokenA)
+    const state = await strategy.getState();
+    await PriceOracleImitatorUtils.uniswapV3(signer, await strategy.converter(), state.pool, state.tokenA);
     // ---
 
     await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
@@ -144,6 +144,14 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
+
+    await printVaultState(
+      vault,
+      splitter,
+      StrategyBaseV2__factory.connect(strategy.address, signer),
+      assetCtr,
+      decimals,
+    );
 
     for (let i = 0; i < cycles; i++) {
       console.log('------------------ CYCLE', i, '------------------');
@@ -230,7 +238,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    const swapAmount = parseUnits('500000', decimals);
+    let swapAmount = parseUnits('500000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -293,17 +301,16 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         );
       }
 
-      await rebalanceUniv3Strategy(strategy, signer, decimals);
-      await printVaultState(
-        vault,
-        splitter,
-        StrategyBaseV2__factory.connect(strategy.address, signer),
-        assetCtr,
-        decimals,
-      );
-
-      if (i % 5 === 0) {
-        // todo currently we are suppose rebalance happens every major price change
+      // we suppose the rebalance happens immediately when it needs
+      if (await strategy.needRebalance()) {
+        await rebalanceUniv3Strategy(strategy, signer, decimals);
+        await printVaultState(
+          vault,
+          splitter,
+          StrategyBaseV2__factory.connect(strategy.address, signer),
+          assetCtr,
+          decimals,
+        );
       }
 
       if (i % 2 === 0) {
@@ -359,12 +366,16 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
       expect(sharePriceAfter).approximately(sharePriceBefore, 10_000);
+
+      // decrease swap amount slowly
+      swapAmount = swapAmount.div(2);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
     console.log('balanceBefore', balanceBefore);
     console.log('balanceAfter', balanceAfter);
-    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 6 * cycles);
+    expect(balanceAfter)
+      .approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 0.2 * cycles);
 
   });
 
