@@ -37,13 +37,18 @@ import { Misc } from '../scripts/utils/Misc';
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {DeployerUtils} from "../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
+import {
+  IHardworkEventInfo,
+  IStateHardworkEvents,
+  IUniV3FeesClaimedInfo
+} from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
   strategy: StrategyBaseV2,
   signer: SignerWithAddress,
   decimals: number,
-) {
+) : Promise<IStateHardworkEvents> {
   // const asset = await strategy.asset();
   const controller = await splitter.controller();
   const platformVoter = await ControllerV2__factory.connect(controller, splitter.provider).platformVoter();
@@ -65,7 +70,7 @@ export async function doHardWorkForStrategy(
   console.log('### DO HARD WORK CALL ###');
   const tx = await splitter.connect(signer).doHardWorkForStrategy(strategy.address, true, { gasLimit: 10_000_000 });
   const receipt = await tx.wait();
-  await handleReceiptDoHardWork(receipt, decimals);
+  const dest = await handleReceiptDoHardWork(receipt, decimals);
 
   const aprAfter = await splitter.strategiesAPR(strategy.address);
 
@@ -91,6 +96,8 @@ export async function doHardWorkForStrategy(
       expect(bribeTetuBalanceAfter).above(bribeTetuBalance);
     }
   }
+
+  return dest;
 }
 
 const { expect } = chai;
@@ -310,7 +317,13 @@ export async function handleReceiptRebalance(receipt: ContractReceipt, decimals:
   console.log('*************');
 }
 
-export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals: number) {
+export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals: number) : Promise<IStateHardworkEvents> {
+  // collect data for IStateHardworkEvents
+  const lossCovered: number[] = [];
+  const loss: number[] = [];
+  const hardWork: IHardworkEventInfo[] = [];
+  const uniV3FeesClaimed: IUniV3FeesClaimedInfo[] = [];
+
   console.log('*** HARD WORK LOGS ***');
   const vaultI = TetuVaultV2__factory.createInterface();
   const splitterI = StrategySplitterV2__factory.createInterface();
@@ -324,6 +337,7 @@ export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals
         event.topics,
       ) as unknown) as LossCoveredEventObject;
       console.log('LossCovered', formatUnits(log.amount, decimals));
+      lossCovered.push(+formatUnits(log.amount, decimals));
     }
     if (event.topics[0].toLowerCase() === splitterI.getEventTopic('Loss').toLowerCase()) {
       const log = (splitterI.decodeEventLog(
@@ -332,6 +346,7 @@ export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals
         event.topics,
       ) as unknown) as LossEventObject;
       console.log('Loss', formatUnits(log.amount, decimals));
+      loss.push(+formatUnits(log.amount, decimals));
     }
     if (event.topics[0].toLowerCase() === splitterI.getEventTopic('HardWork').toLowerCase()) {
       const log = (splitterI.decodeEventLog(
@@ -346,6 +361,13 @@ export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals
       apr: ${formatUnits(log.apr, 1)}%
       avgApr: ${formatUnits(log.avgApr, 1)}%
       `);
+      hardWork.push({
+        tvl: +formatUnits(log.tvl, decimals),
+        earned: +formatUnits(log.earned, decimals),
+        lost: +formatUnits(log.lost, decimals),
+        apr: +formatUnits(log.apr, 1),
+        avgApr: +formatUnits(log.avgApr, 1),
+      })
     }
     if (event.topics[0].toLowerCase() === univ3LogicLibI.getEventTopic('UniV3FeesClaimed').toLowerCase()) {
       const log = (univ3LogicLibI.decodeEventLog(
@@ -358,9 +380,15 @@ export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals
         formatUnits(log.fee0, decimals),
         formatUnits(log.fee1, decimals),
       );
+      uniV3FeesClaimed.push({
+        fee0: +formatUnits(log.fee0, decimals),
+        fee1: +formatUnits(log.fee1, decimals),
+      })
     }
   }
   console.log('*************');
+
+  return {loss, hardWork, lossCovered, uniV3FeesClaimed};
 }
 
 export async function printVaultState(

@@ -7,6 +7,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IPoolAdapter.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
@@ -500,6 +501,9 @@ library ConverterStrategyBaseLib {
     // Let's limit amountToRepay by needToRepay-amount
     (uint needToRepay,) = converter_.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("_closePosition.needToRepay", needToRepay);
+    console.log("_closePosition.balanceBefore", balanceBefore);
+    console.log("_closePosition.amountRepay", amountRepay);
 
     return _closePositionExact(converter_, collateralAsset, borrowAsset, amountRepay, balanceBefore);
   }
@@ -519,22 +523,55 @@ library ConverterStrategyBaseLib {
     uint collateralOut,
     uint repaidAmountOut
   ) {
+    console.log("_closePositionExact.start");
+    _temp(converter_, collateralAsset, borrowAsset);
     // Make full/partial repayment
     IERC20(borrowAsset).safeTransfer(address(converter_), amountRepay);
 
+    console.log("_closePositionExact.amountRepay", amountRepay);
     uint notUsedAmount;
     (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
+    console.log("_closePositionExact.collateralOut", collateralOut);
+    console.log("_closePositionExact.notUsedAmount", notUsedAmount);
 
     emit ClosePosition(collateralAsset, borrowAsset, amountRepay, address(this), collateralOut, notUsedAmount);
     uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
 
     // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (debt-gap)
     repaidAmountOut = balanceBorrowAsset > balanceAfter
-      ? balanceBorrowAsset - balanceAfter
-      : 0;
+    ? balanceBorrowAsset - balanceAfter
+    : 0;
 
     require(notUsedAmount == 0, StrategyLib.WRONG_VALUE);
+    console.log("_closePositionExact.finish");
+    _temp(converter_, collateralAsset, borrowAsset);
   }
+
+  function _temp(ITetuConverter converter_, address collateralAsset, address borrowAsset) internal view {
+    console.log("PA balances");
+    address[] memory pas = converter_.getPositions(address(this), collateralAsset, borrowAsset);
+    for (uint i = 0; i < pas.length; ++i) {
+      address pa = pas[i];
+      console.log("pa", pa);
+      console.log("balance 0", IERC20(collateralAsset).balanceOf(pa));
+      console.log("balance 1", IERC20(borrowAsset).balanceOf(pa));
+      (address originConverter,,,) = IPoolAdapter(pa).getConfig();
+      console.log("pa.originConverter", pa, originConverter);
+      (uint collateralAmount,
+      uint amountToPay,
+      uint healthFactor18,
+      bool opened,
+      uint collateralAmountLiquidated,
+      bool debtGapRequired
+      ) = IPoolAdapter(pa).getStatus();
+      console.log("pa.collateralAmount", collateralAmount);
+      console.log("pa.amountToPay", amountToPay);
+      console.log("pa.healthFactor18", healthFactor18);
+      console.log("pa.opened", opened);
+      console.log("pa.debtGapRequired", debtGapRequired);
+    }
+  }
+
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
   /// @param amountToRepay Amount to repay in terms of {borrowAsset}
