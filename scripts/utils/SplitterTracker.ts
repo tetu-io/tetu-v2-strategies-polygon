@@ -15,7 +15,7 @@ const trackSplitters = [
   deployAddresses.SPLITTER_USDC_ADDRESS.matic,
 ]
 
-const startBlock = 40864457 // Mar-28-2023 01:52:14 PM +UTC
+const startBlock = 41300000
 
 async function main() {
   if ((await ethers.provider.getNetwork()).chainId !== 137) {
@@ -82,6 +82,7 @@ async function main() {
             })
 
             const fees = await UniswapV3Utils.getFees(state.pool, state.lowerTick, state.upperTick, strategy.address, log.blockNumber - 1)
+            console.log('Earned:', formatUnits(state.rebalanceResults[0].add(state.rebalanceResults[1]).add(fees[0]).add(fees[1]).sub(state.rebalanceResults[2]), 6))
 
             strategiesStats[strategyAddress].earned0 = strategiesStats[strategyAddress].earned0.add(state.rebalanceResults[0]).add(fees[0])
             strategiesStats[strategyAddress].earned1 = strategiesStats[strategyAddress].earned1.add(state.rebalanceResults[1]).add(fees[1])

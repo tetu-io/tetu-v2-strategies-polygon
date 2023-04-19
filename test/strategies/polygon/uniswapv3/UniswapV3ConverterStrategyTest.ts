@@ -267,7 +267,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const swapAssetValueForPriceMove = parseUnits('400000', 6);
 
       const state = await s.getState()
-      await PriceOracleImitatorUtils.uniswapV3(signer, await s.converter(), state.pool, state.tokenA)
+      await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
 
       const newFuseThreshold = parseUnits('5', 14) // 0.05%
       await s.setFuseThreshold(newFuseThreshold);
