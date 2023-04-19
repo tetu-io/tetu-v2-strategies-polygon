@@ -46,4 +46,7 @@ library AppErrors {
   string public constant NO_INVESTMENTS = "TS-18 no investments";
 
   string public constant INCORRECT_LENGTHS = "TS-19 lengths";
+
+  /// @notice We expect increasing of the balance, but it was decreased
+  string public constant BALANCE_DECREASE = "TS-20 balance decrease";
 }

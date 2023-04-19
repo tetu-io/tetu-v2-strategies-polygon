@@ -217,7 +217,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @notice Withdraw given amount from the pool.
-  /// @param amount Amount to be withdrawn in terms of the asset.
+  /// @param amount Amount to be withdrawn in terms of the asset in addition to the exist balance.
   /// @return expectedWithdrewUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
   /// @return assetPrice Price of the {asset} from the price oracle
   /// @return strategyLoss Loss should be covered from Insurance
@@ -244,6 +244,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
   /// @return expectedWithdrewUSD The value that we should receive after withdrawing in terms of USD value of each asset in the pool
   /// @return __assetPrice Price of the {asset} taken from the price oracle
+  /// @return strategyLoss Loss before withdrawing: [new-investedAssets - old-investedAssets]
   function _withdrawUniversal(uint amount) internal returns (
     uint expectedWithdrewUSD,
     uint __assetPrice,
@@ -375,7 +376,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
   /// @param indexAsset_ Index of main {asset} in {tokens}
-  /// @param requestedAmount Desired amount for withdraw. Max uint means attempt to withdraw all possible invested assets.
+  /// @param requestedAmount Amount to be withdrawn in terms of the asset in addition to the exist balance.
+  ///        Max uint means attempt to withdraw all possible invested assets.
   /// @param amountsToConvert_ Amounts available for conversion after withdrawing from the pool
   /// @param expectedMainAssetAmounts Amounts of main asset that we expect to receive after conversion amountsToConvert_
   /// @return expectedAmount Expected total amount of main asset after all conversions, swaps and repays
