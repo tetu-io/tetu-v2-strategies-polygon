@@ -164,9 +164,11 @@ library UniswapV3DebtLib {
     uint liquidatorSwapSlippage
   ) internal {
     uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
+    IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
 
     /// after disableFuse() debt can be zero
-    if (debtAmount > 0) {
+    /// we close debt only if it is more than $0.1
+    if (debtAmount * priceOracle.getAssetPrice(tokenB) / 10 ** IERC20Metadata(tokenB).decimals() > 1e17) {
       uint availableBalanceTokenA = _balance(tokenA);
       uint availableBalanceTokenB = _balance(tokenB);
 
