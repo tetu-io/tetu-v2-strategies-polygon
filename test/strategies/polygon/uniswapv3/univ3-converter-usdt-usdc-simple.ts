@@ -34,6 +34,8 @@ import {
 } from '../../../StrategyTestUtils';
 import { BigNumber } from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {Uniswapv3StateUtils} from "./utils/Uniswapv3StateUtils";
 
 
 const { expect } = chai;
@@ -135,6 +137,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   });
 
   it('deposit and full exit should not change share price', async function() {
+    const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
+
     await vault.setDoHardWorkOnInvest(false);
     await TokenUtils.getToken(asset, signer2.address, BigNumber.from(10000));
     await vault.connect(signer2).deposit(10000, signer2.address);
@@ -146,6 +150,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
     for (let i = 0; i < cycles; i++) {
+      const pathOut = `./tmp/deposit_full_exit_states.${i}.csv`;
       console.log('------------------ CYCLE', i, '------------------');
 
       const sharePriceBefore = await vault.sharePrice();
@@ -164,6 +169,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state1 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s1");
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -182,6 +188,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state2 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s2");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2], true);
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
       expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, 100);
@@ -194,6 +202,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state3 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s3");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], true);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, 100);
@@ -206,6 +216,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state4 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s4");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], true);
 
       const sharePriceAfterWithdraw3 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, 1000);
@@ -219,6 +231,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   });
 
   it('deposit and exit with hard works should not change share price with zero compound', async function() {
+    const pathOut = `./tmp/deposit_exit_states.csv`;
+    const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
+    const states = [];
+
     await strategy.setFuseThreshold(parseUnits('1'));
 
     await vault.setDoHardWorkOnInvest(false);
@@ -271,6 +287,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         );
       }
 
+      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`d${i}`));
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -302,12 +320,15 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         decimals,
       );
 
+      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`r${i}`));
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
+
       if (i % 5 === 0) {
         // todo currently we are suppose rebalance happens every major price change
       }
 
       if (i % 2 === 0) {
-        await doHardWorkForStrategy(
+        const stateHardworkEvents = await doHardWorkForStrategy(
           splitter,
           StrategyBaseV2__factory.connect(strategy.address, signer),
           signer,
@@ -320,6 +341,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           assetCtr,
           decimals,
         );
+        states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`h${i}`, stateHardworkEvents));
       }
 
 
@@ -359,6 +381,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
       expect(sharePriceAfter).approximately(sharePriceBefore, 10_000);
+
+      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`w${i}`));
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);

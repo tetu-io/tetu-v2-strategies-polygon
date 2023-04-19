@@ -73,7 +73,30 @@ export interface IState {
   prices: {
     usdc: BigNumber,
     usdt: BigNumber
-  }
+  };
+  stateHardworkEvents?: IStateHardworkEvents;
+}
+
+export interface IHardworkEventInfo {
+  tvl: number;
+  earned: number;
+  lost: number;
+  apr: number;
+  avgApr: number;
+}
+
+export interface IUniV3FeesClaimedInfo {
+  fee0: number;
+  fee1: number;
+}
+/**
+ * Info from the events registered during the hardworking
+ */
+export interface IStateHardworkEvents {
+  lossCovered: number[];
+  loss: number[];
+  hardWork: IHardworkEventInfo[];
+  uniV3FeesClaimed: IUniV3FeesClaimedInfo[];
 }
 
 /**
@@ -88,6 +111,7 @@ export class Uniswapv3StateUtils {
     vault: TetuVaultV2,
     facade: UniswapV3LibFacade,
     title?: string,
+    stateHardworkEvents?: IStateHardworkEvents
   ): Promise<IState> {
     const splitterAddress = await vault.splitter();
     const insurance = await vault.insurance();
@@ -106,8 +130,8 @@ export class Uniswapv3StateUtils {
     const pool = await IUniswapV3Pool__factory.connect(depositorState.pool, signer);
     const slot0 = await pool.slot0();
 
-    console.log("slot0", slot0);
-    console.log("state", depositorState);
+    // console.log("slot0", slot0);
+    // console.log("state", depositorState);
     const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
       slot0.sqrtPriceX96,
       depositorState.lowerTick,
@@ -176,7 +200,8 @@ export class Uniswapv3StateUtils {
       prices: {
         usdc: await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN),
         usdt: await priceOracle.getAssetPrice(MaticAddresses.USDT_TOKEN),
-      }
+      },
+      stateHardworkEvents,
     };
 
     // console.log("State", dest);
@@ -233,6 +258,23 @@ export class Uniswapv3StateUtils {
 
       'price.usdc',
       'price.usdt',
+
+      'lossCovered.sum',
+      'lossCovered.count',
+
+      'loss.sum',
+      'loss.count',
+
+      'hardwork.tvl.last',
+      'hardwork.avg.last',
+      'hardwork.avgApr.last',
+      'hardwork.lost.sum',
+      'hardwork.earned.sum',
+      'hardwork.count',
+
+      'uniV3FeesClaimed.fee0.sum',
+      'uniV3FeesClaimed.fee1.sum',
+      'uniV3FeesClaimed.count',
     ];
 
     const decimalsSharedPrice = 6;
@@ -290,6 +332,11 @@ export class Uniswapv3StateUtils {
 
       18,
       18,
+
+      0, 0, // lossCovered
+      0, 0, // loss
+      0, 0, 0, 0, 0, 0, // hardWork
+      0, 0, 0 // uniV3FeesClaimed
     ];
 
     return { stateHeaders, stateDecimals };
@@ -350,7 +397,27 @@ export class Uniswapv3StateUtils {
         item.converter.amountToRepayUsdt,
 
         item.prices.usdc,
-        item.prices.usdt
+        item.prices.usdt,
+
+        // total amount of loss-covered
+        item.stateHardworkEvents?.lossCovered.reduce((prev, cur) => cur + prev, 0),
+        item.stateHardworkEvents?.lossCovered.length,
+
+        // total amount of loss
+        item.stateHardworkEvents?.loss.reduce((prev, cur) => cur + prev, 0),
+        item.stateHardworkEvents?.loss.length,
+
+        // last TVL, apr
+        item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.tvl, 0),
+        item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.apr, 0),
+        item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.avgApr, 0),
+        item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.lost + prev, 0),
+        item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.earned + prev, 0),
+        item.stateHardworkEvents?.hardWork.length,
+
+        item.stateHardworkEvents?.uniV3FeesClaimed.reduce((prev, cur) => cur.fee0 + prev, 0),
+        item.stateHardworkEvents?.uniV3FeesClaimed.reduce((prev, cur) => cur.fee1 + prev, 0),
+        item.stateHardworkEvents?.uniV3FeesClaimed.length,
       ];
       writeFileSync(
         pathOut,
@@ -367,7 +434,7 @@ export class Uniswapv3StateUtils {
   /**
    * Put data of a state into a separate column
    */
-  public static async saveListStatesToCSVColumns(pathOut: string, states: IState[]) {
+  public static async saveListStatesToCSVColumns(pathOut: string, states: IState[], override: boolean = false) {
     const { stateHeaders, stateDecimals } = this.getCsvData();
     const headers = [
       '',
@@ -421,10 +488,33 @@ export class Uniswapv3StateUtils {
       item.converter.amountToRepayUsdt,
 
       item.prices.usdc,
-      item.prices.usdt
+      item.prices.usdt,
+
+      // total amount of loss-covered
+      item.stateHardworkEvents?.lossCovered.reduce((prev, cur) => cur + prev, 0) || "",
+      item.stateHardworkEvents?.lossCovered.length || "",
+
+      // total amount of loss
+      item.stateHardworkEvents?.loss.reduce((prev, cur) => cur + prev, 0) || "",
+      item.stateHardworkEvents?.loss.length || "",
+
+      // last TVL, apr
+      item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.tvl, 0) || "",
+      item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.apr, 0) || "",
+      item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.avgApr, 0) || "",
+      item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.lost + prev, 0) || "",
+      item.stateHardworkEvents?.hardWork.reduce((prev, cur) => cur.earned + prev, 0) || "",
+      item.stateHardworkEvents?.hardWork.length || "",
+
+      item.stateHardworkEvents?.uniV3FeesClaimed.reduce((prev, cur) => cur.fee0 + prev, 0) || "",
+      item.stateHardworkEvents?.uniV3FeesClaimed.reduce((prev, cur) => cur.fee1 + prev, 0) || "",
+      item.stateHardworkEvents?.uniV3FeesClaimed.length || "",
     ]);
 
-    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' });
+    writeFileSyncRestoreFolder(
+      pathOut,
+      headers.join(';') + '\n',
+      { encoding: 'utf8', flag: override ? 'w' : 'a'});
     for (let i = 0; i < stateHeaders.length; ++i) {
       const line = [stateHeaders[i], ...rows.map(x => x[i])];
       writeFileSync(
@@ -434,7 +524,7 @@ export class Uniswapv3StateUtils {
             ? +formatUnits(x, stateDecimals[i])
             : '' + x,
         ).join(';') + '\n',
-        { encoding: 'utf8', flag: 'a' },
+        { encoding: 'utf8', flag: 'a'},
       );
     }
   }
