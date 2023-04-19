@@ -91,7 +91,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       ppfsDecreaseAllowed: false,
       balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
-      loops: 3,
+      loops: 4, // an even number of iterations triggers the same number of swap1 and swap2
       loopValue: 2000,
       advanceBlocks: true,
       specificTests: [],
@@ -148,6 +148,19 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         );
       },
       rebalancingStrategy: true,
+      makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
+        const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
+        const state = await univ3Strategy.getState()
+        const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
+        const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
+        const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+        await UniswapV3StrategyUtils.makeVolume(
+          swapUser,
+          strategy.address,
+          MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          swapAmount
+        )
+      },
     };
 
     const deployer = async(signer: SignerWithAddress) => UniversalTestUtils.makeStrategyDeployer(

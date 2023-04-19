@@ -50,7 +50,10 @@ export interface IUniversalStrategyInputParams {
   rebalancingStrategy?: boolean;
 
   swap1?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>;
+
   swap2?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>;
+
+  makeVolume?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>;
 }
 
 /**
@@ -167,6 +170,7 @@ async function universalStrategyTest(
         params.swap1,
         params.swap2,
         params.rebalancingStrategy,
+        params.makeVolume,
       );
     });
 

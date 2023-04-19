@@ -100,6 +100,7 @@ export class DoHardWorkLoopBase {
     swap1?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
     swap2?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
     rebalacingStrategy?: boolean,
+    makeVolume?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
   ) {
     const start = Date.now();
     this.loops = loops;
@@ -119,7 +120,7 @@ export class DoHardWorkLoopBase {
     if (stateRegistrar) {
       await stateRegistrar('beforeLoop', this);
     }
-    await this.loop(loops, loopValue, advanceBlocks, stateRegistrar, swap1, swap2, rebalacingStrategy);
+    await this.loop(loops, loopValue, advanceBlocks, stateRegistrar, swap1, swap2, rebalacingStrategy, makeVolume);
     await this.postLoopCheck();
     Misc.printDuration('HardWork test finished', start);
     if (stateRegistrar) {
@@ -222,6 +223,7 @@ export class DoHardWorkLoopBase {
     swap1?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
     swap2?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
     rebalancingStrategy?: boolean,
+    makeVolume?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
   ) {
     console.log('loop... loops, loopValue, advanceBlocks', loops, loopValue, advanceBlocks);
     const techSigner = await DeployerUtilsLocal.impersonate()
@@ -244,6 +246,11 @@ export class DoHardWorkLoopBase {
           console.log('Rebalance..')
           await rebalancingStrategyContract.rebalance()
         }
+      }
+
+      // *********** MAKE VOLUME **************
+      if (makeVolume && i % 3 === 0) {
+        await makeVolume(this.strategy, techSigner)
       }
 
       // *********** DO HARD WORK **************
