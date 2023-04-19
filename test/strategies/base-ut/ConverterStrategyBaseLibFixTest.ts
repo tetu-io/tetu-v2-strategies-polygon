@@ -16,6 +16,7 @@ import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
 } from "../../baseUT/GasLimits";
+import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -1658,14 +1659,21 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
       const r = await forwarder.getLastRegisterIncomeResults();
       return {
-        amountsToForwarder: r.amounts.map((amount, index) => +formatUnits(amount, decimals[index])),
+        amountsToForwarder: await Promise.all(
+          r.amounts.map(
+            async (amount, index) => +formatUnits(
+              amount,
+              await IERC20Metadata__factory.connect(r.tokens[index], signer).decimals()
+            )
+          )
+        ),
         tokensToForwarder: r.tokens,
         isDistributeToForwarder: r.isDistribute,
         splitterToForwarder: r.vault,
         allowanceForForwarder: await Promise.all(
-          p.tokens.map(
+          r.tokens.map(
             async (token, index) => +formatUnits(
-              await token.allowance(facade.address, forwarder.address),
+              await IERC20Metadata__factory.connect(token, signer).allowance(facade.address, forwarder.address),
               decimals[index])
             ),
         )
@@ -1677,7 +1685,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       async function makeSendTokensToForwarderFixture(): Promise<ISendTokensToForwarderResults> {
         return makeSendTokensToForwarderTest({
           tokens: [usdc, usdt, dai, tetu],
-          amounts: ["100", "1", "5000", "0"],
+          amounts: ["100", "1", "5000", "5"],
           vault: VAULT
         });
       }
@@ -1687,7 +1695,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       it("forwarder should receive expected amounts", async () => {
         const r = await loadFixture(makeSendTokensToForwarderFixture);
-        expect(r.amountsToForwarder.join()).eq([100, 1, 5000, 0].join());
+        expect(r.amountsToForwarder.join()).eq([100, 1, 5000, 5].join());
       });
       it("forwarder should receive expected allowance", async () => {
         const r = await loadFixture(makeSendTokensToForwarderFixture);
@@ -1700,6 +1708,32 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       it("forwarder should receive isDistribute=true", async () => {
         const r = await loadFixture(makeSendTokensToForwarderFixture);
         expect(r.isDistributeToForwarder).eq(true);
+      });
+    });
+    describe("zero case", () => {
+      const VAULT = ethers.Wallet.createRandom().address;
+      async function makeSendTokensToForwarderFixture(): Promise<ISendTokensToForwarderResults> {
+        return makeSendTokensToForwarderTest({
+          tokens: [usdc, usdt, dai, tetu],
+          amounts: ["100", "0", "5000", "0"],
+          vault: VAULT
+        });
+      }
+      it("should filter out zero tokens", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.tokensToForwarder.join()).eq([usdc.address, dai.address].join());
+      });
+      it("should filter out zero amounts", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.amountsToForwarder.join()).eq([100, 5000].join());
+      });
+      it("forwarder should receive expected allowance", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        const gt: boolean[] = [];
+        for (let i = 0; i < r.tokensToForwarder.length; ++i) {
+          gt.push(r.allowanceForForwarder[i] >= r.amountsToForwarder[i]);
+        }
+        expect(gt.join()).eq([true, true].join());
       });
     });
   });
