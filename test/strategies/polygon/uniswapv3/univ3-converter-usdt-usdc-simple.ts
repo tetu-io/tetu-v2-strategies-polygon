@@ -150,6 +150,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
     for (let i = 0; i < cycles; i++) {
+      const pathOut = `./tmp/states.${i}.csv`;
       console.log('------------------ CYCLE', i, '------------------');
 
       const sharePriceBefore = await vault.sharePrice();
@@ -188,6 +189,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         decimals,
       );
       const state2 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s2");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2], true);
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
       expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, 100);
@@ -201,8 +203,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         decimals,
       );
       const state3 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s3");
-      const pathOut = "./tmp/states.csv";
-      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3]);
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], true);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, 100);
@@ -215,6 +216,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
+      const state4 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s4");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], true);
 
       const sharePriceAfterWithdraw3 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, 1000);
@@ -235,7 +238,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
 
     // todo test on higher value
-    const cycles = 10;
+    const cycles = 100;
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));

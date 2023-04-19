@@ -106,8 +106,8 @@ export class Uniswapv3StateUtils {
     const pool = await IUniswapV3Pool__factory.connect(depositorState.pool, signer);
     const slot0 = await pool.slot0();
 
-    console.log("slot0", slot0);
-    console.log("state", depositorState);
+    // console.log("slot0", slot0);
+    // console.log("state", depositorState);
     const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
       slot0.sqrtPriceX96,
       depositorState.lowerTick,
@@ -367,7 +367,7 @@ export class Uniswapv3StateUtils {
   /**
    * Put data of a state into a separate column
    */
-  public static async saveListStatesToCSVColumns(pathOut: string, states: IState[]) {
+  public static async saveListStatesToCSVColumns(pathOut: string, states: IState[], override: boolean = false) {
     const { stateHeaders, stateDecimals } = this.getCsvData();
     const headers = [
       '',
@@ -424,7 +424,10 @@ export class Uniswapv3StateUtils {
       item.prices.usdt
     ]);
 
-    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' });
+    writeFileSyncRestoreFolder(
+      pathOut,
+      headers.join(';') + '\n',
+      { encoding: 'utf8', flag: override ? 'w' : 'a'});
     for (let i = 0; i < stateHeaders.length; ++i) {
       const line = [stateHeaders[i], ...rows.map(x => x[i])];
       writeFileSync(
@@ -434,7 +437,7 @@ export class Uniswapv3StateUtils {
             ? +formatUnits(x, stateDecimals[i])
             : '' + x,
         ).join(';') + '\n',
-        { encoding: 'utf8', flag: 'a' },
+        { encoding: 'utf8', flag: 'a'},
       );
     }
   }
