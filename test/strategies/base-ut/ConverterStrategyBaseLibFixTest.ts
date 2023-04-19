@@ -756,7 +756,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
           async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
             return makeClosePositionToGetRequestedAmountTest({
-              requestedAmount: "2500", // usdc
+              requestedAmount: "500", // usdc
               tokens: [usdc, dai],
               indexAsset: 0,
               balances: ["2000", "910"], // usdc, dai
