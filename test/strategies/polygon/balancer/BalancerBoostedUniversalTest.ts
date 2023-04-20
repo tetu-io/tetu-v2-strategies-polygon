@@ -8,13 +8,13 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import {
   getConverterAddress,
-  getDForcePlatformAdapter,
+  getDForcePlatformAdapter, Misc,
 } from '../../../../scripts/utils/Misc';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { ethers } from 'hardhat';
 import {
   BalancerBoostedStrategy,
-  BalancerBoostedStrategy__factory,
+  BalancerBoostedStrategy__factory, ControllerV2__factory,
   IERC20Metadata__factory,
   IStrategyV2,
   TetuVaultV2
@@ -70,6 +70,25 @@ describe('BalancerBoostedUniversalTest', async () => {
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+
+    const controller = ControllerV2__factory.connect(core.controller, signer)
+    const operators = await controller.operatorsList();
+    const operator = await Misc.impersonate(operators[0]);
+    const pools = [
+      {
+        pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        tokenIn: MaticAddresses.DAI_TOKEN,
+        tokenOut: MaticAddresses.USDC_TOKEN,
+      },
+      {
+        pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        tokenIn: MaticAddresses.USDT_TOKEN,
+        tokenOut: MaticAddresses.USDC_TOKEN,
+      },
+    ]
+    await deployInfo.tools?.liquidator.connect(operator).addBlueChipsPools(pools, true)
   });
 
   after(async function() {
