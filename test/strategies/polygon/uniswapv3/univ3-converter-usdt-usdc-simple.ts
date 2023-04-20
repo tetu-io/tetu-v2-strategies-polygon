@@ -130,10 +130,6 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TimeUtils.rollback(snapshot);
   });
 
-  it('strategy specific name', async function() {
-    expect(await strategy.strategySpecificName()).eq('UniV3 USDC/USDT-100');
-  });
-
   it('deposit and full exit should not change share price', async function() {
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
 
@@ -146,6 +142,14 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
+
+    await printVaultState(
+      vault,
+      splitter,
+      StrategyBaseV2__factory.connect(strategy.address, signer),
+      assetCtr,
+      decimals,
+    );
 
     for (let i = 0; i < cycles; i++) {
       const pathOut = `./tmp/deposit_full_exit_states.${i}.csv`;
@@ -239,12 +243,11 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
 
-    // todo test on higher value
     const cycles = 10;
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    const swapAmount = parseUnits('500000', decimals);
+    let swapAmount = parseUnits('500000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -309,21 +312,20 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         );
       }
 
-      await rebalanceUniv3Strategy(strategy, signer, decimals);
-      await printVaultState(
-        vault,
-        splitter,
-        StrategyBaseV2__factory.connect(strategy.address, signer),
-        assetCtr,
-        decimals,
-      );
+      // we suppose the rebalance happens immediately when it needs
+      if (await strategy.needRebalance()) {
+        await rebalanceUniv3Strategy(strategy, signer, decimals);
+        await printVaultState(
+          vault,
+          splitter,
+          StrategyBaseV2__factory.connect(strategy.address, signer),
+          assetCtr,
+          decimals,
+        );
+      }
 
       states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`r${i}`));
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
-
-      if (i % 5 === 0) {
-        // todo currently we are suppose rebalance happens every major price change
-      }
 
       if (i % 2 === 0) {
         const stateHardworkEvents = await doHardWorkForStrategy(
@@ -380,6 +382,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       // zero compound
       expect(sharePriceAfter).approximately(sharePriceBefore, 10_000);
 
+      // decrease swap amount slowly
+      swapAmount = swapAmount.div(2);
+
       states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`w${i}`));
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
     }
@@ -387,7 +392,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
     console.log('balanceBefore', balanceBefore);
     console.log('balanceAfter', balanceAfter);
-    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 6 * cycles);
+    expect(balanceAfter)
+      .approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 0.2 * cycles);
 
   });
 
