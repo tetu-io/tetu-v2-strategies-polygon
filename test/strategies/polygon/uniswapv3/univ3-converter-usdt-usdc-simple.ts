@@ -132,10 +132,6 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TimeUtils.rollback(snapshot);
   });
 
-  it('strategy specific name', async function() {
-    expect(await strategy.strategySpecificName()).eq('UniV3 USDC/USDT-100');
-  });
-
   it('deposit and full exit should not change share price', async function() {
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
 

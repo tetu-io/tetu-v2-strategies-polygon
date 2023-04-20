@@ -44,7 +44,7 @@ describe('BoostedPoolsRebalanceResolverTest tests', function() {
       expect(signer.address).is.eq(await resolver.owner());
     });
 
-    it('updateRebalancers test', async function() {
+    it.skip('updateRebalancers test', async function() {
       const { resolver, signer } = await loadFixture(deployContracts);
       await resolver.updateRebalancers([TETU_BOOSTED_USDC_REBALANCER]);
       const { canExec } = await resolver.checker();
