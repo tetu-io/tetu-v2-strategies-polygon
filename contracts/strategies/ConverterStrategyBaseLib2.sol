@@ -94,6 +94,7 @@ library ConverterStrategyBaseLib2 {
       AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
     }
 
+    (tokens_, amounts_) = TokenAmountsLib.filterZeroAmounts(tokens_, amounts_);
     forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
   }
 
