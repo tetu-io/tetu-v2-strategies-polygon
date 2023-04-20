@@ -238,7 +238,7 @@ library ConverterStrategyBaseLib2 {
   /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
   /// @param amountsOut Amounts of available rewards
   function claimConverterRewards(
-    ITetuConverter tetuConverter_,
+    ITetuConverter converter_,
     address[] memory tokens_,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_,
@@ -248,7 +248,7 @@ library ConverterStrategyBaseLib2 {
     uint[] memory amountsOut
   ) {
     // Rewards from TetuConverter
-    (address[] memory tokensTC, uint[] memory amountsTC) = tetuConverter_.claimRewards(address(this));
+    (address[] memory tokensTC, uint[] memory amountsTC) = converter_.claimRewards(address(this));
 
     // Join arrays and recycle tokens
     (tokensOut, amountsOut) = TokenAmountsLib.combineArrays(

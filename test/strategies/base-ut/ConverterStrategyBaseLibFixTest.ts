@@ -1738,5 +1738,16 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
+  describe("claimConverterRewards", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+// todo
+      });
+    });
+    describe("Bad paths", () => {
+// todo
+    });
+  });
+
 //endregion Unit tests
 });
