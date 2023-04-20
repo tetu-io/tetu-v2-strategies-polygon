@@ -1,12 +1,12 @@
-import {ethers} from "hardhat";
-import axios from "axios";
-import {config as dotEnvConfig} from "dotenv";
-import logSettings from "../../log_settings";
-import {Logger} from "tslog";
+import { ethers } from 'hardhat';
+import axios from 'axios';
+import { config as dotEnvConfig } from 'dotenv';
+import logSettings from '../../log_settings';
+import { Logger } from 'tslog';
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
-const log: Logger = new Logger(logSettings);
+const log: Logger<undefined> = new Logger(logSettings);
 
 
 dotEnvConfig();

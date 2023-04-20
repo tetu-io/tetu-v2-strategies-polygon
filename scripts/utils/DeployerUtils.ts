@@ -1,20 +1,23 @@
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {Contract, ContractFactory} from "ethers";
-import logSettings from "../../log_settings";
-import {Logger} from "tslog";
-import {parseUnits} from "ethers/lib/utils";
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { Contract, ContractFactory } from 'ethers';
+import logSettings from '../../log_settings';
+import { Logger } from 'tslog';
+import { parseUnits } from 'ethers/lib/utils';
 import {
   ControllerMinimal,
   MockToken,
-  ProxyControlled, TetuVaultV2, TetuVaultV2__factory, VaultInsurance,
-} from "../../typechain";
-import {RunHelper} from "./RunHelper";
-import {deployContract} from "../deploy/DeployContract";
-import {ethers} from "hardhat";
+  ProxyControlled,
+  TetuVaultV2,
+  TetuVaultV2__factory,
+  VaultInsurance,
+} from '../../typechain';
+import { RunHelper } from './RunHelper';
+import { deployContract } from '../deploy/DeployContract';
+import { ethers } from 'hardhat';
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
-const log: Logger = new Logger(logSettings);
+const log: Logger<undefined> = new Logger(logSettings);
 
 
 export class DeployerUtils {
@@ -38,7 +41,7 @@ export class DeployerUtils {
 
   public static async deployProxy(signer: SignerWithAddress, contract: string) {
     const logic = await DeployerUtils.deployContract(signer, contract);
-    const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
+    const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
     await RunHelper.runAndWait(() => proxy.initProxy(logic.address));
     return proxy.address;
   }
@@ -57,7 +60,7 @@ export class DeployerUtils {
     buffer: number,
   ) {
     const logic = await DeployerUtils.deployContract(signer, 'TetuVaultV2') as TetuVaultV2;
-    const proxy = await DeployerUtils.deployContract(signer, 'ProxyControlled') as ProxyControlled;
+    const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
     await proxy.initProxy(logic.address);
     const vault = TetuVaultV2__factory.connect(proxy.address, signer);
     await vault.init(

@@ -1,39 +1,46 @@
 import {
+  Aave3AggregatorInterfaceMock, BalancerBoostedDepositorFacade,
+  BalancerLogicLibFacade,
+  ConverterStrategyBaseLibFacade, MockController,
   MockConverterStrategy,
-  MockConverterStrategy__factory, MockTetuConverterController,
-  MockTetuConverterSingleCall, MockTetuLiquidatorSingleCall,
-  PriceOracleMock
-} from "../../../typechain";
-import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {BigNumber} from "ethers";
+  MockConverterStrategy__factory,
+  MockForwarder, MockSplitterVault,
+  MockTetuConverter,
+  MockTetuConverterController,
+  MockTetuLiquidatorSingleCall,
+  PriceOracleMock, UniswapV3LibFacade,
+} from '../../../typechain';
+import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { BigNumber } from 'ethers';
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export class MockHelper {
-  public static async createMockConverterStrategy(signer: SignerWithAddress) : Promise<MockConverterStrategy> {
+  public static async createMockConverterStrategy(signer: SignerWithAddress): Promise<MockConverterStrategy> {
     return MockConverterStrategy__factory.connect(
       (await DeployerUtils.deployProxy(signer, 'MockConverterStrategy')),
-      signer
+      signer,
     );
   }
 
   public static async createPriceOracle(
     signer: SignerWithAddress,
     assets: string[],
-    prices: BigNumber[]
-  ) : Promise<PriceOracleMock> {
+    prices: BigNumber[],
+  ): Promise<PriceOracleMock> {
     return (await DeployerUtils.deployContract(
       signer,
       'PriceOracleMock',
       assets,
-      prices
+      prices,
     )) as PriceOracleMock;
   }
 
-  public static async createMockTetuConverterSingleCall(signer: SignerWithAddress): Promise<MockTetuConverterSingleCall> {
+  public static async createMockTetuConverter(signer: SignerWithAddress): Promise<MockTetuConverter> {
     return (await DeployerUtils.deployContract(
       signer,
-      'MockTetuConverterSingleCall',
-    )) as MockTetuConverterSingleCall;
+      'MockTetuConverter',
+    )) as MockTetuConverter;
   }
 
   public static async createMockTetuLiquidatorSingleCall(signer: SignerWithAddress): Promise<MockTetuLiquidatorSingleCall> {
@@ -45,12 +52,65 @@ export class MockHelper {
 
   public static async createMockTetuConverterController(
     signer: SignerWithAddress,
-    priceOracle: string
-  ) : Promise<MockTetuConverterController> {
+    priceOracle: string,
+  ): Promise<MockTetuConverterController> {
     return (await DeployerUtils.deployContract(
       signer,
       'MockTetuConverterController',
-      priceOracle
+      priceOracle,
     )) as MockTetuConverterController;
+  }
+
+  public static async createBalancerLogicLibFacade(signer: SignerWithAddress): Promise<BalancerLogicLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'BalancerLogicLibFacade')) as BalancerLogicLibFacade;
+  }
+
+  public static async createConverterStrategyBaseLibFacade(signer: SignerWithAddress): Promise<ConverterStrategyBaseLibFacade> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'ConverterStrategyBaseLibFacade',
+    )) as ConverterStrategyBaseLibFacade;
+  }
+
+  public static async createBalancerBoostedDepositorFacade(
+    signer: SignerWithAddress,
+    pool: string = MaticAddresses.BALANCER_POOL_T_USD
+  ): Promise<BalancerBoostedDepositorFacade> {
+    const ret = (await DeployerUtils.deployContract(
+      signer,
+      'BalancerBoostedDepositorFacade',
+    )) as BalancerBoostedDepositorFacade;
+    await ret.init(pool);
+    return ret;
+  }
+
+  public static async createMockForwarder(signer: SignerWithAddress): Promise<MockForwarder> {
+    return (await DeployerUtils.deployContract(signer, 'MockForwarder')) as MockForwarder;
+  }
+
+  public static async createMockController(signer: SignerWithAddress): Promise<MockController> {
+    return (await DeployerUtils.deployContract(signer, 'MockController')) as MockController;
+  }
+
+  public static async createMockSplitter(signer: SignerWithAddress): Promise<MockSplitterVault> {
+    return (await DeployerUtils.deployContract(signer, 'MockSplitterVault')) as MockSplitterVault;
+  }
+
+  public static async createAave3AggregatorInterfaceMock(
+    signer: SignerWithAddress,
+    price: BigNumber,
+  ): Promise<Aave3AggregatorInterfaceMock> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'Aave3AggregatorInterfaceMock',
+      price,
+    )) as Aave3AggregatorInterfaceMock;
+  }
+
+  public static async createUniswapV3LibFacade(signer: SignerWithAddress): Promise<UniswapV3LibFacade> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'UniswapV3LibFacade',
+    )) as UniswapV3LibFacade;
   }
 }

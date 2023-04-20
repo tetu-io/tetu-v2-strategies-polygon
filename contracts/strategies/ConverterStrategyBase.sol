@@ -1,54 +1,93 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
-import "../interfaces/converter/ITetuConverter.sol";
-import "../interfaces/converter/ITetuConverterCallback.sol";
-import "../interfaces/converter/IPriceOracle.sol";
-import "../interfaces/converter/IConverterController.sol";
-import "./depositors/DepositorBase.sol";
-import "../tools/TokenAmountsLib.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
+import "./ConverterStrategyBaseLib.sol";
+import "./ConverterStrategyBaseLib2.sol";
+import "./DepositorBase.sol";
 
-import "hardhat/console.sol";
+/////////////////////////////////////////////////////////////////////
+///                        TERMS
+///  Main asset == underlying: the asset deposited to the vault by users
+///  Secondary assets: all assets deposited to the internal pool except the main asset
+/////////////////////////////////////////////////////////////////////
 
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
-/// @author bogdoslav
+/// @author bogdoslav, dvpublic
 abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV2 {
   using SafeERC20 for IERC20;
+
+  /////////////////////////////////////////////////////////////////////
+  ///                        DATA TYPES
+  /////////////////////////////////////////////////////////////////////
+
+  struct WithdrawUniversalLocal {
+    bool all;
+    uint investedAssetsBeforeWithdraw;
+    uint[] reservesBeforeWithdraw;
+    uint totalSupplyBeforeWithdraw;
+    uint depositorLiquidity;
+    uint liquidityAmountToWithdraw;
+    uint assetPrice;
+    uint[] amountsToConvert;
+    uint expectedTotalMainAssetAmount;
+    uint[] expectedMainAssetAmounts;
+    uint[] repaidAmounts;
+    uint expectedBalanceInc;
+    uint investedAssetsAfterWithdraw;
+    uint balanceAfterWithdraw;
+    address[] tokens;
+    address asset;
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                        CONSTANTS
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.0.0";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.2";
 
-  // approx one month for average block time 2 sec
-  uint private constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
-
-  uint private constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
-  uint private constant _ASSET_LIQUIDATION_SLIPPAGE = 500; // 0.5%
+  uint internal constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
 
   /////////////////////////////////////////////////////////////////////
   //                        VARIABLES
   //                Keep names and ordering!
-  //                 Add only in the bottom.
+  // Add only in the bottom and don't forget to decrease gap variable
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Amount of underlying assets invested to the pool.
-  uint private _investedAssets;
+  uint internal _investedAssets;
 
   /// @dev Linked Tetu Converter
-  ITetuConverter public tetuConverter;
+  ITetuConverter public converter;
 
-  /// @dev Minimum token amounts to liquidate etc.
-  mapping(address => uint) public thresholds;
+  /// @notice Minimum token amounts that can be liquidated
+  mapping(address => uint) public liquidationThresholds;
 
-  event ThresholdChanged(address token, uint amount);
+  /// @notice Percent of asset amount that can be not invested, it's allowed to just keep it on balance
+  ///         decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
+  /// @dev We need this threshold to avoid numerous conversions of small amounts
+  uint public reinvestThresholdPercent;
 
+  /////////////////////////////////////////////////////////////////////
+  ///                        Events
+  /////////////////////////////////////////////////////////////////////
+  event LiquidationThresholdChanged(address token, uint amount);
+  event ReinvestThresholdPercentChanged(uint amount);
+  event OnDepositorEnter(uint[] amounts, uint[] consumedAmounts);
+  event OnDepositorExit(uint liquidityAmount, uint[] withdrawnAmounts);
+  event OnDepositorEmergencyExit(uint[] withdrawnAmounts);
+
+  /// @notice Recycle was made
+  /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
+  /// @param amountsToForward Amounts to be sent to forwarder
+  event Recycle(
+    address[] rewardTokens,
+    uint[] amountsToForward,
+    uint[] performanceAmounts
+  );
 
   /////////////////////////////////////////////////////////////////////
   //                Initialization and configuration
@@ -61,15 +100,26 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address converter_
   ) internal onlyInitializing {
     __StrategyBase_init(controller_, splitter_);
-    tetuConverter = ITetuConverter(converter_);
-    console.log("__ConverterStrategyBase_init, totalSupply", _depositorTotalSupply());
+    converter = ITetuConverter(converter_);
+
+    // 1% by default
+    reinvestThresholdPercent = REINVEST_THRESHOLD_DENOMINATOR / 100;
+    emit ReinvestThresholdPercentChanged(REINVEST_THRESHOLD_DENOMINATOR / 100);
   }
 
-  function setThreshold(address token, uint amount) public {
-    console.log("ConverterStrategyBase.setThreshold", token, amount);
-    _onlyOperators();
-    thresholds[token] = amount;
-    emit ThresholdChanged(token, amount);
+  function setLiquidationThreshold(address token, uint amount) external {
+    StrategyLib.onlyOperators(controller());
+    liquidationThresholds[token] = amount;
+    emit LiquidationThresholdChanged(token, amount);
+  }
+
+  /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
+  function setReinvestThresholdPercent(uint percent_) external {
+    StrategyLib.onlyOperators(controller());
+    require(percent_ <= REINVEST_THRESHOLD_DENOMINATOR, StrategyLib.WRONG_VALUE);
+
+    reinvestThresholdPercent = percent_;
+    emit ReinvestThresholdPercentChanged(percent_);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -82,299 +132,429 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @notice Deposit given amount to the pool.
-  function _depositToPool(uint amount) override internal virtual {
-    console.log('_depositToPool amount', amount);
-
-    address _asset = asset;
+  function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
+    uint strategyLoss
+  ){
+    uint updatedInvestedAssets;
+    // we need to compensate difference between last updated invested assets and the current value for do not allow share price fluctuation
+    (updatedInvestedAssets, strategyLoss) = _updateInvestedAssetsAndGetLoss(updateTotalAssetsBeforeInvest_);
     // skip deposit for small amounts
-    if (amount < thresholds[_asset]) {
-      console.log('_depositToPool thresholds', thresholds[_asset]);
-      return;
-    }
+    if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / REINVEST_THRESHOLD_DENOMINATOR) {
+      address _asset = asset;
+      uint balanceBefore = _balance(_asset);
+      (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
-    address[] memory tokens = _depositorPoolAssets();
-    (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
+      // prepare array of amounts ready to deposit, borrow missed amounts
+      uint[] memory amounts = _beforeDeposit(
+        converter,
+        amount_,
+        tokens,
+        indexAsset
+      );
 
-    uint len = tokens.length;
-    uint[] memory tokenAmounts = new uint[](len);
+      // make deposit, actually consumed amounts can be different from the desired amounts
+      (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+      emit OnDepositorEnter(amounts, consumedAmounts);
 
-    // split the amount on tokens proportionally sto the weights
-    for (uint i = 0; i < len; ++i) {
-      uint assetAmountForToken = amount * weights[i] / totalWeight;
-      address token = tokens[i];
+      // update _investedAssets with new deposited amount
+      uint updatedInvestedAssetsAfterDeposit = _updateInvestedAssets();
+      // after deposit some asset can exist
+      uint balanceAfter = _balance(_asset);
 
-      if (token == _asset) {
-        tokenAmounts[i] = assetAmountForToken;
-      } else {
-        uint tokenBalance = _balance(token);
-        if (tokenBalance >= assetAmountForToken) {
-          // we already have enough tokens
-           tokenAmounts[i] = tokenBalance;
-        } else {
-          // we do not have enough tokens - borrow
-          uint collateral = assetAmountForToken - tokenBalance;
-          _borrowPosition(_asset, collateral, token);
-          tokenAmounts[i] = _balance(token);
-        }
+      // we need to compensate difference if during deposit we lost some assets
+      if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (updatedInvestedAssets + balanceBefore)) {
+        strategyLoss += (updatedInvestedAssets + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
       }
     }
-
-    _depositorEnter(tokenAmounts);
-    _updateInvestedAssets();
-
-    console.log('Weights:');
-    TokenAmountsLib.print(tokens, weights);
-
-    console.log('Amounts for enter:');
-    TokenAmountsLib.print(tokens, tokenAmounts);
-
-    console.log('Balance after:');
-    TokenAmountsLib.printBalances(tokens, address(this));
   }
 
+  /////////////////////////////////////////////////////////////////////
+  ///               Convert amounts before deposit
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Prepare {tokenAmounts} to be passed to depositorEnter
+  /// @dev Override this function to customize entry kind
+  /// @param amount_ The amount of main asset that should be invested
+  /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
+  /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @return tokenAmounts Amounts of depositor's assets ready to invest (this array can be passed to depositorEnter)
+  function _beforeDeposit(
+    ITetuConverter tetuConverter_,
+    uint amount_,
+    address[] memory tokens_,
+    uint indexAsset_
+  ) internal virtual returns (
+    uint[] memory tokenAmounts
+  ) {
+    // calculate required collaterals for each token and temporary save them to tokenAmounts
+    (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
+    // temporary save collateral to tokensAmounts
+    tokenAmounts = ConverterStrategyBaseLib2.getCollaterals(
+      amount_,
+      tokens_,
+      weights,
+      totalWeight,
+      indexAsset_,
+      IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle())
+    );
+
+    // make borrow and save amounts of tokens available for deposit to tokenAmounts
+    tokenAmounts = ConverterStrategyBaseLib.getTokenAmounts(
+      tetuConverter_,
+      tokens_,
+      indexAsset_,
+      tokenAmounts,
+      liquidationThresholds[tokens_[indexAsset_]]
+    );
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                     Withdraw from the pool
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Withdraw given amount from the pool.
-  /// @param amount Amount to be withdrawn in terms of the asset.
-  /// @return investedAssetsUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
-  /// @return assetPrice Price of the {asset} from the price oracle
-  function _withdrawFromPool(uint amount) override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    console.log("_withdrawFromPool, amount", amount);
-    require(_investedAssets != 0, "CSB: no investments");
-    if (amount != 0 && _investedAssets != 0) {
-      uint liquidityAmount = _depositorLiquidity()  // total amount of LP tokens owned by the strategy
-        * 101 // add 1% on top...
-        * amount / _investedAssets // a part of amount that we are going to withdraw
-        / 100; // .. add 1% on top
-      console.log("_withdrawFromPool._investedAssets", _investedAssets);
-      console.log("_withdrawFromPool._depositorLiquidity()", _depositorLiquidity());
-      console.log("_withdrawFromPool.liquidityAmount", liquidityAmount);
-      (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(
-        liquidityAmount, // total amount of LP tokens to be withdrawn
-        _depositorTotalSupply(), // total amount of LP tokens in the pool
-        IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
-      );
-      console.log("_withdrawFromPool investedAssetsUSD, assetPrice", investedAssetsUSD, assetPrice);
-      _withdrawFromPoolUniversal(liquidityAmount, false);
-      console.log("_withdrawFromPool.liquidityAmount finish");
-    }
+  function _beforeWithdraw(uint /*amount*/) internal virtual {
+    // do nothing
+  }
 
-    return (investedAssetsUSD, assetPrice);
+  /// @notice Withdraw given amount from the pool.
+  /// @param amount Amount to be withdrawn in terms of the asset in addition to the exist balance.
+  /// @return expectedWithdrewUSD The value that we should receive after withdrawing (in USD, decimals of the {asset})
+  /// @return assetPrice Price of the {asset} from the price oracle
+  /// @return strategyLoss Loss should be covered from Insurance
+  function _withdrawFromPool(uint amount) override internal virtual returns (
+    uint expectedWithdrewUSD,
+    uint assetPrice,
+    uint strategyLoss
+  ) {
+    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(amount);
   }
 
   /// @notice Withdraw all from the pool.
-  /// @return investedAssetsUSD The value that we should receive after withdrawing
+  /// @return expectedWithdrewUSD The value that we should receive after withdrawing
   /// @return assetPrice Price of the {asset} taken from the price oracle
-  function _withdrawAllFromPool() override internal virtual returns (uint investedAssetsUSD, uint assetPrice) {
-    console.log("_withdrawAllFromPool.start");
-    // total amount of LP-tokens deposited by the strategy
-    uint liquidityAmount = _depositorLiquidity();
-
-    // predict expected amount to be withdrawn (in USD)
-    (investedAssetsUSD, assetPrice) = _getExpectedWithdrawnAmountUSD(
-      liquidityAmount,
-      _depositorTotalSupply(),
-      IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle())
-    );
-    _withdrawFromPoolUniversal(liquidityAmount, false);
-    console.log("_withdrawAllFromPool.finish");
-  }
-
-  /// @notice If pool support emergency withdraw need to call it for emergencyExit()
-  function _emergencyExitFromPool() override internal virtual {
-    _withdrawFromPoolUniversal(0, true);
-  }
-
-  function _withdrawFromPoolUniversal(uint liquidityAmount_, bool emergency_) internal {
-    // withdraw the amount from the depositor to balance of the strategy
-    if (emergency_) {
-      _depositorEmergencyExit();
-    } else {
-      console.log("_withdrawFromPoolUniversal liquidityAmount", liquidityAmount_);
-      _depositorExit(liquidityAmount_);
-    }
-
-    console.log('/// Balance after withdraw:');
-    TokenAmountsLib.printBalances(_depositorPoolAssets(), address(this));
-
-    // convert all received amounts to the asset
-    _convertDepositorPoolAssets();
-    _updateInvestedAssets();
-    console.log("_withdrawFromPoolUniversal.finish");
-  }
-
-  /// @notice Convert all amounts withdrawn from the depositor to {asset}
-  function _convertDepositorPoolAssets() internal {
-    address _asset = asset;
-    console.log('_convertDepositorPoolAssets balance before', _balance(_asset));
-
-    address[] memory tokens = _depositorPoolAssets();
-    uint len = tokens.length;
-
-    for (uint i = 0; i < len; ++i) {
-      address borrowedToken = tokens[i];
-      if (_asset != borrowedToken) {
-        _closePosition(_asset, borrowedToken, _balance(borrowedToken));
-      }
-    }
-    console.log('_convertDepositorPoolAssets balance after', _balance(_asset));
-  }
-
-  /// @notice Get amount of USD that we expect to receive after withdrawing, decimals of {asset}
-  ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
-  ///         investedAssetsUSD = reserve0 * ratio * price0 + reserve1 * ratio * price1 (+ set correct decimals)
-  /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
-  /// @param totalSupply_ Total amount of LP tokens in the depositor
-  /// @return investedAssetsUSD Amount of USD that we expect to receive after withdrawing, decimals of {asset}
-  /// @return assetPrice Price of {asset}, decimals 18
-  function _getExpectedWithdrawnAmountUSD(
-    uint liquidityAmount_,
-    uint totalSupply_,
-    IPriceOracle priceOracle_
-  ) internal view returns (
-    uint investedAssetsUSD,
-    uint assetPrice
+  /// @return strategyLoss Loss should be covered from Insurance
+  function _withdrawAllFromPool() override internal virtual returns (
+    uint expectedWithdrewUSD,
+    uint assetPrice,
+    uint strategyLoss
   ) {
-    console.log("_getExpectedWithdrawnAmountUSD.liquidityAmount_", liquidityAmount_);
-    console.log("_getExpectedWithdrawnAmountUSD.totalSupply_", totalSupply_);
-    address[] memory poolAssets = _depositorPoolAssets(); // token A - first, token B - second
-    uint[] memory reserves = _depositorPoolReserves(); // token A - first, token B - second
+    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(type(uint).max);
+  }
 
-    uint ratio = totalSupply_ == 0
-      ? 0
-      : (liquidityAmount_ >= totalSupply_
-        ? 1e18
-        : 1e18 * liquidityAmount_ / totalSupply_
-      ); // we need brackets here for npm.run.coverage
+  /// @param amount Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
+  /// @return expectedWithdrewUSD The value that we should receive after withdrawing in terms of USD value of each asset in the pool
+  /// @return __assetPrice Price of the {asset} taken from the price oracle
+  /// @return strategyLoss Loss before withdrawing: [new-investedAssets - old-investedAssets]
+  function _withdrawUniversal(uint amount) internal returns (
+    uint expectedWithdrewUSD,
+    uint __assetPrice,
+    uint strategyLoss
+  ) {
+    _beforeWithdraw(amount);
 
-    uint index0 = poolAssets[0] == asset ? 0 : 1;
-    uint index1 = index0 == 0 ? 1 : 0;
+    WithdrawUniversalLocal memory v;
+    v.all = amount == type(uint).max;
+    (v.investedAssetsBeforeWithdraw, strategyLoss) = _updateInvestedAssetsAndGetLoss(true);
 
-    assetPrice = priceOracle_.getAssetPrice(poolAssets[index0]);
-    uint priceSecond = priceOracle_.getAssetPrice(poolAssets[index1]);
-    console.log("_getExpectedWithdrawnAmountUSD.assetPrice", assetPrice);
-    console.log("_getExpectedWithdrawnAmountUSD.priceSecond", priceSecond);
+    if ((v.all || amount != 0) && v.investedAssetsBeforeWithdraw != 0) {
 
-    investedAssetsUSD = assetPrice == 0 || priceSecond == 0
-      ? 0 // it's better to return zero here than a half of the amount
-      : ratio * (
-        reserves[index0] * assetPrice
-        + reserves[index1] * priceSecond
-          * 10**IERC20Metadata(poolAssets[index0]).decimals()
-          / 10**IERC20Metadata(poolAssets[index1]).decimals()
-      ) / 1e18 / 1e18; // price, ratio
+      // --- init variables ---
+      v.tokens = _depositorPoolAssets();
+      v.asset = asset;
+      ITetuConverter _converter = converter;
+      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(v.tokens, v.asset);
+      uint balanceBefore = _balance(v.asset);
+
+      v.reservesBeforeWithdraw = _depositorPoolReserves();
+      v.totalSupplyBeforeWithdraw = _depositorTotalSupply();
+      v.depositorLiquidity = _depositorLiquidity();
+      v.assetPrice = ConverterStrategyBaseLib.getAssetPriceFromConverter(_converter, v.asset);
+      // -----------------------
+
+      // calculate how much liquidity we need to withdraw for getting the requested amount
+      (v.liquidityAmountToWithdraw, v.amountsToConvert) = ConverterStrategyBaseLib2.getLiquidityAmount(
+        v.all ? 0 : amount,
+        address(this),
+        v.tokens,
+        indexAsset,
+        _converter,
+        v.investedAssetsBeforeWithdraw,
+        v.depositorLiquidity
+      );
+
+      if (v.liquidityAmountToWithdraw != 0) {
+
+        // =============== WITHDRAW =====================
+        // make withdraw
+        uint[] memory withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
+        emit OnDepositorExit(v.liquidityAmountToWithdraw, withdrawnAmounts);
+        // ==============================================
+
+        // we need to call expectation after withdraw for calculate it based on the real liquidity amount that was withdrew
+        // it should be called BEFORE the converter will touch our positions coz we need to call quote the estimations
+        // amountsToConvert should contains amounts was withdrawn from the pool and amounts received from the converter
+        (v.expectedMainAssetAmounts, v.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
+          v.reservesBeforeWithdraw,
+          v.depositorLiquidity,
+          v.liquidityAmountToWithdraw,
+          v.totalSupplyBeforeWithdraw,
+          v.amountsToConvert,
+          v.tokens,
+          indexAsset,
+          _converter,
+          _depositorLiquidity(),
+          withdrawnAmounts
+        );
+      } else {
+        // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
+        v.expectedMainAssetAmounts = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+          v.tokens,
+          indexAsset,
+          _converter,
+          v.amountsToConvert
+        );
+      }
+
+      // convert amounts to main asset
+      // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts
+      v.expectedTotalMainAssetAmount += _makeRequestedAmount(
+        v.tokens,
+        indexAsset,
+        v.amountsToConvert,
+        _converter,
+        amount,
+        v.expectedMainAssetAmounts
+      );
+
+      v.investedAssetsAfterWithdraw = _updateInvestedAssets();
+      v.balanceAfterWithdraw = _balance(v.asset);
+
+      // we need to compensate difference if during withdraw we lost some assets
+      if ((v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw) < (v.investedAssetsBeforeWithdraw + balanceBefore)) {
+        strategyLoss += (v.investedAssetsBeforeWithdraw + balanceBefore) - (v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw);
+      }
+
+      return (
+      v.expectedTotalMainAssetAmount * v.assetPrice / 1e18,
+      v.assetPrice,
+      strategyLoss
+      );
+    }
+    return (0, 0, 0);
+  }
+
+  /// @notice If pool supports emergency withdraw need to call it for emergencyExit()
+  function _emergencyExitFromPool() override internal virtual {
+    uint[] memory withdrawnAmounts = _depositorEmergencyExit();
+    emit OnDepositorEmergencyExit(withdrawnAmounts);
+
+    // convert amounts to main asset
+    (address[] memory tokens, uint indexAsset) = _getTokens(asset);
+
+    uint[] memory amountsToConvert = ConverterStrategyBaseLib2.getAvailableBalances(tokens, indexAsset);
+
+    // convert all amounts to the main asset
+    _makeRequestedAmount(
+      tokens,
+      indexAsset,
+      amountsToConvert,
+      converter,
+      type(uint).max,
+      new uint[](tokens.length) // todo refactoring avoid creation of this array
+    );
+
+    // adjust _investedAssets
+    _updateInvestedAssets();
   }
 
   /////////////////////////////////////////////////////////////////////
-  ///                   Claim rewards
+  ///               Convert amounts after withdraw
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Convert {amountsToConvert_} to the main {asset}
+  ///         Swap leftovers (if any) to the main asset.
+  ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
+  /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
+  /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @param requestedAmount Amount to be withdrawn in terms of the asset in addition to the exist balance.
+  ///        Max uint means attempt to withdraw all possible invested assets.
+  /// @param amountsToConvert_ Amounts available for conversion after withdrawing from the pool
+  /// @param expectedMainAssetAmounts Amounts of main asset that we expect to receive after conversion amountsToConvert_
+  /// @return expectedAmount Expected total amount of main asset after all conversions, swaps and repays
+  function _makeRequestedAmount(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory amountsToConvert_,
+    ITetuConverter converter_,
+    uint requestedAmount,
+    uint[] memory expectedMainAssetAmounts
+  ) internal returns (
+    uint expectedAmount
+  ) {
+    // get the total expected amount
+    for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
+      expectedAmount += expectedMainAssetAmounts[i];
+    }
+
+    // we cannot repay a debt twice
+    // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
+    // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
+
+    ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
+    if (expectedAmount > requestedAmount * 101/100) {
+      // amountsToConvert_ are enough to get requestedAmount
+      ConverterStrategyBaseLib.convertAfterWithdraw(
+        converter_,
+        liquidator,
+        indexAsset_,
+        liquidationThresholds[tokens_[indexAsset_]],
+        tokens_,
+        amountsToConvert_
+      );
+    } else {
+      // amountsToConvert_ are NOT enough to get requestedAmount
+      // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
+      // We should try to close the exist debts instead:
+      //    convert a part of main assets to get amount of secondary assets required to repay the debts
+      // and only then make conversion.
+      expectedAmount = ConverterStrategyBaseLib.closePositionsToGetAmount(
+        converter_,
+        liquidator,
+        indexAsset_,
+        liquidationThresholds,
+        requestedAmount,
+        tokens_
+      ) + expectedMainAssetAmounts[indexAsset_];
+    }
+
+    return expectedAmount;
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///                 Claim rewards
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Claim all possible rewards.
-  function _claim() override internal virtual {
-    // TODO Enable claim. Now it reverted for some reason
-    console.log('_claim disabled...');
-    return;
+  function _claim() override internal virtual returns (address[] memory rewardTokens, uint[] memory amounts) {
+    // get rewards from the Depositor
+    (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts, uint[] memory depositorBalancesBefore) = _depositorClaimRewards();
 
-    // Rewards from the Depositor
-    address[] memory tokens1;
-    uint[] memory amounts1;
-    (tokens1, amounts1) = _depositorClaimRewards();
+    (rewardTokens, amounts) = ConverterStrategyBaseLib2.claimConverterRewards(
+      converter,
+      _depositorPoolAssets(),
+      depositorRewardTokens,
+      depositorRewardAmounts,
+      depositorBalancesBefore
+    );
+  }
 
-    // Rewards from TetuConverter
-    address[] memory tokens2;
-    uint[] memory amounts2;
-    (tokens2, amounts2) = tetuConverter.claimRewards(address(this));
+  /// @dev Call recycle process and send tokens to forwarder. Need to be separated from the claim process - the claim can be called by operator for other purposes.
+  function _rewardsLiquidation(address[] memory rewardTokens, uint[] memory amounts) internal {
+    uint len = rewardTokens.length;
+    if (len > 0) {
+      uint[] memory amountsToForward = _recycle(rewardTokens, amounts);
 
-    address[] memory tokens;
-    uint[] memory amounts;
-    // Join arrays and recycle tokens
-    (tokens, amounts) = TokenAmountsLib.unite(tokens1, amounts1, tokens2, amounts2);
-
-    TokenAmountsLib.print(tokens, amounts); // TODO remove
-
-
-    if (tokens.length > 0) {
-      _recycle(tokens, amounts);
+      // send forwarder-part of the rewards to the forwarder
+      ConverterStrategyBaseLib2.sendTokensToForwarder(controller(), splitter, rewardTokens, amountsToForward);
     }
   }
 
   /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
-  function _recycle(address[] memory tokens, uint[] memory amounts) internal {
-    require(tokens.length == amounts.length, "SB: Arrays mismatch");
+  /// We have two kinds of rewards:
+  /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
+  /// 2) any other rewards
+  /// All received rewards divided on two parts: to forwarder, to compound
+  ///   Compound-part of Rewards-2 can be liquidated
+  ///   Compound part of Rewards-1 should be just added to baseAmounts
+  /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
+  /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
+  /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
+  /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
+  /// @return amountsToForward Amounts to be sent to forwarder
+  function _recycle(
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_
+  ) internal returns (uint[] memory amountsToForward) {
+    // send performance-part of the rewards to performanceReceiver
+    (uint[] memory rewardAmounts, uint[] memory performanceAmounts) = ConverterStrategyBaseLib2.sendPerformanceFee(
+      performanceFee,
+      performanceReceiver,
+      splitter,
+      rewardTokens_,
+      rewardAmounts_
+    );
 
-    ITetuLiquidator _tetuLiquidator = ITetuLiquidator(IController(controller()).liquidator());
-    IForwarder _forwarder = IForwarder(IController(controller()).forwarder());
+    // send other part of rewards to forwarder/compound
+    (amountsToForward) = ConverterStrategyBaseLib.recycle(
+      converter,
+      asset,
+      compoundRatio,
+      _depositorPoolAssets(),
+      ITetuLiquidator(IController(controller()).liquidator()),
+      liquidationThresholds,
+      rewardTokens_,
+      rewardAmounts
+    );
 
-    address _asset = asset;
-    uint _compoundRatio = compoundRatio;
-    console.log('_recycle._compoundRatio', _compoundRatio);
-
-    uint len = tokens.length;
-    uint[] memory amountsToForward = new uint[](len);
-
-    // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
-    // the part-to-compound is converted to the main asset and kept on the balance up to the next investing
-    for (uint i = 0; i < len; ++i) {
-      address token = tokens[i];
-      uint amount = amounts[i];
-
-      console.log('_recycle.token, amount', token, amount);
-      if (amount != 0 && amount > thresholds[token]) {
-        uint amountToCompound = amount * _compoundRatio / COMPOUND_DENOMINATOR;
-        if (amountToCompound > 0) {
-          _liquidate(_tetuLiquidator, token, _asset, amountToCompound, _REWARD_LIQUIDATION_SLIPPAGE);
-        }
-
-        uint amountToForward = amount - amountToCompound;
-        console.log('amountToCompound', amountToCompound);
-        amountsToForward[i] = amountToForward;
-        console.log('amountToForward ', amountToForward);
-
-        _approveIfNeeded(token, amountToForward, address(_forwarder));
-      }
-    }
-
-    _forwarder.registerIncome(tokens, amountsToForward, ISplitter(splitter).vault(), true);
+    emit Recycle(
+      rewardTokens_,
+      amountsToForward,
+      performanceAmounts
+    );
   }
 
   /////////////////////////////////////////////////////////////////////
   ///                   Hardwork
   /////////////////////////////////////////////////////////////////////
 
+  /// @notice A virtual handler to make any action before hardwork
+  function _preHardWork(bool reInvest) internal virtual {}
+
+  /// @notice A virtual handler to make any action after hardwork
+  function _postHardWork() internal virtual {}
+
   /// @notice Is strategy ready to hard work
-  function isReadyToHardWork() override external pure returns (bool) {
+  function isReadyToHardWork() override external virtual view returns (bool) {
     // check claimable amounts and compare with thresholds
     return true;
   }
 
   /// @notice Do hard work
   function doHardWork() override public returns (uint, uint) {
+    require(msg.sender == splitter, StrategyLib.DENIED);
     return _doHardWork(true);
   }
 
+  /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
+  function _handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim);
+
+  /// @return earned Earned amount in terms of {asset}
+  /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    console.log('doHardWork...');
-    uint assetBalanceBefore = _balance(asset);
-    _claim();
-    uint assetBalanceAfter = _balance(asset);
-    earned = assetBalanceAfter - assetBalanceBefore;
+    uint investedAssetsBefore = _investedAssets;
+    uint investedAssetsLocal = _updateInvestedAssets();
 
-    lost = 0;
+    // register autocompound income or possible lose if assets fluctuated
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
+    // ATTENTION! splitter will not cover the loss if it is lower than profit
 
-    if (reInvest && assetBalanceAfter > 0) {// re-invest income
-      uint investedBefore = _investedAssets;
-      _depositToPool(assetBalanceAfter);
-      uint investedAfter = _investedAssets;
+    _preHardWork(reInvest);
 
-      if (investedAfter > investedBefore) {
-        earned += investedAfter - investedBefore;
-      } else {
-        lost = investedBefore - investedAfter;
-      }
+
+    (uint earnedFromRewards, uint lostFromRewards, uint assetBalance) = _handleRewards();
+    earned += earnedFromRewards;
+    lost += lostFromRewards;
+
+    // re-invest income
+    if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / REINVEST_THRESHOLD_DENOMINATOR) {
+      uint assetInUseBefore = investedAssetsLocal + assetBalance;
+      _depositToPool(assetBalance, false);
+
+      (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetInUseBefore, _investedAssets + _balance(asset), earned, lost);
+      // todo check
     }
+
+    _postHardWork();
   }
 
 
@@ -383,200 +563,125 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Updates cached _investedAssets to actual value
-  /// @dev Should be called after deposit / withdraw / claim
-  function _updateInvestedAssets() internal {
-    console.log('_updateInvestedAssets _investedAssets BEFORE', _investedAssets);
-    _investedAssets = calcInvestedAssets();
-    console.log('_updateInvestedAssets _investedAssets AFTER', _investedAssets);
+  /// @dev Should be called after deposit / withdraw / claim; virtual - for ut
+  function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
+    investedAssetsOut = _calcInvestedAssets();
+    _investedAssets = investedAssetsOut;
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
-  /// @dev This is writable function because quoteRepay is writable (it updates current balances in the internal pools)
-  /// @return estimatedAssets Invested asset amount under control (in terms of {asset})
-  function calcInvestedAssets() public returns (uint estimatedAssets) {
-    uint[] memory amountsOut = _depositorQuoteExit(_depositorLiquidity());
-    address[] memory tokens = _depositorPoolAssets();
+  /// @dev This is writable function because we need to update current balances in the internal protocols.
+  /// @return Invested asset amount under control (in terms of {asset})
+  function _calcInvestedAssets() internal returns (uint) {
+    (address[] memory tokens, uint indexAsset) = _getTokens(asset);
+    return ConverterStrategyBaseLib.calcInvestedAssets(
+      tokens,
+      // quote exit should check zero liquidity
+      _depositorQuoteExit(_depositorLiquidity()),
+      indexAsset,
+      converter
+    );
+  }
 
-    address _asset = asset;
-    estimatedAssets = 0;
-    console.log("calcInvestedAssets._asset", _asset);
+  function calcInvestedAssets() external returns (uint) {
+    return _calcInvestedAssets();
+  }
 
-    uint len = tokens.length;
-    for (uint i = 0; i < len; ++i) {
-      address borrowedToken = tokens[i];
-      estimatedAssets += _asset == borrowedToken
-        ? amountsOut[i]
-        : tetuConverter.quoteRepay(address(this), _asset, borrowedToken, _balance(borrowedToken) + amountsOut[i]);
-      console.log("_balance(borrowedToken)", _balance(borrowedToken));
-      console.log("amountsOut[i]", amountsOut[i]);
-      console.log("estimatedAssets", estimatedAssets);
-    }
-    console.log("calcInvestedAssets.estimatedAssets", estimatedAssets);
+  /// @notice Update invested assets and return possible lose [new-investedAssets - old-investedAssets]
+  /// @param updateTotalAssetsBeforeInvest_ If false - skip update, return delta = 0
+  function _updateInvestedAssetsAndGetLoss(bool updateTotalAssetsBeforeInvest_) internal returns (
+    uint updatedInvestedAssets,
+    uint loss
+  ) {
+    uint __investedAssets = _investedAssets;
+
+    updatedInvestedAssets = updateTotalAssetsBeforeInvest_
+      ? _updateInvestedAssets()
+      : __investedAssets;
+
+    loss = updateTotalAssetsBeforeInvest_
+      ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
+      : uint(0);
   }
 
   /////////////////////////////////////////////////////////////////////
   ///               ITetuConverterCallback
   /////////////////////////////////////////////////////////////////////
 
-  function requireAmountBack(
-    address collateralAsset_,
-    uint requiredAmountCollateralAsset_,
-    address /*borrowAsset_*/,
-    uint /*requiredAmountBorrowAsset_*/
-  ) external override returns (
-    uint amountOut,
-    bool isCollateral
-  ) {
-    address _tetuConverter = address(tetuConverter);
-    require(msg.sender == _tetuConverter, "CSB: Only TetuConverter");
-    require(collateralAsset_ == asset, 'CSB: Wrong asset');
+  /// @notice Converters asks to send some amount back.
+  /// @param theAsset_ Required asset (either collateral or borrow)
+  /// @param amount_ Required amount of the {theAsset_}
+  /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
+  function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
+    // requirements in swapToGivenAmountAndSendToConverter()
 
-    amountOut = 0;
-    uint assetBalance = _balance(collateralAsset_);
+    // detect index of the target asset
+    (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
+    // get amount of target asset available to be sent
+    uint balance = _balance(theAsset_);
+    uint[] memory withdrawnAmounts = new uint[](tokens.length);
 
-    if (assetBalance >= requiredAmountCollateralAsset_) {
-      amountOut = requiredAmountCollateralAsset_;
-
-    } else {
-      // we assume if withdraw less amount then requiredAmountCollateralAsset_
-      // it will be rebalanced in the next call
-      _withdrawFromPool(requiredAmountCollateralAsset_ - assetBalance);
-      amountOut = _balance(collateralAsset_);
+    // withdraw from the pool if not enough
+    if (balance < amount_) {
+      // the strategy doesn't have enough target asset on balance
+      // withdraw all from the pool but don't convert assets to underlying
+      uint liquidity = _depositorLiquidity();
+      if (liquidity != 0) {
+        withdrawnAmounts = _depositorExit(liquidity);
+        emit OnDepositorExit(liquidity, withdrawnAmounts);
+      }
     }
 
-    IERC20(collateralAsset_).safeTransfer(_tetuConverter, amountOut);
-    isCollateral = true;
-  }
-
-  function onTransferBorrowedAmount(
-    address /*collateralAsset_*/,
-    address /*borrowAsset_*/,
-    uint /*amountBorrowAssetSentToBorrower_*/
-  ) override pure external {
-    // noop; will deposit amount received at the next hardwork
-  }
-
-
-  /////////////////////////////////////////////////////////////////////
-  ///                        HELPERS
-  /////////////////////////////////////////////////////////////////////
-
-  function _borrowPosition(
-    address collateralAsset,
-    uint collateralAmount,
-    address borrowAsset
-  ) internal returns (uint borrowedAmountOut) {
-    console.log('_borrowPosition col, amt, bor', collateralAsset, collateralAmount, borrowAsset);
-    ITetuConverter _tetuConverter = tetuConverter;
-
-    _approveIfNeeded(collateralAsset, collateralAmount, address(_tetuConverter));
-    (address converter, uint maxTargetAmount, /*int apr18*/) = _tetuConverter.findBorrowStrategy(
-      collateralAsset,
-      collateralAmount,
-      borrowAsset,
-      _LOAN_PERIOD_IN_BLOCKS
+    amountOut = ConverterStrategyBaseLib.swapToGivenAmountAndSendToConverter(
+      amount_,
+      indexTheAsset,
+      tokens,
+      address(converter),
+      controller(),
+      asset,
+      liquidationThresholds
     );
-    console.log('converter, maxTargetAmount', converter, maxTargetAmount);
 
-    if (converter == address(0) || maxTargetAmount == 0) {
-      borrowedAmountOut = 0;
-    } else {
-      // we need to approve collateralAmount before the borrow-call but we already made the approval above
-      borrowedAmountOut = _tetuConverter.borrow(
-        converter,
-        collateralAsset,
-        collateralAmount,
-        borrowAsset,
-        maxTargetAmount,
-        address(this)
-      );
-    }
-
-    console.log('>>> BORROW collateralAmount', collateralAmount);
-    console.log('>>> BORROW borrowedAmount', borrowedAmountOut);
+    // update invested assets anyway, even if we suppose it will be called in other places
+    _updateInvestedAssets();
   }
 
-  /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
-  /// @dev If amount-to-repay is bigger then actual amount of debt, manually convert leftover to collateral amount
-  /// @param amountToRepay Amount to repay in terms of {borrowAsset}
-  function _closePosition(address collateralAsset, address borrowAsset, uint amountToRepay) internal returns (
-    uint returnedAssetAmount
-  ) {
-    ITetuConverter _tetuConverter = tetuConverter;
+  /// @notice TetuConverter calls this function when it sends any amount to user's balance
+  /// @param assets_ Any asset sent to the balance, i.e. inside repayTheBorrow
+  /// @param amounts_ Amount of {asset_} that has been sent to the user's balance
+  function onTransferAmounts(address[] memory assets_, uint[] memory amounts_) external override {
+    uint len = assets_.length;
+    require(len == amounts_.length, AppErrors.INCORRECT_LENGTHS);
 
-    // We shouldn't try to pay more than we actually need to repay
-    // The leftover will be swapped inside TetuConverter, it's inefficient.
-    // Let's limit amountToRepay by needToRepay-amount
-    (uint needToRepay,) = _tetuConverter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset);
-    uint leftover = amountToRepay > needToRepay
-      ? amountToRepay - needToRepay
-      : 0;
-
-    console.log('CLOSE POSITION initial amountToRepay', amountToRepay);
-    console.log('CLOSE POSITION needToRepay', needToRepay);
-    console.log('CLOSE POSITION leftover', leftover);
-
-    amountToRepay = amountToRepay < needToRepay
-      ? amountToRepay
-      : needToRepay;
-
-    // Make full/partial repayment
-    IERC20(borrowAsset).safeTransfer(address(_tetuConverter), amountToRepay);
-    uint returnedBorrowAmountOut;
-    (returnedAssetAmount,
-      returnedBorrowAmountOut,
-      /*uint swappedLeftoverCollateralOut*/,
-      /*uint swappedLeftoverBorrowOut*/
-    ) = _tetuConverter.repay(collateralAsset, borrowAsset, amountToRepay, address(this));
-
-    console.log('position closed: returnedAssetAmount:', returnedAssetAmount);
-    console.log('position closed: returnedBorrowAmountOut:', returnedBorrowAmountOut);
-    console.log('>>> REPAY amountToRepay', amountToRepay / 1e18);
-    require(returnedBorrowAmountOut == 0, 'CSB: Can not convert back');
-
-    // Manually swap remain leftover
-    if (leftover != 0) {
-      uint balanceBefore = _balance(collateralAsset);
-      ITetuLiquidator _tetuLiquidator = ITetuLiquidator(IController(controller()).liquidator());
-      _liquidate(_tetuLiquidator, borrowAsset, collateralAsset, leftover, _ASSET_LIQUIDATION_SLIPPAGE);
-      uint balanceAfter = _balance(collateralAsset);
-
-      console.log('SWAP LEFTOVER returned asset', balanceAfter - balanceBefore);
-      returnedAssetAmount += balanceAfter - balanceBefore;
-    }
+    // TetuConverter is able two call this function in two cases:
+    // 1) rebalancing (the health factor of some borrow is too low)
+    // 2) forcible closing of the borrow
+    // In both cases we update invested assets value here
+    // and avoid fixing any related losses in hardwork
+    _updateInvestedAssets();
   }
 
-  function _liquidate(
-    ITetuLiquidator _liquidator,
-    address tokenIn,
-    address tokenOut,
-    uint amountIn,
-    uint slippage
-  ) internal {
-    (ITetuLiquidator.PoolData[] memory route, /* string memory error*/) = _liquidator.buildRoute(tokenIn, tokenOut);
+  /////////////////////////////////////////////////////////////////////
+  ///                Others
+  /////////////////////////////////////////////////////////////////////
 
-    if (route.length == 0) {
-      revert('CSB: No liquidation route');
-    }
-
-    // calculate balance in out value for check threshold
-    uint amountOut = _liquidator.getPriceForRoute(route, amountIn);
-
-    // if the value higher than threshold distribute to destinations
-    if (amountOut > thresholds[tokenOut]) {
-      // we need to approve each time, liquidator address can be changed in controller
-      _approveIfNeeded(tokenIn, amountIn, address(_liquidator));
-      _liquidator.liquidateWithRoute(route, amountIn, slippage);
-    }
+  /// @notice Unlimited capacity by default
+  function capacity() external virtual view returns (uint) {
+    return 2 ** 255;
+    // almost same as type(uint).max but more gas efficient
   }
 
-
+  function _getTokens(address asset_) internal view returns (address[] memory tokens, uint indexAsset) {
+    tokens = _depositorPoolAssets();
+    indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset_);
+    require(indexAsset != type(uint).max, StrategyLib.WRONG_VALUE);
+  }
 
   /**
 * @dev This empty reserved space is put in place to allow future versions to add new
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-  uint[16] private __gap;
+  uint[46] private __gap;
 
 }

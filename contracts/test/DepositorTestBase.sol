@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../strategies/depositors/DepositorBase.sol";
+import "../strategies/DepositorBase.sol";
+
 
 /// @title Abstract Depositor Test Base contract.
 /// @author bogdoslav
@@ -25,8 +26,7 @@ abstract contract DepositorTestBase is DepositorBase {
   }
 
   /// @dev Quotes output for given lp amount from the pool.
-  function depositorQuoteExit(uint liquidityAmount)
-  external view returns (uint[] memory amountsOut) {
+  function depositorQuoteExit(uint liquidityAmount) external returns (uint[] memory amountsOut) {
     return _depositorQuoteExit(liquidityAmount);
   }
 
@@ -38,8 +38,8 @@ abstract contract DepositorTestBase is DepositorBase {
 
   /// @dev Claim all possible rewards.
   function depositorClaimRewards()
-  external returns (address[] memory rewardTokens, uint[] memory rewardAmounts) {
-    (rewardTokens, rewardAmounts) = _depositorClaimRewards();
+  external returns (address[] memory rewardTokens, uint[] memory rewardAmounts, uint[] memory depositorBalancesBefore) {
+    (rewardTokens, rewardAmounts, depositorBalancesBefore) = _depositorClaimRewards();
     _claimedRewardTokens = rewardTokens;
     _claimedRewardAmounts = rewardAmounts;
   }

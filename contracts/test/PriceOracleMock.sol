@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "../interfaces/converter/IPriceOracle.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "hardhat/console.sol";
 
 contract PriceOracleMock is IPriceOracle {

@@ -1,8 +1,8 @@
-import chai from "chai";
-import {BigNumber, ContractTransaction, Event, utils} from "ethers";
-import chaiAsPromised from "chai-as-promised";
+import chai from 'chai';
+import { BigNumber, ContractTransaction, Event, utils } from 'ethers';
+import chaiAsPromised from 'chai-as-promised';
 
-const {expect} = chai;
+const { expect } = chai;
 chai.use(chaiAsPromised);
 
 export class TestAsserts {
@@ -12,7 +12,7 @@ export class TestAsserts {
     eventName: string,
     // tslint:disable-next-line:no-any
     args: any[],
-    eIdx = 0
+    eIdx = 0,
   ) {
     const receipt = await tx.wait();
 

@@ -1,5 +1,5 @@
-import {fetchJson} from "ethers/lib/utils";
-import * as fs from "fs";
+import { fetchJson } from 'ethers/lib/utils';
+import * as fs from 'fs';
 
 const _getBlockUrl = 'https://api.polygonscan.com/api?module=proxy&action=eth_blockNumber';
 const _envFilename = '.env'

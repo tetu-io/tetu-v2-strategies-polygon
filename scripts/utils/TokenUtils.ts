@@ -1,16 +1,12 @@
-import {ethers} from "hardhat";
-import {
-  IWmatic__factory,
-  IERC20__factory,
-  IERC20Extended__factory,
-} from "../../typechain";
-import {BigNumber} from "ethers";
-import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {MaticAddresses} from "../MaticAddresses";
-import chai from "chai";
-import chaiAsPromised from "chai-as-promised";
-import {DeployerUtilsLocal} from "./DeployerUtilsLocal";
-import {parseUnits} from "ethers/lib/utils";
+import { ethers } from 'hardhat';
+import { IERC20__factory, IERC20Metadata__factory, IWmatic__factory } from '../../typechain';
+import { BigNumber } from 'ethers';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { MaticAddresses } from '../addresses/MaticAddresses';
+import chai from 'chai';
+import chaiAsPromised from 'chai-as-promised';
+import { DeployerUtilsLocal } from './DeployerUtilsLocal';
+import { parseUnits } from 'ethers/lib/utils';
 
 const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -25,7 +21,7 @@ export class TokenUtils {
     // [MaticAddresses.WBTC_TOKEN, '0xba12222222228d8ba445958a75a0704d566bf2c8'.toLowerCase()], // bal
     // [MaticAddresses.USDC_TOKEN, '0xBA12222222228d8Ba445958a75a0704d566BF2C8'.toLowerCase()], // bal
     [MaticAddresses.USDC_TOKEN, '0x1a13f4ca1d028320a707d99520abfefca3998b7f'.toLowerCase()], // aave
-    [MaticAddresses.USDT_TOKEN, '0x0D0707963952f2fBA59dD06f2b425ace40b492Fe'.toLowerCase()], // adr
+    [MaticAddresses.USDT_TOKEN, '0xF977814e90dA44bFA03b6295A0616a897441aceC'.toLowerCase()], // Binance: Hot Wallet
     [MaticAddresses.QUICK_TOKEN, '0xdB74C5D4F154BBD0B8e0a28195C68ab2721327e5'.toLowerCase()], // dquick
     [MaticAddresses.FRAX_TOKEN, '0x45c32fa6df82ead1e2ef74d17b76547eddfaff89'.toLowerCase()], // frax
     [MaticAddresses.TETU_TOKEN, '0x7ad5935ea295c4e743e4f2f5b4cda951f41223c2'.toLowerCase()], // fund keeper
@@ -109,15 +105,15 @@ export class TokenUtils {
   }
 
   public static async decimals(tokenAddress: string): Promise<number> {
-    return IERC20Extended__factory.connect(tokenAddress, ethers.provider).decimals();
+    return IERC20Metadata__factory.connect(tokenAddress, ethers.provider).decimals();
   }
 
   public static async tokenName(tokenAddress: string): Promise<string> {
-    return IERC20Extended__factory.connect(tokenAddress, ethers.provider).name();
+    return IERC20Metadata__factory.connect(tokenAddress, ethers.provider).name();
   }
 
   public static async tokenSymbol(tokenAddress: string): Promise<string> {
-    return IERC20Extended__factory.connect(tokenAddress, ethers.provider).symbol();
+    return IERC20Metadata__factory.connect(tokenAddress, ethers.provider).symbol();
   }
 
   public static async checkBalance(tokenAddress: string, account: string, amount: string) {
