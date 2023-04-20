@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
-import {IERC20__factory, IRebalancingStrategy, IStrategyV2, TetuVaultV2} from '../../../typechain';
+import { IERC20__factory, IRebalancingStrategy, IStrategyV2, TetuVaultV2 } from '../../../typechain';
 import { IToolsContractsWrapper } from '../../ToolsContractsWrapper';
 import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import { BigNumber, utils } from 'ethers';
@@ -10,7 +10,7 @@ import { TimeUtils } from '../../../scripts/utils/TimeUtils';
 import { expect } from 'chai';
 import { PriceCalculatorUtils } from '../../PriceCalculatorUtils';
 import { UniversalTestUtils } from './UniversalTestUtils';
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
+import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 
 export interface IBalances {
   userBalance: BigNumber;
@@ -226,31 +226,31 @@ export class DoHardWorkLoopBase {
     makeVolume?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
   ) {
     console.log('loop... loops, loopValue, advanceBlocks', loops, loopValue, advanceBlocks);
-    const techSigner = await DeployerUtilsLocal.impersonate()
+    const techSigner = await DeployerUtilsLocal.impersonate();
     for (let i = 0; i < loops; i++) {
       console.log('\n=====================\nloop i', i);
       const start = Date.now();
 
       // *********** SWAPS **************
       if (swap1 && i % 2 === 0) {
-        await swap1(this.strategy, techSigner)
+        await swap1(this.strategy, techSigner);
       }
       if (swap2 && i % 2 !== 0) {
-        await swap2(this.strategy, techSigner)
+        await swap2(this.strategy, techSigner);
       }
 
       // *********** REBALANCE **************
       if (rebalancingStrategy) {
-        const rebalancingStrategyContract = this.strategy as unknown as IRebalancingStrategy
+        const rebalancingStrategyContract = this.strategy as unknown as IRebalancingStrategy;
         if (await rebalancingStrategyContract.needRebalance()) {
-          console.log('Rebalance..')
-          await rebalancingStrategyContract.rebalance()
+          console.log('Rebalance..');
+          await rebalancingStrategyContract.rebalance();
         }
       }
 
       // *********** MAKE VOLUME **************
       if (makeVolume && i % 3 === 0) {
-        await makeVolume(this.strategy, techSigner)
+        await makeVolume(this.strategy, techSigner);
       }
 
       // *********** DO HARD WORK **************
@@ -383,7 +383,7 @@ export class DoHardWorkLoopBase {
     if (exit) {
       const balanceInVault = await this.userBalanceInVault();
       console.log('exit');
-      await this.vaultAsUser.withdrawAll();
+      await this.vaultAsUser.withdrawAll({ gasLimit: 9_000_000 });
       await this.userCheckBalanceInVault(BigNumber.from(0));
       await this.userCheckBalance(this.subWithdrawFee(balanceInVault));
 
@@ -392,7 +392,7 @@ export class DoHardWorkLoopBase {
       const userBalance = await this.userBalance();
       const userBalanceInVault = await this.userBalanceInVault();
 
-      await this.vaultAsUser.withdraw(amount, this.user.address, this.user.address);
+      await this.vaultAsUser.withdraw(amount, this.user.address, this.user.address, { gasLimit: 9_000_000 });
 
       await this.userCheckBalance(userBalance.add(amount));
       await this.userCheckBalanceInVault(userBalanceInVault.sub(this.addWithdrawFee(amount)));
@@ -435,7 +435,7 @@ export class DoHardWorkLoopBase {
     // expect(await this.strategy.totalAssets()).is.eq(0); // Converter strategy may have dust
 
     // need to call hard work to sell a little excess rewards
-    const splitterSigner = await DeployerUtilsLocal.impersonate(await this.strategy.splitter())
+    const splitterSigner = await DeployerUtilsLocal.impersonate(await this.strategy.splitter());
     await this.strategy.connect(splitterSigner).doHardWork();
 
 
