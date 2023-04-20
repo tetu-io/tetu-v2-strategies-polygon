@@ -1,4 +1,4 @@
-import {MockTetuConverter} from "../../../typechain";
+import {MockTetuConverter, MockToken, PriceOracleMock} from "../../../typechain";
 import {IQuoteRepayParams, IRepayParams} from "./TestDataTypes";
 import {parseUnits} from "ethers/lib/utils";
 
@@ -55,5 +55,12 @@ export async function setupMockedQuoteRepay(tetuConverter: MockTetuConverter, us
     parseUnits(p.amountRepay, decimalsBorrow),
     parseUnits(p.collateralAmountOut, decimalsCollateral),
     parseUnits(p.swappedAmountOut || "0", decimalsCollateral)
+  );
+}
+
+export async function setupPrices(priceOracleMock: PriceOracleMock, tokens: MockToken[], prices: string[]) {
+  await priceOracleMock.changePrices(
+    tokens.map(x => x.address),
+    prices.map(x => parseUnits(x, 18))
   );
 }
