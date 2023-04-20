@@ -1,20 +1,10 @@
-import {
-  IERC20__factory,
-  IERC20Metadata,
-  IStrategyV2__factory,
-  StrategyBaseV2,
-  StrategySplitterV2,
-  StrategySplitterV2__factory,
-  TetuVaultV2,
-} from '../typechain';
+import { IERC20__factory, IStrategyV2__factory, StrategySplitterV2__factory, TetuVaultV2 } from '../typechain';
 import { expect } from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { TokenUtils } from '../scripts/utils/TokenUtils';
 import { BigNumber, ContractTransaction, utils } from 'ethers';
 import { Misc } from '../scripts/utils/Misc';
-import { formatUnits } from 'ethers/lib/utils';
-import {DeployerUtils} from "../scripts/utils/DeployerUtils";
-import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
+import { DeployerUtilsLocal } from '../scripts/utils/DeployerUtilsLocal';
 
 /** Amounts earned/lost by the given strategies during the hardwork */
 export interface IDoHardworkAndCheckResults {
@@ -57,7 +47,7 @@ export class VaultUtils {
 
     await TokenUtils.approve(underlying, user, vault.address, amount.toString());
     console.log('Vault utils: deposit', BigNumber.from(amount).toString());
-    return vaultForUser.deposit(BigNumber.from(amount), user.address);
+    return vaultForUser.deposit(BigNumber.from(amount), user.address, { gasLimit: 9_000_000 });
   }
 
 
@@ -81,7 +71,7 @@ export class VaultUtils {
     console.log('start hard works');
     const splitterAddress = await vault.splitter();
     const splitter = StrategySplitterV2__factory.connect(splitterAddress, vault.signer);
-    const splitterSigner = await DeployerUtilsLocal.impersonate(splitterAddress)
+    const splitterSigner = await DeployerUtilsLocal.impersonate(splitterAddress);
 
     const subStrategies = await splitter.allStrategies();
     for (const subStrategy of subStrategies) {
@@ -91,7 +81,7 @@ export class VaultUtils {
 
       // handle HardWork-event to extract earned and lost values
       const { earned, lost } = await strategy.connect(splitterSigner).callStatic.doHardWork();
-      await strategy.connect(splitterSigner).doHardWork();
+      await strategy.connect(splitterSigner).doHardWork({gasLimit: 9_000_000});
       console.log(`Strategy=${strategyName} step earned=${earned} lost=${lost}`);
 
       dest.strategy.push(strategy.address);
