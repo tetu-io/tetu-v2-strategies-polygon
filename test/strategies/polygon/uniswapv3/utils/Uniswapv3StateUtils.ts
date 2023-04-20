@@ -1,6 +1,6 @@
 import {
   IConverterController__factory,
-  IERC20__factory, IPriceOracle__factory,
+  IERC20__factory, IPoolAdapter__factory, IPriceOracle__factory,
   ISplitter__factory,
   ITetuConverter__factory, IUniswapV3Pool__factory,
   StrategyBaseV2__factory,
@@ -11,7 +11,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber } from 'ethers';
 import hre from 'hardhat';
 import { writeFileSync } from 'fs';
-import { formatUnits } from 'ethers/lib/utils';
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import { writeFileSyncRestoreFolder } from '../../../../baseUT/utils/FileUtils';
 
 /**
@@ -68,7 +68,8 @@ export interface IState {
   };
   converter: {
     collateralForUsdt: BigNumber,
-    amountToRepayUsdt: BigNumber
+    amountToRepayUsdt: BigNumber,
+    healthFactors: number[]
   };
   prices: {
     usdc: BigNumber,
@@ -123,6 +124,15 @@ export class Uniswapv3StateUtils {
       MaticAddresses.USDC_TOKEN,
       MaticAddresses.USDT_TOKEN,
       false
+    );
+    const openedUsdtPositions = await converter.getPositions(strategy.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
+    const healthFactors = await Promise.all(
+      openedUsdtPositions.map(
+        async poolAdapter => {
+          const healthFactor = (await IPoolAdapter__factory.connect(poolAdapter, signer).getStatus()).healthFactor18;
+          return Math.round(+formatUnits(healthFactor, 18)*100)/100;
+        }
+      )
     );
 
     const depositorState = await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer).getState();
@@ -196,6 +206,7 @@ export class Uniswapv3StateUtils {
       converter: {
         collateralForUsdt: debtsUsdt.totalCollateralAmountOut,
         amountToRepayUsdt: debtsUsdt.totalDebtAmountOut,
+        healthFactors
       },
       prices: {
         usdc: await priceOracle.getAssetPrice(MaticAddresses.USDC_TOKEN),
@@ -255,6 +266,7 @@ export class Uniswapv3StateUtils {
 
       'converter.collateralUsdt',
       'converter.toRepayUsdt',
+      'converter.healthFactors',
 
       'price.usdc',
       'price.usdt',
@@ -329,6 +341,7 @@ export class Uniswapv3StateUtils {
 
       decimalsUSDC, // collateral for usdt
       decimalsUSDT, // amount to repay, usdt
+      0, // heatlth factors of all opened positions
 
       18,
       18,
@@ -395,6 +408,7 @@ export class Uniswapv3StateUtils {
 
         item.converter.collateralForUsdt,
         item.converter.amountToRepayUsdt,
+        item.converter.healthFactors.join(),
 
         item.prices.usdc,
         item.prices.usdt,
@@ -486,6 +500,7 @@ export class Uniswapv3StateUtils {
 
       item.converter.collateralForUsdt,
       item.converter.amountToRepayUsdt,
+      item.converter.healthFactors.join(),
 
       item.prices.usdc,
       item.prices.usdt,

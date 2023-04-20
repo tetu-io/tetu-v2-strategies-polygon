@@ -46,7 +46,7 @@ library UniswapV3DebtLib {
   /// @param tokenB The address of tokenB.
   /// @return totalDebtAmountOut The total debt amount out for the token pair.
   function getDebtTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalDebtAmountOut) {
-    (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, false);
+    (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, true);
   }
 
   /// @dev Closes the debt positions for the given token pair.
