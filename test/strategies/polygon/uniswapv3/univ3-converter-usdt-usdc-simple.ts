@@ -243,7 +243,6 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
 
-    // todo test on higher value
     const cycles = 10;
 
     const depositAmount1 = parseUnits('10000', decimals);
