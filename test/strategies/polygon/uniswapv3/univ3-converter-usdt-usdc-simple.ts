@@ -58,8 +58,6 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let asset: string;
   let assetCtr: IERC20Metadata;
   let decimals: number;
-  // let priceOracleManager: IPriceOracleManager;
-
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
@@ -108,7 +106,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
     const state = await strategy.getState()
-    await PriceOracleImitatorUtils.uniswapV3(signer, await strategy.converter(), state.pool, state.tokenA)
+    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
     // ---
 
     await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);

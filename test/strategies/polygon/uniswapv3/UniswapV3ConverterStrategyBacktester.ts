@@ -84,8 +84,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 41100000 - Apr-03-2023 03:29:23 PM +UTC
   // 41150000 - Apr-04-2023 10:43:06 PM +UTC
   // 41210000 - Apr-06-2023 11:23:04 AM +UTC
-  const backtestStartBlock = 41100000;
-  const backtestEndBlock = 41210000;
+  const backtestStartBlock = 41524672;
+  const backtestEndBlock = 41562855;
   const investAmount = parseUnits('1000', 6); // 1k USDC
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
@@ -119,7 +119,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       tickRange: 1200,
       rebalanceTickRange: 60,
     },*/
-    {
+    /*{
       pool: MaticAddresses.UNISWAPV3_USDC_DAI_100, // USDC_DAI_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.DAI_TOKEN,
@@ -127,7 +127,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
       tickRange: 0, // 1 tick
       rebalanceTickRange: 0, // 1 tick
-    },
+    },*/
     {
       pool: MaticAddresses.UNISWAPV3_USDC_USDT_100, // USDC_USDT_0.01%
       token0: MaticAddresses.USDC_TOKEN,
@@ -137,7 +137,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       tickRange: 0, // 1 tick
       rebalanceTickRange: 0, // 1 tick
     },
-    {
+    /*{
       pool: MaticAddresses.UNISWAPV3_USDC_miMATIC_100, // USDC_miMATIC_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.miMATIC_TOKEN,
@@ -145,7 +145,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
       tickRange: 1, // 2 ticks
       rebalanceTickRange: 1, // 1 tick
-    },
+    },*/
   ]
   // =========================
 

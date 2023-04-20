@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
-import { IERC20__factory, IStrategyV2, TetuVaultV2 } from '../../../typechain';
+import {IERC20__factory, IRebalancingStrategy, IStrategyV2, TetuVaultV2} from '../../../typechain';
 import { IToolsContractsWrapper } from '../../ToolsContractsWrapper';
 import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import { BigNumber, utils } from 'ethers';
@@ -97,6 +97,10 @@ export class DoHardWorkLoopBase {
     advanceBlocks: boolean,
     params: IDoHardWorkLoopInputParams,
     stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>,
+    swap1?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
+    swap2?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
+    rebalacingStrategy?: boolean,
+    makeVolume?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
   ) {
     const start = Date.now();
     this.loops = loops;
@@ -116,7 +120,7 @@ export class DoHardWorkLoopBase {
     if (stateRegistrar) {
       await stateRegistrar('beforeLoop', this);
     }
-    await this.loop(loops, loopValue, advanceBlocks, stateRegistrar);
+    await this.loop(loops, loopValue, advanceBlocks, stateRegistrar, swap1, swap2, rebalacingStrategy, makeVolume);
     await this.postLoopCheck();
     Misc.printDuration('HardWork test finished', start);
     if (stateRegistrar) {
@@ -216,11 +220,38 @@ export class DoHardWorkLoopBase {
     loopValue: number,
     advanceBlocks: boolean,
     stateRegistrar?: (title: string, h: DoHardWorkLoopBase) => Promise<void>,
+    swap1?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
+    swap2?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
+    rebalancingStrategy?: boolean,
+    makeVolume?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
   ) {
     console.log('loop... loops, loopValue, advanceBlocks', loops, loopValue, advanceBlocks);
+    const techSigner = await DeployerUtilsLocal.impersonate()
     for (let i = 0; i < loops; i++) {
       console.log('\n=====================\nloop i', i);
       const start = Date.now();
+
+      // *********** SWAPS **************
+      if (swap1 && i % 2 === 0) {
+        await swap1(this.strategy, techSigner)
+      }
+      if (swap2 && i % 2 !== 0) {
+        await swap2(this.strategy, techSigner)
+      }
+
+      // *********** REBALANCE **************
+      if (rebalancingStrategy) {
+        const rebalancingStrategyContract = this.strategy as unknown as IRebalancingStrategy
+        if (await rebalancingStrategyContract.needRebalance()) {
+          console.log('Rebalance..')
+          await rebalancingStrategyContract.rebalance()
+        }
+      }
+
+      // *********** MAKE VOLUME **************
+      if (makeVolume && i % 3 === 0) {
+        await makeVolume(this.strategy, techSigner)
+      }
 
       // *********** DO HARD WORK **************
       if (advanceBlocks) {
