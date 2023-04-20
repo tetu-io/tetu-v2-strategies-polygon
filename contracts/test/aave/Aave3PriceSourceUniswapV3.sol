@@ -73,7 +73,7 @@ contract Aave3PriceSourceUniswapV3 is AggregatorInterface {
       price = price * 10 ** (8 - tokenOutDecimals);
     }
 
-    console.log('Aave3PriceSourceUniswapV3 price', price);
+    // console.log('Aave3PriceSourceUniswapV3 price', price);
     return price;
   }
 
