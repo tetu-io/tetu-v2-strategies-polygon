@@ -2027,5 +2027,196 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
+  describe('recycle', () => {
+    interface IRecycleTestParams {
+      compoundRatio: number;
+
+      tokens: MockToken[];
+      assetIndex: number;
+
+      liquidations: ILiquidationParams[];
+      thresholds: ITokenAmountNum[];
+      initialBalances: ITokenAmountNum[];
+
+      rewardTokens: MockToken[];
+      rewardAmounts: string[];
+
+      isConversionValid?: boolean;
+    }
+
+    interface IRecycleTestResults {
+      gasUsed: BigNumber;
+
+      amountsToForward: string[];
+      tokenBalances: string[];
+      rewardTokenBalances: string[];
+    }
+
+    async function makeRecycle(p: IRecycleTestParams): Promise<IRecycleTestResults> {
+      // set up initial balances
+      for (const b of p.initialBalances) {
+        await b.token.mint(facade.address, parseUnits(b.amount, await b.token.decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        await setupIsConversionValid(
+          converter,
+          liquidation,
+          p.isConversionValid === undefined
+            ? true
+            : p.isConversionValid
+        )
+      }
+
+      // set up thresholds
+      for (const threshold of p.thresholds) {
+        await facade.setLiquidationThreshold(threshold.token.address, threshold.amount);
+      }
+
+      // make test
+      const amountsToForward = await facade.callStatic.recycle(
+        converter.address,
+        p.tokens[p.assetIndex].address,
+        p.compoundRatio,
+        p.tokens.map(x => x.address),
+        liquidator.address,
+        p.rewardTokens.map(x => x.address),
+        await Promise.all(p.rewardAmounts.map(
+          async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
+        ))
+      );
+      console.log(amountsToForward);
+
+      const tx = await facade.recycle(
+        converter.address,
+        p.tokens[p.assetIndex].address,
+        p.compoundRatio,
+        p.tokens.map(x => x.address),
+        liquidator.address,
+        p.rewardTokens.map(x => x.address),
+        await Promise.all(p.rewardAmounts.map(
+          async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
+        ))
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      return {
+        gasUsed,
+        amountsToForward: await Promise.all(amountsToForward.map(
+          async (amount, index) => (+formatUnits(amount, await p.rewardTokens[index].decimals())).toString()
+        )),
+        tokenBalances: await Promise.all(p.tokens.map(
+          async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
+        )),
+        rewardTokenBalances: await Promise.all(p.rewardTokens.map(
+          async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
+        )),
+      }
+    }
+
+    describe('Good paths', () => {
+      describe("Normal case - a lot of various reward tokens", () => {
+        let snapshot: string;
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
+
+        async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          return makeRecycle({
+            assetIndex: 1,
+            tokens: [usdt, usdc, dai],
+            rewardTokens: [usdc, usdt, weth, dai, tetu],
+            rewardAmounts: ["100", "200", "300", "400", "500"],
+            thresholds: [],
+            initialBalances: [
+              {token: usdc, amount: "10100"},
+              {token: usdt, amount: "20200"},
+              {token: weth, amount: "301"},  // 1 is dust token, we never use it
+              {token: dai, amount: "30400"},
+              {token: tetu, amount: "502"},  // 2 are dust tokens, we never use them
+            ],
+            compoundRatio: 10_000,
+            liquidations: [
+              {tokenIn: weth, amountIn: "30", tokenOut: usdc, amountOut: "33"},
+              {tokenIn: tetu, amountIn: "50", tokenOut: usdc, amountOut: "55"},
+            ]
+          });
+        }
+
+        it("should return expected amounts for the forwarder", async () => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.amountsToForward.join()).eq(["90", "180", "270", "360", "450"].join());
+        });
+        it("should not change balances of secondary depositior assets", async () => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.tokenBalances.join()).eq(["20200", "10188", "30400"].join()); // 10100+33+55 = 10188
+        });
+        it("should set expected balances of rewards tokens", async () => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.rewardTokenBalances.join()).eq(["10188", "20200", "271", "30400", "452"].join()); // 10100+33+55 = 10188
+        });
+      });
+      describe("Reward token is underlying", () => {
+        let snapshot: string;
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
+
+
+      });
+      describe("Reward token belongs to the list of depositor tokens", () => {
+        let snapshot: string;
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
+      });
+      describe("Reward doesn't token belong to the list of depositor tokens", () => {
+        let snapshot: string;
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
+      });
+      describe("Compound ratio is zero", () => {
+        let snapshot: string;
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
+      });
+      describe("Compound ratio is 100%", () => {
+        let snapshot: string;
+        before(async function () {snapshot = await TimeUtils.snapshot();});
+        after(async function () {await TimeUtils.rollback(snapshot);});
+      });
+    });
+    describe('Bad paths', () => {
+      describe("liquidationThresholds[main asset] is too high ", () => {
+        describe("liquidationThresholds[main asset] is higher DEFAULT_LIQUIDATION_THRESHOLD", () => {
+          let snapshot: string;
+          before(async function () {snapshot = await TimeUtils.snapshot();});
+          after(async function () {await TimeUtils.rollback(snapshot);});
+        });
+        describe("liquidationThresholds[main asset] is zero, DEFAULT_LIQUIDATION_THRESHOLD is used", () => {
+          let snapshot: string;
+          before(async function () {snapshot = await TimeUtils.snapshot();});
+          after(async function () {await TimeUtils.rollback(snapshot);});
+        });
+      });
+      describe("liquidationThresholds[reward token] is too high ", () => {
+        describe("liquidationThresholds[reward token] is higher DEFAULT_LIQUIDATION_THRESHOLD", () => {
+          let snapshot: string;
+          before(async function () {snapshot = await TimeUtils.snapshot();});
+          after(async function () {await TimeUtils.rollback(snapshot);});
+        });
+        describe("liquidationThresholds[reward token] is zero, DEFAULT_LIQUIDATION_THRESHOLD is used", () => {
+          let snapshot: string;
+          before(async function () {snapshot = await TimeUtils.snapshot();});
+          after(async function () {await TimeUtils.rollback(snapshot);});
+        });
+      });
+    });
+  });
+
+
 //endregion Unit tests
 });

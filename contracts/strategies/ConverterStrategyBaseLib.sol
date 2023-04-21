@@ -850,7 +850,7 @@ library ConverterStrategyBaseLib {
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds Liquidation thresholds for rewards tokens
-  /// @return amountsToForward Amounts to be sent to forwarder
+  /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder
   function recycle(
     ITetuConverter converter_,
     address asset,
@@ -884,7 +884,7 @@ library ConverterStrategyBaseLib {
         } else {
           if (p.amountToCompound < Math.max(liquidationThresholds[p.rewardToken], DEFAULT_LIQUIDATION_THRESHOLD)) {
             // amount is too small, liquidation is not allowed
-            // just keep on the balance, should be handled later
+            // we keep that dust tokens on balance forever
           } else {
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
