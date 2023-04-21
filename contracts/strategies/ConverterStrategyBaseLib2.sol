@@ -237,7 +237,7 @@ library ConverterStrategyBaseLib2 {
   /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
   /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
   /// @param amountsOut Amounts of available rewards
-  function claimConverterRewards(
+  function  claimConverterRewards(
     ITetuConverter converter_,
     address[] memory tokens_,
     address[] memory rewardTokens_,

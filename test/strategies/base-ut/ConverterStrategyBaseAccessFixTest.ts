@@ -1421,9 +1421,6 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         });
       });
     });
-    describe("Bad paths", () => {
-// todo
-    });
   });
   //endregion Unit tests
 });

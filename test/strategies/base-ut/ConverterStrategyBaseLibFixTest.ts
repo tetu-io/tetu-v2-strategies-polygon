@@ -8,7 +8,12 @@ import { expect } from 'chai';
 import { MockHelper } from '../../baseUT/helpers/MockHelper';
 import {Misc} from "../../../scripts/utils/Misc";
 import {BigNumber} from "ethers";
-import {ILiquidationParams, IQuoteRepayParams, IRepayParams} from "../../baseUT/mocks/TestDataTypes";
+import {
+  ILiquidationParams,
+  IQuoteRepayParams,
+  IRepayParams,
+  ITokenAmountNum
+} from "../../baseUT/mocks/TestDataTypes";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
@@ -33,7 +38,10 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   let tetu: MockToken;
   let usdt: MockToken;
   let weth: MockToken;
+  let bal: MockToken;
+  let unknown: MockToken;
   let facade: ConverterStrategyBaseLibFacade;
+  let mapTokenByAddress: Map<string, MockToken>;
   //endregion Variables
 
   //region before, after
@@ -46,11 +54,21 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     dai = await DeployerUtils.deployMockToken(signer, 'DAI');
     weth = await DeployerUtils.deployMockToken(signer, 'WETH', 18);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
+    bal = await DeployerUtils.deployMockToken(signer, 'BAL');
+    unknown = await DeployerUtils.deployMockToken(signer, 'unknown');
     console.log("usdc", usdc.address);
     console.log("dai", dai.address);
     console.log("tetu", tetu.address);
     console.log("weth", weth.address);
     console.log("usdt", usdt.address);
+    console.log("bal", bal.address);
+    mapTokenByAddress = new Map<string, MockToken>();
+    mapTokenByAddress.set(usdc.address, usdc);
+    mapTokenByAddress.set(tetu.address, tetu);
+    mapTokenByAddress.set(dai.address, dai);
+    mapTokenByAddress.set(weth.address, weth);
+    mapTokenByAddress.set(usdt.address, usdt);
+    mapTokenByAddress.set(bal.address, bal);
   });
 
   after(async function() {
@@ -1739,13 +1757,273 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   });
 
   describe("claimConverterRewards", () => {
+    let snapshot: string;
+    before(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    after(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    interface IClaimConverterRewardsParams {
+      /**
+       * Balances of tokens at the moment of the call of {claimConverterRewards}
+       */
+      balances: ITokenAmountNum[];
+
+      /**
+       * Balances of tokens before the call of {depositorClaimRewards} followed by the call of {claimConverterRewards}
+       * see _claim()
+       */
+      balancesBefore: ITokenAmountNum[];
+
+      /**
+       * Depositor pool assets
+       */
+      tokens: MockToken[];
+
+      depositorRewardTokens: MockToken[];
+      depositorRewardAmounts: string[];
+
+      converterRewardTokens: MockToken[];
+      converterRewardAmounts: string[];
+    }
+    interface IClaimConverterRewardsResults {
+      /**
+       * Amounts corresponding to each token name
+       */
+      amounts: string[];
+      /**
+       * Result ordered list of token names, i.e. usdc, usdt, dai, tetu...
+       */
+      tokenNames: string[];
+    }
+
+    async function makeClaimConverterRewards(p: IClaimConverterRewardsParams): Promise<IClaimConverterRewardsResults> {
+      // set up initial balances
+      for (const t of p.balances) {
+        await t.token.mint(
+          facade.address,
+          parseUnits(t.amount, await t.token.decimals())
+        )
+      }
+
+      // set up rewards in the converter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      await converter.setClaimRewards(
+        p.converterRewardTokens.map(x => x.address),
+        await Promise.all(p.converterRewardAmounts.map(
+            async (amount, index) => parseUnits(
+              amount,
+              await p.converterRewardTokens[index].decimals()
+            )
+        )),
+      )
+      for (let i = 0; i < p.converterRewardTokens.length; ++i) {
+        await p.converterRewardTokens[i].mint(
+          converter.address,
+          parseUnits(p.converterRewardAmounts[i], await p.converterRewardTokens[i].decimals())
+        )
+      }
+
+      // call claimConverterRewards
+      const {tokensOut, amountsOut} = await facade.callStatic.claimConverterRewards(
+        converter.address,
+        p.tokens.map(x => x.address),
+        p.depositorRewardTokens.map(x => x.address),
+        await Promise.all(p.depositorRewardAmounts.map(
+            async (amount, index) => parseUnits(amount, await p.depositorRewardTokens[index].decimals())
+        )),
+        await Promise.all(p.balancesBefore.map(
+            async x => parseUnits(x.amount, await x.token.decimals())
+        )),
+      );
+
+      const orderedResults: {tokenName: string, amount: string}[] = (await Promise.all(
+        tokensOut.map(
+          async (x, index) => ({
+            tokenName: await mapTokenByAddress.get(x)?.symbol() || "?",
+            amount: (+formatUnits(
+              amountsOut[index],
+              await IERC20Metadata__factory.connect(tokensOut[index], signer).decimals()
+            )).toString()
+          })
+        )
+      )).sort((x, y) => x.tokenName.localeCompare(y.tokenName));
+
+      return {
+        tokenNames: orderedResults.map(x => x.tokenName),
+        amounts: orderedResults.map(x => x.amount),
+      }
+    }
+
     describe("Good paths", () => {
-      it("should return expected values", async () => {
-// todo
+      describe("Normal case", () => {
+        async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
+          return makeClaimConverterRewards({
+            balances: [
+              {token: usdc, amount: "201"},
+              {token: usdt, amount: "202"},
+              {token: dai, amount: "203"}, // unregistered airdrop
+              {token: tetu, amount: "4"}, // dust tokens, we never use them
+              {token: bal, amount: "5"}, // dust tokens, we never use them
+            ],
+            balancesBefore: [
+              {token: usdc, amount: "0"},
+              {token: usdt, amount: "0"},
+              {token: dai, amount: "0"},
+              {token: tetu, amount: "4"},  // dust tokens, we never use them
+              {token: bal, amount: "5"},  // dust tokens, we never use them
+            ],
+            tokens: [usdc, usdt, dai],
+            depositorRewardTokens: [usdc, usdt],
+            depositorRewardAmounts: ["201", "202"],
+            converterRewardTokens: [tetu, bal],
+            converterRewardAmounts: ["111", "222"]
+          });
+        }
+        it("should return list of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          expect(results.tokenNames.join()).eq(["BAL", "DAI", "TETU", "USDC", "USDT"].join());
+        });
+        it("should return amounts of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          expect(results.amounts.join()).eq(["222", "203", "111", "201", "202"].join());
+        });
+      });
+      describe("Converter rewards, pool rewards, pool assets are all different", () => {
+        async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
+          return makeClaimConverterRewards({
+            balances: [
+              {token: usdc, amount: "1"},
+              {token: usdt, amount: "2"},
+              {token: dai, amount: "3"},
+              {token: tetu, amount: "0"},
+              {token: bal, amount: "0"},
+            ],
+            balancesBefore: [
+              {token: usdc, amount: "0"},
+              {token: usdt, amount: "0"},
+              {token: dai, amount: "0"},
+              {token: tetu, amount: "0"},
+              {token: bal, amount: "0"},
+            ],
+            tokens: [usdc, usdt, dai],
+            depositorRewardTokens: [bal],
+            depositorRewardAmounts: ["11"],
+            converterRewardTokens: [tetu],
+            converterRewardAmounts: ["7"]
+          });
+        }
+        it("should return list of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          expect(results.tokenNames.join()).eq(["BAL", "DAI", "TETU", "USDC", "USDT"].join());
+        });
+        it("should return amounts of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          expect(results.amounts.join()).eq(["11", "3", "7", "1", "2"].join());
+        });
+      });
+      describe("Converter rewards, pool rewards, pool assets are same", () => {
+        async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
+          return makeClaimConverterRewards({
+            balances: [
+              {token: usdc, amount: "201"},
+              {token: usdt, amount: "202"},
+              {token: dai, amount: "203"},
+              {token: tetu, amount: "4"},
+              {token: bal, amount: "5"},
+            ],
+            balancesBefore: [
+              {token: usdc, amount: "0"},
+              {token: usdt, amount: "0"},
+              {token: dai, amount: "0"},
+              {token: tetu, amount: "0"},
+              {token: bal, amount: "0"},
+            ],
+            tokens: [usdc, usdt, dai],
+            depositorRewardTokens: [usdc, usdt, dai, tetu, bal],
+            depositorRewardAmounts: ["11", "12", "13", "14", "15"],
+            converterRewardTokens: [usdc, usdt, dai, tetu, bal],
+            converterRewardAmounts: ["100", "101", "102", "103", "104"]
+          });
+        }
+        it("should return list of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          expect(results.tokenNames.join()).eq(["BAL", "DAI", "TETU", "USDC", "USDT"].join());
+        });
+        it("should return amounts of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          // mocked converter sends tokens to the strategy balance
+          //
+          expect(results.amounts.join()).eq(["119", "305", "117", "301", "303"].join());
+        });
       });
     });
+
     describe("Bad paths", () => {
-// todo
+      describe("Empty arrays", () => {
+        async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
+          return makeClaimConverterRewards({
+            balances: [],
+            balancesBefore: [
+              {token: usdc, amount: "0"},
+              {token: usdt, amount: "0"},
+              {token: dai, amount: "0"},
+            ],
+            tokens: [usdc, usdt, dai],
+            depositorRewardTokens: [],
+            depositorRewardAmounts: [],
+            converterRewardTokens: [],
+            converterRewardAmounts: []
+          });
+        }
+        it("should return empty list of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          expect(results.tokenNames.join()).eq([].join());
+        });
+        it("should return empty list of amounts", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          // mocked converter sends tokens to the strategy balance
+          expect(results.amounts.join()).eq([].join());
+        });
+      });
+      describe("All amounts zero, dust tokens exist on the balance", () => {
+        async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
+          return makeClaimConverterRewards({
+            balances: [
+              {token: usdc, amount: "0"},
+              {token: usdt, amount: "0"},
+              {token: dai, amount: "0"},
+              {token: tetu, amount: "1111111"}, // duct tokens
+              {token: bal, amount: "22222222"}, // dust tokens
+            ],
+            balancesBefore: [
+              {token: usdc, amount: "0"},
+              {token: usdt, amount: "0"},
+              {token: dai, amount: "0"},
+              {token: tetu, amount: "1111111"}, // duct tokens
+              {token: bal, amount: "22222222"}, // dust tokens
+            ],
+            tokens: [usdc, usdt, dai],
+            depositorRewardTokens: [usdc, usdt, dai, tetu, bal],
+            depositorRewardAmounts: ["0", "0", "0", "0", "0"],
+            converterRewardTokens: [usdc, usdt, dai, tetu, bal],
+            converterRewardAmounts: ["0", "0", "0", "0", "0"]
+          });
+        }
+        it("should return empty list of tokens", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          expect(results.tokenNames.join()).eq([].join());
+        });
+        it("should return empty list of amounts", async () => {
+          const results = await loadFixture(makeClaimConverterRewardsTest);
+          // mocked converter sends tokens to the strategy balance
+          // we allow the dust tokens to accumulate on strategy balance forever
+          // (it's valid for tokens that don't belong to the list of depositor tokens)
+          expect(results.amounts.join()).eq([].join());
+        });
+      });
     });
   });
 

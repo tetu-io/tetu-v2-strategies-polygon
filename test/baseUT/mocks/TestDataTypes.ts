@@ -11,6 +11,10 @@ export interface ITokenAmount {
   token: MockToken;
   amount: BigNumber;
 }
+export interface ITokenAmountNum {
+  token: MockToken;
+  amount: string;
+}
 export interface IBorrowParams {
   collateralAsset: MockToken;
   collateralAmount: BigNumber;
