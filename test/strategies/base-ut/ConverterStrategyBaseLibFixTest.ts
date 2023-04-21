@@ -2852,10 +2852,56 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
+  describe("_closePositionExact", () => {
+    describe("Good paths", () => {
+      describe("Full repayment, no debt gap", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+// todo
+      });
+      describe("Full repayment with debt gap", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+// todo
+      });
+      describe("Partial repayment", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+// todo
+      });
+    });
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
+      afterEach(async function () {await TimeUtils.rollback(snapshot);});
+
+      describe("Try to pay too much", () => {
+// todo
+      });
+    });
+  });
+
   describe("postWithdrawActions", () => {
     describe("Good paths", () => {
       it("should return expected values", async () => {
-
+// todo
       });
     });
     describe("Bad paths", () => {
@@ -2866,7 +2912,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   describe("postWithdrawActionsEmpty", () => {
     describe("Good paths", () => {
       it("should return expected values", async () => {
-
+// todo
       });
     });
     describe("Bad paths", () => {
@@ -2877,18 +2923,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   describe("swapToGivenAmountAndSendToConverter", () => {
     describe("Good paths", () => {
       it("should return expected values", async () => {
-
-      });
-    });
-    describe("Bad paths", () => {
-
-    });
-  });
-
-  describe("closePosition", () => {
-    describe("Good paths", () => {
-      it("should return expected values", async () => {
-
+// todo
       });
     });
     describe("Bad paths", () => {
@@ -2899,7 +2934,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   describe("_getCollateralToBorrowRatio", () => {
     describe("Good paths", () => {
       it("should return expected values", async () => {
-
+// todo
       });
     });
     describe("Bad paths", () => {

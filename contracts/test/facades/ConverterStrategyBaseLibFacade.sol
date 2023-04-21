@@ -392,4 +392,23 @@ contract ConverterStrategyBaseLibFacade {
       thresholdMainAsset_
     );
   }
+
+  function _closePositionExact(
+    ITetuConverter converter_,
+    address collateralAsset,
+    address borrowAsset,
+    uint amountRepay,
+    uint balanceBorrowAsset
+  ) external returns (
+    uint collateralOut,
+    uint repaidAmountOut
+  ) {
+    return ConverterStrategyBaseLib._closePositionExact(
+      converter_,
+      collateralAsset,
+      borrowAsset,
+      amountRepay,
+      balanceBorrowAsset
+    );
+  }
 }
