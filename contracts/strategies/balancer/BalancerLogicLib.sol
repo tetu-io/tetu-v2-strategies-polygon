@@ -241,12 +241,17 @@ library BalancerLogicLib {
     uint[] memory weights,
     uint totalWeight
   ) {
-    (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
-    // totalWeight is equal to length of output array here
-    totalWeight = tokens.length - 1;
-    weights = new uint[](totalWeight);
-    for (uint i; i < totalWeight; i = AppLib.uncheckedInc(i)) {
-      weights[i] = 1;
+    (IERC20[] memory tokens,uint256[] memory balances,) = vault_.getPoolTokens(poolId_);
+    uint len = tokens.length;
+    uint bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
+    weights = new uint[](len - 1);
+    uint j;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i != bptIndex) {
+        totalWeight += balances[i];
+        weights[j] = balances[i];
+        j = AppLib.uncheckedInc(j);
+      }
     }
   }
 
