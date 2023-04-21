@@ -401,7 +401,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
 
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
-    if (expectedAmount > requestedAmount * 101/100) {
+    if (requestedAmount != type(uint).max && expectedAmount > requestedAmount * 101/100) {
       // amountsToConvert_ are enough to get requestedAmount
       ConverterStrategyBaseLib.convertAfterWithdraw(
         converter_,

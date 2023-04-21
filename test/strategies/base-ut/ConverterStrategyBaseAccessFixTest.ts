@@ -600,7 +600,9 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         tetuConverter.address,
-        parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+        p.requestedAmount === ""
+          ? Misc.MAX_UINT
+          : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
         p.expectedMainAssetAmounts.map((x, index)=> parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
       );
 
@@ -609,7 +611,9 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         tetuConverter.address,
-        parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+        p.requestedAmount === ""
+          ? Misc.MAX_UINT
+          : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
         p.expectedMainAssetAmounts.map((x, index)=> parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
       );
       const gasUsed = (await tx.wait()).gasUsed;
@@ -1406,6 +1410,62 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               liquidations: [
                 {amountIn: "300", amountOut: "3001", tokenIn: usdt, tokenOut: usdc}, // balance - totalDebtAmountOut
                 {amountIn: "20000", amountOut: "2001", tokenIn: dai, tokenOut: usdc},  // balance - totalDebtAmountOut
+              ],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(9800); // 2900 + 1900 + 3000 + 2000
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([0, 9899, 0].join()); // 97 + 2900 + 1900 + 3001 + 2001
+          });
+        });
+      });
+      describe("requestAmounts == max int", () => {
+        describe("9. Balance=y0, Pool=y1, Debt=y2, y2 is closed by y0 with leftovers", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "", // Misc.MAX_UINT, // usdc
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              balances: ["3000", "97", "5000"], // dai, usdc, usdt
+              amountsToConvert: ["3000", "0", "5000"], // dai, usdc, usdt
+              expectedMainAssetAmounts: ["3000", "0", "5000"],
+              prices: ["1", "1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0", "0"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "1000", collateralAmountOut: "1900"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "2000", collateralAmountOut: "2900"}
+              ],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "1000", // dai
+                collateralAmountOut: "1900", // usdc
+                totalDebtAmountOut: "1000",
+                totalCollateralAmountOut: "1900"
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "2000", // usdt
+                collateralAmountOut: "2900", // usdc
+                totalDebtAmountOut: "2000",
+                totalCollateralAmountOut: "2900"
+              }],
+              liquidations: [
+                {amountIn: "3000", amountOut: "3001", tokenIn: usdt, tokenOut: usdc}, // balance - totalDebtAmountOut
+                {amountIn: "2000", amountOut: "2001", tokenIn: dai, tokenOut: usdc},  // balance - totalDebtAmountOut
               ],
             });
           }
