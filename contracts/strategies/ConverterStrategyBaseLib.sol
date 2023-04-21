@@ -850,7 +850,7 @@ library ConverterStrategyBaseLib {
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds Liquidation thresholds for rewards tokens
-  /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder
+  /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
   function recycle(
     ITetuConverter converter_,
     address asset,
