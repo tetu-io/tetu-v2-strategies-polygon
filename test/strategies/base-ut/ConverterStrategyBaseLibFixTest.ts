@@ -9,6 +9,7 @@ import { MockHelper } from '../../baseUT/helpers/MockHelper';
 import {Misc} from "../../../scripts/utils/Misc";
 import {BigNumber} from "ethers";
 import {
+  IBorrowParamsNum,
   ILiquidationParams,
   IQuoteRepayParams,
   IRepayParams,
@@ -16,7 +17,7 @@ import {
 } from "../../baseUT/mocks/TestDataTypes";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
+import {setupMockedBorrow, setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
@@ -2658,6 +2659,252 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
+  describe("getTokenAmounts", () => {
+    interface IGetTokenAmountsParams {
+      initialBalances: string[];
 
+      tokens: MockToken[];
+      assetIndex: number;
+      threshold?: string;
+
+      borrows: IBorrowParamsNum[];
+      collaterals: string[];
+    }
+
+    interface IGetTokenAmountsResults {
+      gasUsed: BigNumber;
+
+      tokenAmountsOut: string[];
+      tokenBalances: string[];
+    }
+
+    async function makeGetTokenAmounts(p: IGetTokenAmountsParams): Promise<IGetTokenAmountsResults> {
+      // set up initial balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        await p.tokens[i].mint(facade.address, parseUnits(p.initialBalances[i], await p.tokens[i].decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      for (const borrow of p.borrows) {
+        await setupMockedBorrow(converter, facade.address, borrow);
+      }
+
+      // make test
+      const tokenAmountsOut = await facade.callStatic.getTokenAmounts(
+        converter.address,
+        p.tokens.map(x => x.address),
+        p.assetIndex,
+        await Promise.all(p.collaterals.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals())
+        )),
+        parseUnits(p.threshold || "0", await p.tokens[p.assetIndex].decimals())
+      );
+
+      const tx = await facade.getTokenAmounts(
+        converter.address,
+        p.tokens.map(x => x.address),
+        p.assetIndex,
+        await Promise.all(p.collaterals.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals())
+        )),
+        parseUnits(p.threshold || "0", await p.tokens[p.assetIndex].decimals())
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      return {
+        gasUsed,
+        tokenAmountsOut: await Promise.all(tokenAmountsOut.map(
+          async (amount, index) => (+formatUnits(amount, await p.tokens[index].decimals())).toString()
+        )),
+        tokenBalances: await Promise.all(p.tokens.map(
+          async t => (+formatUnits(await t.balanceOf(facade.address), await t.decimals())).toString()
+        )),
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("Typical case", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeGetTokenAmountsTest(): Promise<IGetTokenAmountsResults> {
+          return makeGetTokenAmounts({
+            tokens: [usdt, tetu, dai, usdc],
+            assetIndex: 3,
+            threshold: "0",
+            initialBalances: ["0", "0", "0", "1000"],
+            collaterals: ["100", "200", "300", "4444"],
+            borrows: [
+              {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
+              {collateralAsset: usdc, borrowAsset: tetu, collateralAmount: "200", maxTargetAmount: "201", converter: ethers.Wallet.createRandom().address},
+              {collateralAsset: usdc, borrowAsset: dai, collateralAmount: "300", maxTargetAmount: "301", converter: ethers.Wallet.createRandom().address},
+            ]
+          });
+        }
+
+        it("should return expected values", async () => {
+          const results = await loadFixture(makeGetTokenAmountsTest);
+          expect(results.tokenAmountsOut.join()).eq(["101", "201", "301", "400"].join());
+        });
+        it("should set expected balances", async () => {
+          const results = await loadFixture(makeGetTokenAmountsTest);
+          expect(results.tokenBalances.join()).eq(["101", "201", "301", "400"].join());
+        });
+      });
+    });
+    describe("Bad paths", () => {
+      describe("Conversion is not available", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should revert", async () => {
+          await expect(
+            makeGetTokenAmounts({
+              tokens: [usdt, tetu, dai, usdc],
+              assetIndex: 3,
+              threshold: "0",
+              initialBalances: ["0", "0", "0", "1000"],
+              collaterals: ["100", "200", "300", "400"],
+              borrows: [
+                {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
+                {collateralAsset: usdc, borrowAsset: tetu, collateralAmount: "200", maxTargetAmount: "0", converter: Misc.ZERO_ADDRESS},
+                {collateralAsset: usdc, borrowAsset: dai, collateralAmount: "300", maxTargetAmount: "0", converter: Misc.ZERO_ADDRESS},
+              ]
+            })
+          ).revertedWith("TS-10 zero borrowed amount"); // ZERO_AMOUNT_BORROWED
+        });
+      });
+      describe("Zero collateral amount", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeGetTokenAmountsTest(): Promise<IGetTokenAmountsResults> {
+          return makeGetTokenAmounts({
+            tokens: [usdt, tetu, dai, usdc],
+            assetIndex: 3,
+            threshold: "0",
+            initialBalances: ["0", "0", "0", "1000"],
+            collaterals: ["100", "0", "0", "400"],
+            borrows: [
+              {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
+            ]
+          });
+        }
+
+        it("should return expected values", async () => {
+          const results = await loadFixture(makeGetTokenAmountsTest);
+          expect(results.tokenAmountsOut.join()).eq(["101", "0", "0", "400"].join());
+        });
+        it("should set expected balances", async () => {
+          const results = await loadFixture(makeGetTokenAmountsTest);
+          expect(results.tokenBalances.join()).eq(["101", "0", "0", "900"].join());
+        });
+      });
+      describe("Collateral of the main assets exceeds available balance", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeGetTokenAmountsTest(): Promise<IGetTokenAmountsResults> {
+          return makeGetTokenAmounts({
+            tokens: [usdt, tetu, dai, usdc],
+            assetIndex: 3,
+            threshold: "0",
+            initialBalances: ["0", "0", "0", "999"],
+            collaterals: ["100", "200", "300", "400"],
+            borrows: [
+              {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
+              {collateralAsset: usdc, borrowAsset: tetu, collateralAmount: "200", maxTargetAmount: "201", converter: ethers.Wallet.createRandom().address},
+              {collateralAsset: usdc, borrowAsset: dai, collateralAmount: "300", maxTargetAmount: "301", converter: ethers.Wallet.createRandom().address},
+            ]
+          });
+        }
+
+        it("should return expected values", async () => {
+          const results = await loadFixture(makeGetTokenAmountsTest);
+          expect(results.tokenAmountsOut.join()).eq(["101", "201", "301", "399"].join());
+        });
+        it("should set expected balances", async () => {
+          const results = await loadFixture(makeGetTokenAmountsTest);
+          expect(results.tokenBalances.join()).eq(["101", "201", "301", "399"].join());
+        });
+      });
+    });
+  });
+
+  describe("postWithdrawActions", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+  });
+
+  describe("postWithdrawActionsEmpty", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+  });
+
+  describe("swapToGivenAmountAndSendToConverter", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+  });
+
+  describe("closePosition", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+  });
+
+  describe("_getCollateralToBorrowRatio", () => {
+    describe("Good paths", () => {
+      it("should return expected values", async () => {
+
+      });
+    });
+    describe("Bad paths", () => {
+
+    });
+  });
 //endregion Unit tests
 });

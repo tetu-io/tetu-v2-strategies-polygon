@@ -22,6 +22,13 @@ export interface IBorrowParams {
   converter: string;
   maxTargetAmount: BigNumber;
 }
+export interface IBorrowParamsNum {
+  collateralAsset: MockToken;
+  collateralAmount: string;
+  borrowAsset: MockToken;
+  converter: string;
+  maxTargetAmount: string;
+}
 export interface IRepayParams {
   collateralAsset: MockToken;
   borrowAsset: MockToken;
