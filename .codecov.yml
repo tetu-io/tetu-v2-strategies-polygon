@@ -5,7 +5,7 @@ coverage:
   status:
     patch:
       default:
-        target: 60%
+        target: 99%
     project:
       default:
         threshold: 1%
@@ -14,3 +14,4 @@ ignore:
   - "contracts/test"
   - "contracts/tools"
   - "contracts/interfaces"
+  - "contracts/integrations"
