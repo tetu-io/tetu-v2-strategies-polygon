@@ -21,7 +21,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.2.3";
+  string public constant override STRATEGY_VERSION = "1.2.2";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -86,7 +86,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
-    return investedAssets() != 0 && UniswapV3ConverterStrategyLogicLib.needRebalance(
+    return UniswapV3ConverterStrategyLogicLib.needRebalance(
       state.isFuseTriggered,
       state.pool,
       state.lowerTick,
