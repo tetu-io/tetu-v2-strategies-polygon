@@ -1804,14 +1804,6 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   });
 
   describe("claimConverterRewards", () => {
-    let snapshot: string;
-    before(async function () {
-      snapshot = await TimeUtils.snapshot();
-    });
-    after(async function () {
-      await TimeUtils.rollback(snapshot);
-    });
-
     interface IClaimConverterRewardsParams {
       /**
        * Balances of tokens at the moment of the call of {claimConverterRewards}
@@ -1906,6 +1898,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
     describe("Good paths", () => {
       describe("Normal case", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
         async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
           return makeClaimConverterRewards({
             balances: [
@@ -1939,6 +1939,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
       });
       describe("Converter rewards, pool rewards, pool assets are all different", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
         async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
           return makeClaimConverterRewards({
             balances: [
@@ -1972,6 +1980,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
       });
       describe("Converter rewards, pool rewards, pool assets are same", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
         async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
           return makeClaimConverterRewards({
             balances: [
@@ -2010,6 +2026,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
     describe("Bad paths", () => {
       describe("Empty arrays", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
         async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
           return makeClaimConverterRewards({
             balances: [],
@@ -2036,6 +2060,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
       });
       describe("All amounts zero, dust tokens exist on the balance", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
         async function makeClaimConverterRewardsTest(): Promise<IClaimConverterRewardsResults> {
           return makeClaimConverterRewards({
             balances: [
