@@ -529,8 +529,8 @@ library ConverterStrategyBaseLib {
 
     // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (debt-gap)
     repaidAmountOut = balanceBorrowAsset > balanceAfter
-    ? balanceBorrowAsset - balanceAfter
-    : 0;
+      ? balanceBorrowAsset - balanceAfter
+      : 0;
 
     require(notUsedAmount == 0, StrategyLib.WRONG_VALUE);
   }

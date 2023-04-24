@@ -2885,6 +2885,227 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   });
 
   describe("_closePositionExact", () => {
+    interface IClosePositionParams {
+      collateralAsset: MockToken;
+      borrowAsset: MockToken;
+      amountRepay: string;
+      balances: string[]; // collateral, borrow
+      repays: IRepayParams[];
+    }
+
+    interface IClosePositionResults {
+      gasUsed: BigNumber;
+      collateralAmount: string;
+      repaidAmount: string;
+      collateralAssetBalance: string;
+      borrowAssetBalance: string;
+    }
+
+    async function makeClosePosition(p: IClosePositionParams): Promise<IClosePositionResults> {
+      const tokens = [p.collateralAsset, p.borrowAsset];
+
+      // set up balances
+      for (let i = 0; i < tokens.length; ++i) {
+        await tokens[i].mint(facade.address, parseUnits(p.balances[i], await tokens[i].decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up repay
+      for (const repay of p.repays) {
+        await setupMockedRepay(converter, facade.address, repay);
+      }
+
+      const balanceBorrowAsset = p.balances[1];
+      const ret = await facade.callStatic._closePositionExact(
+        converter.address,
+        p.collateralAsset.address,
+        p.borrowAsset.address,
+        parseUnits(p.amountRepay, await p.borrowAsset.decimals()),
+        parseUnits(balanceBorrowAsset, await p.borrowAsset.decimals())
+      );
+
+      const tx = await facade._closePositionExact(
+        converter.address,
+        p.collateralAsset.address,
+        p.borrowAsset.address,
+        parseUnits(p.amountRepay, await p.borrowAsset.decimals()),
+        parseUnits(balanceBorrowAsset, await p.borrowAsset.decimals())
+      );
+
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        gasUsed,
+        collateralAmount: (+formatUnits(ret.collateralOut, await p.collateralAsset.decimals())).toString(),
+        repaidAmount: (+formatUnits(ret.repaidAmountOut, await p.borrowAsset.decimals())).toString(),
+        collateralAssetBalance: (+formatUnits(await p.collateralAsset.balanceOf(facade.address), await p.collateralAsset.decimals())).toString(),
+        borrowAssetBalance: (+formatUnits(await p.borrowAsset.balanceOf(facade.address), await p.borrowAsset.decimals())).toString(),
+      };
+    }
+
+    describe("Good paths", () => {
+      describe("Full repayment, no debt gap", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["0", "1000"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountRepay: "1000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "1000",
+              collateralAmountOut: "2000",
+              totalDebtAmountOut: "1000",
+              totalCollateralAmountOut: "2000",
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("2000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("1000");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("2000");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("0");
+        });
+      });
+      describe("Full repayment with debt gap", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["0", "1010"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountRepay: "1010",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "1010",
+              collateralAmountOut: "2000",
+              totalDebtAmountOut: "1000",
+              totalCollateralAmountOut: "2000",
+              debtGapToSend: "10",
+              debtGapToReturn: "9"
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("2000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("1001");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("2000");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("9");
+        });
+      });
+      describe("Partial repayment", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["500", "8000"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountRepay: "1000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "1000",
+              collateralAmountOut: "2000",
+              totalDebtAmountOut: "50000",
+              totalCollateralAmountOut: "100000",
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("2000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("1000");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("2500");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("7000");
+        });
+      });
+    });
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
+      afterEach(async function () {await TimeUtils.rollback(snapshot);});
+
+      describe("Try to pay too much", () => {
+        it("should revert if pay too much", async () => {
+          await expect(makeClosePosition({
+            balances: ["0", "8000"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountRepay: "5000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "5000",
+              returnedBorrowAmountOut: "4000", // not used amount = 5000 - 1000
+              collateralAmountOut: "2000",
+              totalDebtAmountOut: "1000",
+              totalCollateralAmountOut: "2000",
+            }]
+          })).revertedWith("SB: Wrong value"); // WRONG_VALUE
+        });
+      });
+    });
+  });
+
+
+  describe("_closePosition", () => {
     describe("Good paths", () => {
       describe("Full repayment, no debt gap", () => {
         let snapshot: string;
