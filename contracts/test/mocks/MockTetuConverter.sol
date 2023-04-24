@@ -316,6 +316,7 @@ contract MockTetuConverter is ITetuConverter {
     uint returnedBorrowAmountOut;
     uint swappedLeftoverCollateralOut;
     uint swappedLeftoverBorrowOut;
+    uint debtGapValue;
   }
   /// @notice keccak256(collateralAsset_, borrowAsset_, amountToRepay_) => results
   mapping(bytes32 => RepayParams) public repayParams;
@@ -337,36 +338,33 @@ contract MockTetuConverter is ITetuConverter {
 
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     RepayParams memory p = repayParams[key];
-    if (collateralAsset_ == p.collateralAsset
-    && borrowAsset_ == p.borrowAsset
-      && amountToRepay_ == p.amountToRepay
-    ) {
+    if (collateralAsset_ == p.collateralAsset && borrowAsset_ == p.borrowAsset && amountToRepay_ == p.amountToRepay) {
       // transfer collateral back to the strategy
       uint balanceCollateral = IERC20Metadata(collateralAsset_).balanceOf(address(this));
       console.log("MockTetuConverter.repay balanceCollateral, collateralAmountOut", balanceCollateral, p.collateralAmountOut);
-      require(
-        balanceCollateral >= p.collateralAmountOut,
-        "MockTetuConverter.repay.collateralAmountOut"
-      );
+      require(balanceCollateral >= p.collateralAmountOut, "MockTetuConverter.repay.collateralAmountOut");
       IERC20Metadata(collateralAsset_).transfer(receiver_, p.collateralAmountOut);
 
-      // needToRepay was bigger than amountRepaid
-      // we need to return the leftover back to the strategy
+      // return debtGap if any
       uint balanceBorrow = IERC20Metadata(borrowAsset_).balanceOf(address(this));
+      if (p.debtGapValue != 0) {
+        require(balanceBorrow >= p.debtGapValue, "MockTetuConverter.repay.debtGapValue");
+        IERC20Metadata(borrowAsset_).transfer(receiver_, p.debtGapValue);
+      }
+
+      // needToRepay was bigger than amountRepaid, we need to return the leftover back to the strategy
+      balanceBorrow = IERC20Metadata(borrowAsset_).balanceOf(address(this));
       console.log("MockTetuConverter.repay balanceBorrow, returnedBorrowAmountOut", balanceBorrow, p.returnedBorrowAmountOut);
       if (p.returnedBorrowAmountOut != 0) {
-        require(
-          balanceBorrow >= p.returnedBorrowAmountOut,
-          "MockTetuConverter.repay.returnedBorrowAmountOut"
-        );
+        require(balanceBorrow >= p.returnedBorrowAmountOut, "MockTetuConverter.repay.returnedBorrowAmountOut");
         IERC20Metadata(borrowAsset_).transfer(receiver_, p.returnedBorrowAmountOut);
       }
 
       return (
-      p.collateralAmountOut,
-      p.returnedBorrowAmountOut,
-      p.swappedLeftoverCollateralOut,
-      p.swappedLeftoverBorrowOut
+        p.collateralAmountOut,
+        p.returnedBorrowAmountOut,
+        p.swappedLeftoverCollateralOut,
+        p.swappedLeftoverBorrowOut
       );
     } else {
       console.log("MockTetuConverter.repay.missed collateral,borrow,amountToRepay", _tokenName(collateralAsset_), _tokenName(borrowAsset_), amountToRepay_);
@@ -382,18 +380,20 @@ contract MockTetuConverter is ITetuConverter {
     uint collateralAmountOut_,
     uint returnedBorrowAmountOut_,
     uint swappedLeftoverCollateralOut_,
-    uint swappedLeftoverBorrowOut_
+    uint swappedLeftoverBorrowOut_,
+    uint debtGapValue
   ) external {
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     repayParams[key] = RepayParams({
-    collateralAsset : collateralAsset_,
-    borrowAsset : borrowAsset_,
-    amountToRepay : amountToRepay_,
-    receiver : receiver_,
-    collateralAmountOut : collateralAmountOut_,
-    returnedBorrowAmountOut : returnedBorrowAmountOut_,
-    swappedLeftoverCollateralOut : swappedLeftoverCollateralOut_,
-    swappedLeftoverBorrowOut : swappedLeftoverBorrowOut_
+      collateralAsset: collateralAsset_,
+      borrowAsset: borrowAsset_,
+      amountToRepay: amountToRepay_,
+      receiver: receiver_,
+      collateralAmountOut: collateralAmountOut_,
+      returnedBorrowAmountOut: returnedBorrowAmountOut_,
+      swappedLeftoverCollateralOut: swappedLeftoverCollateralOut_,
+      swappedLeftoverBorrowOut: swappedLeftoverBorrowOut_,
+      debtGapValue: debtGapValue
     });
   }
 

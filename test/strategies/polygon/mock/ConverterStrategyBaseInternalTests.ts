@@ -202,6 +202,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
           needToRepay.sub(amountRepaid),
           swappedLeftoverCollateralOut,
           swappedLeftoverBorrowOut,
+          0 // no debt gap
         );
 
         // prepare liquidator

@@ -287,6 +287,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // =============== WITHDRAW =====================
         // make withdraw
         uint[] memory withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
+        // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
+        // use what exactly was withdrew instead of the expectation
+        // assume that liquidity cannot increase in _depositorExit
+        v.liquidityAmountToWithdraw = v.depositorLiquidity - _depositorLiquidity();
         emit OnDepositorExit(v.liquidityAmountToWithdraw, withdrawnAmounts);
         // ==============================================
 
@@ -294,23 +298,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // it should be called BEFORE the converter will touch our positions coz we need to call quote the estimations
         // amountsToConvert should contains amounts was withdrawn from the pool and amounts received from the converter
         (v.expectedMainAssetAmounts, v.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
+          _converter,
+          v.tokens,
+          indexAsset,
           v.reservesBeforeWithdraw,
-          v.depositorLiquidity,
           v.liquidityAmountToWithdraw,
           v.totalSupplyBeforeWithdraw,
           v.amountsToConvert,
-          v.tokens,
-          indexAsset,
-          _converter,
-          _depositorLiquidity(),
           withdrawnAmounts
         );
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
         v.expectedMainAssetAmounts = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+          _converter,
           v.tokens,
           indexAsset,
-          _converter,
           v.amountsToConvert
         );
       }
@@ -619,7 +621,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
     // get amount of target asset available to be sent
     uint balance = _balance(theAsset_);
-    uint[] memory withdrawnAmounts = new uint[](tokens.length);
 
     // withdraw from the pool if not enough
     if (balance < amount_) {
@@ -627,7 +628,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // withdraw all from the pool but don't convert assets to underlying
       uint liquidity = _depositorLiquidity();
       if (liquidity != 0) {
-        withdrawnAmounts = _depositorExit(liquidity);
+        uint[] memory withdrawnAmounts = _depositorExit(liquidity);
         emit OnDepositorExit(liquidity, withdrawnAmounts);
       }
     }
