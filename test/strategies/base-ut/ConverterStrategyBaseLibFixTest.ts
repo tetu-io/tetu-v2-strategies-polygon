@@ -3426,7 +3426,10 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
   describe("postWithdrawActions", () => {
     describe("Good paths", () => {
-      it("should return expected values", async () => {
+      describe("Depositor uses expected amount of liquidity", () => {
+// todo
+      });
+      describe("Depositor uses less liquidity then expected", () => {
 // todo
       });
     });

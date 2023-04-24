@@ -287,6 +287,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // =============== WITHDRAW =====================
         // make withdraw
         uint[] memory withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
+        // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
+        // use what exactly was withdrew instead of the expectation
+        // assume that liquidity cannot increase in _depositorExit
+        v.liquidityAmountToWithdraw = v.depositorLiquidity - _depositorLiquidity();
         emit OnDepositorExit(v.liquidityAmountToWithdraw, withdrawnAmounts);
         // ==============================================
 
@@ -294,15 +298,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // it should be called BEFORE the converter will touch our positions coz we need to call quote the estimations
         // amountsToConvert should contains amounts was withdrawn from the pool and amounts received from the converter
         (v.expectedMainAssetAmounts, v.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
+          _converter,
+          v.tokens,
+          indexAsset,
           v.reservesBeforeWithdraw,
-          v.depositorLiquidity,
           v.liquidityAmountToWithdraw,
           v.totalSupplyBeforeWithdraw,
           v.amountsToConvert,
-          v.tokens,
-          indexAsset,
-          _converter,
-          _depositorLiquidity(),
           withdrawnAmounts
         );
       } else {

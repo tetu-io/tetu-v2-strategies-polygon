@@ -17,7 +17,7 @@ library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
   /////////////////////////////////////////////////////////////////////
-  ///                        DATA TYPES
+  //region Data types
   /////////////////////////////////////////////////////////////////////
   /// @notice Local vars for {_recycle}, workaround for stack too deep
   struct RecycleLocalParams {
@@ -106,9 +106,10 @@ library ConverterStrategyBaseLib {
 
     uint newBalance;
   }
+  //endregion Data types
 
   /////////////////////////////////////////////////////////////////////
-  ///                        Constants
+  //region Constants
   /////////////////////////////////////////////////////////////////////
 
   /// @notice approx one month for average block time 2 sec
@@ -127,9 +128,10 @@ library ConverterStrategyBaseLib {
   uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 100_000;
   /// @dev 1% gap in calculation of amount-to-sell in {closePositionsToGetAmount}
   uint internal constant GAP_AMOUNT_TO_SELL = 1_000;
+  //endregion Constants
 
   /////////////////////////////////////////////////////////////////////
-  ///                         Events
+  //region Events
   /////////////////////////////////////////////////////////////////////
   /// @notice A borrow was made
   event OpenPosition(
@@ -161,9 +163,10 @@ library ConverterStrategyBaseLib {
   );
 
   event ReturnAssetToConverter(address asset, uint amount);
+  //endregion Events
 
   /////////////////////////////////////////////////////////////////////
-  ///                      View functions
+  //region View functions
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Get amount of assets that we expect to receive after withdrawing
@@ -224,10 +227,12 @@ library ConverterStrategyBaseLib {
     }
     return type(uint).max;
   }
+  //endregion View functions
 
   /////////////////////////////////////////////////////////////////////
-  ///                   Borrow and close positions
+  //region Borrow and close positions
   /////////////////////////////////////////////////////////////////////
+
   /// @notice Make one or several borrow necessary to supply/borrow required {amountIn_} according to {entryData_}
   ///         Max possible collateral should be approved before calling of this function.
   /// @param entryData_ Encoded entry kind and additional params if necessary (set of params depends on the kind)
@@ -550,9 +555,10 @@ library ConverterStrategyBaseLib {
   ) {
     return _closePosition(tetuConverter_, collateralAsset, borrowAsset, amountToRepay);
   }
+  //endregion Borrow and close positions
 
   /////////////////////////////////////////////////////////////////////
-  ///                         Liquidation
+  //region Liquidation
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
@@ -648,9 +654,10 @@ library ConverterStrategyBaseLib {
       receivedAmountOut
     );
   }
+  //endregion Liquidation
 
   /////////////////////////////////////////////////////////////////////
-  ///                 requirePayAmountBack
+  //region requirePayAmountBack
   /////////////////////////////////////////////////////////////////////
 
   /// @param amountOut Amount of the main asset requested by converter
@@ -832,9 +839,10 @@ library ConverterStrategyBaseLib {
 
     return (amountSpent, amountReceived);
   }
+  //endregion requirePayAmountBack
 
   /////////////////////////////////////////////////////////////////////
-  ///                      Recycle rewards
+  //region Recycle rewards
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
@@ -904,10 +912,12 @@ library ConverterStrategyBaseLib {
       amountsToForward[i] = rewardAmounts[i] - p.amountToCompound;
     }
   }
+  //endregion Recycle rewards
 
   /////////////////////////////////////////////////////////////////////
-  ///                      calcInvestedAssets
+  //region calcInvestedAssets
   /////////////////////////////////////////////////////////////////////
+
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return amountOut Invested asset amount under control (in terms of {asset})
@@ -984,9 +994,10 @@ library ConverterStrategyBaseLib {
 
     return amountOut;
   }
+  //endregion calcInvestedAssets
 
   /////////////////////////////////////////////////////////////////////
-  ///                      getExpectedAmountMainAsset
+  //region getExpectedAmountMainAsset
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Calculate expected amount of the main asset after withdrawing
@@ -1020,10 +1031,12 @@ library ConverterStrategyBaseLib {
     // todo however, if user will exit between rebalances and the gap will be lower than withdraw fee, we will put the fee to vault balance and increase share price
     return amountsOut;
   }
+  //endregion getExpectedAmountMainAsset
 
   /////////////////////////////////////////////////////////////////////
-  ///              Reduce size of ConverterStrategyBase
+  //region Reduce size of ConverterStrategyBase
   /////////////////////////////////////////////////////////////////////
+
   /// @notice Make borrow and save amounts of tokens available for deposit to tokenAmounts
   /// @param thresholdMainAsset_ Min allowed value of collateral in terms of main asset, 0 - use default min value
   /// @param tokens_ Tokens received from {_depositorPoolAssets}
@@ -1068,43 +1081,29 @@ library ConverterStrategyBaseLib {
       IERC20(tokens_[indexAsset_]).balanceOf(address(this))
     );
   }
+  //endregion Reduce size of ConverterStrategyBase
 
   /////////////////////////////////////////////////////////////////////
-  ///                       WITHDRAW HELPERS
+  //region Withdraw helpers
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Add {withdrawnAmounts} to {amountsToConvert}, calculate {expectedAmountMainAsset}
   function postWithdrawActions(
-    uint[] memory reservesBeforeWithdraw,
-    uint depositorLiquidityBeforeWithdraw_,
-    uint liquidityAmountWithdrew,
-    uint totalSupplyBeforeWithdraw,
-    uint[] memory amountsToConvert,
-
+    ITetuConverter converter,
     address[] memory tokens,
     uint indexAsset,
-    ITetuConverter converter,
 
-    uint depositorLiquidityAfterWithdraw_,
+    uint[] memory reservesBeforeWithdraw,
+    uint liquidityAmountWithdrew,
+    uint totalSupplyBeforeWithdraw,
+
+    uint[] memory amountsToConvert,
     uint[] memory withdrawnAmounts
   ) external returns (
     uint[] memory expectedMainAssetAmounts,
     uint[] memory _amountsToConvert
   ) {
-
-    // estimate, how many assets should be withdrawn
-    // the depositor is able to use less liquidity than it was asked
-    // (i.e. Balancer-depositor leaves some BPT unused)
-    // so, we need to fix liquidityAmount on this amount
-
-    // we assume here, that liquidity cannot increase in _depositorExit
-    // use what exactly was withdrew instead of the expectation
-    uint depositorLiquidityDelta = depositorLiquidityBeforeWithdraw_ - depositorLiquidityAfterWithdraw_;
-    if (liquidityAmountWithdrew > depositorLiquidityDelta) {
-      liquidityAmountWithdrew = depositorLiquidityDelta;
-    }
-
-    // now we can estimate expected amount of assets to be withdrawn
+    // estimate expected amount of assets to be withdrawn
     uint[] memory expectedWithdrawAmounts = getExpectedWithdrawnAmounts(
       reservesBeforeWithdraw,
       liquidityAmountWithdrew,
@@ -1119,7 +1118,9 @@ library ConverterStrategyBaseLib {
       expectedWithdrawAmounts,
       amountsToConvert
     );
-    for (uint i; i < tokens.length; i = AppLib.uncheckedInc(i)) {
+
+    uint len = tokens.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       amountsToConvert[i] += withdrawnAmounts[i];
     }
 
@@ -1145,8 +1146,10 @@ library ConverterStrategyBaseLib {
     );
   }
 
+  //endregion Withdraw helpers
+
   /////////////////////////////////////////////////////////////////////
-  ///                      convertAfterWithdraw
+  //region convertAfterWithdraw
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Convert {amountsToConvert_} (available on balance) to the main asset
@@ -1424,10 +1427,10 @@ library ConverterStrategyBaseLib {
 
     return expectedAmountOut;
   }
-
+  //endregion convertAfterWithdraw
 
   /////////////////////////////////////////////////////////////////////
-  ///                       OTHER HELPERS
+  //region Other helpers
   /////////////////////////////////////////////////////////////////////
 
   function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
@@ -1445,6 +1448,7 @@ library ConverterStrategyBaseLib {
     }
     return (earned, lost);
   }
+  //endregion Other helpers
 
 }
 
