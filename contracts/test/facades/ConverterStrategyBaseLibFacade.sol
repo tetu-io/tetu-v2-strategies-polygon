@@ -374,4 +374,41 @@ contract ConverterStrategyBaseLibFacade {
       balancesBefore
     );
   }
+
+  function getTokenAmounts(
+    ITetuConverter tetuConverter_,
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory collaterals_,
+    uint thresholdMainAsset_
+  ) external returns (
+    uint[] memory tokenAmountsOut
+  ) {
+    return ConverterStrategyBaseLib.getTokenAmounts(
+      tetuConverter_,
+      tokens_,
+      indexAsset_,
+      collaterals_,
+      thresholdMainAsset_
+    );
+  }
+
+  function _closePositionExact(
+    ITetuConverter converter_,
+    address collateralAsset,
+    address borrowAsset,
+    uint amountRepay,
+    uint balanceBorrowAsset
+  ) external returns (
+    uint collateralOut,
+    uint repaidAmountOut
+  ) {
+    return ConverterStrategyBaseLib._closePositionExact(
+      converter_,
+      collateralAsset,
+      borrowAsset,
+      amountRepay,
+      balanceBorrowAsset
+    );
+  }
 }

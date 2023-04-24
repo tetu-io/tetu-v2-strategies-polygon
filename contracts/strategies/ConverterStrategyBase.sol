@@ -401,7 +401,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
 
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
-    if (expectedAmount > requestedAmount * 101/100) {
+    if (requestedAmount != type(uint).max && expectedAmount > requestedAmount * 101/100) {
       // amountsToConvert_ are enough to get requestedAmount
       ConverterStrategyBaseLib.convertAfterWithdraw(
         converter_,
@@ -435,16 +435,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Claim all possible rewards.
-  function _claim() override internal virtual returns (address[] memory rewardTokens, uint[] memory amounts) {
+  function _claim() override internal virtual returns (address[] memory rewardTokensOut, uint[] memory amountsOut) {
     // get rewards from the Depositor
-    (address[] memory depositorRewardTokens, uint[] memory depositorRewardAmounts, uint[] memory depositorBalancesBefore) = _depositorClaimRewards();
+    (address[] memory rewardTokens, uint[] memory rewardAmounts, uint[] memory balancesBefore) = _depositorClaimRewards();
 
-    (rewardTokens, amounts) = ConverterStrategyBaseLib2.claimConverterRewards(
+    (rewardTokensOut, amountsOut) = ConverterStrategyBaseLib2.claimConverterRewards(
       converter,
       _depositorPoolAssets(),
-      depositorRewardTokens,
-      depositorRewardAmounts,
-      depositorBalancesBefore
+      rewardTokens,
+      rewardAmounts,
+      balancesBefore
     );
   }
 
