@@ -2713,6 +2713,5 @@ describe('ConverterStrategyBaseLibTest', () => {
       });
     });
   });
-
 //endregion Unit tests
 });

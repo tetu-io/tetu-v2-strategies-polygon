@@ -850,7 +850,7 @@ library ConverterStrategyBaseLib {
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds Liquidation thresholds for rewards tokens
-  /// @return amountsToForward Amounts to be sent to forwarder
+  /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
   function recycle(
     ITetuConverter converter_,
     address asset,
@@ -884,7 +884,7 @@ library ConverterStrategyBaseLib {
         } else {
           if (p.amountToCompound < Math.max(liquidationThresholds[p.rewardToken], DEFAULT_LIQUIDATION_THRESHOLD)) {
             // amount is too small, liquidation is not allowed
-            // just keep on the balance, should be handled later
+            // we keep that dust tokens on balance forever
           } else {
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
@@ -1026,6 +1026,9 @@ library ConverterStrategyBaseLib {
   /////////////////////////////////////////////////////////////////////
   /// @notice Make borrow and save amounts of tokens available for deposit to tokenAmounts
   /// @param thresholdMainAsset_ Min allowed value of collateral in terms of main asset, 0 - use default min value
+  /// @param tokens_ Tokens received from {_depositorPoolAssets}
+  /// @param collaterals_ Amounts of main asset that can be used as collateral to borrow {tokens_}
+  /// @param thresholdMainAsset_ Value of liquidation threshold for the main (collateral) asset
   /// @return tokenAmountsOut Amounts available for deposit
   function getTokenAmounts(
     ITetuConverter tetuConverter_,
@@ -1038,17 +1041,13 @@ library ConverterStrategyBaseLib {
   ) {
     // content of tokenAmounts will be modified in place
     uint len = tokens_.length;
-    uint[] memory borrowedAmounts = new uint[](len);
-    uint spentCollateral;
     tokenAmountsOut = new uint[](len);
+
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset_) {
-        tokenAmountsOut[i] = collaterals_[i];
-      } else {
-        if (collaterals_[i] > 0) {
-          uint collateral;
+      if (i != indexAsset_) {
+        if (collaterals_[i] != 0) {
           AppLib.approveIfNeeded(tokens_[indexAsset_], collaterals_[i], address(tetuConverter_));
-          (collateral, borrowedAmounts[i]) = _openPosition(
+          (, uint borrowedAmount) = _openPosition(
             tetuConverter_,
             "", // entry kind = 0: fixed collateral amount, max possible borrow amount
             tokens_[indexAsset_],
@@ -1056,15 +1055,18 @@ library ConverterStrategyBaseLib {
             collaterals_[i],
             Math.max(thresholdMainAsset_, DEFAULT_LIQUIDATION_THRESHOLD)
           );
-          // collateral should be equal to tokenAmounts[i] here because we use default entry kind
-          spentCollateral += collateral;
 
           // zero amount are possible (conversion is not available) but it's not suitable for depositor
-          require(borrowedAmounts[i] != 0, AppErrors.ZERO_AMOUNT_BORROWED);
+          require(borrowedAmount != 0, AppErrors.ZERO_AMOUNT_BORROWED);
         }
         tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
       }
     }
+
+    tokenAmountsOut[indexAsset_] = Math.min(
+      collaterals_[indexAsset_],
+      IERC20(tokens_[indexAsset_]).balanceOf(address(this))
+    );
   }
 
   /////////////////////////////////////////////////////////////////////
