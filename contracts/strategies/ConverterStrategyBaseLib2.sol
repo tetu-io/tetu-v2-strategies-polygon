@@ -46,7 +46,7 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
   /// @param performanceFee_ Max is FEE_DENOMINATOR
-  /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
+  /// @return rewardAmountsOut = rewardAmounts_ - performanceAmounts
   /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
   function sendPerformanceFee(
     uint performanceFee_,
@@ -55,7 +55,7 @@ library ConverterStrategyBaseLib2 {
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
-    uint[] memory rewardAmounts,
+    uint[] memory rewardAmountsOut,
     uint[] memory performanceAmounts
   ) {
 
@@ -64,12 +64,12 @@ library ConverterStrategyBaseLib2 {
 
     // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
     uint len = rewardAmounts_.length;
-    rewardAmounts = new uint[](len);
+    rewardAmountsOut = new uint[](len);
     performanceAmounts = new uint[](len);
 
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
-      rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
+      rewardAmountsOut[i] = rewardAmounts_[i] - performanceAmounts[i];
 
       uint toPerf = performanceAmounts[i] / 2;
       uint toInsurance = performanceAmounts[i] - toPerf;

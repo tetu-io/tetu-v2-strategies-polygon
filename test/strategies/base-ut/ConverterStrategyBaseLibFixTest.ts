@@ -20,7 +20,7 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedBorrow, setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW, GET_LIQUIDITY_AMOUNT_RATIO
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW, GAS_PERFORMANCE_FEE, GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
@@ -4060,6 +4060,192 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
       });
     })
+  });
+
+  describe('sendPerformanceFee', () => {
+    interface ISendPerformanceFeeParams {
+      fee: number;
+      rewardTokens: MockToken[];
+      rewardAmounts: string[];
+    }
+
+    interface ISendPerformanceFeeResults {
+      rewardAmounts: string[];
+      performanceAmounts: string[];
+      facadeBalances: string[];
+      receiverBalances: string[];
+      insuranceBalance: string[];
+      gasUsed: BigNumber;
+    }
+
+    async function makeSendPerformanceFee(p: ISendPerformanceFeeParams): Promise<ISendPerformanceFeeResults> {
+      const receiver = ethers.Wallet.createRandom().address;
+      const decimals: number[] = [];
+      for (let i = 0; i < p.rewardTokens.length; ++i) {
+        decimals.push(await p.rewardTokens[i].decimals());
+        await p.rewardTokens[i].mint(facade.address, parseUnits(p.rewardAmounts[i], decimals[i]));
+      }
+
+      const insurance = ethers.Wallet.createRandom().address;
+      const vault = await MockHelper.createMockVault(signer);
+      await vault.setInsurance(insurance);
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setVault(vault.address);
+
+      const r = await facade.callStatic.sendPerformanceFee(
+        p.fee,
+        receiver,
+        splitter.address,
+        p.rewardTokens.map(x => x.address),
+        p.rewardAmounts.map((x, i) => parseUnits(x, decimals[i]))
+      );
+
+      const tx = await facade.sendPerformanceFee(
+        p.fee,
+        receiver,
+        splitter.address,
+        p.rewardTokens.map(x => x.address),
+        p.rewardAmounts.map((x, i) => parseUnits(x, decimals[i]))
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const facadeBalances = await Promise.all(p.rewardTokens.map(
+        async rewardToken => rewardToken.balanceOf(facade.address),
+      ));
+      const receiverBalances = await Promise.all(p.rewardTokens.map(
+        async rewardToken => rewardToken.balanceOf(receiver),
+      ));
+      const insuranceBalance = await Promise.all(p.rewardTokens.map(
+        async rewardToken => rewardToken.balanceOf(insurance),
+      ));
+
+      return {
+        gasUsed,
+        performanceAmounts: r.performanceAmounts.map((x, index) => (+formatUnits(x, decimals[index])).toString()),
+        rewardAmounts: r.rewardAmounts.map((x, index) => (+formatUnits(x, decimals[index])).toString()),
+        facadeBalances: facadeBalances.map((x, index) => (+formatUnits(x, decimals[index])).toString()),
+        receiverBalances: receiverBalances.map((x, index) => (+formatUnits(x, decimals[index])).toString()),
+        insuranceBalance: insuranceBalance.map((x, index) => (+formatUnits(x, decimals[index])).toString()),
+      };
+    }
+
+    describe('Good paths', () => {
+      describe('Fee 10%', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            fee: 10_000,
+            rewardTokens: [tetu, usdc, usdt, dai],
+            rewardAmounts: ["10", "20", "30", "0"],
+          });
+        }
+
+        it('should return performance amounts', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.performanceAmounts.join()).eq(["1", "2", "3", "0"].join());
+        });
+        it('should return rewardAmounts', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.rewardAmounts.join()).eq(["9", "18", "27", "0"].join());
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalances.join()).eq(["9", "18", "27", 0].join());
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalances.join()).eq(["0.5", "1", "1.5", 0].join());
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance.join()).eq(["0.5", "1", "1.5", 0].join());
+        });
+      });
+      describe('Fee 0%', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            fee: 0,
+            rewardTokens: [tetu, usdc, usdt, dai],
+            rewardAmounts: ["10", "20", "30", "0"],
+          });
+        }
+
+        it('should return performance amounts', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.performanceAmounts.join()).eq(["0", "0", "0", "0"].join());
+        });
+        it('should return rewardAmounts', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.rewardAmounts.join()).eq(["10", "20", "30", "0"].join());
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalances.join()).eq(["10", "20", "30", "0"].join());
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalances.join()).eq(["0", "0", "0", "0"].join());
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance.join()).eq(["0", "0", "0", "0"].join());
+        });
+      });
+      describe('Fee 100%', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSendPerformanceFeeTest(): Promise<ISendPerformanceFeeResults> {
+          return makeSendPerformanceFee({
+            fee: 100_000,
+            rewardTokens: [tetu, usdc, usdt, dai],
+            rewardAmounts: ["10", "20", "30", "0"],
+          });
+        }
+
+        it('should return performance amounts', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.performanceAmounts.join()).eq(["10", "20", "30", "0"].join());
+        });
+        it('should return rewardAmounts', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.rewardAmounts.join()).eq(["0", "0", "0", "0"].join());
+        });
+        it('should set expected facade balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.facadeBalances.join()).eq(["0", "0", "0", "0"].join());
+        });
+        it('should return receiver balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.receiverBalances.join()).eq(["5", "10", "15", "0"].join());
+        });
+        it('should return insurance balances', async () => {
+          const results = await loadFixture(makeSendPerformanceFeeTest);
+          expect(results.insuranceBalance.join()).eq(["5", "10", "15", "0"].join());
+        });
+      });
+    });
   });
 
 //endregion Unit tests
