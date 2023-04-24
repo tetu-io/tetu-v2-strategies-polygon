@@ -31,9 +31,10 @@ contract ConverterStrategyBaseLibFacade {
     address[] memory tokens,
     uint indexAsset,
     ITetuConverter converter,
-    uint investedAssets
+    uint investedAssets,
+    uint depositorLiquidity
   ) external returns (
-    uint liquidityRatioOut,
+    uint resultAmount,
     uint[] memory amountsToConvertOut
   ) {
     return ConverterStrategyBaseLib2.getLiquidityAmount(
@@ -43,7 +44,7 @@ contract ConverterStrategyBaseLibFacade {
       indexAsset,
       converter,
       investedAssets,
-      1e18
+      depositorLiquidity
     );
   }
 
@@ -422,5 +423,43 @@ contract ConverterStrategyBaseLibFacade {
     uint repaidAmountOut
   ) {
     return ConverterStrategyBaseLib._closePosition(converter_, collateralAsset, borrowAsset, amountToRepay);
+  }
+
+  function postWithdrawActions(
+    ITetuConverter converter,
+    address[] memory tokens,
+    uint indexAsset,
+
+    uint[] memory reservesBeforeWithdraw,
+    uint liquidityAmountWithdrew,
+    uint totalSupplyBeforeWithdraw,
+
+    uint[] memory amountsToConvert,
+    uint[] memory withdrawnAmounts
+  ) external returns (
+    uint[] memory expectedMainAssetAmounts,
+    uint[] memory _amountsToConvert
+  ) {
+    return ConverterStrategyBaseLib.postWithdrawActions(
+      converter,
+      tokens,
+      indexAsset,
+      reservesBeforeWithdraw,
+      liquidityAmountWithdrew,
+      totalSupplyBeforeWithdraw,
+      amountsToConvert,
+      withdrawnAmounts
+    );
+  }
+
+  function postWithdrawActionsEmpty(
+    ITetuConverter converter,
+    address[] memory tokens,
+    uint indexAsset,
+    uint[] memory amountsToConvert_
+  ) external returns (
+    uint[] memory expectedAmountsMainAsset
+  ) {
+      return ConverterStrategyBaseLib.postWithdrawActionsEmpty(converter, tokens, indexAsset, amountsToConvert_);
   }
 }

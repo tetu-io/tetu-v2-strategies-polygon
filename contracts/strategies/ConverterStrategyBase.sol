@@ -310,9 +310,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
         v.expectedMainAssetAmounts = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+          _converter,
           v.tokens,
           indexAsset,
-          _converter,
           v.amountsToConvert
         );
       }
@@ -621,7 +621,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
     // get amount of target asset available to be sent
     uint balance = _balance(theAsset_);
-    uint[] memory withdrawnAmounts = new uint[](tokens.length);
 
     // withdraw from the pool if not enough
     if (balance < amount_) {
@@ -629,7 +628,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // withdraw all from the pool but don't convert assets to underlying
       uint liquidity = _depositorLiquidity();
       if (liquidity != 0) {
-        withdrawnAmounts = _depositorExit(liquidity);
+        uint[] memory withdrawnAmounts = _depositorExit(liquidity);
         emit OnDepositorExit(liquidity, withdrawnAmounts);
       }
     }

@@ -662,7 +662,7 @@ library ConverterStrategyBaseLib {
 
   /// @param amountOut Amount of the main asset requested by converter
   /// @param indexTheAsset Index of the asset required by converter in the {tokens}
-  /// @param asset Main asset or underlying
+  /// @param asset Main asset or underlying (it can be different from tokens[indexTheAsset])
   /// @return amountOut Amount of the main asset sent to converter
   function swapToGivenAmountAndSendToConverter(
     uint amount_,
@@ -1026,9 +1026,10 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    // todo need to somehow calculate additional amountsToConvert_ if we will withdraw not enough
-    // todo it should cover a rare case when user exit from the vault before rebalance
-    // todo however, if user will exit between rebalances and the gap will be lower than withdraw fee, we will put the fee to vault balance and increase share price
+    // todo make integral tests for the following cases:
+    //  1) we will withdraw not enough
+    //  2) a rare case when user exit from the vault before rebalance
+    //  3) however, if user will exit between rebalances and the gap will be lower than withdraw fee, we will put the fee to vault balance and increase share price
     return amountsOut;
   }
   //endregion getExpectedAmountMainAsset
@@ -1088,6 +1089,8 @@ library ConverterStrategyBaseLib {
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Add {withdrawnAmounts} to {amountsToConvert}, calculate {expectedAmountMainAsset}
+  /// @param amountsToConvert Amounts of {tokens} to be converted, they are located on the balance before withdraw
+  /// @param withdrawnAmounts Amounts of {tokens} that were withdrew from the pool
   function postWithdrawActions(
     ITetuConverter converter,
     address[] memory tokens,
@@ -1129,9 +1132,9 @@ library ConverterStrategyBaseLib {
 
   /// @notice return {withdrawnAmounts} with zero values and expected amount calculated using {amountsToConvert_}
   function postWithdrawActionsEmpty(
+    ITetuConverter converter,
     address[] memory tokens,
     uint indexAsset,
-    ITetuConverter converter,
     uint[] memory amountsToConvert_
   ) external returns (
     uint[] memory expectedAmountsMainAsset

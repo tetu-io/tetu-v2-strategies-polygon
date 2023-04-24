@@ -1,11 +1,11 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ethers } from 'hardhat';
-import { TimeUtils } from '../../../scripts/utils/TimeUtils';
-import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
-import { ConverterStrategyBaseLibFacade, MockToken, PriceOracleMock } from '../../../typechain';
-import { expect } from 'chai';
-import { MockHelper } from '../../baseUT/helpers/MockHelper';
+import {SignerWithAddress} from '@nomiclabs/hardhat-ethers/signers';
+import {ethers} from 'hardhat';
+import {TimeUtils} from '../../../scripts/utils/TimeUtils';
+import {DeployerUtils} from '../../../scripts/utils/DeployerUtils';
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
+import {ConverterStrategyBaseLibFacade, MockToken, PriceOracleMock} from '../../../typechain';
+import {expect} from 'chai';
+import {MockHelper} from '../../baseUT/helpers/MockHelper';
 import {Misc} from "../../../scripts/utils/Misc";
 import {BigNumber} from "ethers";
 import {
@@ -20,9 +20,10 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedBorrow, setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW
+  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW, GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
+import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -46,7 +47,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   //endregion Variables
 
   //region before, after
-  before(async function() {
+  before(async function () {
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
@@ -72,7 +73,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     mapTokenByAddress.set(bal.address, bal);
   });
 
-  after(async function() {
+  after(async function () {
     await TimeUtils.rollback(snapshotBefore);
   });
   //endregion before, after
@@ -80,8 +81,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   //region Unit tests
   describe("openPositionEntryKind1", () => {
     let snapshot: string;
-    before(async function() { snapshot = await TimeUtils.snapshot(); });
-    after(async function() { await TimeUtils.rollback(snapshot); });
+    before(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    after(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
 
     interface IOpenPositionEntryKind1TestParams {
       threshold: number,
@@ -328,6 +333,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           },
         );
       }
+
       it('should ignore first platform and make single borrow on the second platform', async () => {
         const r = await loadFixture(makeTestFirstPlatformHasNotEnoughResources);
 
@@ -344,6 +350,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       gasUsed: BigNumber;
       balances: number[];
     }
+
     interface IConvertAfterWithdrawParams {
       tokens: MockToken[];
       indexAsset: number;
@@ -355,7 +362,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       repays: IRepayParams[];
       isConversionValid?: boolean;
     }
-    async function makeConvertAfterWithdraw(p: IConvertAfterWithdrawParams) : Promise<IConvertAfterWithdrawResults> {
+
+    async function makeConvertAfterWithdraw(p: IConvertAfterWithdrawParams): Promise<IConvertAfterWithdrawResults> {
       // set up balances
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -436,10 +444,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     describe('Good paths', () => {
       describe('Repay only, no liquidation (amountsToConvert == repaidAmountsOut)', () => {
         let snapshot: string;
-        before(async function () {snapshot = await TimeUtils.snapshot();});
-        after(async function () {await TimeUtils.rollback(snapshot);});
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
-        async function  makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
+        async function makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
           return makeConvertAfterWithdraw({
             tokens: [dai, usdc, usdt],
             indexAsset: 1, // usdc
@@ -469,19 +481,19 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
         }
 
-        it('should return expected collateralOut', async() => {
+        it('should return expected collateralOut', async () => {
           const r = await loadFixture(makeConvertAfterWithdrawFixture);
           expect(r.collateralOut).eq(1404); // 401 + 1003
         });
-        it('should return expected repaidAmountsOut', async() => {
+        it('should return expected repaidAmountsOut', async () => {
           const r = await loadFixture(makeConvertAfterWithdrawFixture);
           expect(r.repaidAmountsOut.join()).eq(["200", "0", "500"].join());
         });
-        it('should set expected balances', async() => {
+        it('should set expected balances', async () => {
           const r = await loadFixture(makeConvertAfterWithdrawFixture);
           expect(r.balances.join()).eq(["0", "1495", "400"].join()); // 200-200, 91 + 401 + 1003, 900 - 500
         });
-        it('should not exceed gas limits @skip-on-coverage', async() => {
+        it('should not exceed gas limits @skip-on-coverage', async () => {
           const r = await loadFixture(makeConvertAfterWithdrawFixture);
           controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW, (u, t) => {
             expect(u).to.be.below(t + 1);
@@ -491,8 +503,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       describe('Repay + liquidation of leftovers (amountsToConvert > repaidAmountsOut)', () => {
         describe("Leftovers > liquidation threshold", () => {
           let snapshot: string;
-          before(async function () { snapshot = await TimeUtils.snapshot();});
-          after(async function () { await TimeUtils.rollback(snapshot); });
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
             return makeConvertAfterWithdraw({
@@ -542,8 +558,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         describe("Leftovers < liquidation threshold", () => {
           let snapshot: string;
-          before(async function () { snapshot = await TimeUtils.snapshot();});
-          after(async function () { await TimeUtils.rollback(snapshot); });
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
             return makeConvertAfterWithdraw({
@@ -683,6 +703,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       gasUsed: BigNumber;
       balances: number[];
     }
+
     interface IClosePositionToGetRequestedAmountParams {
       requestedAmount: string;
       tokens: MockToken[];
@@ -695,9 +716,10 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       repays: IRepayParams[];
       isConversionValid?: boolean;
     }
+
     async function makeClosePositionToGetRequestedAmountTest(
       p: IClosePositionToGetRequestedAmountParams
-    ) : Promise<IClosePositionToGetRequestedAmountResults> {
+    ): Promise<IClosePositionToGetRequestedAmountResults> {
       // set up balances
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -774,8 +796,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     describe("Good paths", () => {
       describe("Partial repayment, balance > toSell", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -807,6 +833,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(1870); // 2880 - 1010
@@ -818,8 +845,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       describe("Partial repayment, balance < toSell", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -851,6 +882,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(150); // 450-300
@@ -862,8 +894,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       describe("Full repayment of the borrow", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -895,6 +931,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(1000); // 3000 - 2000
@@ -906,8 +943,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       describe("QuoteRepay != repay", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -939,6 +980,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(800); // 2800 - 2000
@@ -950,8 +992,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       describe("Not zero liquidation threshold", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -983,6 +1029,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(800); // 2800 - 2000
@@ -994,8 +1041,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       describe("requestedAmount is max uint", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -1027,6 +1078,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(1000); // 3000 - 2000
@@ -1040,8 +1092,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     describe("Bad paths", () => {
       describe("Zero balance", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -1056,6 +1112,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             repays: [],
           });
         }
+
         it("should return zero expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(0);
@@ -1067,8 +1124,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       describe("There are no debts", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -1095,6 +1156,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return zero expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(0);
@@ -1106,8 +1168,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
       describe("Liquidation threshold is too high", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot();});
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
           return makeClosePositionToGetRequestedAmountTest({
@@ -1139,6 +1205,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             }],
           });
         }
+
         it("should return zero expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.expectedAmountMainAssetOut).eq(0);
@@ -1159,6 +1226,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       balanceTokenIn: number;
       balanceTokenOut: number;
     }
+
     interface ILiquidationTestParams {
       tokens: MockToken[];
       balances: string[];
@@ -1168,7 +1236,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       isConversionValid?: boolean;
       slippage?: number;
     }
-    async function makeLiquidationTest(p: ILiquidationTestParams) : Promise<ILiquidationTestResults> {
+
+    async function makeLiquidationTest(p: ILiquidationTestParams): Promise<ILiquidationTestResults> {
       // set up balances
       for (let i = 0; i < p.tokens.length; ++i) {
         // set up current balances
@@ -1238,7 +1307,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeLiquidationFixture() : Promise<ILiquidationTestResults> {
+        async function makeLiquidationFixture(): Promise<ILiquidationTestResults> {
           return makeLiquidationTest({
             tokens: [usdc, dai],
             balances: ["1000", "2000"],
@@ -1273,7 +1342,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeLiquidationFixture() : Promise<ILiquidationTestResults> {
+        async function makeLiquidationFixture(): Promise<ILiquidationTestResults> {
           return makeLiquidationTest({
             tokens: [usdc, dai],
             balances: ["1000", "2000"],
@@ -1302,8 +1371,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
     describe("Bad paths", () => {
       let snapshot: string;
-      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
-      afterEach(async function () {await TimeUtils.rollback(snapshot);});
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
 
       it("should revert if price impact is too high", async () => {
         await expect(makeLiquidationTest({
@@ -1327,6 +1400,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     interface IGetAmountToSellResults {
       amountOut: number;
     }
+
     interface IGetAmountToSellParams {
       remainingRequestedAmount: string;
       totalDebt: string;
@@ -1336,7 +1410,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       indexCollateral: number;
       balanceBorrowAsset: string;
     }
-    async function makeGetAmountToSellTest(p: IGetAmountToSellParams) : Promise<IGetAmountToSellResults> {
+
+    async function makeGetAmountToSellTest(p: IGetAmountToSellParams): Promise<IGetAmountToSellResults> {
       const indexBorrowAsset = p.indexCollateral === 0 ? 1 : 0;
       const amountOut = await facade._getAmountToSell(
         parseUnits(p.remainingRequestedAmount, p.decimals[p.indexCollateral]),
@@ -1499,13 +1574,15 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       liquidations: ILiquidationParams[];
       balances: string[];
     }
+
     interface ISwapToGivenAmountResults {
       spentAmounts: number[];
       receivedAmounts: number[];
       balances: number[];
       gasUsed: BigNumber;
     }
-    async function makeSwapToGivenAmountTest(p: ISwapToGivenAmountParams) : Promise<ISwapToGivenAmountResults> {
+
+    async function makeSwapToGivenAmountTest(p: ISwapToGivenAmountParams): Promise<ISwapToGivenAmountResults> {
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -1581,7 +1658,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         await TimeUtils.rollback(snapshot);
       });
 
-      async function makeSwapToGivenAmountFixture() : Promise<ISwapToGivenAmountResults> {
+      async function makeSwapToGivenAmountFixture(): Promise<ISwapToGivenAmountResults> {
         return makeSwapToGivenAmountTest({
           targetAmount: "10",
           tokens: [tetu, usdc, usdt, dai],
@@ -1602,6 +1679,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           balances: ["100", "200", "400", "500"],
         });
       }
+
       it("should return expected spentAmounts", async () => {
         const r = await loadFixture(makeSwapToGivenAmountFixture);
         expect(r.spentAmounts.join()).eq([0, 0, 3.75, 0].join());
@@ -1624,7 +1702,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       after(async function () {
         await TimeUtils.rollback(snapshot);
       });
-      async function makeSwapToGivenAmountFixture() : Promise<ISwapToGivenAmountResults> {
+
+      async function makeSwapToGivenAmountFixture(): Promise<ISwapToGivenAmountResults> {
         return makeSwapToGivenAmountTest({
           targetAmount: "16010",
           tokens: [tetu, usdc, usdt, dai],
@@ -1653,6 +1732,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           balances: ["100", "200", "400", "500"],
         });
       }
+
       it("should return expected spentAmounts", async () => {
         const r = await loadFixture(makeSwapToGivenAmountFixture);
         expect(r.spentAmounts.join()).eq([0, 0, 4000, 3].join());
@@ -1697,13 +1777,15 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       splitterToForwarder: string;
       isDistributeToForwarder: boolean;
     }
+
     interface ISendTokensToForwarderParams {
       tokens: MockToken[];
       amounts: string[];
       vault: string;
     }
+
     async function makeSendTokensToForwarderTest(p: ISendTokensToForwarderParams): Promise<ISendTokensToForwarderResults> {
-      const controller = await  MockHelper.createMockController(signer);
+      const controller = await MockHelper.createMockController(signer);
       const forwarder = await MockHelper.createMockForwarder(signer);
       await controller.setForwarder(forwarder.address);
       const splitter = await MockHelper.createMockSplitter(signer);
@@ -1740,13 +1822,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             async (token, index) => +formatUnits(
               await IERC20Metadata__factory.connect(token, signer).allowance(facade.address, forwarder.address),
               decimals[index])
-            ),
+          ),
         )
       }
     }
 
     describe("normal case", () => {
       const VAULT = ethers.Wallet.createRandom().address;
+
       async function makeSendTokensToForwarderFixture(): Promise<ISendTokensToForwarderResults> {
         return makeSendTokensToForwarderTest({
           tokens: [usdc, usdt, dai, tetu],
@@ -1754,6 +1837,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           vault: VAULT
         });
       }
+
       it("forwarder should receive expected tokens", async () => {
         const r = await loadFixture(makeSendTokensToForwarderFixture);
         expect(r.tokensToForwarder.join()).eq([usdc.address, usdt.address, dai.address, tetu.address].join());
@@ -1777,6 +1861,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
     describe("zero case", () => {
       const VAULT = ethers.Wallet.createRandom().address;
+
       async function makeSendTokensToForwarderFixture(): Promise<ISendTokensToForwarderResults> {
         return makeSendTokensToForwarderTest({
           tokens: [usdc, usdt, dai, tetu],
@@ -1784,6 +1869,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           vault: VAULT
         });
       }
+
       it("should filter out zero tokens", async () => {
         const r = await loadFixture(makeSendTokensToForwarderFixture);
         expect(r.tokensToForwarder.join()).eq([usdc.address, dai.address].join());
@@ -1827,6 +1913,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       converterRewardTokens: MockToken[];
       converterRewardAmounts: string[];
     }
+
     interface IClaimConverterRewardsResults {
       /**
        * Amounts corresponding to each token name
@@ -1852,10 +1939,10 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       await converter.setClaimRewards(
         p.converterRewardTokens.map(x => x.address),
         await Promise.all(p.converterRewardAmounts.map(
-            async (amount, index) => parseUnits(
-              amount,
-              await p.converterRewardTokens[index].decimals()
-            )
+          async (amount, index) => parseUnits(
+            amount,
+            await p.converterRewardTokens[index].decimals()
+          )
         )),
       )
       for (let i = 0; i < p.converterRewardTokens.length; ++i) {
@@ -1871,14 +1958,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.tokens.map(x => x.address),
         p.depositorRewardTokens.map(x => x.address),
         await Promise.all(p.depositorRewardAmounts.map(
-            async (amount, index) => parseUnits(amount, await p.depositorRewardTokens[index].decimals())
+          async (amount, index) => parseUnits(amount, await p.depositorRewardTokens[index].decimals())
         )),
         await Promise.all(p.balancesBefore.map(
-            async x => parseUnits(x.amount, await x.token.decimals())
+          async x => parseUnits(x.amount, await x.token.decimals())
         )),
       );
 
-      const orderedResults: {tokenName: string, amount: string}[] = (await Promise.all(
+      const orderedResults: { tokenName: string, amount: string }[] = (await Promise.all(
         tokensOut.map(
           async (x, index) => ({
             tokenName: await mapTokenByAddress.get(x)?.symbol() || "?",
@@ -1929,6 +2016,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             converterRewardAmounts: ["111", "222"]
           });
         }
+
         it("should return list of tokens", async () => {
           const results = await loadFixture(makeClaimConverterRewardsTest);
           expect(results.tokenNames.join()).eq(["BAL", "DAI", "TETU", "USDC", "USDT"].join());
@@ -1970,6 +2058,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             converterRewardAmounts: ["7"]
           });
         }
+
         it("should return list of tokens", async () => {
           const results = await loadFixture(makeClaimConverterRewardsTest);
           expect(results.tokenNames.join()).eq(["BAL", "DAI", "TETU", "USDC", "USDT"].join());
@@ -2011,6 +2100,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             converterRewardAmounts: ["100", "101", "102", "103", "104"]
           });
         }
+
         it("should return list of tokens", async () => {
           const results = await loadFixture(makeClaimConverterRewardsTest);
           expect(results.tokenNames.join()).eq(["BAL", "DAI", "TETU", "USDC", "USDT"].join());
@@ -2049,6 +2139,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             converterRewardAmounts: []
           });
         }
+
         it("should return empty list of tokens", async () => {
           const results = await loadFixture(makeClaimConverterRewardsTest);
           expect(results.tokenNames.join()).eq([].join());
@@ -2091,6 +2182,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             converterRewardAmounts: ["0", "0", "0", "0", "0"]
           });
         }
+
         it("should return empty list of tokens", async () => {
           const results = await loadFixture(makeClaimConverterRewardsTest);
           expect(results.tokenNames.join()).eq([].join());
@@ -2460,8 +2552,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       describe("liquidationThresholds[main asset] is set", () => {
         describe("Reward amount > liquidationThresholds[main asset]", () => {
           let snapshot: string;
-          before(async function () {snapshot = await TimeUtils.snapshot();});
-          after(async function () {await TimeUtils.rollback(snapshot);});
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
@@ -2498,8 +2594,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         describe("liquidationThresholds[main asset] > Reward amount > DEFAULT_LIQUIDATION_THRESHOLD==100_000", () => {
           let snapshot: string;
-          before(async function () {snapshot = await TimeUtils.snapshot();});
-          after(async function () {await TimeUtils.rollback(snapshot);});
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
@@ -2536,8 +2636,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         describe("DEFAULT_LIQUIDATION_THRESHOLD > Reward amount > liquidationThresholds[main asset]", () => {
           let snapshot: string;
-          before(async function () {snapshot = await TimeUtils.snapshot();});
-          after(async function () {await TimeUtils.rollback(snapshot);});
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
@@ -2576,8 +2680,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       describe("liquidationThresholds[reward token] is set", () => {
         describe("amountToCompound > liquidationThresholds[reward token]", () => {
           let snapshot: string;
-          before(async function () {snapshot = await TimeUtils.snapshot();});
-          after(async function () {await TimeUtils.rollback(snapshot);});
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
@@ -2614,8 +2722,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         describe("liquidationThresholds[main asset] > amountToCompound > DEFAULT_LIQUIDATION_THRESHOLD==100_000", () => {
           let snapshot: string;
-          before(async function () {snapshot = await TimeUtils.snapshot();});
-          after(async function () {await TimeUtils.rollback(snapshot);});
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
@@ -2652,8 +2764,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         describe("DEFAULT_LIQUIDATION_THRESHOLD > amountToCompound > liquidationThresholds[main asset]", () => {
           let snapshot: string;
-          before(async function () {snapshot = await TimeUtils.snapshot();});
-          after(async function () {await TimeUtils.rollback(snapshot);});
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
@@ -2773,9 +2889,27 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             initialBalances: ["0", "0", "0", "1000"],
             collaterals: ["100", "200", "300", "4444"],
             borrows: [
-              {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
-              {collateralAsset: usdc, borrowAsset: tetu, collateralAmount: "200", maxTargetAmount: "201", converter: ethers.Wallet.createRandom().address},
-              {collateralAsset: usdc, borrowAsset: dai, collateralAmount: "300", maxTargetAmount: "301", converter: ethers.Wallet.createRandom().address},
+              {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                collateralAmount: "100",
+                maxTargetAmount: "101",
+                converter: ethers.Wallet.createRandom().address
+              },
+              {
+                collateralAsset: usdc,
+                borrowAsset: tetu,
+                collateralAmount: "200",
+                maxTargetAmount: "201",
+                converter: ethers.Wallet.createRandom().address
+              },
+              {
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                collateralAmount: "300",
+                maxTargetAmount: "301",
+                converter: ethers.Wallet.createRandom().address
+              },
             ]
           });
         }
@@ -2809,9 +2943,27 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               initialBalances: ["0", "0", "0", "1000"],
               collaterals: ["100", "200", "300", "400"],
               borrows: [
-                {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
-                {collateralAsset: usdc, borrowAsset: tetu, collateralAmount: "200", maxTargetAmount: "0", converter: Misc.ZERO_ADDRESS},
-                {collateralAsset: usdc, borrowAsset: dai, collateralAmount: "300", maxTargetAmount: "0", converter: Misc.ZERO_ADDRESS},
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  collateralAmount: "100",
+                  maxTargetAmount: "101",
+                  converter: ethers.Wallet.createRandom().address
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: tetu,
+                  collateralAmount: "200",
+                  maxTargetAmount: "0",
+                  converter: Misc.ZERO_ADDRESS
+                },
+                {
+                  collateralAsset: usdc,
+                  borrowAsset: dai,
+                  collateralAmount: "300",
+                  maxTargetAmount: "0",
+                  converter: Misc.ZERO_ADDRESS
+                },
               ]
             })
           ).revertedWith("TS-10 zero borrowed amount"); // ZERO_AMOUNT_BORROWED
@@ -2834,7 +2986,13 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             initialBalances: ["0", "0", "0", "1000"],
             collaterals: ["100", "0", "0", "400"],
             borrows: [
-              {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
+              {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                collateralAmount: "100",
+                maxTargetAmount: "101",
+                converter: ethers.Wallet.createRandom().address
+              },
             ]
           });
         }
@@ -2865,9 +3023,27 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             initialBalances: ["0", "0", "0", "999"],
             collaterals: ["100", "200", "300", "400"],
             borrows: [
-              {collateralAsset: usdc, borrowAsset: usdt, collateralAmount: "100", maxTargetAmount: "101", converter: ethers.Wallet.createRandom().address},
-              {collateralAsset: usdc, borrowAsset: tetu, collateralAmount: "200", maxTargetAmount: "201", converter: ethers.Wallet.createRandom().address},
-              {collateralAsset: usdc, borrowAsset: dai, collateralAmount: "300", maxTargetAmount: "301", converter: ethers.Wallet.createRandom().address},
+              {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                collateralAmount: "100",
+                maxTargetAmount: "101",
+                converter: ethers.Wallet.createRandom().address
+              },
+              {
+                collateralAsset: usdc,
+                borrowAsset: tetu,
+                collateralAmount: "200",
+                maxTargetAmount: "201",
+                converter: ethers.Wallet.createRandom().address
+              },
+              {
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                collateralAmount: "300",
+                maxTargetAmount: "301",
+                converter: ethers.Wallet.createRandom().address
+              },
             ]
           });
         }
@@ -3079,8 +3255,12 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
     describe("Bad paths", () => {
       let snapshot: string;
-      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
-      afterEach(async function () {await TimeUtils.rollback(snapshot);});
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
 
       describe("Try to pay too much", () => {
         it("should revert if pay too much", async () => {
@@ -3425,50 +3605,462 @@ describe('ConverterStrategyBaseLibFixTest', () => {
   });
 
   describe("postWithdrawActions", () => {
-    describe("Good paths", () => {
-      describe("Depositor uses expected amount of liquidity", () => {
-// todo
-      });
-      describe("Depositor uses less liquidity then expected", () => {
-// todo
-      });
-    });
-    describe("Bad paths", () => {
+    interface IPostWithdrawActionsParams {
+      tokens: MockToken[];
+      indexAsset: number;
+      reservesBeforeWithdraw: string[];
+      liquidityAmountWithdrew: string;
+      totalSupplyBeforeWithdraw: string;
+      amountsToConvert: string[];
+      withdrawnAmounts: string[];
+      balances: string[];
+      quoteRepays: IQuoteRepayParams[];
+    }
 
+    interface IPostWithdrawActionsResults {
+      expectedMainAssetAmounts: string[];
+      amountsToConvert: string[];
+    }
+
+    async function postWithdrawActions(p: IPostWithdrawActionsParams): Promise<IPostWithdrawActionsResults> {
+      // set up balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up quote repay
+      for (const quoteRepay of p.quoteRepays) {
+        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
+      }
+
+      const ret = await facade.callStatic.postWithdrawActions(
+        converter.address,
+        p.tokens.map(x => x.address),
+        p.indexAsset,
+        await Promise.all(p.reservesBeforeWithdraw.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()))
+        ),
+        parseUnits(p.liquidityAmountWithdrew, 18),
+        parseUnits(p.totalSupplyBeforeWithdraw, 18),
+        await Promise.all(p.amountsToConvert.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()))
+        ),
+        await Promise.all(p.withdrawnAmounts.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()))
+        ),
+      );
+
+      return {
+        amountsToConvert: await Promise.all(ret._amountsToConvert.map(
+          async (x, index) => (+formatUnits(x, await p.tokens[index].decimals())).toString()
+        )),
+        expectedMainAssetAmounts: await Promise.all(ret.expectedMainAssetAmounts.map(
+          async (x, index) => (+formatUnits(x, await p.tokens[p.indexAsset].decimals())).toString()
+        )),
+      }
+    }
+
+    describe("Typical case", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function postWithdrawActionsTest(): Promise<IPostWithdrawActionsResults> {
+        return postWithdrawActions({
+          tokens: [usdt, dai, usdc, weth, tetu],
+          indexAsset: 2,
+          balances: ["1000", "2000", "3000", "4000", "5000"], // actual values don't matter here, they are not used
+          totalSupplyBeforeWithdraw: "50000",
+          liquidityAmountWithdrew: "25000", // 1/2
+          reservesBeforeWithdraw: ["100", "200", "300", "400", "500"],
+          amountsToConvert: ["1", "2", "3", "4", "5"],
+          withdrawnAmounts: ["10", "20", "30", "40", "50"],
+          quoteRepays: [
+            {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "51", collateralAmountOut: "1"},
+            {collateralAsset: usdc, borrowAsset: dai, amountRepay: "102", collateralAmountOut: "2"},
+            {collateralAsset: usdc, borrowAsset: weth, amountRepay: "204", collateralAmountOut: "4"},
+            {collateralAsset: usdc, borrowAsset: tetu, amountRepay: "255", collateralAmountOut: "5"}
+          ]
+        });
+      }
+
+      it("should return amountsToConvert = amountsToConvert + withdrawnAmounts", async () => {
+        const results = await loadFixture(postWithdrawActionsTest);
+        expect(results.amountsToConvert.join()).eq(["11", "22", "33", "44", "55"].join());
+      });
+      it("should return expected value of expectedMainAssetAmounts", async () => {
+        const results = await loadFixture(postWithdrawActionsTest);
+        expect(results.expectedMainAssetAmounts.join()).eq([1, 2, 150, 4, 5].join());
+      });
     });
   });
 
   describe("postWithdrawActionsEmpty", () => {
-    describe("Good paths", () => {
-      it("should return expected values", async () => {
-// todo
-      });
-    });
-    describe("Bad paths", () => {
+    interface IPostWithdrawActionsEmptyParams {
+      tokens: MockToken[];
+      indexAsset: number;
+      amountsToConvert: string[];
+      balances: string[]; // collateral, borrow
+      quoteRepays: IQuoteRepayParams[];
+    }
 
+    interface IPostWithdrawActionsEmptyResults {
+      expectedMainAssetAmounts: string[];
+    }
+
+    async function postWithdrawActionsEmpty(p: IPostWithdrawActionsEmptyParams): Promise<IPostWithdrawActionsEmptyResults> {
+      // set up balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up quote repay
+      for (const quoteRepay of p.quoteRepays) {
+        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
+      }
+
+      const ret = await facade.callStatic.postWithdrawActionsEmpty(
+        converter.address,
+        p.tokens.map(x => x.address),
+        p.indexAsset,
+        await Promise.all(p.amountsToConvert.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()))
+        ),
+      );
+
+      return {
+        expectedMainAssetAmounts: await Promise.all(ret.map(
+          async (x, index) => (+formatUnits(x, await p.tokens[p.indexAsset].decimals())).toString()
+        )),
+      }
+    }
+
+    describe("Typical case", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function postWithdrawActionsTest(): Promise<IPostWithdrawActionsEmptyResults> {
+        return postWithdrawActionsEmpty({
+          tokens: [usdt, dai, usdc, weth, tetu],
+          indexAsset: 2,
+          balances: ["1000", "2000", "3000", "4000", "5000"], // actual values don't matter here, they are not used
+          amountsToConvert: ["1", "2", "3", "4", "5"],
+          quoteRepays: [
+            {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "1", collateralAmountOut: "1"},
+            {collateralAsset: usdc, borrowAsset: dai, amountRepay: "2", collateralAmountOut: "2"},
+            {collateralAsset: usdc, borrowAsset: weth, amountRepay: "4", collateralAmountOut: "4"},
+            {collateralAsset: usdc, borrowAsset: tetu, amountRepay: "5", collateralAmountOut: "5"}
+          ]
+        });
+      }
+
+      it("should return expected value of expectedMainAssetAmounts", async () => {
+        const results = await loadFixture(postWithdrawActionsTest);
+        expect(results.expectedMainAssetAmounts.join()).eq([1, 2, 0, 4, 5].join());
+      });
     });
   });
 
-  describe("swapToGivenAmountAndSendToConverter", () => {
-    describe("Good paths", () => {
-      it("should return expected values", async () => {
-// todo
+  describe('getLiquidityAmount', () => {
+    const DECIMALS_LIQUIDITY = 18;
+
+    interface IGetLiquidityAmountParams {
+      tokens: MockToken[];
+      indexAsset: number;
+      targetAmount: string;
+      investedAssets: string;
+      depositorLiquidity: string;
+
+      balances: string[];
+      quoteRepays: IQuoteRepayParams[];
+    }
+
+    interface IGetLiquidityAmountResults {
+      resultAmount: number;
+      amountsToConvertOut: string[];
+    }
+
+    async function getLiquidityAmount(p: IGetLiquidityAmountParams): Promise<IGetLiquidityAmountResults> {
+      // set up balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up quote repay
+      for (const quoteRepay of p.quoteRepays) {
+        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
+      }
+      const ret = await facade.callStatic.getLiquidityAmount(
+        parseUnits(p.targetAmount, await p.tokens[p.indexAsset].decimals()),
+        ethers.Wallet.createRandom().address,
+        p.tokens.map(x => x.address),
+        p.indexAsset,
+        converter.address,
+        parseUnits(p.investedAssets, await p.tokens[p.indexAsset].decimals()),
+        parseUnits(p.depositorLiquidity, DECIMALS_LIQUIDITY),
+      );
+
+      return {
+        amountsToConvertOut: await Promise.all(ret.amountsToConvertOut.map(
+          async (x, index) => (+formatUnits(x, await p.tokens[index].decimals())).toString()
+        )),
+        resultAmount: +formatUnits(ret.resultAmount, DECIMALS_LIQUIDITY)
+      }
+    }
+
+    describe('Good paths', () => {
+      describe('partial', () => {
+        describe('zero balances', () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+            return getLiquidityAmount({
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              targetAmount: "5",
+              investedAssets: "500",
+              depositorLiquidity: "7",
+              balances: ["0", "0", "0"],
+              quoteRepays: []
+            })
+          }
+
+          it('should return expected resultAmount', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.resultAmount).eq(7 * 101 / 100 * 5 / 500);
+          });
+          it('should return zero amounts to convert', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.amountsToConvertOut.join()).eq([0, 0, 0].join());
+          });
+        });
+        describe('amount of first asset is enough to get the required amount', () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+            return getLiquidityAmount({
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              targetAmount: "5",
+              investedAssets: "500",
+              depositorLiquidity: "7",
+              balances: ["17", "27", "37"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "27", collateralAmountOut: "14"},
+              ]
+            })
+          }
+
+          it('should return expected resultAmount', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.resultAmount).eq(0);
+          });
+          it('should return zero amounts to convert', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.amountsToConvertOut.join()).eq([17, 0, 0].join());
+          });
+        });
+        describe('amount of two assets is enough to get the required amount', () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+            return getLiquidityAmount({
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              targetAmount: "9",
+              investedAssets: "500",
+              depositorLiquidity: "7",
+              balances: ["17", "27", "37"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "37", collateralAmountOut: "14"},
+              ]
+            })
+          }
+
+          it('should return expected resultAmount', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.resultAmount).eq(0);
+          });
+          it('should return zero amounts to convert', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
+          });
+        });
+        describe('amount of two assets is NOT enough to get the required amount', () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+            return getLiquidityAmount({
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              targetAmount: "19",
+              investedAssets: "500",
+              depositorLiquidity: "7",
+              balances: ["17", "27", "37"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"}, // 2 + 7 < 19
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "37", collateralAmountOut: "2"},
+              ]
+            })
+          }
+
+          it('should return expected resultAmount', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.resultAmount).eq(7 * 101 / 100 * (19 - 9) / (500 - 9));
+          });
+          it('should return zero amounts to convert', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
+          });
+        });
+      });
+      describe('all', () => {
+        describe('zero balances', () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+            return getLiquidityAmount({
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              targetAmount: "0", // all
+              investedAssets: "500",
+              depositorLiquidity: "7777",
+              balances: ["0", "0", "0"],
+              quoteRepays: []
+            })
+          }
+
+          it('should return expected resultAmount', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.resultAmount).eq(7777);
+          });
+          it('should return zero amounts to convert', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.amountsToConvertOut.join()).eq([0, 0, 0].join());
+          });
+        });
+        describe('balances are not zero', () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+            return getLiquidityAmount({
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              targetAmount: "0",
+              investedAssets: "500",
+              depositorLiquidity: "7777",
+              balances: ["17", "27", "37"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "27", collateralAmountOut: "14"},
+              ]
+            })
+          }
+
+          it('should return expected resultAmount', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.resultAmount).eq(7777);
+          });
+          it('should return zero amounts to convert', async () => {
+            const results = await loadFixture(getLiquidityAmountTest);
+            expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
+          });
+        });
       });
     });
+
     describe("Bad paths", () => {
+      describe('targetAmount > investedAmount, investedAmount == sum(collaterals)', () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
-    });
-  });
+        async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+          return getLiquidityAmount({
+            tokens: [dai, usdc, usdt],
+            indexAsset: 1,
+            targetAmount: "500",
+            investedAssets: "21",
+            depositorLiquidity: "777",
+            balances: ["17", "27", "37"],
+            quoteRepays: [
+              {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
+              {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "37", collateralAmountOut: "14"},
+            ]
+          })
+        }
 
-  describe("_getCollateralToBorrowRatio", () => {
-    describe("Good paths", () => {
-      it("should return expected values", async () => {
-// todo
+        it('should return expected resultAmount', async () => {
+          const results = await loadFixture(getLiquidityAmountTest);
+          expect(results.resultAmount).eq(777);
+        });
+        it('should return zero amounts to convert', async () => {
+          const results = await loadFixture(getLiquidityAmountTest);
+          expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
+        });
       });
-    });
-    describe("Bad paths", () => {
-
-    });
+    })
   });
+
 //endregion Unit tests
 });
