@@ -3104,20 +3104,66 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     });
   });
 
-
   describe("_closePosition", () => {
+    interface IClosePositionParams {
+      collateralAsset: MockToken;
+      borrowAsset: MockToken;
+      amountToRepay: string;
+      balances: string[]; // collateral, borrow
+      repays: IRepayParams[];
+    }
+
+    interface IClosePositionResults {
+      gasUsed: BigNumber;
+      collateralAmount: string;
+      repaidAmount: string;
+      collateralAssetBalance: string;
+      borrowAssetBalance: string;
+    }
+
+    async function makeClosePosition(p: IClosePositionParams): Promise<IClosePositionResults> {
+      const tokens = [p.collateralAsset, p.borrowAsset];
+
+      // set up balances
+      for (let i = 0; i < tokens.length; ++i) {
+        await tokens[i].mint(facade.address, parseUnits(p.balances[i], await tokens[i].decimals()));
+      }
+
+      // set up TetuConverter
+      const converter = await MockHelper.createMockTetuConverter(signer);
+
+      // set up repay
+      for (const repay of p.repays) {
+        await setupMockedRepay(converter, facade.address, repay);
+      }
+
+      const balanceBorrowAsset = p.balances[1];
+      const ret = await facade.callStatic._closePosition(
+        converter.address,
+        p.collateralAsset.address,
+        p.borrowAsset.address,
+        parseUnits(p.amountToRepay, await p.borrowAsset.decimals())
+      );
+
+      const tx = await facade._closePosition(
+        converter.address,
+        p.collateralAsset.address,
+        p.borrowAsset.address,
+        parseUnits(p.amountToRepay, await p.borrowAsset.decimals())
+      );
+
+      const gasUsed = (await tx.wait()).gasUsed;
+      return {
+        gasUsed,
+        collateralAmount: (+formatUnits(ret.returnedAssetAmountOut, await p.collateralAsset.decimals())).toString(),
+        repaidAmount: (+formatUnits(ret.repaidAmountOut, await p.borrowAsset.decimals())).toString(),
+        collateralAssetBalance: (+formatUnits(await p.collateralAsset.balanceOf(facade.address), await p.collateralAsset.decimals())).toString(),
+        borrowAssetBalance: (+formatUnits(await p.borrowAsset.balanceOf(facade.address), await p.borrowAsset.decimals())).toString(),
+      };
+    }
+
     describe("Good paths", () => {
-      describe("Full repayment, no debt gap", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-// todo
-      });
-      describe("Full repayment with debt gap", () => {
+      describe("balanceBefore > needToRepay > amountToRepay", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -3126,9 +3172,41 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-// todo
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["300", "5000"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountToRepay: "1000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "1000",
+              collateralAmountOut: "2000",
+              totalDebtAmountOut: "3000", // needToRepay
+              totalCollateralAmountOut: "6000",
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("2000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("1000");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("2300");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("4000");
+        });
       });
-      describe("Partial repayment", () => {
+      describe("balanceBefore > amountToRepay > needToRepay", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -3137,16 +3215,211 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-// todo
-      });
-    });
-    describe("Bad paths", () => {
-      let snapshot: string;
-      beforeEach(async function () {snapshot = await TimeUtils.snapshot();});
-      afterEach(async function () {await TimeUtils.rollback(snapshot);});
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["300", "5000"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountToRepay: "4000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "1000",
+              collateralAmountOut: "2000",
+              totalDebtAmountOut: "1000", // needToRepay
+              totalCollateralAmountOut: "2000",
+            }]
+          });
+        }
 
-      describe("Try to pay too much", () => {
-// todo
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("2000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("1000");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("2300");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("4000");
+        });
+      });
+      describe("amountToRepay > needToRepay > balanceBefore", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["300", "500"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountToRepay: "7000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "500",
+              collateralAmountOut: "1000",
+              totalDebtAmountOut: "1000", // needToRepay
+              totalCollateralAmountOut: "2000",
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("1000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("500");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("1300");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("0");
+        });
+      });
+      describe("amountToRepay > balanceBefore > needToRepay", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["300", "5000"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountToRepay: "7000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "1000",
+              collateralAmountOut: "2000",
+              totalDebtAmountOut: "1000", // needToRepay
+              totalCollateralAmountOut: "2000",
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("2000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("1000");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("2300");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("4000");
+        });
+      });
+      describe("needToRepay > amountToRepay > balanceBefore", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["300", "500"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountToRepay: "7000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "500",
+              collateralAmountOut: "1000",
+              totalDebtAmountOut: "25000", // needToRepay
+              totalCollateralAmountOut: "50000",
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("1000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("500");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("1300");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("0");
+        });
+      });
+      describe("needToRepay > balanceBefore > amountToRepay", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionTest(): Promise<IClosePositionResults> {
+          return makeClosePosition({
+            balances: ["300", "5000"],
+            collateralAsset: usdc,
+            borrowAsset: dai,
+            amountToRepay: "3000",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              amountRepay: "3000",
+              collateralAmountOut: "6000",
+              totalDebtAmountOut: "25000", // needToRepay
+              totalCollateralAmountOut: "50000",
+            }]
+          });
+        }
+
+        it("should return expected collateral amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAmount).eq("6000");
+        });
+        it("should return expected repaid amount", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.repaidAmount).eq("3000");
+        });
+        it("should set expected collateral asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.collateralAssetBalance).eq("6300");
+        });
+        it("should set expected borrow asset balance", async () => {
+          const ret = await loadFixture(makeClosePositionTest);
+          expect(ret.borrowAssetBalance).eq("2000");
+        });
       });
     });
   });
