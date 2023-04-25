@@ -197,7 +197,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle())
     );
 
-    // make borrow and save amounts of tokens available for deposit to tokenAmounts
+    // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
     tokenAmounts = ConverterStrategyBaseLib.getTokenAmounts(
       tetuConverter_,
       tokens_,

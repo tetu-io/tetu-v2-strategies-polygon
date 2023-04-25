@@ -12,7 +12,6 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
-
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -1061,7 +1060,7 @@ library ConverterStrategyBaseLib {
       if (i != indexAsset_) {
         if (collaterals_[i] != 0) {
           AppLib.approveIfNeeded(tokens_[indexAsset_], collaterals_[i], address(tetuConverter_));
-          (, uint borrowedAmount) = _openPosition(
+          _openPosition(
             tetuConverter_,
             "", // entry kind = 0: fixed collateral amount, max possible borrow amount
             tokens_[indexAsset_],
@@ -1070,8 +1069,8 @@ library ConverterStrategyBaseLib {
             Math.max(thresholdMainAsset_, DEFAULT_LIQUIDATION_THRESHOLD)
           );
 
-          // zero amount are possible (conversion is not available) but it's not suitable for depositor
-          require(borrowedAmount != 0, AppErrors.ZERO_AMOUNT_BORROWED);
+          // zero borrowed amount is possible here (conversion is not available)
+          // if it's not suitable for depositor, the depositor should check zero amount in other places
         }
         tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
       }

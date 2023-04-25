@@ -2934,39 +2934,44 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           await TimeUtils.rollback(snapshot);
         });
 
-        it("should revert", async () => {
-          await expect(
-            makeGetTokenAmounts({
-              tokens: [usdt, tetu, dai, usdc],
-              assetIndex: 3,
-              threshold: "0",
-              initialBalances: ["0", "0", "0", "1000"],
-              collaterals: ["100", "200", "300", "400"],
-              borrows: [
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: usdt,
-                  collateralAmount: "100",
-                  maxTargetAmount: "101",
-                  converter: ethers.Wallet.createRandom().address
-                },
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: tetu,
-                  collateralAmount: "200",
-                  maxTargetAmount: "0",
-                  converter: Misc.ZERO_ADDRESS
-                },
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  collateralAmount: "300",
-                  maxTargetAmount: "0",
-                  converter: Misc.ZERO_ADDRESS
-                },
-              ]
-            })
-          ).revertedWith("TS-10 zero borrowed amount"); // ZERO_AMOUNT_BORROWED
+        /**
+         * There are two possible cases with maxTargetAmount = 0:
+         * 1) threshold is too high
+         * 2) landing platform cannot provide required liquidity
+         * In both cases the function doesn't revert, it just returns zero amount
+         */
+        it("should return zero amounts", async () => {
+          const r = await makeGetTokenAmounts({
+            tokens: [usdt, tetu, dai, usdc],
+            assetIndex: 3,
+            threshold: "0",
+            initialBalances: ["0", "0", "0", "1000"],
+            collaterals: ["100", "200", "300", "400"],
+            borrows: [
+              {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                collateralAmount: "100",
+                maxTargetAmount: "101",
+                converter: ethers.Wallet.createRandom().address
+              },
+              {
+                collateralAsset: usdc,
+                borrowAsset: tetu,
+                collateralAmount: "200",
+                maxTargetAmount: "0",
+                converter: Misc.ZERO_ADDRESS
+              },
+              {
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                collateralAmount: "300",
+                maxTargetAmount: "0",
+                converter: Misc.ZERO_ADDRESS
+              },
+            ]
+          });
+          expect(r.tokenAmountsOut.join()).eq(["101", "0", "0", "400"].join());
         });
       });
       describe("Zero collateral amount", () => {
