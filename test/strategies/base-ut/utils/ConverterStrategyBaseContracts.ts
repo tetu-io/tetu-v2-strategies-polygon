@@ -1,4 +1,5 @@
 import {
+  BalancerBoostedStrategy__factory,
   ControllerV2__factory,
   ConverterStrategyBase, ConverterStrategyBase__factory,
   IController, IController__factory, IERC20__factory,
@@ -15,8 +16,19 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {Misc} from "../../../../scripts/utils/Misc";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {Signer} from "ethers";
+import {Provider} from "@ethersproject/providers";
 
-export class ConverterStrategyBaseIntUniv3 {
+export interface IConverterStrategyBaseContractsParams {
+  converter?: string;
+  buffer?: number;
+  depositFee?: number;
+  withdrawFee?: number;
+  wait?: boolean;
+}
+
+export class ConverterStrategyBaseContracts {
   strategy: ConverterStrategyBase;
   vault: TetuVaultV2;
   splitter: StrategySplitterV2;
@@ -40,14 +52,15 @@ export class ConverterStrategyBaseIntUniv3 {
   /**
    * Build UniswapV3ConverterStrategy for the given pool/asset
    */
-  static async build(
+  static async buildUniv3(
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
     core: CoreAddresses,
     asset: string,
     pool: string,
-    gov: SignerWithAddress
-  ): Promise<ConverterStrategyBaseIntUniv3> {
+    gov: SignerWithAddress,
+    p?: IConverterStrategyBaseContractsParams
+  ): Promise<ConverterStrategyBaseContracts> {
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,
       'TetuV2_UniswapV3_USDC-USDT-0.01%',
@@ -60,7 +73,7 @@ export class ConverterStrategyBaseIntUniv3 {
         await _strategy.init(
           core.controller,
           _splitterAddress,
-          MaticAddresses.TETU_CONVERTER,
+          p?.converter || MaticAddresses.TETU_CONVERTER,
           MaticAddresses.UNISWAPV3_USDC_USDT_100,
           0,
           0,
@@ -70,13 +83,65 @@ export class ConverterStrategyBaseIntUniv3 {
       },
       IController__factory.connect(core.controller, gov),
       gov,
-      0,
-      300,
-      300,
-      false,
+      p?.buffer || 0,
+      p?.depositFee || 300,
+      p?.withdrawFee || 300,
+      p?.wait || false,
     );
 
-    const dest = new ConverterStrategyBaseIntUniv3(
+    const dest = new ConverterStrategyBaseContracts(
+      ConverterStrategyBase__factory.connect(data.strategy.address, gov),
+      data.vault,
+      data.splitter,
+      await data.vault.insurance(),
+      asset
+    );
+
+    // setup converter
+    const strategy = UniswapV3ConverterStrategy__factory.connect(data.strategy.address, gov);
+    await ConverterUtils.whitelist([strategy.address]);
+    const state = await strategy.getState();
+    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
+
+    await IERC20__factory.connect(asset, signer).approve(data.vault.address, Misc.MAX_UINT);
+    await IERC20__factory.connect(asset, signer2).approve(data.vault.address, Misc.MAX_UINT);
+
+    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
+
+    await data.vault.setWithdrawRequestBlocks(0);
+
+    return dest;
+  }
+
+  static async buildBalancer(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    core: CoreAddresses,
+    asset: string,
+    pool: string,
+    gov: SignerWithAddress,
+    p?: IConverterStrategyBaseContractsParams
+  ): Promise<ConverterStrategyBaseContracts> {
+    const converter = p?.converter || MaticAddresses.TETU_CONVERTER;
+    const data = await UniversalTestUtils.makeStrategyDeployer(
+      signer,
+      core,
+      asset,
+      converter,
+      'BalancerBoostedStrategy',
+      async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
+        const strategyContract = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
+        await strategyContract.init(core.controller, splitterAddress, converter, pool);
+        return strategyContract as unknown as IStrategyV2;
+      },
+      {
+        depositFee: p?.depositFee || 300,
+        buffer: p?.buffer || 0,
+        withdrawFee: p?.withdrawFee || 300,
+      },
+    );
+
+    const dest = new ConverterStrategyBaseContracts(
       ConverterStrategyBase__factory.connect(data.strategy.address, gov),
       data.vault,
       data.splitter,

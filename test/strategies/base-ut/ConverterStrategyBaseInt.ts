@@ -5,7 +5,7 @@ import {Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {ConverterStrategyBaseIntUniv3} from "./utils/ConverterStrategyBaseIntUniv3";
+import {ConverterStrategyBaseContracts} from "./utils/ConverterStrategyBaseContracts";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {BigNumber} from "ethers";
@@ -43,8 +43,8 @@ describe("ConverterStrategyBaseInt", () => {
 //endregion Before, after
 
 //region Fixtures
-  async function prepareUniv3ConverterStrategyUsdcUsdt(): Promise<ConverterStrategyBaseIntUniv3> {
-    return ConverterStrategyBaseIntUniv3.build(
+  async function prepareUniv3ConverterStrategyUsdcUsdt(): Promise<ConverterStrategyBaseContracts> {
+    return ConverterStrategyBaseContracts.buildUniv3(
       signer,
       signer2,
       core,
@@ -53,7 +53,16 @@ describe("ConverterStrategyBaseInt", () => {
       gov
     );
   }
-
+  async function prepareBalancerConverterStrategyUsdcTUsd(): Promise<ConverterStrategyBaseContracts> {
+    return ConverterStrategyBaseContracts.buildBalancer(
+      signer,
+      signer2,
+      core,
+      MaticAddresses.USDC_TOKEN,
+      MaticAddresses.BALANCER_POOL_T_USD,
+      gov
+    );
+  }
 //endregion Fixtures
 
 //region Unit tests
@@ -63,97 +72,195 @@ describe("ConverterStrategyBaseInt", () => {
       afterExit: IStateNum;
     }
 
-    /**
-     * todo Uncomment after fixing SCB-670
-     */
-    describe.skip("Deposit $0.1", () => {
-      let snapshot: string;
-      before(async function () {
-        snapshot = await TimeUtils.snapshot();
+    describe("univ3", () => {
+      /**
+       * todo Uncomment after fixing SCB-670
+       */
+      describe.skip("Deposit $0.1", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeNoDepositEmergencyExit(): Promise<IMakeDepositAndEmergencyExit> {
+          const cc = await loadFixture(prepareUniv3ConverterStrategyUsdcUsdt);
+          await cc.vault.setDoHardWorkOnInvest(false);
+
+          await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
+          await cc.vault.connect(signer2).deposit(10000, signer2.address);
+
+          const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
+          const depositAmount1 = parseUnits('100000', decimals);
+          await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
+          const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
+          console.log("beforeExit", beforeExit);
+
+          await cc.strategy.connect(signer).emergencyExit();
+          const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
+
+          console.log("afterExit", afterExit);
+
+          return {beforeExit, afterExit}
+        }
+
+        it("should set investedAssets to 0", async () => {
+          const r = await loadFixture(makeNoDepositEmergencyExit);
+          await expect(r.afterExit.strategy.investedAssets).eq(0);
+        });
       });
-      after(async function () {
-        await TimeUtils.rollback(snapshot);
-      });
+      describe("Deposit $0.1 + 100000", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
-      async function makeNoDepositEmergencyExit() : Promise<IMakeDepositAndEmergencyExit> {
-        const cc = await loadFixture(prepareUniv3ConverterStrategyUsdcUsdt);
-        await cc.vault.setDoHardWorkOnInvest(false);
+        async function makeDepositAndEmergencyExit(): Promise<IMakeDepositAndEmergencyExit> {
+          const cc = await loadFixture(prepareUniv3ConverterStrategyUsdcUsdt);
+          await cc.vault.setDoHardWorkOnInvest(false);
 
-        await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
-        await cc.vault.connect(signer2).deposit(10000, signer2.address);
+          await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
+          await cc.vault.connect(signer2).deposit(10000, signer2.address);
 
-        const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
-        const depositAmount1 = parseUnits('100000', decimals);
-        await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
-        const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
-        console.log("beforeExit", beforeExit);
+          const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
+          const depositAmount1 = parseUnits('100000', decimals);
+          await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
 
-        await cc.strategy.connect(signer).emergencyExit();
-        const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
+          const asset = IERC20Metadata__factory.connect(cc.asset, signer);
+          await depositToVault(cc.vault, signer, depositAmount1, decimals, asset, cc.insurance);
+          const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
-        console.log("afterExit", afterExit);
+          console.log("emergencyExit");
+          await cc.strategy.connect(signer).emergencyExit();
+          const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
-        return {beforeExit, afterExit}
-      }
+          console.log("afterDeposit", beforeExit);
+          console.log("afterExit", afterExit);
 
-      it("should set investedAssets to 0", async () => {
-        const r = await loadFixture(makeNoDepositEmergencyExit);
-        await expect(r.afterExit.strategy.investedAssets).eq(0);
+          return {beforeExit, afterExit};
+        }
+
+        it("should set investedAssets to 0", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.strategy.investedAssets).gt(0);
+          await expect(r.afterExit.strategy.investedAssets).eq(0);
+        });
+        it("should set totalAssets to 0", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.strategy.totalAssets).gt(0);
+          await expect(r.afterExit.strategy.totalAssets).eq(0);
+        });
+        it("should set liquidity to 0", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.strategy.liquidity).gt(0);
+          await expect(r.afterExit.strategy.liquidity).eq(0);
+        });
+        it("should close all debts", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.converter.amountsToRepay.length).gt(0);
+          await expect(r.afterExit.converter.amountsToRepay.length).eq(0);
+        });
       });
     });
-    describe("Deposit $0.1 + 100000", () => {
-      let snapshot: string;
-      before(async function () {
-        snapshot = await TimeUtils.snapshot();
+
+    describe("balancer", () => {
+      /**
+       * todo Uncomment after fixing SCB-670
+       */
+      describe.skip("Deposit $0.1", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeNoDepositEmergencyExit(): Promise<IMakeDepositAndEmergencyExit> {
+          const cc = await loadFixture(prepareBalancerConverterStrategyUsdcTUsd);
+          await cc.vault.setDoHardWorkOnInvest(false);
+
+          await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
+          await cc.vault.connect(signer2).deposit(10000, signer2.address);
+
+          const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
+          const depositAmount1 = parseUnits('100000', decimals);
+          await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
+          const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
+          console.log("beforeExit", beforeExit);
+
+          await cc.strategy.connect(signer).emergencyExit();
+          const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
+
+          console.log("afterExit", afterExit);
+
+          return {beforeExit, afterExit}
+        }
+
+        it("should set investedAssets to 0", async () => {
+          const r = await loadFixture(makeNoDepositEmergencyExit);
+          await expect(r.afterExit.strategy.investedAssets).eq(0);
+        });
       });
-      after(async function () {
-        await TimeUtils.rollback(snapshot);
-      });
+      describe("Deposit $0.1 + 100000", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
-      async function makeDepositAndEmergencyExit() : Promise<IMakeDepositAndEmergencyExit> {
-        const cc = await loadFixture(prepareUniv3ConverterStrategyUsdcUsdt);
-        await cc.vault.setDoHardWorkOnInvest(false);
+        async function makeDepositAndEmergencyExit(): Promise<IMakeDepositAndEmergencyExit> {
+          const cc = await loadFixture(prepareBalancerConverterStrategyUsdcTUsd);
+          await cc.vault.setDoHardWorkOnInvest(false);
 
-        await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
-        await cc.vault.connect(signer2).deposit(10000, signer2.address);
+          await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
+          await cc.vault.connect(signer2).deposit(10000, signer2.address);
 
-        const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
-        const depositAmount1 = parseUnits('100000', decimals);
-        await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
+          const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
+          const depositAmount1 = parseUnits('100000', decimals);
+          await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
 
-        const asset = IERC20Metadata__factory.connect(cc.asset, signer);
-        await depositToVault(cc.vault, signer, depositAmount1, decimals, asset, cc.insurance);
-        const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
+          const asset = IERC20Metadata__factory.connect(cc.asset, signer);
+          await depositToVault(cc.vault, signer, depositAmount1, decimals, asset, cc.insurance);
+          const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
-        console.log("emergencyExit");
-        await cc.strategy.connect(signer).emergencyExit();
-        const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
+          console.log("emergencyExit");
+          await cc.strategy.connect(signer).emergencyExit();
+          const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
-        console.log("afterDeposit", beforeExit);
-        console.log("afterExit", afterExit);
+          console.log("afterDeposit", beforeExit);
+          console.log("afterExit", afterExit);
 
-        return {beforeExit, afterExit};
-      }
+          return {beforeExit, afterExit};
+        }
 
-      it("should set investedAssets to 0", async () => {
-        const r = await loadFixture(makeDepositAndEmergencyExit);
-        await expect(r.beforeExit.strategy.investedAssets).gt(0);
-        await expect(r.afterExit.strategy.investedAssets).eq(0);
-      });
-      it("should set totalAssets to 0", async () => {
-        const r = await loadFixture(makeDepositAndEmergencyExit);
-        await expect(r.beforeExit.strategy.totalAssets).gt(0);
-        await expect(r.afterExit.strategy.totalAssets).eq(0);
-      });
-      it("should set liquidity to 0", async () => {
-        const r = await loadFixture(makeDepositAndEmergencyExit);
-        await expect(r.beforeExit.strategy.liquidity).gt(0);
-        await expect(r.afterExit.strategy.liquidity).eq(0);
-      });
-      it("should close all debts", async () => {
-        const r = await loadFixture(makeDepositAndEmergencyExit);
-        await expect(r.beforeExit.converter.amountsToRepay.length).gt(0);
-        await expect(r.afterExit.converter.amountsToRepay.length).eq(0);
+        it("should set investedAssets to 0", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.strategy.investedAssets).gt(0);
+          await expect(r.afterExit.strategy.investedAssets).eq(0);
+        });
+        it("should set totalAssets to 0", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.strategy.totalAssets).gt(0);
+          await expect(r.afterExit.strategy.totalAssets).eq(0);
+        });
+        it("should set liquidity to 0", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.strategy.liquidity).gt(0);
+          await expect(r.afterExit.strategy.liquidity).eq(0);
+        });
+        it("should close all debts", async () => {
+          const r = await loadFixture(makeDepositAndEmergencyExit);
+          await expect(r.beforeExit.converter.amountsToRepay.length).gt(0);
+          await expect(r.afterExit.converter.amountsToRepay.length).eq(0);
+        });
       });
     });
   });
