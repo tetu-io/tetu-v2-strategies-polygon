@@ -46,7 +46,7 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
   /// @param performanceFee_ Max is FEE_DENOMINATOR
-  /// @return rewardAmounts = rewardAmounts_ - performanceAmounts
+  /// @return rewardAmountsOut = rewardAmounts_ - performanceAmounts
   /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
   function sendPerformanceFee(
     uint performanceFee_,
@@ -55,7 +55,7 @@ library ConverterStrategyBaseLib2 {
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (
-    uint[] memory rewardAmounts,
+    uint[] memory rewardAmountsOut,
     uint[] memory performanceAmounts
   ) {
 
@@ -64,12 +64,12 @@ library ConverterStrategyBaseLib2 {
 
     // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
     uint len = rewardAmounts_.length;
-    rewardAmounts = new uint[](len);
+    rewardAmountsOut = new uint[](len);
     performanceAmounts = new uint[](len);
 
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
-      rewardAmounts[i] = rewardAmounts_[i] - performanceAmounts[i];
+      rewardAmountsOut[i] = rewardAmounts_[i] - performanceAmounts[i];
 
       uint toPerf = performanceAmounts[i] / 2;
       uint toInsurance = performanceAmounts[i] - toPerf;
@@ -156,9 +156,10 @@ library ConverterStrategyBaseLib2 {
   ///         2) IF result amount is not necessary - withdraw some liquidity from the pool
   ///            and also convert it to the main asset.
   /// @dev This is a writable function with read-only behavior (because of the quote-call)
-  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy
-  ///                      0 - withdraw all
+  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy; 0 - withdraw all
   /// @param strategy_ Address of the strategy
+  /// @return resultAmount Amount of liquidity that should be withdrawn from the pool, cannot exceed depositorLiquidity
+  /// @return amountsToConvertOut Amounts of {tokens} that should be converted to the main asset
   function getLiquidityAmount(
     uint targetAmount_,
     address strategy_,
@@ -181,12 +182,7 @@ library ConverterStrategyBaseLib2 {
       uint balance = IERC20(tokens[i]).balanceOf(address(this));
       if (balance != 0) {
         // let's estimate collateral that we received back after repaying balance-amount
-        (uint expectedCollateral,) = converter.quoteRepay(
-          strategy_,
-          tokens[indexAsset],
-          tokens[i],
-          balance
-        );
+        (uint expectedCollateral,) = converter.quoteRepay(strategy_, tokens[indexAsset], tokens[i], balance);
 
         if (all || targetAmount_ != 0) {
           // We always repay WHOLE available balance-amount even if it gives us much more amount then we need.
@@ -197,23 +193,17 @@ library ConverterStrategyBaseLib2 {
           amountsToConvertOut[i] = balance;
         }
 
-        if (targetAmount_ > expectedCollateral) {
-          targetAmount_ -= expectedCollateral;
-        } else {
-          targetAmount_ = 0;
-        }
+        targetAmount_ = targetAmount_ > expectedCollateral
+          ? targetAmount_ - expectedCollateral
+          : 0;
 
-        if (investedAssets > expectedCollateral) {
-          investedAssets -= expectedCollateral;
-        } else {
-          investedAssets = 0;
-        }
+        investedAssets = investedAssets > expectedCollateral
+          ? investedAssets - expectedCollateral
+          : 0;
       }
     }
 
-    require(all || investedAssets > 0, AppErrors.WITHDRAW_TOO_MUCH);
-
-    uint liquidityRatioOut = all
+    uint liquidityRatioOut = all || investedAssets == 0
       ? 1e18
       : ((targetAmount_ == 0)
         ? 0
@@ -223,11 +213,9 @@ library ConverterStrategyBaseLib2 {
         / 100 // .. add 1% on top
       );
 
-    if (liquidityRatioOut != 0) {
-      resultAmount = Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity);
-    } else {
-      resultAmount = 0;
-    }
+    resultAmount = liquidityRatioOut != 0
+      ? Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity)
+      : 0;
   }
 
   /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
