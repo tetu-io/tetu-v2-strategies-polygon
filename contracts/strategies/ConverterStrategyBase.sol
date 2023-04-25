@@ -20,7 +20,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   using SafeERC20 for IERC20;
 
   /////////////////////////////////////////////////////////////////////
-  ///                        DATA TYPES
+  //region DATA TYPES
   /////////////////////////////////////////////////////////////////////
 
   struct WithdrawUniversalLocal {
@@ -34,25 +34,25 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] amountsToConvert;
     uint expectedTotalMainAssetAmount;
     uint[] expectedMainAssetAmounts;
-    uint[] repaidAmounts;
-    uint expectedBalanceInc;
     uint investedAssetsAfterWithdraw;
     uint balanceAfterWithdraw;
     address[] tokens;
     address asset;
   }
+  //endregion DATA TYPES
 
   /////////////////////////////////////////////////////////////////////
-  ///                        CONSTANTS
+  //region CONSTANTS
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.3";
 
   uint internal constant REINVEST_THRESHOLD_DENOMINATOR = 100_000;
+  //endregion CONSTANTS
 
   /////////////////////////////////////////////////////////////////////
-  //                        VARIABLES
+  //region VARIABLES
   //                Keep names and ordering!
   // Add only in the bottom and don't forget to decrease gap variable
   /////////////////////////////////////////////////////////////////////
@@ -70,9 +70,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///         decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   /// @dev We need this threshold to avoid numerous conversions of small amounts
   uint public reinvestThresholdPercent;
+  //endregion VARIABLES
 
   /////////////////////////////////////////////////////////////////////
-  ///                        Events
+  //region Events
   /////////////////////////////////////////////////////////////////////
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
@@ -88,9 +89,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] amountsToForward,
     uint[] performanceAmounts
   );
+  //endregion Events
 
   /////////////////////////////////////////////////////////////////////
-  //                Initialization and configuration
+  //region Initialization and configuration
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Initialize contract after setup it as proxy implementation
@@ -121,9 +123,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     reinvestThresholdPercent = percent_;
     emit ReinvestThresholdPercentChanged(percent_);
   }
+  //endregion Initialization and configuration
 
   /////////////////////////////////////////////////////////////////////
-  ///                     Deposit to the pool
+  //region Deposit to the pool
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Amount of underlying assets converted to pool assets and invested to the pool.
@@ -167,9 +170,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       }
     }
   }
+  //endregion Deposit to the pool
 
   /////////////////////////////////////////////////////////////////////
-  ///               Convert amounts before deposit
+  //region Convert amounts before deposit
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Prepare {tokenAmounts} to be passed to depositorEnter
@@ -207,9 +211,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       liquidationThresholds[tokens_[indexAsset_]]
     );
   }
+  //endregion Convert amounts before deposit
 
   /////////////////////////////////////////////////////////////////////
-  ///                     Withdraw from the pool
+  //region Withdraw from the pool
   /////////////////////////////////////////////////////////////////////
 
   function _beforeWithdraw(uint /*amount*/) internal virtual {
@@ -368,9 +373,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // adjust _investedAssets
     _updateInvestedAssets();
   }
+  //endregion Withdraw from the pool
 
   /////////////////////////////////////////////////////////////////////
-  ///               Convert amounts after withdraw
+  //region Convert amounts after withdraw
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Convert {amountsToConvert_} to the main {asset}
@@ -431,9 +437,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     return expectedAmount;
   }
+  //endregion Convert amounts after withdraw
 
   /////////////////////////////////////////////////////////////////////
-  ///                 Claim rewards
+  //region Claim rewards
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Claim all possible rewards.
@@ -504,9 +511,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       performanceAmounts
     );
   }
+  //endregion Claim rewards
 
   /////////////////////////////////////////////////////////////////////
-  ///                   Hardwork
+  //region Hardwork
   /////////////////////////////////////////////////////////////////////
 
   /// @notice A virtual handler to make any action before hardwork
@@ -558,10 +566,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     _postHardWork();
   }
-
+  //endregion Hardwork
 
   /////////////////////////////////////////////////////////////////////
-  ///               InvestedAssets Calculations
+  //region InvestedAssets Calculations
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Updates cached _investedAssets to actual value
@@ -605,9 +613,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
       : uint(0);
   }
+  //endregion InvestedAssets Calculations
 
   /////////////////////////////////////////////////////////////////////
-  ///               ITetuConverterCallback
+  //region ITetuConverterCallback
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Converters asks to send some amount back.
@@ -661,9 +670,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // and avoid fixing any related losses in hardwork
     _updateInvestedAssets();
   }
+  //endregion ITetuConverterCallback
 
   /////////////////////////////////////////////////////////////////////
-  ///                Others
+  //region Others
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Unlimited capacity by default
@@ -677,6 +687,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset_);
     require(indexAsset != type(uint).max, StrategyLib.WRONG_VALUE);
   }
+  //endregion Others
 
   /**
 * @dev This empty reserved space is put in place to allow future versions to add new
