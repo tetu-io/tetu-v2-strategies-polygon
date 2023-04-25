@@ -1483,6 +1483,5 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     });
   });
 
-
   //endregion Unit tests
 });

@@ -148,12 +148,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
-      uint[] memory amounts = _beforeDeposit(
-        converter,
-        amount_,
-        tokens,
-        indexAsset
-      );
+      uint[] memory amounts = _beforeDeposit(converter, amount_, tokens, indexAsset);
 
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
@@ -357,17 +352,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // convert amounts to main asset
     (address[] memory tokens, uint indexAsset) = _getTokens(asset);
-
-    uint[] memory amountsToConvert = ConverterStrategyBaseLib2.getAvailableBalances(tokens, indexAsset);
-
-    // convert all amounts to the main asset
-    _makeRequestedAmount(
-      tokens,
-      indexAsset,
-      amountsToConvert,
+    ConverterStrategyBaseLib.closePositionsToGetAmount(
       converter,
+      _getLiquidator(controller()),
+      indexAsset,
+      liquidationThresholds,
       type(uint).max,
-      new uint[](tokens.length) // todo refactoring avoid creation of this array
+      tokens
     );
 
     // adjust _investedAssets
@@ -408,7 +399,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
     // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
 
-    ITetuLiquidator liquidator = ITetuLiquidator(IController(controller()).liquidator());
+    ITetuLiquidator liquidator = _getLiquidator(controller());
     if (requestedAmount != type(uint).max && expectedAmount > requestedAmount * 101/100) {
       // amountsToConvert_ are enough to get requestedAmount
       ConverterStrategyBaseLib.convertAfterWithdraw(
@@ -499,7 +490,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       asset,
       compoundRatio,
       _depositorPoolAssets(),
-      ITetuLiquidator(IController(controller()).liquidator()),
+      _getLiquidator(controller()),
       liquidationThresholds,
       rewardTokens_,
       rewardAmounts
@@ -686,6 +677,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     tokens = _depositorPoolAssets();
     indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset_);
     require(indexAsset != type(uint).max, StrategyLib.WRONG_VALUE);
+  }
+
+  function _getLiquidator(address controller_) internal view returns (ITetuLiquidator) {
+    return ITetuLiquidator(IController(controller_).liquidator());
   }
   //endregion Others
 
