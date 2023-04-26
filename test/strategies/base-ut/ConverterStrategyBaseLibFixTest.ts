@@ -909,11 +909,18 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             balances: ["5000", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
-            liquidations: [{
-              amountIn: "2000", // usdc
-              amountOut: "2000", // dai
+            liquidations: [
+            { // _getAmountToSell gives 2020 instead 2000, so 20 exceed usdc will be exhanged
+              // we need second liquidation to exchange them back
+              amountIn: "2020", // usdc, 2000 + 1%, see _getAmountToSell
+              amountOut: "2020", // dai
               tokenIn: usdc,
               tokenOut: dai
+            }, {
+              amountIn: "20", // dai
+              amountOut: "20", // usdc
+              tokenIn: dai,
+              tokenOut: usdc
             }],
             quoteRepays: [{
               collateralAsset: usdc,
@@ -934,7 +941,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(1000); // 3000 - 2000
+          expect(r.expectedAmountMainAssetOut).eq(1000); // 3000 - 2020 + 20
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -959,7 +966,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
             liquidations: [{
-              amountIn: "2000", // usdc
+              amountIn: "2020", // usdc, 2000 + 1%, see _getAmountToSell
               amountOut: "2000", // dai
               tokenIn: usdc,
               tokenOut: dai
@@ -983,11 +990,11 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(800); // 2800 - 2000
+          expect(r.expectedAmountMainAssetOut).eq(780); // 2800 - 2020
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([6000, 0].join());
+          expect(r.balances.join()).eq([5980, 0].join());
         });
       });
       describe("Not zero liquidation threshold", () => {
@@ -1008,7 +1015,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "1999"], // (!) less than amoutOut in liquidation
             liquidations: [{
-              amountIn: "2000", // usdc
+              amountIn: "2020", // usdc, 2000 + 1%, see _getAmountToSell
               amountOut: "2000", // dai
               tokenIn: usdc,
               tokenOut: dai
@@ -1032,11 +1039,11 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(800); // 2800 - 2000
+          expect(r.expectedAmountMainAssetOut).eq(780); // 2800 - 2020
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([6000, 0].join());
+          expect(r.balances.join()).eq([5980, 0].join());
         });
       });
       describe("requestedAmount is max uint", () => {
@@ -1057,7 +1064,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             prices: ["1", "1"], // for simplicity
             liquidationThresholds: ["0", "0"],
             liquidations: [{
-              amountIn: "2000", // usdc
+              amountIn: "2020", // usdc, 2000 + 1%, see _getAmountToSell
               amountOut: "2000", // dai
               tokenIn: usdc,
               tokenOut: dai
@@ -1081,11 +1088,11 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
         it("should return expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(1000); // 3000 - 2000
+          expect(r.expectedAmountMainAssetOut).eq(980); // 3000 - 2020
         });
         it("should set expected balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([6000, 0].join());
+          expect(r.balances.join()).eq([5980, 0].join());
         });
       });
     });
@@ -1458,7 +1465,10 @@ describe('ConverterStrategyBaseLibFixTest', () => {
                 balanceBorrowAsset: "0"
               });
               // alpha = 2e30, (alpha18 * totalCollateral / totalDebt - 1e18) = 5e18
-              expect(r.amountOut).eq(500); // 600 * 101/100 = 606 > max allowed 500 usdc, so 500
+
+              // 600 * 101/100 = 606 > max allowed 500 usdc, so 500
+              // but _getAmountToSell adds +1%, so 505
+              expect(r.amountOut).eq(505);
             });
           });
         });
@@ -1475,7 +1485,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
                 balanceBorrowAsset: "0"
               });
               // 2500e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 10100
-              expect(r.amountOut).eq(10100);
+              expect(r.amountOut).eq(10100); // 10100
             });
           });
           describe("collateral = requested amount", () => {
@@ -1491,7 +1501,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               });
               // 50000e18/(0.02*1e6*1e18/2/1e18*50000e18/400e6-1e18)*101/100 = 202000 > 50000
               // 400e6*1e18/(0.02*1e6*1e18/2/1e18)/1e18 = 40000 === $800
-              expect(r.amountOut).eq(40000); // == $800 == totalDebt
+              expect(r.amountOut).eq(40400); // == $800 == totalDebt + 1%, === 40000 + 1%
             });
           });
         });
@@ -1526,7 +1536,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               });
               // 50000e18/(0.02*1e6*1e18/2/1e18*54000e18/405e6-1e18)*101/100 = 151500 > 50000
               // 405e6*1e18/(0.02*1e6*1e18/2/1e18)/1e18 = 40500 === $810
-              expect(r.amountOut).eq(40500); // == $810 == totalDebt - balanceBorrowAsset
+              expect(r.amountOut).eq(40905); // == $810 == totalDebt - balanceBorrowAsset + 1%, == 40500 + 1%
             });
           });
         });

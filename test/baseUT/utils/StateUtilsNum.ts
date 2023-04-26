@@ -215,7 +215,7 @@ export class StateUtilsNum {
         assetBalance: +formatUnits(await asset.balanceOf(insurance), assetDecimals),
       },
       gauge: {
-        strategyBalance: +formatUnits(gaugeStrategyBalance, gaugeDecimals),
+        strategyBalance: gaugeStrategyBalance,
       },
       converter: {
         collaterals,

@@ -19,6 +19,10 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+
+const COMPOUND_RATIO = 50_000;
+const REINVEST_THRESHOLD_PERCENT = 1_000;
 
 export interface IConverterStrategyBaseContractsParams {
   converter?: string;
@@ -152,8 +156,6 @@ export class ConverterStrategyBaseContracts {
     // setup converter
     const strategy = UniswapV3ConverterStrategy__factory.connect(data.strategy.address, gov);
     await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState();
-    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
 
     await IERC20__factory.connect(asset, signer).approve(data.vault.address, Misc.MAX_UINT);
     await IERC20__factory.connect(asset, signer2).approve(data.vault.address, Misc.MAX_UINT);
@@ -161,6 +163,34 @@ export class ConverterStrategyBaseContracts {
     await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
 
     await data.vault.setWithdrawRequestBlocks(0);
+
+
+    const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
+    await UniversalTestUtils.setCompoundRatio(strategy as unknown as IStrategyV2, signer2, COMPOUND_RATIO);
+    await StrategyTestUtils.setThresholds(
+      strategy as unknown as IStrategyV2,
+      signer2,
+      { reinvestThresholdPercent: REINVEST_THRESHOLD_PERCENT },
+    );
+
+
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    const pools = [
+      {
+        pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        tokenIn: MaticAddresses.DAI_TOKEN,
+        tokenOut: MaticAddresses.USDC_TOKEN,
+      },
+      {
+        pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        tokenIn: MaticAddresses.USDT_TOKEN,
+        tokenOut: MaticAddresses.USDC_TOKEN,
+      },
+    ]
+    await tools.liquidator.connect(operator).addBlueChipsPools(pools, true)
+    await tools.liquidator.connect(operator).addLargestPools(pools, true);
 
     return dest;
   }

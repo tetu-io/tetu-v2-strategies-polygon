@@ -162,8 +162,12 @@ describe("ConverterStrategyBaseInt", () => {
         });
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(r.beforeExit.converter.amountsToRepay.length).gt(0);
-          await expect(r.afterExit.converter.amountsToRepay.length).eq(0);
+          await expect(
+            r.beforeExit.converter.platformAdapters.filter(x => x.length != 0).length
+          ).eq(1);
+          await expect(
+            r.afterExit.converter.platformAdapters.filter(x => x.length != 0).length
+          ).eq(0);
         });
       });
     });
@@ -220,10 +224,12 @@ describe("ConverterStrategyBaseInt", () => {
           const cc = await loadFixture(prepareBalancerConverterStrategyUsdcTUsd);
           await cc.vault.setDoHardWorkOnInvest(false);
 
-          await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
-          await cc.vault.connect(signer2).deposit(10000, signer2.address);
-
           const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
+
+          const depositAmount0 = parseUnits('100', decimals);
+          await TokenUtils.getToken(cc.asset, signer2.address, depositAmount0);
+          await cc.vault.connect(signer2).deposit(depositAmount0, signer2.address);
+
           const depositAmount1 = parseUnits('100000', decimals);
           await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
 
@@ -253,13 +259,17 @@ describe("ConverterStrategyBaseInt", () => {
         });
         it("should set liquidity to 0", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(r.beforeExit.strategy.liquidity).gt(0);
-          await expect(r.afterExit.strategy.liquidity).eq(0);
+          await expect(r.beforeExit.gauge.strategyBalance).gt(0);
+          await expect(r.afterExit.gauge.strategyBalance).eq(0);
         });
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
-          await expect(r.beforeExit.converter.amountsToRepay.length).gt(0);
-          await expect(r.afterExit.converter.amountsToRepay.length).eq(0);
+          await expect(
+            r.beforeExit.converter.platformAdapters.filter(x => x.length != 0).length
+          ).eq(1);
+          await expect(
+            r.afterExit.converter.platformAdapters.filter(x => x.length != 0).length
+          ).eq(0);
         });
       });
     });

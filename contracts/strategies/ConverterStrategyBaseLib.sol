@@ -12,6 +12,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -1349,7 +1350,7 @@ library ConverterStrategyBaseLib {
     uint indexCollateral,
     uint indexBorrowAsset,
     uint balanceBorrowAsset
-  ) internal pure returns (
+  ) internal view returns (
     uint amountOut
   ) {
     if (totalDebt != 0) {
@@ -1376,15 +1377,12 @@ library ConverterStrategyBaseLib {
 
       // if totalCollateral is zero (liquidation happens) we will have zero amount (the debt shouldn't be paid)
       amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18
-        ? (GAP_AMOUNT_TO_SELL + DENOMINATOR)
-          * Math.min(requestedAmount, totalCollateral) * 1e18
-          / (alpha18 * totalCollateral / totalDebt - 1e18)
-          / DENOMINATOR
+        ? Math.min(requestedAmount, totalCollateral) * 1e18 / (alpha18 * totalCollateral / totalDebt - 1e18)
         : 0;
 
       // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
       if (amountOut != 0) {
-        amountOut = Math.min(amountOut, totalDebt * 1e18 / alpha18);
+        amountOut = (GAP_AMOUNT_TO_SELL + DENOMINATOR) * Math.min(amountOut, totalDebt * 1e18 / alpha18) / DENOMINATOR;
       }
     }
 
