@@ -676,7 +676,7 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
-    require(msg.sender == converter, StrategyLib.DENIED);
+    // msg.sender == converter; we assume here that it was checked before the call of this function
     address theAsset = tokens[indexTheAsset];
 
     amountOut = IERC20(theAsset).balanceOf(address(this));
@@ -1351,7 +1351,7 @@ library ConverterStrategyBaseLib {
     uint indexCollateral,
     uint indexBorrowAsset,
     uint balanceBorrowAsset
-  ) internal view returns (
+  ) internal pure returns (
     uint amountOut
   ) {
     if (totalDebt != 0) {

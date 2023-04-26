@@ -590,6 +590,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function calcInvestedAssets() external returns (uint) {
+    StrategyLib.onlyOperators(controller());
     return _calcInvestedAssets();
   }
 
@@ -620,6 +621,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount_ Required amount of the {theAsset_}
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
+    address __converter = address(converter);
+    require(msg.sender == __converter, StrategyLib.DENIED);
     // requirements in swapToGivenAmountAndSendToConverter()
 
     // detect index of the target asset
@@ -642,7 +645,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       amount_,
       indexTheAsset,
       tokens,
-      address(converter),
+      __converter,
       controller(),
       asset,
       liquidationThresholds
@@ -656,7 +659,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param assets_ Any asset sent to the balance, i.e. inside repayTheBorrow
   /// @param amounts_ Amount of {asset_} that has been sent to the user's balance
   function onTransferAmounts(address[] memory assets_, uint[] memory amounts_) external override {
-      uint len = assets_.length;
+    require(msg.sender == address(converter), StrategyLib.DENIED);
+
+    uint len = assets_.length;
     require(len == amounts_.length, AppErrors.INCORRECT_LENGTHS);
 
     // TetuConverter is able two call this function in two cases:
