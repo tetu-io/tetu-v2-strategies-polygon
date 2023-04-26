@@ -1,4 +1,4 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import {SignerWithAddress} from '@nomiclabs/hardhat-ethers/signers';
 import {
   ControllerV2__factory,
   IController,
@@ -15,19 +15,20 @@ import {
   StrategySplitterV2__factory,
   TetuVaultV2,
 } from '../../../typechain';
-import { ethers } from 'hardhat';
-import { TimeUtils } from '../../../scripts/utils/TimeUtils';
-import { MockHelper } from '../../baseUT/helpers/MockHelper';
-import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
-import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
-import { BigNumber } from 'ethers';
-import { expect } from 'chai';
+import {ethers} from 'hardhat';
+import {TimeUtils} from '../../../scripts/utils/TimeUtils';
+import {MockHelper} from '../../baseUT/helpers/MockHelper';
+import {DeployerUtils} from '../../../scripts/utils/DeployerUtils';
+import {DeployerUtilsLocal} from '../../../scripts/utils/DeployerUtilsLocal';
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
+import {BigNumber} from 'ethers';
+import {expect} from 'chai';
 import {Misc} from "../../../scripts/utils/Misc";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
 import {ILiquidationParams, IQuoteRepayParams, IRepayParams, ITokenAmount} from "../../baseUT/mocks/TestDataTypes";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedQuoteRepay, setupMockedRepay, setupPrices} from "../../baseUT/mocks/MockRepayUtils";
+import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 
 /**
  * Test of ConverterStrategyBase
@@ -61,7 +62,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
   //endregion Variables
 
   //region before, after
-  before(async function() {
+  before(async function () {
     [signer] = await ethers.getSigners();
 
     const governance = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -86,7 +87,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
     controller = await DeployerUtilsLocal.getController(signer);
     tetuConverter = await MockHelper.createMockTetuConverter(signer);
-    const strategyDeployer = async(_splitterAddress: string) => {
+    const strategyDeployer = async (_splitterAddress: string) => {
       const strategyLocal = MockConverterStrategy__factory.connect(
         await DeployerUtils.deployProxy(signer, 'MockConverterStrategy'), governance);
 
@@ -140,7 +141,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     await controllerGov.changeAddress(_FORWARDER);
   });
 
-  after(async function() {
+  after(async function () {
     await TimeUtils.rollback(snapshotBefore);
   });
 
@@ -207,7 +208,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         ),
         strategyUsdcBalances: await Promise.all(
           depositorTokens.map(
-            async token=> +formatUnits(await token.balanceOf(strategy.address), await token.decimals()),
+            async token => +formatUnits(await token.balanceOf(strategy.address), await token.decimals()),
           )
         ),
       }
@@ -216,8 +217,12 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     describe("Good paths", () => {
       describe("There is enough asset on the balance", () => {
         let snapshot: string;
-        before(async function () { snapshot = await TimeUtils.snapshot(); });
-        after(async function () { await TimeUtils.rollback(snapshot); });
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
         async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
           await usdc.mint(strategy.address, parseUnits("100", 6));
@@ -246,8 +251,12 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         describe("Liquidity > 0", () => {
           describe("Withdrawn asset + balance >= required amount", () => {
             let snapshot: string;
-            before(async function () { snapshot = await TimeUtils.snapshot(); });
-            after(async function () { await TimeUtils.rollback(snapshot); });
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
               const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
@@ -291,7 +300,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 }
               )
 
-              const amountOut= await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1003", 6));
+              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1003", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("1003", 6));
 
               return getResults(amountOut);
@@ -312,8 +321,12 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
           describe("Withdrawn underlying + balance < required amount", () => {
             let snapshot: string;
-            before(async function () { snapshot = await TimeUtils.snapshot(); });
-            after(async function () { await TimeUtils.rollback(snapshot); });
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
               const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
@@ -349,7 +362,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 }
               )
 
-              const amountOut= await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1018", 6));
+              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1018", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("1018", 6));
 
               return getResults(amountOut);
@@ -372,8 +385,12 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         describe("Liquidity == 0", () => {
           describe("Total amount is enough", () => {
             let snapshot: string;
-            before(async function () { snapshot = await TimeUtils.snapshot(); });
-            after(async function () { await TimeUtils.rollback(snapshot); });
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
               const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
@@ -409,7 +426,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 }
               );
 
-              const amountOut= await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
+              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
 
               return getResults(amountOut);
@@ -430,8 +447,12 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
           describe("Total amount is NOT enough", () => {
             let snapshot: string;
-            before(async function () { snapshot = await TimeUtils.snapshot(); });
-            after(async function () { await TimeUtils.rollback(snapshot); });
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
               const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
@@ -467,7 +488,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 }
               );
 
-              const amountOut= await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
+              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
 
               return getResults(amountOut);
@@ -491,10 +512,14 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     });
     describe('Bad paths', () => {
       let snapshot: string;
-      beforeEach(async function () { snapshot = await TimeUtils.snapshot(); });
-      afterEach(async function () { await TimeUtils.rollback(snapshot); });
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
 
-      it('should revert if not tetu converter', async() => {
+      it('should revert if not tetu converter', async () => {
         await usdc.mint(strategy.address, parseUnits('100', 6));
         const strategyAsNotTC = strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address));
         await expect(
@@ -504,7 +529,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           )
         ).revertedWith("SB: Denied"); // DENIED
       });
-      it('should revert if wrong asset', async() => {
+      it('should revert if wrong asset', async () => {
         await usdc.mint(strategy.address, parseUnits('100', 6));
         const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
         await expect(
@@ -515,6 +540,52 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         ).revertedWith("SB: Wrong value"); // StrategyLib.WRONG_VALUE
       });
 
+    });
+  });
+
+  describe("onTransferAmounts", () => {
+    let snapshot: string;
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    async function prepareCalcInvestedAssetsMocks() {
+      await strategy.setDepositorLiquidity(0);
+      await strategy.setDepositorQuoteExit(0, depositorTokens.map(x => 0));
+    }
+
+    describe("Good paths", () => {
+      it("should not revert (currently the implementation is empty)", async () => {
+        await prepareCalcInvestedAssetsMocks();
+        const tx = await strategy.connect(
+          await Misc.impersonate(tetuConverter.address)
+        ).onTransferAmounts([usdc.address, weth.address], [1, 2]);
+
+        const gasUsed = (await tx.wait()).gasUsed;
+        expect(gasUsed.gt(0)).eq(true); // not reverted
+      });
+    });
+
+    describe("Bad paths", () => {
+      it("should revert if not tetu converter", async () => {
+        await prepareCalcInvestedAssetsMocks();
+        await expect(
+          strategy.connect(
+            await Misc.impersonate(ethers.Wallet.createRandom().address)
+          ).onTransferAmounts([usdc.address, weth.address], [1, 2])
+        ).revertedWith("SB: Denied"); // StrategyLib.DENIED
+      });
+      it("should revert if arrays have different lengths", async () => {
+        await prepareCalcInvestedAssetsMocks();
+        await expect(
+          strategy.connect(
+            await Misc.impersonate(tetuConverter.address)
+          ).onTransferAmounts([usdc.address, weth.address], [1])
+        ).revertedWith("TS-19 lengths"); // INCORRECT_LENGTHS
+      });
     });
   });
 
@@ -545,6 +616,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       gasUsed: BigNumber;
       balances: number[];
     }
+
     interface IMakeRequestedAmountParams {
       requestedAmount: string;
       tokens: MockToken[];
@@ -559,9 +631,10 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       isConversionValid?: boolean;
       expectedMainAssetAmounts: string[];
     }
+
     async function makeRequestedAmountTest(
       p: IMakeRequestedAmountParams
-    ) : Promise<IMakeRequestedAmountResults> {
+    ): Promise<IMakeRequestedAmountResults> {
       // set up balances
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -603,7 +676,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
-        p.expectedMainAssetAmounts.map((x, index)=> parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
+        p.expectedMainAssetAmounts.map((x, index) => parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
       );
 
       const tx = await strategy._makeRequestedAmountAccess(
@@ -614,7 +687,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
-        p.expectedMainAssetAmounts.map((x, index)=> parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
+        p.expectedMainAssetAmounts.map((x, index) => parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
@@ -1170,7 +1243,8 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
-                {amountIn: "500", amountOut: "500", tokenIn: usdc, tokenOut: usdt},
+                // 500 + 1%
+                {amountIn: "505", amountOut: "500", tokenIn: usdc, tokenOut: usdt},
               ],
               quoteRepays: [{
                 collateralAsset: usdc,
@@ -1192,11 +1266,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(4000 - 500);
+            expect(r.expectedAmountMainAsset).eq(4000 - 505);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.balances.join()).eq([1000 - 500 + 4000, 0].join());
+            expect(r.balances.join()).eq([1000 - 505 + 4000, 0].join());
           });
         });
       });
@@ -1221,8 +1295,8 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               prices: ["1", "1", "1"], // for simplicity
               liquidationThresholds: ["0", "0", "0"],
               liquidations: [
-                {amountIn: "1000", amountOut: "1010", tokenIn: usdc, tokenOut: dai},
-                {amountIn: "3000", amountOut: "3030", tokenIn: usdc, tokenOut: usdt},
+                {amountIn: "1010", amountOut: "1010", tokenIn: usdc, tokenOut: dai},
+                {amountIn: "3030", amountOut: "3030", tokenIn: usdc, tokenOut: usdt},
                 {amountIn: "10", amountOut: "9", tokenIn: dai, tokenOut: usdc},
                 {amountIn: "30", amountOut: "29", tokenIn: usdt, tokenOut: usdc},
               ],
@@ -1250,11 +1324,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(15040); // 6000 + 4000 + 9000 - 1000 - 3000 + 10 + 30
+            expect(r.expectedAmountMainAsset).eq(15040-40); // 6000 + 4000 + 9000 - 1000 - 3000 + 10 + 30 - 40
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.balances.join()).eq([15038, 0, 0].join());
+            expect(r.balances.join()).eq([15038-40, 0, 0].join());
           });
         });
         describe("9. Balance=y0, Pool=y1, Debt=y2, y2 is closed by y0 with leftovers", () => {
@@ -1333,8 +1407,8 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               prices: ["1", "0.1", "10"], // for simplicity
               liquidationThresholds: ["0", "0", "0"],
               liquidations: [
-                {amountIn: "1000", amountOut: "10100", tokenIn: usdc, tokenOut: dai},
-                {amountIn: "3000", amountOut: "303", tokenIn: usdc, tokenOut: usdt},
+                {amountIn: "1010", amountOut: "10100", tokenIn: usdc, tokenOut: dai}, // + 1%
+                {amountIn: "3030", amountOut: "303", tokenIn: usdc, tokenOut: usdt}, // +
                 {amountIn: "100", amountOut: "9", tokenIn: dai, tokenOut: usdc},
                 {amountIn: "3", amountOut: "29", tokenIn: usdt, tokenOut: usdc},
               ],
@@ -1362,11 +1436,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(15040); // 6000 + 4000 + 9000 - 1000 - 3000 + 10 + 30
+            expect(r.expectedAmountMainAsset).eq(15040-40); // 6000 + 4000 + 9000 - 1000 - 3000 + 10 + 30 - 40
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.balances.join()).eq([15038, 0, 0].join());
+            expect(r.balances.join()).eq([15038-40, 0, 0].join());
           });
         });
         describe("9. Balance=y0, Pool=y1, Debt=y2, y2 is closed by y0 with leftovers", () => {
@@ -1479,6 +1553,47 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             expect(r.balances.join()).eq([0, 9899, 0].join()); // 97 + 2900 + 1900 + 3001 + 2001
           });
         });
+      });
+    });
+  });
+
+  describe("calcInvestedAssets", () => {
+    let snapshot: string;
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    describe("Good paths", () => {
+      it("should return not zero amount", async () => {
+        // set not zero balances
+        for (const token of depositorTokens) {
+          await token.mint(strategy.address, 1000);
+        }
+        await strategy.setDepositorLiquidity(0);
+        await strategy.setDepositorQuoteExit(0, depositorTokens.map(x => 0));
+
+        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+        const investedAssets = await strategy.connect(operator).callStatic.calcInvestedAssets();
+        expect(investedAssets.gt(0)).eq(true);
+      });
+    });
+
+    describe("Bad paths", () => {
+      it("should revert if not operator", async () => {
+        // set not zero balances
+        for (const token of depositorTokens) {
+          await token.mint(strategy.address, 1000);
+        }
+        await strategy.setDepositorLiquidity(0);
+        await strategy.setDepositorQuoteExit(0, depositorTokens.map(x => 0));
+
+        const notOperator = await Misc.impersonate(ethers.Wallet.createRandom().address);
+        await expect(
+          strategy.connect(notOperator).calcInvestedAssets()
+        ).revertedWith("SB: Denied"); // StrategyLib.DENIED
       });
     });
   });

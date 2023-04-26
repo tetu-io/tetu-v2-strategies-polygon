@@ -7,7 +7,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
-import "@tetu_io/tetu-converter/contracts/interfaces/IPoolAdapter.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
@@ -126,8 +125,9 @@ library ConverterStrategyBaseLib {
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
   /// @dev Absolute value for any token
   uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 100_000;
-  /// @dev 1% gap in calculation of amount-to-sell in {closePositionsToGetAmount}
-  uint internal constant GAP_AMOUNT_TO_SELL = 1_000;
+  /// @notice 1% gap to cover possible liquidation inefficiency
+  /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
+  uint internal constant GAP_CONVERSION = 1_000;
   //endregion Constants
 
   /////////////////////////////////////////////////////////////////////
@@ -675,7 +675,7 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
-    require(msg.sender == converter, StrategyLib.DENIED);
+    // msg.sender == converter; we assume here that it was checked before the call of this function
     address theAsset = tokens[indexTheAsset];
 
     amountOut = IERC20(theAsset).balanceOf(address(this));
@@ -1061,7 +1061,7 @@ library ConverterStrategyBaseLib {
       if (i != indexAsset_) {
         if (collaterals_[i] != 0) {
           AppLib.approveIfNeeded(tokens_[indexAsset_], collaterals_[i], address(tetuConverter_));
-          (, uint borrowedAmount) = _openPosition(
+          _openPosition(
             tetuConverter_,
             "", // entry kind = 0: fixed collateral amount, max possible borrow amount
             tokens_[indexAsset_],
@@ -1070,8 +1070,8 @@ library ConverterStrategyBaseLib {
             Math.max(thresholdMainAsset_, DEFAULT_LIQUIDATION_THRESHOLD)
           );
 
-          // zero amount are possible (conversion is not available) but it's not suitable for depositor
-          require(borrowedAmount != 0, AppErrors.ZERO_AMOUNT_BORROWED);
+          // zero borrowed amount is possible here (conversion is not available)
+          // if it's not suitable for depositor, the depositor should check zero amount in other places
         }
         tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
       }
@@ -1377,15 +1377,13 @@ library ConverterStrategyBaseLib {
 
       // if totalCollateral is zero (liquidation happens) we will have zero amount (the debt shouldn't be paid)
       amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18
-        ? (GAP_AMOUNT_TO_SELL + DENOMINATOR)
-          * Math.min(requestedAmount, totalCollateral) * 1e18
-          / (alpha18 * totalCollateral / totalDebt - 1e18)
-          / DENOMINATOR
+        ? Math.min(requestedAmount, totalCollateral) * 1e18 / (alpha18 * totalCollateral / totalDebt - 1e18)
         : 0;
 
-      // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
       if (amountOut != 0) {
-        amountOut = Math.min(amountOut, totalDebt * 1e18 / alpha18);
+        // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
+        // but we always asks +1% because liquidation results can be different a bit from expected
+        amountOut = (GAP_CONVERSION + DENOMINATOR) * Math.min(amountOut, totalDebt * 1e18 / alpha18) / DENOMINATOR;
       }
     }
 

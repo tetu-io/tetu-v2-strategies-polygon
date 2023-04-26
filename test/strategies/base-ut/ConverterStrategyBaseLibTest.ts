@@ -11,11 +11,9 @@ import {
   GAS_CALC_INVESTED_ASSETS_NO_DEBTS,
   GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT,
   GAS_OPEN_POSITION,
-  GAS_PERFORMANCE_FEE,
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS,
   GET_GET_COLLATERALS,
-  GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT,
-  GET_LIQUIDITY_AMOUNT_RATIO
+  GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT
 } from "../../baseUT/GasLimits";
 import {Misc} from "../../../scripts/utils/Misc";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
@@ -1457,6 +1455,28 @@ describe('ConverterStrategyBaseLibTest', () => {
         });
       });
     });
+    describe("Bad paths", () => {
+      describe("Amount < DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD", () => {
+        it("should return zero amounts", async () => {
+          const r = await makeOpenPositionTest(
+            '0x',
+            usdc,
+            dai,
+            BigNumber.from(1), // (!) we ask for amount that is less than default threshold
+            {
+              borrows: [],
+              findBorrowStrategyOutputs: [],
+              amountCollateralForFacade: parseUnits('3', 6),
+              amountBorrowAssetForTetuConverter: parseUnits('3', 18),
+              amountInIsCollateral: true,
+            },
+          );
+
+          expect(r.collateralAmountOut.eq(0)).eq(true);
+          expect(r.borrowedAmountOut.eq(0)).eq(true);
+        });
+      })
+    })
     describe('Gas estimation @skip-on-coverage', () => {
       it('should not exceed gas limits', async() => {
         const converter1 = ethers.Wallet.createRandom().address;
