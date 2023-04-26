@@ -6,7 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -141,26 +141,26 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ){
-      uint updatedInvestedAssets;
+    uint updatedInvestedAssets;
     // we need to compensate difference between last updated invested assets and the current value for do not allow share price fluctuation
-      (updatedInvestedAssets, strategyLoss) = _updateInvestedAssetsAndGetLoss(updateTotalAssetsBeforeInvest_);
+    (updatedInvestedAssets, strategyLoss) = _updateInvestedAssetsAndGetLoss(updateTotalAssetsBeforeInvest_);
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / DENOMINATOR) {
-        address _asset = asset;
-        uint balanceBefore = _balance(_asset);
-        (address[] memory tokens, uint indexAsset) = _getTokens(asset);
+      address _asset = asset;
+      uint balanceBefore = _balance(_asset);
+      (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
-        uint[] memory amounts = _beforeDeposit(converter, amount_, tokens, indexAsset);
+      uint[] memory amounts = _beforeDeposit(converter, amount_, tokens, indexAsset);
 
       // make deposit, actually consumed amounts can be different from the desired amounts
-        (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+      (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
       emit OnDepositorEnter(amounts, consumedAmounts);
 
       // update _investedAssets with new deposited amount
-        uint updatedInvestedAssetsAfterDeposit = _updateInvestedAssets();
+      uint updatedInvestedAssetsAfterDeposit = _updateInvestedAssets();
       // after deposit some asset can exist
-        uint balanceAfter = _balance(_asset);
+      uint balanceAfter = _balance(_asset);
 
       // we need to compensate difference if during deposit we lost some assets
       if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (updatedInvestedAssets + balanceBefore)) {
@@ -537,27 +537,46 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    console.log("_doHardWork");
+    console.log("_balance(asset)", _balance(asset));
+    console.log("_investedAssets", _investedAssets);
     uint investedAssetsBefore = _investedAssets;
     uint investedAssetsLocal = _updateInvestedAssets();
+    console.log("investedAssetsBefore", investedAssetsBefore);
+    console.log("investedAssetsLocal", investedAssetsLocal);
 
     // register autocompound income or possible lose if assets fluctuated
     (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
     // ATTENTION! splitter will not cover the loss if it is lower than profit
+    console.log("earned1", earned);
+    console.log("lost1", lost);
+    console.log("_balance(asset)", _balance(asset));
 
     _preHardWork(reInvest);
 
-
     (uint earnedFromRewards, uint lostFromRewards, uint assetBalance) = _handleRewards();
+    console.log("earnedFromRewards", earnedFromRewards);
+    console.log("lostFromRewards", lostFromRewards);
+    console.log("assetBalance", assetBalance);
+    console.log("_balance(asset)", _balance(asset));
     earned += earnedFromRewards;
     lost += lostFromRewards;
+    console.log("earned2", earned);
+    console.log("lost2", lost);
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / DENOMINATOR) {
       uint assetInUseBefore = investedAssetsLocal + assetBalance;
       _depositToPool(assetBalance, false);
+      console.log("assetInUseBefore", assetInUseBefore);
+      console.log("_investedAssets", _investedAssets);
+      console.log("_balance(asset)", _balance(asset));
 
       (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetInUseBefore, _investedAssets + _balance(asset), earned, lost);
       // todo check
+      console.log("earned3", earned);
+      console.log("lost3", lost);
+      console.log("_balance(asset)", _balance(asset));
     }
 
     _postHardWork();
@@ -579,7 +598,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
-      (address[] memory tokens, uint indexAsset) = _getTokens(asset);
+    (address[] memory tokens, uint indexAsset) = _getTokens(asset);
     return ConverterStrategyBaseLib.calcInvestedAssets(
       tokens,
       // quote exit should check zero liquidity

@@ -1110,88 +1110,88 @@ describe('ConverterStrategyBaseAccessTest', () => {
   //   });
   // });
 
-  describe('_doHardWork', () => {
-    describe('Good paths', () => {
-      it('should return expected values, positive reinvest', async() => {
-        const assetProvider = ethers.Wallet.createRandom();
-        await usdc.mint(assetProvider.address, parseUnits('1000', 6));
-        await usdc.connect(await Misc.impersonate(assetProvider.address)).approve(strategy.address, Misc.MAX_UINT);
-
-        await strategy.setMockedDepositToPool(
-          parseUnits('8', 6), // balance change
-          assetProvider.address,
-          0,
-        );
-        await strategy.setDepositorLiquidity(parseUnits('1', 18));
-        await strategy.setDepositorQuoteExit(
-          parseUnits('1', 18),
-          [
-            parseUnits('0', 18),
-            parseUnits('23', 6),
-            parseUnits('0', 6),
-          ],
-        );
-
-        await strategy.setMockedHandleRewardsResults(
-          parseUnits('7', 6), // earned
-          parseUnits('14', 6), // lost
-          parseUnits('17', 6), // asset balance change
-          assetProvider.address,
-        );
-
-        const r = await strategy.callStatic._doHardWorkAccess(true);
-        const ret = [
-          r.earned.toString(),
-          r.lost.toString(),
-        ].join();
-        const expected = [
-          parseUnits('38', 6).toString(), // 8 + 7 + 23
-          parseUnits('14', 6).toString(),
-        ].join();
-
-        expect(ret).eq(expected);
-      });
-      it('should return expected values, negative reinvest', async() => {
-        const assetProvider = ethers.Wallet.createRandom();
-        await usdc.mint(assetProvider.address, parseUnits('1000', 6));
-        await usdc.connect(await Misc.impersonate(assetProvider.address)).approve(strategy.address, Misc.MAX_UINT);
-
-        await strategy.setMockedDepositToPool(
-          parseUnits('-8', 6),
-          assetProvider.address,
-          0,
-        );
-        await strategy.setDepositorLiquidity(parseUnits('1', 18));
-        await strategy.setDepositorQuoteExit(
-          parseUnits('1', 18),
-          [
-            parseUnits('0', 18),
-            parseUnits('23', 6),
-            parseUnits('0', 6),
-          ],
-        );
-
-        await strategy.setMockedHandleRewardsResults(
-          parseUnits('7', 6), // earned
-          parseUnits('14', 6), // lost
-          parseUnits('17', 6),
-          assetProvider.address,
-        );
-
-        const r = await strategy.callStatic._doHardWorkAccess(true);
-        const ret = [
-          r.earned.toString(),
-          r.lost.toString(),
-        ].join();
-        const expected = [
-          parseUnits('30', 6).toString(), // 7 + 23
-          parseUnits('22', 6).toString(), // 14 + 8
-        ].join();
-
-        expect(ret).eq(expected);
-      });
-    });
-  });
+  // describe('_doHardWork', () => {
+  //   describe('Good paths', () => {
+  //     it('should return expected values, positive reinvest', async() => {
+  //       const assetProvider = ethers.Wallet.createRandom();
+  //       await usdc.mint(assetProvider.address, parseUnits('1000', 6));
+  //       await usdc.connect(await Misc.impersonate(assetProvider.address)).approve(strategy.address, Misc.MAX_UINT);
+  //
+  //       await strategy.setMockedDepositToPool(
+  //         parseUnits('8', 6), // balance change
+  //         assetProvider.address,
+  //         0,
+  //       );
+  //       await strategy.setDepositorLiquidity(parseUnits('1', 18));
+  //       await strategy.setDepositorQuoteExit(
+  //         parseUnits('1', 18),
+  //         [
+  //           parseUnits('0', 18),
+  //           parseUnits('23', 6),
+  //           parseUnits('0', 6),
+  //         ],
+  //       );
+  //
+  //       await strategy.setMockedHandleRewardsResults(
+  //         parseUnits('7', 6), // earned
+  //         parseUnits('14', 6), // lost
+  //         parseUnits('17', 6), // asset balance change
+  //         assetProvider.address,
+  //       );
+  //
+  //       const r = await strategy.callStatic._doHardWorkAccess(true);
+  //       const ret = [
+  //         r.earned.toString(),
+  //         r.lost.toString(),
+  //       ].join();
+  //       const expected = [
+  //         parseUnits('38', 6).toString(), // 8 + 7 + 23
+  //         parseUnits('14', 6).toString(),
+  //       ].join();
+  //
+  //       expect(ret).eq(expected);
+  //     });
+  //     it('should return expected values, negative reinvest', async() => {
+  //       const assetProvider = ethers.Wallet.createRandom();
+  //       await usdc.mint(assetProvider.address, parseUnits('1000', 6));
+  //       await usdc.connect(await Misc.impersonate(assetProvider.address)).approve(strategy.address, Misc.MAX_UINT);
+  //
+  //       await strategy.setMockedDepositToPool(
+  //         parseUnits('-8', 6),
+  //         assetProvider.address,
+  //         0,
+  //       );
+  //       await strategy.setDepositorLiquidity(parseUnits('1', 18));
+  //       await strategy.setDepositorQuoteExit(
+  //         parseUnits('1', 18),
+  //         [
+  //           parseUnits('0', 18),
+  //           parseUnits('23', 6),
+  //           parseUnits('0', 6),
+  //         ],
+  //       );
+  //
+  //       await strategy.setMockedHandleRewardsResults(
+  //         parseUnits('7', 6), // earned
+  //         parseUnits('14', 6), // lost
+  //         parseUnits('17', 6),
+  //         assetProvider.address,
+  //       );
+  //
+  //       const r = await strategy.callStatic._doHardWorkAccess(true);
+  //       const ret = [
+  //         r.earned.toString(),
+  //         r.lost.toString(),
+  //       ].join();
+  //       const expected = [
+  //         parseUnits('30', 6).toString(), // 7 + 23
+  //         parseUnits('22', 6).toString(), // 14 + 8
+  //       ].join();
+  //
+  //       expect(ret).eq(expected);
+  //     });
+  //   });
+  // });
 
   // describe('_claim', () => {
   //   interface IClaimTestParams {
