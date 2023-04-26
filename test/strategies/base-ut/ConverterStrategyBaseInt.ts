@@ -163,10 +163,10 @@ describe("ConverterStrategyBaseInt", () => {
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(
-            r.beforeExit.converter.platformAdapters.filter(x => x.length != 0).length
+            r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
           ).eq(1);
           await expect(
-            r.afterExit.converter.platformAdapters.filter(x => x.length != 0).length
+            r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
         });
       });
@@ -265,10 +265,10 @@ describe("ConverterStrategyBaseInt", () => {
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(
-            r.beforeExit.converter.platformAdapters.filter(x => x.length != 0).length
+            r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
           ).eq(1);
           await expect(
-            r.afterExit.converter.platformAdapters.filter(x => x.length != 0).length
+            r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
         });
       });

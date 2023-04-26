@@ -126,8 +126,9 @@ library ConverterStrategyBaseLib {
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
   /// @dev Absolute value for any token
   uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 100_000;
-  /// @dev 1% gap in calculation of amount-to-sell in {closePositionsToGetAmount}
-  uint internal constant GAP_AMOUNT_TO_SELL = 1_000;
+  /// @notice 1% gap to cover possible liquidation inefficiency
+  /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
+  uint internal constant GAP_CONVERSION = 1_000;
   //endregion Constants
 
   /////////////////////////////////////////////////////////////////////
@@ -1380,9 +1381,10 @@ library ConverterStrategyBaseLib {
         ? Math.min(requestedAmount, totalCollateral) * 1e18 / (alpha18 * totalCollateral / totalDebt - 1e18)
         : 0;
 
-      // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
       if (amountOut != 0) {
-        amountOut = (GAP_AMOUNT_TO_SELL + DENOMINATOR) * Math.min(amountOut, totalDebt * 1e18 / alpha18) / DENOMINATOR;
+        // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
+        // but we always asks +1% because liquidation results can be different a bit from expected
+        amountOut = (GAP_CONVERSION + DENOMINATOR) * Math.min(amountOut, totalDebt * 1e18 / alpha18) / DENOMINATOR;
       }
     }
 
