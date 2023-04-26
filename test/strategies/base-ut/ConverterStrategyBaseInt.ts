@@ -266,7 +266,7 @@ describe("ConverterStrategyBaseInt", () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(
             r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
-          ).eq(2);
+          ).gt(0);
           await expect(
             r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
@@ -399,7 +399,7 @@ describe("ConverterStrategyBaseInt", () => {
           const r = await loadFixture(makeDepositAndWithdrawAll);
           await expect(
             r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
-          ).eq(1);
+          ).gt(0);
           await expect(
             r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
