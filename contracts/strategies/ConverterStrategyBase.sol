@@ -46,7 +46,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.3";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.4";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -402,7 +402,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
     // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
 
-    ITetuLiquidator liquidator = _getLiquidator(controller());
+      ITetuLiquidator liquidator = _getLiquidator(controller());
     if (requestedAmount != type(uint).max
       && expectedAmount > requestedAmount * (GAP_CONVERSION + DENOMINATOR) / DENOMINATOR
     ) {
@@ -537,26 +537,26 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-      uint investedAssetsBefore = _investedAssets;
-      uint investedAssetsLocal = _updateInvestedAssets();
+    uint investedAssetsBefore = _investedAssets;
+    uint investedAssetsLocal = _updateInvestedAssets();
 
     // register autocompound income or possible lose if assets fluctuated
-      (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, earned, lost);
     // ATTENTION! splitter will not cover the loss if it is lower than profit
 
     _preHardWork(reInvest);
 
 
-      (uint earnedFromRewards, uint lostFromRewards, uint assetBalance) = _handleRewards();
+    (uint earnedFromRewards, uint lostFromRewards, uint assetBalance) = _handleRewards();
     earned += earnedFromRewards;
     lost += lostFromRewards;
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / DENOMINATOR) {
-        uint assetInUseBefore = investedAssetsLocal + assetBalance;
+      uint assetInUseBefore = investedAssetsLocal + assetBalance;
       _depositToPool(assetBalance, false);
 
-        (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetInUseBefore, _investedAssets + _balance(asset), earned, lost);
+      (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetInUseBefore, _investedAssets + _balance(asset), earned, lost);
       // todo check
     }
 
@@ -621,7 +621,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount_ Required amount of the {theAsset_}
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
-    address __converter = address(converter);
+      address __converter = address(converter);
     require(msg.sender == __converter, StrategyLib.DENIED);
     // requirements in swapToGivenAmountAndSendToConverter()
 
@@ -661,7 +661,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function onTransferAmounts(address[] memory assets_, uint[] memory amounts_) external override {
     require(msg.sender == address(converter), StrategyLib.DENIED);
 
-    uint len = assets_.length;
+      uint len = assets_.length;
     require(len == amounts_.length, AppErrors.INCORRECT_LENGTHS);
 
     // TetuConverter is able two call this function in two cases:

@@ -23,7 +23,6 @@ import {
   GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW, GAS_PERFORMANCE_FEE, GET_LIQUIDITY_AMOUNT_RATIO
 } from "../../baseUT/GasLimits";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -1242,6 +1241,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       liquidation: ILiquidationParams;
       isConversionValid?: boolean;
       slippage?: number;
+      noLiquidationRoute?: boolean;
     }
 
     async function makeLiquidationTest(p: ILiquidationTestParams): Promise<ILiquidationTestResults> {
@@ -1265,7 +1265,9 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
       // set up expected liquidations
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      await setupMockedLiquidation(liquidator, p.liquidation);
+      if (! p.noLiquidationRoute) {
+        await setupMockedLiquidation(liquidator, p.liquidation);
+      }
       await setupIsConversionValid(
         converter,
         p.liquidation,
@@ -1399,6 +1401,22 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           liquidationThreshold: "799",
           isConversionValid: false // (!) price impact is too high
         })).revertedWith("TS-16 price impact"); // PRICE_IMPACT
+      });
+      it("should revert if no liquidation route", async () => {
+        await expect(makeLiquidationTest({
+          tokens: [usdc, dai],
+          balances: ["1000", "2000"],
+          prices: ["1", "1"],
+          liquidation: {
+            tokenIn: usdc,
+            tokenOut: dai,
+            amountIn: "400",
+            amountOut: "800",
+          },
+          noLiquidationRoute: true,
+          liquidationThreshold: "799",
+          isConversionValid: false // (!) price impact is too high
+        })).revertedWith("TS-15 No liquidation route");
       });
     });
   });

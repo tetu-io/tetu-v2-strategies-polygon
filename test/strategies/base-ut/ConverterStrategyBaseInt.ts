@@ -86,7 +86,7 @@ describe("ConverterStrategyBaseInt", () => {
         });
 
         async function makeNoDepositEmergencyExit(): Promise<IMakeDepositAndEmergencyExitResults> {
-          const cc = await loadFixture(prepareUniv3ConverterStrategyUsdcUsdt);
+          const cc = await prepareUniv3ConverterStrategyUsdcUsdt();
           await cc.vault.setDoHardWorkOnInvest(false);
 
           await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -121,7 +121,7 @@ describe("ConverterStrategyBaseInt", () => {
         });
 
         async function makeDepositAndEmergencyExit(): Promise<IMakeDepositAndEmergencyExitResults> {
-          const cc = await loadFixture(prepareUniv3ConverterStrategyUsdcUsdt);
+          const cc = await prepareUniv3ConverterStrategyUsdcUsdt();
           await cc.vault.setDoHardWorkOnInvest(false);
 
           await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -186,7 +186,7 @@ describe("ConverterStrategyBaseInt", () => {
         });
 
         async function makeNoDepositEmergencyExit(): Promise<IMakeDepositAndEmergencyExitResults> {
-          const cc = await loadFixture(prepareBalancerConverterStrategyUsdcTUsd);
+          const cc = await prepareBalancerConverterStrategyUsdcTUsd();
           await cc.vault.setDoHardWorkOnInvest(false);
 
           await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -221,7 +221,7 @@ describe("ConverterStrategyBaseInt", () => {
         });
 
         async function makeDepositAndEmergencyExit(): Promise<IMakeDepositAndEmergencyExitResults> {
-          const cc = await loadFixture(prepareBalancerConverterStrategyUsdcTUsd);
+          const cc = await prepareBalancerConverterStrategyUsdcTUsd();
           await cc.vault.setDoHardWorkOnInvest(false);
 
           const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
@@ -266,7 +266,7 @@ describe("ConverterStrategyBaseInt", () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(
             r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
-          ).eq(1);
+          ).eq(2);
           await expect(
             r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
@@ -292,7 +292,7 @@ describe("ConverterStrategyBaseInt", () => {
         });
 
         async function makeDepositAndWithdrawAll(): Promise<IMakeWithdrawAllFromPoolResults> {
-          const cc = await loadFixture(prepareUniv3ConverterStrategyUsdcUsdt);
+          const cc = await prepareUniv3ConverterStrategyUsdcUsdt();
           await cc.vault.setDoHardWorkOnInvest(false);
 
           await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -354,7 +354,7 @@ describe("ConverterStrategyBaseInt", () => {
         });
 
         async function makeDepositAndWithdrawAll(): Promise<IMakeWithdrawAllFromPoolResults> {
-          const cc = await loadFixture(prepareBalancerConverterStrategyUsdcTUsd);
+          const cc = await prepareBalancerConverterStrategyUsdcTUsd();
           await cc.vault.setDoHardWorkOnInvest(false);
 
           const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
