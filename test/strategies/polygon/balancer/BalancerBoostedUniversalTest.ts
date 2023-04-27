@@ -24,9 +24,12 @@ import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {IState, IStateParams, StateUtils} from "../../../StateUtils";
-import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
-import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
+import {IUniversalStrategyInputParams, universalStrategyTest} from "../../base/UniversalStrategyTest";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {ICoreContractsWrapper} from "../../../CoreContractsWrapper";
+import {IToolsContractsWrapper} from "../../../ToolsContractsWrapper";
+import {IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -161,13 +164,34 @@ describe('BalancerBoostedUniversalTest', async () => {
       },
     );
 
-    /* tslint:disable:no-floating-promises */
-    startDefaultStrategyTest(
-      strategyName,
-      asset,
-      asset,
+    const hwInitiator = (
+      _signer: SignerWithAddress,
+      _user: SignerWithAddress,
+      _core: ICoreContractsWrapper,
+      _tools: IToolsContractsWrapper,
+      _underlying: string,
+      _vault: TetuVaultV2,
+      _strategy: IStrategyV2,
+      _balanceTolerance: number,
+    ) => {
+      return new BalancerRewardsHardwork(
+        _signer,
+        _user,
+        _core,
+        _tools,
+        _underlying,
+        _vault,
+        _strategy,
+        _balanceTolerance,
+        0,
+      );
+    };
+
+    universalStrategyTest(
+      strategyName + '_' + t[1],
       deployInfo,
-      deployer,
+      deployer as (signer: SignerWithAddress) => Promise<IVaultStrategyInfo>,
+      hwInitiator,
       params,
     );
   })

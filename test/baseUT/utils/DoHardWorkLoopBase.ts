@@ -166,6 +166,7 @@ export class DoHardWorkLoopBase {
     };
     console.log('initialBalances', this.initialBalances);
 
+    // todo dynamic compoundRatio support
     await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate);
   }
 
@@ -230,6 +231,7 @@ export class DoHardWorkLoopBase {
     for (let i = 0; i < loops; i++) {
       console.log('\n=====================\nloop i', i);
       const start = Date.now();
+      await this.loopStartActions(i);
 
       // *********** SWAPS **************
       if (swap1 && i % 2 === 0) {
@@ -288,6 +290,10 @@ export class DoHardWorkLoopBase {
   //     }
   //     Misc.printDuration('fLoopEndActions completed', start);
   //   }
+
+  protected async loopStartActions(i: number) {
+    console.log('loopStartActions', i);
+  }
 
   protected async loopEndCheck() {
     // ** check to claim
