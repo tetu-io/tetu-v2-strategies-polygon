@@ -383,7 +383,7 @@ export class DoHardWorkLoopBase {
     if (exit) {
       const balanceInVault = await this.userBalanceInVault();
       console.log('exit');
-      await this.vaultAsUser.withdrawAll({ gasLimit: 9_000_000 });
+      await this.vaultAsUser.withdrawAll({ gasLimit: 29_000_000 });
       await this.userCheckBalanceInVault(BigNumber.from(0));
       await this.userCheckBalance(this.subWithdrawFee(balanceInVault));
 
@@ -392,7 +392,7 @@ export class DoHardWorkLoopBase {
       const userBalance = await this.userBalance();
       const userBalanceInVault = await this.userBalanceInVault();
 
-      await this.vaultAsUser.withdraw(amount, this.user.address, this.user.address, { gasLimit: 9_000_000 });
+      await this.vaultAsUser.withdraw(amount, this.user.address, this.user.address, { gasLimit: 29_000_000 });
 
       await this.userCheckBalance(userBalance.add(amount));
       await this.userCheckBalanceInVault(userBalanceInVault.sub(this.addWithdrawFee(amount)));

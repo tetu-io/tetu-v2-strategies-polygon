@@ -22,10 +22,6 @@ interface ISwapper {
 contract Aave3PriceSourceBalancerBoosted is AggregatorInterface {
   IBVault public constant BALANCER_VAULT = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
   ISwapper internal constant BALANCER_COMPOSABLE_STABLE_SWAPPER = ISwapper(0xab6F8E82ddea3Ee2Ad192cfe92dD608f4ad7d574);
-  uint256 internal constant _MIN_AMP = 1;
-  uint256 internal constant _MAX_AMP = 5000;
-  uint256 internal constant _AMP_PRECISION = 1e3;
-  uint256 internal constant _MAX_STABLE_TOKENS = 5;
 
   IComposableStablePool public pool;
   address public inputToken;
@@ -95,6 +91,9 @@ contract Aave3PriceSourceBalancerBoosted is AggregatorInterface {
     // console.log('output linear price', linearOutputBptPrice);
 
     // get inputToken price in term of outputToken
-    return bptSwapPrice * linearOutputBptPrice / linearInputBptPrice;
+    uint price = bptSwapPrice * linearOutputBptPrice / linearInputBptPrice / 1e10;
+    // console.log('Aave3PriceSourceBalancerBoosted _getPrice inputToken', inputToken);
+    // console.log('Aave3PriceSourceBalancerBoosted _getPrice price', price);
+    return price;
   }
 }
