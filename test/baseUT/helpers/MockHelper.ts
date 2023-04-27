@@ -7,7 +7,7 @@ import {
   MockForwarder, MockSplitterVault,
   MockTetuConverter,
   MockTetuConverterController,
-  MockTetuLiquidatorSingleCall,
+  MockTetuLiquidatorSingleCall, MockVaultInsurance,
   PriceOracleMock, UniswapV3LibFacade,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
@@ -94,6 +94,10 @@ export class MockHelper {
 
   public static async createMockSplitter(signer: SignerWithAddress): Promise<MockSplitterVault> {
     return (await DeployerUtils.deployContract(signer, 'MockSplitterVault')) as MockSplitterVault;
+  }
+
+  public static async createMockVault(signer: SignerWithAddress): Promise<MockVaultInsurance> {
+    return (await DeployerUtils.deployContract(signer, 'MockVaultInsurance')) as MockVaultInsurance;
   }
 
   public static async createAave3AggregatorInterfaceMock(

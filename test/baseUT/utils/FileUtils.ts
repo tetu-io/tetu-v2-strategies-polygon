@@ -11,10 +11,6 @@ export function writeFileSyncRestoreFolder(
   options?: fs.WriteFileOptions,
 ): void {
   const dir = path.dirname(filePath.toString());
-  fs.mkdir(dir, { recursive: true }, (err) => {
-    if (err) {
-      throw err;
-    }
-  });
+  fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, data, options);
 }

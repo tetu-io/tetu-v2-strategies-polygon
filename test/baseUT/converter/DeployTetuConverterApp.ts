@@ -8,7 +8,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {ConverterController__factory, IBorrowManager, IBorrowManager__factory} from "../../../typechain";
 import {RunHelper} from "../../../scripts/utils/RunHelper";
 import {CoreContractsHelper} from "./CoreContractsHelper";
-import {AdaptersHelper} from "./AdaptersHelper";
+import {ConverterAdaptersHelper} from "./ConverterAdaptersHelper";
 
 //region Data types
 export interface IControllerSetupParams {
@@ -317,9 +317,9 @@ export class DeployTetuConverterApp {
     controller: string,
     aavePoolAddress: string
   ) : Promise<IPlatformAdapterResult> {
-    const converterNormal = await AdaptersHelper.createAave3PoolAdapter(deployer);
-    const converterEModde = await AdaptersHelper.createAave3PoolAdapterEMode(deployer);
-    const platformAdapter = await AdaptersHelper.createAave3PlatformAdapter(
+    const converterNormal = await ConverterAdaptersHelper.createAave3PoolAdapter(deployer);
+    const converterEModde = await ConverterAdaptersHelper.createAave3PoolAdapterEMode(deployer);
+    const platformAdapter = await ConverterAdaptersHelper.createAave3PlatformAdapter(
       deployer,
       controller,
       aavePoolAddress,
@@ -339,8 +339,8 @@ export class DeployTetuConverterApp {
     controller: string,
     aavePoolAddress: string
   ) : Promise<IPlatformAdapterResult> {
-    const converterNormal = await AdaptersHelper.createAaveTwoPoolAdapter(deployer);
-    const platformAdapter = await AdaptersHelper.createAaveTwoPlatformAdapter(
+    const converterNormal = await ConverterAdaptersHelper.createAaveTwoPoolAdapter(deployer);
+    const platformAdapter = await ConverterAdaptersHelper.createAaveTwoPlatformAdapter(
       deployer,
       controller,
       aavePoolAddress,
@@ -360,8 +360,8 @@ export class DeployTetuConverterApp {
     comptroller: string,
     cTokensActive: string[]
   ) : Promise<IPlatformAdapterResult> {
-    const converterNormal = await AdaptersHelper.createDForcePoolAdapter(deployer);
-    const platformAdapter = await AdaptersHelper.createDForcePlatformAdapter(
+    const converterNormal = await ConverterAdaptersHelper.createDForcePoolAdapter(deployer);
+    const platformAdapter = await ConverterAdaptersHelper.createDForcePlatformAdapter(
       deployer,
       controller,
       comptroller,

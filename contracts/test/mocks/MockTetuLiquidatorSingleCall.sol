@@ -43,12 +43,16 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       return (route, p.errorMessage);
     } else {
       if (tokenIn == p.tokenIn && tokenOut == p.tokenOut) {
-        route = new PoolData[](1);
-        route[0].tokenIn = p.tokenIn;
-        route[0].tokenOut = p.tokenOut;
-        route[0].pool = p.pool;
-        route[0].swapper = p.swapper;
-        return (route, errorMessage);
+        if (p.pool == address(0)) {
+          return (new PoolData[](0), "route not found");
+        } else {
+          route = new PoolData[](1);
+          route[0].tokenIn = p.tokenIn;
+          route[0].tokenOut = p.tokenOut;
+          route[0].pool = p.pool;
+          route[0].swapper = p.swapper;
+          return (route, errorMessage);
+        }
       } else {
         console.log("MockTetuLiquidatorSingleCall.buildRoute.error.not.found", _tokenName(tokenIn), _tokenName(tokenOut));
         return (route, "route not found");
@@ -66,11 +70,11 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
     console.log("setBuildRoute", tokenIn, tokenOut);
     bytes32 key = keccak256(abi.encodePacked(tokenIn, tokenOut));
     buildRouteParams[key] = BuildRouteParams({
-    errorMessage : errorMessage,
-    tokenIn : tokenIn,
-    tokenOut : tokenOut,
-    pool : pool,
-    swapper : swapper
+      errorMessage: errorMessage,
+      tokenIn: tokenIn,
+      tokenOut: tokenOut,
+      pool: pool,
+      swapper: swapper
     });
   }
 
