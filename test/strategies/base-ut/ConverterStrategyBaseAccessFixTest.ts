@@ -1642,13 +1642,18 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     });
   });
 
-  describe('_doHardWork', () => {
-    interface IDoHardworkResults {
+  describe('_doHardWork, doHardwork', () => {
+    interface IEarnedLost {
       earned: number;
       lost: number;
+    }
+
+    interface IDoHardworkResults extends IEarnedLost {
       investedAssetsBefore: number;
       investedAssetsAfter: number;
+      callDoHardwork?: IEarnedLost;
     }
+
     interface ISetupInvestedAssets {
       depositorLiquidity18: string;
       depositorQuoteExit: {
@@ -1656,6 +1661,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         amountsOut: string[];
       }
     }
+
     interface IDoHardworkParams {
       tokens: MockToken[];
       assetIndex: number;
@@ -1673,6 +1679,14 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       balanceChange: string;
 
       assetProviderBalance: string;
+      reInvest?: boolean;
+      reinvestThresholdPercent?: number;
+      /**
+       * undefined - don't call doHardwork()
+       * true - make call doHardwork by spliter
+       * false - make call doHardwork by random caller
+       */
+      callDoHardworkBySplitter?: boolean;
     }
 
     async function makeDoHardwork(p: IDoHardworkParams): Promise<IDoHardworkResults> {
@@ -1689,6 +1703,10 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       await usdc.connect(await Misc.impersonate(assetProvider)).approve(ms.strategy.address, Misc.MAX_UINT);
 
       await usdc.mint(ms.strategy.address, parseUnits(p.initialBalance, assetDecimals[p.assetIndex]));
+
+      if (p.reinvestThresholdPercent) {
+        await ms.strategy.setReinvestThresholdPercent(p.reinvestThresholdPercent);
+      }
 
       // run hardwork first time to set up initial value of _investedAssets
       await ms.strategy.setDepositorLiquidity(parseUnits(p.setUpInvestedAssetsInitial.depositorLiquidity18, 18));
@@ -1722,14 +1740,27 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         assetProvider,
       );
 
-      const r = await ms.strategy.callStatic._doHardWorkAccess(true);
-      await ms.strategy._doHardWorkAccess(true);
+      const callDoHardwork = p.callDoHardworkBySplitter === undefined
+        ? undefined
+        : p.callDoHardworkBySplitter
+          ? await ms.strategy.connect(await Misc.impersonate(ms.splitter.address)).callStatic.doHardWork()
+          : await ms.strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address)).callStatic.doHardWork();
+
+      const reInvest: boolean = p?.reInvest === undefined ? true : p.reInvest;
+      const r = await ms.strategy.callStatic._doHardWorkAccess(reInvest);
+      await ms.strategy._doHardWorkAccess(reInvest);
 
       return {
         earned: +formatUnits(r.earned, assetDecimals[p.assetIndex]),
         lost: +formatUnits(r.lost, assetDecimals[p.assetIndex]),
         investedAssetsBefore: +formatUnits(investedAssetsBefore, assetDecimals[p.assetIndex]),
         investedAssetsAfter: +formatUnits(await ms.strategy.investedAssets(), assetDecimals[p.assetIndex]),
+        callDoHardwork: callDoHardwork
+          ? {
+            earned: +formatUnits(callDoHardwork.earned, assetDecimals[p.assetIndex]),
+            lost: +formatUnits(callDoHardwork.lost, assetDecimals[p.assetIndex]),
+          }
+          : undefined,
       }
     }
 
@@ -1765,6 +1796,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             assetProviderBalance: "1000"
           });
         }
+
         describe("Invested assets amount was increased", async () => {
           let snapshot: string;
           before(async function () {
@@ -1777,6 +1809,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           async function incInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
             return changeAssetAmountTest("1", "3");
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(incInvestedAssetAmountTest);
             expect(result.earned).to.eq(3 - 1);
@@ -1800,6 +1833,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           async function decInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
             return changeAssetAmountTest("3", "1");
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(decInvestedAssetAmountTest);
             expect(result.earned).to.eq(0);
@@ -1842,6 +1876,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             assetProviderBalance: "1000"
           });
         }
+
         describe("Handle-rewards-amount was increased", async () => {
           let snapshot: string;
           before(async function () {
@@ -1854,6 +1889,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           async function incInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
             return changeHandleRewardsAmount("7", "3");
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(incInvestedAssetAmountTest);
             expect(result.earned).to.eq(7);
@@ -1877,6 +1913,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           async function decInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
             return changeHandleRewardsAmount("3", "7");
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(decInvestedAssetAmountTest);
             expect(result.earned).to.eq(3);
@@ -1922,6 +1959,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             assetProviderBalance: "1000"
           });
         }
+
         describe("Balance was increased during reinvesting", async () => {
           let snapshot: string;
           before(async function () {
@@ -1934,6 +1972,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           async function incInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
             return changeDepositToPoolAmounts("3", "7");
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(incInvestedAssetAmountTest);
             expect(result.earned).to.eq(7);
@@ -1957,6 +1996,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           async function decInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
             return changeDepositToPoolAmounts("7", "-5");
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(decInvestedAssetAmountTest);
             expect(result.earned).to.eq(0);
@@ -2007,9 +2047,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 earned: "500",
                 lost: "0",
               },
-              assetProviderBalance: "1000"
+              assetProviderBalance: "1000",
+              callDoHardworkBySplitter: true
             });
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(makeTestThreeEarnedAmounts);
             expect(result.earned).to.eq(555);
@@ -2019,6 +2061,68 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             const result = await loadFixture(makeTestThreeEarnedAmounts);
             expect(result.investedAssetsBefore).to.eq(1);
             expect(result.investedAssetsAfter).to.eq(6);
+          });
+          it("doHardwork() should return expected results", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.callDoHardwork?.earned).to.eq(555);
+            expect(result.callDoHardwork?.lost).to.eq(0);
+          });
+        });
+        describe("2 earned amounts + 2 losses", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeTestThreeEarnedAmounts(): Promise<IDoHardworkResults> {
+            return makeDoHardwork({
+              tokens: [usdc, dai],
+              assetIndex: 0,
+
+              setUpInvestedAssetsInitial: {
+                depositorLiquidity18: "1",
+                depositorQuoteExit: {
+                  liquidityAmount18: "1",
+                  amountsOut: ["1000", "0"],
+                }
+              },
+              setUpInvestedAssets: {
+                depositorLiquidity18: "2",
+                depositorQuoteExit: {
+                  liquidityAmount18: "2",
+                  amountsOut: ["6000", "0"],
+                }
+              },
+
+              initialBalance: "100",
+              balanceChange: "-50",
+
+              handleRewardsResults: {
+                earned: "500",
+                lost: "400",
+              },
+              assetProviderBalance: "1000",
+              callDoHardworkBySplitter: true
+            });
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.earned).to.eq(5000 + 500);
+            expect(result.lost).to.eq(400 + 50);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.investedAssetsBefore).to.eq(1000);
+            expect(result.investedAssetsAfter).to.eq(6000);
+          });
+          it("doHardwork() should return expected results", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.callDoHardwork?.earned).to.eq(5500);
+            expect(result.callDoHardwork?.lost).to.eq(450);
           });
         });
         describe("3 lost amounts", async () => {
@@ -2057,9 +2161,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 earned: "0",
                 lost: "500",
               },
-              assetProviderBalance: "1000"
+              assetProviderBalance: "1000",
+              callDoHardworkBySplitter: true
             });
           }
+
           it("should return expected lost and earned values", async () => {
             const result = await loadFixture(makeTestThreeLostAmounts);
             expect(result.earned).to.eq(0);
@@ -2070,8 +2176,178 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             expect(result.investedAssetsBefore).to.eq(6);
             expect(result.investedAssetsAfter).to.eq(1);
           });
+          it("doHardwork() should return expected results", async () => {
+            const result = await loadFixture(makeTestThreeLostAmounts);
+            expect(result.callDoHardwork?.earned).to.eq(0);
+            expect(result.callDoHardwork?.lost).to.eq(555);
+          });
+
+        });
+        describe("Skipping reinvesting", async () => {
+          describe("reInvest is false", async () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeTestThreeEarnedAmountsSkipReinvest(): Promise<IDoHardworkResults> {
+              return makeDoHardwork({
+                tokens: [usdc, dai],
+                assetIndex: 0,
+
+                setUpInvestedAssetsInitial: {
+                  depositorLiquidity18: "1",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "1",
+                    amountsOut: ["1", "0"],
+                  }
+                },
+                setUpInvestedAssets: {
+                  depositorLiquidity18: "2",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "2",
+                    amountsOut: ["6", "0"],
+                  }
+                },
+
+                initialBalance: "100",
+                balanceChange: "50",
+
+                handleRewardsResults: {
+                  earned: "500",
+                  lost: "0",
+                },
+                assetProviderBalance: "1000",
+                reInvest: false // (!)
+              });
+            }
+
+            it("should return expected lost and earned values", async () => {
+              const result = await loadFixture(makeTestThreeEarnedAmountsSkipReinvest);
+              expect(result.earned).to.eq(505);
+              expect(result.lost).to.eq(0);
+            });
+            it("should set expected investedAssets value", async () => {
+              const result = await loadFixture(makeTestThreeEarnedAmountsSkipReinvest);
+              expect(result.investedAssetsBefore).to.eq(1);
+              expect(result.investedAssetsAfter).to.eq(6);
+            });
+          });
+          describe("Available amount is less than the threshold", async () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeTestThreeLostAmountsThreshold(): Promise<IDoHardworkResults> {
+              return makeDoHardwork({
+                tokens: [usdc, dai],
+                assetIndex: 0,
+
+                setUpInvestedAssetsInitial: {
+                  depositorLiquidity18: "1",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "1",
+                    amountsOut: ["60000", "0"],
+                  }
+                },
+                setUpInvestedAssets: {
+                  depositorLiquidity18: "2",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "2",
+                    amountsOut: ["40000", "0"],
+                  }
+                },
+
+                initialBalance: "3999", // (!)
+                balanceChange: "10000",
+
+                handleRewardsResults: {
+                  earned: "0",
+                  lost: "500",
+                },
+                assetProviderBalance: "1000",
+
+                reInvest: true,
+                reinvestThresholdPercent: 10_000 // (!) assetBalance must be greater than 40_000 * 10% = 4000
+              });
+            }
+
+            it("should return expected lost and earned values", async () => {
+              const result = await loadFixture(makeTestThreeLostAmountsThreshold);
+              expect(result.earned).to.eq(0);
+              expect(result.lost).to.eq(20500);
+            });
+            it("should set expected investedAssets value", async () => {
+              const result = await loadFixture(makeTestThreeLostAmountsThreshold);
+              expect(result.investedAssetsBefore).to.eq(60_000);
+              expect(result.investedAssetsAfter).to.eq(40_000);
+            });
+          });
         });
       });
+    });
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+      it("doHardwork() should revert if not splitter", async () => {
+        const p = {
+          tokens: [usdc, dai],
+          assetIndex: 0,
+
+          setUpInvestedAssetsInitial: {
+            depositorLiquidity18: "1",
+            depositorQuoteExit: {
+              liquidityAmount18: "1",
+              amountsOut: ["1", "0"],
+            }
+          },
+          setUpInvestedAssets: {
+            depositorLiquidity18: "2",
+            depositorQuoteExit: {
+              liquidityAmount18: "2",
+              amountsOut: ["6", "0"],
+            }
+          },
+
+          initialBalance: "100",
+          balanceChange: "50",
+
+          handleRewardsResults: {
+            earned: "500",
+            lost: "0",
+          },
+          assetProviderBalance: "1000",
+          callDoHardworkBySplitter: false // (!)
+        }
+        await expect(makeDoHardwork(p)).to.be.revertedWith("SB: Denied"); // DENIED
+      });
+    });
+  });
+
+  describe("isReadyToHardWork", () => {
+    let snapshot: string;
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    it("should return true", async () => {
+      const ms = await setupMockedStrategy();
+      expect(await ms.strategy.isReadyToHardWork()).eq(true);
     });
   });
   //endregion Unit tests

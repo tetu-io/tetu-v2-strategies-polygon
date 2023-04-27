@@ -11,7 +11,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
-import "hardhat/console.sol";
+
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
@@ -929,7 +929,6 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
-    console.log("calcInvestedAssets");
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
 
@@ -939,11 +938,9 @@ library ConverterStrategyBaseLib {
       tokens,
       v.len
     );
-    console.log("calcInvestedAssets.2");
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      console.log("calcInvestedAssets.3 i", i);
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
@@ -973,7 +970,6 @@ library ConverterStrategyBaseLib {
         }
       }
     }
-    console.log("calcInvestedAssets.4");
 
     if (v.debts.length == v.len) {
       // we assume here, that it would be always profitable to save collateral
@@ -995,7 +991,6 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    console.log("calcInvestedAssets.5 amountOut", amountOut);
     return amountOut;
   }
   //endregion calcInvestedAssets
