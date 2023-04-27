@@ -13,4 +13,6 @@ interface ILinearPool {
   function getWrappedToken() external view returns (address);
 
   function getWrappedTokenRate() external view returns (uint256);
+
+  function getRate() external view returns (uint256);
 }

@@ -26,6 +26,7 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {IState, IStateParams, StateUtils} from "../../../StateUtils";
 import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
+import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -45,7 +46,7 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe.skip('BalancerBoostedUniversalTest', async () => {
+describe('BalancerBoostedUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -135,6 +136,8 @@ describe.skip('BalancerBoostedUniversalTest', async () => {
           { reinvestThresholdPercent },
         );
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
+
+        await PriceOracleImitatorUtils.balancerBoosted(user, t[1], t[0])
       },
     };
 

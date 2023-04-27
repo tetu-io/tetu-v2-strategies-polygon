@@ -37,7 +37,7 @@ const argv = require('yargs/yargs')()
     },
     maticForkBlock: {
       type: 'number',
-      default: 41666774,
+      default: 42012800,
     },
     hardhatLogsEnabled: {
       type: 'boolean',
