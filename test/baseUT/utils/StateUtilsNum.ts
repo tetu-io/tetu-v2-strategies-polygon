@@ -5,9 +5,18 @@ import {formatUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
 import {
   BalancerBoostedStrategy__factory,
-  ConverterStrategyBase, IBalancerGauge__factory, IBorrowManager__factory, IConverterController__factory,
-  IERC20__factory, IERC20Metadata__factory, IPoolAdapter__factory, ISplitter__factory, ITetuConverter__factory,
-  TetuVaultV2, UniswapV3ConverterStrategy__factory
+  ConverterStrategyBase,
+  IBalancerGauge__factory,
+  IBorrowManager__factory,
+  IConverterController__factory,
+  IERC20__factory,
+  IERC20Metadata__factory,
+  IPoolAdapter__factory,
+  IPriceOracle__factory,
+  ISplitter__factory,
+  ITetuConverter__factory,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy__factory
 } from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
@@ -65,6 +74,8 @@ export interface IStateNum {
     borrowAssetNames: string[];
     healthFactors: number[][];
     platformAdapters: string[][];
+    borrowAssetsPrices: number[];
+    borrowAssetsAddresses: string[];
   };
 }
 
@@ -90,9 +101,12 @@ export class StateUtilsNum {
     const assetDecimals = await asset.decimals();
     let liquidity: number;
 
-    let borrowAssets: string[];
+    let borrowAssets: string[] = [];
     const borrowAssetsBalances: number[] = [];
     const borrowAssetsNames: string[] = [];
+    const borrowAssetsPrices: number[] = [];
+    let borrowAssetsAddresses: string[] = [];
+
     const collaterals: number[] = [];
     const amountsToRepay: number[] = [];
     const converterBorrowAssetNames: string[] = []
@@ -103,6 +117,10 @@ export class StateUtilsNum {
     let gaugeDecimals: number = 0;
 
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
+    const priceOracle = IPriceOracle__factory.connect(
+      await IConverterController__factory.connect(await converter.controller(), signer).priceOracle(),
+      signer
+    );
     const borrowManager = await IBorrowManager__factory.connect(
       await IConverterController__factory.connect(await converter.controller(), signer).borrowManager(),
       signer
@@ -116,8 +134,8 @@ export class StateUtilsNum {
       liquidity = +formatUnits(await pool.balanceOf(strategy.address), await pool.decimals());
       const depositorFacade = await MockHelper.createBalancerBoostedDepositorFacade(signer, poolAddress);
 
-      borrowAssets = await depositorFacade._depositorPoolAssetsAccess();
-      borrowAssets = borrowAssets.filter(a => a !== asset.address);
+      borrowAssetsAddresses = await depositorFacade._depositorPoolAssetsAccess();
+      borrowAssets = borrowAssetsAddresses.filter(a => a !== asset.address);
       for (const item of borrowAssets) {
         const borrowAsset = await IERC20Metadata__factory.connect(item, signer);
         borrowAssetsBalances.push(+formatUnits(await borrowAsset.balanceOf(strategy.address), await borrowAsset.decimals()));
@@ -153,6 +171,7 @@ export class StateUtilsNum {
         assetDecimals // todo
       );
       const tokenB = await IERC20Metadata__factory.connect(state.tokenB, signer);
+      borrowAssetsAddresses = [state.tokenA, state.tokenB];
       borrowAssetsBalances.push(+formatUnits(await tokenB.balanceOf(strategy.address), await tokenB.decimals()));
       borrowAssetsNames.push(await tokenB.symbol());
 
@@ -177,6 +196,11 @@ export class StateUtilsNum {
     } else {
       throw new Error('Not supported')
     }
+
+    for (const borrowAssetAddress of borrowAssetsAddresses) {
+      borrowAssetsPrices.push(+formatUnits(await priceOracle.getAssetPrice(borrowAssetAddress), 18));
+    }
+
 
     // noinspection UnnecessaryLocalVariableJS
     const dest: IStateNum = {
@@ -222,7 +246,9 @@ export class StateUtilsNum {
         amountsToRepay,
         borrowAssetNames: converterBorrowAssetNames,
         healthFactors: converterHealthFactors,
-        platformAdapters: converterPlatformAdapters
+        platformAdapters: converterPlatformAdapters,
+        borrowAssetsPrices,
+        borrowAssetsAddresses
       }
     }
 
