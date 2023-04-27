@@ -16,6 +16,7 @@ import { writeFileSyncRestoreFolder } from '../../../../baseUT/utils/FileUtils';
 
 /**
  * All balances
+ * @deprecated Please use universal IState from StateUtils
  */
 export interface IState {
   title: string;
