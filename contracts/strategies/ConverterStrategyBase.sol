@@ -6,7 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -46,7 +46,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.4";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.5";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -141,11 +141,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ){
+    console.log("_depositToPool.amount", amount_);
     uint updatedInvestedAssets;
     // we need to compensate difference between last updated invested assets and the current value for do not allow share price fluctuation
     (updatedInvestedAssets, strategyLoss) = _updateInvestedAssetsAndGetLoss(updateTotalAssetsBeforeInvest_);
+    console.log("_depositToPool.updatedInvestedAssets", updatedInvestedAssets);
+    console.log("_depositToPool.reinvestThresholdPercent", reinvestThresholdPercent);
+    console.log("_depositToPool.DENOMINATOR", DENOMINATOR);
+
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / DENOMINATOR) {
+      console.log("reinvestThresholdPercent * updatedInvestedAssets / DENOMINATOR", reinvestThresholdPercent * updatedInvestedAssets / DENOMINATOR);
       address _asset = asset;
       uint balanceBefore = _balance(_asset);
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);

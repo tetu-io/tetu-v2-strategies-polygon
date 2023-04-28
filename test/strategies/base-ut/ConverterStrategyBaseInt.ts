@@ -14,6 +14,7 @@ import {IConverterController__factory, IERC20Metadata__factory, ITetuConverter__
 import {depositToVault} from "../../StrategyTestUtils";
 import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
+import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 
 /**
  * Tests of ConverterStrategyBase on the base of real strategies
@@ -586,6 +587,90 @@ describe("ConverterStrategyBaseInt", () => {
         it("should not reduce gauge balance", async () => {
           const r = await loadFixture(makeWithdrawTest);
           await expect(r.afterWithdraw.gauge.strategyBalance).gte(r.afterDeposit.gauge.strategyBalance);
+        });
+      });
+    });
+  });
+
+  describe("deposit", () => {
+    describe("reinvestThresholdPercent", () => {
+      interface IMakeDepositResults {
+        afterDeposit0: IStateNum;
+        afterDeposit1: IStateNum;
+      }
+      interface IMakeDepositParams {
+        amountToDeposit0: string;
+        amountToDeposit1: string;
+        reinvestThresholdPercent: number;
+      }
+
+      async function makeTwoDeposits(p: IMakeDepositParams): Promise<IMakeDepositResults> {
+        const cc = await prepareBalancerConverterStrategyUsdcTUsd();
+        await cc.vault.setDoHardWorkOnInvest(false);
+        const decimals = await IERC20Metadata__factory.connect(cc.asset, gov).decimals();
+
+        const operator = await UniversalTestUtils.getAnOperator(cc.strategy.address, signer);
+        await cc.strategy.connect(operator).setReinvestThresholdPercent(p.reinvestThresholdPercent);
+
+        const depositAmount0 = parseUnits(p.amountToDeposit0, decimals);
+        await TokenUtils.getToken(cc.asset, signer2.address, depositAmount0);
+        await cc.vault.connect(signer2).deposit(depositAmount0, signer2.address);
+        const afterDeposit0 = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "afterDeposit0");
+        console.log("afterDeposit0", afterDeposit0);
+
+        const depositAmount1 = parseUnits(p.amountToDeposit1, decimals);
+        await TokenUtils.getToken(cc.asset, signer.address, depositAmount1);
+
+        const asset = IERC20Metadata__factory.connect(cc.asset, signer);
+        await depositToVault(cc.vault, signer, depositAmount1, decimals, asset, cc.insurance);
+        const afterDeposit1 = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "afterDeposit1");
+        console.log("afterDeposit1", afterDeposit1);
+
+        return {afterDeposit0, afterDeposit1};
+      }
+
+      describe("Deposit amount < threshold", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeWithdrawTest(): Promise<IMakeDepositResults> {
+          return makeTwoDeposits({
+            amountToDeposit0: "1000",
+            amountToDeposit1: "100",
+            reinvestThresholdPercent: 100_000 // 100%
+          });
+        }
+
+        it("second deposit shouldn't change invested amount", async () => {
+          const r = await loadFixture(makeWithdrawTest);
+          await expect(r.afterDeposit0.strategy.investedAssets).approximately(r.afterDeposit1.strategy.investedAssets, 1);
+        });
+      });
+      describe("Deposit amount > threshold", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeWithdrawTest(): Promise<IMakeDepositResults> {
+          return makeTwoDeposits({
+            amountToDeposit0: "1000",
+            amountToDeposit1: "2000",
+            reinvestThresholdPercent: 100_000 // 100%
+          });
+        }
+
+        it("second deposit should increase invested amount", async () => {
+          const r = await loadFixture(makeWithdrawTest);
+          await expect(r.afterDeposit0.strategy.investedAssets).lt(r.afterDeposit1.strategy.investedAssets);
         });
       });
     });

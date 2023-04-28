@@ -2374,5 +2374,32 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       expect(await ms.strategy.isReadyToHardWork()).eq(true);
     });
   });
+
+  describe("_withdrawUniversal-trivial", () => {
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      it("should return zeros if amount is zero", async () => {
+        const ms = await setupMockedStrategy();
+
+        // set up _updateInvestedAssets()
+        await ms.strategy.setDepositorLiquidity(parseUnits("1", 18));
+        await ms.strategy.setDepositorQuoteExit(
+          parseUnits("1", 18),
+          ms.depositorTokens.map((x, index) => parseUnits("0", 18))
+        );
+        const r = await ms.strategy.callStatic.withdrawUniversalTestAccess(0, false);
+
+        expect(r.expectedWithdrewUSD.eq(0)).eq(true);
+        expect(r.assetPrice.eq(0)).eq(true);
+      });
+    });
+  });
   //endregion Unit tests
 });
