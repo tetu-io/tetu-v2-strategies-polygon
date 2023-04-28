@@ -580,7 +580,7 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
-  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
+  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator (== 0 | amountIn_)
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
   function _liquidate(
     ITetuConverter converter_,
@@ -603,7 +603,7 @@ library ConverterStrategyBaseLib {
 
     // if the expected value is higher than threshold distribute to destinations
     return amountOut > liquidationThresholdForTokenOut_
-      ? _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_)
+      ? (amountIn_, _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_))
       : (0, 0);
   }
 
@@ -616,7 +616,6 @@ library ConverterStrategyBaseLib {
     uint amountIn_,
     uint slippage_
   ) internal returns (
-    uint spentAmountIn,
     uint receivedAmountOut
   ) {
     // we need to approve each time, liquidator address can be changed in controller
@@ -633,7 +632,6 @@ library ConverterStrategyBaseLib {
     receivedAmountOut = balanceAfter > balanceBefore
       ? balanceAfter - balanceBefore
       : 0;
-    spentAmountIn = amountIn_;
 
     require(
       converter_.isConversionValid(
@@ -650,7 +648,7 @@ library ConverterStrategyBaseLib {
       tokenIn_,
       tokenOut_,
       amountIn_,
-      spentAmountIn,
+      amountIn_,
       receivedAmountOut
     );
   }
@@ -1302,7 +1300,7 @@ library ConverterStrategyBaseLib {
             );
             if (spentAmountIn != 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
-              expectedAmount += tokenBalance * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+              expectedAmount += spentAmountIn * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
             }
           }
 
