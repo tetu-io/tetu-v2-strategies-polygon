@@ -14,7 +14,8 @@ import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { ethers } from 'hardhat';
 import {
   BalancerBoostedStrategy,
-  BalancerBoostedStrategy__factory, ControllerV2__factory,
+  BalancerBoostedStrategy__factory,
+  ControllerV2__factory,
   IERC20Metadata__factory,
   IStrategyV2,
   TetuVaultV2
@@ -30,6 +31,8 @@ import {ICoreContractsWrapper} from "../../../CoreContractsWrapper";
 import {IToolsContractsWrapper} from "../../../ToolsContractsWrapper";
 import {IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
+import {BalancerStrategyUtils} from "../../../BalancerStrategyUtils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -141,6 +144,24 @@ describe('BalancerBoostedUniversalTest', async () => {
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
 
         await PriceOracleImitatorUtils.balancerBoosted(user, t[1], t[0])
+      },
+      swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
+        const swapAmountUnits = '3000'
+        const boostedStrategy = strategy as unknown as BalancerBoostedStrategy
+        const poolId = await boostedStrategy.poolId()
+        const otherToken = IERC20Metadata__factory.connect(await BalancerStrategyUtils.getOtherToken(poolId, t[0], MaticAddresses.BALANCER_VAULT, swapUser), swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
+        await BalancerStrategyUtils.bbSwap(poolId.substring(0, 42), t[0], otherToken.address, parseUnits(swapAmountUnits, await IERC20Metadata__factory.connect(t[0], swapUser).decimals()), MaticAddresses.BALANCER_VAULT, swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
+      },
+      swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
+        const swapAmountUnits = '3000'
+        const boostedStrategy = strategy as unknown as BalancerBoostedStrategy
+        const poolId = await boostedStrategy.poolId()
+        const otherToken = IERC20Metadata__factory.connect(await BalancerStrategyUtils.getOtherToken(poolId, t[0], MaticAddresses.BALANCER_VAULT, swapUser), swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
+        await BalancerStrategyUtils.bbSwap(poolId.substring(0, 42), otherToken.address, t[0], parseUnits(swapAmountUnits, await otherToken.decimals()), MaticAddresses.BALANCER_VAULT, swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
       },
     };
 

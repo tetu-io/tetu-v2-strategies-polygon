@@ -73,6 +73,7 @@ contract Aave3PriceSourceBalancerBoosted is AggregatorInterface {
   }
 
   /// @notice Calculates price in pool
+  /// todo dont use getRate() that doesn't take into account scaling factors
   function _getPrice() internal view returns (uint) {
     // get input linear bpt price in term of inputToken
     ILinearPool linearInputPool = _getLinearPool(inputToken);

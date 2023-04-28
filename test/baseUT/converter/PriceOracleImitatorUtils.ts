@@ -64,9 +64,6 @@ export class PriceOracleImitatorUtils {
     }
 
     await priceOracleAsPoolOwner.setAssetSources(tokens, sources.map(x => x.address))
-
-    console.log('Price of USDT', await priceOracleAsPoolOwner.getAssetPrice(MaticAddresses.USDT_TOKEN))
-    console.log('Price of DAI', await priceOracleAsPoolOwner.getAssetPrice(MaticAddresses.DAI_TOKEN))
   }
 
   public static async uniswapV3(
