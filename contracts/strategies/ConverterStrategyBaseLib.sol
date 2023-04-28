@@ -660,7 +660,7 @@ library ConverterStrategyBaseLib {
   //region requirePayAmountBack
   /////////////////////////////////////////////////////////////////////
 
-  /// @param amountOut Amount of the main asset requested by converter
+  /// @param amount_ Amount of the main asset requested by converter
   /// @param indexTheAsset Index of the asset required by converter in the {tokens}
   /// @param asset Main asset or underlying (it can be different from tokens[indexTheAsset])
   /// @return amountOut Amount of the main asset sent to converter
@@ -1200,13 +1200,7 @@ library ConverterStrategyBaseLib {
           liquidationThreshold
         );
         collateralOut += v.received;
-        if (v.spent != 0) {
-          repaidAmountsOut[i] += v.spent;
-          require(
-            tetuConverter.isConversionValid(tokens[i], v.spent, v.asset, v.received, PRICE_IMPACT_TOLERANCE),
-            AppErrors.PRICE_IMPACT
-          );
-        }
+        repaidAmountsOut[i] += v.spent;
       }
     }
 

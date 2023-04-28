@@ -1726,6 +1726,30 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
           });
         });
+        describe('There are two debts', () => {
+          describe('Amount to repay > total amount of the debts', () => {
+            it('should return expected values', async() => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                balances: ['117', '1987', '300'],
+                prices: ['20', '10', '60'],
+                debts: [{
+                  debtAmount: '17',
+                  collateralAmount: '500',
+                  borrowAsset: dai,
+                }, {
+                  debtAmount: '100',
+                  collateralAmount: '700',
+                  borrowAsset: usdt,
+                }],
+              })).amountOut;
+              const expected = 500 + 700 + (117 - 17) * 20 / 10 + (300 - 100) * 60 / 10;
+
+              expect(ret).eq(expected);
+            });
+          });
+        });
       });
       describe('All amounts are deposited to the pool', () => {
         it('should return expected values', async() => {

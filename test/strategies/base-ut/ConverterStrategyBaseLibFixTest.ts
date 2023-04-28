@@ -1128,6 +1128,30 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           expect(r.balances.join()).eq([0, 0].join());
         });
       });
+      describe("Zero requested amount", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero expected amount", async () => {
+          const r = await makeClosePositionToGetRequestedAmountTest({
+            requestedAmount: "0", // (!)
+            tokens: [usdc, dai],
+            indexAsset: 0,
+            balances: ["0", "0"], // usdc, dai - we don't have USDC at all
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["0", "0"],
+            liquidations: [],
+            quoteRepays: [],
+            repays: [],
+          });
+          expect(r.expectedAmountMainAssetOut).eq(0);
+        });
+      });
       describe("There are no debts", () => {
         let snapshot: string;
         before(async function () {
@@ -2832,6 +2856,31 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
         });
       });
+
+      describe("Wrong lengths", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amounts for the forwarder", async () => {
+          expect(
+            makeRecycle({
+              assetIndex: 1,
+              tokens: [usdt, usdc, dai],
+              rewardTokens: [tetu],
+              rewardAmounts: ["6", "7"], // (!) wrong lengths
+              thresholds: [],
+              initialBalances: [],
+              compoundRatio: 30_000,
+              liquidations: []
+            })
+          ).revertedWith("TS-4 wrong lengths"); // WRONG_LENGTHS
+        });
+      });
     });
   });
 
@@ -3805,6 +3854,30 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       it("should return expected value of expectedMainAssetAmounts", async () => {
         const results = await loadFixture(postWithdrawActionsTest);
         expect(results.expectedMainAssetAmounts.join()).eq([1, 2, 0, 4, 5].join());
+      });
+    });
+    describe("Zero amounts", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function postWithdrawActionsTest(): Promise<IPostWithdrawActionsEmptyResults> {
+        return postWithdrawActionsEmpty({
+          tokens: [usdt, dai, usdc, weth, tetu],
+          indexAsset: 2,
+          balances: ["1000", "2000", "3000", "4000", "5000"], // actual values don't matter here, they are not used
+          amountsToConvert: ["0", "0", "0", "0", "0"],
+          quoteRepays: []
+        });
+      }
+
+      it("should return expected value of expectedMainAssetAmounts", async () => {
+        const results = await loadFixture(postWithdrawActionsTest);
+        expect(results.expectedMainAssetAmounts.join()).eq([0, 0, 0, 0, 0].join());
       });
     });
   });

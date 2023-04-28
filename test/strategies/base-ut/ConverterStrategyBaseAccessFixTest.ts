@@ -545,6 +545,30 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
         });
       });
+      describe("Zero amount", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
+          const ms = await setupMockedStrategy();
+          await usdc.mint(ms.strategy.address, parseUnits("100", 6));
+          const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
+          await ms.strategy.setDepositorQuoteExit(0, [0, 0, 0]);
+          const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("0", 6));
+          await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("0", 6));
+          return getResults(ms, amountOut);
+        }
+
+        it("should return zero amount", async () => {
+          const r = await loadFixture(makeRequirePayAmountBackTest);
+          expect(r.amountOut).eq(0);
+        });
+      });
     });
     describe('Bad paths', () => {
       let snapshot: string;

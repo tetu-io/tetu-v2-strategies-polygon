@@ -629,7 +629,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
     address __converter = address(converter);
     require(msg.sender == __converter, StrategyLib.DENIED);
-    // requirements in swapToGivenAmountAndSendToConverter()
 
     // detect index of the target asset
     (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
