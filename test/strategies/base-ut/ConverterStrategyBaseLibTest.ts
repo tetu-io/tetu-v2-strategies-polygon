@@ -1727,7 +1727,11 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
         });
         describe('There are two debts', () => {
-          describe('Amount to repay > total amount of the debts', () => {
+          /**
+           * Fix coverage for calcInvestedAssets:
+           * else part for "if (v.debts.length == 0)"
+           */
+          describe('Amount to repay < total amount of the debts', () => {
             it('should return expected values', async() => {
               const ret = (await makeCalcInvestedAssetsTest({
                 tokens: [dai, usdc, usdt],
@@ -1735,16 +1739,16 @@ describe('ConverterStrategyBaseLibTest', () => {
                 balances: ['117', '1987', '300'],
                 prices: ['20', '10', '60'],
                 debts: [{
-                  debtAmount: '17',
+                  debtAmount: '117',
                   collateralAmount: '500',
                   borrowAsset: dai,
                 }, {
-                  debtAmount: '100',
+                  debtAmount: '300',
                   collateralAmount: '700',
                   borrowAsset: usdt,
                 }],
               })).amountOut;
-              const expected = 500 + 700 + (117 - 17) * 20 / 10 + (300 - 100) * 60 / 10;
+              const expected = 500 + 700;
 
               expect(ret).eq(expected);
             });
