@@ -1023,10 +1023,6 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    // todo make integral tests for the following cases:
-    //  1) we will withdraw not enough
-    //  2) a rare case when user exit from the vault before rebalance
-    //  3) however, if user will exit between rebalances and the gap will be lower than withdraw fee, we will put the fee to vault balance and increase share price
     return amountsOut;
   }
   //endregion getExpectedAmountMainAsset
