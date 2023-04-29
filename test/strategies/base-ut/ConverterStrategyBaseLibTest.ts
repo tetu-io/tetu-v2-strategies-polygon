@@ -1726,6 +1726,34 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
           });
         });
+        describe('There are two debts', () => {
+          /**
+           * Fix coverage for calcInvestedAssets:
+           * else part for "if (v.debts.length == 0)"
+           */
+          describe('Amount to repay < total amount of the debts', () => {
+            it('should return expected values', async() => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                balances: ['117', '1987', '300'],
+                prices: ['20', '10', '60'],
+                debts: [{
+                  debtAmount: '117',
+                  collateralAmount: '500',
+                  borrowAsset: dai,
+                }, {
+                  debtAmount: '300',
+                  collateralAmount: '700',
+                  borrowAsset: usdt,
+                }],
+              })).amountOut;
+              const expected = 500 + 700;
+
+              expect(ret).eq(expected);
+            });
+          });
+        });
       });
       describe('All amounts are deposited to the pool', () => {
         it('should return expected values', async() => {

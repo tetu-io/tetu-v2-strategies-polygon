@@ -39,6 +39,7 @@ import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 describe('ConverterStrategyBaseAccessFixTest', () => {
   //region Variables
   let snapshotBefore: string;
+  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let usdc: MockToken;
   let dai: MockToken;
@@ -46,17 +47,6 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
   let bal: MockToken;
   let usdt: MockToken;
   let weth: MockToken;
-  let strategy: MockConverterStrategy;
-  let controller: IController;
-  let vault: TetuVaultV2;
-  let splitter: StrategySplitterV2;
-  let tetuConverter: MockTetuConverter;
-  let priceOracle: PriceOracleMock;
-  let tetuConverterController: MockTetuConverterController;
-  let depositorTokens: MockToken[];
-  let depositorWeights: number[];
-  let depositorReserves: BigNumber[];
-  let indexAsset: number;
   let liquidator: MockTetuLiquidatorSingleCall;
   let forwarder: MockForwarder;
   //endregion Variables
@@ -65,7 +55,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
   before(async function () {
     [signer] = await ethers.getSigners();
 
-    const governance = await DeployerUtilsLocal.getControllerGovernance(signer);
+    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     snapshotBefore = await TimeUtils.snapshot();
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
@@ -75,18 +65,47 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     weth = await DeployerUtils.deployMockToken(signer, 'WETH', 8);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
 
-    // Set up strategy
-    depositorTokens = [dai, usdc, usdt];
-    indexAsset = depositorTokens.findIndex(x => x.address === usdc.address);
-    depositorWeights = [1, 1, 1];
-    depositorReserves = [
-      parseUnits('1000', 18), // dai
-      parseUnits('1000', 6),  // usdc
-      parseUnits('1000', 6),   // usdt
-    ];
+    liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+    forwarder = await MockHelper.createMockForwarder(signer);
+  });
 
-    controller = await DeployerUtilsLocal.getController(signer);
-    tetuConverter = await MockHelper.createMockTetuConverter(signer);
+  after(async function () {
+    await TimeUtils.rollback(snapshotBefore);
+  });
+  //endregion before, after
+
+  //region Fixtures
+  interface IStrategySetupParams {
+    depositorTokens?: MockToken[];
+    depositorWeights?: number[];
+    depositorReserves?: string[];
+    underlying?: MockToken;
+  }
+  interface IStrategySetupResults {
+    strategy: MockConverterStrategy;
+    controller: IController;
+    vault: TetuVaultV2;
+    splitter: StrategySplitterV2;
+    tetuConverter: MockTetuConverter;
+    priceOracle: PriceOracleMock;
+    tetuConverterController: MockTetuConverterController;
+    depositorTokens: MockToken[];
+    depositorWeights: number[];
+    depositorReserves: BigNumber[];
+    indexAsset: number;
+  }
+
+  async function setupMockedStrategy(p?: IStrategySetupParams): Promise<IStrategySetupResults> {
+    // Set up strategy
+    const depositorTokens = p?.depositorTokens || [dai, usdc, usdt];
+    const indexAsset = depositorTokens.findIndex(x => x.address === (p?.underlying?.address || usdc.address));
+    const depositorWeights = p?.depositorWeights || [1, 1, 1];
+    const depositorReserves = await Promise.all((p?.depositorReserves || ["1000", "1000", "1000"]).map(
+      async (x, index) => parseUnits(x, await depositorTokens[index].decimals())
+    ));
+
+    const controller = await DeployerUtilsLocal.getController(signer);
+    const tetuConverter = await MockHelper.createMockTetuConverter(signer);
     const strategyDeployer = async (_splitterAddress: string) => {
       const strategyLocal = MockConverterStrategy__factory.connect(
         await DeployerUtils.deployProxy(signer, 'MockConverterStrategy'), governance);
@@ -113,24 +132,22 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       false,
     );
 
-    vault = data.vault.connect(signer);
+    const vault = data.vault.connect(signer);
     const splitterAddress = await vault.splitter();
-    splitter = await StrategySplitterV2__factory.connect(splitterAddress, signer);
-    strategy = data.strategy as unknown as MockConverterStrategy;
+    const splitter = await StrategySplitterV2__factory.connect(splitterAddress, signer);
+    const strategy = data.strategy as unknown as MockConverterStrategy;
 
     // set up TetuConverter
-    priceOracle = (await DeployerUtils.deployContract(
+    const priceOracle = (await DeployerUtils.deployContract(
       signer,
       'PriceOracleMock',
       [usdc.address, dai.address, usdt.address],
       [parseUnits('1', 18), parseUnits('1', 18), parseUnits('1', 18)],
     )) as PriceOracleMock;
-    tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+    const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
     await tetuConverter.setController(tetuConverterController.address);
 
     // set up mock liquidator and mock forwarder
-    liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-    forwarder = await MockHelper.createMockForwarder(signer);
     const controllerGov = ControllerV2__factory.connect(controller.address, governance);
     const _LIQUIDATOR = 4;
     const _FORWARDER = 5;
@@ -139,13 +156,22 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     await TimeUtils.advanceBlocksOnTs(86400); // 1 day
     await controllerGov.changeAddress(_LIQUIDATOR);
     await controllerGov.changeAddress(_FORWARDER);
-  });
 
-  after(async function () {
-    await TimeUtils.rollback(snapshotBefore);
-  });
-
-  //endregion before, after
+    return {
+      strategy,
+      controller,
+      vault,
+      splitter,
+      tetuConverter,
+      priceOracle,
+      tetuConverterController,
+      depositorTokens,
+      depositorWeights,
+      depositorReserves,
+      indexAsset,
+    }
+  }
+  //endregion Fixture
 
   //region Unit tests
   describe("requirePayAmountBack", () => {
@@ -163,6 +189,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     }
 
     async function prepareWithdraw(
+      ms: IStrategySetupResults,
       depositorLiquidity: BigNumber,
       depositorPoolReserves: BigNumber[],
       depositorTotalSupply: BigNumber,
@@ -171,44 +198,44 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     ) {
       if (params?.initialBalances) {
         for (const tokenAmount of params?.initialBalances) {
-          await tokenAmount.token.mint(strategy.address, tokenAmount.amount);
+          await tokenAmount.token.mint(ms.strategy.address, tokenAmount.amount);
         }
       }
       if (params?.liquidations) {
         for (const liquidation of params?.liquidations) {
           await setupMockedLiquidation(liquidator, liquidation);
-          await setupIsConversionValid(tetuConverter, liquidation, true);
+          await setupIsConversionValid(ms.tetuConverter, liquidation, true);
         }
       }
       if (params?.repayments) {
         for (const repayment of params.repayments) {
-          await setupMockedRepay(tetuConverter, strategy.address, repayment);
+          await setupMockedRepay(ms.tetuConverter, ms.strategy.address, repayment);
         }
       }
 
-      await strategy.setDepositorLiquidity(depositorLiquidity);
+      await ms.strategy.setDepositorLiquidity(depositorLiquidity);
       console.log("setDepositorLiquidity", depositorLiquidity);
-      await strategy.setDepositorPoolReserves(depositorPoolReserves);
-      await strategy.setTotalSupply(depositorTotalSupply);
+      await ms.strategy.setDepositorPoolReserves(depositorPoolReserves);
+      await ms.strategy.setTotalSupply(depositorTotalSupply);
 
-      await strategy.setDepositorExit(depositorLiquidity, withdrawnAmounts);
-      await strategy.setDepositorQuoteExit(depositorLiquidity, withdrawnAmounts);
+      await ms.strategy.setDepositorExit(depositorLiquidity, withdrawnAmounts);
+      await ms.strategy.setDepositorQuoteExit(depositorLiquidity, withdrawnAmounts);
 
       // _updateInvestedAssets is called at the end of requirePayAmountBack when the liquidity is 0
-      await strategy.setDepositorQuoteExit(0, withdrawnAmounts);
+      await ms.strategy.setDepositorQuoteExit(0, withdrawnAmounts);
     }
 
-    async function getResults(amountOut: BigNumber): Promise<IRequirePayAmountBackTestResults> {
+    async function getResults(ms: IStrategySetupResults, amountOut: BigNumber): Promise<IRequirePayAmountBackTestResults> {
       return {
         amountOut: +formatUnits(amountOut, await usdc.decimals()),
         converterUsdcBalances: await Promise.all(
-          depositorTokens.map(
-            async token => +formatUnits(await token.balanceOf(tetuConverter.address), await token.decimals()),
+          ms.depositorTokens.map(
+            async token => +formatUnits(await token.balanceOf(ms.tetuConverter.address), await token.decimals()),
           )
         ),
         strategyUsdcBalances: await Promise.all(
-          depositorTokens.map(
-            async token => +formatUnits(await token.balanceOf(strategy.address), await token.decimals()),
+          ms.depositorTokens.map(
+            async token => +formatUnits(await token.balanceOf(ms.strategy.address), await token.decimals()),
           )
         ),
       }
@@ -225,12 +252,13 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         });
 
         async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-          await usdc.mint(strategy.address, parseUnits("100", 6));
-          const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
-          await strategy.setDepositorQuoteExit(0, [0, 0, 0]);
+          const ms = await setupMockedStrategy();
+          await usdc.mint(ms.strategy.address, parseUnits("100", 6));
+          const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
+          await ms.strategy.setDepositorQuoteExit(0, [0, 0, 0]);
           const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("99", 6));
           await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("99", 6));
-          return getResults(amountOut);
+          return getResults(ms, amountOut);
         }
 
         it("should return expected amount", async () => {
@@ -259,9 +287,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+              const ms = await setupMockedStrategy();
+              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
 
               await prepareWithdraw(
+                ms,
                 parseUnits("6", 6), // total liquidity of the user
                 [
                   parseUnits("1000", 18), // dai
@@ -303,7 +333,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1003", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("1003", 6));
 
-              return getResults(amountOut);
+              return getResults(ms, amountOut);
             }
 
             it("should return expected amount", async () => {
@@ -329,9 +359,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+              const ms = await setupMockedStrategy();
+              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
 
               await prepareWithdraw(
+                ms,
                 parseUnits("6", 6), // total liquidity of the user
                 [
                   parseUnits("1000", 18), // dai
@@ -365,7 +397,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1018", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("1018", 6));
 
-              return getResults(amountOut);
+              return getResults(ms, amountOut);
             }
 
             it("should return expected amount", async () => {
@@ -393,9 +425,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+              const ms = await setupMockedStrategy();
+              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
 
               await prepareWithdraw(
+                ms,
                 parseUnits("0", 6), // user has NOT liquidity in the pool
                 [
                   parseUnits("1000", 18), // dai
@@ -429,7 +463,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
 
-              return getResults(amountOut);
+              return getResults(ms, amountOut);
             }
 
             it("should return expected amount", async () => {
@@ -455,9 +489,11 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             });
 
             async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+              const ms = await setupMockedStrategy();
+              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
 
               await prepareWithdraw(
+                ms,
                 parseUnits("0", 6), // user has NOT liquidity in the pool
                 [
                   parseUnits("1000", 18), // dai
@@ -491,7 +527,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
               const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
               await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
 
-              return getResults(amountOut);
+              return getResults(ms, amountOut);
             }
 
             it("should return expected amount", async () => {
@@ -509,6 +545,30 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
         });
       });
+      describe("Zero amount", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
+          const ms = await setupMockedStrategy();
+          await usdc.mint(ms.strategy.address, parseUnits("100", 6));
+          const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
+          await ms.strategy.setDepositorQuoteExit(0, [0, 0, 0]);
+          const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("0", 6));
+          await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("0", 6));
+          return getResults(ms, amountOut);
+        }
+
+        it("should return zero amount", async () => {
+          const r = await loadFixture(makeRequirePayAmountBackTest);
+          expect(r.amountOut).eq(0);
+        });
+      });
     });
     describe('Bad paths', () => {
       let snapshot: string;
@@ -520,8 +580,9 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       });
 
       it('should revert if not tetu converter', async () => {
-        await usdc.mint(strategy.address, parseUnits('100', 6));
-        const strategyAsNotTC = strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address));
+        const ms = await setupMockedStrategy();
+        await usdc.mint(ms.strategy.address, parseUnits('100', 6));
+        const strategyAsNotTC = ms.strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address));
         await expect(
           strategyAsNotTC.requirePayAmountBack(
             usdc.address,
@@ -530,8 +591,9 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         ).revertedWith("SB: Denied"); // DENIED
       });
       it('should revert if wrong asset', async () => {
-        await usdc.mint(strategy.address, parseUnits('100', 6));
-        const strategyAsTC = strategy.connect(await Misc.impersonate(tetuConverter.address));
+        const ms = await setupMockedStrategy();
+        await usdc.mint(ms.strategy.address, parseUnits('100', 6));
+        const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
         await expect(
           strategyAsTC.requirePayAmountBack(
             weth.address, // (!) wrong asset, not registered in the depositor
@@ -552,16 +614,17 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       await TimeUtils.rollback(snapshot);
     });
 
-    async function prepareCalcInvestedAssetsMocks() {
-      await strategy.setDepositorLiquidity(0);
-      await strategy.setDepositorQuoteExit(0, depositorTokens.map(x => 0));
+    async function prepareCalcInvestedAssetsMocks(ms: IStrategySetupResults) {
+      await ms.strategy.setDepositorLiquidity(0);
+      await ms.strategy.setDepositorQuoteExit(0, ms.depositorTokens.map(x => 0));
     }
 
     describe("Good paths", () => {
       it("should not revert (currently the implementation is empty)", async () => {
-        await prepareCalcInvestedAssetsMocks();
-        const tx = await strategy.connect(
-          await Misc.impersonate(tetuConverter.address)
+        const ms = await setupMockedStrategy();
+        await prepareCalcInvestedAssetsMocks(ms);
+        const tx = await ms.strategy.connect(
+          await Misc.impersonate(ms.tetuConverter.address)
         ).onTransferAmounts([usdc.address, weth.address], [1, 2]);
 
         const gasUsed = (await tx.wait()).gasUsed;
@@ -571,18 +634,20 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
     describe("Bad paths", () => {
       it("should revert if not tetu converter", async () => {
-        await prepareCalcInvestedAssetsMocks();
+        const ms = await setupMockedStrategy();
+        await prepareCalcInvestedAssetsMocks(ms);
         await expect(
-          strategy.connect(
+          ms.strategy.connect(
             await Misc.impersonate(ethers.Wallet.createRandom().address)
           ).onTransferAmounts([usdc.address, weth.address], [1, 2])
         ).revertedWith("SB: Denied"); // StrategyLib.DENIED
       });
       it("should revert if arrays have different lengths", async () => {
-        await prepareCalcInvestedAssetsMocks();
+        const ms = await setupMockedStrategy();
+        await prepareCalcInvestedAssetsMocks(ms);
         await expect(
-          strategy.connect(
-            await Misc.impersonate(tetuConverter.address)
+          ms.strategy.connect(
+            await Misc.impersonate(ms.tetuConverter.address)
           ).onTransferAmounts([usdc.address, weth.address], [1])
         ).revertedWith("TS-19 lengths"); // INCORRECT_LENGTHS
       });
@@ -635,6 +700,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     async function makeRequestedAmountTest(
       p: IMakeRequestedAmountParams
     ): Promise<IMakeRequestedAmountResults> {
+      const ms = await setupMockedStrategy();
       // set up balances
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -642,48 +708,48 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         decimals.push(d);
 
         // set up current balances
-        await p.tokens[i].mint(strategy.address, parseUnits(p.balances[i], d));
+        await p.tokens[i].mint(ms.strategy.address, parseUnits(p.balances[i], d));
         console.log("mint", i, p.balances[i]);
 
         // set up liquidation threshold for token
-        await strategy.setLiquidationThreshold(p.tokens[i].address, parseUnits(p.liquidationThresholds[i], d));
+        await ms.strategy.setLiquidationThreshold(p.tokens[i].address, parseUnits(p.liquidationThresholds[i], d));
       }
 
       // set up price oracle
-      await setupPrices(priceOracle, p.tokens, p.prices);
+      await setupPrices(ms.priceOracle, p.tokens, p.prices);
 
       // set up repay and quoteRepay in converter
       for (const repay of p.repays) {
-        await setupMockedRepay(tetuConverter, strategy.address, repay);
+        await setupMockedRepay(ms.tetuConverter, ms.strategy.address, repay);
       }
       for (const quoteRepay of p.quoteRepays) {
-        await setupMockedQuoteRepay(tetuConverter, strategy.address, quoteRepay);
+        await setupMockedQuoteRepay(ms.tetuConverter, ms.strategy.address, quoteRepay);
       }
 
       // set up expected liquidations
       for (const liquidation of p.liquidations) {
         await setupMockedLiquidation(liquidator, liquidation);
         const isConversionValid = p.isConversionValid === undefined ? true : p.isConversionValid;
-        await setupIsConversionValid(tetuConverter, liquidation, isConversionValid)
+        await setupIsConversionValid(ms.tetuConverter, liquidation, isConversionValid)
       }
 
       // make test
-      const ret = await strategy.callStatic._makeRequestedAmountAccess(
+      const ret = await ms.strategy.callStatic._makeRequestedAmountAccess(
         p.tokens.map(x => x.address),
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
-        tetuConverter.address,
+        ms.tetuConverter.address,
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
         p.expectedMainAssetAmounts.map((x, index) => parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
       );
 
-      const tx = await strategy._makeRequestedAmountAccess(
+      const tx = await ms.strategy._makeRequestedAmountAccess(
         p.tokens.map(x => x.address),
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
-        tetuConverter.address,
+        ms.tetuConverter.address,
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
@@ -695,7 +761,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         gasUsed,
         balances: await Promise.all(
           p.tokens.map(
-            async (token, index) => +formatUnits(await token.balanceOf(strategy.address), decimals[index])
+            async (token, index) => +formatUnits(await token.balanceOf(ms.strategy.address), decimals[index])
           )
         )
       }
@@ -1568,32 +1634,770 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
     describe("Good paths", () => {
       it("should return not zero amount", async () => {
+        const ms = await setupMockedStrategy();
         // set not zero balances
-        for (const token of depositorTokens) {
-          await token.mint(strategy.address, 1000);
+        for (const token of ms.depositorTokens) {
+          await token.mint(ms.strategy.address, 1000);
         }
-        await strategy.setDepositorLiquidity(0);
-        await strategy.setDepositorQuoteExit(0, depositorTokens.map(x => 0));
+        await ms.strategy.setDepositorLiquidity(0);
+        await ms.strategy.setDepositorQuoteExit(0, ms.depositorTokens.map(x => 0));
 
-        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-        const investedAssets = await strategy.connect(operator).callStatic.calcInvestedAssets();
+        const operator = await UniversalTestUtils.getAnOperator(ms.strategy.address, signer);
+        const investedAssets = await ms.strategy.connect(operator).callStatic.calcInvestedAssets();
         expect(investedAssets.gt(0)).eq(true);
       });
     });
 
     describe("Bad paths", () => {
       it("should revert if not operator", async () => {
+        const ms = await setupMockedStrategy();
         // set not zero balances
-        for (const token of depositorTokens) {
-          await token.mint(strategy.address, 1000);
+        for (const token of ms.depositorTokens) {
+          await token.mint(ms.strategy.address, 1000);
         }
-        await strategy.setDepositorLiquidity(0);
-        await strategy.setDepositorQuoteExit(0, depositorTokens.map(x => 0));
+        await ms.strategy.setDepositorLiquidity(0);
+        await ms.strategy.setDepositorQuoteExit(0, ms.depositorTokens.map(x => 0));
 
         const notOperator = await Misc.impersonate(ethers.Wallet.createRandom().address);
         await expect(
-          strategy.connect(notOperator).calcInvestedAssets()
+          ms.strategy.connect(notOperator).calcInvestedAssets()
         ).revertedWith("SB: Denied"); // StrategyLib.DENIED
+      });
+    });
+  });
+
+  describe('_doHardWork, doHardwork', () => {
+    interface IEarnedLost {
+      earned: number;
+      lost: number;
+    }
+
+    interface IDoHardworkResults extends IEarnedLost {
+      investedAssetsBefore: number;
+      investedAssetsAfter: number;
+      callDoHardwork?: IEarnedLost;
+    }
+
+    interface ISetupInvestedAssets {
+      depositorLiquidity18: string;
+      depositorQuoteExit: {
+        liquidityAmount18: string;
+        amountsOut: string[];
+      }
+    }
+
+    interface IDoHardworkParams {
+      tokens: MockToken[];
+      assetIndex: number;
+
+      setUpInvestedAssetsInitial: ISetupInvestedAssets;
+      setUpInvestedAssets: ISetupInvestedAssets;
+
+      handleRewardsResults: {
+        earned: string;
+        lost: string;
+        balanceChange?: string;
+      }
+
+      initialBalance: string;
+      balanceChange: string;
+
+      assetProviderBalance: string;
+      reInvest?: boolean;
+      reinvestThresholdPercent?: number;
+      /**
+       * undefined - don't call doHardwork()
+       * true - make call doHardwork by spliter
+       * false - make call doHardwork by random caller
+       */
+      callDoHardworkBySplitter?: boolean;
+    }
+
+    async function makeDoHardwork(p: IDoHardworkParams): Promise<IDoHardworkResults> {
+      const ms = await setupMockedStrategy({
+        depositorTokens: p.tokens,
+        underlying: p.tokens[p.assetIndex],
+        depositorReserves: p.tokens.map(x => "1000"),
+        depositorWeights: p.tokens.map(x => 1),
+      });
+
+      const assetDecimals = await Promise.all(p.tokens.map(async token => token.decimals()));
+      const assetProvider = ethers.Wallet.createRandom().address;
+      await usdc.mint(assetProvider, parseUnits(p.assetProviderBalance, assetDecimals[p.assetIndex]));
+      await usdc.connect(await Misc.impersonate(assetProvider)).approve(ms.strategy.address, Misc.MAX_UINT);
+
+      await usdc.mint(ms.strategy.address, parseUnits(p.initialBalance, assetDecimals[p.assetIndex]));
+
+      if (p.reinvestThresholdPercent) {
+        await ms.strategy.setReinvestThresholdPercent(p.reinvestThresholdPercent);
+      }
+
+      // run hardwork first time to set up initial value of _investedAssets
+      await ms.strategy.setDepositorLiquidity(parseUnits(p.setUpInvestedAssetsInitial.depositorLiquidity18, 18));
+      await ms.strategy.setDepositorQuoteExit(
+        parseUnits(p.setUpInvestedAssetsInitial.depositorQuoteExit.liquidityAmount18, 18),
+        p.tokens.map((x, index) => parseUnits(
+          p.setUpInvestedAssetsInitial.depositorQuoteExit.amountsOut[index], assetDecimals[index])
+        )
+      );
+      await ms.strategy.setMockedHandleRewardsResults(0, 0, 0, assetProvider);
+      await ms.strategy._doHardWorkAccess(false);
+      const investedAssetsBefore = await ms.strategy.investedAssets();
+
+      // set up _depositToPool during reinvesting
+      await ms.strategy.setMockedDepositToPool(parseUnits(p.balanceChange, 6), assetProvider, 0);
+
+      // set up _updateInvestedAssets in the hardwork
+      await ms.strategy.setDepositorLiquidity(parseUnits(p.setUpInvestedAssets.depositorLiquidity18, 18));
+      await ms.strategy.setDepositorQuoteExit(
+        parseUnits(p.setUpInvestedAssets.depositorQuoteExit.liquidityAmount18, 18),
+        p.tokens.map((x, index) => parseUnits(
+          p.setUpInvestedAssets.depositorQuoteExit.amountsOut[index], assetDecimals[index])
+        )
+      );
+
+      // set up handleRewards
+      await ms.strategy.setMockedHandleRewardsResults(
+        parseUnits(p.handleRewardsResults.earned, assetDecimals[p.assetIndex]),
+        parseUnits(p.handleRewardsResults.lost, assetDecimals[p.assetIndex]),
+        parseUnits(p.handleRewardsResults.balanceChange || "0", assetDecimals[p.assetIndex]),
+        assetProvider,
+      );
+
+      const callDoHardwork = p.callDoHardworkBySplitter === undefined
+        ? undefined
+        : p.callDoHardworkBySplitter
+          ? await ms.strategy.connect(await Misc.impersonate(ms.splitter.address)).callStatic.doHardWork()
+          : await ms.strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address)).callStatic.doHardWork();
+
+      const reInvest: boolean = p?.reInvest === undefined ? true : p.reInvest;
+      const r = await ms.strategy.callStatic._doHardWorkAccess(reInvest);
+      await ms.strategy._doHardWorkAccess(reInvest);
+
+      return {
+        earned: +formatUnits(r.earned, assetDecimals[p.assetIndex]),
+        lost: +formatUnits(r.lost, assetDecimals[p.assetIndex]),
+        investedAssetsBefore: +formatUnits(investedAssetsBefore, assetDecimals[p.assetIndex]),
+        investedAssetsAfter: +formatUnits(await ms.strategy.investedAssets(), assetDecimals[p.assetIndex]),
+        callDoHardwork: callDoHardwork
+          ? {
+            earned: +formatUnits(callDoHardwork.earned, assetDecimals[p.assetIndex]),
+            lost: +formatUnits(callDoHardwork.lost, assetDecimals[p.assetIndex]),
+          }
+          : undefined,
+      }
+    }
+
+    describe('Good paths', () => {
+      describe("Only invested assets amount changes", async () => {
+        async function changeAssetAmountTest(amount0: string, amount1: string): Promise<IDoHardworkResults> {
+          return makeDoHardwork({
+            tokens: [usdc, dai],
+            assetIndex: 0,
+
+            setUpInvestedAssetsInitial: {
+              depositorLiquidity18: "1",
+              depositorQuoteExit: {
+                liquidityAmount18: "1",
+                amountsOut: [amount0, "0"],
+              }
+            },
+            setUpInvestedAssets: {
+              depositorLiquidity18: "2",
+              depositorQuoteExit: {
+                liquidityAmount18: "2",
+                amountsOut: [amount1, "0"],
+              }
+            },
+
+            initialBalance: "0",
+            balanceChange: "0",
+
+            handleRewardsResults: {
+              earned: "0",
+              lost: "0",
+            },
+            assetProviderBalance: "1000"
+          });
+        }
+
+        describe("Invested assets amount was increased", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function incInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
+            return changeAssetAmountTest("1", "3");
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(incInvestedAssetAmountTest);
+            expect(result.earned).to.eq(3 - 1);
+            expect(result.lost).to.eq(0);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(incInvestedAssetAmountTest);
+            expect(result.investedAssetsBefore).to.eq(1);
+            expect(result.investedAssetsAfter).to.eq(3);
+          });
+        });
+        describe("Invested assets amount was decreased", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function decInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
+            return changeAssetAmountTest("3", "1");
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(decInvestedAssetAmountTest);
+            expect(result.earned).to.eq(0);
+            expect(result.lost).to.eq(3 - 1);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(decInvestedAssetAmountTest);
+            expect(result.investedAssetsBefore).to.eq(3);
+            expect(result.investedAssetsAfter).to.eq(1);
+          });
+        });
+      });
+
+      describe("Only handle-rewards-amount changes", async () => {
+        async function changeHandleRewardsAmount(earned: string, lost: string): Promise<IDoHardworkResults> {
+          return makeDoHardwork({
+            tokens: [usdc, dai],
+            assetIndex: 0,
+
+            setUpInvestedAssetsInitial: {
+              depositorLiquidity18: "1",
+              depositorQuoteExit: {
+                liquidityAmount18: "1",
+                amountsOut: ["1", "0"],
+              }
+            },
+            setUpInvestedAssets: {
+              depositorLiquidity18: "2",
+              depositorQuoteExit: {
+                liquidityAmount18: "2",
+                amountsOut: ["1", "0"],
+              }
+            },
+            initialBalance: "0",
+            balanceChange: "0",
+            handleRewardsResults: {
+              earned,
+              lost,
+            },
+            assetProviderBalance: "1000"
+          });
+        }
+
+        describe("Handle-rewards-amount was increased", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function incInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
+            return changeHandleRewardsAmount("7", "3");
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(incInvestedAssetAmountTest);
+            expect(result.earned).to.eq(7);
+            expect(result.lost).to.eq(3);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(incInvestedAssetAmountTest);
+            expect(result.investedAssetsBefore).to.eq(1);
+            expect(result.investedAssetsAfter).to.eq(1);
+          });
+        });
+        describe("Handle-rewards-amount was decreased", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function decInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
+            return changeHandleRewardsAmount("3", "7");
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(decInvestedAssetAmountTest);
+            expect(result.earned).to.eq(3);
+            expect(result.lost).to.eq(7);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(decInvestedAssetAmountTest);
+            expect(result.investedAssetsBefore).to.eq(1);
+            expect(result.investedAssetsAfter).to.eq(1);
+          });
+        });
+      });
+
+      describe("Only deposit-to-pool amounts were changed", async () => {
+        async function changeDepositToPoolAmounts(initialBalance: string, balanceChange: string): Promise<IDoHardworkResults> {
+          return makeDoHardwork({
+            tokens: [usdc, dai],
+            assetIndex: 0,
+
+            setUpInvestedAssetsInitial: {
+              depositorLiquidity18: "1",
+              depositorQuoteExit: {
+                liquidityAmount18: "1",
+                amountsOut: ["1", "0"],
+              }
+            },
+            setUpInvestedAssets: {
+              depositorLiquidity18: "2",
+              depositorQuoteExit: {
+                liquidityAmount18: "2",
+                amountsOut: ["1", "0"],
+              }
+            },
+
+            initialBalance,
+            balanceChange,
+
+            handleRewardsResults: {
+              earned: "0",
+              lost: "0",
+              balanceChange: "0",
+            },
+            assetProviderBalance: "1000"
+          });
+        }
+
+        describe("Balance was increased during reinvesting", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function incInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
+            return changeDepositToPoolAmounts("3", "7");
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(incInvestedAssetAmountTest);
+            expect(result.earned).to.eq(7);
+            expect(result.lost).to.eq(0);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(incInvestedAssetAmountTest);
+            expect(result.investedAssetsBefore).to.eq(1);
+            expect(result.investedAssetsAfter).to.eq(1);
+          });
+        });
+        describe("Balance was decreased during reinvesting", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function decInvestedAssetAmountTest(): Promise<IDoHardworkResults> {
+            return changeDepositToPoolAmounts("7", "-5");
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(decInvestedAssetAmountTest);
+            expect(result.earned).to.eq(0);
+            expect(result.lost).to.eq(5);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(decInvestedAssetAmountTest);
+            expect(result.investedAssetsBefore).to.eq(1);
+            expect(result.investedAssetsAfter).to.eq(1);
+          });
+        });
+      });
+
+      describe("All amounts were changed", async () => {
+        describe("3 earned amounts", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeTestThreeEarnedAmounts(): Promise<IDoHardworkResults> {
+            return makeDoHardwork({
+              tokens: [usdc, dai],
+              assetIndex: 0,
+
+              setUpInvestedAssetsInitial: {
+                depositorLiquidity18: "1",
+                depositorQuoteExit: {
+                  liquidityAmount18: "1",
+                  amountsOut: ["1", "0"],
+                }
+              },
+              setUpInvestedAssets: {
+                depositorLiquidity18: "2",
+                depositorQuoteExit: {
+                  liquidityAmount18: "2",
+                  amountsOut: ["6", "0"],
+                }
+              },
+
+              initialBalance: "100",
+              balanceChange: "50",
+
+              handleRewardsResults: {
+                earned: "500",
+                lost: "0",
+              },
+              assetProviderBalance: "1000",
+              callDoHardworkBySplitter: true
+            });
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.earned).to.eq(555);
+            expect(result.lost).to.eq(0);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.investedAssetsBefore).to.eq(1);
+            expect(result.investedAssetsAfter).to.eq(6);
+          });
+          it("doHardwork() should return expected results", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.callDoHardwork?.earned).to.eq(555);
+            expect(result.callDoHardwork?.lost).to.eq(0);
+          });
+        });
+        describe("2 earned amounts + 2 losses", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeTestThreeEarnedAmounts(): Promise<IDoHardworkResults> {
+            return makeDoHardwork({
+              tokens: [usdc, dai],
+              assetIndex: 0,
+
+              setUpInvestedAssetsInitial: {
+                depositorLiquidity18: "1",
+                depositorQuoteExit: {
+                  liquidityAmount18: "1",
+                  amountsOut: ["1000", "0"],
+                }
+              },
+              setUpInvestedAssets: {
+                depositorLiquidity18: "2",
+                depositorQuoteExit: {
+                  liquidityAmount18: "2",
+                  amountsOut: ["6000", "0"],
+                }
+              },
+
+              initialBalance: "100",
+              balanceChange: "-50",
+
+              handleRewardsResults: {
+                earned: "500",
+                lost: "400",
+              },
+              assetProviderBalance: "1000",
+              callDoHardworkBySplitter: true
+            });
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.earned).to.eq(5000 + 500);
+            expect(result.lost).to.eq(400 + 50);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.investedAssetsBefore).to.eq(1000);
+            expect(result.investedAssetsAfter).to.eq(6000);
+          });
+          it("doHardwork() should return expected results", async () => {
+            const result = await loadFixture(makeTestThreeEarnedAmounts);
+            expect(result.callDoHardwork?.earned).to.eq(5500);
+            expect(result.callDoHardwork?.lost).to.eq(450);
+          });
+        });
+        describe("3 lost amounts", async () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeTestThreeLostAmounts(): Promise<IDoHardworkResults> {
+            return makeDoHardwork({
+              tokens: [usdc, dai],
+              assetIndex: 0,
+
+              setUpInvestedAssetsInitial: {
+                depositorLiquidity18: "1",
+                depositorQuoteExit: {
+                  liquidityAmount18: "1",
+                  amountsOut: ["6", "0"],
+                }
+              },
+              setUpInvestedAssets: {
+                depositorLiquidity18: "2",
+                depositorQuoteExit: {
+                  liquidityAmount18: "2",
+                  amountsOut: ["1", "0"],
+                }
+              },
+
+              initialBalance: "100",
+              balanceChange: "-50",
+
+              handleRewardsResults: {
+                earned: "0",
+                lost: "500",
+              },
+              assetProviderBalance: "1000",
+              callDoHardworkBySplitter: true
+            });
+          }
+
+          it("should return expected lost and earned values", async () => {
+            const result = await loadFixture(makeTestThreeLostAmounts);
+            expect(result.earned).to.eq(0);
+            expect(result.lost).to.eq(555);
+          });
+          it("should set expected investedAssets value", async () => {
+            const result = await loadFixture(makeTestThreeLostAmounts);
+            expect(result.investedAssetsBefore).to.eq(6);
+            expect(result.investedAssetsAfter).to.eq(1);
+          });
+          it("doHardwork() should return expected results", async () => {
+            const result = await loadFixture(makeTestThreeLostAmounts);
+            expect(result.callDoHardwork?.earned).to.eq(0);
+            expect(result.callDoHardwork?.lost).to.eq(555);
+          });
+
+        });
+        describe("Skipping reinvesting", async () => {
+          describe("reInvest is false", async () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeTestThreeEarnedAmountsSkipReinvest(): Promise<IDoHardworkResults> {
+              return makeDoHardwork({
+                tokens: [usdc, dai],
+                assetIndex: 0,
+
+                setUpInvestedAssetsInitial: {
+                  depositorLiquidity18: "1",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "1",
+                    amountsOut: ["1", "0"],
+                  }
+                },
+                setUpInvestedAssets: {
+                  depositorLiquidity18: "2",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "2",
+                    amountsOut: ["6", "0"],
+                  }
+                },
+
+                initialBalance: "100",
+                balanceChange: "50",
+
+                handleRewardsResults: {
+                  earned: "500",
+                  lost: "0",
+                },
+                assetProviderBalance: "1000",
+                reInvest: false // (!)
+              });
+            }
+
+            it("should return expected lost and earned values", async () => {
+              const result = await loadFixture(makeTestThreeEarnedAmountsSkipReinvest);
+              expect(result.earned).to.eq(505);
+              expect(result.lost).to.eq(0);
+            });
+            it("should set expected investedAssets value", async () => {
+              const result = await loadFixture(makeTestThreeEarnedAmountsSkipReinvest);
+              expect(result.investedAssetsBefore).to.eq(1);
+              expect(result.investedAssetsAfter).to.eq(6);
+            });
+          });
+          describe("Available amount is less than the threshold", async () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeTestThreeLostAmountsThreshold(): Promise<IDoHardworkResults> {
+              return makeDoHardwork({
+                tokens: [usdc, dai],
+                assetIndex: 0,
+
+                setUpInvestedAssetsInitial: {
+                  depositorLiquidity18: "1",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "1",
+                    amountsOut: ["60000", "0"],
+                  }
+                },
+                setUpInvestedAssets: {
+                  depositorLiquidity18: "2",
+                  depositorQuoteExit: {
+                    liquidityAmount18: "2",
+                    amountsOut: ["40000", "0"],
+                  }
+                },
+
+                initialBalance: "3999", // (!)
+                balanceChange: "10000",
+
+                handleRewardsResults: {
+                  earned: "0",
+                  lost: "500",
+                },
+                assetProviderBalance: "1000",
+
+                reInvest: true,
+                reinvestThresholdPercent: 10_000 // (!) assetBalance must be greater than 40_000 * 10% = 4000
+              });
+            }
+
+            it("should return expected lost and earned values", async () => {
+              const result = await loadFixture(makeTestThreeLostAmountsThreshold);
+              expect(result.earned).to.eq(0);
+              expect(result.lost).to.eq(20500);
+            });
+            it("should set expected investedAssets value", async () => {
+              const result = await loadFixture(makeTestThreeLostAmountsThreshold);
+              expect(result.investedAssetsBefore).to.eq(60_000);
+              expect(result.investedAssetsAfter).to.eq(40_000);
+            });
+          });
+        });
+      });
+    });
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+      it("doHardwork() should revert if not splitter", async () => {
+        const p = {
+          tokens: [usdc, dai],
+          assetIndex: 0,
+
+          setUpInvestedAssetsInitial: {
+            depositorLiquidity18: "1",
+            depositorQuoteExit: {
+              liquidityAmount18: "1",
+              amountsOut: ["1", "0"],
+            }
+          },
+          setUpInvestedAssets: {
+            depositorLiquidity18: "2",
+            depositorQuoteExit: {
+              liquidityAmount18: "2",
+              amountsOut: ["6", "0"],
+            }
+          },
+
+          initialBalance: "100",
+          balanceChange: "50",
+
+          handleRewardsResults: {
+            earned: "500",
+            lost: "0",
+          },
+          assetProviderBalance: "1000",
+          callDoHardworkBySplitter: false // (!)
+        }
+        await expect(makeDoHardwork(p)).to.be.revertedWith("SB: Denied"); // DENIED
+      });
+    });
+  });
+
+  describe("isReadyToHardWork", () => {
+    let snapshot: string;
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    it("should return true", async () => {
+      const ms = await setupMockedStrategy();
+      expect(await ms.strategy.isReadyToHardWork()).eq(true);
+    });
+  });
+
+  describe("_withdrawUniversal-trivial", () => {
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      it("should return zeros if amount is zero", async () => {
+        const ms = await setupMockedStrategy();
+
+        // set up _updateInvestedAssets()
+        await ms.strategy.setDepositorLiquidity(parseUnits("1", 18));
+        await ms.strategy.setDepositorQuoteExit(
+          parseUnits("1", 18),
+          ms.depositorTokens.map((x, index) => parseUnits("0", 18))
+        );
+        const r = await ms.strategy.callStatic.withdrawUniversalTestAccess(0, false);
+
+        expect(r.expectedWithdrewUSD.eq(0)).eq(true);
+        expect(r.assetPrice.eq(0)).eq(true);
       });
     });
   });

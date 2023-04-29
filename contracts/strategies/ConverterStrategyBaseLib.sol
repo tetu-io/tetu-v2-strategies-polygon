@@ -580,7 +580,7 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
-  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
+  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator (== 0 | amountIn_)
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
   function _liquidate(
     ITetuConverter converter_,
@@ -603,7 +603,7 @@ library ConverterStrategyBaseLib {
 
     // if the expected value is higher than threshold distribute to destinations
     return amountOut > liquidationThresholdForTokenOut_
-      ? _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_)
+      ? (amountIn_, _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_))
       : (0, 0);
   }
 
@@ -616,7 +616,6 @@ library ConverterStrategyBaseLib {
     uint amountIn_,
     uint slippage_
   ) internal returns (
-    uint spentAmountIn,
     uint receivedAmountOut
   ) {
     // we need to approve each time, liquidator address can be changed in controller
@@ -633,7 +632,6 @@ library ConverterStrategyBaseLib {
     receivedAmountOut = balanceAfter > balanceBefore
       ? balanceAfter - balanceBefore
       : 0;
-    spentAmountIn = amountIn_;
 
     require(
       converter_.isConversionValid(
@@ -650,7 +648,7 @@ library ConverterStrategyBaseLib {
       tokenIn_,
       tokenOut_,
       amountIn_,
-      spentAmountIn,
+      amountIn_,
       receivedAmountOut
     );
   }
@@ -660,7 +658,7 @@ library ConverterStrategyBaseLib {
   //region requirePayAmountBack
   /////////////////////////////////////////////////////////////////////
 
-  /// @param amountOut Amount of the main asset requested by converter
+  /// @param amount_ Amount of the main asset requested by converter
   /// @param indexTheAsset Index of the asset required by converter in the {tokens}
   /// @param asset Main asset or underlying (it can be different from tokens[indexTheAsset])
   /// @return amountOut Amount of the main asset sent to converter
@@ -938,7 +936,6 @@ library ConverterStrategyBaseLib {
       tokens,
       v.len
     );
-
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
@@ -1026,10 +1023,6 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    // todo make integral tests for the following cases:
-    //  1) we will withdraw not enough
-    //  2) a rare case when user exit from the vault before rebalance
-    //  3) however, if user will exit between rebalances and the gap will be lower than withdraw fee, we will put the fee to vault balance and increase share price
     return amountsOut;
   }
   //endregion getExpectedAmountMainAsset
@@ -1201,13 +1194,7 @@ library ConverterStrategyBaseLib {
           liquidationThreshold
         );
         collateralOut += v.received;
-        if (v.spent != 0) {
-          repaidAmountsOut[i] += v.spent;
-          require(
-            tetuConverter.isConversionValid(tokens[i], v.spent, v.asset, v.received, PRICE_IMPACT_TOLERANCE),
-            AppErrors.PRICE_IMPACT
-          );
-        }
+        repaidAmountsOut[i] += v.spent;
       }
     }
 
@@ -1309,7 +1296,7 @@ library ConverterStrategyBaseLib {
             );
             if (spentAmountIn != 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
-              expectedAmount += tokenBalance * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+              expectedAmount += spentAmountIn * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
             }
           }
 

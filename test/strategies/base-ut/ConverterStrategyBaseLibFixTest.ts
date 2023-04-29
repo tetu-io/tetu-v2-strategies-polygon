@@ -1128,6 +1128,30 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           expect(r.balances.join()).eq([0, 0].join());
         });
       });
+      describe("Zero requested amount", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero expected amount", async () => {
+          const r = await makeClosePositionToGetRequestedAmountTest({
+            requestedAmount: "0", // (!)
+            tokens: [usdc, dai],
+            indexAsset: 0,
+            balances: ["0", "0"], // usdc, dai - we don't have USDC at all
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["0", "0"],
+            liquidations: [],
+            quoteRepays: [],
+            repays: [],
+          });
+          expect(r.expectedAmountMainAssetOut).eq(0);
+        });
+      });
       describe("There are no debts", () => {
         let snapshot: string;
         before(async function () {
@@ -1172,7 +1196,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           expect(r.balances.join()).eq([5000, 0].join());
         });
       });
-      describe("Liquidation threshold is too high", () => {
+      describe("Liquidation threshold is too high to sell", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -1219,6 +1243,43 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
           expect(r.balances.join()).eq([5000, 0].join());
+        });
+      });
+      describe("Liquidation threshold is too high to swap", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
+          return makeClosePositionToGetRequestedAmountTest({
+            requestedAmount: "10000", // usdc - we need as much as possible USDC
+            tokens: [usdc, dai],
+            indexAsset: 0,
+            balances: ["8000", "3000"], // usdc, dai - we have enough USDC on balance to completely pay the debt
+            prices: ["1", "1"], // for simplicity
+            liquidationThresholds: ["3001", "0"], // (!) the threshold for usdc is higher than token balance
+            liquidations: [{
+              amountIn: "3000", // dai
+              amountOut: "3000", // usdc
+              tokenIn: dai,
+              tokenOut: usdc
+            }],
+            quoteRepays: [],
+            repays: [],
+          });
+        }
+
+        it("should return zero expected amount", async () => {
+          const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
+          expect(r.expectedAmountMainAssetOut).eq(0);
+        });
+        it("should not change balances", async () => {
+          const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
+          expect(r.balances.join()).eq([8000, 3000].join());
         });
       });
     });
@@ -2832,6 +2893,31 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
         });
       });
+
+      describe("Wrong lengths", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should revert", async () => {
+          await expect(
+            makeRecycle({
+              assetIndex: 1,
+              tokens: [usdt, usdc, dai],
+              rewardTokens: [tetu, usdc],
+              rewardAmounts: ["6"], // (!) wrong lengths
+              thresholds: [],
+              initialBalances: [],
+              compoundRatio: 30_000,
+              liquidations: []
+            })
+          ).revertedWith("TS-4 wrong lengths"); // WRONG_LENGTHS
+        });
+      });
     });
   });
 
@@ -3805,6 +3891,30 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       it("should return expected value of expectedMainAssetAmounts", async () => {
         const results = await loadFixture(postWithdrawActionsTest);
         expect(results.expectedMainAssetAmounts.join()).eq([1, 2, 0, 4, 5].join());
+      });
+    });
+    describe("Zero amounts", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function postWithdrawActionsTest(): Promise<IPostWithdrawActionsEmptyResults> {
+        return postWithdrawActionsEmpty({
+          tokens: [usdt, dai, usdc, weth, tetu],
+          indexAsset: 2,
+          balances: ["1000", "2000", "3000", "4000", "5000"], // actual values don't matter here, they are not used
+          amountsToConvert: ["0", "0", "0", "0", "0"],
+          quoteRepays: []
+        });
+      }
+
+      it("should return expected value of expectedMainAssetAmounts", async () => {
+        const results = await loadFixture(postWithdrawActionsTest);
+        expect(results.expectedMainAssetAmounts.join()).eq([0, 0, 0, 0, 0].join());
       });
     });
   });
