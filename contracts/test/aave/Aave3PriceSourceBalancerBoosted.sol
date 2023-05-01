@@ -27,6 +27,12 @@ contract Aave3PriceSourceBalancerBoosted is AggregatorInterface {
   address public inputToken;
   address public outputToken;
 
+  struct LinearPoolParams {
+    uint fee;
+    uint lowerTarget;
+    uint upperTarget;
+  }
+
   constructor (address pool_, address inputToken_, address outputToken_) {
     pool = IComposableStablePool(pool_);
     // console.log('pool', pool_);
@@ -57,6 +63,35 @@ contract Aave3PriceSourceBalancerBoosted is AggregatorInterface {
 
   // ---------------  Balancer ----------------------------------------------------------
 
+  /// @notice Calculates price in pool
+  function _getPrice() internal view returns (uint) {
+    uint inputTokenDecimals = IERC20Metadata(inputToken).decimals();
+    uint outputTokenDecimals = IERC20Metadata(outputToken).decimals();
+    // get input linear bpt price in term of inputToken
+    ILinearPool linearInputPool = _getLinearPool(inputToken);
+    // console.log('input linear pool', address(linearInputPool));
+    uint linearInputBptOut = _calcLinearBptOutPerMainIn(BALANCER_VAULT, linearInputPool, 10 ** inputTokenDecimals);
+    // console.log('input linear price', linearInputBptOut);
+
+    // get input linear bpt price in term of output linear bpt
+    ILinearPool linearOutputPool = _getLinearPool(outputToken);
+    // console.log('output linear pool', address(linearOutputPool));
+    uint linearOutputBptOut = BALANCER_COMPOSABLE_STABLE_SWAPPER.getPrice(address(pool), address(linearInputPool), address(linearOutputPool), linearInputBptOut);
+    // console.log('bpt swap price', linearOutputBptOut);
+
+    // get output linear bpt price in term of outputToken
+    uint price = _calcLinearMainOutPerBptIn(BALANCER_VAULT, linearOutputPool, linearOutputBptOut);
+    // console.log('output linear price', price);
+
+    if (outputTokenDecimals > 8) {
+      price = price / 10 ** (outputTokenDecimals - 8);
+    } else if (outputTokenDecimals < 8) {
+      price = price * 10 ** (8 - outputTokenDecimals);
+    }
+
+    return price;
+  }
+
   function _getLinearPool(address mainToken) internal view returns (ILinearPool) {
     bytes32 rootPoolId = pool.getPoolId();
     (IERC20[] memory rootTokens,,) = BALANCER_VAULT.getPoolTokens(rootPoolId);
@@ -72,29 +107,67 @@ contract Aave3PriceSourceBalancerBoosted is AggregatorInterface {
     revert('Incorrect tokenIn');
   }
 
-  /// @notice Calculates price in pool
-  /// todo dont use getRate() that doesn't take into account scaling factors
-  function _getPrice() internal view returns (uint) {
-    // get input linear bpt price in term of inputToken
-    ILinearPool linearInputPool = _getLinearPool(inputToken);
-    // console.log('input linear pool', address(linearInputPool));
-    uint linearInputBptPrice = linearInputPool.getRate();
-    // console.log('input linear price', linearInputBptPrice);
+  function _calcLinearBptOutPerMainIn(IBVault vault, ILinearPool pool_, uint amount) internal view returns (uint) {
+    (uint lowerTarget, uint upperTarget) = pool_.getTargets();
+    LinearPoolParams memory params = LinearPoolParams(pool_.getSwapFeePercentage(), lowerTarget, upperTarget);
+    (,uint[] memory balances,) = vault.getPoolTokens(pool_.getPoolId());
+    uint[] memory scalingFactors = pool_.getScalingFactors();
+    _upscaleArray(balances, scalingFactors);
+    uint mainIndex = pool_.getMainIndex();
+    amount *= scalingFactors[mainIndex] / 1e18;
+    uint mainBalance = balances[mainIndex];
+    uint bptSupply = pool_.totalSupply() - balances[0];
+    uint previousNominalMain = _toNominal(mainBalance, params);
+    uint afterNominalMain = _toNominal(mainBalance + amount, params);
+    uint deltaNominalMain = afterNominalMain - previousNominalMain;
+    uint invariant = previousNominalMain + balances[pool_.getWrappedIndex()];
+    return bptSupply * deltaNominalMain / invariant * 1e18 / scalingFactors[0];
+  }
 
-    // get input linear bpt price in term of output linear bpt
-    ILinearPool linearOutputPool = _getLinearPool(outputToken);
-    // console.log('output linear pool', address(linearOutputPool));
-    uint bptSwapPrice = BALANCER_COMPOSABLE_STABLE_SWAPPER.getPrice(address(pool), address(linearInputPool), address(linearOutputPool), 1e18);
-    // console.log('bpt swap price', bptSwapPrice);
+  function _calcLinearMainOutPerBptIn(IBVault vault, ILinearPool pool_, uint amount) internal view returns (uint) {
+    (uint lowerTarget, uint upperTarget) = pool_.getTargets();
+    LinearPoolParams memory params = LinearPoolParams(pool_.getSwapFeePercentage(), lowerTarget, upperTarget);
+    (,uint[] memory balances,) = vault.getPoolTokens(pool_.getPoolId());
+    uint[] memory scalingFactors = pool_.getScalingFactors();
+    _upscaleArray(balances, scalingFactors);
+    amount *= scalingFactors[0] / 1e18;
+    uint mainIndex = pool_.getMainIndex();
+    uint mainBalance = balances[mainIndex];
+    uint bptSupply = pool_.totalSupply() - balances[0];
+    uint previousNominalMain = _toNominal(mainBalance, params);
+    uint invariant = previousNominalMain + balances[pool_.getWrappedIndex()];
+    uint deltaNominalMain = invariant * amount / bptSupply;
+    uint afterNominalMain = previousNominalMain > deltaNominalMain ? previousNominalMain - deltaNominalMain : 0;
+    uint newMainBalance = _fromNominal(afterNominalMain, params);
+    return (mainBalance - newMainBalance) * 1e18 / scalingFactors[mainIndex];
+  }
 
-    // get output linear bpt price in term of outputToken
-    uint linearOutputBptPrice = linearOutputPool.getRate();
-    // console.log('output linear price', linearOutputBptPrice);
+  function _toNominal(uint real, LinearPoolParams memory params) internal pure returns (uint) {
+    if (real < params.lowerTarget) {
+      uint fees = (params.lowerTarget - real) * params.fee / 1e18;
+      return real - fees;
+    } else if (real <= params.upperTarget) {
+      return real;
+    } else {
+      uint fees = (real - params.upperTarget) * params.fee / 1e18;
+      return real - fees;
+    }
+  }
 
-    // get inputToken price in term of outputToken
-    uint price = bptSwapPrice * linearOutputBptPrice / linearInputBptPrice / 1e10;
-    // console.log('Aave3PriceSourceBalancerBoosted _getPrice inputToken', inputToken);
-    // console.log('Aave3PriceSourceBalancerBoosted _getPrice price', price);
-    return price;
+  function _fromNominal(uint nominal, LinearPoolParams memory params) internal pure returns (uint) {
+    if (nominal < params.lowerTarget) {
+      return (nominal + (params.fee * params.lowerTarget / 1e18)) * 1e18 / (1e18 + params.fee);
+    } else if (nominal <= params.upperTarget) {
+      return nominal;
+    } else {
+      return (nominal - (params.fee * params.upperTarget / 1e18)) * 1e18/ (1e18 - params.fee);
+    }
+  }
+
+  function _upscaleArray(uint[] memory amounts, uint[] memory scalingFactors) internal pure {
+    uint length = amounts.length;
+    for (uint i; i < length; ++i) {
+      amounts[i] = amounts[i] * scalingFactors[i] / 1e18;
+    }
   }
 }
