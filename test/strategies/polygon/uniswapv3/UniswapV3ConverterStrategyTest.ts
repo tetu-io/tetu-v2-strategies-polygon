@@ -344,8 +344,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await strategy3.connect(platformVoter).setCompoundRatio(50000);
 
       console.log('initial deposits...');
-      await vault3.deposit(investAmount, signer.address);
-      await vault3.connect(signer3).deposit(_1_000, signer3.address);
+      await vault3.deposit(investAmount, signer.address, {gasLimit: 19_000_000});
+      await vault3.connect(signer3).deposit(_1_000, signer3.address, {gasLimit: 19_000_000});
 
       let lastDirectionUp = false
       for (let i = 0; i < 10; i++) {
@@ -372,7 +372,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
         if (i % 2) {
           console.log('Deposit..')
-          await vault3.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address);
+          await vault3.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address, {gasLimit: 19_000_000});
         } else {
           console.log('Withdraw..')
           const toWithdraw = parseUnits('100.111437', 6)
