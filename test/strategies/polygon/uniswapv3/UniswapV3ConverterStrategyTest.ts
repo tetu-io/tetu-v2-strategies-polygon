@@ -362,12 +362,12 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
         if (await strategy3.needRebalance()) {
           console.log('Rebalance..')
-          await strategy3.rebalance();
+          await strategy3.rebalance({gasLimit: 19_000_000});
         }
 
         if (i % 5) {
           console.log('Hardwork..')
-          await strategy3.connect(splitterSigner).doHardWork();
+          await strategy3.connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
         }
 
         if (i % 2) {
@@ -378,7 +378,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
           const toWithdraw = parseUnits('100.111437', 6)
           const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
           await vault3.connect(signer3).requestWithdraw()
-          await vault3.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address)
+          await vault3.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address, {gasLimit: 19_000_000})
           const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
           console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
         }
@@ -386,11 +386,11 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       await vault3.connect(signer3).requestWithdraw()
       console.log('withdrawAll as signer3...');
-      await vault3.connect(signer3).withdrawAll();
+      await vault3.connect(signer3).withdrawAll({gasLimit: 19_000_000});
 
       await vault3.requestWithdraw()
       console.log('withdrawAll...');
-      await vault3.withdrawAll();
+      await vault3.withdrawAll({gasLimit: 19_000_000});
     });
 
     it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
