@@ -19,7 +19,7 @@ export interface IBalances {
 
 export interface IDoHardWorkLoopInputParams {
   /// 50_000 for 0.5
-  compoundRate?: number;
+  compoundRate?: number|number[];
 }
 
 export class DoHardWorkLoopBase {
@@ -40,6 +40,8 @@ export class DoHardWorkLoopBase {
   loops = 0;
   startTs = 0;
   cRatio = 0;
+  cRatioArr: number[] = []
+  cRarioI = 0
   isUserDeposited = true;
   stratEarned = BigNumber.from(0);
   priceCache = new Map<string, BigNumber>();
@@ -166,8 +168,13 @@ export class DoHardWorkLoopBase {
     };
     console.log('initialBalances', this.initialBalances);
 
-    // todo dynamic compoundRatio support
-    await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate);
+    // dynamic compoundRatio support
+    if (Array.isArray(params.compoundRate)) {
+      await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate[0]);
+    } else {
+      await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate);
+    }
+    this.cRatio = (await this.strategy.compoundRatio()).toNumber();
   }
 
   protected async initialSnapshot() {
@@ -175,7 +182,7 @@ export class DoHardWorkLoopBase {
     // TODO capture initial asset and reward balances
 
     this.startTs = await Misc.getBlockTsFromChain();
-    this.cRatio = (await this.strategy.compoundRatio()).toNumber();
+    // this.cRatio = (await this.strategy.compoundRatio()).toNumber();
     console.log('initialSnapshot end');
   }
 
@@ -293,6 +300,14 @@ export class DoHardWorkLoopBase {
 
   protected async loopStartActions(i: number) {
     console.log('loopStartActions', i);
+    if (this.cRatioArr.length > 0 && i > 0) {
+      this.cRarioI++
+      if (this.cRarioI > this.cRatioArr.length) {
+        this.cRarioI = 0
+      }
+      await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, this.cRatioArr[this.cRarioI]);
+      this.cRatio = (await this.strategy.compoundRatio()).toNumber();
+    }
   }
 
   protected async loopEndCheck() {

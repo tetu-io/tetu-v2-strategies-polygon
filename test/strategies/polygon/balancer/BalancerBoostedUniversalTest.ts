@@ -114,12 +114,13 @@ describe('BalancerBoostedUniversalTest', async () => {
       ppfsDecreaseAllowed: false,
       balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
-      loops: 3,
+      loops: 4,
       loopValue: 2000,
       advanceBlocks: true,
       specificTests: [],
       hwParams: {
-        compoundRate: 100_000, // 50%
+        // compoundRate: 100_000, // 100%
+        compoundRate: [0, 10_000, 45_000, 100_000], // 0%, 10%, 45%, 100%
       },
       stateRegistrar: async(title, h) => {
         const strategy = h.strategy as unknown as BalancerBoostedStrategy
