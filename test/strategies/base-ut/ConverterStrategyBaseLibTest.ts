@@ -1476,6 +1476,35 @@ describe('ConverterStrategyBaseLibTest', () => {
           expect(r.borrowedAmountOut.eq(0)).eq(true);
         });
       })
+      describe("No converters were found", () => {
+        it("should return zero amounts", async () => {
+          const r = await makeOpenPositionTest(
+            '0x',
+            usdc,
+            dai,
+            parseUnits('11', 6),
+            {
+              borrows: [],
+              findBorrowStrategyOutputs: [{
+                converters: [],
+                sourceToken: usdc.address,
+                targetToken: dai.address,
+                entryData: '0x',
+                aprs18: [],
+                amountIn: parseUnits('11', 6),
+                collateralAmountsOut: [],
+                amountToBorrowsOut: [],
+              }],
+              amountCollateralForFacade: parseUnits('3', 6),
+              amountBorrowAssetForTetuConverter: parseUnits('3', 18),
+              amountInIsCollateral: true,
+            },
+          );
+
+          expect(r.collateralAmountOut.eq(0)).eq(true);
+          expect(r.borrowedAmountOut.eq(0)).eq(true);
+        });
+      });
     })
     describe('Gas estimation @skip-on-coverage', () => {
       it('should not exceed gas limits', async() => {
@@ -1736,7 +1765,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               const ret = (await makeCalcInvestedAssetsTest({
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
-                balances: ['117', '1987', '300'],
+                balances: ['116', '1987', '299'],
                 prices: ['20', '10', '60'],
                 debts: [{
                   debtAmount: '117',
@@ -1748,7 +1777,7 @@ describe('ConverterStrategyBaseLibTest', () => {
                   borrowAsset: usdt,
                 }],
               })).amountOut;
-              const expected = 500 + 700;
+              const expected = 495 + 697; // 116*500/117 = 495, 299*700/300 = 697
 
               expect(ret).eq(expected);
             });
