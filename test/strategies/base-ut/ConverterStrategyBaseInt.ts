@@ -77,7 +77,7 @@ describe("ConverterStrategyBaseInt", () => {
       /**
        * todo Uncomment after fixing SCB-670
        */
-      describe.skip("Deposit $0.1", () => {
+      describe.skip("Deposit $0.01", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -112,7 +112,7 @@ describe("ConverterStrategyBaseInt", () => {
           await expect(r.afterExit.strategy.investedAssets).eq(0);
         });
       });
-      describe("Deposit $0.1 + 100000", () => {
+      describe("Deposit $0.01 + 100000", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();

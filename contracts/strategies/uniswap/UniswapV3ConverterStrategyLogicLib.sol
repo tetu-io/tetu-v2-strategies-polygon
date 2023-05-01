@@ -108,13 +108,6 @@ library UniswapV3ConverterStrategyLogicLib {
     return isStablePool(pool) ? LIQUIDATOR_SWAP_SLIPPAGE_STABLE : LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE;
   }
 
-  /// @notice Get the balance of the given token held by the contract.
-  /// @param token The token address.
-  /// @return The balance of the token.
-  function _balance(address token) internal view returns (uint) {
-    return IERC20(token).balanceOf(address(this));
-  }
-
   /// @notice Check if the given pool is a stable pool.
   /// @param pool The Uniswap V3 pool.
   /// @return A boolean indicating if the pool is stable.
@@ -128,8 +121,8 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @return amountB The balance of tokenB.
   function getTokenAmounts(State storage state) external view returns (uint amountA, uint amountB) {
     bool depositorSwapTokens = state.depositorSwapTokens;
-    amountA = _balance(state.tokenA);
-    amountB = _balance(state.tokenB);
+    amountA = AppLib.balance(state.tokenA);
+    amountB = AppLib.balance(state.tokenB);
 
     uint earned0 = (depositorSwapTokens ? state.rebalanceEarned1 : state.rebalanceEarned0);
     uint earned1 = (depositorSwapTokens ? state.rebalanceEarned0 : state.rebalanceEarned1);
@@ -245,7 +238,7 @@ library UniswapV3ConverterStrategyLogicLib {
     uint feeA = p.depositorSwapTokens ? newFee1 : newFee0;
     uint feeB = p.depositorSwapTokens ? newFee0 : newFee1;
 
-    uint newInvestedAssets = collateralAmount + _balance(p.tokenA) - feeA;
+    uint newInvestedAssets = collateralAmount + AppLib.balance(p.tokenA) - feeA;
     if (newInvestedAssets < p.oldInvestedAssets) {
       // we have lost
       uint lost = p.oldInvestedAssets - newInvestedAssets;
@@ -487,8 +480,8 @@ library UniswapV3ConverterStrategyLogicLib {
     uint fee0,
     uint fee1
   ) external returns (int24 lowerTickFillup, int24 upperTickFillup, uint128 liquidityOutFillup) {
-    uint balance0 = _balance(pool.token0());
-    uint balance1 = _balance(pool.token1());
+    uint balance0 = AppLib.balance(pool.token0());
+    uint balance1 = AppLib.balance(pool.token1());
 
     require(balance0 >= fee0 && balance1 >= fee1, Uni3StrategyErrors.WRONG_FEE);
     balance0 -= fee0;
@@ -769,8 +762,8 @@ library UniswapV3ConverterStrategyLogicLib {
       }
 
       tokenAmounts = new uint[](2);
-      tokenAmounts[0] = _balance(vars.tokenA) - (vars.depositorSwapTokens ? vars.newRebalanceEarned1 : vars.newRebalanceEarned0);
-      tokenAmounts[1] = _balance(vars.tokenB) - (vars.depositorSwapTokens ? vars.newRebalanceEarned0 : vars.newRebalanceEarned1);
+      tokenAmounts[0] = AppLib.balance(vars.tokenA) - (vars.depositorSwapTokens ? vars.newRebalanceEarned1 : vars.newRebalanceEarned0);
+      tokenAmounts[1] = AppLib.balance(vars.tokenB) - (vars.depositorSwapTokens ? vars.newRebalanceEarned0 : vars.newRebalanceEarned1);
 
       if (vars.fillUp) {
         isNeedFillup = true;
