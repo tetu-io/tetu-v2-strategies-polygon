@@ -40,6 +40,13 @@ library BalancerLogicLib {
     uint[] balances;
   }
 
+  /// @notice Used in linear pool quote swap math logic
+  struct LinearPoolParams {
+    uint fee;
+    uint lowerTarget;
+    uint upperTarget;
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///             Asset related utils
   /////////////////////////////////////////////////////////////////////
@@ -207,7 +214,7 @@ library BalancerLogicLib {
       // i.e. (DAI + tDAI + bb-t-DAI) or (bb-t-USDC, tUSDC, USDC)
 
       // get balances of all tokens of bb-am-XXX token, i.e. balances of (DAI, amDAI, bb-am-DAI)
-      (, uint256[] memory balances,) = vault_.getPoolTokens(linearPool.getPoolId());
+      (, uint[] memory balances,) = vault_.getPoolTokens(linearPool.getPoolId());
       // DAI
       uint mainIndex = linearPool.getMainIndex();
       // tDAI
@@ -241,12 +248,17 @@ library BalancerLogicLib {
     uint[] memory weights,
     uint totalWeight
   ) {
-    (IERC20[] memory tokens,,) = vault_.getPoolTokens(poolId_);
-    // totalWeight is equal to length of output array here
-    totalWeight = tokens.length - 1;
-    weights = new uint[](totalWeight);
-    for (uint i; i < totalWeight; i = AppLib.uncheckedInc(i)) {
-      weights[i] = 1;
+    (IERC20[] memory tokens,uint[] memory balances,) = vault_.getPoolTokens(poolId_);
+    uint len = tokens.length;
+    uint bptIndex = IComposableStablePool(getPoolAddress(poolId_)).getBptIndex();
+    weights = new uint[](len - 1);
+    uint j;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i != bptIndex) {
+        totalWeight += balances[i];
+        weights[j] = balances[i];
+        j = AppLib.uncheckedInc(j);
+      }
     }
   }
 
@@ -518,9 +530,7 @@ library BalancerLogicLib {
     (p.tokens, p.balances,) = vault_.getPoolTokens(poolId_);
     p.len = p.tokens.length;
 
-    // bpt - amount of unconverted bpt
-    // let's temporary save total amount of converted BPT there
-    (uint256 bpt, uint[] memory amountsBpt) = helper_.queryExit(
+    (, uint[] memory amountsBpt) = helper_.queryExit(
       poolId_,
       address(this),
       payable(address(this)),
@@ -528,87 +538,21 @@ library BalancerLogicLib {
         assets : asIAsset(p.tokens),
         minAmountsOut : new uint[](p.len), // no limits
         userData : abi.encode(
-        IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT,
-        liquidityAmount_
-      ),
-    toInternalBalance : false
-    })
+          IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT,
+          liquidityAmount_
+        ),
+        toInternalBalance : false
+      })
     );
 
-    // amount of unconverted bpt, we need to take them into account for correct calculation of investedAssets amount
-    bpt = bpt < liquidityAmount_
-    ? liquidityAmount_ - bpt
-    : 0;
-
-    IBVault.FundManagement memory funds = IBVault.FundManagement({
-    sender : address(this),
-    fromInternalBalance : false,
-    recipient : payable(address(this)),
-    toInternalBalance : false
-    });
-    IBVault.BatchSwapStep[] memory steps = new IBVault.BatchSwapStep[](p.len - 1);
-    IAsset[] memory assets = new IAsset[](2 * (p.len - 1));
     uint k;
-    for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
-      if (i == p.bptIndex) continue;
-      if (bpt != 0) {
-        // take into account the cost of unused BPT by directly converting them to first available amBPT
-        int[] memory deltas = _convertBptToAmBpt(vault_, poolId_, p.tokens[p.bptIndex], bpt, p.tokens[i], funds);
-        if (deltas[0] > 0) {
-          bpt = (bpt < uint(deltas[0]))
-          ? bpt - uint(deltas[0])
-          : 0;
-          amountsBpt[i] += (deltas[1] < 0)
-          ? uint(- deltas[1])
-          : 0;
-        }
-      }
-      ILinearPool linearPool = ILinearPool(address(p.tokens[i]));
-      steps[k].poolId = linearPool.getPoolId();
-      steps[k].assetInIndex = 2 * k + 1;
-      steps[k].assetOutIndex = 2 * k;
-      steps[k].amount = amountsBpt[i];
-
-      assets[2 * k] = IAsset(linearPool.getMainToken());
-      assets[2 * k + 1] = IAsset(address(p.tokens[i]));
-      ++k;
-    }
-
-    int[] memory assetDeltas = vault_.queryBatchSwap(IBVault.SwapKind.GIVEN_IN, steps, assets, funds);
-
     amountsOut = new uint[](p.len - 1);
-    k = 0;
     for (uint i = 0; i < p.len; i = AppLib.uncheckedInc(i)) {
       if (i == p.bptIndex) continue;
-      amountsOut[k] = assetDeltas[2 * k] < 0
-      ? uint256(- assetDeltas[2 * k])
-      : 0;
-
+      ILinearPool linearPool = ILinearPool(address(p.tokens[i]));
+      amountsOut[k] = _calcLinearMainOutPerBptIn(vault_, linearPool, amountsBpt[i]);
       ++k;
     }
-  }
-
-  function _convertBptToAmBpt(
-    IBVault vault_,
-    bytes32 poolId_,
-    IERC20 bptToken,
-    uint amountBpt,
-    IERC20 amBptToken,
-    IBVault.FundManagement memory funds
-  ) internal returns (
-    int[] memory assetDeltas
-  ) {
-    IAsset[] memory assets = new IAsset[](2);
-    assets[0] = IAsset(address(bptToken));
-    assets[1] = IAsset(address(amBptToken));
-
-    IBVault.BatchSwapStep[] memory steps = new IBVault.BatchSwapStep[](1);
-    steps[0].poolId = poolId_;
-    steps[0].assetInIndex = 0;
-    steps[0].assetOutIndex = 1;
-    steps[0].amount = amountBpt;
-
-    return vault_.queryBatchSwap(IBVault.SwapKind.GIVEN_IN, steps, assets, funds);
   }
 
   /// @notice Swap given {amountIn_} of {assetIn_} to {assetOut_} using the given BalanceR pool
@@ -694,6 +638,60 @@ library BalancerLogicLib {
     // solhint-disable-next-line no-inline-assembly
     assembly {
       assets := tokens
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Linear pool quote swap math logic
+  /////////////////////////////////////////////////////////////////////
+
+  /// @dev This logic is needed for hardworks in conditions of lack of funds in linear pools.
+  ///      The lack of funds in linear pools is a typical situation caused by pool rebalancing after deposits from the strategy.
+  ///      Main tokens are leaving linear pools to mint wrapped tokens.
+  function _calcLinearMainOutPerBptIn(IBVault vault, ILinearPool pool, uint amount) internal view returns (uint) {
+    (uint lowerTarget, uint upperTarget) = pool.getTargets();
+    LinearPoolParams memory params = LinearPoolParams(pool.getSwapFeePercentage(), lowerTarget, upperTarget);
+    (,uint[] memory balances,) = vault.getPoolTokens(pool.getPoolId());
+    uint[] memory scalingFactors = pool.getScalingFactors();
+    _upscaleArray(balances, scalingFactors);
+    amount *= scalingFactors[0] / 1e18;
+    uint mainIndex = pool.getMainIndex();
+    uint mainBalance = balances[mainIndex];
+    uint bptSupply = pool.totalSupply() - balances[0];
+    uint previousNominalMain = _toNominal(mainBalance, params);
+    uint invariant = previousNominalMain + balances[pool.getWrappedIndex()];
+    uint deltaNominalMain = invariant * amount / bptSupply;
+    uint afterNominalMain = previousNominalMain > deltaNominalMain ? previousNominalMain - deltaNominalMain : 0;
+    uint newMainBalance = _fromNominal(afterNominalMain, params);
+    return (mainBalance - newMainBalance) * 1e18 / scalingFactors[mainIndex];
+  }
+
+  function _toNominal(uint real, LinearPoolParams memory params) internal pure returns (uint) {
+    if (real < params.lowerTarget) {
+      uint fees = (params.lowerTarget - real) * params.fee / 1e18;
+      return real - fees;
+    } else if (real <= params.upperTarget) {
+      return real;
+    } else {
+      uint fees = (real - params.upperTarget) * params.fee / 1e18;
+      return real - fees;
+    }
+  }
+
+  function _fromNominal(uint nominal, LinearPoolParams memory params) internal pure returns (uint) {
+    if (nominal < params.lowerTarget) {
+      return (nominal + (params.fee * params.lowerTarget / 1e18)) * 1e18 / (1e18 + params.fee);
+    } else if (nominal <= params.upperTarget) {
+      return nominal;
+    } else {
+      return (nominal - (params.fee * params.upperTarget / 1e18)) * 1e18/ (1e18 - params.fee);
+    }
+  }
+
+  function _upscaleArray(uint[] memory amounts, uint[] memory scalingFactors) internal pure {
+    uint length = amounts.length;
+    for (uint i; i < length; ++i) {
+      amounts[i] = amounts[i] * scalingFactors[i] / 1e18;
     }
   }
 }

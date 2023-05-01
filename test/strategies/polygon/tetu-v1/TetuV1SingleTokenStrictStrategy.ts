@@ -29,7 +29,7 @@ const argv = require('yargs/yargs')()
 chai.use(chaiAsPromised);
 
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-const USDC_BIG_HOLDER_ADDRESS = '0xe7804c37c13166ff0b37f5ae0bb07a3aebb6e245';
+const USDC_BIG_HOLDER_ADDRESS = '0x06959153b974d0d5fdfd87d561db6d8d4fa0bb0b';
 const TETU_ADDRESS = '0x255707B70BF90aa112006E1b07B9AeA6De021424';
 const TETU_BIG_HOLDER_ADDRESS = '0x8d7e07b1a346ac29e922ac01fa34cb2029f536b9';
 const X_TETU_ADDRESS = '0x225084D30cc297F3b177d9f93f5C3Ab8fb6a1454';
@@ -110,12 +110,13 @@ describe('TetuV1 Single Token Strict Strategy tests', async() => {
     // // transfer some xTETU to owner
     const xtetu = await ethers.getContractAt('@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol:IERC20', X_TETU_ADDRESS);
     impersonatedSigner = await ethers.getImpersonatedSigner(X_TETU_BIG_HOLDER_ADDRESS);
+    await owner.sendTransaction({to: impersonatedSigner.address, value: ethers.utils.parseUnits('10')})
     await xtetu.connect(impersonatedSigner).transfer(owner.address, ethers.utils.parseUnits('100', 18));
-
 
     // transfer some USDC to owner
     const usdc = await ethers.getContractAt('@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol:IERC20', USDC_ADDRESS);
     impersonatedSigner = await ethers.getImpersonatedSigner(USDC_BIG_HOLDER_ADDRESS);
+    await owner.sendTransaction({to: impersonatedSigner.address, value: ethers.utils.parseUnits('10')})
     await usdc.connect(impersonatedSigner).transfer(owner.address, ethers.utils.parseUnits('1000000', 6));
     await usdc.connect(owner);
 

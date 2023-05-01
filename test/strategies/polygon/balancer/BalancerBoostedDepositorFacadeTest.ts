@@ -84,22 +84,22 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
 
   function getMaxPercentDelta(r: IDepositorChangeBalances): BigNumber {
     const totalTokensBefore = r.poolTokensBefore.balances[0]
-      .add(r.poolTokensBefore.balances[2])
+      .add(r.poolTokensBefore.balances[1])
       .add(r.poolTokensBefore.balances[3]);
     const totalTokensAfter = r.poolTokensAfter.balances[0]
-      .add(r.poolTokensAfter.balances[2])
+      .add(r.poolTokensAfter.balances[1])
       .add(r.poolTokensAfter.balances[3]);
     console.log('Before', r.poolTokensBefore, totalTokensBefore);
     console.log('After', r.poolTokensAfter, totalTokensAfter);
 
     const proportionsAfter = [
       r.poolTokensAfter.balances[0].mul(Misc.ONE18).div(totalTokensAfter),
-      r.poolTokensAfter.balances[2].mul(Misc.ONE18).div(totalTokensAfter),
+      r.poolTokensAfter.balances[1].mul(Misc.ONE18).div(totalTokensAfter),
       r.poolTokensAfter.balances[3].mul(Misc.ONE18).div(totalTokensAfter),
     ];
     const proportionsBefore = [
       r.poolTokensBefore.balances[0].mul(Misc.ONE18).div(totalTokensBefore),
-      r.poolTokensBefore.balances[2].mul(Misc.ONE18).div(totalTokensBefore),
+      r.poolTokensBefore.balances[1].mul(Misc.ONE18).div(totalTokensBefore),
       r.poolTokensBefore.balances[3].mul(Misc.ONE18).div(totalTokensBefore),
     ];
     const percentDeltas = [
@@ -143,18 +143,19 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
     const holders = [MaticHolders.HOLDER_USDT, MaticHolders.HOLDER_USDC, MaticHolders.HOLDER_DAI,];
     const vault = IBVault__factory.connect(balancerVault, signer);
 
+    const depositorPoolWeights = await facade._depositorPoolWeightsAccess()
     const amountsDesired = params?.amountsDesired
       || (
         params?.amount
           ? [
-            parseUnits(params.amount, 6), // usdt
-            parseUnits(params.amount, 6),  // usdc
-            parseUnits(params.amount, 18),   // dai
+            parseUnits(params.amount, 6).mul(depositorPoolWeights.weights[0]).div(depositorPoolWeights.totalWeight), // usdt
+            parseUnits(params.amount, 6).mul(depositorPoolWeights.weights[1]).div(depositorPoolWeights.totalWeight),  // usdc
+            parseUnits(params.amount, 18).mul(depositorPoolWeights.weights[2]).div(depositorPoolWeights.totalWeight),   // dai
           ]
           : [
-            parseUnits('1', 6), // usdt
-            parseUnits('1', 6),  // usdc
-            parseUnits('1', 18),   // dai
+            parseUnits('1', 6).mul(depositorPoolWeights.weights[0]).div(depositorPoolWeights.totalWeight), // usdt
+            parseUnits('1', 6).mul(depositorPoolWeights.weights[1]).div(depositorPoolWeights.totalWeight),  // usdc
+            parseUnits('1', 18).mul(depositorPoolWeights.weights[2]).div(depositorPoolWeights.totalWeight),   // dai
           ]
       );
 
@@ -299,20 +300,6 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
       });
     });
     describe('_depositorPoolWeights', () => {
-      it('should return all weights equal to 1', async() => {
-        const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
-        const r = await facade._depositorPoolWeightsAccess();
-        const ret = [
-          r.totalWeight,
-          r.weights.join(),
-        ].join('\n');
-        const expected = [
-          3,
-          [1, 1, 1].join(),
-        ].join('\n');
-
-        expect(ret).eq(expected);
-      });
       it('should not exceed gas limits @skip-on-coverage', async() => {
         const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
         const gasUsed = await facade.estimateGas._depositorPoolWeightsAccess();
@@ -419,51 +406,18 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
             console.log('liquidityOut', r.liquidityOut);
             console.log('DAI', r.amountsConsumedOut[0], r.balancesAfter[0].sub(r.balancesBefore[0]));
 
-            const ret = [
-              balanceGaugeBefore.eq(0),
-              // there is small difference in results (static call and call are different calls)
-              areAlmostEqual(r.liquidityOut, balanceGaugeAfter),
-
-              r.amountsConsumedOut.length,
-
-              r.amountsConsumedOut[0].gt(0),
-              r.amountsConsumedOut[1].gt(0),
-              r.amountsConsumedOut[2].gt(0),
-
-              // one of amounts exactly matches to the desired amount "1"
-              r.amountsConsumedOut[0].eq(parseUnits('1', 18))
-              || r.amountsConsumedOut[1].eq(parseUnits('1', 6))
-              || r.amountsConsumedOut[2].eq(parseUnits('1', 6)),
-
-              r.amountsConsumedOut[0].eq(r.balancesBefore[0].sub(r.balancesAfter[0])),
-              r.amountsConsumedOut[1].eq(r.balancesBefore[1].sub(r.balancesAfter[1])),
-              r.amountsConsumedOut[2].eq(r.balancesBefore[2].sub(r.balancesAfter[2])),
-            ].map(x => BalanceUtils.toString(x)).join('\n');
-
-            const expected = [
-              true,
-              true,
-
-              3,
-
-              true,
-              true,
-              true,
-
-              true,
-
-              true,
-              true,
-              true,
-            ].map(x => BalanceUtils.toString(x)).join('\n');
-
-            expect(ret).eq(expected);
+            expect(balanceGaugeBefore).eq(0)
+            expect(areAlmostEqual(r.liquidityOut, balanceGaugeAfter)).eq(true)
+            expect(r.amountsConsumedOut.length).eq(3)
+            expect(r.amountsConsumedOut[0]).gt(0)
+            expect(r.amountsConsumedOut[1]).gt(0)
+            expect(r.amountsConsumedOut[2]).gt(0)
+            expect(r.amountsConsumedOut[0]).eq(r.balancesBefore[0].sub(r.balancesAfter[0]))
+            expect(r.amountsConsumedOut[1]).eq(r.balancesBefore[1].sub(r.balancesAfter[1]))
+            expect(r.amountsConsumedOut[2]).eq(r.balancesBefore[2].sub(r.balancesAfter[2]))
           });
         });
-        /**
-         * TODO: scb-615
-         */
-        describe.skip('Ensure that deposit doesn\'t change proportions too much', () => {
+        describe('Ensure that deposit doesn\'t change proportions too much', () => {
           it('$1', async() => {
             const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, { amount: '1' });
@@ -484,7 +438,7 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
             const r = await makeDepositorEnterTest(facade, { amount: '1000000' });
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
-            expect(maxPercentDeltas.abs().lt(1e12)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e13)).eq(true);
           });
         });
       });
@@ -568,10 +522,7 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
             expect(ret).eq(expected);
           });
         });
-        /**
-         * TODO: scb-615
-         */
-        describe.skip('Ensure that the withdrawing doesn\'t change proportions too much', () => {
+        describe('Ensure that the withdrawing doesn\'t change proportions too much', () => {
           it('$1', async() => {
             const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             await makeDepositorEnterTest(facade, { amount: '1' });

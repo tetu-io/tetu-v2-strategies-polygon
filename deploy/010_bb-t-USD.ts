@@ -60,7 +60,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   if (hre.network.name === 'hardhat') {
     console.log('=== TESTS ===');
     const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-    const USDC_BIG_HOLDER_ADDRESS = '0xe7804c37c13166ff0b37f5ae0bb07a3aebb6e245';
+    const USDC_BIG_HOLDER_ADDRESS = '0x06959153b974d0d5fdfd87d561db6d8d4fa0bb0b';
     const BALANCER_VAULT_ADDRESS = '0xBA12222222228d8Ba445958a75a0704d566BF2C8';
 
     const usdc = await ethers.getContractAt(

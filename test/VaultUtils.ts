@@ -47,7 +47,7 @@ export class VaultUtils {
 
     await TokenUtils.approve(underlying, user, vault.address, amount.toString());
     console.log('Vault utils: deposit', BigNumber.from(amount).toString());
-    return vaultForUser.deposit(BigNumber.from(amount), user.address, { gasLimit: 9_000_000 });
+    return vaultForUser.deposit(BigNumber.from(amount), user.address, { gasLimit: 19_000_000 });
   }
 
 
@@ -81,7 +81,7 @@ export class VaultUtils {
 
       // handle HardWork-event to extract earned and lost values
       const { earned, lost } = await strategy.connect(splitterSigner).callStatic.doHardWork();
-      await strategy.connect(splitterSigner).doHardWork({gasLimit: 9_000_000});
+      await strategy.connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
       console.log(`Strategy=${strategyName} step earned=${earned} lost=${lost}`);
 
       dest.strategy.push(strategy.address);
