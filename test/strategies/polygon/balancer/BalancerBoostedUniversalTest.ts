@@ -146,7 +146,7 @@ describe('BalancerBoostedUniversalTest', async () => {
         await PriceOracleImitatorUtils.balancerBoosted(user, t[1], t[0])
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
-        const swapAmountUnits = '3000'
+        const swapAmountUnits = '10000'
         const boostedStrategy = strategy as unknown as BalancerBoostedStrategy
         const poolId = await boostedStrategy.poolId()
         const otherToken = IERC20Metadata__factory.connect(await BalancerStrategyUtils.getOtherToken(poolId, t[0], MaticAddresses.BALANCER_VAULT, swapUser), swapUser)
@@ -155,7 +155,7 @@ describe('BalancerBoostedUniversalTest', async () => {
         console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
-        const swapAmountUnits = '3000'
+        const swapAmountUnits = '10000'
         const boostedStrategy = strategy as unknown as BalancerBoostedStrategy
         const poolId = await boostedStrategy.poolId()
         const otherToken = IERC20Metadata__factory.connect(await BalancerStrategyUtils.getOtherToken(poolId, t[0], MaticAddresses.BALANCER_VAULT, swapUser), swapUser)

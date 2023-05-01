@@ -14,29 +14,40 @@ import {Misc} from "../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
 
 export class BalancerStrategyUtils {
-  public static async getOtherToken(
+  public static async getOtherTokenAndLinearPool(
     poolId: string,
     token: string,
     vault: string,
     signer: SignerWithAddress
-  ):Promise<string> {
+  ):Promise<[string, string]> {
     const balancerVault = IBVault__factory.connect(vault, signer)
     const poolTokens = await balancerVault.getPoolTokens(poolId)
     let otherToken: string|undefined
+    let linearPoolToken: string|undefined
     for (const poolToken of poolTokens.tokens) {
       if (poolToken.toLowerCase() !== poolId.substring(0, 42).toLowerCase()) {
         const linearPool = ILinearPool__factory.connect(poolToken, signer)
         const mainToken = await linearPool.getMainToken()
         if (mainToken.toLowerCase() !== token.toLowerCase()) {
           otherToken = mainToken
+          linearPoolToken = poolToken
           break
         }
       }
     }
-    if (!otherToken) {
+    if (!otherToken || !linearPoolToken) {
       throw new Error()
     }
-    return otherToken
+    return [otherToken, linearPoolToken]
+  }
+
+  public static async getOtherToken(
+    poolId: string,
+    token: string,
+    vault: string,
+    signer: SignerWithAddress
+  ):Promise<string> {
+    return (await this.getOtherTokenAndLinearPool(poolId, token, vault, signer))[0]
   }
 
   public static async bbSwap(

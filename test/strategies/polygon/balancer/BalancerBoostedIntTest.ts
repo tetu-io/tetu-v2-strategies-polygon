@@ -14,8 +14,8 @@ import {
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import {
   BalancerBoostedStrategy, BalancerBoostedStrategy__factory,
-  ControllerV2__factory, ConverterController__factory,
-  IERC20__factory, IERC20Metadata__factory,
+  ControllerV2__factory, ConverterController__factory, IBVault__factory,
+  IERC20__factory, IERC20Metadata__factory, ILinearPool__factory,
   ISplitter,
   ISplitter__factory,
   IStrategyV2, ITetuConverter__factory,
@@ -385,6 +385,47 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
           });
         });
       });
+
+      describe('Hardwork with a lack of asset in the linear pool', () => {
+        it('should work', async() => {
+
+          const poolId = await strategy.poolId()
+          const otherTokenAndLinearPool = await BalancerStrategyUtils.getOtherTokenAndLinearPool(poolId, await strategy.asset(), MaticAddresses.BALANCER_VAULT, signer)
+          console.log('Other token', otherTokenAndLinearPool[0])
+          console.log('Linear pool', otherTokenAndLinearPool[1])
+          const linearPoolId = ILinearPool__factory.connect(otherTokenAndLinearPool[1], signer).getPoolId()
+          let linearPoolTokens = await IBVault__factory.connect(MaticAddresses.BALANCER_VAULT, signer).getPoolTokens(linearPoolId)
+          let mainTokenIndexInLinearPool
+          for (let i = 0; i < linearPoolTokens[0].length; i++) {
+            if (linearPoolTokens[0][i] === otherTokenAndLinearPool[0]) {
+              mainTokenIndexInLinearPool = i
+              break
+            }
+          }
+          if (!mainTokenIndexInLinearPool) {
+            throw new Error()
+          }
+
+          console.log('mainTokenIndexInLinearPool', mainTokenIndexInLinearPool)
+          const linearPoolMainTokenBalanceBefore = linearPoolTokens[1][mainTokenIndexInLinearPool]
+          console.log('linearPoolMainTokenBalance initial', linearPoolMainTokenBalanceBefore)
+
+          await enterToVault();
+          linearPoolTokens = await IBVault__factory.connect(MaticAddresses.BALANCER_VAULT, signer).getPoolTokens(linearPoolId)
+          const linearPoolMainTokenBalanceAfterDeposit = linearPoolTokens[1][mainTokenIndexInLinearPool]
+          console.log('linearPoolMainTokenBalance after deposit', linearPoolMainTokenBalanceAfterDeposit)
+
+          await BalancerStrategyUtils.bbSwap(pool.substring(0, 42), await strategy.asset(), otherTokenAndLinearPool[0], linearPoolMainTokenBalanceBefore.add(parseUnits('10000', 6)), MaticAddresses.BALANCER_VAULT, signer)
+
+          linearPoolTokens = await IBVault__factory.connect(MaticAddresses.BALANCER_VAULT, signer).getPoolTokens(linearPoolId)
+          console.log('linearPoolMainTokenBalance after bbSwap', linearPoolTokens[1][mainTokenIndexInLinearPool])
+
+          // now amount in linear pool less then deposited by strategy
+          expect(linearPoolMainTokenBalanceAfterDeposit.sub(linearPoolMainTokenBalanceBefore)).gt(linearPoolTokens[1][mainTokenIndexInLinearPool])
+
+          await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
+        });
+      })
 
       describe('withdrawAllToSplitter', () => {
 

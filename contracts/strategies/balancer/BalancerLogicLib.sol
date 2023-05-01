@@ -40,6 +40,7 @@ library BalancerLogicLib {
     uint[] balances;
   }
 
+  /// @notice Used in linear pool quote swap math logic
   struct LinearPoolParams {
     uint fee;
     uint lowerTarget;
@@ -554,52 +555,6 @@ library BalancerLogicLib {
     }
   }
 
-  function _calcLinearMainOutPerBptIn(IBVault vault, ILinearPool pool, uint amount) internal view returns (uint) {
-    (uint lowerTarget, uint upperTarget) = pool.getTargets();
-    LinearPoolParams memory params = LinearPoolParams(pool.getSwapFeePercentage(), lowerTarget, upperTarget);
-    (,uint[] memory balances,) = vault.getPoolTokens(pool.getPoolId());
-    uint[] memory scalingFactors = pool.getScalingFactors();
-    _upscaleArray(balances, scalingFactors);
-    amount *= scalingFactors[0] / 1e18;
-    uint mainBalance = balances[pool.getMainIndex()];
-    uint bptSupply = pool.totalSupply() - balances[0];
-    uint previousNominalMain = _toNominal(mainBalance, params);
-    uint invariant = previousNominalMain + balances[pool.getWrappedIndex()];
-    uint deltaNominalMain = invariant * amount / bptSupply;
-    uint afterNominalMain = previousNominalMain - deltaNominalMain;
-    uint newMainBalance = _fromNominal(afterNominalMain, params);
-    return (mainBalance - newMainBalance) * 1e18 / scalingFactors[pool.getMainIndex()];
-  }
-
-  function _toNominal(uint real, LinearPoolParams memory params) internal pure returns (uint) {
-    if (real < params.lowerTarget) {
-      uint fees = (params.lowerTarget - real) * params.fee / 1e18;
-      return real - fees;
-    } else if (real <= params.upperTarget) {
-      return real;
-    } else {
-      uint fees = (real - params.upperTarget) * params.fee / 1e18;
-      return real - fees;
-    }
-  }
-
-  function _fromNominal(uint nominal, LinearPoolParams memory params) internal pure returns (uint) {
-    if (nominal < params.lowerTarget) {
-      return (nominal + (params.fee * params.lowerTarget / 1e18)) * 1e18 / (1e18 + params.fee);
-    } else if (nominal <= params.upperTarget) {
-      return nominal;
-    } else {
-      return (nominal - (params.fee * params.upperTarget / 1e18)) * 1e18/ (1e18 - params.fee);
-    }
-  }
-
-  function _upscaleArray(uint[] memory amounts, uint[] memory scalingFactors) internal pure {
-    uint length = amounts.length;
-    for (uint i; i < length; ++i) {
-      amounts[i] = amounts[i] * scalingFactors[i] / 1e18;
-    }
-  }
-
   /// @notice Swap given {amountIn_} of {assetIn_} to {assetOut_} using the given BalanceR pool
   function swap(
     IBVault vault_,
@@ -683,6 +638,60 @@ library BalancerLogicLib {
     // solhint-disable-next-line no-inline-assembly
     assembly {
       assets := tokens
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  ///             Linear pool quote swap math logic
+  /////////////////////////////////////////////////////////////////////
+
+  /// @dev This logic is needed for hardworks in conditions of lack of funds in linear pools.
+  ///      The lack of funds in linear pools is a typical situation caused by pool rebalancing after deposits from the strategy.
+  ///      Main tokens are leaving linear pools to mint wrapped tokens.
+  function _calcLinearMainOutPerBptIn(IBVault vault, ILinearPool pool, uint amount) internal view returns (uint) {
+    (uint lowerTarget, uint upperTarget) = pool.getTargets();
+    LinearPoolParams memory params = LinearPoolParams(pool.getSwapFeePercentage(), lowerTarget, upperTarget);
+    (,uint[] memory balances,) = vault.getPoolTokens(pool.getPoolId());
+    uint[] memory scalingFactors = pool.getScalingFactors();
+    _upscaleArray(balances, scalingFactors);
+    amount *= scalingFactors[0] / 1e18;
+    uint mainIndex = pool.getMainIndex();
+    uint mainBalance = balances[mainIndex];
+    uint bptSupply = pool.totalSupply() - balances[0];
+    uint previousNominalMain = _toNominal(mainBalance, params);
+    uint invariant = previousNominalMain + balances[pool.getWrappedIndex()];
+    uint deltaNominalMain = invariant * amount / bptSupply;
+    uint afterNominalMain = previousNominalMain > deltaNominalMain ? previousNominalMain - deltaNominalMain : 0;
+    uint newMainBalance = _fromNominal(afterNominalMain, params);
+    return (mainBalance - newMainBalance) * 1e18 / scalingFactors[mainIndex];
+  }
+
+  function _toNominal(uint real, LinearPoolParams memory params) internal pure returns (uint) {
+    if (real < params.lowerTarget) {
+      uint fees = (params.lowerTarget - real) * params.fee / 1e18;
+      return real - fees;
+    } else if (real <= params.upperTarget) {
+      return real;
+    } else {
+      uint fees = (real - params.upperTarget) * params.fee / 1e18;
+      return real - fees;
+    }
+  }
+
+  function _fromNominal(uint nominal, LinearPoolParams memory params) internal pure returns (uint) {
+    if (nominal < params.lowerTarget) {
+      return (nominal + (params.fee * params.lowerTarget / 1e18)) * 1e18 / (1e18 + params.fee);
+    } else if (nominal <= params.upperTarget) {
+      return nominal;
+    } else {
+      return (nominal - (params.fee * params.upperTarget / 1e18)) * 1e18/ (1e18 - params.fee);
+    }
+  }
+
+  function _upscaleArray(uint[] memory amounts, uint[] memory scalingFactors) internal pure {
+    uint length = amounts.length;
+    for (uint i; i < length; ++i) {
+      amounts[i] = amounts[i] * scalingFactors[i] / 1e18;
     }
   }
 }
