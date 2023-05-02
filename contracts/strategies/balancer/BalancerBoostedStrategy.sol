@@ -5,7 +5,8 @@ import "../ConverterStrategyBase.sol";
 import "./BalancerBoostedDepositor.sol";
 import "../../libs/AppPlatforms.sol";
 
-
+/// @title Delta-neutral converter strategy for Balancer boosted pools
+/// @author a17, dvpublic
 contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDepositor {
   string public constant override NAME = "Balancer Boosted Strategy";
   string public constant override PLATFORM = AppPlatforms.BALANCER;
