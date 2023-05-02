@@ -176,13 +176,17 @@ describe('BalancerBoostedUniversalTest', async () => {
         const strategy = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
         await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1]);
         const mainAssetSymbol = await IERC20Metadata__factory.connect(t[0], signer).symbol()
+        const mainAssetDecimals = await IERC20Metadata__factory.connect(t[0], signer).decimals()
         statesParams[await strategy.poolId()] = {
           mainAssetSymbol,
+          mainAssetDecimals,
         }
         return strategy as unknown as IStrategyV2;
       },
       {
         vaultName: 'tetu' + await IERC20Metadata__factory.connect(t[0], signer).symbol(),
+        depositFee: 300,
+        withdrawFee: 300,
       },
     );
 
