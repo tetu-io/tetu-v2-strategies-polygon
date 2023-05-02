@@ -278,22 +278,6 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-//  function _closePositionUsingMainAsset(
-//    ITetuConverter converter,
-//    address collateralAsset,
-//    address borrowAsset,
-//    uint amountToRepay
-//  ) external returns (
-//    uint expectedAmountOut
-//  ) {
-//    return ConverterStrategyBaseLib._repayDebt(
-//      converter,
-//      collateralAsset,
-//      borrowAsset,
-//      amountToRepay
-//    );
-//  }
-
   function _getAmountToSell(
     uint remainingRequestedAmount,
     uint totalDebt,
