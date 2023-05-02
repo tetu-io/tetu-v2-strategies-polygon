@@ -375,7 +375,7 @@ library UniswapV3ConverterStrategyLogicLib {
         sqrtRatioX96,
         lowerTickFillup,
         upperTickFillup,
-        liquidityFillup * liquidityAmountToExit / liquidity
+        uint128(uint(liquidityFillup) * uint(liquidityAmountToExit) / uint(liquidity))
       );
 
       amountsOut[0] += amountOut0Fillup;
@@ -555,7 +555,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
     // remove proportional part of fillup liquidity
     if (liquidityFillup != 0) {
-      uint128 toRemoveFillUpAmount = liquidityFillup * liquidityAmountToExit / liquidity;
+      uint128 toRemoveFillUpAmount = uint128(uint(liquidityFillup) * uint(liquidityAmountToExit) / uint(liquidity));
       (uint amountsOutFillup0, uint amountsOutFillup1) = pool.burn(lowerTickFillup, upperTickFillup, toRemoveFillUpAmount);
       pool.collect(
         address(this),
