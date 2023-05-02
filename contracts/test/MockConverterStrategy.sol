@@ -35,7 +35,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-
+  function init2(address controller_, address splitter_, address converter_) external {
+    __ConverterStrategyBase_init(
+      controller_,
+      splitter_,
+      converter_
+    );
+  }
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////

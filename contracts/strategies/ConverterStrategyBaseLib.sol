@@ -624,35 +624,14 @@ library ConverterStrategyBaseLib {
     AppLib.approveIfNeeded(tokenIn_, amountIn_, address(liquidator_));
 
     uint balanceBefore = IERC20(tokenOut_).balanceOf(address(this));
-
     liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
-
-    // temporary save balance of token out after  liquidation to spentAmountIn
     uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
 
-    // assign correct values to
-    receivedAmountOut = balanceAfter > balanceBefore
-      ? balanceAfter - balanceBefore
-      : 0;
+    require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
+    receivedAmountOut = balanceAfter - balanceBefore;
 
-    require(
-      converter_.isConversionValid(
-        tokenIn_,
-        amountIn_,
-        tokenOut_,
-        receivedAmountOut,
-        slippage_
-      ),
-      AppErrors.PRICE_IMPACT
-    );
-
-    emit Liquidation(
-      tokenIn_,
-      tokenOut_,
-      amountIn_,
-      amountIn_,
-      receivedAmountOut
-    );
+    require(converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
+    emit Liquidation(tokenIn_, tokenOut_, amountIn_, amountIn_, receivedAmountOut);
   }
   //endregion Liquidation
 
