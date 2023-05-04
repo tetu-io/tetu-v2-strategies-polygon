@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -45,7 +46,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.5";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.6";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -147,7 +148,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // skip deposit for small amounts
     if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / DENOMINATOR) {
       address _asset = asset;
-      uint balanceBefore = _balance(_asset);
+      uint balanceBefore = AppLib.balance(_asset);
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
@@ -160,7 +161,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // update _investedAssets with new deposited amount
       uint updatedInvestedAssetsAfterDeposit = _updateInvestedAssets();
       // after deposit some asset can exist
-      uint balanceAfter = _balance(_asset);
+      uint balanceAfter = AppLib.balance(_asset);
 
       // we need to compensate difference if during deposit we lost some assets
       if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (updatedInvestedAssets + balanceBefore)) {
@@ -266,7 +267,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       v.asset = asset;
       ITetuConverter _converter = converter;
       uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(v.tokens, v.asset);
-      uint balanceBefore = _balance(v.asset);
+      uint balanceBefore = AppLib.balance(v.asset);
 
       v.reservesBeforeWithdraw = _depositorPoolReserves();
       v.totalSupplyBeforeWithdraw = _depositorTotalSupply();
@@ -332,7 +333,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       );
 
       v.investedAssetsAfterWithdraw = _updateInvestedAssets();
-      v.balanceAfterWithdraw = _balance(v.asset);
+      v.balanceAfterWithdraw = AppLib.balance(v.asset);
 
       // we need to compensate difference if during withdraw we lost some assets
       if ((v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw) < (v.investedAssetsBeforeWithdraw + balanceBefore)) {
@@ -560,7 +561,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _depositToPool(assetBalance, false);
       (earned, lost) = ConverterStrategyBaseLib.registerIncome(
         investedAssetsLocal + assetBalance, // assets in use before deposit
-        _investedAssets + _balance(asset), // assets in use after deposit
+        _investedAssets + AppLib.balance(asset), // assets in use after deposit
         earned,
         lost
       );
@@ -633,7 +634,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // detect index of the target asset
     (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
     // get amount of target asset available to be sent
-    uint balance = _balance(theAsset_);
+    uint balance = AppLib.balance(theAsset_);
 
     // withdraw from the pool if not enough
     if (balance < amount_) {
@@ -699,11 +700,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
   //endregion Others
 
-  /**
-* @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-  uint[46] private __gap;
+
+  /// @dev This empty reserved space is put in place to allow future versions to add new
+  /// variables without shifting down storage in the inheritance chain.
+  /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+  uint[50 - 4] private __gap; // 50 - count of variables
 
 }

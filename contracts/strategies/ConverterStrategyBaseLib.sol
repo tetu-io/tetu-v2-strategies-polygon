@@ -369,6 +369,7 @@ library ConverterStrategyBaseLib {
 
   /// @notice Open position using entry kind 1 - split provided amount on two parts according provided proportions
   /// @param amountIn_ Amount of collateral to be divided on parts. We assume {amountIn_} > 0
+  /// @param collateralThreshold_ Min allowed collateral amount to be used for new borrow, > 0
   /// @return collateralAmountOut Total collateral used to borrow {borrowedAmountOut}
   /// @return borrowedAmountOut Total borrowed amount
   function openPositionEntryKind1(
@@ -462,7 +463,8 @@ library ConverterStrategyBaseLib {
 
         // protection against dust amounts, see "openPosition.dust", just leave dust amount unused
         // we CAN NOT add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
-        if (amountIn_ < collateralThreshold_ || amountIn_ == 0) break;
+        // we assume here, that collateralThreshold_ != 0, so check amountIn_ != 0 is not required
+        if (amountIn_ < collateralThreshold_) break;
       }
     }
 
@@ -622,35 +624,14 @@ library ConverterStrategyBaseLib {
     AppLib.approveIfNeeded(tokenIn_, amountIn_, address(liquidator_));
 
     uint balanceBefore = IERC20(tokenOut_).balanceOf(address(this));
-
     liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
-
-    // temporary save balance of token out after  liquidation to spentAmountIn
     uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
 
-    // assign correct values to
-    receivedAmountOut = balanceAfter > balanceBefore
-      ? balanceAfter - balanceBefore
-      : 0;
+    require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
+    receivedAmountOut = balanceAfter - balanceBefore;
 
-    require(
-      converter_.isConversionValid(
-        tokenIn_,
-        amountIn_,
-        tokenOut_,
-        receivedAmountOut,
-        slippage_
-      ),
-      AppErrors.PRICE_IMPACT
-    );
-
-    emit Liquidation(
-      tokenIn_,
-      tokenOut_,
-      amountIn_,
-      amountIn_,
-      receivedAmountOut
-    );
+    require(converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
+    emit Liquidation(tokenIn_, tokenOut_, amountIn_, amountIn_, receivedAmountOut);
   }
   //endregion Liquidation
 
@@ -963,12 +944,12 @@ library ConverterStrategyBaseLib {
             // lazy initialization
             v.debts = new uint[](v.len);
           }
+
           // to pay the following amount we need to swap some other asset at first
           v.debts[i] = toPay - toRepay;
         }
       }
     }
-
     if (v.debts.length == v.len) {
       // we assume here, that it would be always profitable to save collateral
       // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,

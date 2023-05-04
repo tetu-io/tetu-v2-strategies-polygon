@@ -6,16 +6,15 @@ import "./AppErrors.sol";
 /// @title Library for clearing / joining token addresses & amounts arrays
 /// @author bogdoslav
 library TokenAmountsLib {
-
-  function uncheckedInc(uint i) internal pure returns (uint) {
-  unchecked {
-    return i + 1;
-  }
-  }
-
   /// @notice Version of the contract
   /// @dev Should be incremented when contract changed
-  string internal constant TOKEN_AMOUNTS_LIB_VERSION = "1.0.0";
+  string internal constant TOKEN_AMOUNTS_LIB_VERSION = "1.0.1";
+
+  function uncheckedInc(uint i) internal pure returns (uint) {
+    unchecked {
+      return i + 1;
+    }
+  }
 
   function filterZeroAmounts(
     address[] memory tokens,
@@ -24,7 +23,7 @@ library TokenAmountsLib {
     address[] memory t,
     uint[] memory a
   ) {
-    require(tokens.length == amounts.length, 'TAL: Arrays mismatch');
+    require(tokens.length == amounts.length, AppErrors.INCORRECT_LENGTHS);
     uint len2 = 0;
     uint len = tokens.length;
     for (uint i = 0; i < len; i++) {

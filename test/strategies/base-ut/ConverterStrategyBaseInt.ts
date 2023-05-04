@@ -5,7 +5,10 @@ import {Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {ConverterStrategyBaseContracts} from "./utils/ConverterStrategyBaseContracts";
+import {
+  ConverterStrategyBaseContracts,
+  IConverterStrategyBaseContractsParams
+} from "./utils/ConverterStrategyBaseContracts";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {BigNumber} from "ethers";
@@ -44,24 +47,26 @@ describe("ConverterStrategyBaseInt", () => {
 //endregion Before, after
 
 //region Fixtures
-  async function prepareUniv3ConverterStrategyUsdcUsdt(): Promise<ConverterStrategyBaseContracts> {
+  async function prepareUniv3ConverterStrategyUsdcUsdt(p?: IConverterStrategyBaseContractsParams): Promise<ConverterStrategyBaseContracts> {
     return ConverterStrategyBaseContracts.buildUniv3(
       signer,
       signer2,
       core,
       MaticAddresses.USDC_TOKEN,
       MaticAddresses.UNISWAPV3_USDC_USDT_100,
-      gov
+      gov,
+      p
     );
   }
-  async function prepareBalancerConverterStrategyUsdcTUsd(): Promise<ConverterStrategyBaseContracts> {
+  async function prepareBalancerConverterStrategyUsdcTUsd(p?: IConverterStrategyBaseContractsParams): Promise<ConverterStrategyBaseContracts> {
     return ConverterStrategyBaseContracts.buildBalancer(
       signer,
       signer2,
       core,
       MaticAddresses.USDC_TOKEN,
       MaticAddresses.BALANCER_POOL_T_USD,
-      gov
+      gov,
+      p
     );
   }
 //endregion Fixtures
@@ -76,8 +81,10 @@ describe("ConverterStrategyBaseInt", () => {
     describe("univ3", () => {
       /**
        * todo Uncomment after fixing SCB-670
+       * SCB-670 is fixed in build 10 of TetuConveter
+       * This test doesn't pass because too small USDC amount cannot be liquidated and the borrow cannot be closed.
        */
-      describe.skip("Deposit $0.1", () => {
+      describe.skip("Deposit $0.01", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -87,7 +94,25 @@ describe("ConverterStrategyBaseInt", () => {
         });
 
         async function makeNoDepositEmergencyExit(): Promise<IMakeDepositAndEmergencyExitResults> {
-          const cc = await prepareUniv3ConverterStrategyUsdcUsdt();
+          // const app = await DeployTetuConverterApp.deployApp(signer, "0x527a819db1eb0e34426297b03bae11F2f8B3A19E");
+          const cc = await prepareUniv3ConverterStrategyUsdcUsdt(
+            // {converter: app.core.tetuConverter}
+          );
+          // for (const item of app.platformAdapters) {
+          //   if (item.lendingPlatformTitle !== "AAVE v3") {
+          //     await ConverterUtils.disablePlatformAdapter(signer, item.platformAdapterAddress, app.core.tetuConverter);
+          //     console.log("Disable", item.lendingPlatformTitle);
+          //   }
+          // }
+          // await StrategyTestUtils.setThresholds(
+          //   cc.strategy,
+          //   signer,
+          //   {
+          //     rewardLiquidationThresholds: [
+          //       {asset: MaticAddresses.USDT_TOKEN, threshold: parseUnits("0.01", 6)}
+          //     ]
+          //   }
+          // );
           await cc.vault.setDoHardWorkOnInvest(false);
 
           await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -112,7 +137,7 @@ describe("ConverterStrategyBaseInt", () => {
           await expect(r.afterExit.strategy.investedAssets).eq(0);
         });
       });
-      describe("Deposit $0.1 + 100000", () => {
+      describe("Deposit $0.01 + 100000", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -177,7 +202,7 @@ describe("ConverterStrategyBaseInt", () => {
       /**
        * todo Uncomment after fixing SCB-670
        */
-      describe.skip("Deposit $0.1", () => {
+      describe.skip("Deposit $0.01", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -546,10 +571,11 @@ describe("ConverterStrategyBaseInt", () => {
         // assume that afterDeposit.converter.borrowAssetsAddresses are following: USDT, USDC, DAI
         const indexUsdt2 = 0;
         const indexDai2 = 2;
-        const amountToWithdraw= Math.round(
+        const amountToWithdrawSecondaryAssets= Math.round(
           afterDeposit.strategy.borrowAssetsBalances[indexUsdt1] * afterDeposit.converter.borrowAssetsPrices[indexUsdt2]
            + afterDeposit.strategy.borrowAssetsBalances[indexDai1] * afterDeposit.converter.borrowAssetsPrices[indexDai2]
         );
+        const amountToWithdraw = amountToWithdrawSecondaryAssets / 2 + afterDeposit.strategy.assetBalance;
         console.log("amountToWithdraw", amountToWithdraw);
 
         // withdraw the amount

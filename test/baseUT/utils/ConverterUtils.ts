@@ -20,9 +20,9 @@ import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export class ConverterUtils {
 
-  public static async whitelist(adrs: string[]) {
+  public static async whitelist(adrs: string[], converterAddress?: string) {
     const signer = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
-    const converterControllerAddr = await TetuConverter__factory.connect(getConverterAddress(), signer).controller();
+    const converterControllerAddr = await TetuConverter__factory.connect(converterAddress || getConverterAddress(), signer).controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();
     const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
@@ -57,10 +57,10 @@ export class ConverterUtils {
     console.log('disableAaveV2 done.\n\n');
   }
 
-  public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {
+  public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string, converterAddress?: string) {
     console.log(`disable ${platformAdapter}`);
     const tools = Addresses.getTools();
-    const converter = TetuConverter__factory.connect(getConverterAddress(), signer);
+    const converter = TetuConverter__factory.connect(converterAddress || getConverterAddress(), signer);
     const converterControllerAddr = await converter.controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();

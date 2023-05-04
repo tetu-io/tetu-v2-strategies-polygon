@@ -35,7 +35,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-
+  function init2(address controller_, address splitter_, address converter_) external {
+    __ConverterStrategyBase_init(
+      controller_,
+      splitter_,
+      converter_
+    );
+  }
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
@@ -80,17 +86,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- handleRewardsParams.assetBalanceChange)
         );
       }
-      return (handleRewardsParams.earned, handleRewardsParams.lost, _balance(asset));
+      return (handleRewardsParams.earned, handleRewardsParams.lost, AppLib.balance(asset));
     } else {
       return __handleRewards();
     }
   }
 
   function __handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
-    uint assetBalanceBefore = _balance(asset);
+    uint assetBalanceBefore = AppLib.balance(asset);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
-    assetBalanceAfterClaim = _balance(asset);
+    assetBalanceAfterClaim = AppLib.balance(asset);
     (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
     return (earned, lost, assetBalanceAfterClaim);
   }

@@ -169,8 +169,8 @@ library UniswapV3DebtLib {
     /// after disableFuse() debt can be zero
     /// we close debt only if it is more than $0.1
     if (debtAmount * priceOracle.getAssetPrice(tokenB) / 10 ** IERC20Metadata(tokenB).decimals() > 1e17) {
-      uint availableBalanceTokenA = _balance(tokenA);
-      uint availableBalanceTokenB = _balance(tokenB);
+      uint availableBalanceTokenA = AppLib.balance(tokenA);
+      uint availableBalanceTokenB = AppLib.balance(tokenB);
 
       // exclude fees if it is possible
       if(availableBalanceTokenA > feeA) {
@@ -187,7 +187,7 @@ library UniswapV3DebtLib {
         needToSellTokenA += needToSellTokenA / SELL_GAP;
 
         ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, Math.min(needToSellTokenA, availableBalanceTokenA), liquidatorSwapSlippage, 0);
-        availableBalanceTokenB = _balance(tokenB);
+        availableBalanceTokenB = AppLib.balance(tokenB);
         if(availableBalanceTokenB > feeB) {
           availableBalanceTokenB -= feeB;
         }
@@ -200,7 +200,7 @@ library UniswapV3DebtLib {
         Math.min(debtAmount, availableBalanceTokenB)
       );
 
-      availableBalanceTokenB = _balance(tokenB);
+      availableBalanceTokenB = AppLib.balance(tokenB);
       if(availableBalanceTokenB > feeB) {
         availableBalanceTokenB -= feeB;
       }
@@ -226,7 +226,7 @@ library UniswapV3DebtLib {
       entryData,
       tokenA,
       tokenB,
-      _balance(tokenA) - feeA,
+      AppLib.balance(tokenA) - feeA,
       0
     );
   }
@@ -358,19 +358,12 @@ library UniswapV3DebtLib {
     return vars.collateral;
   }
 
-  /// @notice Get the balance of the given token held by the contract.
-  /// @param token The token address.
-  /// @return The balance of the token.
-  function _balance(address token) internal view returns (uint) {
-    return IERC20(token).balanceOf(address(this));
-  }
-
   /// @dev Gets the token balance without fees.
   /// @param token The token address.
   /// @param fee The fee amount to be subtracted from the balance.
   /// @return balanceWithoutFees The token balance without the specified fee amount.
   function getBalanceWithoutFees(address token, uint fee) internal view returns (uint balanceWithoutFees) {
-    balanceWithoutFees = _balance(token);
+    balanceWithoutFees = AppLib.balance(token);
     require(balanceWithoutFees >= fee, Uni3StrategyErrors.BALANCE_LOWER_THAN_FEE);
     balanceWithoutFees -= fee;
   }

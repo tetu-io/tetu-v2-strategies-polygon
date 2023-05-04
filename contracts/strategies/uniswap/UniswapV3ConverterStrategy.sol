@@ -193,7 +193,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       lost = state.rebalanceLost;
       state.rebalanceLost = 0;
     }
-    return (earned, lost, _balance(asset));
+    return (earned, lost, AppLib.balance(asset));
   }
 
   /// @notice Deposit given amount to the pool.
