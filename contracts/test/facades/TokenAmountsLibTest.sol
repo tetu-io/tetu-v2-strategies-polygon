@@ -33,4 +33,8 @@ contract TokenAmountsLibTest {
       tokens2, amounts2
     );
   }
+
+  function uncheckedInc(uint i) external pure returns (uint) {
+    return TokenAmountsLib.uncheckedInc(i);
+  }
 }

@@ -9,6 +9,7 @@ import {ConverterController__factory, IBorrowManager, IBorrowManager__factory} f
 import {RunHelper} from "../../../scripts/utils/RunHelper";
 import {CoreContractsHelper} from "./CoreContractsHelper";
 import {ConverterAdaptersHelper} from "./ConverterAdaptersHelper";
+import {CustomConverterDeployHelper} from "./CustomConverterDeployHelper";
 
 //region Data types
 export interface IControllerSetupParams {
@@ -73,6 +74,11 @@ export interface ITargetHealthFactorValue {
   asset: string;
   healthFactor2: number;
 }
+
+export interface IDeployAppResults {
+  core: IDeployCoreResults;
+  platformAdapters: IPlatformAdapterResult[];
+}
 //endregion Data types
 
 const GAS_DEPLOY_LIMIT = 8_000_000;
@@ -83,7 +89,7 @@ export class DeployTetuConverterApp {
     signer: SignerWithAddress,
     gelatoOpsReady: string,
     params?: IControllerSetupParams,
-  ) : Promise<IDeployCoreResults> {
+  ) : Promise<IDeployAppResults> {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
     /// Initial settings
@@ -95,7 +101,8 @@ export class DeployTetuConverterApp {
       maxHealthFactor2: 400,
       disableAave3: false,
       disableAaveTwo: false,
-      disableDForce: false
+      disableDForce: false,
+      debtGap: BigNumber.from(1000)
     };
     const borrowManagerSetupParams: IBorrowManagerSetupParams = {
       rewardsFactor: parseUnits("0.5", 18)
@@ -237,7 +244,7 @@ export class DeployTetuConverterApp {
       )
     );
 
-    return deployCoreResults;
+    return {core: deployCoreResults, platformAdapters: deployedPlatformAdapters};
   }
 //endregion Main script
 
@@ -306,7 +313,7 @@ export class DeployTetuConverterApp {
       tetuLiquidator,
       controllerSetupParams,
       borrowManagerSetupParams,
-      gelatoOpsReady
+      gelatoOpsReady,
     }
   }
 //endregion Setup core
@@ -317,9 +324,9 @@ export class DeployTetuConverterApp {
     controller: string,
     aavePoolAddress: string
   ) : Promise<IPlatformAdapterResult> {
-    const converterNormal = await ConverterAdaptersHelper.createAave3PoolAdapter(deployer);
-    const converterEModde = await ConverterAdaptersHelper.createAave3PoolAdapterEMode(deployer);
-    const platformAdapter = await ConverterAdaptersHelper.createAave3PlatformAdapter(
+    const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(deployer);
+    const converterEModde = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(deployer);
+    const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
       deployer,
       controller,
       aavePoolAddress,
@@ -339,8 +346,8 @@ export class DeployTetuConverterApp {
     controller: string,
     aavePoolAddress: string
   ) : Promise<IPlatformAdapterResult> {
-    const converterNormal = await ConverterAdaptersHelper.createAaveTwoPoolAdapter(deployer);
-    const platformAdapter = await ConverterAdaptersHelper.createAaveTwoPlatformAdapter(
+    const converterNormal = await CustomConverterDeployHelper.createAaveTwoPoolAdapter(deployer);
+    const platformAdapter = await CustomConverterDeployHelper.createAaveTwoPlatformAdapter(
       deployer,
       controller,
       aavePoolAddress,
@@ -360,8 +367,8 @@ export class DeployTetuConverterApp {
     comptroller: string,
     cTokensActive: string[]
   ) : Promise<IPlatformAdapterResult> {
-    const converterNormal = await ConverterAdaptersHelper.createDForcePoolAdapter(deployer);
-    const platformAdapter = await ConverterAdaptersHelper.createDForcePlatformAdapter(
+    const converterNormal = await CustomConverterDeployHelper.createDForcePoolAdapter(deployer);
+    const platformAdapter = await CustomConverterDeployHelper.createDForcePlatformAdapter(
       deployer,
       controller,
       comptroller,

@@ -340,6 +340,47 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         expect(r.borrowedAmountOut).eq(BigNumber.from("10052591")); // (!) 91 (single borrow)
       });
     });
+    describe("No converters are available", () => {
+      async function makeTest(): Promise<IOpenPositionEntryKind1TestResults> {
+        const entryData1 = "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000f4366000000000000000000000000000000000000000000000000000000000000d93e";
+        return makeOpenPositionEntryKind1Test(
+          entryData1,
+          usdc,
+          usdt,
+          BigNumber.from("194495951"),
+          {
+            threshold: 0,
+            borrows: [],
+            findBorrowStrategyOutputs: [
+              {
+                converters: [],
+                sourceToken: usdc.address,
+                targetToken: usdt.address,
+                entryData: entryData1,
+                aprs18: [],
+                amountIn: BigNumber.from("194495951"),
+                collateralAmountsOut: [],
+                amountToBorrowsOut: [],
+              },
+            ],
+            amountCollateralForFacade: BigNumber.from("194495951"),
+            amountBorrowAssetForTetuConverter: BigNumber.from("10052592"),
+            amountInIsCollateral: true,
+            prices: {
+              collateral: BigNumber.from("1000082050000000000"),
+              borrow: BigNumber.from("1000523100000000000")
+            }
+          },
+        );
+      }
+
+      it('should make two borrows if threshold is 0', async () => {
+        const r = await loadFixture(makeTest);
+
+        expect(r.collateralAmountOut).eq(BigNumber.from("0"));
+        expect(r.borrowedAmountOut).eq(BigNumber.from("0"));
+      });
+    });
   });
 
   describe('convertAfterWithdraw', () => {

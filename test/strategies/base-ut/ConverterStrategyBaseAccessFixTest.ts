@@ -2401,5 +2401,23 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       });
     });
   });
+
+  describe("__ConverterStrategyBase_init", () => {
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+      it("should revert on second initialization", async () => {
+        const ms = await setupMockedStrategy();
+        await expect(
+          ms.strategy.init2(ms.controller.address, ms.splitter.address, ms.tetuConverter.address)
+        ).revertedWith("Initializable: contract is not initializing"); // openzeppelin/Initializable.sol
+      });
+    });
+  });
   //endregion Unit tests
 });
