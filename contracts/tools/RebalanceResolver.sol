@@ -15,7 +15,7 @@ import "../libs/AppPlatforms.sol";
 contract RebalanceResolver is ControllableV3 {
   // --- CONSTANTS ---
 
-  string public constant VERSION = "1.1.0";
+  string public constant VERSION = "1.1.1";
   uint public constant DELAY_RATE_DENOMINATOR = 100_000;
 
   // --- VARIABLES ---
@@ -107,29 +107,29 @@ contract RebalanceResolver is ControllableV3 {
     uint vaultsLength = _controller.vaultsListLength();
 
     uint counter;
+    address[] memory strategiesForRebalance = new address[](10000);
     for (uint i; i < vaultsLength; ++i) {
       ISplitter splitter = ITetuVaultV2(_controller.vaults(i)).splitter();
       for (uint k; k < splitter.strategiesLength(); ++k) {
-        if (_needRebalance(splitter.strategies(k))) {
+        address strategy = splitter.strategies(k);
+        if (!splitter.pausedStrategies(strategy) && _needRebalance(strategy)) {
+          strategiesForRebalance[counter] = strategy;
           ++counter;
         }
       }
     }
 
+    address[] memory strategiesResult = new address[](counter);
+    for (uint i; i < counter; ++i) {
+      if (strategiesForRebalance[i] != address(0)) {
+        strategiesResult[i] = strategiesForRebalance[i];
+      }
+    }
+
+
     if (counter == 0) {
       return (false, bytes("No ready strategies"));
     } else {
-      address[] memory strategiesResult = new address[](counter);
-      uint j;
-      for (uint i; i < vaultsLength; ++i) {
-        ISplitter splitter = ITetuVaultV2(_controller.vaults(i)).splitter();
-        for (uint k; k < splitter.strategiesLength(); ++k) {
-          if (_needRebalance(splitter.strategies(k))) {
-            strategiesResult[j] = splitter.strategies(k);
-            ++j;
-          }
-        }
-      }
       return (true, abi.encodeWithSelector(RebalanceResolver.call.selector, strategiesResult));
     }
   }
