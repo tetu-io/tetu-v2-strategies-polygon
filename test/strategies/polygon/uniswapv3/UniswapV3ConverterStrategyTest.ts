@@ -477,6 +477,36 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('Strategy totalAssets', await strategy2.totalAssets());
     });
 
+    /**
+     * TODO: emergencyExit should not check price impact at all
+     */
+    describe.skip("Emergency exit after strong price change", () => {
+      it('should make emergency exit without any reverts (even if a rebalance is required)', async() => {
+        const investAmount = _10_000;
+        const swapAssetValueForPriceMove = parseUnits('5000000', 6);
+        const state = await strategy.getState();
+
+        let price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+        console.log('tokenB price', formatUnits(price, 6));
+
+        console.log('deposit...');
+        await vault.deposit(investAmount, signer.address);
+
+        expect(await strategy.isReadyToHardWork()).eq(false);
+        expect(await strategy.needRebalance()).eq(false);
+
+        await UniswapV3StrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+        price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+        console.log('tokenB price (updated)', formatUnits(price, 6));
+
+        expect(await strategy.isReadyToHardWork()).eq(true);
+        expect(await strategy.needRebalance()).eq(true);
+
+        await strategy.emergencyExit();
+      });
+    });
+
     /*it('deposit / withdraw, fees, totalAssets + check insurance and LossCovered', async() => {
      // after insurance logic changed this test became incorrect
 
