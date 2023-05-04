@@ -12,7 +12,7 @@ export class BalancerRewardsHardwork extends DoHardWorkLoopBase {
       (await strategy.poolId()).substring(0, 42),
       MaticAddresses.BALANCER_LIQUIDITY_GAUGE_FACTORY,
       MaticAddresses.BAL_TOKEN,
-      parseUnits('100'),
+      parseUnits('1000'),
       this.signer
     )
   }

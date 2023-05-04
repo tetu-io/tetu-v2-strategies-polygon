@@ -266,8 +266,8 @@ export class StateUtils {
 
       formatMainAssetUnits(item.insurance.assetBalance, params.mainAssetDecimals),
       formatMainAssetUnits(item.strategy.assetBalance, params.mainAssetDecimals),
-      item.strategy.borrowAssetsBalances.map(a => a.toString()).join(','),
-      item.strategy.rewardTokensBalances?.join(','),
+      item.strategy.borrowAssetsBalances.map(a => a.toString()).join(' '),
+      item.strategy.rewardTokensBalances?.join(' '),
       item.strategy.liquidity,
       formatMainAssetUnits(item.strategy.totalAssets, params.mainAssetDecimals),
       formatMainAssetUnits(item.strategy.investedAssets, params.mainAssetDecimals),
@@ -276,8 +276,8 @@ export class StateUtils {
       formatMainAssetUnits(item.splitter.assetBalance, params.mainAssetDecimals),
       formatMainAssetUnits(item.splitter.totalAssets, params.mainAssetDecimals),
 
-      item.converter?.collaterals.join(','),
-      item.converter?.amountsToRepay.join(','),
+      item.converter?.collaterals.map(a => a.toString()).join(' '),
+      item.converter?.amountsToRepay.map(a => a.toString()).join(' '),
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' });

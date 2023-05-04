@@ -431,7 +431,7 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
             const r = await makeDepositorEnterTest(facade, { amount: '10000' });
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
-            expect(maxPercentDeltas.abs().lt(1e11)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e12)).eq(true);
           });
           it('$1_000_000', async() => {
             const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);

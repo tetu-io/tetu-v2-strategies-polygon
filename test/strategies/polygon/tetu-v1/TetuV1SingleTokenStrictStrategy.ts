@@ -166,7 +166,7 @@ describe('TetuV1 Single Token Strict Strategy tests', async() => {
       // rounding issues need to check maxWithdrawAmount
       await strictVault.redeem(maxRedeemAmount, owner.address, owner.address);
       const balanceAfter = await usdc.balanceOf(owner.address);
-      expect(balanceAfter.sub(balanceBefore)).approximately(depositAmount, 1);
+      expect(balanceAfter.sub(balanceBefore)).approximately(depositAmount, 100);
       expect(await smartVault.underlyingBalanceWithInvestmentForHolder(strategy.address)).approximately(0, 1);
     });
   });

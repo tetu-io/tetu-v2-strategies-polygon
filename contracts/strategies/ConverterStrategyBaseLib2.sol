@@ -58,7 +58,7 @@ library ConverterStrategyBaseLib2 {
     uint[] memory rewardAmountsOut,
     uint[] memory performanceAmounts
   ) {
-
+    // todo send only underlying token to insurance and performanceReceiver_
     // read inside lib for reduce contract space in the main contract
     address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
 

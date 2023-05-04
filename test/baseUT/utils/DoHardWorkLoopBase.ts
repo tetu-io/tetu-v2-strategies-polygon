@@ -171,6 +171,7 @@ export class DoHardWorkLoopBase {
     // dynamic compoundRatio support
     if (Array.isArray(params.compoundRate)) {
       await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate[0]);
+      this.cRatioArr = params.compoundRate
     } else {
       await UniversalTestUtils.setCompoundRatio(this.strategy, this.user, params.compoundRate);
     }

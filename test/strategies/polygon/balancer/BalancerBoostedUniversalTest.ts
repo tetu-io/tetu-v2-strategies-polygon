@@ -111,7 +111,6 @@ describe('BalancerBoostedUniversalTest', async () => {
     const asset = t[0];
     const reinvestThresholdPercent = 1_000; // 1%
     const params: IUniversalStrategyInputParams = {
-      ppfsDecreaseAllowed: false,
       balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
       loops: 4,
