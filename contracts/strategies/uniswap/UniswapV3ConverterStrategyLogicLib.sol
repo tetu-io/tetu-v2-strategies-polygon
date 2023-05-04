@@ -487,18 +487,20 @@ library UniswapV3ConverterStrategyLogicLib {
     balance0 -= fee0;
     balance1 -= fee1;
 
-    (, int24 tick, , , , ,) = pool.slot0();
-    if (balance0 > balance1 * UniswapV3Lib.getPrice(address(pool), pool.token1()) / 10 ** IERC20Metadata(pool.token1()).decimals()) {
-      // add token0 to half range
-      lowerTickFillup = tick / tickSpacing * tickSpacing + tickSpacing;
-      upperTickFillup = upperTick;
-      (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, balance0, 0);
-      pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
-    } else {
-      lowerTickFillup = lowerTick;
-      upperTickFillup = tick / tickSpacing * tickSpacing - tickSpacing;
-      (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, 0, balance1);
-      pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
+    if (balance0 > 0 || balance1 > 0) {
+      (, int24 tick, , , , ,) = pool.slot0();
+      if (balance0 > balance1 * UniswapV3Lib.getPrice(address(pool), pool.token1()) / 10 ** IERC20Metadata(pool.token1()).decimals()) {
+        // add token0 to half range
+        lowerTickFillup = tick / tickSpacing * tickSpacing + tickSpacing;
+        upperTickFillup = upperTick;
+        (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, balance0, 0);
+        pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
+      } else {
+        lowerTickFillup = lowerTick;
+        upperTickFillup = tick / tickSpacing * tickSpacing - tickSpacing;
+        (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, 0, balance1);
+        pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
+      }
     }
   }
 
@@ -715,6 +717,18 @@ library UniswapV3ConverterStrategyLogicLib {
     ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+
+    // for rebalance after emergencyExit() case
+    uint b0 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenB : vars.tokenA);
+    uint b1 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenA : vars.tokenB);
+    if (b0 < vars.rebalanceEarned0) {
+      vars.rebalanceEarned0 = b0;
+      state.rebalanceEarned0 = b0;
+    }
+    if (b1 < vars.rebalanceEarned1) {
+      vars.rebalanceEarned1 = b1;
+      state.rebalanceEarned1 = b1;
+    }
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity

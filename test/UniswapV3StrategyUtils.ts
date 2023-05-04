@@ -1,6 +1,11 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber } from 'ethers';
-import { ISwapper__factory, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory } from '../typechain';
+import {
+  IERC20Metadata__factory,
+  ISwapper__factory,
+  UniswapV3ConverterStrategy,
+  UniswapV3ConverterStrategy__factory
+} from '../typechain';
 import { TokenUtils } from '../scripts/utils/TokenUtils';
 import { MaticAddresses } from '../scripts/addresses/MaticAddresses';
 import { formatUnits } from 'ethers/lib/utils';
@@ -18,6 +23,7 @@ export class UniswapV3StrategyUtils {
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenA = state.tokenA;
     const tokenB = state.tokenB;
+    const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, signer).decimals()
     const tokenAName = await TokenUtils.tokenSymbol(tokenA);
     const tokenBName = await TokenUtils.tokenSymbol(tokenB);
     const swapAmount = amount;
@@ -33,13 +39,13 @@ export class UniswapV3StrategyUtils {
     console.log('Moving price up...');
     priceABefore = await swapper.getPrice(state.pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceBBefore = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-    console.log(tokenBName, 'tokenB price', formatUnits(priceBBefore, 6));
+    console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
     console.log('swap in pool tokenA to tokenB...', tokenAName, '->', tokenBName);
     await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString());
     await swapper.connect(signer).swap(state.pool, tokenA, tokenB, signer.address, 99000); // 99% slippage
     priceA = await swapper.getPrice(state.pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceB = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-    console.log(tokenBName, 'tokenB new price', formatUnits(priceB, 6));
+    console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
     console.log('Price change', formatUnits(priceB.sub(priceBBefore).mul(1e13).div(priceBBefore).div(1e8), 3) + '%');
     return {
       priceAChange: priceA.sub(priceABefore).mul(1e9).mul(1e9).div(priceABefore),
@@ -58,6 +64,7 @@ export class UniswapV3StrategyUtils {
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenA = state.tokenA;
     const tokenB = state.tokenB;
+    const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, signer).decimals()
     const tokenAName = await TokenUtils.tokenSymbol(tokenA);
     const tokenBName = await TokenUtils.tokenSymbol(tokenB);
     const swapAmount = amount;
@@ -73,14 +80,14 @@ export class UniswapV3StrategyUtils {
     console.log('Moving price down...');
     priceABefore = await swapper.getPrice(state.pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceBBefore = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-    console.log('tokenB price', formatUnits(priceABefore, 6));
+    console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
     console.log('swap in pool tokenB to tokenA...', tokenBName, '->', tokenAName);
     await TokenUtils.transfer(tokenB, signer, swapper.address, swapAmount.toString());
     await swapper.connect(signer).swap(state.pool, tokenB, tokenA, signer.address, 40000); // 40% slippage
     priceA = await swapper.getPrice(state.pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceB = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-    console.log(tokenBName, 'tokenB new price', formatUnits(priceA, 6));
-    console.log('Price change', formatUnits(priceA.sub(priceABefore).mul(1e13).div(priceABefore).div(1e8), 3) + '%');
+    console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
+    console.log('Price change', '-' + formatUnits(priceA.sub(priceABefore).mul(1e13).div(priceABefore).div(1e8), 3) + '%');
 
     return {
       priceAChange: priceA.sub(priceABefore).mul(1e9).mul(1e9).div(priceABefore),
