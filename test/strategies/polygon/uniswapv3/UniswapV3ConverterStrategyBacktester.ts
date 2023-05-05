@@ -59,6 +59,7 @@ import { Misc } from '../../../../scripts/utils/Misc';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
+import {expect} from "chai";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -86,13 +87,15 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 41210000 - Apr-06-2023 11:23:04 AM +UTC
   const backtestStartBlock = 41524672;
   const backtestEndBlock = 41562855;
-  const investAmount = parseUnits('1000', 6); // 1k USDC
+  const investAmountUnits: string = '1000' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
 
   const strategies = [
+    // USDC vault
     /*{
+      vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_USDC_WETH_500,
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.WETH_TOKEN,
@@ -102,15 +105,17 @@ describe('UmiswapV3 converter strategy backtester', function() {
       rebalanceTickRange: 40, // 40*0.01% == 0.4% price change
     },*/
     /*{
+      vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_WMATIC_USDC_500, // WMATIC_USDC_0.05%
       token0: MaticAddresses.WMATIC_TOKEN,
       token1: MaticAddresses.USDC_TOKEN,
       poolFee: 500, // 0.05%
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*10*0.01% == +-20% price
       tickRange: 1200, // 1200*0.01% == +- 12% price
-      rebalanceTickRange: 60, // 40*0.01% == 0.4% price change
+      rebalanceTickRange: 60, // 60*0.01% == 0.6% price change
     },*/
     /*{
+      vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_WMATIC_USDC_3000, // WMATIC_USDC_0.3%
       token0: MaticAddresses.WMATIC_TOKEN,
       token1: MaticAddresses.USDC_TOKEN,
@@ -120,6 +125,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       rebalanceTickRange: 60,
     },*/
     /*{
+      vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_USDC_DAI_100, // USDC_DAI_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.DAI_TOKEN,
@@ -129,6 +135,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       rebalanceTickRange: 0, // 1 tick
     },*/
     {
+      vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_USDC_USDT_100, // USDC_USDT_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.USDT_TOKEN,
@@ -138,6 +145,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       rebalanceTickRange: 0, // 1 tick
     },
     /*{
+      vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_USDC_miMATIC_100, // USDC_miMATIC_0.01%
       token0: MaticAddresses.USDC_TOKEN,
       token1: MaticAddresses.miMATIC_TOKEN,
@@ -145,6 +153,17 @@ describe('UmiswapV3 converter strategy backtester', function() {
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
       tickRange: 1, // 2 ticks
       rebalanceTickRange: 1, // 1 tick
+    },*/
+    // WMATIC vault
+    /*{
+      vaultAsset: MaticAddresses.WMATIC_TOKEN,
+      pool: MaticAddresses.UNISWAPV3_WMATIC_WETH_500, // WMATIC_WETH_0.05%
+      token0: MaticAddresses.WMATIC_TOKEN,
+      token1: MaticAddresses.WETH_TOKEN,
+      poolFee: 500, // 0.05%
+      liquiditySnapshotSurroundingTickSpacings: 200, // 200*10*0.01% == +-20% price
+      tickRange: 1200, // +- 12% price
+      rebalanceTickRange: 60, // 0.6% price change
     },*/
   ]
   // =========================
@@ -214,6 +233,19 @@ describe('UmiswapV3 converter strategy backtester', function() {
     let tx;
     [signer, user] = await ethers.getSigners();
 
+    // check strategies vaultAsset
+    let vaultAsset: string|undefined
+    for (const s of strategies) {
+      if (!vaultAsset) {
+        vaultAsset = s.vaultAsset
+      } else if (vaultAsset !== s.vaultAsset) {
+        throw new Error('All backtesting strategies must have same vaultAsset')
+      }
+    }
+    if (!vaultAsset) {
+      throw new Error('Empty strategies list')
+    }
+
     // deploy tokens
     const mintAmount = '100000000000'; // 100b
     tokens[MaticAddresses.USDC_TOKEN] = await DeployerUtils.deployMockToken(signer, 'USDC', 6, mintAmount);
@@ -254,17 +286,17 @@ describe('UmiswapV3 converter strategy backtester', function() {
       })
     }
 
-    // TETU token and tetuUsdc pool need for strategy testing with compoundRatio < 100%
+    // TETU token and tetuAsset pool need for strategy testing with compoundRatio < 100%
     const tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
-    await (await uniswapV3Factory.createPool(tetu.address, USDC.address, 500)).wait();
-    const tetuUsdc500Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(
+    await (await uniswapV3Factory.createPool(tetu.address, tokens[vaultAsset].address, 500)).wait();
+    const tetuAsset500Pool = UniswapV3Pool__factory.connect(await uniswapV3Factory.getPool(
       tetu.address,
-      USDC.address,
+      tokens[vaultAsset].address,
       500,
     ), signer);
     await tetu.approve(uniswapV3Calee.address, Misc.MAX_UINT);
-    await tetuUsdc500Pool.initialize('79224306130848112672356'); // 1:1
-    await uniswapV3Calee.mint(tetuUsdc500Pool.address, signer.address, -277280, -275370, '21446390278959920000');
+    await tetuAsset500Pool.initialize('79224306130848112672356'); // 1:1
+    await uniswapV3Calee.mint(tetuAsset500Pool.address, signer.address, -277280, -275370, '21446390278959920000');
 
     // deploy tetu liquidator and setup
     const liquidatorController = await DeployerUtils.deployContract(
@@ -314,10 +346,10 @@ describe('UmiswapV3 converter strategy backtester', function() {
       })
     }
     liquidatorPools.push({
-      pool: tetuUsdc500Pool.address,
+      pool: tetuAsset500Pool.address,
       swapper: uni3swapper.address,
       tokenIn: tetu.address,
-      tokenOut: USDC.address,
+      tokenOut: tokens[vaultAsset].address,
     })
     await liquidator.addLargestPools(liquidatorPools, true);
 
@@ -325,7 +357,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     compPriceOracleImitator = await DeployerUtils.deployContract(
       signer,
       'CompPriceOracleImitator',
-      USDC.address,
+      tokens[vaultAsset].address,// USDC.address,
       liquidator.address,
     ) as CompPriceOracleImitator;
     comptroller = await DeployerUtils.deployContract(signer, 'Comptroller') as Comptroller;
@@ -360,15 +392,19 @@ describe('UmiswapV3 converter strategy backtester', function() {
       await token.approve(cToken.address, Misc.MAX_UINT)
       await comptroller.enterMarkets([cToken.address])
       await cToken.mint(parseUnits('500000', await token.decimals()));
+      console.log(`Comp oracle ${await token.symbol()} price: ${await compPriceOracleImitator.getUnderlyingPrice(cToken.address)}`)
     }
 
     // deploy price oracle for converter
     priceOracleImitator = await DeployerUtils.deployContract(
       signer,
       'PriceOracleImitator',
-      USDC.address,
+      tokens[vaultAsset].address,
       liquidator.address,
     ) as PriceOracleImitator;
+
+    // console.log(await priceOracleImitator.getAssetPrice(tokens[MaticAddresses.WMATIC_TOKEN].address))
+    // console.log(await priceOracleImitator.getAssetPrice(tokens[MaticAddresses.WETH_TOKEN].address))
 
     // deploy tetu converter and setup
     const converterController = await DeployerUtils.deployContract(
@@ -575,8 +611,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
     for (let i = 0; i < strategies.length; i++) {
       const token0 = IERC20Metadata__factory.connect(await data[i].pool.token0(), signer);
       const token1 = IERC20Metadata__factory.connect(await data[i].pool.token1(), signer);
+      const vaultAssetAddress = tokens[strategies[i].vaultAsset].address
       vaultStrategyInfo = await deployAndInitVaultAndUniswapV3Strategy(
-        USDC.address,
+        vaultAssetAddress,
         `TetuV2_UniswapV3_${await token0.symbol()}-${await token1.symbol()}-${strategies[i].poolFee}`,
         controller,
         gauge,
@@ -626,7 +663,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
         uniswapV3Calee,
         uniswapV3Helper,
         data[i].liquiditySnapshot,
-        investAmount,
+        investAmountUnits,
         backtestStartBlock,
         backtestEndBlock,
         strategies[i].pool,
@@ -663,6 +700,8 @@ interface IVaultUniswapV3StrategyInfo {
 
 interface IBacktestResult {
   vaultName: string;
+  vaultAssetSymbol: string;
+  vaultAssetDecimals: number;
   tickRange: number;
   rebalanceTickRange: number;
   startTimestamp: number;
@@ -688,16 +727,16 @@ function showBacktestResult(r: IBacktestResult) {
   const apr = earnedPerDay.mul(365).mul(100000000).div(r.investAmount).div(1000);
   console.log(`APR: ${formatUnits(apr, 3)}%. Invest amount: ${formatUnits(
     r.investAmount,
-    6,
-  )} USDC. Earned: ${formatUnits(r.earned, 6)} USDC. Rebalances: ${r.rebalances}.`);
+    r.vaultAssetDecimals,
+  )} ${r.vaultAssetSymbol}. Earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Rebalances: ${r.rebalances}.`);
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.startTimestamp *
     1000).toLocaleTimeString('en-US')}. Finish: ${new Date(r.endTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.endTimestamp * 1000).toLocaleTimeString('en-US')}.`);
-  console.log(`Start price of ${r.tokenBSymbol}: ${formatUnits(r.startPrice, 6)}. End price: ${formatUnits(
+  console.log(`Start price of ${r.tokenBSymbol}: ${formatUnits(r.startPrice, r.vaultAssetDecimals)}. End price: ${formatUnits(
     r.endPrice,
-    6,
-  )}. Min price: ${formatUnits(r.minPrice, 6)}. Max price: ${formatUnits(r.maxPrice, 6)}.`);
+    r.vaultAssetDecimals,
+  )}. Min price: ${formatUnits(r.minPrice, r.vaultAssetDecimals)}. Max price: ${formatUnits(r.maxPrice, r.vaultAssetDecimals)}.`);
   console.log(`Mints: ${!r.disableMints ? 'enabled' : 'disabled'}. Burns: ${!r.disableBurns
     ? 'enabled'
     : 'disabled'}.`);
@@ -823,7 +862,7 @@ async function strategyBacktest(
   uniswapV3Calee: UniswapV3Callee,
   uniswapV3Helper: UniswapV3Lib,
   liquiditySnapshot: IPoolLiquiditySnapshot,
-  investAmount: BigNumber,
+  investAmountUnits: string,
   backtestStartBlock: number,
   backtestEndBlock: number,
   uniswapV3RealPoolAddress: string,
@@ -834,6 +873,7 @@ async function strategyBacktest(
   const state = await strategy.getState();
   const startTimestampLocal = Math.floor(Date.now() / 1000);
   const tokenA = IERC20Metadata__factory.connect(state.tokenA, signer);
+  const tokenADecimals = await tokenA.decimals();
   const tokenB = IERC20Metadata__factory.connect(state.tokenB, signer);
   const pool = IUniswapV3Pool__factory.connect(state.pool, signer);
   const token0 = IERC20Metadata__factory.connect(await pool.token0(), signer);
@@ -843,6 +883,7 @@ async function strategyBacktest(
   const token0Symbol = await token0.symbol();
   const token1Symbol = await token1.symbol();
   const tickSpacing = UniswapV3Utils.getTickSpacing(await pool.fee());
+  const investAmount = parseUnits(investAmountUnits, tokenADecimals)
 
   console.log(`Starting backtest of ${await vault.name()}`);
   console.log(`Filling pool with initial liquidity from snapshot (${liquiditySnapshot.ticks.length} ticks)..`);
@@ -858,10 +899,13 @@ async function strategyBacktest(
     }
   }
 
-  console.log('Deposit USDC to vault...');
+  console.log(`Deposit ${await tokenA.symbol()} to vault...`);
   await tokenA.approve(vault.address, Misc.MAX_UINT);
   await vault.deposit(investAmount, signer.address);
   const totalAssetsinStrategyBefore = await strategy.totalAssets();
+
+  const initialState = await strategy.getState()
+  expect(initialState.totalLiquidity).gt(0)
 
   const liquidityTickLower = liquiditySnapshot.ticks[0].tickIdx;
   const liquidityTickUpper = liquiditySnapshot.ticks[liquiditySnapshot.ticks.length - 1].tickIdx;
@@ -883,6 +927,20 @@ async function strategyBacktest(
   for (const poolTx of poolTxs) {
     i++;
     endTimestamp = poolTx.timestamp;
+
+    if (!disableMints && poolTx.type === TransactionType.MINT && poolTx.tickUpper !== undefined && poolTx.tickLower !==
+      undefined) {
+      await uniswapV3Calee.mint(
+        pool.address,
+        signer.address,
+        poolTx.tickLower,
+        poolTx.tickUpper,
+        BigNumber.from(poolTx.amount),
+      );
+
+      console.log(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] MINT`);
+    }
+
     if (!disableBurns && poolTx.type === TransactionType.BURN && poolTx.tickUpper !== undefined && poolTx.tickLower !==
       undefined) {
       if (poolTx.tickUpper < liquidityTickLower || poolTx.tickLower > liquidityTickUpper) {
@@ -896,7 +954,6 @@ async function strategyBacktest(
       }
 
       process.stdout.write(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] BURN`);
-
       if (poolTx.tickLower < liquidityTickLower || poolTx.tickUpper > liquidityTickUpper) {
         const rangeOrigin = BigNumber.from(poolTx.tickUpper - poolTx.tickLower);
         const newTickUpper = poolTx.tickUpper > liquidityTickUpper ? liquidityTickUpper : poolTx.tickUpper;
@@ -916,19 +973,6 @@ async function strategyBacktest(
         }
       }
       console.log('');
-    }
-
-    if (!disableMints && poolTx.type === TransactionType.MINT && poolTx.tickUpper !== undefined && poolTx.tickLower !==
-      undefined) {
-      await uniswapV3Calee.mint(
-        pool.address,
-        signer.address,
-        poolTx.tickLower,
-        poolTx.tickUpper,
-        BigNumber.from(poolTx.amount),
-      );
-
-      console.log(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] MINT`);
     }
 
     if (poolTx.type === TransactionType.SWAP) {
@@ -955,7 +999,7 @@ async function strategyBacktest(
         ? token0Symbol
         : token1Symbol} -> ${swap0to1 ? token1Symbol : token0Symbol}. Price: ${formatUnits(
         priceAfter,
-        6,
+        tokenADecimals,
       )}${priceChangeStr}.`);
 
       if (priceAfter.gt(maxPrice)) {
@@ -1000,6 +1044,8 @@ async function strategyBacktest(
 
   return {
     vaultName: await vault.name(),
+    vaultAssetSymbol: await tokenA.symbol(),
+    vaultAssetDecimals: tokenADecimals,
     tickRange: (state.upperTick - state.lowerTick) / 2,
     rebalanceTickRange: state.rebalanceTickRange,
     startTimestamp,

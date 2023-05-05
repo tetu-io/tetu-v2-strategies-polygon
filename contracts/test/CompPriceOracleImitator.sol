@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+//import "hardhat/console.sol";
 import "./compound-core/PriceOracle.sol";
 import "./compound-core/CErc20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
@@ -22,10 +23,18 @@ contract CompPriceOracleImitator is PriceOracle {
   function getUnderlyingPrice(CToken cToken) public override view returns (uint) {
     address asset = _getUnderlyingAddress(cToken);
     if (asset == usdc) {
-      return 1e30;
+      return 1e18;
     }
     uint tokenInDecimals = IERC20Metadata(asset).decimals();
-    uint lPrice = liquidator.getPrice(asset, usdc, 10 ** tokenInDecimals);
-    return lPrice * 10 ** (12 + 18 - tokenInDecimals);
+    uint tokenOutDecimals = IERC20Metadata(usdc).decimals();
+    uint price = liquidator.getPrice(asset, usdc, 10 ** tokenInDecimals);
+
+    if (tokenOutDecimals > 18) {
+      price = price / 10 ** (tokenOutDecimals - 18);
+    } else if (tokenOutDecimals < 18) {
+      price = price * 10 ** (18 - tokenOutDecimals);
+    }
+
+    return price;
   }
 }

@@ -26,7 +26,7 @@ export interface IUniversalStrategyInputParams {
   /** add custom liquidation path if necessary */
   forwarderConfigurator?: ((forwarder: IForwarder) => Promise<void>);
   /** only for strategies where we expect PPFS fluctuations */
-  ppfsDecreaseAllowed: boolean;
+  ppfsDecreaseAllowed?: boolean;
   specificTests: SpecificStrategyTest[];
 
   /**

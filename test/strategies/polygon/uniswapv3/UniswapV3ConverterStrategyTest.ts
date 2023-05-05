@@ -139,7 +139,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       gov,
       bufferRate,
       0,
-      0,
+      300,
       false,
     );
     vault = data.vault.connect(signer);
@@ -260,6 +260,157 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
+    it('Rebalance empty fillup strategy', async() => {
+      const s = strategy
+      const v = vault
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      const state = await s.getState()
+
+      expect(await s.isReadyToHardWork()).eq(false);
+      expect(await s.needRebalance()).eq(false);
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      const price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      await UniswapV3StrategyUtils.movePriceDown(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price));
+
+      console.log('rebalance not empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('withdraw all');
+      await v.requestWithdraw()
+      await v.withdrawAll({gasLimit: 19_000_000});
+
+      expect(await s.totalAssets()).eq(0)
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+    });
+
+    it('Rebalance empty swap strategy', async() => {
+      const s = strategy3 // usdc-usdt
+      const v = vault3
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      const state = await s.getState()
+
+      expect(await s.isReadyToHardWork()).eq(false);
+      expect(await s.needRebalance()).eq(false);
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      const price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      await UniswapV3StrategyUtils.movePriceDown(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+
+      console.log('rebalance not empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('withdraw all');
+      await v.requestWithdraw()
+      await v.withdrawAll({gasLimit: 19_000_000});
+
+      expect(await s.investedAssets()).eq(0)
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+    });
+
+    it('Rebalance empty fillup strategy after emergencyExit()', async() => {
+      const s = strategy
+      const v = vault
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      let state = await s.getState()
+      await s.connect(operator).setLiquidationThreshold(state.tokenB, parseUnits('1', 10));
+
+      await UniswapV3StrategyUtils.makeVolume(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('emergency exit');
+      await s.connect(operator).emergencyExit()
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      state = await s.getState()
+      expect(state.rebalanceResults[0]).gt(0)
+      expect(state.rebalanceResults[1]).gt(0)
+
+      console.log('rebalance empty strategy after emergencyExit');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      state = await s.getState()
+      expect(state.rebalanceResults[0]).eq(0)
+      expect(state.rebalanceResults[1]).eq(0)
+    });
+
+    it('Rebalance empty swap strategy after emergencyExit()', async() => {
+      const s = strategy3 // usdc-usdt
+      const v = vault3
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      await UniswapV3StrategyUtils.makeVolume(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('emergency exit');
+      await s.connect(operator).emergencyExit()
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      let state = await s.getState()
+      expect(state.rebalanceResults[0]).gt(0)
+      expect(state.rebalanceResults[1]).gt(0)
+
+      console.log('rebalance empty strategy after emergencyExit');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      state = await s.getState()
+      expect(state.rebalanceResults[0]).eq(0)
+      expect(state.rebalanceResults[1]).eq(0)
+    });
+
     it('Fuse test', async() => {
       const s = strategy3
       const v = vault3
