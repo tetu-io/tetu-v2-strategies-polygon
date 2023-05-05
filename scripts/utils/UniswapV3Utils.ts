@@ -139,7 +139,20 @@ export class UniswapV3Utils {
       }
       console.log(`Got ${got} swaps.`)
 
-      r = r.sort((a,b) => a.timestamp < b.timestamp ? -1 : 1)
+      r = r.sort((a,b) => {
+        if (a.timestamp < b.timestamp) {
+          return -1;
+        }
+        if (a.timestamp > b.timestamp) {
+          return 1;
+        }
+
+        if (a.type === TransactionType.MINT) {
+          return -1
+        }
+
+        return 1
+      })
 
       if (!fs.existsSync(cacheDir)) {
         fs.mkdirSync(cacheDir);

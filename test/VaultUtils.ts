@@ -47,7 +47,7 @@ export class VaultUtils {
 
     await TokenUtils.approve(underlying, user, vault.address, amount.toString());
     console.log('Vault utils: deposit', BigNumber.from(amount).toString());
-    return vaultForUser.deposit(BigNumber.from(amount), user.address, { gasLimit: 19_000_000 });
+    return vaultForUser.deposit(BigNumber.from(amount), user.address, { gasLimit: 29_000_000 });
   }
 
 

@@ -111,7 +111,6 @@ describe('BalancerBoostedUniversalTest', async () => {
     const asset = t[0];
     const reinvestThresholdPercent = 1_000; // 1%
     const params: IUniversalStrategyInputParams = {
-      ppfsDecreaseAllowed: false,
       balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
       loops: 4,
@@ -176,13 +175,17 @@ describe('BalancerBoostedUniversalTest', async () => {
         const strategy = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
         await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1]);
         const mainAssetSymbol = await IERC20Metadata__factory.connect(t[0], signer).symbol()
+        const mainAssetDecimals = await IERC20Metadata__factory.connect(t[0], signer).decimals()
         statesParams[await strategy.poolId()] = {
           mainAssetSymbol,
+          mainAssetDecimals,
         }
         return strategy as unknown as IStrategyV2;
       },
       {
         vaultName: 'tetu' + await IERC20Metadata__factory.connect(t[0], signer).symbol(),
+        depositFee: 300,
+        withdrawFee: 300,
       },
     );
 

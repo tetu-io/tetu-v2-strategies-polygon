@@ -248,75 +248,80 @@ library UniswapV3DebtLib {
     vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
     vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
 
-    if (vars.availableBalanceTokenB > vars.debtAmount) {
-      vars.needToBorrowOrFreeFromBorrow = vars.availableBalanceTokenB - vars.debtAmount;
+    if (vars.debtAmount > 0) {
+      if (vars.availableBalanceTokenB > vars.debtAmount) {
+        vars.needToBorrowOrFreeFromBorrow = vars.availableBalanceTokenB - vars.debtAmount;
 
-      if (_getCollateralAmountForBorrow(tetuConverter, tokenA, tokenB, vars.needToBorrowOrFreeFromBorrow) < vars.availableBalanceTokenA) {
-        ConverterStrategyBaseLib.openPosition(
-          tetuConverter,
-          abi.encode(2),
-          tokenA,
-          tokenB,
-          vars.needToBorrowOrFreeFromBorrow,
-          0
-        );
+        if (_getCollateralAmountForBorrow(tetuConverter, tokenA, tokenB, vars.needToBorrowOrFreeFromBorrow) < vars.availableBalanceTokenA) {
+          ConverterStrategyBaseLib.openPosition(
+            tetuConverter,
+            abi.encode(2),
+            tokenA,
+            tokenB,
+            vars.needToBorrowOrFreeFromBorrow,
+            0
+          );
+        } else {
+          ConverterStrategyBaseLib.closePosition(
+            tetuConverter,
+            tokenA,
+            tokenB,
+            vars.debtAmount
+          );
+
+          vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
+
+          ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, vars.availableBalanceTokenB, liquidatorSwapSlippage, 0);
+
+          vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
+
+          ConverterStrategyBaseLib.openPosition(
+            tetuConverter,
+            abi.encode(1, 1, 1),
+            tokenA,
+            tokenB,
+            vars.availableBalanceTokenA,
+            0
+          );
+        }
       } else {
-        ConverterStrategyBaseLib.closePosition(
-          tetuConverter,
-          tokenA,
-          tokenB,
-          vars.debtAmount
-        );
+        vars.needToBorrowOrFreeFromBorrow = vars.debtAmount - vars.availableBalanceTokenB;
+        if (vars.availableBalanceTokenB > vars.needToBorrowOrFreeFromBorrow) {
+          ConverterStrategyBaseLib.closePosition(
+            tetuConverter,
+            tokenA,
+            tokenB,
+            vars.needToBorrowOrFreeFromBorrow
+          );
+        } else {
+          uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * vars.needToBorrowOrFreeFromBorrow / 10 ** IERC20Metadata(tokenB).decimals();
+          // add % gap for price impact
+          needToSellTokenA += needToSellTokenA / SELL_GAP;
 
-        vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
+          if (needToSellTokenA <= vars.availableBalanceTokenA) {
+            ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
 
-        ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, vars.availableBalanceTokenB, liquidatorSwapSlippage, 0);
+            vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
 
-        vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
+            ConverterStrategyBaseLib.closePosition(
+              tetuConverter,
+              tokenA,
+              tokenB,
+              vars.debtAmount < vars.availableBalanceTokenB ? vars.debtAmount : vars.availableBalanceTokenB
+            );
 
-        ConverterStrategyBaseLib.openPosition(
-          tetuConverter,
-          abi.encode(1, 1, 1),
-          tokenA,
-          tokenB,
-          vars.availableBalanceTokenA,
-          0
-        );
-      }
-    } else {
-      vars.needToBorrowOrFreeFromBorrow = vars.debtAmount - vars.availableBalanceTokenB;
-      if (vars.availableBalanceTokenB > vars.needToBorrowOrFreeFromBorrow) {
-        ConverterStrategyBaseLib.closePosition(
-          tetuConverter,
-          tokenA,
-          tokenB,
-          vars.needToBorrowOrFreeFromBorrow
-        );
-      } else {
-        uint needToSellTokenA = UniswapV3Lib.getPrice(address(pool), tokenB) * vars.needToBorrowOrFreeFromBorrow / 10 ** IERC20Metadata(tokenB).decimals();
-        // add % gap for price impact
-        needToSellTokenA += needToSellTokenA / SELL_GAP;
-        ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0);
+            vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
 
-        vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
-
-        ConverterStrategyBaseLib.closePosition(
-          tetuConverter,
-          tokenA,
-          tokenB,
-          vars.debtAmount < vars.availableBalanceTokenB ? vars.debtAmount : vars.availableBalanceTokenB
-        );
-
-        vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
-
-        ConverterStrategyBaseLib.openPosition(
-          tetuConverter,
-          abi.encode(1, 1, 1),
-          tokenA,
-          tokenB,
-          vars.availableBalanceTokenA,
-          0
-        );
+            ConverterStrategyBaseLib.openPosition(
+              tetuConverter,
+              abi.encode(1, 1, 1),
+              tokenA,
+              tokenB,
+              vars.availableBalanceTokenA,
+              0
+            );
+          }
+        }
       }
     }
   }

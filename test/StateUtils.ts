@@ -68,6 +68,7 @@ export interface IPutInitialAmountsBalancesResults {
 
 export interface IStateParams {
   mainAssetSymbol: string;
+  mainAssetDecimals?: number;
 }
 
 export class StateUtils {
@@ -243,42 +244,40 @@ export class StateUtils {
       '',
       ...states.map(x => x.title),
     ];
+    const formatMainAssetUnits = (amount: BigNumber, decimals?: number) => decimals ? +formatUnits(amount, decimals) : amount.toString()
+
     const rows = states.map(item => [
       item.title,
       item.block,
       item.blockTimestamp,
 
-      item.signer.assetBalance,
-      item.user.assetBalance,
+      formatMainAssetUnits(item.signer.assetBalance, params.mainAssetDecimals),
+      formatMainAssetUnits(item.user.assetBalance, params.mainAssetDecimals),
 
-      item.vault.userShares,
-      item.vault.signerShares,
+      formatMainAssetUnits(item.vault.userShares, params.mainAssetDecimals),
+      formatMainAssetUnits(item.vault.signerShares, params.mainAssetDecimals),
 
-      item.vault.userAssetBalance,
-      item.vault.signerAssetBalance,
+      formatMainAssetUnits(item.vault.userAssetBalance, params.mainAssetDecimals),
+      formatMainAssetUnits(item.vault.signerAssetBalance, params.mainAssetDecimals),
 
-      item.vault.sharePrice,
-      item.vault.totalSupply,
-      item.vault.totalAssets,
+      formatMainAssetUnits(item.vault.sharePrice, params.mainAssetDecimals),
+      formatMainAssetUnits(item.vault.totalSupply, params.mainAssetDecimals),
+      formatMainAssetUnits(item.vault.totalAssets, params.mainAssetDecimals),
 
-      item.insurance.assetBalance,
-      item.strategy.assetBalance,
-      item.strategy.borrowAssetsBalances.join(','),
-      item.strategy.rewardTokensBalances?.join(','),
+      formatMainAssetUnits(item.insurance.assetBalance, params.mainAssetDecimals),
+      formatMainAssetUnits(item.strategy.assetBalance, params.mainAssetDecimals),
+      item.strategy.borrowAssetsBalances.map(a => a.toString()).join(' '),
+      item.strategy.rewardTokensBalances?.join(' '),
       item.strategy.liquidity,
-      item.strategy.totalAssets,
-      item.strategy.investedAssets,
+      formatMainAssetUnits(item.strategy.totalAssets, params.mainAssetDecimals),
+      formatMainAssetUnits(item.strategy.investedAssets, params.mainAssetDecimals),
       item.gauge.strategyBalance,
-      item.vault.assetBalance,
-      item.splitter.assetBalance,
-      item.splitter.totalAssets,
+      formatMainAssetUnits(item.vault.assetBalance, params.mainAssetDecimals),
+      formatMainAssetUnits(item.splitter.assetBalance, params.mainAssetDecimals),
+      formatMainAssetUnits(item.splitter.totalAssets, params.mainAssetDecimals),
 
-      item.converter?.collaterals.join(','),
-      item.converter?.amountsToRepay.join(','),
-
-      // item.balancerPool.bbAmUsdc,
-      // item.balancerPool.bbAmUsdt,
-      // item.balancerPool.bbAmDai,
+      item.converter?.collaterals.map(a => a.toString()).join(' '),
+      item.converter?.amountsToRepay.map(a => a.toString()).join(' '),
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' });
