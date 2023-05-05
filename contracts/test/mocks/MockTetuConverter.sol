@@ -719,4 +719,11 @@ contract MockTetuConverter is ITetuConverter {
     return poolAdaptersOut;
   }
 
+  function salvage(address receiver, address token, uint amount) external {
+    receiver;
+    token;
+    amount;
+    // not implemented
+  }
+
 }
