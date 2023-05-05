@@ -44,7 +44,7 @@
     "@openzeppelin/contracts": "^4.8.2",
     "@openzeppelin/contracts-upgradeable": "^4.8.2",
     "@openzeppelin/hardhat-upgrades": "^1.22.1",
-    "@tetu_io/tetu-converter": "0.0.9",
+    "@tetu_io/tetu-converter": "1.0.12",
     "@tetu_io/tetu-liquidator": "1.0.0",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.5",
