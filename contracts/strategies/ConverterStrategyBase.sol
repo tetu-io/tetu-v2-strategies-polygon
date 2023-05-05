@@ -90,7 +90,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   event Recycle(
     address[] rewardTokens,
     uint[] amountsToForward,
-    uint[] performanceAmounts
+    uint toPerf,
+    uint toInsurance
   );
   //endregion Events
 
@@ -478,36 +479,29 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @return amountsToForward Amounts to be sent to forwarder
-  function _recycle(
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) internal returns (uint[] memory amountsToForward) {
-    // send performance-part of the rewards to performanceReceiver
-    (uint[] memory rewardAmounts, uint[] memory performanceAmounts) = ConverterStrategyBaseLib2.sendPerformanceFee(
-        performanceFee,
-        performanceReceiver,
-        splitter,
-        rewardTokens_,
-        rewardAmounts_
-      );
+  function _recycle(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal returns (
+    uint[] memory amountsToForward
+  ) {
+    address _asset = asset; // save gas
 
     // send other part of rewards to forwarder/compound
-    (amountsToForward) = ConverterStrategyBaseLib.recycle(
+    uint amountPerf;
+    (amountsToForward, amountPerf) = ConverterStrategyBaseLib.recycle(
       converter,
-      asset,
+      _asset,
       compoundRatio,
       _depositorPoolAssets(),
       _getLiquidator(controller()),
       liquidationThresholds,
       rewardTokens_,
-      rewardAmounts
+      rewardAmounts_,
+      performanceFee
     );
 
-    emit Recycle(
-      rewardTokens_,
-      amountsToForward,
-      performanceAmounts
-    );
+    // send performance-part of the underlying to the performance receiver and insurance
+    (uint toPerf, uint toInsurance) = ConverterStrategyBaseLib2.sendPerformanceFee(_asset, amountPerf, splitter, performanceReceiver);
+
+    emit Recycle(rewardTokens_, amountsToForward, toPerf, toInsurance);
   }
   //endregion Claim rewards
 
