@@ -3230,7 +3230,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               compoundRatio: 40_000,
 
               // 0.1 > 0.04*0.4 > 0.01
-              liquidations: [{tokenIn: tetu, tokenOut: usdc, amountIn: "0.02", amountOut: "0.09"}],
+              liquidations: [],
               performanceFee: 0
             });
           }
@@ -3246,6 +3246,146 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           it("should set expected balances of rewards tokens", async () => {
             const r = await loadFixture(makeRecycleTest);
             expect(r.rewardTokenBalances.join()).eq(["1"].join());
+          });
+        });
+      });
+      describe("liquidationThresholds[secondary asset] is set, performance fee > 0", () => {
+        describe("performance > liquidationThresholds[reward token]", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              assetIndex: 1,
+              tokens: [usdt, usdc, dai],
+              rewardTokens: [dai],
+              rewardAmounts: ["12"],
+              thresholds: [{token: dai, amount: "0.7"}],
+              initialBalances: [
+                {token: usdt, amount: "1"},
+                {token: usdc, amount: "2"},
+                {token: dai, amount: "12"},
+              ],
+              compoundRatio: 30_000,
+
+              // 12*0.5 > 0.7 > 0.0000000000001
+              liquidations: [{tokenIn: dai, tokenOut: usdc, amountIn: "6", amountOut: "7"}],
+              performanceFee: 50_000
+            });
+          }
+
+          it("should return expected amounts for the forwarder", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountsToForward.join()).eq(["4.2"].join());
+          });
+          it("should not change balances of secondary depositor assets", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.tokenBalances.join()).eq(["1", "9", "6"].join());
+          });
+          it("should set expected balances of rewards tokens", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.rewardTokenBalances.join()).eq(["6"].join());
+          });
+          it("should set expected performance amount", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountToPerformanceAndInsurance).eq("7");
+          });
+        });
+        describe("liquidationThresholds[main asset] > performance > DEFAULT_LIQUIDATION_THRESHOLD==100_000", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              assetIndex: 1,
+              tokens: [usdt, usdc, dai],
+              rewardTokens: [dai],
+              rewardAmounts: ["12"],
+              thresholds: [{token: usdc, amount: "6.16"}],
+              initialBalances: [
+                {token: usdt, amount: "1"},
+                {token: usdc, amount: "2"},
+                {token: dai, amount: "6"},
+              ],
+              compoundRatio: 30_000,
+
+              // 6.16 > (12*0.5 => 6.15) > 100_000e-18
+              liquidations: [{tokenIn: dai, tokenOut: usdc, amountIn: "6", amountOut: "6.15"}],
+              performanceFee: 50_000
+            });
+          }
+
+          it("should return expected amounts for the forwarder", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountsToForward.join()).eq(["4.2"].join());
+          });
+          it("should not change balances of secondary depositor assets", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.tokenBalances.join()).eq(["1", "2", "6"].join());
+          });
+          it("should set expected balances of rewards tokens", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.rewardTokenBalances.join()).eq(["6"].join());
+          });
+          it("should generate zero performance amount", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountToPerformanceAndInsurance).eq("0");
+          });
+        });
+        describe("DEFAULT_LIQUIDATION_THRESHOLD > performance > liquidationThresholds[main asset]", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              assetIndex: 0,
+              tokens: [usdc, dai],
+              rewardTokens: [dai],
+              rewardAmounts: ["0.08"],
+              thresholds: [{token: usdc, amount: "0.01"}],
+              initialBalances: [
+                {token: usdt, amount: "1"},
+                {token: usdc, amount: "2"},
+                {token: dai, amount: "1"},
+              ],
+              compoundRatio: 40_000,
+
+              // 0.1 > 0.08*0.5 > 0.01
+              liquidations: [{tokenIn: dai, tokenOut: usdc, amountIn: "0.04", amountOut: "0.09"}],
+              performanceFee: 50_000
+            });
+          }
+
+          it("should return expected amounts for the forwarder", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountsToForward.join()).eq(["0.024"].join());
+          });
+          it("should not change balances of secondary depositor assets", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.tokenBalances.join()).eq(["2", "1"].join());
+          });
+          it("should set expected balances of rewards tokens", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.rewardTokenBalances.join()).eq(["1"].join());
+          });
+          it("should set expected balances of rewards tokens", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountToPerformanceAndInsurance).eq("0");
           });
         });
       });

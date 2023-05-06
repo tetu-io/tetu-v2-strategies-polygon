@@ -31,7 +31,6 @@ library ConverterStrategyBaseLib {
     address rewardToken;
     uint liquidationThresholdAsset;
     uint len;
-    uint spentAmountIn;
     uint receivedAmountOut;
   }
 
@@ -836,17 +835,18 @@ library ConverterStrategyBaseLib {
   /// We have two kinds of rewards:
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
   /// 2) any other rewards
-  /// All received rewards are immediately "recycled".
-  /// It means, they are divided on two parts: to forwarder, to compound
+  /// All received rewards divided on three parts: to performance receiver+insurance, to forwarder, to compound
   ///   Compound-part of Rewards-2 can be liquidated
-  ///   Compound part of Rewards-1 should be just put on the balance.
-  /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
-  /// All performance parts are liquidated, total amount of underlying is returned to be send to a performance receiver and insurance
+  ///   Compound part of Rewards-1 should be just left on the balance
+  ///   All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder outside.
+  ///   Performance amounts are liquidated, result amount of underlying is returned in {amountToPerformanceAndInsurance}
+  /// @param asset Underlying asset
+  /// @param compoundRatio Compound ration in the range [0...COMPOUND_DENOMINATOR]
   /// @param tokens tokens received from {_depositorPoolAssets}
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds Liquidation thresholds for rewards tokens
-  /// @param performanceFee Max is FEE_DENOMINATOR
+  /// @param performanceFee Performance fee in the range [0...FEE_DENOMINATOR]
   /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
   /// @return amountToPerformanceAndInsurance Amount of underlying to be sent to performance receiver and insurance
   function recycle(
@@ -873,11 +873,10 @@ library ConverterStrategyBaseLib {
     amountsToForward = new uint[](p.len);
 
     // rewardAmounts => P + F + C, where P - performance + insurance, F - forwarder, C - compound
-    // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
     for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
       p.amountFC = rewardAmounts[i] * (COMPOUND_DENOMINATOR - performanceFee) / COMPOUND_DENOMINATOR;
-      p.amountC = (p.amountFC * compoundRatio / COMPOUND_DENOMINATOR);
-      p.amountP = (rewardAmounts[i] - p.amountFC);
+      p.amountC = p.amountFC * compoundRatio / COMPOUND_DENOMINATOR;
+      p.amountP = rewardAmounts[i] - p.amountFC;
       p.rewardToken = rewardTokens[i];
       p.amountCP = p.amountC + p.amountP;
 
@@ -891,7 +890,7 @@ library ConverterStrategyBaseLib {
             if (p.amountP < Math.max(liquidationThresholds[p.rewardToken], DEFAULT_LIQUIDATION_THRESHOLD)) {
               // performance amount is too small, liquidation is not allowed, we just keep that dust tokens on balance forever
             } else {
-              (p.spentAmountIn, p.receivedAmountOut) = _liquidate(
+              (, p.receivedAmountOut) = _liquidate(
                 converter_,
                 liquidator,
                 p.rewardToken,
@@ -910,7 +909,7 @@ library ConverterStrategyBaseLib {
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
             // because the {_asset} is always included to the list of depositor's assets
-            (p.spentAmountIn, p.receivedAmountOut) = _liquidate(
+            (, p.receivedAmountOut) = _liquidate(
               converter_,
               liquidator,
               p.rewardToken,

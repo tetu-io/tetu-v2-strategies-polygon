@@ -471,10 +471,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// We have two kinds of rewards:
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
   /// 2) any other rewards
-  /// All received rewards divided on two parts: to forwarder, to compound
+  /// All received rewards divided on three parts: to performance receiver+insurance, to forwarder, to compound
   ///   Compound-part of Rewards-2 can be liquidated
-  ///   Compound part of Rewards-1 should be just added to baseAmounts
-  /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
+  ///   Compound part of Rewards-1 should be just left on the balance
+  ///   Performance amounts should be liquidate, result underlying should be sent to performance receiver and insurance.
+  ///   All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder outside.
   /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
@@ -484,8 +485,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) {
     address _asset = asset; // save gas
 
-    // send other part of rewards to forwarder/compound
-    uint amountPerf;
+    uint amountPerf; // total amount for the performance receiver and insurance
     (amountsToForward, amountPerf) = ConverterStrategyBaseLib.recycle(
       converter,
       _asset,
