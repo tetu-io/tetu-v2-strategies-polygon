@@ -44,41 +44,25 @@ library ConverterStrategyBaseLib2 {
     return amountsToConvert;
   }
 
-  /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
-  /// @param performanceFee_ Max is FEE_DENOMINATOR
-  /// @return rewardAmountsOut = rewardAmounts_ - performanceAmounts
-  /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
-  function sendPerformanceFee(
-    uint performanceFee_,
-    address performanceReceiver_,
-    address splitter,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) external returns (
-    uint[] memory rewardAmountsOut,
-    uint[] memory performanceAmounts
+  /// @notice Send {amount_} of {asset_} to {receiver_} and insurance
+  /// @param asset_ Underlying asset
+  /// @param amount_ Amount of underlying asset to be sent to
+  /// @param receiver_ Performance receiver
+  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_) external returns (
+    uint toPerf,
+    uint toInsurance
   ) {
-    // todo send only underlying token to insurance and performanceReceiver_
     // read inside lib for reduce contract space in the main contract
     address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
 
-    // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
-    uint len = rewardAmounts_.length;
-    rewardAmountsOut = new uint[](len);
-    performanceAmounts = new uint[](len);
+    toPerf = amount_ / 2;
+    toInsurance = amount_ - toPerf;
 
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
-      rewardAmountsOut[i] = rewardAmounts_[i] - performanceAmounts[i];
-
-      uint toPerf = performanceAmounts[i] / 2;
-      uint toInsurance = performanceAmounts[i] - toPerf;
-      if (toPerf != 0) {
-        IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, toPerf);
-      }
-      if (toInsurance != 0) {
-        IERC20(rewardTokens_[i]).safeTransfer(insurance, toInsurance);
-      }
+    if (toPerf != 0) {
+      IERC20(asset_).safeTransfer(receiver_, toPerf);
+    }
+    if (toInsurance != 0) {
+      IERC20(asset_).safeTransfer(insurance, toInsurance);
     }
   }
 
