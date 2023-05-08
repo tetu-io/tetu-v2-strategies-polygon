@@ -25,7 +25,13 @@ import {BigNumber} from 'ethers';
 import {expect} from 'chai';
 import {Misc} from "../../../scripts/utils/Misc";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
-import {ILiquidationParams, IQuoteRepayParams, IRepayParams, ITokenAmount} from "../../baseUT/mocks/TestDataTypes";
+import {
+  ILiquidationParams,
+  IQuoteRepayParams,
+  IRepayParams,
+  ITokenAmount,
+  ITokenAmountNum
+} from "../../baseUT/mocks/TestDataTypes";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedQuoteRepay, setupMockedRepay, setupPrices} from "../../baseUT/mocks/MockRepayUtils";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
@@ -2419,5 +2425,292 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       });
     });
   });
+
+  describe('_recycle', () => {
+    interface IRecycleTestParams {
+      asset: MockToken;
+      compoundRate: number;
+      rewardTokens: MockToken[];
+      rewardAmounts: string[];
+
+      liquidations: ILiquidationParams[];
+      thresholds: ITokenAmountNum[];
+      initialBalances: ITokenAmountNum[];
+
+      // disable performanceFee by default
+      performanceFee: number;
+      // governance is used as a performance receiver by default
+      performanceReceiver: string;
+    }
+
+    interface IRecycleTestResults {
+      gasUsed: BigNumber;
+
+      forwarderTokens: string[];
+      forwarderAmounts: number[];
+
+      amountsToForward: number[];
+      performanceAmounts: number;
+      insuranceAmounts: number;
+
+      finalRewardTokenBalances: number[];
+    }
+
+    async function makeRecycle(p: IRecycleTestParams): Promise<IRecycleTestResults> {
+      const ms = await setupMockedStrategy();
+      await ms.strategy.connect(await Misc.impersonate(await ms.controller.platformVoter())).setCompoundRatio(p.compoundRate);
+
+      // disable performance fee by default
+      await ms.strategy.connect(await Misc.impersonate(await ms.controller.governance())).setupPerformanceFee(p.performanceFee,p.performanceReceiver);
+
+      for (const tokenAmount of p.initialBalances) {
+        await tokenAmount.token.mint(
+          ms.strategy.address,
+          parseUnits(tokenAmount.amount, await tokenAmount.token.decimals())
+        );
+      }
+
+      for (const liquidation of p.liquidations) {
+        await setupMockedLiquidation(liquidator, liquidation);
+        await setupIsConversionValid(ms.tetuConverter, liquidation, true);
+      }
+
+      const operators = await ControllerV2__factory.connect(ms.controller.address, signer).operatorsList();
+      for (const threshold of p.thresholds) {
+        await ms.strategy.setLiquidationThreshold(
+          threshold.token.address,
+          parseUnits(threshold.amount, await threshold.token.decimals())
+        );
+      }
+
+      const amountsToForward: BigNumber[] = await ms.strategy.callStatic._recycleAccess(
+        p.rewardTokens.map(x => x.address),
+        await Promise.all(p.rewardAmounts.map(
+          async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
+        ))
+      );
+      const tx = await ms.strategy._recycleAccess(
+        p.rewardTokens.map(x => x.address),
+        await Promise.all(p.rewardAmounts.map(
+          async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
+        ))
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
+
+      const retForwarder = await forwarder.getLastRegisterIncomeResults();
+
+      return {
+        gasUsed,
+        forwarderAmounts: await Promise.all(retForwarder.amounts.map(
+          async (amount, index) => +formatUnits(amount, await p.rewardTokens[index].decimals())
+        )),
+        forwarderTokens: retForwarder.tokens,
+        amountsToForward: await Promise.all(amountsToForward.map(
+          async (amount, index) => +formatUnits(amount, await p.rewardTokens[index].decimals())
+        )),
+        performanceAmounts: +formatUnits(await p.asset.balanceOf(p.performanceReceiver), await p.asset.decimals()),
+        insuranceAmounts: +formatUnits(await p.asset.balanceOf(await ms.vault.insurance()), await p.asset.decimals()),
+        finalRewardTokenBalances: await Promise.all(p.rewardTokens.map(
+          async (token, index) => +formatUnits(await token.balanceOf(ms.strategy.address), await token.decimals())
+        )),
+      };
+    }
+
+    describe('Good paths', () => {
+      describe('All cases test, zero liquidation thresholds', () => {
+        let snapshotLocal: string;
+        before(async function() {
+          snapshotLocal = await TimeUtils.snapshot();
+        });
+        after(async function() {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+
+        async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          return makeRecycle({
+            performanceReceiver: ethers.Wallet.createRandom().address,
+            rewardTokens: [dai, usdc, bal],
+            rewardAmounts: ["100", "200", "400"],
+            asset: usdc,
+            compoundRate: 80_000,
+            liquidations: [
+              {tokenIn: dai, tokenOut: usdc, amountIn: "10", amountOut: "12"},
+              {tokenIn: bal, tokenOut: usdc, amountIn: "328", amountOut: "34"},
+            ],
+            thresholds: [],
+            performanceFee: 10_000,
+            initialBalances: [
+              {token: dai, amount: "100"},
+              {token: usdc, amount: "200"},
+              {token: bal, amount: "400"}
+            ],
+          });
+        }
+
+        it('should return expected forwarderAmounts', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+        });
+        it('should return expected performanceAmounts', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.performanceAmounts).to.equal(18.07317); // (12 + 20 + 40/328*34) / 2
+        });
+        it('should return expected insuranceAmounts', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.performanceAmounts).to.equal(18.07317); // (12 + 20 + 40/328*34) / 2
+        });
+        it('should return expected final balances', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.finalRewardTokenBalances.join()).to.equal([90, 209.853659, 72].join()); // 200 - 20 + 288/328*34
+        });
+      });
+      describe("too high liquidation thresholds", () => {
+        describe('bal', () => {
+          let snapshotLocal: string;
+          before(async function() {
+            snapshotLocal = await TimeUtils.snapshot();
+          });
+          after(async function() {
+            await TimeUtils.rollback(snapshotLocal);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              performanceReceiver: ethers.Wallet.createRandom().address,
+              rewardTokens: [dai, usdc, bal],
+              rewardAmounts: ["100", "200", "400"],
+              asset: usdc,
+              compoundRate: 80_000,
+              liquidations: [
+                {tokenIn: dai, tokenOut: usdc, amountIn: "10", amountOut: "12"},
+                {tokenIn: bal, tokenOut: usdc, amountIn: "328", amountOut: "34"},
+              ],
+              thresholds: [
+                {token: bal, amount: "329"},
+              ],
+              performanceFee: 10_000,
+              initialBalances: [
+                {token: dai, amount: "100"},
+                {token: usdc, amount: "200"},
+                {token: bal, amount: "400"}
+              ],
+            });
+          }
+
+          it('should return expected forwarderAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+          });
+          it('should return expected performanceAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.performanceAmounts).to.equal(16); // (12 + 20 + 0/328*34) / 2
+          });
+          it('should return expected insuranceAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.performanceAmounts).to.equal(16); // (12 + 20 + 0/328*34) / 2
+          });
+          it('should return expected final balances', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.finalRewardTokenBalances.join()).to.equal([90, 180, 400].join()); // 200 - 20
+          });
+        });
+        describe('dai', () => {
+          let snapshotLocal: string;
+          before(async function() {
+            snapshotLocal = await TimeUtils.snapshot();
+          });
+          after(async function() {
+            await TimeUtils.rollback(snapshotLocal);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              performanceReceiver: ethers.Wallet.createRandom().address,
+              rewardTokens: [dai, usdc, bal],
+              rewardAmounts: ["100", "200", "400"],
+              asset: usdc,
+              compoundRate: 80_000,
+              liquidations: [
+                {tokenIn: dai, tokenOut: usdc, amountIn: "10", amountOut: "12"},
+                {tokenIn: bal, tokenOut: usdc, amountIn: "328", amountOut: "34"},
+              ],
+              thresholds: [{token: dai, amount: "11"}],
+              performanceFee: 10_000,
+              initialBalances: [
+                {token: dai, amount: "100"},
+                {token: usdc, amount: "200"},
+                {token: bal, amount: "400"}
+              ],
+            });
+          }
+
+          it('should return expected forwarderAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+          });
+          it('should return expected performanceAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.performanceAmounts).to.equal(12.07317); // (0 + 20 + 40/328*34) / 2
+          });
+          it('should return expected insuranceAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.performanceAmounts).to.equal(12.07317); // (0 + 20 + 40/328*34) / 2
+          });
+          it('should return expected final balances', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.finalRewardTokenBalances.join()).to.equal([100, 209.853659, 72].join()); // 200 - 20 + 288/328*34
+          });
+        });
+        describe('usdc', () => {
+          let snapshotLocal: string;
+          before(async function() {
+            snapshotLocal = await TimeUtils.snapshot();
+          });
+          after(async function() {
+            await TimeUtils.rollback(snapshotLocal);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              performanceReceiver: ethers.Wallet.createRandom().address,
+              rewardTokens: [dai, usdc, bal],
+              rewardAmounts: ["100", "200", "400"],
+              asset: usdc,
+              compoundRate: 80_000,
+              liquidations: [
+                {tokenIn: dai, tokenOut: usdc, amountIn: "10", amountOut: "12"},
+                {tokenIn: bal, tokenOut: usdc, amountIn: "328", amountOut: "34"},
+              ],
+              thresholds: [{token: usdc, amount: "35"}],
+              performanceFee: 10_000,
+              initialBalances: [
+                {token: dai, amount: "100"},
+                {token: usdc, amount: "200"},
+                {token: bal, amount: "400"}
+              ],
+            });
+          }
+
+          it('should return expected forwarderAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+          });
+          it('should return expected performanceAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.performanceAmounts).to.equal(10); // (0 + 20 + 0) / 2
+          });
+          it('should return expected insuranceAmounts', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.performanceAmounts).to.equal(10); // (0 + 20 + 0) / 2
+          });
+          it('should return expected final balances', async() => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.finalRewardTokenBalances.join()).to.equal([100, 180, 400].join());
+          });
+        });
+      });
+    });
+  });
+
   //endregion Unit tests
 });

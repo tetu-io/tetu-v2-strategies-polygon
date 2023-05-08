@@ -175,23 +175,11 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function sendPerformanceFee(
-    uint performanceFee_,
-    address performanceReceiver_,
-    address splitter,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) external returns (
-    uint[] memory rewardAmounts,
-    uint[] memory performanceAmounts
+  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_) external returns (
+    uint toPerf,
+    uint toInsurance
   ) {
-    return ConverterStrategyBaseLib2.sendPerformanceFee(
-      performanceFee_,
-      performanceReceiver_,
-      splitter,
-      rewardTokens_,
-      rewardAmounts_
-    );
+    return ConverterStrategyBaseLib2.sendPerformanceFee(asset_, amount_, splitter, receiver_);
   }
 
   function swapToGivenAmountAccess(
@@ -325,9 +313,11 @@ contract ConverterStrategyBaseLibFacade {
     address[] memory tokens,
     ITetuLiquidator liquidator,
     address[] memory rewardTokens,
-    uint[] memory rewardAmounts
+    uint[] memory rewardAmounts,
+    uint performanceFee
   ) external returns (
-    uint[] memory amountsToForward
+    uint[] memory amountsToForward,
+    uint amountToPerformanceAndInsurance
   ) {
     return ConverterStrategyBaseLib.recycle(
       converter_,
@@ -337,7 +327,8 @@ contract ConverterStrategyBaseLibFacade {
       liquidator,
       liquidationThresholds,
       rewardTokens,
-      rewardAmounts
+      rewardAmounts,
+      performanceFee
     );
   }
 
