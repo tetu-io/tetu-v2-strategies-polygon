@@ -76,7 +76,7 @@ describe('BalancerBoostedUniversalTest', async () => {
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
 
     const controller = ControllerV2__factory.connect(core.controller, signer)
     const operators = await controller.operatorsList();

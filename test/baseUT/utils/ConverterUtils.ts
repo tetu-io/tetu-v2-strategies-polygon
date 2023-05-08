@@ -41,19 +41,19 @@ export class ConverterUtils {
    */
   public static async disableDForce(signer: SignerWithAddress) {
     console.log('disableDForce...');
-    await this.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    await this.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     console.log('disableDForce done.\n\n');
   }
 
   public static async disableAaveV3(signer: SignerWithAddress) {
     console.log('disableAaveV3...');
-    await this.disablePlatformAdapter(signer, getAaveThreePlatformAdapter());
+    await this.disablePlatformAdapter(signer, await getAaveThreePlatformAdapter(signer));
     console.log('disableAaveV3 done.\n\n');
   }
 
   public static async disableAaveV2(signer: SignerWithAddress) {
     console.log('disableAaveV2...');
-    await this.disablePlatformAdapter(signer, getAaveTwoPlatformAdapter());
+    await this.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
     console.log('disableAaveV2 done.\n\n');
   }
 
