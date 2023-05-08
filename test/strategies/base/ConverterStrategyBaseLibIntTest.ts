@@ -78,7 +78,7 @@ describe.skip('ConverterStrategyBaseLibIntTest', () => {
       collateralHolder: string,
     ): Promise<IOpenPositionTestResults> {
       // Disable DForce (as it reverts on repay after block advance)
-      await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+      await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
       await ConverterUtils.addToWhitelist(signer, tetuConverter.address, facade.address);
 
       // todo add facade to whitelist of the tetu converter

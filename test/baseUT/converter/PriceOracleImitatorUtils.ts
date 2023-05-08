@@ -28,8 +28,8 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-    await ConverterUtils.disablePlatformAdapter(signer, getAaveTwoPlatformAdapter());
+    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
     const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, poolOwner);
@@ -75,8 +75,8 @@ export class PriceOracleImitatorUtils {
     stableTokenPrice: string = '100000000'
   ) {
     // Disable all lending platforms except AAVE3
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
-    await ConverterUtils.disablePlatformAdapter(signer, getAaveTwoPlatformAdapter());
+    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
 
     const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
     const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, poolOwner);

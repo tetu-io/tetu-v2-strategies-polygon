@@ -4,9 +4,16 @@ import Common from "ethereumjs-common";
 import logSettings from "../../log_settings";
 import {DeployerUtils} from "./DeployerUtils";
 import {DeployerUtilsLocal} from "./DeployerUtilsLocal";
-import {Multicall} from "../../typechain";
+import {
+  BorrowManager__factory,
+  IConverterController__factory, IPlatformAdapter,
+  IPlatformAdapter__factory,
+  Multicall
+} from "../../typechain";
 import {BigNumber} from "ethers";
 import {MaticAddresses} from "../addresses/MaticAddresses";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {LendingPlatformKinds} from "../../test/baseUT/converter/ConverterConstants";
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -131,18 +138,34 @@ export function getConverterAddress() {
 /**
  * Address of DForce platform adapter registered in TetuConveter
  */
-export function getDForcePlatformAdapter() {
-  return ethers.utils.getAddress(MaticAddresses.TETU_CONVERTER_DFORCE_PLATFORM_ADAPTER);
+export async function getDForcePlatformAdapter(signer: SignerWithAddress): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.DFORCE_1)).address;
 }
 
-export function getAaveTwoPlatformAdapter() {
-  return ethers.utils.getAddress(MaticAddresses.TETU_CONVERTER_AAVE2_PLATFORM_ADAPTER);
+export async function getAaveTwoPlatformAdapter(signer: SignerWithAddress): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE2_2)).address;
 }
 
-export function getAaveThreePlatformAdapter() {
-  return ethers.utils.getAddress(MaticAddresses.TETU_CONVERTER_AAVE3_PLATFORM_ADAPTER);
+export async function getAaveThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3)).address;
 }
 
+async function getPlatformAdapter(signer: SignerWithAddress, lendingPlatformKind: LendingPlatformKinds): Promise<IPlatformAdapter> {
+  const borrowManager = await BorrowManager__factory.connect(
+    await IConverterController__factory.connect(MaticAddresses.TETU_CONVERTER, signer).borrowManager(),
+    signer
+  );
+  const len = (await borrowManager.platformAdaptersLength()).toNumber();
+  for (let i = 0; i < len; i++) {
+    const platformAdapter = await IPlatformAdapter__factory.connect(await borrowManager.platformAdaptersAt(i), signer);
+    const platformKind = await platformAdapter.platformKind();
+    if (platformKind === lendingPlatformKind) {
+      return platformAdapter;
+    }
+  }
+
+  throw new Error(`No platform adapter found for platform kind ${lendingPlatformKind}`);
+}
 
 //endregion TetuConverter addresses
 

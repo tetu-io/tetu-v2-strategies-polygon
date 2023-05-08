@@ -73,7 +73,7 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, addresses);
 
     // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
   });
 
   after(async function() {
