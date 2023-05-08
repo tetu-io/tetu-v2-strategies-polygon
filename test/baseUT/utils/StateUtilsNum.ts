@@ -155,7 +155,9 @@ export class StateUtilsNum {
           healthFactors.push(+formatUnits(status.healthFactor18, 18));
 
           const config = await poolAdapter.getConfig();
-          platformAdapters.push(ConverterAdaptersHelper.getPlatformAdapterName(await borrowManager.getPlatformAdapter(config.originConverter)));
+          platformAdapters.push(
+            await ConverterAdaptersHelper.getPlatformAdapterName(signer, await borrowManager.getPlatformAdapter(config.originConverter))
+          );
         }
         converterHealthFactors.push(healthFactors);
         converterPlatformAdapters.push(platformAdapters);
@@ -189,7 +191,9 @@ export class StateUtilsNum {
         healthFactors.push(+formatUnits(status.healthFactor18, 18));
 
         const config = await poolAdapter.getConfig();
-        platformAdapters.push(ConverterAdaptersHelper.getPlatformAdapterName(await borrowManager.getPlatformAdapter(config.originConverter)));
+        platformAdapters.push(
+          await ConverterAdaptersHelper.getPlatformAdapterName(signer, await borrowManager.getPlatformAdapter(config.originConverter))
+        );
       }
       converterHealthFactors.push(healthFactors);
       converterPlatformAdapters.push(platformAdapters);
