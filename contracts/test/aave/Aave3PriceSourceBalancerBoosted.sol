@@ -21,7 +21,7 @@ interface ISwapper {
 ///         See price oracle 0xb023e699F5a33916Ea823A16485e259257cA8Bd1
 contract Aave3PriceSourceBalancerBoosted is AggregatorInterface {
   IBVault public constant BALANCER_VAULT = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-  ISwapper internal constant BALANCER_COMPOSABLE_STABLE_SWAPPER = ISwapper(0xD93519327c133CC6d0Dc86c4749F2809Aa554a5F);
+  ISwapper internal constant BALANCER_COMPOSABLE_STABLE_SWAPPER = ISwapper(0xFae1b6961F4a24B8A02AD4B4C66de447c35bf09f);
 
   IComposableStablePool public pool;
   address public inputToken;

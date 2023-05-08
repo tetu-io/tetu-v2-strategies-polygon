@@ -1,3 +1,4 @@
+/* tslint:disable:no-trailing-whitespace */
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
 import { IERC20__factory, IRebalancingStrategy, IStrategyV2, TetuVaultV2 } from '../../../typechain';
@@ -11,6 +12,7 @@ import { expect } from 'chai';
 import { PriceCalculatorUtils } from '../../PriceCalculatorUtils';
 import { UniversalTestUtils } from './UniversalTestUtils';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 
 export interface IBalances {
   userBalance: BigNumber;
@@ -20,6 +22,13 @@ export interface IBalances {
 export interface IDoHardWorkLoopInputParams {
   /// 50_000 for 0.5
   compoundRate?: number|number[];
+}
+
+export interface ILossStats {
+  deposited: BigNumber;
+  depositLoss: BigNumber;
+  withdrawn: BigNumber;
+  withdrawLoss: BigNumber;
 }
 
 export class DoHardWorkLoopBase {
@@ -56,6 +65,8 @@ export class DoHardWorkLoopBase {
 
   initialBalances: IBalances;
 
+  lossStats: ILossStats;
+
   constructor(
     signer: SignerWithAddress,
     user: SignerWithAddress,
@@ -82,6 +93,13 @@ export class DoHardWorkLoopBase {
       userBalance: BigNumber.from(0),
       signerBalance: BigNumber.from(0),
     };
+
+    this.lossStats = {
+      deposited: BigNumber.from(0),
+      withdrawn: BigNumber.from(0),
+      depositLoss: BigNumber.from(0),
+      withdrawLoss: BigNumber.from(0),
+    }
   }
 
   protected static toPercent(actual: number, expected: number): string {
@@ -128,6 +146,15 @@ export class DoHardWorkLoopBase {
     if (stateRegistrar) {
       await stateRegistrar('final', this);
     }
+    this.showLoss()
+  }
+
+  protected showLoss() {
+    console.log('== Covered loss stats')
+    const depositLossPerc = this.lossStats.deposited.gt(0) ? formatUnits(this.lossStats.depositLoss.mul(parseUnits('1', 10)).div(this.lossStats.deposited), 8) : '0'
+    console.log(`Deposit loss: ${depositLossPerc}% (deposited: ${formatUnits(this.lossStats.deposited, this.underlyingDecimals)}, loss: ${formatUnits(this.lossStats.depositLoss, this.underlyingDecimals)})`)
+    const withdrawtLossPerc = this.lossStats.withdrawn.gt(0) ? formatUnits(this.lossStats.withdrawLoss.mul(parseUnits('1', 10)).div(this.lossStats.withdrawn), 8) : '0'
+    console.log(`Withddraw loss: ${withdrawtLossPerc}% (withdrawn: ${formatUnits(this.lossStats.withdrawn, this.underlyingDecimals)}, loss: ${formatUnits(this.lossStats.withdrawLoss, this.underlyingDecimals)})`)
   }
 
   //region Fee utils
@@ -197,13 +224,20 @@ export class DoHardWorkLoopBase {
     const balanceUser = await TokenUtils.balanceOf(this.underlying, this.user.address);
     const balanceSigner = await TokenUtils.balanceOf(this.underlying, this.signer.address);
 
+    let receipt
+
     // initial deposit from signer
-    await VaultUtils.deposit(this.signer, this.vault, balanceSigner);
+    receipt = await (await VaultUtils.deposit(this.signer, this.vault, balanceSigner)).wait()
     console.log('enterToVault: deposited for signer');
+    this.lossStats.deposited = this.lossStats.deposited.add(this.subDepositFee(balanceSigner))
+    this.lossStats.depositLoss = this.lossStats.depositLoss.add(await UniversalTestUtils.extractLossCovered(receipt, this.vault.address) || BigNumber.from(0))
 
     // initial deposit from user
-    await this.initialDepositFromUser(balanceUser);
+    console.log('INITIAL DEPOSIT from user', balanceUser.toString());
+    receipt = await (await VaultUtils.deposit(this.user, this.vault, balanceUser)).wait()
     console.log('enterToVault: deposited for user');
+    this.lossStats.deposited = this.lossStats.deposited.add(this.subDepositFee(balanceUser))
+    this.lossStats.depositLoss = this.lossStats.depositLoss.add(await UniversalTestUtils.extractLossCovered(receipt, this.vault.address) || BigNumber.from(0))
 
     // remove excess tokens
     await UniversalTestUtils.removeExcessTokens(this.underlying, this.user, this.tools.liquidator.address);
@@ -214,14 +248,6 @@ export class DoHardWorkLoopBase {
   }
 
   //endregion Initialization
-
-  protected async initialDepositFromUser(amount: BigNumber) {
-    console.log('INITIAL DEPOSIT from user', amount.toString());
-
-    await VaultUtils.deposit(this.user, this.vault, amount);
-    // TODO expect(await this.userBalanceInVault()).gte(this.subDepositFee(amount));
-
-  }
 
   //region Loop
   protected async loop(
@@ -281,23 +307,6 @@ export class DoHardWorkLoopBase {
   }
 
   //region End actions
-  //   /** Simplest version: single deposit, single withdrawing */
-  //   protected async loopEndActions(i: number, numberLoops: number) {
-  //     console.log("loopEndActions", i);
-  //     const start = Date.now();
-  //     // we need to enter and exit from the vault between loops for properly check all mechanic
-  //     if (i === numberLoops - 1) {
-  //       this.isUserDeposited = false;
-  //       console.log("!!!Withdraw all");
-  //       await this.withdraw(true, BigNumber.from(0));
-  //     // } else if (i === 0) {
-  //     //   this.isUserDeposited = true;
-  //     //   const underlyingBalance = await TokenUtils.balanceOf(this.underlying, this.user.address);
-  //     //   console.log("!!!Deposit", BigNumber.from(underlyingBalance));
-  //     //   await this.deposit(BigNumber.from(underlyingBalance));
-  //     }
-  //     Misc.printDuration('fLoopEndActions completed', start);
-  //   }
 
   protected async loopStartActions(i: number) {
     console.log('loopStartActions', i);
@@ -360,6 +369,11 @@ export class DoHardWorkLoopBase {
     return userBalance;
   }
 
+  protected async signerBalanceInVault(): Promise<BigNumber> {
+    const shares = await TokenUtils.balanceOf(this.vault.address, this.signer.address);
+    return this.vaultAsUser.convertToAssets(shares);
+  }
+
   protected async userCheckBalanceInVault(userExpectedBalance: BigNumber) {
     // assume that at this point we deposited all expected amount except userWithdrew amount
     const userBalance = await this.userBalanceInVault();
@@ -405,7 +419,9 @@ export class DoHardWorkLoopBase {
     if (exit) {
       const balanceInVault = await this.userBalanceInVault();
       console.log('exit');
-      await this.vaultAsUser.withdrawAll({ gasLimit: 29_000_000 });
+      const receipt = await (await this.vaultAsUser.withdrawAll({ gasLimit: 29_000_000 })).wait()
+      this.lossStats.withdrawn = this.lossStats.withdrawn.add(this.subWithdrawFee(balanceInVault))
+      this.lossStats.withdrawLoss = this.lossStats.withdrawLoss.add(await UniversalTestUtils.extractLossCovered(receipt, this.vault.address) || BigNumber.from(0))
       await this.userCheckBalanceInVault(BigNumber.from(0));
       await this.userCheckBalance(this.subWithdrawFee(balanceInVault));
 
@@ -414,7 +430,9 @@ export class DoHardWorkLoopBase {
       const userBalance = await this.userBalance();
       const userBalanceInVault = await this.userBalanceInVault();
 
-      await this.vaultAsUser.withdraw(amount, this.user.address, this.user.address, { gasLimit: 29_000_000 });
+      const receipt = await (await this.vaultAsUser.withdraw(amount, this.user.address, this.user.address, { gasLimit: 29_000_000 })).wait()
+      this.lossStats.withdrawn = this.lossStats.withdrawn.add(this.subWithdrawFee(amount))
+      this.lossStats.withdrawLoss = this.lossStats.withdrawLoss.add(await UniversalTestUtils.extractLossCovered(receipt, this.vault.address) || BigNumber.from(0))
 
       await this.userCheckBalance(userBalance.add(amount));
       await this.userCheckBalanceInVault(userBalanceInVault.sub(this.addWithdrawFee(amount)));
@@ -430,7 +448,9 @@ export class DoHardWorkLoopBase {
     const userBalance = await this.userBalance();
     const userBalanceInVault = await this.userBalanceInVault();
 
-    await VaultUtils.deposit(this.user, this.vault, amount);
+    const receipt = await (await VaultUtils.deposit(this.user, this.vault, amount)).wait()
+    this.lossStats.deposited = this.lossStats.deposited.add(this.subDepositFee(amount))
+    this.lossStats.depositLoss = this.lossStats.depositLoss.add(await UniversalTestUtils.extractLossCovered(receipt, this.vault.address) || BigNumber.from(0))
 
     await this.userCheckBalanceInVault(userBalanceInVault.add(this.subDepositFee(amount)));
     await this.userCheckBalance(userBalance.sub(amount));
@@ -451,14 +471,18 @@ export class DoHardWorkLoopBase {
     await TimeUtils.advanceNBlocks(3000);
     await this.withdraw(true, BigNumber.from(0));
     // exit for signer
-    await this.vault.connect(this.signer).withdrawAll();
+    const signerBalanceInVault = await this.signerBalanceInVault()
+    const receipt = await (await this.vault.connect(this.signer).withdrawAll({ gasLimit: 29_000_000 })).wait()
+    this.lossStats.withdrawn = this.lossStats.withdrawn.add(this.subWithdrawFee(signerBalanceInVault))
+    this.lossStats.withdrawLoss = this.lossStats.withdrawLoss.add(await UniversalTestUtils.extractLossCovered(receipt, this.vault.address) || BigNumber.from(0))
+
     // await this.strategy.withdrawAllToSplitter();
 
     // expect(await this.strategy.totalAssets()).is.eq(0); // Converter strategy may have dust
 
     // need to call hard work to sell a little excess rewards
     const splitterSigner = await DeployerUtilsLocal.impersonate(await this.strategy.splitter());
-    await this.strategy.connect(splitterSigner).doHardWork();
+    await this.strategy.connect(splitterSigner).doHardWork({ gasLimit: 29_000_000 });
 
 
     // strategy should not contain any tokens in the end
