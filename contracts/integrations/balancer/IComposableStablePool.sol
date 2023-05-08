@@ -6,5 +6,5 @@ interface IComposableStablePool {
   function getActualSupply() external view returns (uint256);
   function getPoolId() external view returns (bytes32);
   function getBptIndex() external view returns (uint256);
-
+  function updateTokenRateCache(address token) external;
 }

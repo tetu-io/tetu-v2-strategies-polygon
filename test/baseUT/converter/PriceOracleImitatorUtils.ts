@@ -47,6 +47,8 @@ export class PriceOracleImitatorUtils {
         if (mainToken.toLowerCase() !== stableToken.toLowerCase()) {
           volatileTokens.push(mainToken)
         }
+
+        await balancerBoostedPool.updateTokenRateCache(poolTokens.tokens[i])
       }
     }
     console.log(volatileTokens)
