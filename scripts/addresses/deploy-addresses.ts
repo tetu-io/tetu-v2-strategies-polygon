@@ -93,5 +93,9 @@ export const deployAddresses = {
   ST_MATIC_RATE_PROVIDER_ADDRESS: {
     "hardhat": "0xdEd6C522d803E35f65318a9a4d7333a22d582199",
     "matic": "0xdEd6C522d803E35f65318a9a4d7333a22d582199"
-  }
+  },
+  BALANCER_POOL_T_USD: {
+    "hardhat": MaticAddresses.BALANCER_POOL_T_USD,
+    "matic": MaticAddresses.BALANCER_POOL_T_USD
+  },
 }
