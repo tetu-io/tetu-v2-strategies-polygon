@@ -167,7 +167,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     },*/
     // WBTC vault
     {
-      vaultAsset: MaticAddresses.WBTC_TOKEN,
+      vaultAsset: MaticAddresses.WETH_TOKEN,
       pool: MaticAddresses.UNISWAPV3_WBTC_WETH_500,
       token0: MaticAddresses.WBTC_TOKEN,
       token1: MaticAddresses.WETH_TOKEN,
