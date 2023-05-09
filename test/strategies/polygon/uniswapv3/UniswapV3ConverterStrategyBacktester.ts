@@ -87,7 +87,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 41210000 - Apr-06-2023 11:23:04 AM +UTC
   const backtestStartBlock = 41524672;
   const backtestEndBlock = 41562855;
-  const investAmountUnits: string = '1000' // 1k USDC, 1k WMATIC etc
+  const investAmountUnits: string = '1' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
@@ -134,7 +134,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       tickRange: 0, // 1 tick
       rebalanceTickRange: 0, // 1 tick
     },*/
-    {
+    /*{
       vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_USDC_USDT_100, // USDC_USDT_0.01%
       token0: MaticAddresses.USDC_TOKEN,
@@ -143,7 +143,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
       tickRange: 0, // 1 tick
       rebalanceTickRange: 0, // 1 tick
-    },
+    },*/
     /*{
       vaultAsset: MaticAddresses.USDC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_USDC_miMATIC_100, // USDC_miMATIC_0.01%
@@ -163,8 +163,19 @@ describe('UmiswapV3 converter strategy backtester', function() {
       poolFee: 500, // 0.05%
       liquiditySnapshotSurroundingTickSpacings: 200, // 200*10*0.01% == +-20% price
       tickRange: 1200, // +- 12% price
-      rebalanceTickRange: 60, // 0.6% price change
+      rebalanceTickRange: 320, // 0.6% price change
     },*/
+    // WBTC vault
+    {
+      vaultAsset: MaticAddresses.WBTC_TOKEN,
+      pool: MaticAddresses.UNISWAPV3_WBTC_WETH_500,
+      token0: MaticAddresses.WBTC_TOKEN,
+      token1: MaticAddresses.WETH_TOKEN,
+      poolFee: 500, // 0.05%
+      liquiditySnapshotSurroundingTickSpacings: 200, // 200*10*0.01% == +-20% price
+      tickRange: 1200, // +- 12% price
+      rebalanceTickRange: 60, // 0.6% price change
+    },
   ]
   // =========================
 
@@ -254,6 +265,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     tokens[MaticAddresses.DAI_TOKEN] =  await DeployerUtils.deployMockToken(signer, 'DAI', 18, mintAmount);
     tokens[MaticAddresses.USDT_TOKEN] = await DeployerUtils.deployMockToken(signer, 'USDT', 6, mintAmount);
     tokens[MaticAddresses.miMATIC_TOKEN] = await DeployerUtils.deployMockToken(signer, 'miMATIC', 18, mintAmount);
+    tokens[MaticAddresses.WBTC_TOKEN] = await DeployerUtils.deployMockToken(signer, 'WBTC', 8, mintAmount);
     USDC = tokens[MaticAddresses.USDC_TOKEN]
     // give 10k USDC to user
     await USDC.transfer(user.address, parseUnits('10000', 6));
@@ -411,7 +423,6 @@ describe('UmiswapV3 converter strategy backtester', function() {
       signer,
       'ConverterController',
       liquidator.address,
-      priceOracleImitator.address,
     ) as ConverterController;
     const borrowManager = await DeployerUtils.deployContract(
       signer,
@@ -430,7 +441,6 @@ describe('UmiswapV3 converter strategy backtester', function() {
       'SwapManager',
       converterController.address,
       liquidator.address,
-      priceOracleImitator.address,
     );
     const keeperCaller = await DeployerUtils.deployContract(signer, 'KeeperCaller');
     const keeper = await DeployerUtils.deployContract(
@@ -448,20 +458,19 @@ describe('UmiswapV3 converter strategy backtester', function() {
       debtMonitor.address,
       swapManager.address,
       keeper.address,
-      priceOracleImitator.address,
     ) as TetuConverter;
     await converterController.initialize(
       signer.address,
       41142,
       101,
       120,
-      400,
       tetuConverter.address,
       borrowManager.address,
       debtMonitor.address,
       keeper.address,
       swapManager.address,
-      1000
+      1000,
+      priceOracleImitator.address
     );
     const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
     const platformAdapter = await DeployerUtils.deployContract(
@@ -930,15 +939,23 @@ async function strategyBacktest(
 
     if (!disableMints && poolTx.type === TransactionType.MINT && poolTx.tickUpper !== undefined && poolTx.tickLower !==
       undefined) {
-      await uniswapV3Calee.mint(
-        pool.address,
-        signer.address,
-        poolTx.tickLower,
-        poolTx.tickUpper,
-        BigNumber.from(poolTx.amount),
-      );
 
-      console.log(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] MINT`);
+      process.stdout.write(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] MINT`);
+      const parts = (poolTx.tickUpper - poolTx.tickLower) / tickSpacing;
+      const newTickUpper = poolTx.tickUpper > liquidityTickUpper ? liquidityTickUpper : poolTx.tickUpper;
+      const newTickLower = poolTx.tickLower < liquidityTickLower ? liquidityTickLower : poolTx.tickLower;
+      for (let t = newTickLower; t < newTickUpper - tickSpacing; t += tickSpacing) {
+        await uniswapV3Calee.mint(
+          pool.address,
+          signer.address,
+          t,
+          t + tickSpacing,
+          BigNumber.from(poolTx.amount).div(parts),
+        );
+        process.stdout.write(`.`);
+      }
+
+      console.log('');
     }
 
     if (!disableBurns && poolTx.type === TransactionType.BURN && poolTx.tickUpper !== undefined && poolTx.tickLower !==
