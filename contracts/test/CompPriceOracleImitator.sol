@@ -22,19 +22,15 @@ contract CompPriceOracleImitator is PriceOracle {
 
   function getUnderlyingPrice(CToken cToken) public override view returns (uint) {
     address asset = _getUnderlyingAddress(cToken);
-    if (asset == usdc) {
-      return 1e18;
-    }
     uint tokenInDecimals = IERC20Metadata(asset).decimals();
     uint tokenOutDecimals = IERC20Metadata(usdc).decimals();
-    uint price = liquidator.getPrice(asset, usdc, 10 ** tokenInDecimals);
 
-    if (tokenOutDecimals > 18) {
-      price = price / 10 ** (tokenOutDecimals - 18);
-    } else if (tokenOutDecimals < 18) {
-      price = price * 10 ** (18 - tokenOutDecimals);
+    if (asset == usdc) {
+      return 10 ** (36 - tokenOutDecimals);
     }
 
-    return price;
+    uint price = liquidator.getPrice(asset, usdc, 10 ** tokenInDecimals);
+
+    return price * 10 ** (36 - tokenInDecimals) / 10 ** tokenOutDecimals;
   }
 }
