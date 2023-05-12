@@ -951,6 +951,11 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
       });
     });
 
+    describe("specific name for ui", () => {
+      it('have expected value', async() => {
+        expect(await strategy.strategySpecificName()).eq("Balancer bb-t-USD")
+      })
+    })
   });
 
   //endregion Integration tests

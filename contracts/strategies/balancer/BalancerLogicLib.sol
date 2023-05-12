@@ -625,6 +625,10 @@ library BalancerLogicLib {
   ///             Utils
   /////////////////////////////////////////////////////////////////////
 
+  function createSpecificName(address pool_) external view returns (string memory) {
+    return string(abi.encodePacked("Balancer ", IERC20Metadata(pool_).symbol()));
+  }
+
   /// @dev Returns the address of a Pool's contract.
   ///      Due to how Pool IDs are created, this is done with no storage accesses and costs little gas.
   function getPoolAddress(bytes32 id) internal pure returns (address) {
