@@ -1613,7 +1613,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       const tc = await MockHelper.createMockTetuConverter(signer);
       if (params.debts) {
         for (let i = 0; i < params.debts.length; ++i) {
-          await tc.setGetDebtAmountCurrent(
+          await tc.getDebtAmountStored(
             facade.address,
             params.tokens[params.indexAsset].address,
             params.debts[i].borrowAsset.address,

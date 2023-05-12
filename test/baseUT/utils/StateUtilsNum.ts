@@ -141,7 +141,7 @@ export class StateUtilsNum {
         borrowAssetsBalances.push(+formatUnits(await borrowAsset.balanceOf(strategy.address), await borrowAsset.decimals()));
         borrowAssetsNames.push(await borrowAsset.symbol());
 
-        const debtStored = await converter.callStatic.getDebtAmountCurrent(strategy.address, asset.address, item, false);
+        const debtStored = await converter.callStatic.getDebtAmountStored(strategy.address, asset.address, item, false);
         collaterals.push(+formatUnits(debtStored[1], assetDecimals));
         amountsToRepay.push(+formatUnits(debtStored[0], await borrowAsset.decimals()));
         converterBorrowAssetNames.push(await borrowAsset.symbol());
@@ -177,7 +177,7 @@ export class StateUtilsNum {
       borrowAssetsBalances.push(+formatUnits(await tokenB.balanceOf(strategy.address), await tokenB.decimals()));
       borrowAssetsNames.push(await tokenB.symbol());
 
-      const debtStored = await converter.callStatic.getDebtAmountCurrent(strategy.address, asset.address, state.tokenB, false);
+      const debtStored = await converter.callStatic.getDebtAmountStored(strategy.address, asset.address, state.tokenB, false);
       collaterals.push(+formatUnits(debtStored[1], assetDecimals));
       amountsToRepay.push(+formatUnits(debtStored[0], await tokenB.decimals()));
       converterBorrowAssetNames.push(await tokenB.symbol());

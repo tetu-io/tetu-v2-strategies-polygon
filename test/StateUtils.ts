@@ -100,7 +100,7 @@ export class StateUtils {
       borrowAssets = borrowAssets.filter(a => a !== asset.address)
       for (const item of borrowAssets) {
         borrowAssetsBalances.push(await IERC20__factory.connect(item, signer).balanceOf(strategy.address))
-        const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountCurrent(
+        const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
           strategy.address,
           asset.address,
           item,
@@ -116,7 +116,7 @@ export class StateUtils {
       const state = await uniswapV3Stratety.getState()
       liquidity = state.totalLiquidity
       borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
-      const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountCurrent(
+      const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
         strategy.address,
         asset.address,
         state.tokenB,
