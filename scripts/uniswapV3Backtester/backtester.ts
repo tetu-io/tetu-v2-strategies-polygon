@@ -296,10 +296,7 @@ async function main() {
       task.investAmountUnits,
       task.startBlock,
       task.endBlock,
-      getAddress(task.pool),
-      0,
-      true,
-      true
+      getAddress(task.pool)
     )
 
     await showBacktestResult(results)

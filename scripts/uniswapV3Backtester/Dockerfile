@@ -6,4 +6,4 @@ RUN git checkout alien-dev
 RUN npm i
 ENV TETU_HARDHAT_CHAIN_ID=31337
 RUN npx hardhat compile
-CMD /usr/local/bin/npx hardhat run scripts/uniswapV3Backtester/backtester.ts
+CMD /usr/local/bin/npx cross-env NODE_OPTIONS="--max_old_space_size=1800" hardhat run scripts/uniswapV3Backtester/backtester.ts --max-memory 1800
