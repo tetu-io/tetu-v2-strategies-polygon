@@ -241,7 +241,7 @@ export function getApr(earned: BigNumber, investAmount: BigNumber, startTimestam
 export function showBacktestResult(r: IBacktestResult) {
   console.log(`Strategy ${r.vaultName}. Tick range: ${r.tickRange} (+-${r.tickRange /
   100}% price). Rebalance tick range: ${r.rebalanceTickRange} (+-${r.rebalanceTickRange / 100}% price).`);
-  const earnedPerSec1e10 = r.earned.mul(parseUnits('1', 10)).div(r.endTimestamp - r.startTimestamp);
+  const earnedPerSec1e10 = r.endTimestamp > r.startTimestamp ? r.earned.mul(parseUnits('1', 10)).div(r.endTimestamp - r.startTimestamp) : BigNumber.from(1);
   const earnedPerDay = earnedPerSec1e10.mul(86400).div(parseUnits('1', 10));
   const apr = earnedPerDay.mul(365).mul(100000000).div(r.investAmount).div(1000);
   console.log(`APR: ${formatUnits(apr, 3)}%. Invest amount: ${formatUnits(

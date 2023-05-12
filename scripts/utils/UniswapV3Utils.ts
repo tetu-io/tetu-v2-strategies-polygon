@@ -79,6 +79,9 @@ export class UniswapV3Utils {
           }
         }
 
+        if (!data.data.mints.length) {
+          break
+        }
         lastTimestamp = data.data.mints[data.data.mints.length - 1].timestamp
         if (data.data.mints.length < 1000) {
           break
@@ -115,6 +118,9 @@ export class UniswapV3Utils {
           }
         }
 
+        if (!data.data.burns.length) {
+          break
+        }
         lastTimestamp = data.data.burns[data.data.burns.length - 1].timestamp
         if (data.data.burns.length < 1000) {
           break
@@ -147,6 +153,11 @@ export class UniswapV3Utils {
             usedTxIds[swap.id] = true
             got++
           }
+        }
+
+        if (!data.data.swaps.length) {
+          console.log('No swaps in this period. Cant backtest.')
+          process.exit()
         }
 
         lastTimestamp = data.data.swaps[data.data.swaps.length - 1].timestamp

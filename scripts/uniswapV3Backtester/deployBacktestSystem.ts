@@ -73,6 +73,8 @@ export async function deployBacktestSystem(
   tokens[getAddress(MaticAddresses.USDT_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'USDT', 6, mintAmount);
   tokens[getAddress(MaticAddresses.miMATIC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'miMATIC', 18, mintAmount);
   tokens[getAddress(MaticAddresses.WBTC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WBTC', 8, mintAmount);
+  tokens[getAddress(MaticAddresses.wstETH_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'wstETH', 18, mintAmount);
+  tokens[getAddress(MaticAddresses.MaticX_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'MaticX', 18, mintAmount);
   const tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
 
   // deploy uniswap v3 and periphery

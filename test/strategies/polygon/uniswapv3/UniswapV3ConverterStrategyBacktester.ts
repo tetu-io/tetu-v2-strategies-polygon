@@ -90,9 +90,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // 41100000 - Apr-03-2023 03:29:23 PM +UTC
   // 41150000 - Apr-04-2023 10:43:06 PM +UTC
   // 41210000 - Apr-06-2023 11:23:04 AM +UTC
-  const backtestStartBlock = 41524672;
-  const backtestEndBlock = 41562855;
-  const investAmountUnits: string = '1' // 1k USDC, 1k WMATIC etc
+  const backtestStartBlock = 42300000;//42000000;// 42500000;
+  const backtestEndBlock = 42301000;//42110000; //42500000; // 42610019;
+  const investAmountUnits: string = '0.05' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
@@ -172,7 +172,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     },*/
     // WBTC vault
     {
-      vaultAsset: MaticAddresses.WETH_TOKEN,
+      vaultAsset: MaticAddresses.WBTC_TOKEN,
       pool: MaticAddresses.UNISWAPV3_WBTC_WETH_500,
       token0: MaticAddresses.WBTC_TOKEN,
       token1: MaticAddresses.WETH_TOKEN,
@@ -181,6 +181,17 @@ describe('UmiswapV3 converter strategy backtester', function() {
       tickRange: 1200, // +- 12% price
       rebalanceTickRange: 120, // 0.6% price change
     },
+    // WETH vault
+    /*{
+      vaultAsset: MaticAddresses.WETH_TOKEN,
+      pool: MaticAddresses.UNISWAPV3_wstETH_WETH_500,
+      token0: MaticAddresses.wstETH_TOKEN,
+      token1: MaticAddresses.WETH_TOKEN,
+      poolFee: 500, // 0.05%
+      liquiditySnapshotSurroundingTickSpacings: 200, // 200*10*0.01% == +-20% price
+      tickRange: 0, // 1 tick spacing
+      rebalanceTickRange: 0, // 1 tick spacing
+    },*/
   ]
   // =========================
 
@@ -271,6 +282,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
     tokens[MaticAddresses.USDT_TOKEN] = await DeployerUtils.deployMockToken(signer, 'USDT', 6, mintAmount);
     tokens[MaticAddresses.miMATIC_TOKEN] = await DeployerUtils.deployMockToken(signer, 'miMATIC', 18, mintAmount);
     tokens[MaticAddresses.WBTC_TOKEN] = await DeployerUtils.deployMockToken(signer, 'WBTC', 8, mintAmount);
+    tokens[MaticAddresses.wstETH_TOKEN] = await DeployerUtils.deployMockToken(signer, 'wstETH', 18, mintAmount);
+    tokens[MaticAddresses.MaticX_TOKEN] = await DeployerUtils.deployMockToken(signer, 'MaticX', 18, mintAmount);
     USDC = tokens[MaticAddresses.USDC_TOKEN]
     // give 10k USDC to user
     await USDC.transfer(user.address, parseUnits('10000', 6));
