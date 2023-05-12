@@ -7,7 +7,7 @@ import {DeployerUtilsLocal} from "./DeployerUtilsLocal";
 import {
   BorrowManager__factory,
   IConverterController__factory, IPlatformAdapter,
-  IPlatformAdapter__factory,
+  IPlatformAdapter__factory, ITetuConverter__factory,
   Multicall
 } from "../../typechain";
 import {BigNumber} from "ethers";
@@ -152,7 +152,10 @@ export async function getAaveThreePlatformAdapter(signer: SignerWithAddress): Pr
 
 async function getPlatformAdapter(signer: SignerWithAddress, lendingPlatformKind: LendingPlatformKinds): Promise<IPlatformAdapter> {
   const borrowManager = await BorrowManager__factory.connect(
-    await IConverterController__factory.connect(MaticAddresses.TETU_CONVERTER, signer).borrowManager(),
+    await IConverterController__factory.connect(
+      await ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer).controller(),
+      signer
+    ).borrowManager(),
     signer
   );
   const len = (await borrowManager.platformAdaptersLength()).toNumber();

@@ -103,7 +103,7 @@ export class ConverterStrategyBaseContracts {
 
     // setup converter
     const strategy = UniswapV3ConverterStrategy__factory.connect(data.strategy.address, gov);
-    await ConverterUtils.whitelist([strategy.address], p?.converter);
+    await ConverterUtils.whitelist([strategy.address], p?.converter || MaticAddresses.TETU_CONVERTER);
     const state = await strategy.getState();
     await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
 
@@ -155,7 +155,7 @@ export class ConverterStrategyBaseContracts {
 
     // setup converter
     const strategy = UniswapV3ConverterStrategy__factory.connect(data.strategy.address, gov);
-    await ConverterUtils.whitelist([strategy.address], p?.converter);
+    await ConverterUtils.whitelist([strategy.address], p?.converter || MaticAddresses.TETU_CONVERTER);
 
     await IERC20__factory.connect(asset, signer).approve(data.vault.address, Misc.MAX_UINT);
     await IERC20__factory.connect(asset, signer2).approve(data.vault.address, Misc.MAX_UINT);
