@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM node
 WORKDIR /app
-RUN git clone https://github.com/tetu-io/tetu-v2-strategies-polygon.git . && git checkout alien-dev && echo '1'
+RUN git clone https://github.com/tetu-io/tetu-v2-strategies-polygon.git . && git checkout alien-dev && echo '3'
 RUN npm i
 ENV TETU_HARDHAT_CHAIN_ID=31337
 RUN npx hardhat compile

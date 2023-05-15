@@ -39,12 +39,12 @@ INSERT INTO
     '0x50eaEDB835021E4A108B7290636d62E9765cc6d7',
     '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
     42300000,
-    42400000,
+    42600000,
     '0.05',
     '{
   "liquiditySnapshotSurroundingTickSpacings": 200,
-  "maxTickRange": 1200,
-  "maxRebalanceTickRange": 120,
+  "maxTickRange": 1800,
+  "maxRebalanceTickRange": 1200,
   "gens": 5,
   "minIndividualsPerGen": 6,
   "bestIndividualsPerGen": 3

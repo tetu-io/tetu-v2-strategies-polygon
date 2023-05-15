@@ -118,195 +118,193 @@ async function main() {
 
   const resultRepository = AppDataSource.getRepository(Result)
 
-  while(1) {
-    let strategyParams:IStrategyParams|undefined
-    let gen:number
+  let strategyParams:IStrategyParams|undefined
+  let gen:number
 
-    // get last gen
-    const selectResult = await resultRepository
-      .findOne({
-        select: {
-          id: true,
-          gen: true,
-        },
-        where: [{
-          task,
-        }],
-        order: {
-          gen: 'DESC',
-        },
-      })
-    const lastGen = selectResult ? selectResult.gen : 0
-    console.log(`Last generation is ${lastGen}`)
-
-    // count how much results of last gen are already done
-    const alreadyDoneInGen = await resultRepository
-      .countBy({
-        gen: lastGen,
-        done: true,
+  // get last gen
+  const selectResult = await resultRepository
+    .findOne({
+      select: {
+        id: true,
+        gen: true,
+      },
+      where: [{
         task,
-      })
-    console.log(`Already done: ${alreadyDoneInGen} of ${task.config.minIndividualsPerGen}.`)
+      }],
+      order: {
+        gen: 'DESC',
+      },
+    })
+  const lastGen = selectResult ? selectResult.gen : 0
+  console.log(`Last generation is ${lastGen}`)
 
-    if (alreadyDoneInGen < task.config.minIndividualsPerGen) {
-      gen = lastGen
-      console.log(`Creating results in gen ${gen}`)
-      if (gen === 0) {
-        console.log('Gen is 0 then generating new params')
-        strategyParams = bornGen0(task, poolData.tickSpacing)
+  // count how much results of last gen are already done
+  const alreadyDoneInGen = await resultRepository
+    .countBy({
+      gen: lastGen,
+      done: true,
+      task,
+    })
+  console.log(`Already done: ${alreadyDoneInGen} of ${task.config.minIndividualsPerGen}.`)
+
+  if (alreadyDoneInGen < task.config.minIndividualsPerGen) {
+    gen = lastGen
+    console.log(`Creating results in gen ${gen}`)
+    if (gen === 0) {
+      console.log('Gen is 0 then generating new params')
+      strategyParams = bornGen0(task, poolData.tickSpacing)
+    }
+  } else {
+    gen = lastGen + 1
+    if (gen === task.config.gens) {
+      console.log(`All ${task.config.gens} created. Work done.`)
+      if (await isTaskDone(task, resultRepository)) {
+        task.done = true
+        await taskRepository.save(task)
       }
-    } else {
-      gen = lastGen + 1
-      if (gen === task.config.gens) {
-        console.log(`All ${task.config.gens} created. Work done.`)
-        if (await isTaskDone(task, resultRepository)) {
-          task.done = true
-          await taskRepository.save(task)
+      return
+    }
+    console.log(`Starting new gen ${gen}`)
+  }
+
+  if (!strategyParams) {
+    console.log('Need crossover and mutation')
+
+    // get best parents
+    const parents = await resultRepository
+      .find({
+        where: {
+          gen: gen - 1,
+          done: true,
+          task,
+        },
+        order: {
+          apr: 'DESC',
+        },
+        take: task.config.bestIndividualsPerGen,
+      })
+
+    // console.log('Best parents', parents)
+
+    // get max rebalanceTickRange
+    let maxRebalanceTickRange = task.config.maxRebalanceTickRange
+    const minRebalanceTickRangeWithoutRebalancesResult = await resultRepository
+      .findOne({
+        where: {
+          gen: gen - 1,
+          done: true,
+          task,
+          rebalances: 0,
+        },
+        order: {
+          rebalanceTickRange: 'ASC',
+        },
+      })
+    if (minRebalanceTickRangeWithoutRebalancesResult) {
+      maxRebalanceTickRange = minRebalanceTickRangeWithoutRebalancesResult.rebalanceTickRange
+    }
+    console.log(`Max rebalance tick range: ${maxRebalanceTickRange}`)
+
+    const parent1Index = getRandomInt(parents.length - 1)
+    let parent2Index = parent1Index
+    while (parent1Index === parent2Index) {
+      parent2Index = getRandomInt(parents.length - 1)
+    }
+    const parent1 = parents[parent1Index]
+    const parent2 = parents[parent2Index]
+
+    console.log('Parent 1', parent1)
+    console.log('Parent 2', parent2)
+
+    // predict best tickRange mutation direction
+    /*let */
+    const tickRangeMutationDirection: MutateDirection = MutateDirection.UNKNOWN
+    /*if (parent1.rebalances === parent2.rebalances) {
+      if (parent1.apr !== parent2.apr) {
+        if (parent1.apr > parent2.apr) {
+          tickRangeMutationDirection = parent1.tickRange < parent2.tickRange ? MutateDirection.DECREASE : MutateDirection.INCREASE
+        } else {
+          tickRangeMutationDirection = parent1.tickRange < parent2.tickRange ? MutateDirection.INCREASE : MutateDirection.DECREASE
         }
-        return
       }
-      console.log(`Starting new gen ${gen}`)
+    }
+    console.log('Tick range mutation direction', tickRangeMutationDirection)*/
+
+    for (let i = 0; i < 50; i++) {
+      // check exist
+      const tickRange = mutateTickRange(parent1.tickRange, tickRangeMutationDirection, poolData.tickSpacing)
+      const rebalanceTickRange = mutateRebalanceTickRange(parent2.rebalanceTickRange, maxRebalanceTickRange, poolData.tickSpacing)
+      if (await resultRepository.countBy({
+        task,
+        tickRange,
+        rebalanceTickRange,
+      })) {
+        console.log('Params already exist')
+      } else {
+        strategyParams = {
+          tickRange,
+          rebalanceTickRange,
+        }
+        break
+      }
     }
 
     if (!strategyParams) {
-      console.log('Need crossover and mutation')
-
-      // get best parents
-      const parents = await resultRepository
-        .find({
-          where: {
-            gen: gen - 1,
-            done: true,
-            task,
-          },
-          order: {
-            apr: 'DESC',
-          },
-          take: task.config.bestIndividualsPerGen,
-        })
-
-      // console.log('Best parents', parents)
-
-      // get max rebalanceTickRange
-      let maxRebalanceTickRange = task.config.maxRebalanceTickRange
-      const minRebalanceTickRangeWithoutRebalancesResult = await resultRepository
-        .findOne({
-          where: {
-            gen: gen - 1,
-            done: true,
-            task,
-            rebalances: 0,
-          },
-          order: {
-            rebalanceTickRange: 'ASC',
-          },
-        })
-      if (minRebalanceTickRangeWithoutRebalancesResult) {
-        maxRebalanceTickRange = minRebalanceTickRangeWithoutRebalancesResult.rebalanceTickRange
+      console.log('Cant find unique strategy params. Work done.')
+      if (await isTaskDone(task, resultRepository)) {
+        task.done = true
+        await taskRepository.save(task)
       }
-      console.log(`Max rebalance tick range: ${maxRebalanceTickRange}`)
-
-      const parent1Index = getRandomInt(parents.length - 1)
-      let parent2Index = parent1Index
-      while (parent1Index === parent2Index) {
-        parent2Index = getRandomInt(parents.length - 1)
-      }
-      const parent1 = parents[parent1Index]
-      const parent2 = parents[parent2Index]
-
-      console.log('Parent 1', parent1)
-      console.log('Parent 2', parent2)
-
-      // predict best tickRange mutation direction
-      /*let */
-      const tickRangeMutationDirection: MutateDirection = MutateDirection.UNKNOWN
-      /*if (parent1.rebalances === parent2.rebalances) {
-        if (parent1.apr !== parent2.apr) {
-          if (parent1.apr > parent2.apr) {
-            tickRangeMutationDirection = parent1.tickRange < parent2.tickRange ? MutateDirection.DECREASE : MutateDirection.INCREASE
-          } else {
-            tickRangeMutationDirection = parent1.tickRange < parent2.tickRange ? MutateDirection.INCREASE : MutateDirection.DECREASE
-          }
-        }
-      }
-      console.log('Tick range mutation direction', tickRangeMutationDirection)*/
-
-      for (let i = 0; i < 50; i++) {
-        // check exist
-        const tickRange = mutateTickRange(parent1.tickRange, tickRangeMutationDirection, poolData.tickSpacing)
-        const rebalanceTickRange = mutateRebalanceTickRange(parent2.rebalanceTickRange, maxRebalanceTickRange, poolData.tickSpacing)
-        if (await resultRepository.countBy({
-          task,
-          tickRange,
-          rebalanceTickRange,
-        })) {
-          console.log('Params already exist')
-        } else {
-          strategyParams = {
-            tickRange,
-            rebalanceTickRange,
-          }
-          break
-        }
-      }
-
-      if (!strategyParams) {
-        console.log('Cant find unique strategy params. Work done.')
-        if (await isTaskDone(task, resultRepository)) {
-          task.done = true
-          await taskRepository.save(task)
-        }
-        return
-      }
+      return
     }
-
-    console.log(`Gen: ${gen}. Tick range: ${strategyParams.tickRange}. Rebalance tick range: ${strategyParams.rebalanceTickRange}.`)
-
-    const result = new Result()
-    result.gen = gen
-    result.done = false
-    result.task = task
-    result.tickRange = strategyParams.tickRange
-    result.rebalanceTickRange = strategyParams.rebalanceTickRange
-    result.earned = ''
-    result.apr = 0
-    result.rebalances = 0
-    await resultRepository.save(result)
-
-    const liquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(task.pool), task.startBlock, task.config.liquiditySnapshotSurroundingTickSpacings)
-    const signer = (await ethers.getSigners())[0];
-    const contracts = await deployBacktestSystem(
-      signer,
-      liquiditySnapshot,
-      getAddress(task.vaultAsset),
-      poolData.token0,
-      poolData.token1,
-      poolData.fee,
-      strategyParams.tickRange,
-      strategyParams.rebalanceTickRange
-    )
-
-    const results = await strategyBacktest(
-      signer,
-      contracts.vault,
-      contracts.strategy,
-      contracts.uniswapV3Calee,
-      contracts.uniswapV3Helper,
-      liquiditySnapshot,
-      task.investAmountUnits,
-      task.startBlock,
-      task.endBlock,
-      getAddress(task.pool)
-    )
-
-    await showBacktestResult(results)
-
-    result.apr = getApr(results.earned, results.investAmount, results.startTimestamp, results.endTimestamp)
-    result.earned = results.earned.toString()
-    result.done = true
-    result.rebalances = results.rebalances
-    await resultRepository.save(result)
   }
+
+  console.log(`Gen: ${gen}. Tick range: ${strategyParams.tickRange}. Rebalance tick range: ${strategyParams.rebalanceTickRange}.`)
+
+  const result = new Result()
+  result.gen = gen
+  result.done = false
+  result.task = task
+  result.tickRange = strategyParams.tickRange
+  result.rebalanceTickRange = strategyParams.rebalanceTickRange
+  result.earned = ''
+  result.apr = 0
+  result.rebalances = 0
+  await resultRepository.save(result)
+
+  const liquiditySnapshot = await UniswapV3Utils.getPoolLiquiditySnapshot(getAddress(task.pool), task.startBlock, task.config.liquiditySnapshotSurroundingTickSpacings)
+  const signer = (await ethers.getSigners())[0];
+  const contracts = await deployBacktestSystem(
+    signer,
+    liquiditySnapshot,
+    getAddress(task.vaultAsset),
+    poolData.token0,
+    poolData.token1,
+    poolData.fee,
+    strategyParams.tickRange,
+    strategyParams.rebalanceTickRange
+  )
+
+  const results = await strategyBacktest(
+    signer,
+    contracts.vault,
+    contracts.strategy,
+    contracts.uniswapV3Calee,
+    contracts.uniswapV3Helper,
+    liquiditySnapshot,
+    task.investAmountUnits,
+    task.startBlock,
+    task.endBlock,
+    getAddress(task.pool)
+  )
+
+  await showBacktestResult(results)
+
+  result.apr = getApr(results.earned, results.investAmount, results.startTimestamp, results.endTimestamp)
+  result.earned = results.earned.toString()
+  result.done = true
+  result.rebalances = results.rebalances
+  await resultRepository.save(result)
 }
 
 main().catch((error) => {
