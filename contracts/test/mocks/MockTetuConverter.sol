@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "hardhat/console.sol";
 
 /// @notice Mock of ITetuConverter, each function saves input params and has customizable output value
@@ -16,8 +17,8 @@ contract MockTetuConverter is ITetuConverter {
   //////////////////////////////////////////////////////////
   address public _controller;
 
-  function controller() external view returns (IConverterController) {
-    return IConverterController(_controller);
+  function controller() external view returns (address) {
+    return _controller;
   }
 
   function setController(address controller_) external {
