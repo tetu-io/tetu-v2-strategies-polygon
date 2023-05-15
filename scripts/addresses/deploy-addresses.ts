@@ -74,6 +74,10 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.UNISWAPV3_USDC_DAI_100,
     "matic": MaticAddresses.UNISWAPV3_USDC_DAI_100
   },
+  UNISWAPV3_WSTETH_WETH_500: {
+    "hardhat": MaticAddresses.UNISWAPV3_wstETH_WETH_500,
+    "matic": MaticAddresses.UNISWAPV3_wstETH_WETH_500
+  },
   SPLITTER_USDC_ADDRESS: {
     "hardhat": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c",
     "matic": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c"
