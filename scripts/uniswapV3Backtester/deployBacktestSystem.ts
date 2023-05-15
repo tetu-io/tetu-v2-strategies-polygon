@@ -1,20 +1,20 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
-  BorrowManager,
+  BorrowManager, BorrowManager__factory,
   CErc20Immutable,
   CompPriceOracleImitator,
   Comptroller,
   Controller as LiquidatorController,
   ControllerV2,
   ControllerV2__factory,
-  ConverterController,
+  ConverterController, ConverterController__factory, DebtMonitor__factory,
   ForwarderV3__factory,
   HfPlatformAdapter,
   HfPoolAdapter,
   IERC20Metadata__factory,
   InvestFundV2__factory,
-  JumpRateModelV2,
+  JumpRateModelV2, Keeper__factory,
   MockToken,
   MultiBribe__factory,
   MultiGauge,
@@ -22,8 +22,8 @@ import {
   PlatformVoter__factory,
   PriceOracleImitator,
   ProxyControlled,
-  StrategySplitterV2__factory,
-  TetuConverter,
+  StrategySplitterV2__factory, SwapManager__factory,
+  TetuConverter, TetuConverter__factory,
   TetuLiquidator__factory,
   TetuVaultV2,
   TetuVaultV2__factory,
@@ -196,38 +196,48 @@ export async function deployBacktestSystem(
 
 
   // deploy tetu converter and setup
-  const converterController = await DeployerUtils.deployContract(
+  const converterController = ConverterController__factory.connect(await deployConverterProxy(signer, "ConverterController"), signer)
+  const borrowManager = BorrowManager__factory.connect(await deployConverterProxy(signer, 'BorrowManager'), signer)
+  const keeper = Keeper__factory.connect(await deployConverterProxy(signer, 'Keeper'), signer)
+  const swapManager = SwapManager__factory.connect(await deployConverterProxy(signer, 'SwapManager'), signer)
+  const debtMonitor = DebtMonitor__factory.connect(await deployConverterProxy(signer, 'DebtMonitor'), signer)
+  const tetuConverter = TetuConverter__factory.connect(await deployConverterProxy(signer, "TetuConverter"), signer)
+
+
+  /*const converterController = await DeployerUtils.deployContract(
     signer,
     'ConverterController',
-    liquidator.address,
-  ) as ConverterController;
-  const borrowManager = await DeployerUtils.deployContract(
+    // liquidator.address,
+  ) as ConverterController;*/
+  /*const borrowManager = await DeployerUtils.deployContract(
     signer,
     'BorrowManager',
     converterController.address,
     parseUnits('0.9'),
-  ) as BorrowManager;
-  const debtMonitor = await DeployerUtils.deployContract(
+  ) as BorrowManager;*/
+  /*const debtMonitor = await DeployerUtils.deployContract(
     signer,
     'DebtMonitor',
     converterController.address,
     borrowManager.address,
-  );
-  const swapManager = await DeployerUtils.deployContract(
+  );*/
+  /*const swapManager = await DeployerUtils.deployContract(
     signer,
     'SwapManager',
     converterController.address,
     liquidator.address,
-  );
+  );*/
   const keeperCaller = await DeployerUtils.deployContract(signer, 'KeeperCaller');
-  const keeper = await DeployerUtils.deployContract(
+  /*const keeper = await DeployerUtils.deployContract(
     signer,
     'Keeper',
     converterController.address,
     keeperCaller.address,
     2 * 7 * 24 * 60 * 60,
-  );
-  const tetuConverter = await DeployerUtils.deployContract(
+  );*/
+
+
+  /*const tetuConverter = await DeployerUtils.deployContract(
     signer,
     'TetuConverter',
     converterController.address,
@@ -235,20 +245,28 @@ export async function deployBacktestSystem(
     debtMonitor.address,
     swapManager.address,
     keeper.address,
-  ) as TetuConverter;
-  await converterController.initialize(
+  ) as TetuConverter;*/
+  await converterController.init(
     signer.address,
-    41142,
-    101,
-    120,
+    signer.address,
     tetuConverter.address,
     borrowManager.address,
     debtMonitor.address,
     keeper.address,
     swapManager.address,
-    1000,
-    priceOracleImitator.address
+    priceOracleImitator.address,
+    liquidator.address,
+    41142
   );
+  await converterController.setMinHealthFactor2(101)
+  await converterController.setTargetHealthFactor2(120)
+  await converterController.setDebtGap(1000)
+  await borrowManager.init(converterController.address, parseUnits('0.9'))
+  await keeper.init(converterController.address, keeperCaller.address, 2 * 7 * 24 * 60 * 60,)
+  await tetuConverter.init(converterController.address)
+  await debtMonitor.init(converterController.address)
+  await swapManager.init(converterController.address)
+
   const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
   const platformAdapter = await DeployerUtils.deployContract(
     signer,
@@ -505,4 +523,11 @@ export async function deployAndInitVaultAndUniswapV3Strategy<T>(
   await splitter.addStrategies([strategy.address], [0]);
 
   return { vault, strategy };
+}
+
+async function deployConverterProxy(signer: SignerWithAddress, contract: string) {
+  const logic = await DeployerUtils.deployContract(signer, contract);
+  const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-converter/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
+  await RunHelper.runAndWait(() => proxy.initProxy(logic.address));
+  return proxy.address;
 }
