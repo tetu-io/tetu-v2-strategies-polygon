@@ -49,3 +49,16 @@ export interface IQuoteRepayParams {
   collateralAmountOut: string;
   swappedAmountOut?: string;
 }
+export interface IConversionValidationParams {
+  tokenIn: MockToken;
+  tokenOut: MockToken;
+  amountIn: string;
+  amountOut: string;
+  /**
+   * See SetIsConversionValidResult:
+   *  0 - fail
+   *  1 - success
+   *  2 - zero price error
+   */
+  result: number;
+}

@@ -132,7 +132,8 @@ contract ConverterStrategyBaseLibFacade {
     address tokenOut,
     uint amountIn,
     uint slippage,
-    uint rewardLiquidationThresholdForTokenOut
+    uint rewardLiquidationThresholdForTokenOut,
+    bool skipValidation
   ) external returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -144,7 +145,8 @@ contract ConverterStrategyBaseLibFacade {
       tokenOut,
       amountIn,
       slippage,
-      rewardLiquidationThresholdForTokenOut
+      rewardLiquidationThresholdForTokenOut,
+      skipValidation
     );
   }
 

@@ -10,7 +10,7 @@ import "../../libs/AppPlatforms.sol";
 contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDepositor {
   string public constant override NAME = "Balancer Boosted Strategy";
   string public constant override PLATFORM = AppPlatforms.BALANCER;
-  string public constant override STRATEGY_VERSION = "1.0.0";
+  string public constant override STRATEGY_VERSION = "1.0.1";
 
   function init(
     address controller_,
