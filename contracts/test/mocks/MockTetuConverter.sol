@@ -5,6 +5,8 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
+import "../../libs/AppErrors.sol";
+
 import "hardhat/console.sol";
 
 /// @notice Mock of ITetuConverter, each function saves input params and has customizable output value
@@ -649,12 +651,19 @@ contract MockTetuConverter is ITetuConverter {
     revert("safeLiquidate is not implemented");
   }
 
+  //region ----------------------------------------------  isConversionValid
+  enum SetIsConversionValidResult {
+    FAILED_0,
+    SUCCESS_1,
+    PRICE_ZERO_ERROR_2
+  }
+
   struct IsConversionValidParams {
     address assetIn;
     uint amountIn;
     address assetOut;
     uint amountOut;
-    bool result;
+    SetIsConversionValidResult result;
   }
   /// @notice keccak256(assetIn_, amountIn_, assetOut_, amountOut_) => results
   mapping(bytes32 => IsConversionValidParams) public isConversionValidParams;
@@ -670,7 +679,13 @@ contract MockTetuConverter is ITetuConverter {
     priceImpactTolerance_;
     IsConversionValidParams memory p = isConversionValidParams[key];
     if (p.assetIn == assetIn_) {
-      return p.result;
+      if (p.result == SetIsConversionValidResult.FAILED_0) {
+        return false;
+      } else if (p.result == SetIsConversionValidResult.SUCCESS_1) {
+        return true;
+      } else {
+        revert(AppErrors.ZERO_PRICE);
+      }
     } else {
       console.log("isConversionValid assetIn", _tokenName(assetIn_), amountIn_);
       console.log("isConversionValid assetOut", _tokenName(assetOut_), amountOut_);
@@ -683,19 +698,21 @@ contract MockTetuConverter is ITetuConverter {
     uint amountIn_,
     address assetOut_,
     uint amountOut_,
-    bool result_
+    SetIsConversionValidResult result_
   ) external {
     console.log("setIsConversionValid assetIn", assetIn_, amountIn_);
     console.log("setIsConversionValid assetOut", assetOut_, amountOut_);
     bytes32 key = keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_, amountOut_));
     isConversionValidParams[key] = IsConversionValidParams({
-    assetIn : assetIn_,
-    amountIn : amountIn_,
-    assetOut : assetOut_,
-    amountOut : amountOut_,
-    result : result_
+      assetIn: assetIn_,
+      amountIn: amountIn_,
+      assetOut: assetOut_,
+      amountOut: amountOut_,
+      result: result_
     });
   }
+  //endregion ----------------------------------------------  isConversionValid
+
 
   function repayTheBorrow(address poolAdapter_, bool closePosition) external pure returns (
     uint collateralAmountOut,
