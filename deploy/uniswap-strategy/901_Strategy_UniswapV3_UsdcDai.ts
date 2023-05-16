@@ -1,24 +1,24 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { ethers } from 'hardhat';
-import { UniswapV3ConverterStrategy } from '../typechain';
+import { UniswapV3ConverterStrategy } from '../../typechain';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
-import { isContractExist, txParams } from '../deploy_constants/deploy-helpers';
-import { RunHelper } from '../scripts/utils/RunHelper';
+import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
+import { RunHelper } from '../../scripts/utils/RunHelper';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
-  const { deployer, CONVERTER_ADDRESS, UNISWAPV3_USDC_USDT_100, SPLITTER_USDC_ADDRESS } = await getNamedAccounts();
+  const { deployer, CONVERTER_ADDRESS, UNISWAPV3_USDC_DAI_100, SPLITTER_USDC_ADDRESS } = await getNamedAccounts();
 
-  if (await isContractExist(hre, 'Strategy_UniswapV3ConverterStrategy_UsdcUsdt')) {
+  if (await isContractExist(hre, 'Strategy_UniswapV3ConverterStrategy_UsdcDai')) {
     return;
   }
 
   const core = Addresses.getCore() as CoreAddresses;
 
   const strategyImplDeployment = await deployments.get('UniswapV3ConverterStrategy');
-  const proxyDeployResult = await deployments.deploy('Strategy_UniswapV3ConverterStrategy_UsdcUsdt', {
+  const proxyDeployResult = await deployments.deploy('Strategy_UniswapV3ConverterStrategy_UsdcDai', {
     contract: '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
     from: deployer,
     log: true,
@@ -26,7 +26,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   });
 
   await deployments.execute(
-    'Strategy_UniswapV3ConverterStrategy_UsdcUsdt',
+    'Strategy_UniswapV3ConverterStrategy_UsdcDai',
     {
       from: deployer,
       log: true,
@@ -45,7 +45,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     core.controller,
     SPLITTER_USDC_ADDRESS,
     CONVERTER_ADDRESS,
-    UNISWAPV3_USDC_USDT_100,
+    UNISWAPV3_USDC_DAI_100,
     0,
     0, {
       ...params,
@@ -53,5 +53,5 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   ));
 };
 export default func;
-func.tags = ['Strategy_UniswapV3ConverterStrategy_UsdcUsdt'];
+func.tags = ['Strategy_UniswapV3ConverterStrategy_UsdcDai'];
 func.dependencies = ['UniswapV3ConverterStrategy'];

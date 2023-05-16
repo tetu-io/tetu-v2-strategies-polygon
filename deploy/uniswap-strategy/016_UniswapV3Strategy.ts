@@ -1,7 +1,7 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
-import { UniswapV3ConverterStrategy } from '../typechain';
-import { txParams } from '../deploy_constants/deploy-helpers';
+import { UniswapV3ConverterStrategy } from '../../typechain';
+import { txParams } from '../../deploy_constants/deploy-helpers';
 import { ethers } from 'hardhat';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {

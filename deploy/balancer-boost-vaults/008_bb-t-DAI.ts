@@ -1,10 +1,10 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction, DeploymentSubmission } from 'hardhat-deploy/types';
-import { Consts } from '../deploy_constants/constatants';
+import { Consts } from '../../deploy_constants/constatants';
 import { ethers } from 'hardhat';
-import ERC4626LinearPoolFactoryABI from '../scripts/abis/ERC4626LinearPoolFactory.json';
-import LinearPool from '../scripts/abis/LinearPool.json';
-import { isContractExist } from '../deploy_constants/deploy-helpers';
+import ERC4626LinearPoolFactoryABI from '../../scripts/abis/ERC4626LinearPoolFactory.json';
+import LinearPool from '../../scripts/abis/LinearPool.json';
+import { isContractExist } from '../../deploy_constants/deploy-helpers';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
