@@ -1,12 +1,12 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction, DeploymentSubmission } from 'hardhat-deploy/types';
-import { Consts } from '../deploy_constants/constatants';
+import { Consts } from '../../deploy_constants/constatants';
 import { ethers } from 'hardhat';
-import ComposableStablePoolFactoryABI from '../scripts/abis/ComposableStablePoolFactory.json';
-import ComposableStablePoolABI from '../scripts/abis/ComposableStablePool.json';
-import LinearPoolABI from '../scripts/abis/LinearPool.json';
-import BalancerVaultABI from '../scripts/abis/BalancerVault.json';
-import { isContractExist } from '../deploy_constants/deploy-helpers';
+import ComposableStablePoolFactoryABI from '../../scripts/abis/ComposableStablePoolFactory.json';
+import ComposableStablePoolABI from '../../scripts/abis/ComposableStablePool.json';
+import LinearPoolABI from '../../scripts/abis/LinearPool.json';
+import BalancerVaultABI from '../../scripts/abis/BalancerVault.json';
+import { isContractExist } from '../../deploy_constants/deploy-helpers';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;

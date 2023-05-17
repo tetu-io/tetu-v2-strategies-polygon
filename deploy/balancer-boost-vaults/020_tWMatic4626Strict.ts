@@ -1,10 +1,10 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
-import { Consts } from '../deploy_constants/constatants';
-import { TetuV1SingleTokenStrictStrategy__factory } from '../typechain';
+import { Consts } from '../../deploy_constants/constatants';
+import { TetuV1SingleTokenStrictStrategy__factory } from '../../typechain';
 import { ethers } from 'hardhat';
-import { Misc } from '../scripts/utils/Misc';
-import { txParams } from '../deploy_constants/deploy-helpers';
+import { Misc } from '../../scripts/utils/Misc';
+import { txParams } from '../../deploy_constants/deploy-helpers';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;

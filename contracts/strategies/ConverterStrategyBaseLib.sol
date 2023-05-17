@@ -573,6 +573,7 @@ library ConverterStrategyBaseLib {
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
+  /// @param skipValidation Don't check correctness of conversion using TetuConverter's oracle (i.e. for reward tokens)
   function liquidate(
     ITetuConverter converter,
     ITetuLiquidator liquidator_,
@@ -580,17 +581,19 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdTokenOut_
+    uint liquidationThresholdTokenOut_,
+    bool skipValidation
   ) external returns (
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
-    return _liquidate(converter, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, liquidationThresholdTokenOut_);
+    return _liquidate(converter, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, liquidationThresholdTokenOut_, skipValidation);
   }
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator (== 0 | amountIn_)
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
+  /// @param skipValidation Don't check correctness of conversion using TetuConverter's oracle (i.e. for reward tokens)
   function _liquidate(
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
@@ -598,7 +601,8 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_
+    uint liquidationThresholdForTokenOut_,
+    bool skipValidation
   ) internal returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -612,10 +616,12 @@ library ConverterStrategyBaseLib {
 
     // if the expected value is higher than threshold distribute to destinations
     return amountOut > liquidationThresholdForTokenOut_
-      ? (amountIn_, _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_))
+      ? (amountIn_, _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, skipValidation))
       : (0, 0);
   }
 
+  /// @notice Make liquidation using given route and check correctness using TetuConverter's price oracle
+  /// @param skipValidation Don't check correctness of conversion using TetuConverter's oracle (i.e. for reward tokens)
   function _liquidateWithRoute(
     ITetuConverter converter_,
     ITetuLiquidator.PoolData[] memory route,
@@ -623,7 +629,8 @@ library ConverterStrategyBaseLib {
     address tokenIn_,
     address tokenOut_,
     uint amountIn_,
-    uint slippage_
+    uint slippage_,
+    bool skipValidation
   ) internal returns (
     uint receivedAmountOut
   ) {
@@ -637,7 +644,9 @@ library ConverterStrategyBaseLib {
     require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
     receivedAmountOut = balanceAfter - balanceBefore;
 
-    require(converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
+    // Oracle in TetuConverter "knows" only limited number of the assets
+    // It may not know prices for reward assets, so for rewards this validation should be skipped to avoid TC-4 error
+    require(skipValidation || converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
     emit Liquidation(tokenIn_, tokenOut_, amountIn_, amountIn_, receivedAmountOut);
   }
   //endregion Liquidation
@@ -819,7 +828,8 @@ library ConverterStrategyBaseLib {
         p.tokens[p.indexTargetAsset],
         Math.min(amountIn, p.amounts[indexTokenIn]),
         _ASSET_LIQUIDATION_SLIPPAGE,
-        p.liquidationThresholdForTargetAsset
+        p.liquidationThresholdForTargetAsset,
+        false
       );
     }
 
@@ -898,7 +908,8 @@ library ConverterStrategyBaseLib {
                 asset,
                 p.amountP,
                 _REWARD_LIQUIDATION_SLIPPAGE,
-                p.liquidationThresholdAsset
+                p.liquidationThresholdAsset,
+                false // use conversion validation for these rewards
               );
               amountToPerformanceAndInsurance += p.receivedAmountOut;
             }
@@ -917,7 +928,8 @@ library ConverterStrategyBaseLib {
               asset,
               p.amountCP,
               _REWARD_LIQUIDATION_SLIPPAGE,
-              p.liquidationThresholdAsset
+              p.liquidationThresholdAsset,
+              true // skip conversion validation for rewards becase we can have arbitrary assets here
             );
 
             amountToPerformanceAndInsurance += p.receivedAmountOut * (rewardAmounts[i] - p.amountFC) / p.amountCP;
@@ -1209,7 +1221,8 @@ library ConverterStrategyBaseLib {
           v.asset,
           amountsToConvert[i] - repaidAmountsOut[i],
           _ASSET_LIQUIDATION_SLIPPAGE,
-          liquidationThreshold
+          liquidationThreshold,
+          false
         );
         collateralOut += v.received;
         repaidAmountsOut[i] += v.spent;
@@ -1289,7 +1302,8 @@ library ConverterStrategyBaseLib {
                 tokens[i],
                 toSell,
                 _ASSET_LIQUIDATION_SLIPPAGE,
-                liquidationThresholds[tokens[i]]
+                liquidationThresholds[tokens[i]],
+                false
               );
               tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
             }
@@ -1310,7 +1324,8 @@ library ConverterStrategyBaseLib {
               v.asset,
               tokenBalance,
               _ASSET_LIQUIDATION_SLIPPAGE,
-              liquidationThresholds[v.asset]
+              liquidationThresholds[v.asset],
+              false
             );
             if (spentAmountIn != 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold

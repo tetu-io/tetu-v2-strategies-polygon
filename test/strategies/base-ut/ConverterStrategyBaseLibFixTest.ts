@@ -9,13 +9,17 @@ import {MockHelper} from '../../baseUT/helpers/MockHelper';
 import {Misc} from "../../../scripts/utils/Misc";
 import {BigNumber} from "ethers";
 import {
-  IBorrowParamsNum,
+  IBorrowParamsNum, IConversionValidationParams,
   ILiquidationParams,
   IQuoteRepayParams,
   IRepayParams,
   ITokenAmountNum
 } from "../../baseUT/mocks/TestDataTypes";
-import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
+import {
+  setupIsConversionValid,
+  setupIsConversionValidDetailed,
+  setupMockedLiquidation
+} from "../../baseUT/mocks/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {setupMockedBorrow, setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
@@ -1344,6 +1348,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       isConversionValid?: boolean;
       slippage?: number;
       noLiquidationRoute?: boolean;
+      skipConversionValidation?: boolean;
     }
 
     async function makeLiquidationTest(p: ILiquidationTestParams): Promise<ILiquidationTestResults> {
@@ -1387,6 +1392,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         parseUnits(p.liquidation.amountIn, await p.liquidation.tokenIn.decimals()),
         p.slippage || 10_000,
         parseUnits(p.liquidationThreshold, await p.liquidation.tokenOut.decimals()),
+        p?.skipConversionValidation || false
       );
 
       const tx = await facade.liquidate(
@@ -1397,6 +1403,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         parseUnits(p.liquidation.amountIn, await p.liquidation.tokenIn.decimals()),
         p.slippage || 10_000,
         parseUnits(p.liquidationThreshold, await p.liquidation.tokenOut.decimals()),
+        p?.skipConversionValidation || false
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
@@ -1477,6 +1484,34 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           const r = await loadFixture(makeLiquidationFixture);
           expect(r.balanceTokenIn).eq(1000);
           expect(r.balanceTokenOut).eq(2000);
+        });
+      });
+      describe("Conversion validation is disabled", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should revert if price impact is too high", async () => {
+          const r = await makeLiquidationTest({
+            tokens: [usdc, dai],
+            balances: ["1000", "2000"],
+            prices: ["1", "1"],
+            liquidation: {
+              tokenIn: usdc,
+              tokenOut: dai,
+              amountIn: "400",
+              amountOut: "800",
+            },
+            liquidationThreshold: "799",
+            isConversionValid: false, // price impact is too high
+            skipConversionValidation: true // .. but validation is skipped
+          });
+          expect(r.spentAmountIn).eq(400);
+          expect(r.receivedAmountOut).eq(800);
         });
       });
     });
@@ -2343,6 +2378,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       rewardAmounts: string[];
 
       isConversionValid?: boolean;
+      isConversionValidDetailed?: IConversionValidationParams[];
 
       performanceFee: number;
     }
@@ -2370,13 +2406,21 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
       for (const liquidation of p.liquidations) {
         await setupMockedLiquidation(liquidator, liquidation);
-        await setupIsConversionValid(
-          converter,
-          liquidation,
-          p.isConversionValid === undefined
-            ? true
-            : p.isConversionValid
-        )
+        if (! p.isConversionValidDetailed) {
+          await setupIsConversionValid(
+            converter,
+            liquidation,
+            p.isConversionValid === undefined
+              ? true
+              : p.isConversionValid
+          )
+        }
+      }
+
+      if (p.isConversionValidDetailed) {
+        for (const cv of p.isConversionValidDetailed) {
+          await setupIsConversionValidDetailed(converter, cv);
+        }
       }
 
       // set up thresholds
@@ -2983,6 +3027,77 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               const r = await loadFixture(makeRecycleTest);
               expect(r.amountToPerformanceAndInsurance).eq("116"); // 7 + 11 + 100*0.1+330*(300*0.1/(300*0.1+300*0.9))+550*(500*0.1/(500*0.1+500*0.9))
             });
+          });
+        });
+      });
+      describe("using of isConversionValid inside liquidation", () => {
+        describe("Reward token belongs to the list of depositor tokens", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              assetIndex: 1,
+              tokens: [usdt, usdc, dai],
+              rewardTokens: [dai],
+              rewardAmounts: ["100"],
+              thresholds: [],
+              initialBalances: [
+                {token: usdt, amount: "1"},
+                {token: usdc, amount: "2"},
+                {token: dai, amount: "103"}
+              ],
+              compoundRatio: 90_000,
+              liquidations: [{amountIn: "10", amountOut: "8", tokenIn: dai, tokenOut: usdc}],
+              performanceFee: 10_000,
+              isConversionValidDetailed: [{amountIn: "10", amountOut: "8", tokenIn: dai, tokenOut: usdc, result: 1}]
+            });
+          }
+
+          it("should successfully liquidate performance part of the reward amount", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.amountToPerformanceAndInsurance).eq("8");
+          });
+        });
+        describe("Reward doesn't token belong to the list of depositor tokens", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRecycleTest(): Promise<IRecycleTestResults> {
+            return makeRecycle({
+              assetIndex: 1,
+              tokens: [usdt, usdc, dai],
+              rewardTokens: [tetu],
+              rewardAmounts: ["100"],
+              thresholds: [],
+              initialBalances: [
+                {token: usdt, amount: "1"},
+                {token: usdc, amount: "2"},
+                {token: dai, amount: "3"},
+                {token: tetu, amount: "108"}
+              ],
+              compoundRatio: 90_000,
+              liquidations: [{tokenIn: tetu, tokenOut: usdc, amountIn: "90", amountOut: "97"}],
+              performanceFee: 0,
+
+              // Following isConversionValid check shouldn't be called because TETU is not depositor asset
+              isConversionValidDetailed: [{tokenIn: tetu, tokenOut: usdc, amountIn: "90", amountOut: "97", result: 2}]
+            });
+          }
+
+          it("should set expected balances of rewards tokens", async () => {
+            const r = await loadFixture(makeRecycleTest);
+            expect(r.rewardTokenBalances.join()).eq(["18"].join());
           });
         });
       });

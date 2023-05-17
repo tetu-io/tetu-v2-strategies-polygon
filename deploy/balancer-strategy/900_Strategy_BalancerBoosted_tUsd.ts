@@ -1,24 +1,24 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { ethers } from 'hardhat';
-import { UniswapV3ConverterStrategy } from '../typechain';
+import {BalancerBoostedStrategy, UniswapV3ConverterStrategy} from '../../typechain';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
-import { isContractExist, txParams } from '../deploy_constants/deploy-helpers';
-import { RunHelper } from '../scripts/utils/RunHelper';
+import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
+import { RunHelper } from '../../scripts/utils/RunHelper';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
-  const { deployer, CONVERTER_ADDRESS, UNISWAPV3_USDC_MIMATIC_100, SPLITTER_USDC_ADDRESS } = await getNamedAccounts();
+  const { deployer, CONVERTER_ADDRESS, BALANCER_POOL_T_USD, SPLITTER_USDC_ADDRESS } = await getNamedAccounts();
 
-  if (await isContractExist(hre, 'Strategy_UniswapV3ConverterStrategy_UsdcMiMatic')) {
+  if (await isContractExist(hre, 'Strategy_BalancerBoostedStrategy_tUsd')) {
     return;
   }
 
   const core = Addresses.getCore() as CoreAddresses;
 
-  const strategyImplDeployment = await deployments.get('UniswapV3ConverterStrategy');
-  const proxyDeployResult = await deployments.deploy('Strategy_UniswapV3ConverterStrategy_UsdcMiMatic', {
+  const strategyImplDeployment = await deployments.get('BalancerBoostedStrategy');
+  const proxyDeployResult = await deployments.deploy('Strategy_BalancerBoostedStrategy_tUsd', {
     contract: '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
     from: deployer,
     log: true,
@@ -26,7 +26,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   });
 
   await deployments.execute(
-    'Strategy_UniswapV3ConverterStrategy_UsdcMiMatic',
+    'Strategy_BalancerBoostedStrategy_tUsd',
     {
       from: deployer,
       log: true,
@@ -37,21 +37,20 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   );
 
   const strategyContract = await ethers.getContractAt(
-    'UniswapV3ConverterStrategy',
+    'BalancerBoostedStrategy',
     proxyDeployResult.address,
-  ) as UniswapV3ConverterStrategy;
+  ) as BalancerBoostedStrategy;
   const params = await txParams(hre, ethers.provider);
   await RunHelper.runAndWait(() => strategyContract.init(
     core.controller,
     SPLITTER_USDC_ADDRESS,
     CONVERTER_ADDRESS,
-    UNISWAPV3_USDC_MIMATIC_100,
-    0,
-    0, {
+    BALANCER_POOL_T_USD,
+    {
       ...params,
     },
   ));
 };
 export default func;
-func.tags = ['Strategy_UniswapV3ConverterStrategy_UsdcMiMatic'];
-func.dependencies = ['UniswapV3ConverterStrategy'];
+func.tags = ['Strategy_BalancerBoostedStrategy_tUsd'];
+func.dependencies = ['BalancerBoostedStrategy'];
