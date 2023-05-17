@@ -313,6 +313,7 @@ export class MaticAddresses {
   public static UNISWAPV3_USDC_USDT_100 = '0xDaC8A8E6DBf8c690ec6815e0fF03491B2770255D'.toLowerCase()
   public static UNISWAPV3_USDC_miMATIC_100 = '0x7de263D0Ad6e5D208844E65118c3a02A9A5D56B6'.toLowerCase()
   public static UNISWAPV3_wstETH_WETH_500 = '0x993dEfDE3E6eF50610eB6D994823dc82565Ad3Ba'.toLowerCase()
+  public static UNISWAPV3_wstETH_WETH_100 = '0xff69201019E25E3f8f3180faBdb58d60AFeD9A1D'.toLowerCase()
   public static UNISWAPV3_WMATIC_MaticX_500 = '0x12CfbfFF0Ea06A04DfA50d8597143313C3Dd75d4'.toLowerCase()
   public static UNISWAPV3_WMATIC_MaticX_100 = '0xFfFC988BFf914aeeca5ABdE55e7E07D3AAD09015'.toLowerCase()
   // volatile pools
