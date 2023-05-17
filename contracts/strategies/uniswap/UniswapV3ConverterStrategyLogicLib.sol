@@ -12,7 +12,7 @@ library UniswapV3ConverterStrategyLogicLib {
   //            CONSTANTS
   //////////////////////////////////////////
 
-  uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_STABLE = 100;
+  uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_STABLE = 300;
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE = 500;
   uint internal constant HARD_WORK_USD_FEE_THRESHOLD = 100;
   /// @dev 0.5% by default
