@@ -17,7 +17,7 @@ contract PriceOracleImitator is IPriceOracle {
   /// @notice Return asset price in USD, decimals 18
   function getAssetPrice(address asset) external view override returns (uint256) {
     if (asset == usdc) {
-      return 1e18;
+      return 1e18 * 10000;
     }
     uint tokenInDecimals = IERC20Metadata(asset).decimals();
     uint tokenOutDecimals = IERC20Metadata(usdc).decimals();
@@ -29,7 +29,7 @@ contract PriceOracleImitator is IPriceOracle {
       price = price * 10 ** (18 - tokenOutDecimals);
     }
 
-    return price;
+    return price * 10000;
   }
 
   function setUsdc(address asset) external {

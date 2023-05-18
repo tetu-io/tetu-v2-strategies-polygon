@@ -21,7 +21,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.2.6";
+  string public constant override STRATEGY_VERSION = "1.2.7";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT

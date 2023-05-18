@@ -1,6 +1,6 @@
 /* tslint:disable:no-trailing-whitespace */
 import {BigNumber, ethers} from "ethers";
-import {UniswapV3Pool__factory} from "../../typechain";
+import {IERC20Metadata__factory, UniswapV3Pool__factory} from "../../typechain";
 import fs from "fs";
 import { createClient } from 'urql'
 import 'isomorphic-unfetch';
@@ -8,6 +8,23 @@ import {Misc} from "./Misc";
 
 export class UniswapV3Utils {
   static SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon'
+
+  public static async getPoolData(poolAddr: string): Promise<IPoolData> {
+    const rpc = process.env.TETU_MATIC_RPC_URL
+    const provider = new ethers.providers.JsonRpcProvider(rpc)
+    const pool = UniswapV3Pool__factory.connect(poolAddr, provider)
+    const token0 = IERC20Metadata__factory.connect(await pool.token0(), provider)
+    const token1 = IERC20Metadata__factory.connect(await pool.token1(), provider)
+    const fee = await pool.fee()
+    return {
+      token0: token0.address,
+      token0Symbol: await token0.symbol(),
+      token1: token1.address,
+      token1Symbol: await token1.symbol(),
+      fee,
+      tickSpacing: this.getTickSpacing(fee),
+    }
+  }
 
   public static async getPoolTransactions(poolAddr: string, startBlock: number, endBlock: number) {
     console.log(`Get Uniswap V3 pool transactions for ${poolAddr} for blocks ${startBlock} - ${endBlock}`)
@@ -62,6 +79,9 @@ export class UniswapV3Utils {
           }
         }
 
+        if (!data.data.mints.length) {
+          break
+        }
         lastTimestamp = data.data.mints[data.data.mints.length - 1].timestamp
         if (data.data.mints.length < 1000) {
           break
@@ -98,6 +118,9 @@ export class UniswapV3Utils {
           }
         }
 
+        if (!data.data.burns.length) {
+          break
+        }
         lastTimestamp = data.data.burns[data.data.burns.length - 1].timestamp
         if (data.data.burns.length < 1000) {
           break
@@ -130,6 +153,11 @@ export class UniswapV3Utils {
             usedTxIds[swap.id] = true
             got++
           }
+        }
+
+        if (!data.data.swaps.length) {
+          console.log('No swaps in this period. Cant backtest.')
+          process.exit()
         }
 
         lastTimestamp = data.data.swaps[data.data.swaps.length - 1].timestamp
@@ -328,6 +356,15 @@ export class UniswapV3Utils {
 
     return [fee0, fee1]
   }
+}
+
+export interface IPoolData {
+  token0: string
+  token0Symbol: string
+  token1: string
+  token1Symbol: string
+  fee: number
+  tickSpacing: number
 }
 
 export interface IPoolTransaction {
