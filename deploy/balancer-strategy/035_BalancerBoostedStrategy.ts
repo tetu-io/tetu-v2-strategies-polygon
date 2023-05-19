@@ -1,23 +1,15 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { DeployFunction } from 'hardhat-deploy/types';
 import { BalancerBoostedStrategy } from '../../typechain';
-import { txParams } from '../../deploy_constants/deploy-helpers';
-import { ethers } from 'hardhat';
+import { hardhatDeploy } from '../../deploy_constants/deploy-helpers';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
-  const { deployments, getNamedAccounts } = hre;
-  const { deployer } = await getNamedAccounts();
-  await deployments.deploy('BalancerBoostedStrategy', {
-    contract: 'BalancerBoostedStrategy',
-    from: deployer,
-    libraries: {
-      StrategyLib: (await deployments.get('StrategyLib')).address,
-      ConverterStrategyBaseLib: (await deployments.get('ConverterStrategyBaseLib')).address,
-      ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
-      BalancerLogicLib: (await deployments.get('BalancerLogicLib')).address,
-    },
-    log: true,
-    ...(await txParams(hre, ethers.provider)),
+  const { deployments } = hre;
+  await hardhatDeploy(hre, 'BalancerBoostedStrategy', true, {
+    StrategyLib: (await deployments.get('StrategyLib')).address,
+    ConverterStrategyBaseLib: (await deployments.get('ConverterStrategyBaseLib')).address,
+    ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
+    BalancerLogicLib: (await deployments.get('BalancerLogicLib')).address,
   });
 };
 export default func;
