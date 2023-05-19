@@ -42,9 +42,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     int24 tickRange_,
     int24 rebalanceTickRange_
   ) external initializer {
-    __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
-    UniswapV3ConverterStrategyLogicLib.initStrategyState(state, controller_, converter_);
+    UniswapV3ConverterStrategyLogicLib.initStrategyState(
+      state,
+      controller_,
+      converter_,
+      pool_,
+      tickRange_,
+      rebalanceTickRange_,
+      ISplitter(splitter_).asset()
+    );
 
     // setup specific name for UI
     strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);

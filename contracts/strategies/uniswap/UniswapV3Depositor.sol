@@ -28,40 +28,6 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   UniswapV3ConverterStrategyLogicLib.State internal state;
 
   /////////////////////////////////////////////////////////////////////
-  ///                INIT
-  /////////////////////////////////////////////////////////////////////
-
-  /// @dev Initializes the contract with the provided parameters.
-  /// @param asset_ The address of the asset.
-  /// @param pool_ The address of the Uniswap V3 pool.
-  /// @param tickRange_ The tick range for the positions.
-  /// @param rebalanceTickRange_ The tick range for rebalancing.
-  function __UniswapV3Depositor_init(
-    address asset_,
-    address pool_,
-    int24 tickRange_,
-    int24 rebalanceTickRange_
-  ) internal onlyInitializing {
-    require(pool_ != address(0), AppErrors.ZERO_ADDRESS);
-    state.pool = IUniswapV3Pool(pool_);
-    state.rebalanceTickRange = rebalanceTickRange_;
-    (
-    state.tickSpacing,
-    state.lowerTick,
-    state.upperTick,
-    state.tokenA,
-    state.tokenB,
-    state.depositorSwapTokens
-    ) = UniswapV3ConverterStrategyLogicLib.calcInitialDepositorValues(
-      state.pool,
-      tickRange_,
-      rebalanceTickRange_,
-      asset_
-    );
-  }
-
-
-  /////////////////////////////////////////////////////////////////////
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
@@ -172,7 +138,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     (uint fee0, uint fee1) = getFees();
     state.rebalanceEarned0 += fee0;
     state.rebalanceEarned1 += fee1;
-    (amountsOut, state.totalLiquidity, state.totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.exit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, uint128(liquidityAmount), state.depositorSwapTokens);
+    amountsOut = UniswapV3ConverterStrategyLogicLib.exit(state, uint128(liquidityAmount));
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.

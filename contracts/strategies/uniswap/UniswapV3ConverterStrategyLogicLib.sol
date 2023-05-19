@@ -160,7 +160,28 @@ library UniswapV3ConverterStrategyLogicLib {
     return oldPrice > newPrice ? (oldPrice - newPrice) > fuseThreshold : (newPrice - oldPrice) > fuseThreshold;
   }
 
-  function initStrategyState(State storage state, address controller_, address converter) external {
+  function initStrategyState(
+    State storage state,
+    address controller_,
+    address converter,
+    address pool,
+    int24 tickRange,
+    int24 rebalanceTickRange,
+    address asset_
+  ) external {
+    require(pool != address(0), AppErrors.ZERO_ADDRESS);
+    state.pool = IUniswapV3Pool(pool);
+
+    state.rebalanceTickRange = rebalanceTickRange;
+
+    _setInitialDepositorValues(
+      state,
+      IUniswapV3Pool(pool),
+      tickRange,
+      rebalanceTickRange,
+      asset_
+    );
+
     address liquidator = IController(controller_).liquidator();
     IERC20(state.tokenA).approve(liquidator, type(uint).max);
     IERC20(state.tokenB).approve(liquidator, type(uint).max);
@@ -186,45 +207,35 @@ library UniswapV3ConverterStrategyLogicLib {
   //            CALCULATIONS
   //////////////////////////////////////////
 
-  /// @notice Calculate the initial values for a Uniswap V3 pool Depositor.
+  /// @notice Calculate and set the initial values for a Uniswap V3 pool Depositor.
+  /// @param state Depositor storage state struct
   /// @param pool The Uniswap V3 pool to get the initial values from.
   /// @param tickRange_ The tick range for the pool.
   /// @param rebalanceTickRange_ The rebalance tick range for the pool.
   /// @param asset_ Underlying asset of the depositor.
-  /// @return tickSpacing The tick spacing for the pool.
-  /// @return lowerTick The lower tick value for the pool.
-  /// @return upperTick The upper tick value for the pool.
-  /// @return tokenA The address of the first token in the pool.
-  /// @return tokenB The address of the second token in the pool.
-  /// @return _depositorSwapTokens A boolean representing whether to use reverse tokens for pool.
-  function calcInitialDepositorValues(
+  function _setInitialDepositorValues(
+    State storage state,
     IUniswapV3Pool pool,
     int24 tickRange_,
     int24 rebalanceTickRange_,
     address asset_
-  ) external view returns (
-    int24 tickSpacing,
-    int24 lowerTick,
-    int24 upperTick,
-    address tokenA,
-    address tokenB,
-    bool _depositorSwapTokens
-  ) {
-    tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
+  ) internal {
+    int24 tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
     if (tickRange_ != 0) {
       require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_TICK_RANGE);
       require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
     }
-    (lowerTick, upperTick) = UniswapV3DebtLib.calcTickRange(pool, tickRange_, tickSpacing);
+    state.tickSpacing = tickSpacing;
+    (state.lowerTick, state.upperTick) = UniswapV3DebtLib.calcTickRange(pool, tickRange_, tickSpacing);
     require(asset_ == pool.token0() || asset_ == pool.token1(), Uni3StrategyErrors.INCORRECT_ASSET);
     if (asset_ == pool.token0()) {
-      tokenA = pool.token0();
-      tokenB = pool.token1();
-      _depositorSwapTokens = false;
+      state.tokenA = pool.token0();
+      state.tokenB = pool.token1();
+      state.depositorSwapTokens = false;
     } else {
-      tokenA = pool.token1();
-      tokenB = pool.token0();
-      _depositorSwapTokens = true;
+      state.tokenA = pool.token1();
+      state.tokenB = pool.token0();
+      state.depositorSwapTokens = true;
     }
   }
 
@@ -545,30 +556,22 @@ library UniswapV3ConverterStrategyLogicLib {
 
 
   /// @notice Exit the pool and collect tokens proportional to the liquidity amount to exit.
-  /// @param pool The Uniswap V3 pool to exit from.
-  /// @param lowerTick The lower tick value for the pool.
-  /// @param upperTick The upper tick value for the pool.
-  /// @param lowerTickFillup The lower tick value for the fillup range in the pool.
-  /// @param upperTickFillup The upper tick value for the fillup range in the pool.
-  /// @param liquidity The current liquidity in the pool.
-  /// @param liquidityFillup The current liquidity in the fillup range.
+  /// @param state The State storage object.
   /// @param liquidityAmountToExit The amount of liquidity to exit.
-  /// @param _depositorSwapTokens A boolean indicating if need to use token B instead of token A.
   /// @return amountsOut An array containing the collected amounts for each token in the pool.
-  /// @return totalLiquidity The updated total liquidity after the exit.
-  /// @return totalLiquidityFillup The updated total liquidity in the fillup range after the exit.
   function exit(
-    IUniswapV3Pool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 lowerTickFillup,
-    int24 upperTickFillup,
-    uint128 liquidity,
-    uint128 liquidityFillup,
-    uint128 liquidityAmountToExit,
-    bool _depositorSwapTokens
-  ) external returns (uint[] memory amountsOut, uint128 totalLiquidity, uint128 totalLiquidityFillup) {
-    totalLiquidityFillup = 0;
+    State storage state,
+    uint128 liquidityAmountToExit
+  ) external returns (uint[] memory amountsOut) {
+    uint128 totalLiquidityFillup = 0;
+    IUniswapV3Pool pool = state.pool;
+    int24 lowerTick = state.lowerTick;
+    int24 upperTick = state.upperTick;
+    int24 lowerTickFillup = state.lowerTickFillup;
+    int24 upperTickFillup = state.upperTickFillup;
+    uint128 liquidity = state.totalLiquidity;
+    uint128 liquidityFillup = state.totalLiquidityFillup;
+    bool _depositorSwapTokens = state.depositorSwapTokens;
 
     require(liquidity >= liquidityAmountToExit, Uni3StrategyErrors.WRONG_LIQUIDITY);
 
@@ -601,7 +604,8 @@ library UniswapV3ConverterStrategyLogicLib {
       totalLiquidityFillup = liquidityFillup - toRemoveFillUpAmount;
     }
 
-    totalLiquidity = liquidity - liquidityAmountToExit;
+    state.totalLiquidity = liquidity - liquidityAmountToExit;
+    state.totalLiquidityFillup = totalLiquidityFillup;
 
     if (_depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
