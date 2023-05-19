@@ -23,8 +23,8 @@ docker run --env-file .env t1
 ### Insert task
 
 Example of WBTC/WETH-0.01% pool with WBTC vault asset
-Start block: 42300000 May-04-2023 03:15:22 PM +UTC
-End block: 42400000 May-07-2023 04:06:57 AM +UTC
+Start block: 40000000 Mar-05-2023 05:00:45 PM +UTC
+End block: 42600000 May-12-2023 04:01:18 AM +UTC
 ```
 INSERT INTO 
   task (
@@ -38,12 +38,12 @@ INSERT INTO
   VALUES (
     '0x50eaEDB835021E4A108B7290636d62E9765cc6d7',
     '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
-    42300000,
+    40000000,
     42600000,
     '0.05',
     '{
   "liquiditySnapshotSurroundingTickSpacings": 200,
-  "maxTickRange": 1800,
+  "maxTickRange": 2400,
   "maxRebalanceTickRange": 1200,
   "gens": 5,
   "minIndividualsPerGen": 6,

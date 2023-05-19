@@ -57,9 +57,14 @@ function mutateRebalanceTickRange(original: number, max: number, tickSpacing: nu
 }
 
 function bornGen0(task: Task, tickSpacing: number): IStrategyParams {
+  const tickRange = getRandomInt((task.config.maxTickRange - tickSpacing) / tickSpacing) * tickSpacing + tickSpacing
+  let rebalanceTickRange = getRandomInt((task.config.maxRebalanceTickRange - tickSpacing) / tickSpacing) * tickSpacing + tickSpacing
+  if (rebalanceTickRange > tickRange) {
+    rebalanceTickRange = tickRange
+  }
   return {
-    tickRange: getRandomInt((task.config.maxTickRange - tickSpacing) / tickSpacing) * tickSpacing + tickSpacing,
-    rebalanceTickRange: getRandomInt((task.config.maxRebalanceTickRange - tickSpacing) / tickSpacing) * tickSpacing + tickSpacing,
+    tickRange,
+    rebalanceTickRange,
   }
 }
 
@@ -216,24 +221,13 @@ async function main() {
     console.log('Parent 1', parent1)
     console.log('Parent 2', parent2)
 
-    // predict best tickRange mutation direction
-    /*let */
-    const tickRangeMutationDirection: MutateDirection = MutateDirection.UNKNOWN
-    /*if (parent1.rebalances === parent2.rebalances) {
-      if (parent1.apr !== parent2.apr) {
-        if (parent1.apr > parent2.apr) {
-          tickRangeMutationDirection = parent1.tickRange < parent2.tickRange ? MutateDirection.DECREASE : MutateDirection.INCREASE
-        } else {
-          tickRangeMutationDirection = parent1.tickRange < parent2.tickRange ? MutateDirection.INCREASE : MutateDirection.DECREASE
-        }
-      }
-    }
-    console.log('Tick range mutation direction', tickRangeMutationDirection)*/
-
     for (let i = 0; i < 50; i++) {
       // check exist
-      const tickRange = mutateTickRange(parent1.tickRange, tickRangeMutationDirection, poolData.tickSpacing)
-      const rebalanceTickRange = mutateRebalanceTickRange(parent2.rebalanceTickRange, maxRebalanceTickRange, poolData.tickSpacing)
+      const tickRange = mutateTickRange(parent1.tickRange, MutateDirection.UNKNOWN, poolData.tickSpacing)
+      let rebalanceTickRange = mutateRebalanceTickRange(parent2.rebalanceTickRange, maxRebalanceTickRange, poolData.tickSpacing)
+      if (rebalanceTickRange > tickRange) {
+        rebalanceTickRange = tickRange
+      }
       if (await resultRepository.countBy({
         task,
         tickRange,
