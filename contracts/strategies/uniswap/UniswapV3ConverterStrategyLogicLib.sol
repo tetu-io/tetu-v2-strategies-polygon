@@ -89,6 +89,13 @@ library UniswapV3ConverterStrategyLogicLib {
     uint newPrice;
   }
 
+  struct RebalanceSwapByAggParams {
+    bool direction;
+    uint amount;
+    address agg;
+    bytes swapData;
+  }
+
   //////////////////////////////////////////
   //            HELPERS
   //////////////////////////////////////////
@@ -352,7 +359,7 @@ library UniswapV3ConverterStrategyLogicLib {
     uint128 liquidityFillup,
     uint128 liquidityAmountToExit,
     bool _depositorSwapTokens
-  ) external view returns (uint[] memory amountsOut) {
+  ) public view returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
     (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
 
@@ -419,6 +426,34 @@ library UniswapV3ConverterStrategyLogicLib {
     bool depositorSwapTokens
   ) public view returns (bytes memory entryData) {
     return UniswapV3DebtLib.getEntryData(pool, lowerTick, upperTick, depositorSwapTokens);
+  }
+
+  function quoteRebalanceSwap(State storage state, ITetuConverter converter) external returns (bool, uint) {
+    uint debtAmount = UniswapV3DebtLib.getDebtTotalDebtAmountOut(converter, state.tokenA, state.tokenB);
+
+    if (
+      state.fillUp
+      || !needRebalance(state.isFuseTriggered, state.pool, state.lowerTick, state.upperTick, state.tickSpacing, state.rebalanceTickRange)
+      || !UniswapV3DebtLib.needCloseDebt(debtAmount, converter, state.tokenB)
+    ) {
+      return (false, 0);
+    }
+
+    uint[] memory amountsOut = quoteExit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, state.totalLiquidity, state.depositorSwapTokens);
+
+    if (state.depositorSwapTokens) {
+      (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+    }
+
+    if (amountsOut[1] < debtAmount) {
+      uint tokenBprice = UniswapV3Lib.getPrice(address(state.pool), state.tokenB);
+      uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(state.tokenB).decimals();
+      // add 1% gap for price impact
+      needToSellTokenA += needToSellTokenA / UniswapV3DebtLib.SELL_GAP;
+      return (true, needToSellTokenA);
+    } else {
+      return (false, amountsOut[1] - debtAmount);
+    }
   }
 
   //////////////////////////////////////////
@@ -782,6 +817,123 @@ library UniswapV3ConverterStrategyLogicLib {
       if (vars.fillUp) {
         isNeedFillup = true;
       }
+    }
+
+    // need to update last price only for stables coz only stables have fuse mechanic
+    if (vars.isStablePool) {
+      state.lastPrice = vars.newPrice;
+    }
+
+    emit Rebalanced();
+  }
+
+  function rebalanceSwapByAgg(
+    State storage state,
+    ITetuConverter converter,
+    uint oldInvestedAssets,
+    RebalanceSwapByAggParams memory aggParams
+  ) external returns (
+    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
+  ) {
+    tokenAmounts = new uint[](0);
+
+    if (state.fillUp) {
+      revert('Only for swap strategy.');
+    }
+
+    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
+      upperTick: state.upperTick,
+      lowerTick: state.lowerTick,
+      tickSpacing: state.tickSpacing,
+      pool: state.pool,
+      tokenA: state.tokenA,
+      tokenB: state.tokenB,
+      lastPrice: state.lastPrice,
+      fuseThreshold: state.fuseThreshold,
+      depositorSwapTokens: state.depositorSwapTokens,
+      rebalanceEarned0: state.rebalanceEarned0,
+      rebalanceEarned1: state.rebalanceEarned1,
+    // setup initial values
+      newRebalanceEarned0: 0,
+      newRebalanceEarned1: 0,
+      notCoveredLoss: 0,
+      newLowerTick: 0,
+      newUpperTick: 0,
+      fillUp: state.fillUp,
+      isStablePool: state.isStablePool,
+      newPrice: 0
+    });
+
+    require(needRebalance(
+      state.isFuseTriggered,
+      vars.pool,
+      vars.lowerTick,
+      vars.upperTick,
+      vars.tickSpacing,
+      state.rebalanceTickRange
+    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+
+    vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+
+    // for rebalance after emergencyExit() case
+    uint b0 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenB : vars.tokenA);
+    uint b1 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenA : vars.tokenB);
+    if (b0 < vars.rebalanceEarned0) {
+      vars.rebalanceEarned0 = b0;
+      state.rebalanceEarned0 = b0;
+    }
+    if (b1 < vars.rebalanceEarned1) {
+      vars.rebalanceEarned1 = b1;
+      state.rebalanceEarned1 = b1;
+    }
+
+    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
+      /// enabling fuse: close debt and stop providing liquidity
+      state.isFuseTriggered = true;
+      emit FuseTriggered();
+
+      UniswapV3DebtLib.closeDebtByAgg(
+        converter,
+        vars.tokenA,
+        vars.tokenB,
+        vars.depositorSwapTokens,
+        vars.rebalanceEarned0,
+        vars.rebalanceEarned1,
+        _getLiquidatorSwapSlippage(vars.pool),
+        aggParams
+      );
+    } else {
+      /// rebalancing debt with passing rebalanceEarned0, rebalanceEarned1 that will remain untouched
+      /// setting new tick range
+      UniswapV3DebtLib.rebalanceDebtSwapByAgg(
+        converter,
+        state,
+        _getLiquidatorSwapSlippage(vars.pool),
+        aggParams
+      );
+
+      /// trying to cover rebalance loss (IL + not hedged part of tokenB + swap cost) by pool rewards
+      (vars.newRebalanceEarned0, vars.newRebalanceEarned1, vars.notCoveredLoss) = _calculateCoverLoss(
+        TryCoverLossParams(
+          vars.pool,
+          vars.tokenA,
+          vars.tokenB,
+          vars.depositorSwapTokens,
+          vars.rebalanceEarned0,
+          vars.rebalanceEarned1,
+          oldInvestedAssets
+        ),
+        UniswapV3DebtLib.getDebtTotalCollateralAmountOut(converter, vars.tokenA, vars.tokenB)
+      );
+      state.rebalanceEarned0 = vars.newRebalanceEarned0;
+      state.rebalanceEarned1 = vars.newRebalanceEarned1;
+      if (vars.notCoveredLoss != 0) {
+        state.rebalanceLost += vars.notCoveredLoss;
+      }
+
+      tokenAmounts = new uint[](2);
+      tokenAmounts[0] = AppLib.balance(vars.tokenA) - (vars.depositorSwapTokens ? vars.newRebalanceEarned1 : vars.newRebalanceEarned0);
+      tokenAmounts[1] = AppLib.balance(vars.tokenB) - (vars.depositorSwapTokens ? vars.newRebalanceEarned0 : vars.newRebalanceEarned1);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic

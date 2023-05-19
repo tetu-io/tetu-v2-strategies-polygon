@@ -12,9 +12,10 @@ library UniswapV3DebtLib {
   //            CONSTANTS
   //////////////////////////////////////////
 
-  uint internal constant SELL_GAP = 100;
+  uint public constant SELL_GAP = 100;
   /// @dev should be placed local, probably will be adjusted later
   uint internal constant BORROW_PERIOD_ESTIMATION = 30 days / 2;
+  address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
 
   //////////////////////////////////////////
   //            STRUCTURES
@@ -36,7 +37,7 @@ library UniswapV3DebtLib {
   /// @param tokenA The address of tokenA.
   /// @param tokenB The address of tokenB.
   /// @return totalCollateralAmountOut The total collateral amount out for the token pair.
-  function getDebtTotalCollateralAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalCollateralAmountOut) {
+  function getDebtTotalCollateralAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) public returns (uint totalCollateralAmountOut) {
     (, totalCollateralAmountOut) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, false);
   }
 
@@ -45,7 +46,7 @@ library UniswapV3DebtLib {
   /// @param tokenA The address of tokenA.
   /// @param tokenB The address of tokenB.
   /// @return totalDebtAmountOut The total debt amount out for the token pair.
-  function getDebtTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) internal returns (uint totalDebtAmountOut) {
+  function getDebtTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) public returns (uint totalDebtAmountOut) {
     (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, true);
   }
 
@@ -68,10 +69,24 @@ library UniswapV3DebtLib {
     uint fee0,
     uint fee1,
     uint liquidatorSwapSlippage
-  ) internal {
+  ) public {
     uint tokenAFee = depositorSwapTokens ? fee1 : fee0;
     uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
     _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
+  }
+
+  function closeDebtByAgg(
+    ITetuConverter tetuConverter,
+    address tokenA,
+    address tokenB,
+    bool depositorSwapTokens,
+    uint fee0,
+    uint fee1,
+    uint liquidatorSwapSlippage,
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+  ) public {
+    uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
+    _closeDebtByAgg(tetuConverter, tokenA, tokenB, tokenBFee, liquidatorSwapSlippage, aggParams);
   }
 
   /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
@@ -99,6 +114,25 @@ library UniswapV3DebtLib {
     }
   }
 
+  function rebalanceDebtSwapByAgg(
+    ITetuConverter tetuConverter,
+    UniswapV3ConverterStrategyLogicLib.State storage state,
+    uint liquidatorSwapSlippage,
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+  ) external {
+    IUniswapV3Pool pool = state.pool;
+    address tokenA = state.tokenA;
+    address tokenB = state.tokenB;
+    bool depositorSwapTokens = state.depositorSwapTokens;
+    (uint tokenAFee, uint tokenBFee) = depositorSwapTokens ? (state.rebalanceEarned1, state.rebalanceEarned0) : (state.rebalanceEarned0, state.rebalanceEarned1);
+    _closeDebtByAgg(tetuConverter, tokenA, tokenB, tokenBFee, liquidatorSwapSlippage, aggParams);
+    (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+    _openDebt(tetuConverter, tokenA, tokenB, entryData, tokenAFee);
+    state.lowerTick = newLowerTick;
+    state.upperTick = newUpperTick;
+  }
+
   function getEntryData(
     IUniswapV3Pool pool,
     int24 lowerTick,
@@ -121,6 +155,12 @@ library UniswapV3DebtLib {
     } else {
       entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
     }
+  }
+
+  /// @dev we close debt only if it is more than $0.1
+  function needCloseDebt(uint debtAmount, ITetuConverter tetuConverter, address tokenB) public view returns (bool) {
+    IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
+    return debtAmount * priceOracle.getAssetPrice(tokenB) / 10 ** IERC20Metadata(tokenB).decimals() > 1e17;
   }
 
   function calcTickRange(IUniswapV3Pool pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
@@ -164,11 +204,8 @@ library UniswapV3DebtLib {
     uint liquidatorSwapSlippage
   ) internal {
     uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
-    IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
 
-    /// after disableFuse() debt can be zero
-    /// we close debt only if it is more than $0.1
-    if (debtAmount * priceOracle.getAssetPrice(tokenB) / 10 ** IERC20Metadata(tokenB).decimals() > 1e17) {
+    if (needCloseDebt(debtAmount, tetuConverter, tokenB)) {
       uint availableBalanceTokenA = AppLib.balance(tokenA);
       uint availableBalanceTokenB = AppLib.balance(tokenB);
 
@@ -205,6 +242,62 @@ library UniswapV3DebtLib {
         availableBalanceTokenB -= feeB;
       }
       ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, availableBalanceTokenB, liquidatorSwapSlippage, 0, false);
+    }
+  }
+
+  function _closeDebtByAgg(
+    ITetuConverter tetuConverter,
+    address tokenA,
+    address tokenB,
+    uint feeB,
+    uint liquidatorSwapSlippage,
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+  ) internal {
+    _checkSwapRouter(aggParams.agg);
+
+    uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
+
+    if (needCloseDebt(debtAmount, tetuConverter, tokenB)) {
+      uint balanceTokenABefore = AppLib.balance(tokenA);
+      uint balanceTokenBBefore = AppLib.balance(tokenB);
+
+      address tokenIn = aggParams.direction ? tokenA : tokenB;
+
+      AppLib.approveIfNeeded(tokenIn, aggParams.amount, aggParams.agg);
+
+      {
+        (bool success, bytes memory result) = aggParams.agg.call(aggParams.swapData);
+        require(success, string(result));
+      }
+
+      uint availableBalanceTokenA = AppLib.balance(tokenA);
+      uint availableBalanceTokenB = AppLib.balance(tokenB);
+
+      require(
+        tetuConverter.isConversionValid(
+          tokenIn,
+          aggParams.amount,
+          aggParams.direction ? tokenB : tokenA,
+          aggParams.direction ? availableBalanceTokenB - balanceTokenBBefore : availableBalanceTokenA - balanceTokenABefore,
+          liquidatorSwapSlippage
+        ), AppErrors.PRICE_IMPACT);
+
+      // exclude fees if it is possible
+      if(availableBalanceTokenB > feeB) {
+        availableBalanceTokenB -= feeB;
+      }
+
+      ConverterStrategyBaseLib.closePosition(
+        tetuConverter,
+        tokenA,
+        tokenB,
+        Math.min(debtAmount, availableBalanceTokenB)
+      );
+
+      availableBalanceTokenB = AppLib.balance(tokenB);
+      if(availableBalanceTokenB > feeB) {
+        availableBalanceTokenB -= feeB;
+      }
     }
   }
 
@@ -373,4 +466,7 @@ library UniswapV3DebtLib {
     balanceWithoutFees -= fee;
   }
 
+  function _checkSwapRouter(address router) internal pure {
+    require(router == ONEINCH, Uni3StrategyErrors.UNKNOWN_SWAP_ROUTER);
+  }
 }
