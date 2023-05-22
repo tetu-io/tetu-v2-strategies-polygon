@@ -3,6 +3,7 @@ import { providers } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
 import { delay } from '@nomiclabs/hardhat-etherscan/dist/src/etherscan/EtherscanService';
+import { Libraries } from 'hardhat-deploy/types';
 
 // tslint:disable-next-line:no-var-requires
 const hreLocal = require('hardhat');
@@ -53,7 +54,14 @@ export async function getDeployedContractByName(name: string) {
   return contract.address;
 }
 
-export async function hardhatDeploy(hre: HardhatRuntimeEnvironment, contractName: string, verify = false) {
+export async function hardhatDeploy(
+  hre: HardhatRuntimeEnvironment,
+  contractName: string,
+  verify = false,
+  libraries?: Libraries,
+  // tslint:disable-next-line:no-any
+  args?: any[] | undefined,
+) {
   const { deployments, getNamedAccounts } = hre;
   const { deployer } = await getNamedAccounts();
 
@@ -67,6 +75,8 @@ export async function hardhatDeploy(hre: HardhatRuntimeEnvironment, contractName
     contract: contractName,
     from: deployer,
     log: true,
+    args,
+    libraries,
     ...(await txParams(hre, ethers.provider)),
   });
 
