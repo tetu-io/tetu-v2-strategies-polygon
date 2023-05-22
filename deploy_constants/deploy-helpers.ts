@@ -59,6 +59,7 @@ export async function hardhatDeploy(
   contractName: string,
   verify = false,
   libraries?: Libraries,
+  deploymentName?: string,
   // tslint:disable-next-line:no-any
   args?: any[] | undefined,
 ) {
@@ -67,11 +68,10 @@ export async function hardhatDeploy(
 
   let oldAdr: string | undefined;
   try {
-    oldAdr = (await deployments.get(contractName)).address;
+    oldAdr = (await deployments.get(deploymentName || contractName)).address;
   } catch (e) {}
 
-
-  await deployments.deploy(contractName, {
+  await deployments.deploy(deploymentName || contractName, {
     contract: contractName,
     from: deployer,
     log: true,
@@ -80,12 +80,16 @@ export async function hardhatDeploy(
     ...(await txParams(hre, ethers.provider)),
   });
 
-  const newAdr = await deployments.get(contractName);
+  const newAdr = await deployments.get(deploymentName || contractName);
 
   if (!oldAdr || oldAdr !== newAdr.address) {
     if (verify && hre.network.name !== 'hardhat') {
       await wait(10);
-      await verifyWithoutArgs(newAdr.address);
+      if (args) {
+        await verifyWithArgs(newAdr.address, args);
+      } else {
+        await verifyWithoutArgs(newAdr.address);
+      }
     }
   }
 }
@@ -102,6 +106,18 @@ async function wait(blocks: number) {
     if (hreLocal.ethers.provider.blockNumber >= start + blocks) {
       break;
     }
+  }
+}
+
+// tslint:disable-next-line:no-any
+async function verifyWithArgs(address: string, constructorArguments: any[]) {
+  try {
+    await hreLocal.run('verify:verify', {
+      address,
+      constructorArguments,
+    });
+  } catch (e) {
+    console.error('error verify ' + e);
   }
 }
 
