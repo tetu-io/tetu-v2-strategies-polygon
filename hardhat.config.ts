@@ -15,6 +15,7 @@ import { task } from 'hardhat/config';
 import { deployContract } from './scripts/deploy/DeployContract';
 import 'hardhat-deploy';
 import { deployAddresses } from './scripts/addresses/deploy-addresses';
+import "@gelatonetwork/web3-functions-sdk/hardhat-plugin";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -89,6 +90,14 @@ export default {
       // gasMultiplier: 1.3,
       accounts: [argv.privateKey],
     },
+    w3fmatic: {
+      chainId: 137,
+      accounts: [argv.privateKey],
+      url: 'http://127.0.0.1:8545',
+    },
+    localhost: {
+      timeout: 9999999999,
+    },
     eth: {
       url: argv.ethRpcUrl || '',
       chainId: 1,
@@ -157,4 +166,9 @@ export default {
     pretty: true,
   },
   namedAccounts: deployAddresses,
+  w3f: {
+    rootDir: "./web3-functions",
+    debug: true,
+    networks: ["w3fmatic"],
+  },
 };
