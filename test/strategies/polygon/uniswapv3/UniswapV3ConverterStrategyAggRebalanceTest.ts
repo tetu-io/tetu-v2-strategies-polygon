@@ -109,6 +109,9 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
     await vault.connect(gov).setWithdrawRequestBlocks(0)
 
     await ConverterUtils.disableAaveV2(signer)
+
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+    await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
   })
 
   after(async function() {
