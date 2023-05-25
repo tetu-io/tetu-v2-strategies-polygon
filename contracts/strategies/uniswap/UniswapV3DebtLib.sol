@@ -16,6 +16,7 @@ library UniswapV3DebtLib {
   /// @dev should be placed local, probably will be adjusted later
   uint internal constant BORROW_PERIOD_ESTIMATION = 30 days / 2;
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
+  address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOceanExchangeProxy
 
   //////////////////////////////////////////
   //            STRUCTURES
@@ -467,6 +468,6 @@ library UniswapV3DebtLib {
   }
 
   function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH, Uni3StrategyErrors.UNKNOWN_SWAP_ROUTER);
+    require(router == ONEINCH || router == OPENOCEAN, Uni3StrategyErrors.UNKNOWN_SWAP_ROUTER);
   }
 }

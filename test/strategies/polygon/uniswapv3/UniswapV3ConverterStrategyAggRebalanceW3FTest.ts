@@ -45,6 +45,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceW3FTest', function() {
     rebalanceW3f = w3f.get("uniswapv3-rebalance");
     userArgs = {
       strategy: strategy.address,
+      agg: "", // 'openocean' | '1inch' | ''
       oneInchProtocols: "", // 'POLYGON_BALANCER_V2'
     };
   })

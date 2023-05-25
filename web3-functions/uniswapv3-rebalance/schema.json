@@ -5,6 +5,7 @@
   "timeout": 30,
   "userArgs": {
     "strategy": "string",
+    "agg": "string",
     "oneInchProtocols": "string"
   }
 }
