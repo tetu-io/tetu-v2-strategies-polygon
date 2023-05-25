@@ -44,18 +44,17 @@ import {
 import {MaticAddresses} from "../addresses/MaticAddresses";
 import {DeployerUtils} from "../utils/DeployerUtils";
 import {Misc} from "../utils/Misc";
-import {IPoolLiquiditySnapshot} from "../utils/UniswapV3Utils";
 import {ProxyControlled as ProxyControlled_1_0_0} from "../../typechain/@tetu_io/tetu-liquidator/contracts/proxy";
 import {getAddress, parseUnits} from "ethers/lib/utils";
 import {generateAssetPairs} from "../utils/ConverterUtils";
-import {BigNumber} from "ethers";
+import {BigNumber, BigNumberish} from "ethers";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {RunHelper} from "../utils/RunHelper";
 import {IContracts, IVaultUniswapV3StrategyInfo} from "./types";
 
 export async function deployBacktestSystem(
   signer: SignerWithAddress,
-  liquiditySnapshot: IPoolLiquiditySnapshot,
+  currentSqrtPriceX96: BigNumberish,
   vaultAsset: string,
   token0: string,
   token1: string,
@@ -92,7 +91,7 @@ export async function deployBacktestSystem(
     tokens[token1].address,
     poolFee,
   ), signer)
-  await pool.initialize(liquiditySnapshot.currentSqrtPriceX96);
+  await pool.initialize(currentSqrtPriceX96);
 
   // deploy tetu liquidator and setup
   let tx
@@ -202,50 +201,7 @@ export async function deployBacktestSystem(
   const swapManager = SwapManager__factory.connect(await deployConverterProxy(signer, 'SwapManager'), signer)
   const debtMonitor = DebtMonitor__factory.connect(await deployConverterProxy(signer, 'DebtMonitor'), signer)
   const tetuConverter = TetuConverter__factory.connect(await deployConverterProxy(signer, "TetuConverter"), signer)
-
-
-  /*const converterController = await DeployerUtils.deployContract(
-    signer,
-    'ConverterController',
-    // liquidator.address,
-  ) as ConverterController;*/
-  /*const borrowManager = await DeployerUtils.deployContract(
-    signer,
-    'BorrowManager',
-    converterController.address,
-    parseUnits('0.9'),
-  ) as BorrowManager;*/
-  /*const debtMonitor = await DeployerUtils.deployContract(
-    signer,
-    'DebtMonitor',
-    converterController.address,
-    borrowManager.address,
-  );*/
-  /*const swapManager = await DeployerUtils.deployContract(
-    signer,
-    'SwapManager',
-    converterController.address,
-    liquidator.address,
-  );*/
   const keeperCaller = await DeployerUtils.deployContract(signer, 'KeeperCaller');
-  /*const keeper = await DeployerUtils.deployContract(
-    signer,
-    'Keeper',
-    converterController.address,
-    keeperCaller.address,
-    2 * 7 * 24 * 60 * 60,
-  );*/
-
-
-  /*const tetuConverter = await DeployerUtils.deployContract(
-    signer,
-    'TetuConverter',
-    converterController.address,
-    borrowManager.address,
-    debtMonitor.address,
-    swapManager.address,
-    keeper.address,
-  ) as TetuConverter;*/
   await converterController.init(
     signer.address,
     signer.address,

@@ -270,7 +270,7 @@ async function main() {
   const signer = (await ethers.getSigners())[0];
   const contracts = await deployBacktestSystem(
     signer,
-    liquiditySnapshot,
+    liquiditySnapshot.currentSqrtPriceX96,
     getAddress(task.vaultAsset),
     poolData.token0,
     poolData.token1,
