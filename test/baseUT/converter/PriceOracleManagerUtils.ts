@@ -30,12 +30,12 @@ export class PriceOracleManagerUtils {
 
     //  See first event for of ACLManager (AAVE_V3_POOL = "0x794a61358D6845594F94dc1DB02A252b5b4814aD")
     //  https://polygonscan.com/address/0xa72636cbcaa8f5ff95b2cc47f3cdee83f3294a0b#readContract
-    const AAVE_V3_POOL_OWNER = '0xdc9a35b16db4e126cfedc41322b3a36454b1f772';
+    const AAVE_V3_POOL_OWNER = MaticAddresses.AAVE3_POOL_OWNER;
     const poolOwner = await Misc.impersonate(AAVE_V3_POOL_OWNER);
 
     // Set up mocked price-source to AAVE3's price oracle
     // Tetu converter uses same price oracle internally
-    const AAVE_V3_PRICE_ORACLE = '0xb023e699F5a33916Ea823A16485e259257cA8Bd1';
+    const AAVE_V3_PRICE_ORACLE = MaticAddresses.AAVE3_PRICE_ORACLE;
     const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(AAVE_V3_PRICE_ORACLE, poolOwner);
 
     const sources: Aave3AggregatorInterfaceMock[] = [];
