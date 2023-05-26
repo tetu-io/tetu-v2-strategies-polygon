@@ -386,3 +386,11 @@ export class MaticAddresses {
     throw Error('Unknown router ' + router);
   }
 }
+
+/**
+ Strategy_UniswapV3ConverterStrategy_UsdcDai 0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1
+ Strategy_UniswapV3ConverterStrategy_UsdcUsdt 0x05C7D307632a36D31D7eECbE4cC5Aa46D15fA752
+ Strategy_UniswapV3ConverterStrategy_WMaticMaticX100 0xC64E8BBb27c1c866feFE9164709A4D02E09eB53e
+ Strategy_UniswapV3ConverterStrategy_wstETHWETH100 0x6e6231F1C17411B7492C26b93B92E363c62D0d1E
+
+*/
