@@ -34,6 +34,7 @@
   "license": "MIT",
   "homepage": "https://tetu.io/",
   "dependencies": {
+    "@gelatonetwork/web3-functions-sdk": "^2.0.5",
     "@nomicfoundation/hardhat-chai-matchers": "^1.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
     "@nomiclabs/hardhat-ethers": "^2.2.2",
@@ -71,6 +72,7 @@
     "hardhat-gas-reporter": "^1.0.9",
     "hardhat-tracer": "^2.1.2",
     "isomorphic-unfetch": "^4.0.2",
+    "ky": "^0.33.3",
     "mocha": "^10.2.0",
     "pg": "^8.10.0",
     "react": "^18.2.0",

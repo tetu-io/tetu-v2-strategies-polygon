@@ -21,7 +21,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.2.7";
+  string public constant override STRATEGY_VERSION = "1.3.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -42,9 +42,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     int24 tickRange_,
     int24 rebalanceTickRange_
   ) external initializer {
-    __UniswapV3Depositor_init(ISplitter(splitter_).asset(), pool_, tickRange_, rebalanceTickRange_);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
-    UniswapV3ConverterStrategyLogicLib.initStrategyState(state, controller_, converter_);
+    UniswapV3ConverterStrategyLogicLib.initStrategyState(
+      state,
+      controller_,
+      converter_,
+      pool_,
+      tickRange_,
+      rebalanceTickRange_,
+      ISplitter(splitter_).asset()
+    );
 
     // setup specific name for UI
     strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);
@@ -96,6 +103,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
   }
 
+  /// @return swapAtoB, swapAmount
+  function quoteRebalanceSwap() external returns (bool, uint) {
+    return UniswapV3ConverterStrategyLogicLib.quoteRebalanceSwap(state, converter);
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                   REBALANCE
   /////////////////////////////////////////////////////////////////////
@@ -137,6 +149,37 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
           state.rebalanceEarned1
         );
       }
+    }
+
+    //updating investedAssets based on new baseAmounts
+    _updateInvestedAssets();
+  }
+
+  function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
+
+    /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
+    /// after disableFuse() liquidity is zero
+    if (state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+
+    // _depositorEnter(tokenAmounts) if length == 2
+    (uint[] memory tokenAmounts) = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
+      state,
+      converter,
+      investedAssets(),
+      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
+        direction,
+        amount,
+        agg,
+        swapData
+      )
+    );
+
+    if (tokenAmounts.length == 2) {
+      _depositorEnter(tokenAmounts);
     }
 
     //updating investedAssets based on new baseAmounts

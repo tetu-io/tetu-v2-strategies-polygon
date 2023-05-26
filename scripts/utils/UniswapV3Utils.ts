@@ -9,6 +9,14 @@ import {Misc} from "./Misc";
 export class UniswapV3Utils {
   static SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon'
 
+  public static async getPoolPrice(poolAddr: string): Promise<BigNumber> {
+    const rpc = process.env.TETU_MATIC_RPC_URL
+    const provider = new ethers.providers.JsonRpcProvider(rpc)
+    const pool = UniswapV3Pool__factory.connect(poolAddr, provider)
+    const slot0 = await pool.slot0()
+    return slot0.sqrtPriceX96
+  }
+
   public static async getPoolData(poolAddr: string): Promise<IPoolData> {
     const rpc = process.env.TETU_MATIC_RPC_URL
     const provider = new ethers.providers.JsonRpcProvider(rpc)

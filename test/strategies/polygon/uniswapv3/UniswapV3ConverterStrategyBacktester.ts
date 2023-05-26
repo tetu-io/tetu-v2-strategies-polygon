@@ -186,7 +186,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
     contracts = await deployBacktestSystem(
       signer,
-      liquiditySnapshot,
+      liquiditySnapshot.currentSqrtPriceX96,
       getAddress(params.vaultAsset),
       getAddress(params.token0),
       getAddress(params.token1),
