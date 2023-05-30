@@ -108,6 +108,14 @@ library UniswapV3ConverterStrategyLogicLib {
     emit NewFuseThreshold(value);
   }
 
+  function resetRebalanceStats(UniswapV3ConverterStrategyLogicLib.State storage state, address controller) external {
+    StrategyLib.onlyOperators(controller);
+
+    state.rebalanceEarned0 = 0;
+    state.rebalanceEarned1 = 0;
+    state.rebalanceLost = 0;
+  }
+
   /// @dev Gets the liquidator swap slippage based on the pool type (stable or volatile).
   /// @param pool The IUniswapV3Pool instance.
   /// @return The liquidator swap slippage percentage.

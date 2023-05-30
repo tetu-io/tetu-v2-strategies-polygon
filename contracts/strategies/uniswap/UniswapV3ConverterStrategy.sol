@@ -80,6 +80,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     UniswapV3ConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
   }
 
+  /// @notice Reset rebalance earned/lost values in case of emergency.
+  function resetRebalanceStats() external {
+    UniswapV3ConverterStrategyLogicLib.resetRebalanceStats(state, controller());
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                   METRIC VIEWS
   /////////////////////////////////////////////////////////////////////
