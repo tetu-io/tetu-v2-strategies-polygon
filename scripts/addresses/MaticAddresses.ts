@@ -326,6 +326,9 @@ export class MaticAddresses {
   public static UNISWAPV3_WMATIC_USDT_500 = '0x9B08288C3Be4F62bbf8d1C20Ac9C5e6f9467d8B7'.toLowerCase()
   public static UNISWAPV3_WMATIC_WETH_500 = '0x86f1d8390222A3691C28938eC7404A1661E618e0'.toLowerCase()
 
+  // ALGEBRA
+  public static ALGEBRA_USDC_USDT = '0x7b925e617aefd7fb3a93abe3a701135d7a1ba710'.toLowerCase()
+
   // Aggregators
   public static AGG_ONEINCH_V5 = '0x1111111254EEB25477B68fb85Ed929f73A960582'.toLowerCase()
 
