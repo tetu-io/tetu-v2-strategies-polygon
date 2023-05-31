@@ -65,24 +65,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Disable fuse for the strategy.
   function disableFuse() external {
     StrategyLib.onlyOperators(controller());
-    state.isFuseTriggered = false;
-    state.lastPrice = UniswapV3ConverterStrategyLogicLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
-
-    UniswapV3ConverterStrategyLogicLib.emitDisableFuse();
+    UniswapV3ConverterStrategyLogicLib.disableFuse(state, converter);
   }
 
   /// @notice Set the fuse threshold for the strategy.
   /// @param newFuseThreshold The new fuse threshold value.
   function setFuseThreshold(uint newFuseThreshold) external {
     StrategyLib.onlyOperators(controller());
-    state.fuseThreshold = newFuseThreshold;
-
-    UniswapV3ConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
+    UniswapV3ConverterStrategyLogicLib.newFuseThreshold(state, newFuseThreshold);
   }
 
   /// @notice Reset rebalance earned/lost values in case of emergency.
   function resetRebalanceStats() external {
-    UniswapV3ConverterStrategyLogicLib.resetRebalanceStats(state, controller());
+    StrategyLib.onlyOperators(controller());
+    UniswapV3ConverterStrategyLogicLib.resetRebalanceStats(state);
   }
 
   /////////////////////////////////////////////////////////////////////

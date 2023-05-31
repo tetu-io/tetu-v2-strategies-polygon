@@ -100,17 +100,18 @@ library UniswapV3ConverterStrategyLogicLib {
   //            HELPERS
   //////////////////////////////////////////
 
-  function emitDisableFuse() external {
+  function disableFuse(State storage state, ITetuConverter converter) external {
+    state.isFuseTriggered = false;
+    state.lastPrice = getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
     emit DisableFuse();
   }
 
-  function emitNewFuseThreshold(uint value) external {
+  function newFuseThreshold(State storage state, uint value) external {
+    state.fuseThreshold = value;
     emit NewFuseThreshold(value);
   }
 
-  function resetRebalanceStats(UniswapV3ConverterStrategyLogicLib.State storage state, address controller) external {
-    StrategyLib.onlyOperators(controller);
-
+  function resetRebalanceStats(State storage state) external {
     state.rebalanceEarned0 = 0;
     state.rebalanceEarned1 = 0;
     state.rebalanceLost = 0;
