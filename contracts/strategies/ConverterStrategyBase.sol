@@ -38,6 +38,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint balanceAfterWithdraw;
     address[] tokens;
     address asset;
+    /// @notice Amount "earned" because of price changes
+    uint earnedByPrices;
   }
   //endregion DATA TYPES
 
@@ -259,7 +261,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     WithdrawUniversalLocal memory v;
     v.all = amount == type(uint).max;
-    (v.investedAssetsBeforeWithdraw, strategyLoss) = _updateInvestedAssetsAndGetLoss(true);
+    strategyLoss = 0;
+
+    // calculate profit/loss because of price changes, try to compensate the loss from the insurance
+    (v.investedAssetsBeforeWithdraw, v.earnedByPrices) = _fixPriceChanges(true);
 
     if ((v.all || amount != 0) && v.investedAssetsBeforeWithdraw != 0) {
 
@@ -278,7 +283,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // calculate how much liquidity we need to withdraw for getting the requested amount
       (v.liquidityAmountToWithdraw, v.amountsToConvert) = ConverterStrategyBaseLib2.getLiquidityAmount(
-        v.all ? 0 : amount,
+        v.all ? 0 : amount + v.earnedByPrices,
         address(this),
         v.tokens,
         indexAsset,
@@ -329,9 +334,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         indexAsset,
         v.amountsToConvert,
         _converter,
-        amount,
+        v.all ? amount : amount + v.earnedByPrices,
         v.expectedMainAssetAmounts
       );
+
+      if (v.earnedByPrices != 0) {
+        ConverterStrategyBaseLib2.sendToInsurance(v.asset, v.earnedByPrices);
+      }
 
       v.investedAssetsAfterWithdraw = _updateInvestedAssets();
       v.balanceAfterWithdraw = AppLib.balance(v.asset);
@@ -539,16 +548,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // ATTENTION! splitter will not cover the loss if it is lower than profit
 
     // register autocompound income or possible lose if assets fluctuated
-    uint investedAssetsBefore = _investedAssets;
-    uint investedAssetsLocal = _updateInvestedAssets();
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsLocal, 0, 0);
+    (uint investedAssetsLocal, uint earnedByPrices) = _fixPriceChanges(true);
 
     _preHardWork(reInvest);
 
     // claim rewards and get current asset balance
     (uint earnedFromRewards, uint lostFromRewards, uint assetBalance) = _handleRewards();
-    earned += earnedFromRewards;
-    lost += lostFromRewards;
+    uint earned = earnedFromRewards;
+    uint lost = lostFromRewards;
 
     // re-invest income
     if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / DENOMINATOR) {
@@ -610,6 +617,28 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     loss = updateTotalAssetsBeforeInvest_
       ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
       : uint(0);
+  }
+
+  /// @notice Calculate profit/loss happened because of price changing. Try to cover the loss, send the profit to the insurance
+  /// @param updateInvestedAssetsAmount_ If false - just return current value of invested assets
+  /// @return investedAssetsOut Updated value of {_investedAssets}
+  /// @return earnedOut Profit that was received because of price changes. It should be sent back to insurance.
+  ///                   It's to dangerous to get this to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
+  ///                   So, we need to handle it in the caller code.
+  function _fixPriceChanges(bool updateInvestedAssetsAmount_) internal returns (uint investedAssetsOut, uint earnedOut) {
+    if (updateInvestedAssetsAmount_) {
+      uint lost;
+      uint investedAssetsBefore = _investedAssets;
+      investedAssetsOut = _updateInvestedAssets();
+      (earnedOut, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsOut, 0, 0);
+
+      if (lost != 0) {
+        // todo coverPossibleStrategyLoss()
+      }
+    } else {
+      investedAssetsOut = _investedAssets;
+      earnedOut = 0;
+    }
   }
   //endregion InvestedAssets Calculations
 
