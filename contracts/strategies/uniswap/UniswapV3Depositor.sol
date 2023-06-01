@@ -57,9 +57,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     fuseThreshold = state.fuseThreshold;
 
     rebalanceResults = new uint[](3);
-    rebalanceResults[0] = state.rebalanceEarned0;
-    rebalanceResults[1] = state.rebalanceEarned1;
-    rebalanceResults[2] = state.rebalanceLost;
+    rebalanceResults[0] = IERC20(tokenA).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[1] = IERC20(tokenB).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[2] = 0;
   }
 
   /// @notice Returns the fees for the current state.
@@ -136,9 +136,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @return amountsOut The amounts of the tokens withdrawn.
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     (uint fee0, uint fee1) = getFees();
-    state.rebalanceEarned0 += fee0;
-    state.rebalanceEarned1 += fee1;
     amountsOut = UniswapV3ConverterStrategyLogicLib.exit(state, uint128(liquidityAmount));
+    UniswapV3ConverterStrategyLogicLib.sendFeeToProfitHolder(state, fee0, fee1);
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.
@@ -166,25 +165,22 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     tokensOut[1] = state.tokenB;
 
     (amountsOut, balancesBefore) = UniswapV3ConverterStrategyLogicLib.claimRewards(
+      state.strategyProfitHolder,
       state.pool,
       state.lowerTick,
       state.upperTick,
       state.lowerTickFillup,
       state.upperTickFillup,
-      state.rebalanceEarned0,
-      state.rebalanceEarned1,
       state.depositorSwapTokens,
       tokensOut,
       state.totalLiquidity,
       state.totalLiquidityFillup
     );
-    state.rebalanceEarned0 = 0;
-    state.rebalanceEarned1 = 0;
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.
   /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[50-1] private __gap; // 50 - count of variables
+  uint[50-2] private __gap; // 50 - count of variables
 
 }

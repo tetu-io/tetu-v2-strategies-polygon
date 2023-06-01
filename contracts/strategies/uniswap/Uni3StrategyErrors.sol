@@ -15,5 +15,6 @@ library Uni3StrategyErrors {
   string public constant BALANCE_LOWER_THAN_FEE = "U3S-10 Balance lower than fee";
   string public constant NOT_CALLBACK_CALLER = "U3S-11 Not callback caller";
   string public constant UNKNOWN_SWAP_ROUTER = "U3S-12 Unknown router";
+  string public constant ZERO_PROFIT_HOLDER = "U3S-13 Zero strategy profit holder";
 
 }

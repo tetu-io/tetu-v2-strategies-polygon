@@ -21,7 +21,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.3.0";
+  string public constant override STRATEGY_VERSION = "1.4.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -75,10 +75,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     UniswapV3ConverterStrategyLogicLib.newFuseThreshold(state, newFuseThreshold);
   }
 
-  /// @notice Reset rebalance earned/lost values in case of emergency.
-  function resetRebalanceStats() external {
+  function setStrategyProfitHolder(address strategyProfitHolder) external {
     StrategyLib.onlyOperators(controller());
-    UniswapV3ConverterStrategyLogicLib.resetRebalanceStats(state);
+    state.strategyProfitHolder = strategyProfitHolder;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -120,7 +119,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
-    /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
+    // todo need to cover loss by new developing by dvpublic function
+    uint oldInvestedAssets = _investedAssets;
+    uint newInvestedAssets = _updateInvestedAssets();
+    uint profitToCover = newInvestedAssets > oldInvestedAssets ? newInvestedAssets - oldInvestedAssets : 0;
+
+    /// withdraw all liquidity from pool
     /// after disableFuse() liquidity is zero
     if (state.totalLiquidity > 0) {
       _depositorEmergencyExit();
@@ -128,12 +132,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-    bool isNeedFillup
+    bool isNeedFillup,
+    uint loss
     ) = UniswapV3ConverterStrategyLogicLib.rebalance(
       state,
       converter,
       _controller,
-      investedAssets()
+      totalAssets(),
+      profitToCover
     );
 
     if (tokenAmounts.length == 2) {
@@ -141,14 +147,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
       //add fill-up liquidity part of fill-up is used
       if (isNeedFillup) {
-        (state.lowerTickFillup, state.upperTickFillup, state.totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(
-          state.pool,
-          state.lowerTick,
-          state.upperTick,
-          state.tickSpacing,
-          state.rebalanceEarned0,
-          state.rebalanceEarned1
-        );
+        UniswapV3ConverterStrategyLogicLib.addFillup(state);
       }
     }
 
@@ -160,14 +159,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
-    /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
+    /// withdraw all liquidity from pool
     /// after disableFuse() liquidity is zero
     if (state.totalLiquidity > 0) {
       _depositorEmergencyExit();
     }
 
     // _depositorEnter(tokenAmounts) if length == 2
-    (uint[] memory tokenAmounts) = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
+    (uint[] memory tokenAmounts, uint loss) = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
       state,
       converter,
       investedAssets(),
@@ -232,12 +231,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     earned = UniswapV3ConverterStrategyLogicLib.calcEarned(state);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
-
-    if (state.rebalanceLost > 0) {
-      lost = state.rebalanceLost;
-      state.rebalanceLost = 0;
-    }
-    return (earned, lost, AppLib.balance(asset));
+    lost = 0; // hide warning
+    assetBalanceAfterClaim = AppLib.balance(asset);
   }
 
   /// @notice Deposit given amount to the pool.
