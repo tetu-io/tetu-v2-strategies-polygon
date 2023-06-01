@@ -123,6 +123,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint oldInvestedAssets = _investedAssets;
     uint newInvestedAssets = _updateInvestedAssets();
     uint profitToCover = newInvestedAssets > oldInvestedAssets ? newInvestedAssets - oldInvestedAssets : 0;
+    uint oldTotalAssets = totalAssets() - profitToCover;
 
     /// withdraw all liquidity from pool
     /// after disableFuse() liquidity is zero
@@ -138,7 +139,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       state,
       converter,
       _controller,
-      totalAssets(),
+      oldTotalAssets,
       profitToCover
     );
 
@@ -172,6 +173,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       profitToCover = newInvestedAssets - oldInvestedAssets;
     }
     }
+    uint oldTotalAssets = totalAssets() - profitToCover;
 
     /// withdraw all liquidity from pool
     /// after disableFuse() liquidity is zero
@@ -183,7 +185,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     (uint[] memory tokenAmounts, uint loss) = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
       state,
       converter,
-      totalAssets(),
+      oldTotalAssets,
       UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
         direction,
         amount,

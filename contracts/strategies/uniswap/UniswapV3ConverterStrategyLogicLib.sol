@@ -24,7 +24,7 @@ library UniswapV3ConverterStrategyLogicLib {
   //////////////////////////////////////////
 
   event FuseTriggered();
-  event Rebalanced();
+  event Rebalanced(uint loss);
   event DisableFuse();
   event NewFuseThreshold(uint newFuseThreshold);
   event UniV3FeesClaimed(uint fee0, uint fee1);
@@ -81,7 +81,6 @@ library UniswapV3ConverterStrategyLogicLib {
     bool fillUp;
     bool isStablePool;
     uint newPrice;
-    uint oldTotalAssets;
     uint newTotalAssets;
   }
 
@@ -678,7 +677,6 @@ library UniswapV3ConverterStrategyLogicLib {
       fillUp: state.fillUp,
       isStablePool: state.isStablePool,
       newPrice: 0,
-      oldTotalAssets: 0,
       newTotalAssets: 0
     });
 
@@ -729,7 +727,9 @@ library UniswapV3ConverterStrategyLogicLib {
       address[] memory tokens = new address[](2);
       tokens[0] = vars.tokenA;
       tokens[1] = vars.tokenB;
-      vars.newTotalAssets = tokenAmounts[0] + ConverterStrategyBaseLib.calcInvestedAssets(tokens, new uint[](2), 0, converter);
+      uint[] memory amounts = new uint[](2);
+      amounts[0] = tokenAmounts[0];
+      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
       if (vars.newTotalAssets < oldTotalAssets) {
         loss = oldTotalAssets - vars.newTotalAssets;
       }
@@ -740,7 +740,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
-    emit Rebalanced();
+    emit Rebalanced(loss);
   }
 
   function rebalanceSwapByAgg(
@@ -776,7 +776,6 @@ library UniswapV3ConverterStrategyLogicLib {
       fillUp: state.fillUp,
       isStablePool: state.isStablePool,
       newPrice: 0,
-      oldTotalAssets: 0,
       newTotalAssets: 0
     });
 
@@ -822,7 +821,9 @@ library UniswapV3ConverterStrategyLogicLib {
       address[] memory tokens = new address[](2);
       tokens[0] = vars.tokenA;
       tokens[1] = vars.tokenB;
-      vars.newTotalAssets = tokenAmounts[0] + ConverterStrategyBaseLib.calcInvestedAssets(tokens, new uint[](2), 0, converter);
+      uint[] memory amounts = new uint[](2);
+      amounts[0] = tokenAmounts[0];
+      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
       if (vars.newTotalAssets < oldTotalAssets) {
         loss = oldTotalAssets - vars.newTotalAssets;
       }
@@ -833,7 +834,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
-    emit Rebalanced();
+    emit Rebalanced(loss);
   }
 
   function calcEarned(State storage state) external view returns (uint) {
