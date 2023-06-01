@@ -249,6 +249,7 @@ library ConverterStrategyBaseLib2 {
   /// @notice Send given amount of underlying to the insurance
   /// @return Amount of underlying sent to the insurance
   function sendToInsurance(address asset, uint amount, address splitter) external returns (uint) {
+    // todo limit max allowed amount
     uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
     if (amountToSend != 0) {
       IERC20(asset).transfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
