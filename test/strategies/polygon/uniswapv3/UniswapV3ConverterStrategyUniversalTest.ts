@@ -26,6 +26,7 @@ import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTes
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 
 
 dotEnvConfig();
@@ -176,6 +177,9 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
+        const state = await strategy.getState()
+        const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB])
+        await strategy.setStrategyProfitHolder(profitHolder.address)
         return strategy as unknown as IStrategyV2;
       },
       {
