@@ -5,6 +5,9 @@ import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3Lib.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 
 library UniswapV3DebtLib {
 
@@ -63,9 +66,14 @@ library UniswapV3DebtLib {
     IUniswapV3Pool pool,
     address tokenA,
     address tokenB,
-    uint liquidatorSwapSlippage
+    uint liquidatorSwapSlippage,
+    uint profitToCover
   ) public {
     _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
+    if (profitToCover > 0) {
+      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+    }
   }
 
   function closeDebtByAgg(
@@ -73,9 +81,14 @@ library UniswapV3DebtLib {
     address tokenA,
     address tokenB,
     uint liquidatorSwapSlippage,
-    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
+    uint profitToCover
   ) public {
     _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
+    if (profitToCover > 0) {
+      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+    }
   }
 
   /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
@@ -86,16 +99,23 @@ library UniswapV3DebtLib {
     uint liquidatorSwapSlippage,
     uint profitToCover
   ) external {
-    // todo cover profit
     IUniswapV3Pool pool = state.pool;
     address tokenA = state.tokenA;
     address tokenB = state.tokenB;
     bool depositorSwapTokens = state.depositorSwapTokens;
     if (state.fillUp) {
+      if (profitToCover > 0) {
+        address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+        IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+      }
       _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
       (state.lowerTick, state.upperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     } else {
       _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
+      if (profitToCover > 0) {
+        address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+        IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+      }
       (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
       bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
       _openDebt(tetuConverter, tokenA, tokenB, entryData);
@@ -108,14 +128,19 @@ library UniswapV3DebtLib {
     ITetuConverter tetuConverter,
     UniswapV3ConverterStrategyLogicLib.State storage state,
     uint liquidatorSwapSlippage,
-    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
+    uint profitToCover
   ) external {
     IUniswapV3Pool pool = state.pool;
     address tokenA = state.tokenA;
     address tokenB = state.tokenB;
     bool depositorSwapTokens = state.depositorSwapTokens;
     _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
-    (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    if (profitToCover > 0) {
+      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+    }
+  (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
     _openDebt(tetuConverter, tokenA, tokenB, entryData);
     state.lowerTick = newLowerTick;
@@ -302,6 +327,7 @@ library UniswapV3DebtLib {
     vars.availableBalanceTokenA = AppLib.balance(tokenA);
     vars.availableBalanceTokenB = AppLib.balance(tokenB);
 
+    // todo fix this logic, i think its incorrect now
     if (vars.debtAmount > 0) {
       if (vars.availableBalanceTokenB > vars.debtAmount) {
         vars.needToBorrowOrFreeFromBorrow = vars.availableBalanceTokenB - vars.debtAmount;

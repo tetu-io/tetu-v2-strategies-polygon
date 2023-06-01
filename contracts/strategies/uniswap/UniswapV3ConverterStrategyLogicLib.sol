@@ -693,10 +693,6 @@ library UniswapV3ConverterStrategyLogicLib {
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
-    // for rebalance after emergencyExit() case
-    uint b0 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenB : vars.tokenA);
-    uint b1 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenA : vars.tokenB);
-
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
       state.isFuseTriggered = true;
@@ -708,7 +704,8 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.pool,
         vars.tokenA,
         vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.pool)
+        _getLiquidatorSwapSlippage(vars.pool),
+        profitToCover
       );
     } else {
       /// rebalancing debt
@@ -749,8 +746,9 @@ library UniswapV3ConverterStrategyLogicLib {
   function rebalanceSwapByAgg(
     State storage state,
     ITetuConverter converter,
-    uint oldInvestedAssets,
-    RebalanceSwapByAggParams memory aggParams
+    uint oldTotalAssets,
+    RebalanceSwapByAggParams memory aggParams,
+    uint profitToCover
   ) external returns (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
     uint loss
@@ -793,10 +791,6 @@ library UniswapV3ConverterStrategyLogicLib {
 
     vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
-    // for rebalance after emergencyExit() case
-    uint b0 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenB : vars.tokenA);
-    uint b1 = AppLib.balance(vars.depositorSwapTokens ? vars.tokenA : vars.tokenB);
-
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
       state.isFuseTriggered = true;
@@ -807,7 +801,8 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.tokenA,
         vars.tokenB,
         _getLiquidatorSwapSlippage(vars.pool),
-        aggParams
+        aggParams,
+        profitToCover
       );
     } else {
       /// rebalancing debt
@@ -816,7 +811,8 @@ library UniswapV3ConverterStrategyLogicLib {
         converter,
         state,
         _getLiquidatorSwapSlippage(vars.pool),
-        aggParams
+        aggParams,
+        profitToCover
       );
 
       tokenAmounts = new uint[](2);
@@ -826,10 +822,9 @@ library UniswapV3ConverterStrategyLogicLib {
       address[] memory tokens = new address[](2);
       tokens[0] = vars.tokenA;
       tokens[1] = vars.tokenB;
-      vars.oldTotalAssets = (vars.depositorSwapTokens ? b1 : b0) + oldInvestedAssets;
       vars.newTotalAssets = tokenAmounts[0] + ConverterStrategyBaseLib.calcInvestedAssets(tokens, new uint[](2), 0, converter);
-      if (vars.newTotalAssets < vars.oldTotalAssets) {
-        loss = vars.oldTotalAssets - vars.newTotalAssets;
+      if (vars.newTotalAssets < oldTotalAssets) {
+        loss = oldTotalAssets - vars.newTotalAssets;
       }
     }
 

@@ -153,11 +153,25 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
+
+    if (loss > 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+    }
   }
 
   function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
+
+    // todo need to cover loss by new developing by dvpublic function
+    uint profitToCover;
+    {
+    uint oldInvestedAssets = _investedAssets;
+    uint newInvestedAssets = _updateInvestedAssets();
+    if (newInvestedAssets > oldInvestedAssets) {
+      profitToCover = newInvestedAssets - oldInvestedAssets;
+    }
+    }
 
     /// withdraw all liquidity from pool
     /// after disableFuse() liquidity is zero
@@ -169,13 +183,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     (uint[] memory tokenAmounts, uint loss) = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
       state,
       converter,
-      investedAssets(),
+      totalAssets(),
       UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
         direction,
         amount,
         agg,
         swapData
-      )
+      ),
+      profitToCover
     );
 
     if (tokenAmounts.length == 2) {
@@ -184,6 +199,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
+
+    if (loss > 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+    }
   }
 
   /////////////////////////////////////////////////////////////////////
