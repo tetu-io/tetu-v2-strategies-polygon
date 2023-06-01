@@ -28,6 +28,10 @@ library ConverterStrategyBaseLib2 {
 
   uint internal constant DENOMINATOR = 100_000;
 
+  /// @dev 0.5% of max profit for strategy TVL
+  /// @notice Limit max amount of profit that can be send to insurance after price changing
+  uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = 500;
+
   /////////////////////////////////////////////////////////////////////
   ///                        MAIN LOGIC
   /////////////////////////////////////////////////////////////////////
@@ -247,11 +251,13 @@ library ConverterStrategyBaseLib2 {
   }
 
   /// @notice Send given amount of underlying to the insurance
+  /// @param strategyBalance Total strategy balance = balance of underlying + current invested assets amount
   /// @return Amount of underlying sent to the insurance
-  function sendToInsurance(address asset, uint amount, address splitter) external returns (uint) {
-    // todo limit max allowed amount
+  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
     uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
     if (amountToSend != 0) {
+      // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
+      amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
       IERC20(asset).transfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
     }
     return amountToSend;

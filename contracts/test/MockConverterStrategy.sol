@@ -127,17 +127,16 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     });
   }
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  /// _depositToPool mock
-  /////////////////////////////////////////////////////////////////////////////////////
-  struct MockedDepositToPoolParams {
+  //region -------------------------------------------- _depositToPoolUni mock
+  struct MockedDepositToPoolUniParams {
     bool initialized;
     int balanceChange;
     address providerBalanceChange;
     uint loss;
+    uint amountSentToInsurance;
   }
 
-  MockedDepositToPoolParams internal depositToPoolParams;
+  MockedDepositToPoolUniParams internal depositToPoolParams;
 
   function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns (
     uint loss
@@ -145,8 +144,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _depositToPool(amount_, updateTotalAssetsBeforeInvest_);
   }
 
-  function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
-    uint loss
+
+  function _depositToPoolUni(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
+    uint strategyLoss,
+    uint amountSentToInsurance
   ){
     if (depositToPoolParams.initialized) {
       //      console.log("_depositToPool.mocked-version is called");
@@ -162,20 +163,27 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- depositToPoolParams.balanceChange)
         );
       }
-      loss = depositToPoolParams.loss;
+      return (depositToPoolParams.loss, depositToPoolParams.amountSentToInsurance);
     } else {
-      loss = super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
+      return super._depositToPoolUni(amount_, earnedByPrices_, investedAssets_);
     }
   }
 
-  function setMockedDepositToPool(int balanceChange, address providerBalanceChange, uint loss) external {
-    depositToPoolParams = MockedDepositToPoolParams({
+  function setMockedDepositToPoolUni(
+    int balanceChange,
+    address providerBalanceChange,
+    uint loss,
+    uint amountSentToInsurance
+  ) external {
+    depositToPoolParams = MockedDepositToPoolUniParams({
       initialized: true,
       balanceChange: balanceChange,
       providerBalanceChange: providerBalanceChange,
-      loss: loss
+      loss: loss,
+      amountSentToInsurance: amountSentToInsurance
     });
   }
+  //endregion -------------------------------------------- _depositToPoolUni mock
 
   /////////////////////////////////////////////////////////////////////////////////////
   /// Others

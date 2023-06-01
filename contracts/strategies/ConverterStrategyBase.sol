@@ -148,7 +148,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (strategyLoss,) = _depositToPoolUni(amount_, earnedByPrices, updatedInvestedAssets);
   }
 
-  /// @notice Deposit {amount_} to the pool, send {earnedByPrices_} to insurance
+  /// @notice Deposit {amount_} to the pool, send {earnedByPrices_} to insurance.
+  ///         totalAsset will decrease on earnedByPrices_ and sharePrice won't change after all recalculations.
   /// @dev We need to deposit {amount_} and withdraw {earnedByPrices_} here
   /// @param amount_ Amount of underlying to be deposited
   /// @param earnedByPrices_ Profit received because of price changing
@@ -172,7 +173,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       console.log("_depositToPoolUni.2");
       if (earnedByPrices_ != 0) {
         console.log("_depositToPoolUni.2.1");
-        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, splitter);
+        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
+          _asset,
+          earnedByPrices_,
+          splitter,
+          investedAssets_ + AppLib.balance(_asset)
+        );
       }
       console.log("_depositToPoolUni.2.2");
       uint balanceBefore = AppLib.balance(_asset);
@@ -201,15 +207,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         strategyLoss = (investedAssets_ + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
       }
     } else if (earnedByPrices_ != 0) {
-      console.log("_depositToPoolUni.3");
-      console.log("_depositToPoolUni.AppLib.balance(_asset)", AppLib.balance(_asset));
       // we just skip check of expectedWithdrewUSD here
-      if (AppLib.balance(_asset) < earnedByPrices_) { // todo pass balance to withdraw-universal, gas optimization
-        console.log("_depositToPoolUni.5");
+      uint balance = AppLib.balance(_asset);
+      if (balance < earnedByPrices_) { // todo pass balance to withdraw-universal, gas optimization
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
       } else {
-        console.log("_depositToPoolUni.4");
-        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, splitter);
+        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
+          _asset,
+          earnedByPrices_,
+          splitter,
+          investedAssets_ + balance
+        );
       }
     }
 
@@ -390,7 +398,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       );
 
       if (earnedByPrices_ != 0) {
-        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(v.asset, earnedByPrices_, splitter);
+        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
+          v.asset,
+          earnedByPrices_,
+          splitter,
+          investedAssets_ + v.balanceBefore
+        );
       }
 
       v.investedAssetsAfterWithdraw = _updateInvestedAssets();
@@ -612,6 +625,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     console.log("_doHardWork.earned", earned);
     console.log("_doHardWork.lost", lost);
     console.log("_doHardWork.assetBalance", assetBalance);
+    console.log("_doHardWork.AppLib.balance(asset)", AppLib.balance(asset));
 
     // re-invest income
     uint amountToInvest = reInvest && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
