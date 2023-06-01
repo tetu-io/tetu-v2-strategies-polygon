@@ -25,7 +25,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   struct WithdrawUniversalLocal {
     bool all;
-    uint investedAssetsBeforeWithdraw;
     uint[] reservesBeforeWithdraw;
     uint totalSupplyBeforeWithdraw;
     uint depositorLiquidity;
@@ -38,8 +37,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint balanceAfterWithdraw;
     address[] tokens;
     address asset;
-    /// @notice Amount "earned" because of price changes
-    uint earnedByPrices;
+    uint indexAsset;
+    uint balanceBefore;
   }
   //endregion DATA TYPES
 
@@ -144,18 +143,35 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ){
-    uint updatedInvestedAssets;
-    // we need to compensate difference between last updated invested assets and the current value for do not allow share price fluctuation
-    (updatedInvestedAssets, strategyLoss) = _updateInvestedAssetsAndGetLoss(updateTotalAssetsBeforeInvest_);
+    (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
+    (strategyLoss,) = _depositToPoolUni(amount_, earnedByPrices, updatedInvestedAssets);
+  }
+
+  /// @notice Deposit {amount_} to the pool, send {earnedByPrices_} to insurance
+  /// @dev We need to deposit {amount_} and withdraw {earnedByPrices_} here
+  /// @param amount_ Amount of underlying to be deposited
+  /// @param earnedByPrices_ Profit received because of price changing
+  /// @param investedAssets_ Invested assets value calculated with updated prices
+  function _depositToPoolUni(uint amount_, uint earnedByPrices_, uint investedAssets_) internal virtual returns (
+    uint strategyLoss,
+    uint amountSentToInsurance
+  ){
+    uint amountToDeposit = amount_ > earnedByPrices_
+      ? amount_ - earnedByPrices_
+      : 0;
 
     // skip deposit for small amounts
-    if (amount_ > reinvestThresholdPercent * updatedInvestedAssets / DENOMINATOR) {
+    if (amountToDeposit > reinvestThresholdPercent * investedAssets_ / DENOMINATOR) {
       address _asset = asset;
+      if (earnedByPrices_ != 0) {
+        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, splitter);
+      }
+
       uint balanceBefore = AppLib.balance(_asset);
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
-      uint[] memory amounts = _beforeDeposit(converter, amount_, tokens, indexAsset);
+      uint[] memory amounts = _beforeDeposit(converter, amountToDeposit, tokens, indexAsset);
 
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
@@ -167,10 +183,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint balanceAfter = AppLib.balance(_asset);
 
       // we need to compensate difference if during deposit we lost some assets
-      if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (updatedInvestedAssets + balanceBefore)) {
-        strategyLoss += (updatedInvestedAssets + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
+      if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (investedAssets_ + balanceBefore)) {
+        strategyLoss = (investedAssets_ + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
       }
+    } else if (earnedByPrices_ != 0) {
+      // todo what we should do with expectedWithdrewUSD here?
+      (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, investedAssets_, earnedByPrices_);
     }
+
+    return (strategyLoss, amountSentToInsurance);
   }
   //endregion Deposit to the pool
 
@@ -233,7 +254,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(amount);
+    // calculate profit/loss because of price changes, try to compensate the loss from the insurance
+    (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
+    (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(amount, investedAssetsNewPrices, earnedByPrices);
   }
 
   /// @notice Withdraw all from the pool.
@@ -245,17 +268,23 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    (expectedWithdrewUSD, assetPrice, strategyLoss) = _withdrawUniversal(type(uint).max);
+    // calculate profit/loss because of price changes, try to compensate the loss from the insurance
+    (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
+    (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(type(uint).max, investedAssetsNewPrices, earnedByPrices);
   }
 
   /// @param amount Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
+  /// @param earnedByPrices_ Additional amount that should be withdrawn and send to the insurance
+  /// @param investedAssets_ Value of invested assets recalculated using current prices
   /// @return expectedWithdrewUSD The value that we should receive after withdrawing in terms of USD value of each asset in the pool
   /// @return __assetPrice Price of the {asset} taken from the price oracle
   /// @return strategyLoss Loss before withdrawing: [new-investedAssets - old-investedAssets]
-  function _withdrawUniversal(uint amount) internal returns (
+  /// @return amountSentToInsurance Actual amount of underlying sent to the insurance
+  function _withdrawUniversal(uint amount, uint earnedByPrices_, uint investedAssets_) internal returns (
     uint expectedWithdrewUSD,
     uint __assetPrice,
-    uint strategyLoss
+    uint strategyLoss,
+    uint amountSentToInsurance
   ) {
     _beforeWithdraw(amount);
 
@@ -263,17 +292,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     v.all = amount == type(uint).max;
     strategyLoss = 0;
 
-    // calculate profit/loss because of price changes, try to compensate the loss from the insurance
-    (v.investedAssetsBeforeWithdraw, v.earnedByPrices) = _fixPriceChanges(true);
-
-    if ((v.all || amount != 0) && v.investedAssetsBeforeWithdraw != 0) {
+    if ((v.all || amount + earnedByPrices_ != 0) && investedAssets_ != 0) {
 
       // --- init variables ---
       v.tokens = _depositorPoolAssets();
       v.asset = asset;
       ITetuConverter _converter = converter;
-      uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(v.tokens, v.asset);
-      uint balanceBefore = AppLib.balance(v.asset);
+      v.indexAsset = ConverterStrategyBaseLib.getAssetIndex(v.tokens, v.asset);
+      v.balanceBefore = AppLib.balance(v.asset);
 
       v.reservesBeforeWithdraw = _depositorPoolReserves();
       v.totalSupplyBeforeWithdraw = _depositorTotalSupply();
@@ -283,12 +309,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // calculate how much liquidity we need to withdraw for getting the requested amount
       (v.liquidityAmountToWithdraw, v.amountsToConvert) = ConverterStrategyBaseLib2.getLiquidityAmount(
-        v.all ? 0 : amount + v.earnedByPrices,
+        v.all ? 0 : amount + earnedByPrices_,
         address(this),
         v.tokens,
-        indexAsset,
+        v.indexAsset,
         _converter,
-        v.investedAssetsBeforeWithdraw,
+        investedAssets_,
         v.depositorLiquidity
       );
 
@@ -310,7 +336,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         (v.expectedMainAssetAmounts, v.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
           _converter,
           v.tokens,
-          indexAsset,
+          v.indexAsset,
           v.reservesBeforeWithdraw,
           v.liquidityAmountToWithdraw,
           v.totalSupplyBeforeWithdraw,
@@ -322,7 +348,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         v.expectedMainAssetAmounts = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
           _converter,
           v.tokens,
-          indexAsset,
+          v.indexAsset,
           v.amountsToConvert
         );
       }
@@ -331,32 +357,33 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts
       v.expectedTotalMainAssetAmount += _makeRequestedAmount(
         v.tokens,
-        indexAsset,
+        v.indexAsset,
         v.amountsToConvert,
         _converter,
-        v.all ? amount : amount + v.earnedByPrices,
+        v.all ? amount : amount + earnedByPrices_,
         v.expectedMainAssetAmounts
       );
 
-      if (v.earnedByPrices != 0) {
-        ConverterStrategyBaseLib2.sendToInsurance(v.asset, v.earnedByPrices);
+      if (earnedByPrices_ != 0) {
+        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(v.asset, earnedByPrices_, splitter);
       }
 
       v.investedAssetsAfterWithdraw = _updateInvestedAssets();
       v.balanceAfterWithdraw = AppLib.balance(v.asset);
 
       // we need to compensate difference if during withdraw we lost some assets
-      if ((v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw) < (v.investedAssetsBeforeWithdraw + balanceBefore)) {
-        strategyLoss += (v.investedAssetsBeforeWithdraw + balanceBefore) - (v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw);
+      if ((v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw + earnedByPrices_) < (investedAssets_ + v.balanceBefore)) {
+        strategyLoss += (investedAssets_ + v.balanceBefore) - (v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw + earnedByPrices_);
       }
 
       return (
         v.expectedTotalMainAssetAmount * v.assetPrice / 1e18,
         v.assetPrice,
-        strategyLoss
+        strategyLoss,
+        amountSentToInsurance
       );
     }
-    return (0, 0, 0);
+    return (0, 0, 0, 0);
   }
 
   /// @notice If pool supports emergency withdraw need to call it for emergencyExit()
@@ -546,27 +573,27 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
     // ATTENTION! splitter will not cover the loss if it is lower than profit
-
-    // register autocompound income or possible lose if assets fluctuated
-    (uint investedAssetsLocal, uint earnedByPrices) = _fixPriceChanges(true);
+    (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
 
     _preHardWork(reInvest);
 
     // claim rewards and get current asset balance
     (uint earnedFromRewards, uint lostFromRewards, uint assetBalance) = _handleRewards();
-    uint earned = earnedFromRewards;
-    uint lost = lostFromRewards;
+    earned = earnedFromRewards;
+    lost = lostFromRewards;
 
     // re-invest income
-    if (reInvest && assetBalance > reinvestThresholdPercent * investedAssetsLocal / DENOMINATOR) {
-      _depositToPool(assetBalance, false);
-      (earned, lost) = ConverterStrategyBaseLib.registerIncome(
-        investedAssetsLocal + assetBalance, // assets in use before deposit
-        _investedAssets + AppLib.balance(asset), // assets in use after deposit
-        earned,
-        lost
-      );
-    }
+    uint amountToInvest = reInvest && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
+      ? assetBalance
+      : 0;
+
+    (, uint amountSentToInsurance) = _depositToPoolUni(amountToInvest, earnedByPrices, investedAssetsNewPrices);
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(
+      investedAssetsNewPrices + assetBalance, // assets in use before deposit
+      _investedAssets + AppLib.balance(asset) + amountSentToInsurance, // assets in use after deposit
+      earned,
+      lost
+    );
 
     _postHardWork();
   }
@@ -602,23 +629,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return _calcInvestedAssets();
   }
 
-  /// @notice Update invested assets and return possible lose [new-investedAssets - old-investedAssets]
-  /// @param updateTotalAssetsBeforeInvest_ If false - skip update, return delta = 0
-  function _updateInvestedAssetsAndGetLoss(bool updateTotalAssetsBeforeInvest_) internal returns (
-    uint updatedInvestedAssets,
-    uint loss
-  ) {
-    uint __investedAssets = _investedAssets;
-
-    updatedInvestedAssets = updateTotalAssetsBeforeInvest_
-      ? _updateInvestedAssets()
-      : __investedAssets;
-
-    loss = updateTotalAssetsBeforeInvest_
-      ? updatedInvestedAssets < __investedAssets ? __investedAssets - updatedInvestedAssets : 0
-      : uint(0);
-  }
-
   /// @notice Calculate profit/loss happened because of price changing. Try to cover the loss, send the profit to the insurance
   /// @param updateInvestedAssetsAmount_ If false - just return current value of invested assets
   /// @return investedAssetsOut Updated value of {_investedAssets}
@@ -633,7 +643,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (earnedOut, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsOut, 0, 0);
 
       if (lost != 0) {
-        // todo coverPossibleStrategyLoss()
+        ConverterStrategyBaseLib2.coverPossibleStrategyLoss(earnedOut, lost, splitter);
       }
     } else {
       investedAssetsOut = _investedAssets;
