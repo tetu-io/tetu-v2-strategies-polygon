@@ -56,12 +56,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     _updateInvestedAssets();
   }
 
-  function withdrawUniversalTestAccess(uint amount, bool all) external returns (
+  function withdrawUniversalTestAccess(uint amount, bool all, uint earnedByPrices_, uint investedAssets_) external returns (
     uint expectedWithdrewUSD,
     uint assetPrice,
-    uint strategyLoss
+    uint strategyLoss,
+    uint amountSentToInsurance
   ) {
-    return _withdrawUniversal(all ? type(uint).max : amount);
+    return _withdrawUniversal(all ? type(uint).max : amount, earnedByPrices_, investedAssets_);
   }
 
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {

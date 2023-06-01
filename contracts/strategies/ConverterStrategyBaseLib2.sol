@@ -2,6 +2,8 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
@@ -242,6 +244,20 @@ library ConverterStrategyBaseLib2 {
 
     // filter zero amounts out
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
+  }
+
+  /// @notice Send given amount of underlying to the insurance
+  /// @return Amount of underlying sent to the insurance
+  function sendToInsurance(address asset, uint amount, address splitter) external returns (uint) {
+    uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
+    if (amountToSend != 0) {
+      IERC20(asset).transfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
+    }
+    return amountToSend;
+  }
+
+  function coverPossibleStrategyLoss(uint earned, uint lost, address splitter) external {
+    ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
   }
 }
 
