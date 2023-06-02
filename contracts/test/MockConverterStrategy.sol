@@ -98,8 +98,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
-    return (earned, lost, assetBalanceAfterClaim);
+    (uint earned2, uint lost2) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
+    return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
   }
 
   struct MockedHandleRewardsParams {
@@ -232,11 +232,21 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint indexAsset_,
     uint[] memory amountsToConvert_,
     ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
     uint requestedAmount,
     uint[] memory expectedMainAssetAmounts
   ) external returns (
     uint expectedTotalAmountMainAsset
   ) {
-    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount, expectedMainAssetAmounts);
+    return ConverterStrategyBaseLib.makeRequestedAmount(
+      tokens_,
+      indexAsset_,
+      amountsToConvert_,
+      converter_,
+      liquidator_,
+      requestedAmount,
+      expectedMainAssetAmounts,
+      liquidationThresholds
+    );
   }
 }

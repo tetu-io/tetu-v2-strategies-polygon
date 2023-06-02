@@ -6,7 +6,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -48,7 +47,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.1.7";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.2.0";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -85,6 +84,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   event OnDepositorEnter(uint[] amounts, uint[] consumedAmounts);
   event OnDepositorExit(uint liquidityAmount, uint[] withdrawnAmounts);
   event OnDepositorEmergencyExit(uint[] withdrawnAmounts);
+  event OnHardWorkEarnedLost(
+    uint investedAssetsNewPrices,
+    uint earnedByPrices,
+    uint earnedHandleRewards,
+    uint lostHandleRewards,
+    uint earnedDeposit,
+    uint lostDeposit
+  );
 
   /// @notice Recycle was made
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
@@ -154,25 +161,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount_ Amount of underlying to be deposited
   /// @param earnedByPrices_ Profit received because of price changing
   /// @param investedAssets_ Invested assets value calculated with updated prices
+  /// @return strategyLoss Loss happened on the depositing. It doesn't include any price-changing losses
+  /// @return amountSentToInsurance Price-changing-profit that was sent to the insurance
   function _depositToPoolUni(uint amount_, uint earnedByPrices_, uint investedAssets_) internal virtual returns (
     uint strategyLoss,
     uint amountSentToInsurance
   ){
     address _asset = asset;
 
-    console.log("_depositToPoolUni.amount", amount_);
-    console.log("_depositToPoolUni.earnedByPrices_", earnedByPrices_);
-    console.log("_depositToPoolUni.investedAssets_", investedAssets_);
     uint amountToDeposit = amount_ > earnedByPrices_
       ? amount_ - earnedByPrices_
       : 0;
-    console.log("_depositToPoolUni.amountToDeposit", amountToDeposit);
 
     // skip deposit for small amounts
     if (amountToDeposit > reinvestThresholdPercent * investedAssets_ / DENOMINATOR) {
-      console.log("_depositToPoolUni.2");
       if (earnedByPrices_ != 0) {
-        console.log("_depositToPoolUni.2.1");
         amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
           _asset,
           earnedByPrices_,
@@ -180,27 +183,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           investedAssets_ + AppLib.balance(_asset)
         );
       }
-      console.log("_depositToPoolUni.2.2");
       uint balanceBefore = AppLib.balance(_asset);
 
-      console.log("_depositToPoolUni.2.3");
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);
 
-      console.log("_depositToPoolUni.2.4");
       // prepare array of amounts ready to deposit, borrow missed amounts
       uint[] memory amounts = _beforeDeposit(converter, amountToDeposit, tokens, indexAsset);
 
-      console.log("_depositToPoolUni.2.5");
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
       emit OnDepositorEnter(amounts, consumedAmounts);
 
-      console.log("_depositToPoolUni.2.6");
       // update _investedAssets with new deposited amount
       uint updatedInvestedAssetsAfterDeposit = _updateInvestedAssets();
       // after deposit some asset can exist
       uint balanceAfter = AppLib.balance(_asset);
-      console.log("_depositToPoolUni.2.7");
 
       // we need to compensate difference if during deposit we lost some assets
       if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (investedAssets_ + balanceBefore)) {
@@ -209,7 +206,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     } else if (earnedByPrices_ != 0) {
       // we just skip check of expectedWithdrewUSD here
       uint balance = AppLib.balance(_asset);
-      if (balance < earnedByPrices_) { // todo pass balance to withdraw-universal, gas optimization
+      if (balance < earnedByPrices_) {
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
       } else {
         amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
@@ -298,9 +295,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    // calculate profit/loss because of price changes, try to compensate the loss from the insurance
-    (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
-    (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(type(uint).max, earnedByPrices, investedAssetsNewPrices);
+    return _withdrawFromPool(type(uint).max);
   }
 
   /// @param amount Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
@@ -316,9 +311,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
-    console.log("_withdrawUniversal.amount", amount);
-    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
-    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
     _beforeWithdraw(amount);
 
     WithdrawUniversalLocal memory v;
@@ -388,13 +380,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // convert amounts to main asset
       // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts
-      v.expectedTotalMainAssetAmount += _makeRequestedAmount(
+      v.expectedTotalMainAssetAmount += ConverterStrategyBaseLib.makeRequestedAmount(
         v.tokens,
         v.indexAsset,
         v.amountsToConvert,
         _converter,
+        _getLiquidator(controller()),
         v.all ? amount : amount + earnedByPrices_,
-        v.expectedMainAssetAmounts
+        v.expectedMainAssetAmounts,
+        liquidationThresholds
       );
 
       if (earnedByPrices_ != 0) {
@@ -444,72 +438,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     _updateInvestedAssets();
   }
   //endregion Withdraw from the pool
-
-  /////////////////////////////////////////////////////////////////////
-  //region Convert amounts after withdraw
-  /////////////////////////////////////////////////////////////////////
-
-  /// @notice Convert {amountsToConvert_} to the main {asset}
-  ///         Swap leftovers (if any) to the main asset.
-  ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
-  /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
-  /// @param indexAsset_ Index of main {asset} in {tokens}
-  /// @param requestedAmount Amount to be withdrawn in terms of the asset in addition to the exist balance.
-  ///        Max uint means attempt to withdraw all possible invested assets.
-  /// @param amountsToConvert_ Amounts available for conversion after withdrawing from the pool
-  /// @param expectedMainAssetAmounts Amounts of main asset that we expect to receive after conversion amountsToConvert_
-  /// @return expectedAmount Expected total amount of main asset after all conversions, swaps and repays
-  function _makeRequestedAmount(
-    address[] memory tokens_,
-    uint indexAsset_,
-    uint[] memory amountsToConvert_,
-    ITetuConverter converter_,
-    uint requestedAmount,
-    uint[] memory expectedMainAssetAmounts
-  ) internal returns (
-    uint expectedAmount
-  ) {
-    // get the total expected amount
-    for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
-      expectedAmount += expectedMainAssetAmounts[i];
-    }
-
-    // we cannot repay a debt twice
-    // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
-    // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
-
-    ITetuLiquidator liquidator = _getLiquidator(controller());
-    if (requestedAmount != type(uint).max
-      && expectedAmount > requestedAmount * (GAP_CONVERSION + DENOMINATOR) / DENOMINATOR
-    ) {
-      // amountsToConvert_ are enough to get requestedAmount
-      ConverterStrategyBaseLib.convertAfterWithdraw(
-        converter_,
-        liquidator,
-        indexAsset_,
-        liquidationThresholds[tokens_[indexAsset_]],
-        tokens_,
-        amountsToConvert_
-      );
-    } else {
-      // amountsToConvert_ are NOT enough to get requestedAmount
-      // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
-      // We should try to close the exist debts instead:
-      //    convert a part of main assets to get amount of secondary assets required to repay the debts
-      // and only then make conversion.
-      expectedAmount = ConverterStrategyBaseLib.closePositionsToGetAmount(
-        converter_,
-        liquidator,
-        indexAsset_,
-        liquidationThresholds,
-        requestedAmount,
-        tokens_
-      ) + expectedMainAssetAmounts[indexAsset_];
-    }
-
-    return expectedAmount;
-  }
-  //endregion Convert amounts after withdraw
 
   /////////////////////////////////////////////////////////////////////
   //region Claim rewards
@@ -610,41 +538,32 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    console.log("_doHardWork");
-
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
-    console.log("_doHardWork.investedAssetsNewPrices", investedAssetsNewPrices);
-    console.log("_doHardWork.earnedByPrices", earnedByPrices);
 
     _preHardWork(reInvest);
 
     // claim rewards and get current asset balance
     uint assetBalance;
     (earned, lost, assetBalance) = _handleRewards();
-    console.log("_doHardWork.earned", earned);
-    console.log("_doHardWork.lost", lost);
-    console.log("_doHardWork.assetBalance", assetBalance);
-    console.log("_doHardWork.AppLib.balance(asset)", AppLib.balance(asset));
 
     // re-invest income
-    uint amountToInvest = reInvest && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
-      ? assetBalance
-      : 0;
-    console.log("_doHardWork.amountToInvest", amountToInvest);
-
-    (, uint amountSentToInsurance) = _depositToPoolUni(amountToInvest, earnedByPrices, investedAssetsNewPrices);
-    console.log("_doHardWork.amountSentToInsurance", amountSentToInsurance);
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(
-      investedAssetsNewPrices + assetBalance, // assets in use before deposit
-      _investedAssets + AppLib.balance(asset) + amountSentToInsurance, // assets in use after deposit
-      earned,
-      lost
+    (, uint amountSentToInsurance) = _depositToPoolUni(
+      reInvest && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
+        ? assetBalance
+        : 0,
+      earnedByPrices,
+      investedAssetsNewPrices
     );
-    console.log("_doHardWork.earned2", earned);
-    console.log("_doHardWork.lost2", lost);
+    (uint earned2, uint lost2) = ConverterStrategyBaseLib.registerIncome(
+      investedAssetsNewPrices + assetBalance, // assets in use before deposit
+      _investedAssets + AppLib.balance(asset) + amountSentToInsurance // assets in use after deposit
+    );
 
     _postHardWork();
+
+    emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
+    return (earned + earned2, lost + lost2);
   }
   //endregion Hardwork
 
@@ -685,17 +604,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                   It's to dangerous to get this to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
   ///                   So, we need to handle it in the caller code.
   function _fixPriceChanges(bool updateInvestedAssetsAmount_) internal returns (uint investedAssetsOut, uint earnedOut) {
-    console.log("_fixPriceChanges.investedAssetsBefore", _investedAssets);
     if (updateInvestedAssetsAmount_) {
-      uint lost;
       uint investedAssetsBefore = _investedAssets;
       investedAssetsOut = _updateInvestedAssets();
-      console.log("_fixPriceChanges.investedAssetsOut", investedAssetsOut);
-      (earnedOut, lost) = ConverterStrategyBaseLib.registerIncome(investedAssetsBefore, investedAssetsOut, 0, 0);
-
-      if (lost != 0) {
-        ConverterStrategyBaseLib2.coverPossibleStrategyLoss(earnedOut, lost, splitter);
-      }
+      earnedOut = ConverterStrategyBaseLib.coverPossibleStrategyLoss(investedAssetsBefore, investedAssetsOut, splitter);
     } else {
       investedAssetsOut = _investedAssets;
       earnedOut = 0;

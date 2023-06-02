@@ -263,8 +263,5 @@ library ConverterStrategyBaseLib2 {
     return amountToSend;
   }
 
-  function coverPossibleStrategyLoss(uint earned, uint lost, address splitter) external {
-    ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
-  }
 }
 

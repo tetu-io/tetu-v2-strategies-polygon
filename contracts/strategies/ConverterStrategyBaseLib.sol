@@ -3,6 +3,8 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
@@ -170,6 +172,8 @@ library ConverterStrategyBaseLib {
   );
 
   event ReturnAssetToConverter(address asset, uint amount);
+
+  event FixChangePrices(uint investedAssetsBefore, uint investedAssetsOut);
   //endregion Events
 
   /////////////////////////////////////////////////////////////////////
@@ -1105,6 +1109,66 @@ library ConverterStrategyBaseLib {
       IERC20(tokens_[indexAsset_]).balanceOf(address(this))
     );
   }
+
+  /// @notice Convert {amountsToConvert_} to the main {asset}
+  ///         Swap leftovers (if any) to the main asset.
+  ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
+  /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
+  /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @param requestedAmount Amount to be withdrawn in terms of the asset in addition to the exist balance.
+  ///        Max uint means attempt to withdraw all possible invested assets.
+  /// @param amountsToConvert_ Amounts available for conversion after withdrawing from the pool
+  /// @param expectedMainAssetAmounts Amounts of main asset that we expect to receive after conversion amountsToConvert_
+  /// @return expectedAmount Expected total amount of main asset after all conversions, swaps and repays
+  function makeRequestedAmount(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory amountsToConvert_,
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
+    uint requestedAmount,
+    uint[] memory expectedMainAssetAmounts,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (uint expectedAmount) {
+    // get the total expected amount
+    for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
+      expectedAmount += expectedMainAssetAmounts[i];
+    }
+
+    // we cannot repay a debt twice
+    // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
+    // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
+
+    if (requestedAmount != type(uint).max
+      && expectedAmount > requestedAmount * (GAP_CONVERSION + DENOMINATOR) / DENOMINATOR
+    ) {
+      // amountsToConvert_ are enough to get requestedAmount
+      _convertAfterWithdraw(
+        converter_,
+        liquidator_,
+        indexAsset_,
+        liquidationThresholds[tokens_[indexAsset_]],
+        tokens_,
+        amountsToConvert_
+      );
+    } else {
+      // amountsToConvert_ are NOT enough to get requestedAmount
+      // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
+      // We should try to close the exist debts instead:
+      //    convert a part of main assets to get amount of secondary assets required to repay the debts
+      // and only then make conversion.
+      expectedAmount = _closePositionsToGetAmount(
+        converter_,
+        liquidator_,
+        indexAsset_,
+        liquidationThresholds,
+        requestedAmount,
+        tokens_
+      ) + expectedMainAssetAmounts[indexAsset_];
+    }
+
+    return expectedAmount;
+  }
   //endregion Reduce size of ConverterStrategyBase
 
   /////////////////////////////////////////////////////////////////////
@@ -1187,14 +1251,14 @@ library ConverterStrategyBaseLib {
   /// @param amountsToConvert Amounts to convert, the order of asset is same as in {tokens}
   /// @return collateralOut Total amount of main asset returned after closing positions
   /// @return repaidAmountsOut What amounts were spent in exchange of the {collateralOut}
-  function convertAfterWithdraw(
+  function _convertAfterWithdraw(
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
     uint liquidationThreshold,
     address[] memory tokens,
     uint[] memory amountsToConvert
-  ) external returns (
+  ) internal returns (
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
@@ -1251,6 +1315,26 @@ library ConverterStrategyBaseLib {
     uint requestedAmount,
     address[] memory tokens
   ) external returns (
+    uint expectedAmount
+  ) {
+    return _closePositionsToGetAmount(
+      converter_,
+      liquidator,
+      indexAsset,
+      liquidationThresholds,
+      requestedAmount,
+      tokens
+    );
+  }
+
+  function _closePositionsToGetAmount(
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator,
+    uint indexAsset,
+    mapping(address => uint) storage liquidationThresholds,
+    uint requestedAmount,
+    address[] memory tokens
+  ) internal returns (
     uint expectedAmount
   ) {
     if (requestedAmount != 0) {
@@ -1458,17 +1542,25 @@ library ConverterStrategyBaseLib {
     return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
   }
 
-  function registerIncome(uint assetBefore, uint assetAfter, uint earned, uint lost) internal pure returns (
-    uint _earned,
-    uint _lost
-  ) {
+  function registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
     if (assetAfter > assetBefore) {
-      earned += assetAfter - assetBefore;
+      earned = assetAfter - assetBefore;
     } else {
-      lost += assetBefore - assetAfter;
+      lost = assetBefore - assetAfter;
     }
     return (earned, lost);
   }
+
+  /// @notice Register income and cover possible loss
+  function coverPossibleStrategyLoss(uint assetBefore, uint assetAfter, address splitter) external returns (uint earned) {
+    uint lost;
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter);
+    if (lost != 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
+    }
+    emit FixChangePrices(assetBefore, assetAfter);
+  }
+
   //endregion Other helpers
 
 }
