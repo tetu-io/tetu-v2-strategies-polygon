@@ -745,6 +745,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         ms.tetuConverter.address,
+        liquidator.address,
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
@@ -756,6 +757,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         p.indexAsset,
         p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         ms.tetuConverter.address,
+        liquidator.address,
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
