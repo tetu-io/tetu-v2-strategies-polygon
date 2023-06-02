@@ -11,7 +11,6 @@ import "./Uni3StrategyErrors.sol";
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
 ///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
-///         It also attempts to cover rebalancing losses with rewards.
 /// @author a17
 contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy {
 
@@ -138,14 +137,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-    bool isNeedFillup,
-    uint loss
+    bool isNeedFillup
     ) = UniswapV3ConverterStrategyLogicLib.rebalance(
       state,
       converter,
       _controller,
       oldTotalAssets,
-      profitToCover
+      profitToCover,
+      splitter
     );
 
     if (tokenAmounts.length == 2) {
@@ -157,12 +156,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       }
     }
 
-    //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
-
-    if (loss > 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
-    }
   }
 
   function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
@@ -189,7 +183,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     }
 
     // _depositorEnter(tokenAmounts) if length == 2
-    (uint[] memory tokenAmounts, uint loss) = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
+    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
       state,
       converter,
       oldTotalAssets,
@@ -199,19 +193,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         agg,
         swapData
       ),
-      profitToCover
+      profitToCover,
+      splitter
     );
 
     if (tokenAmounts.length == 2) {
       _depositorEnter(tokenAmounts);
     }
 
-    //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
-
-    if (loss > 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
-    }
   }
 
   /////////////////////////////////////////////////////////////////////

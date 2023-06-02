@@ -159,28 +159,11 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-
-    tokensOut = new address[](2);
-    tokensOut[0] = state.tokenA;
-    tokensOut[1] = state.tokenB;
-
-    (amountsOut, balancesBefore) = UniswapV3ConverterStrategyLogicLib.claimRewards(
-      state.strategyProfitHolder,
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.lowerTickFillup,
-      state.upperTickFillup,
-      state.depositorSwapTokens,
-      tokensOut,
-      state.totalLiquidity,
-      state.totalLiquidityFillup
-    );
+    (tokensOut, amountsOut, balancesBefore) = UniswapV3ConverterStrategyLogicLib.claimRewards(state);
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.
   /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
   uint[50-2] private __gap; // 50 - count of variables
-
 }

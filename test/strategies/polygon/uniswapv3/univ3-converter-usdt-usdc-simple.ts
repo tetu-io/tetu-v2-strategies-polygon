@@ -36,6 +36,7 @@ import { BigNumber } from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {Uniswapv3StateUtils} from "./utils/Uniswapv3StateUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 
 const { expect } = chai;
@@ -115,6 +116,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
 
     await vault.setWithdrawRequestBlocks(0);
+
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
   });
 
   after(async function() {

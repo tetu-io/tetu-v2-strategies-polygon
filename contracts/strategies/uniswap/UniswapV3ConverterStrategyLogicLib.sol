@@ -533,25 +533,18 @@ library UniswapV3ConverterStrategyLogicLib {
   //////////////////////////////////////////
 
   /// @notice Claim rewards from the Uniswap V3 pool.
-  /// @param pool The Uniswap V3 pool instance.
-  /// @param lowerTick The lower tick of the pool's main range.
-  /// @param upperTick The upper tick of the pool's main range.
-  /// @param lowerTickFillup The lower tick of the pool's fill-up range.
-  /// @param upperTickFillup The upper tick of the pool's fill-up range.
-  /// @param _depositorSwapTokens A boolean indicating if need to use token B instead of token A.
+  /// @return tokensOut An array containing tokenA and tokenB.
   /// @return amountsOut An array containing the amounts of token0 and token1 claimed as rewards.
-  function claimRewards(
-    address strategyProfitHolder,
-    IUniswapV3Pool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 lowerTickFillup,
-    int24 upperTickFillup,
-    bool _depositorSwapTokens,
-    address[] memory tokensOut,
-    uint128 liquidity,
-    uint128 liquidityFillup
-  ) external returns (uint[] memory amountsOut, uint[] memory balancesBefore) {
+  function claimRewards(State storage state) external returns (address[] memory tokensOut, uint[] memory amountsOut, uint[] memory balancesBefore) {
+    address strategyProfitHolder = state.strategyProfitHolder;
+    IUniswapV3Pool pool = state.pool;
+    int24 lowerTick = state.lowerTick;
+    int24 upperTick = state.upperTick;
+    int24 lowerTickFillup = state.lowerTickFillup;
+    int24 upperTickFillup = state.upperTickFillup;
+    tokensOut = new address[](2);
+    tokensOut[0] = state.tokenA;
+    tokensOut[1] = state.tokenB;
 
     balancesBefore = new uint[](2);
     for (uint i; i < tokensOut.length; i++) {
@@ -559,7 +552,7 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     amountsOut = new uint[](2);
-    if (liquidity > 0) {
+    if (state.totalLiquidity > 0) {
       pool.burn(lowerTick, upperTick, 0);
       (amountsOut[0], amountsOut[1]) = pool.collect(
         address(this),
@@ -569,7 +562,7 @@ library UniswapV3ConverterStrategyLogicLib {
         type(uint128).max
       );
     }
-    if (liquidityFillup > 0) {
+    if (state.totalLiquidityFillup > 0) {
       pool.burn(lowerTickFillup, upperTickFillup, 0);
       (uint fillup0, uint fillup1) = pool.collect(
         address(this),
@@ -584,7 +577,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
     emit UniV3FeesClaimed(amountsOut[0], amountsOut[1]);
 
-    if (_depositorSwapTokens) {
+    if (state.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
 
@@ -645,18 +638,18 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param oldTotalAssets The amount of total assets before rebalancing.
   /// @return tokenAmounts The token amounts for deposit (if length != 2 then do nothing).
   /// @return isNeedFillup Indicates if fill-up is required after rebalancing.
-  /// @return loss Rebalance loss
   function rebalance(
     State storage state,
     ITetuConverter converter,
     address controller,
     uint oldTotalAssets,
-    uint profitToCover
+    uint profitToCover,
+    address splitter
   ) external returns (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-    bool isNeedFillup,
-    uint loss
+    bool isNeedFillup
   ) {
+    uint loss;
     tokenAmounts = new uint[](0);
     isNeedFillup = false;
 
@@ -740,6 +733,10 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
+    if (loss > 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+    }
+
     emit Rebalanced(loss);
   }
 
@@ -748,11 +745,12 @@ library UniswapV3ConverterStrategyLogicLib {
     ITetuConverter converter,
     uint oldTotalAssets,
     RebalanceSwapByAggParams memory aggParams,
-    uint profitToCover
+    uint profitToCover,
+    address splitter
   ) external returns (
-    uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-    uint loss
+    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
   ) {
+    uint loss;
     tokenAmounts = new uint[](0);
 
     if (state.fillUp) {
@@ -832,6 +830,10 @@ library UniswapV3ConverterStrategyLogicLib {
     // need to update last price only for stables coz only stables have fuse mechanic
     if (vars.isStablePool) {
       state.lastPrice = vars.newPrice;
+    }
+
+    if (loss > 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
     }
 
     emit Rebalanced(loss);

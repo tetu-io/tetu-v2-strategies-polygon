@@ -112,6 +112,9 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
 
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
     await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
+
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
   })
 
   after(async function() {
