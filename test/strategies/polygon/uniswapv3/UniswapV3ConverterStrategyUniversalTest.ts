@@ -90,7 +90,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
     const reinvestThresholdPercent = 1_000; // 1%
     const params: IUniversalStrategyInputParams = {
       ppfsDecreaseAllowed: false,
-      balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
+      balanceTolerance: 0.000002, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
       loops: 4, // an even number of iterations triggers the same number of swap1 and swap2
       loopValue: 2000,

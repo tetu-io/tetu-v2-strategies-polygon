@@ -119,10 +119,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
-    // todo need to cover loss by new developing by dvpublic function
+    // todo change to new function developing by dvpublic
     uint oldInvestedAssets = _investedAssets;
     uint newInvestedAssets = _updateInvestedAssets();
-    uint profitToCover = newInvestedAssets > oldInvestedAssets ? newInvestedAssets - oldInvestedAssets : 0;
+    uint profitToCover;
+    if (newInvestedAssets > oldInvestedAssets) {
+      profitToCover = newInvestedAssets - oldInvestedAssets;
+    } else {
+      ISplitter(splitter).coverPossibleStrategyLoss(0, oldInvestedAssets - newInvestedAssets);
+    }
     uint oldTotalAssets = totalAssets() - profitToCover;
 
     /// withdraw all liquidity from pool
@@ -164,13 +169,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
-    // todo need to cover loss by new developing by dvpublic function
+    // todo change to new function developing by dvpublic
     uint profitToCover;
     {
     uint oldInvestedAssets = _investedAssets;
     uint newInvestedAssets = _updateInvestedAssets();
     if (newInvestedAssets > oldInvestedAssets) {
       profitToCover = newInvestedAssets - oldInvestedAssets;
+    } else {
+      ISplitter(splitter).coverPossibleStrategyLoss(0, oldInvestedAssets - newInvestedAssets);
     }
     }
     uint oldTotalAssets = totalAssets() - profitToCover;
