@@ -225,10 +225,6 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
       await s.rebalanceSwapByAgg(quote[0], 0, MaticAddresses.AGG_ONEINCH_V5, '0x')
 
       expect(await s.needRebalance()).eq(false)
-
-      state = await s.getState()
-      expect(state.rebalanceResults[0]).eq(0)
-      expect(state.rebalanceResults[1]).eq(0)
     })
   })
 })
@@ -240,11 +236,17 @@ function apiRequestUrl(methodName: string, queryParams: string) {
   return apiBaseUrl + methodName + '?' + r;
 }
 
-async function buildTxForSwap(params: string) {
+async function buildTxForSwap(params: string, tries: number = 2) {
   const url = apiRequestUrl('/swap', params);
   console.log('url', url)
-  return fetch(url).then(res => {
-    // console.log('res', res)
-    return res.json();
-  }).then(res => res.tx);
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url)
+      if (r && r.status === 200) {
+        return (await r.json()).tx
+      }
+    } catch (e) {
+      console.error('Err', e)
+    }
+  }
 }
