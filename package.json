@@ -19,7 +19,8 @@
     "deploy-prod": "hardhat deploy --network matic --write true",
     "verify-all": "hardhat etherscan-verify --network matic",
     "deploy-local": "hardhat deploy --write true --reset",
-    "solhint": "solhint \"contracts/**/*.sol\""
+    "solhint": "solhint \"contracts/**/*.sol\"",
+    "sporalyzer": "node sporalyzer.js --buildInfoPath ./artifacts/build-info/5bec354a0980c63ba6a301a42148783a.json --mode deployedBytecode --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\""
   },
   "keywords": [
     "solidity",
@@ -72,6 +73,7 @@
     "hardhat-gas-reporter": "^1.0.9",
     "hardhat-tracer": "^2.1.2",
     "isomorphic-unfetch": "^4.0.2",
+    "jsonpath-plus": "^7.2.0",
     "ky": "^0.33.3",
     "mocha": "^10.2.0",
     "pg": "^8.10.0",
