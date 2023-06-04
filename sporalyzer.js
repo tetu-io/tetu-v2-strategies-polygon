@@ -2,6 +2,7 @@ const { JSONPath } = require('jsonpath-plus');
 const fs = require('fs');
 let args = require('minimist')(process.argv.slice(2));
 
+const mode = 'deployedBytecode'
 const directoryPath = './artifacts/build-info';
 const buildInfoPath = directoryPath + '/' + fs.readdirSync(directoryPath)[0];
 
@@ -21,7 +22,7 @@ inputFileSources.forEach(
   },
 );
 
-const generatedSources = JSONPath({ json: buildInfo, path: `$.output.contracts..${args.mode}.generatedSources[*]` });
+const generatedSources = JSONPath({ json: buildInfo, path: `$.output.contracts..${mode}.generatedSources[*]` });
 
 generatedSources.forEach(
   (s) => {
@@ -46,11 +47,11 @@ const allContracts = JSONPath({ json: buildInfo, path: `$.output.contracts` })[0
 const contractPath = args.contract.split(':')[0];
 const contractName = args.contract.split(':')[1];
 
-//console.log(JSONPath({ json: buildInfo, path: `$.output.contracts['${contractPath}'].${contractName}.evm.${args.mode}` }));
+//console.log(JSONPath({ json: buildInfo, path: `$.output.contracts['${contractPath}'].${contractName}.evm.${mode}` }));
 
 const bytecode = JSONPath({
   json: buildInfo,
-  path: `$.output.contracts['${contractPath}'].${contractName}.evm.${args.mode}`,
+  path: `$.output.contracts['${contractPath}'].${contractName}.evm.${mode}`,
 })[0];
 //console.log(bytecode);
 // Normalize the opcode listing so that PUSH instructions are single tokens, and trim excess data at the end
