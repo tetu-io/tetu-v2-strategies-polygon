@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber } from 'ethers';
-import { IERC20__factory, ITetuLiquidator__factory } from '../../../../../typechain';
+import { IERC20__factory, ITetuLiquidator__factory, ControllerV2__factory, ITetuLiquidator } from '../../../../../typechain';
 import { MaticAddresses } from '../../../../../scripts/addresses/MaticAddresses';
 import { Misc } from '../../../../../scripts/utils/Misc';
 
@@ -85,5 +85,30 @@ export class LiquidatorUtils {
       finalPrice: price,
       pricesRatio18: initialPrice.mul(Misc.ONE18).div(price),
     };
+  }
+
+  public static async addBlueChipsPools(
+    signer: SignerWithAddress,
+    controllerAddress: string,
+    liquidator?: ITetuLiquidator
+  ) {
+    const controller = ControllerV2__factory.connect(controllerAddress, signer)
+    const operators = await controller.operatorsList();
+    const operator = await Misc.impersonate(operators[0]);
+    const pools = [
+      {
+        pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        tokenIn: MaticAddresses.DAI_TOKEN,
+        tokenOut: MaticAddresses.USDC_TOKEN,
+      },
+      {
+        pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        tokenIn: MaticAddresses.USDT_TOKEN,
+        tokenOut: MaticAddresses.USDC_TOKEN,
+      },
+    ]
+    await liquidator?.connect(operator).addBlueChipsPools(pools, true);
   }
 }

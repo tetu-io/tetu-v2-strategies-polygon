@@ -110,7 +110,7 @@ export class ConverterUtils {
   }
 
   /**
-   * Add {borrower} to white list of tetuController
+   * Add {borrower} to whitelist of tetuController
    */
   public static async addToWhitelist(signer: SignerWithAddress, tetuConverter: string, borrower: string) {
     const controllerAddress = await ITetuConverter__factory.connect(tetuConverter, signer).controller();

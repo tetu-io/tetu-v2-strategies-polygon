@@ -262,7 +262,7 @@ library ConverterStrategyBaseLib2 {
       // Revert or cutting amount in both cases
 
       // amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
-      require(strategyBalance != 0, ZERO_BALANCE);
+      require(strategyBalance != 0, AppErrors.ZERO_BALANCE);
       require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
       IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
     }
