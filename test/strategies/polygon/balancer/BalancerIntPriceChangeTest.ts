@@ -31,11 +31,11 @@ import { BalancerBoostedTetuUsdUtils } from './utils/BalancerBoostedTetuUsdUtils
 import { LiquidatorUtils } from './utils/LiquidatorUtils';
 import { PriceOracleManagerUtils } from '../../../baseUT/converter/PriceOracleManagerUtils';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
-import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {IPutInitialAmountsBalancesResults, StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {Provider} from "@ethersproject/providers";
 import {IPriceOracleManager} from "../../../baseUT/converter/PriceOracleManager";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
+import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 
 chai.use(chaiAsPromised);
 
@@ -123,19 +123,19 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
     let strategy: BalancerBoostedStrategy;
     let asset: string;
     let splitter: ISplitter;
-    let stateBeforeDeposit: IState;
+    let stateBeforeDeposit: IStateNum;
     let initialBalances: IPutInitialAmountsBalancesResults;
     let forwarder: string;
 
     /**
      * DEPOSIT_AMOUNT => user, DEPOSIT_AMOUNT/2 => signer, DEPOSIT_AMOUNT/2 => liquidator
      */
-    async function enterToVault(): Promise<IState> {
+    async function enterToVault(): Promise<IStateNum> {
       await VaultUtils.deposit(signer, vault, initialBalances.balanceSigner);
       await VaultUtils.deposit(user, vault, initialBalances.balanceUser);
       await UniversalTestUtils.removeExcessTokens(asset, user, tools.liquidator.address);
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-      return StateUtils.getState(signer, user, strategy, vault);
+      return StateUtilsNum.getState(signer, user, strategy, vault);
     }
 
     interface IChangePricesResults {
@@ -150,19 +150,20 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       percent: number,
       skipOracleChanges?: boolean,
     ): Promise<IChangePricesResults> {
-      const investedAssets0 = await strategy.callStatic.calcInvestedAssets();
+      const strategyAsOperator = strategy.connect(
+        await UniversalTestUtils.getAnOperator(strategy.address, signer)
+      );
+      const investedAssets0 = await strategyAsOperator.callStatic.calcInvestedAssets();
 
       if (!skipOracleChanges) {
         // change prices ~4% in price oracles
         await priceOracleManager.decPrice(MaticAddresses.DAI_TOKEN, 4);
         await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, 4);
       }
-      const investedAssetsAfterOracles = await strategy.callStatic.calcInvestedAssets();
-
+      const investedAssetsAfterOracles = await strategyAsOperator.callStatic.calcInvestedAssets();
       // change prices ~4% in balancer
       await BalancerBoostedTetuUsdUtils.swapDaiToUsdt(signer, percent);
-      const investedAssetsAfterBalancer = await strategy.callStatic.calcInvestedAssets();
-
+      const investedAssetsAfterBalancer = await strategyAsOperator.callStatic.calcInvestedAssets();
       // change prices ~4% in liquidator
       // add usdt to the pool, reduce USDT price
       await LiquidatorUtils.swapToUsdc(
@@ -173,7 +174,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         parseUnits('10000', 6),
         percent,
       );
-      const investedAssetsAfterLiquidatorUsdt = await strategy.callStatic.calcInvestedAssets();
+      const investedAssetsAfterLiquidatorUsdt = await strategyAsOperator.callStatic.calcInvestedAssets();
 
       // remove DAI from the pool, increase DAI price
       await LiquidatorUtils.swapUsdcTo(
@@ -184,9 +185,8 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         parseUnits('10000', 6),
         percent,
       );
-      const investedAssetsAfterLiquidatorAll = await strategy.callStatic.calcInvestedAssets();
+      const investedAssetsAfterLiquidatorAll = await strategyAsOperator.callStatic.calcInvestedAssets();
       await UniversalTestUtils.removeExcessTokens(asset, signer, tools.liquidator.address);
-
       return {
         investedAssets0,
         investedAssetsAfterOracles,
@@ -247,7 +247,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         DEPOSIT_AMOUNT,
       );
 
-      stateBeforeDeposit = await StateUtils.getState(signer, user, strategy, vault);
+      stateBeforeDeposit = await StateUtilsNum.getState(signer, user, strategy, vault);
     });
 
     after(async function() {
@@ -338,9 +338,9 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
             .transfer(strategy.address, parseUnits('10000', 6));
 
           // change prices
-          const stateBefore = await StateUtils.getState(signer, user, strategy, vault);
+          const stateBefore = await StateUtilsNum.getState(signer, user, strategy, vault);
           const r = await changePrices(PERCENT_CHANGE_PRICES);
-          const stateAfter = await StateUtils.getState(signer, user, strategy, vault);
+          const stateAfter = await StateUtilsNum.getState(signer, user, strategy, vault);
 
           // check states
           console.log('stateBefore', stateBefore);
@@ -364,183 +364,181 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       });
     });
 
-    // describe('Reduce share price after price changing', () => {
-    //   describe('Deposit', () => {
-    //     it('should reduce sharePrice, small deposit', async() => {
-    //       const stateInitial = await enterToVault();
-    //
-    //       // let's allow strategy to invest all available amount
-    //       for (let i = 0; i < 3; ++i) {
-    //         await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-    //         const state = await StateUtils.getState(signer, user, strategy, vault);
-    //         console.log(`state ${i}`, state);
-    //       }
-    //       const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
-    //
-    //       // prices were changed, but calcInvestedAssets were not called
-    //       await changePrices(PERCENT_CHANGE_PRICES);
-    //
-    //       // await strategy.updateInvestedAssets();
-    //
-    //       // let's deposit $1 - calcInvestedAssets will be called
-    //       await IERC20__factory.connect(
-    //         MaticAddresses.USDC_TOKEN,
-    //         await Misc.impersonate(MaticHolders.HOLDER_USDC),
-    //       ).transfer(user.address, parseUnits('1', 6));
-    //       await VaultUtils.deposit(user, vault, parseUnits('1', 6));
-    //
-    //       const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
-    //
-    //       console.log('State before', stateBefore);
-    //       console.log('State after', stateAfter);
-    //
-    //       console.log('Share price before', stateBefore.vault.sharePrice.toString());
-    //       console.log('Share price after', stateAfter.vault.sharePrice.toString());
-    //
-    //       await StateUtils.saveListStatesToCSVColumns(
-    //         './tmp/pc_deposit_small.csv',
-    //         [stateBefore, stateAfter],
-    //         stateParams
-    //       );
-    //
-    //       const ret = [
-    //         stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-    //         stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
-    //       ].join();
-    //       const expected = [true, true].join();
-    //       expect(ret).eq(expected);
-    //     });
-    //     it('should reduce sharePrice, huge deposit', async() => {
-    //       await enterToVault();
-    //
-    //       // let's allow strategy to invest all available amount
-    //       for (let i = 0; i < 3; ++i) {
-    //         await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-    //         const state = await StateUtils.getState(signer, user, strategy, vault);
-    //         console.log(`state ${i}`, state);
-    //       }
-    //       const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
-    //
-    //       // prices were changed, but calcInvestedAssets were not called
-    //       await changePrices(PERCENT_CHANGE_PRICES);
-    //
-    //       // await strategy.updateInvestedAssets();
-    //
-    //       // let's deposit $1 - calcInvestedAssets will be called
-    //       await IERC20__factory.connect(
-    //         MaticAddresses.USDC_TOKEN,
-    //         await Misc.impersonate(MaticHolders.HOLDER_USDC),
-    //       ).transfer(user.address, parseUnits('50000', 6));
-    //       await VaultUtils.deposit(user, vault, parseUnits('50000', 6));
-    //
-    //       const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
-    //
-    //       console.log('State before', stateBefore);
-    //       console.log('State after', stateAfter);
-    //
-    //       console.log('Share price before', stateBefore.vault.sharePrice.toString());
-    //       console.log('Share price after', stateAfter.vault.sharePrice.toString());
-    //
-    //       await StateUtils.saveListStatesToCSVColumns(
-    //         './tmp/pc_deposit_huge.csv',
-    //         [stateBefore, stateAfter],
-    //         stateParams
-    //       );
-    //
-    //       const ret = [
-    //         stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-    //         stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
-    //       ].join();
-    //       const expected = [true, true].join();
-    //       expect(ret).eq(expected);
-    //     });
-    //   });
-    //   describe('Withdraw almost most allowed amount', () => {
-    //     it('should reduce sharePrice', async() => {
-    //       const stateInitial = await enterToVault();
-    //       console.log('stateInitial', stateInitial);
-    //
-    //       // let's allow strategy to invest all available amount
-    //       for (let i = 0; i < 3; ++i) {
-    //         await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-    //         const state = await StateUtils.getState(signer, user, strategy, vault);
-    //         console.log(`state ${i}`, state);
-    //       }
-    //       const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
-    //
-    //       // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
-    //       await changePrices(PERCENT_CHANGE_PRICES);
-    //
-    //       // we need to force vault to withdraw some amount from the strategy
-    //       // so let's ask to withdraw ALMOST all amount from vault's balance
-    //       // calcInvestedAssets will be called after the withdrawal
-    //       const assets = await vault.convertToAssets(await vault.balanceOf(user.address));
-    //       // todo const amountToWithdraw = (await vault.maxWithdraw(user.address)).sub(parseUnits("1", 6));
-    //       const amountToWithdraw = assets.mul(DENOMINATOR - WITHDRAW_FEE).div(DENOMINATOR).sub(parseUnits('1', 6));
-    //       console.log('amountToWithdraw', amountToWithdraw);
-    //       await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
-    //
-    //       const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
-    //
-    //       console.log('stateBefore', stateBefore);
-    //       console.log('stateAfter', stateAfter);
-    //       console.log('Share price before', stateBefore.vault.sharePrice.toString());
-    //       console.log('Share price after', stateAfter.vault.sharePrice.toString());
-    //
-    //       await StateUtils.saveListStatesToCSVColumns(
-    //         './tmp/pc_withdraw.csv',
-    //         [stateBefore, stateAfter],
-    //         stateParams
-    //       );
-    //
-    //       const ret = [
-    //         stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-    //         stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
-    //       ].join();
-    //       const expected = [true, true].join();
-    //       expect(ret).eq(expected);
-    //     });
-    //   });
-    //   describe('WithdrawAll', () => {
-    //     it('should reduce sharePrice', async() => {
-    //       const stateInitial = await enterToVault();
-    //       console.log('stateInitial', stateInitial);
-    //
-    //       // let's allow strategy to invest all available amount
-    //       for (let i = 0; i < 3; ++i) {
-    //         await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
-    //         const state = await StateUtils.getState(signer, user, strategy, vault);
-    //         console.log(`state ${i}`, state);
-    //       }
-    //       const stateBefore = await StateUtils.getState(signer, user, strategy, vault, 'before');
-    //
-    //       // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
-    //       await changePrices(PERCENT_CHANGE_PRICES);
-    //
-    //       await vault.connect(user).withdrawAll();
-    //
-    //       const stateAfter = await StateUtils.getState(signer, user, strategy, vault, 'after');
-    //
-    //       console.log('stateBefore', stateBefore);
-    //       console.log('stateAfter', stateAfter);
-    //       console.log('Share price before', stateBefore.vault.sharePrice.toString());
-    //       console.log('Share price after', stateAfter.vault.sharePrice.toString());
-    //
-    //       await StateUtils.saveListStatesToCSVColumns(
-    //         './tmp/pc_withdraw_all.csv',
-    //         [stateBefore, stateAfter],
-    //         stateParams
-    //       );
-    //
-    //       const ret = [
-    //         stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
-    //         stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
-    //       ].join();
-    //       const expected = [true, true].join();
-    //       expect(ret).eq(expected);
-    //     });
-    //   });
-    // });
+    describe('Reduce share price after price changing', () => {
+      describe('Deposit', () => {
+        it('should reduce sharePrice, small deposit', async() => {
+          const stateInitial = await enterToVault();
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
+            const state = await StateUtilsNum.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state);
+          }
+          const stateBefore = await StateUtilsNum.getState(signer, user, strategy, vault, 'before');
+
+          // prices were changed, but calcInvestedAssets were not called
+          await changePrices(PERCENT_CHANGE_PRICES);
+
+          // await strategy.updateInvestedAssets();
+
+          // let's deposit $1 - calcInvestedAssets will be called
+          await IERC20__factory.connect(
+            MaticAddresses.USDC_TOKEN,
+            await Misc.impersonate(MaticHolders.HOLDER_USDC),
+          ).transfer(user.address, parseUnits('1', 6));
+          await VaultUtils.deposit(user, vault, parseUnits('1', 6));
+
+          const stateAfter = await StateUtilsNum.getState(signer, user, strategy, vault, 'after');
+
+          console.log('State before', stateBefore);
+          console.log('State after', stateAfter);
+
+          console.log('Share price before', stateBefore.vault.sharePrice.toString());
+          console.log('Share price after', stateAfter.vault.sharePrice.toString());
+
+          await StateUtilsNum.saveListStatesToCSVColumns(
+            './tmp/pc_deposit_small.csv',
+            [stateBefore, stateAfter],
+            stateParams
+          );
+
+          expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1);
+        });
+        it('should reduce sharePrice, huge deposit', async() => {
+          await enterToVault();
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
+            const state = await StateUtilsNum.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state);
+          }
+          const stateBefore = await StateUtilsNum.getState(signer, user, strategy, vault, 'before');
+
+          // prices were changed, but calcInvestedAssets were not called
+          await changePrices(PERCENT_CHANGE_PRICES);
+
+          // await strategy.updateInvestedAssets();
+
+          // let's deposit $1 - calcInvestedAssets will be called
+          await IERC20__factory.connect(
+            MaticAddresses.USDC_TOKEN,
+            await Misc.impersonate(MaticHolders.HOLDER_USDC),
+          ).transfer(user.address, parseUnits('50000', 6));
+          await VaultUtils.deposit(user, vault, parseUnits('50000', 6));
+
+          const stateAfter = await StateUtilsNum.getState(signer, user, strategy, vault, 'after');
+
+          console.log('State before', stateBefore);
+          console.log('State after', stateAfter);
+
+          console.log('Share price before', stateBefore.vault.sharePrice.toString());
+          console.log('Share price after', stateAfter.vault.sharePrice.toString());
+
+          await StateUtilsNum.saveListStatesToCSVColumns(
+            './tmp/pc_deposit_huge.csv',
+            [stateBefore, stateAfter],
+            stateParams
+          );
+
+          expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1);
+          // const ret = [
+          //   stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
+          //   stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
+          // ].join();
+          // const expected = [true, true].join();
+          // expect(ret).eq(expected);
+        });
+      });
+      describe('Withdraw almost most allowed amount', () => {
+        it('should reduce sharePrice', async() => {
+          const stateInitial = await enterToVault();
+          console.log('stateInitial', stateInitial);
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
+            const state = await StateUtilsNum.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state);
+          }
+          const stateBefore = await StateUtilsNum.getState(signer, user, strategy, vault, 'before');
+
+          // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
+          await changePrices(PERCENT_CHANGE_PRICES);
+
+          // we need to force vault to withdraw some amount from the strategy
+          // so let's ask to withdraw ALMOST all amount from vault's balance
+          // calcInvestedAssets will be called after the withdrawal
+          const assets = await vault.convertToAssets(await vault.balanceOf(user.address));
+          // todo const amountToWithdraw = (await vault.maxWithdraw(user.address)).sub(parseUnits("1", 6));
+          const amountToWithdraw = assets.mul(DENOMINATOR - WITHDRAW_FEE).div(DENOMINATOR).sub(parseUnits('1', 6));
+          console.log('amountToWithdraw', amountToWithdraw);
+          await vault.connect(user).withdraw(amountToWithdraw, user.address, user.address);
+
+          const stateAfter = await StateUtilsNum.getState(signer, user, strategy, vault, 'after');
+
+          console.log('stateBefore', stateBefore);
+          console.log('stateAfter', stateAfter);
+          console.log('Share price before', stateBefore.vault.sharePrice.toString());
+          console.log('Share price after', stateAfter.vault.sharePrice.toString());
+
+          await StateUtilsNum.saveListStatesToCSVColumns(
+            './tmp/pc_withdraw.csv',
+            [stateBefore, stateAfter],
+            stateParams
+          );
+
+          expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1);
+          // const ret = [
+          //   stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
+          //   stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
+          // ].join();
+          // const expected = [true, true].join();
+          // expect(ret).eq(expected);
+        });
+      });
+      describe('WithdrawAll', () => {
+        it('should reduce sharePrice', async() => {
+          const stateInitial = await enterToVault();
+          console.log('stateInitial', stateInitial);
+
+          // let's allow strategy to invest all available amount
+          for (let i = 0; i < 3; ++i) {
+            await strategy.connect(await Misc.impersonate(splitter.address)).doHardWork();
+            const state = await StateUtilsNum.getState(signer, user, strategy, vault);
+            console.log(`state ${i}`, state);
+          }
+          const stateBefore = await StateUtilsNum.getState(signer, user, strategy, vault, 'before');
+
+          // prices were changed, invested assets amount is reduced, but calcInvestedAssets is not called
+          await changePrices(PERCENT_CHANGE_PRICES);
+
+          await vault.connect(user).withdrawAll();
+
+          const stateAfter = await StateUtilsNum.getState(signer, user, strategy, vault, 'after');
+
+          console.log('stateBefore', stateBefore);
+          console.log('stateAfter', stateAfter);
+          console.log('Share price before', stateBefore.vault.sharePrice.toString());
+          console.log('Share price after', stateAfter.vault.sharePrice.toString());
+
+          await StateUtilsNum.saveListStatesToCSVColumns(
+            './tmp/pc_withdraw_all.csv',
+            [stateBefore, stateAfter],
+            stateParams
+          );
+
+          expect(stateAfter.vault.sharePrice).approximately(stateBefore.vault.sharePrice, 1);
+          // const ret = [
+          //   stateAfter.vault.sharePrice.lt(stateBefore.vault.sharePrice),
+          //   stateAfter.insurance.assetBalance.gt(stateBefore.insurance.assetBalance),
+          // ].join();
+          // const expected = [true, true].join();
+          // expect(ret).eq(expected);
+        });
+      });
+    });
   });
 
   //endregion Integration tests

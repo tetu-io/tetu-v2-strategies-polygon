@@ -20,7 +20,6 @@ import {
 } from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 
 /**
