@@ -49,4 +49,7 @@ library AppErrors {
 
   /// @notice We expect increasing of the balance, but it was decreased
   string public constant BALANCE_DECREASE = "TS-20 balance decrease";
+
+  /// @notice Prices changed and invested assets amount was increased on S, value of S is too high
+  string public constant EARNED_AMOUNT_TOO_HIGH = "TS-21 earned too high";
 }

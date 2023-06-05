@@ -2,6 +2,8 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
@@ -25,6 +27,10 @@ library ConverterStrategyBaseLib2 {
   /////////////////////////////////////////////////////////////////////
 
   uint internal constant DENOMINATOR = 100_000;
+
+  /// @dev 0.5% of max profit for strategy TVL
+  /// @notice Limit max amount of profit that can be send to insurance after price changing
+  uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = 500;
 
   /////////////////////////////////////////////////////////////////////
   ///                        MAIN LOGIC
@@ -243,5 +249,25 @@ library ConverterStrategyBaseLib2 {
     // filter zero amounts out
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
   }
+
+  /// @notice Send given amount of underlying to the insurance
+  /// @param strategyBalance Total strategy balance = balance of underlying + current invested assets amount
+  /// @return Amount of underlying sent to the insurance
+  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
+    uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
+    if (amountToSend != 0) {
+      // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
+
+      // Amount limitation should be implemented in the same way as in StrategySplitterV2._coverLoss
+      // Revert or cutting amount in both cases
+
+      // amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
+      require(strategyBalance != 0, AppErrors.ZERO_BALANCE);
+      require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
+      IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
+    }
+    return amountToSend;
+  }
+
 }
 

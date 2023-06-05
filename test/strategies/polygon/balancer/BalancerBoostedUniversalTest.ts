@@ -33,6 +33,7 @@ import {IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
 import {BalancerStrategyUtils} from "../../../BalancerStrategyUtils";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {LiquidatorUtils} from "./utils/LiquidatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -78,24 +79,7 @@ describe('BalancerBoostedUniversalTest', async () => {
     // Disable DForce (as it reverts on repay after block advance)
     await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
 
-    const controller = ControllerV2__factory.connect(core.controller, signer)
-    const operators = await controller.operatorsList();
-    const operator = await Misc.impersonate(operators[0]);
-    const pools = [
-      {
-        pool: MaticAddresses.UNISWAPV3_USDC_DAI_100,
-        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        tokenIn: MaticAddresses.DAI_TOKEN,
-        tokenOut: MaticAddresses.USDC_TOKEN,
-      },
-      {
-        pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
-        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        tokenIn: MaticAddresses.USDT_TOKEN,
-        tokenOut: MaticAddresses.USDC_TOKEN,
-      },
-    ]
-    await deployInfo.tools?.liquidator.connect(operator).addBlueChipsPools(pools, true)
+    await LiquidatorUtils.addBlueChipsPools(signer, core.controller, deployInfo.tools?.liquidator);
   });
 
   after(async function() {

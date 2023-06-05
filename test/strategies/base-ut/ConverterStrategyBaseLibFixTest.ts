@@ -1915,14 +1915,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
 
   describe("registerIncome", () => {
     it("should return expected values if after > before", async () => {
-      const r = await facade.registerIncome(1, 2, 30, 40);
-      expect(r._earned.toNumber()).eq(31);
-      expect(r._lost.toNumber()).eq(40);
+      const r = await facade.registerIncome(1, 2);
+      expect(r.earned.toNumber()).eq(1);
+      expect(r.lost.toNumber()).eq(0);
     });
     it("should return expected values if after < before", async () => {
-      const r = await facade.registerIncome(2, 1, 30, 40);
-      expect(r._earned.toNumber()).eq(30);
-      expect(r._lost.toNumber()).eq(41);
+      const r = await facade.registerIncome(2, 1);
+      expect(r.earned.toNumber()).eq(0);
+      expect(r.lost.toNumber()).eq(1);
     });
   });
 
