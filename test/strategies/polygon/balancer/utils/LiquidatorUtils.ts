@@ -29,7 +29,7 @@ export class LiquidatorUtils {
     const liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, signer);
     const initialPrice = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
     let price = initialPrice;
-    while (initialPrice.sub(price).lt(price.mul(approxTargetPercent).div(100))) {
+    while (initialPrice.sub(price).abs().lt(price.mul(approxTargetPercent).div(100))) {
       // const holderBalance = await IERC20__factory.connect(assetIn, await Misc.impersonate(assetInHolder)).balanceOf(assetInHolder);
       // console.log("swapToUsdc.holderBalance", holderBalance, amountInPerSingleSwap);
 
@@ -43,6 +43,8 @@ export class LiquidatorUtils {
       price = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
       console.log('swapToUsdc.getPrice', price, assetIn, assetOut);
     }
+    console.log('swapToUsdc.initialPrice.sub(price).abs()', initialPrice.sub(price).abs());
+    console.log('swapToUsdc.price.mul(approxTargetPercent).div(100)', price.mul(approxTargetPercent).div(100));
 
     return {
       initialPrice,
@@ -66,7 +68,7 @@ export class LiquidatorUtils {
     const liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, signer);
     const initialPrice = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
     let price = initialPrice;
-    while (initialPrice.sub(price).lt(price.mul(approxTargetPercent).div(100))) {
+    while (initialPrice.sub(price).abs().lt(price.mul(approxTargetPercent).div(100))) {
       // const holderBalance = await IERC20__factory.connect(assetIn, await Misc.impersonate(assetInHolder)).balanceOf(assetInHolder);
       // console.log("swapUsdcTo.holderBalance", holderBalance, amountInPerSingleSwap);
       await IERC20__factory.connect(
@@ -78,6 +80,10 @@ export class LiquidatorUtils {
       await liquidator.liquidate(assetIn, assetOut, amountInPerSingleSwap, 100_000);
       price = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
       console.log('swapUsdcTo.getPrice', price, assetIn, assetOut);
+      console.log('swapUsdcTo.initialPrice', initialPrice);
+      console.log('swapUsdcTo.price', price);
+      console.log('swapUsdcTo.initialPrice.sub(price).abs()', initialPrice.sub(price).abs());
+      console.log('swapUsdcTo.price.mul(approxTargetPercent).div(100)', price.mul(approxTargetPercent).div(100));
     }
 
     return {

@@ -21,6 +21,7 @@ import {
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
+import {BigNumber} from "ethers";
 
 /**
  * Same as IState but all numbers are without decimals
@@ -74,14 +75,23 @@ export interface IStateNum {
     healthFactors: number[][];
     platformAdapters: string[][];
     borrowAssetsPrices: number[];
-    borrowAssetsAddresses: string[];
+    borrowAssets: string[];
+    borrowAssetsNames: string[];
   };
+  fixPriceChanges?: IFixPricesChangesEventInfo;
 }
 
 export interface IStateParams {
   mainAssetSymbol: string;
 }
 
+export interface IFixPricesChangesEventInfo {
+  assetBefore: number;
+  assetAfter: number;
+}
+export interface IGetStateParams {
+  fixChangePrices?: IFixPricesChangesEventInfo[];
+}
 /**
  * Version of StateUtils without decimals
  */
@@ -92,6 +102,7 @@ export class StateUtilsNum {
     strategy: ConverterStrategyBase,
     vault: TetuVaultV2,
     title?: string,
+    p?: IGetStateParams
   ): Promise<IStateNum> {
     const block = await hre.ethers.provider.getBlock('latest');
     const splitterAddress = await vault.splitter();
@@ -251,8 +262,12 @@ export class StateUtilsNum {
         healthFactors: converterHealthFactors,
         platformAdapters: converterPlatformAdapters,
         borrowAssetsPrices,
-        borrowAssetsAddresses
-      }
+        borrowAssets: borrowAssetsAddresses,
+        borrowAssetsNames
+      },
+      fixPriceChanges: p?.fixChangePrices
+        ? p?.fixChangePrices[0]
+        : undefined
     }
 
     // console.log(dest)
@@ -309,6 +324,11 @@ export class StateUtilsNum {
       'converter.amountsToRepay',
       'converter.healthFactors',
       'converter.platformAdapters',
+      'converter.borrowAssets',
+      'converter.prices',
+
+      'fixPriceChanges.investedAssetsBefore',
+      'fixPriceChanges.investedAssetsAfter',
     ];
 
     return { stateHeaders };
@@ -343,8 +363,8 @@ export class StateUtilsNum {
 
       item.insurance.assetBalance,
       item.strategy.assetBalance,
-      item.strategy.borrowAssetsBalances.join(','),
-      item.strategy.rewardTokensBalances?.join(','),
+      item.strategy.borrowAssetsBalances?.join(" "),
+      item.strategy.rewardTokensBalances?.join(' '),
       item.strategy.liquidity,
       item.strategy.totalAssets,
       item.strategy.investedAssets,
@@ -353,10 +373,15 @@ export class StateUtilsNum {
       item.splitter.assetBalance,
       item.splitter.totalAssets,
 
-      item.converter?.collaterals.join(','),
-      item.converter?.amountsToRepay.join(','),
-      item.converter?.healthFactors.map(x => x.join(" ")).join(","),
-      item.converter?.platformAdapters.map(x => x.join(" ")).join(","),
+      item.converter?.collaterals.join(' '),
+      item.converter?.amountsToRepay.join(' '),
+      item.converter?.healthFactors.map(x => x.join(" ")).join(" "),
+      item.converter?.platformAdapters.map(x => x.join(" ")).join(" "),
+      item.converter?.borrowAssetsNames?.join(" "),
+      item.converter?.borrowAssetsPrices?.join(" "),
+
+      item.fixPriceChanges?.assetBefore,
+      item.fixPriceChanges?.assetAfter,
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' });

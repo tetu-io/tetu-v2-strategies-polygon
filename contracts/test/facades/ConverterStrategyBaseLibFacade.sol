@@ -177,11 +177,11 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_) external returns (
+  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) external returns (
     uint toPerf,
     uint toInsurance
   ) {
-    return ConverterStrategyBaseLib2.sendPerformanceFee(asset_, amount_, splitter, receiver_);
+    return ConverterStrategyBaseLib2.sendPerformanceFee(asset_, amount_, splitter, receiver_, ratio);
   }
 
   function swapToGivenAmountAccess(
