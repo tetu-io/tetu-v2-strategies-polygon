@@ -54,7 +54,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // setup specific name for UI
     strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategySpecificNameChanged(strategySpecificName);
+    emit StrategyLib.StrategySpecificNameChanged(strategySpecificName); // todo: change to _checkStrategySpecificNameChanged
   }
 
   /////////////////////////////////////////////////////////////////////
