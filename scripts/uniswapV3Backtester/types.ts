@@ -87,4 +87,12 @@ export interface IBacktestResult {
   tokenBSymbol: string;
   disableBurns: boolean;
   disableMints: boolean;
+  hardworkEarned: BigNumber;
+  hardworkLost: BigNumber;
+  vaultTotalAssetsBefore: BigNumber;
+  vaultTotalAssetsAfter: BigNumber;
+  strategyTotalAssetsAfter: BigNumber;
+  insuranceAssetsBefore: BigNumber;
+  insuranceAssetsAfter: BigNumber;
+  totalLossCovered: BigNumber;
 }

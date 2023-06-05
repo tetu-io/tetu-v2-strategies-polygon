@@ -388,6 +388,8 @@ export async function deployBacktestSystem(
   const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', vaultStrategyInfo.strategy.address, [poolToken0.address, poolToken1.address])
   await vaultStrategyInfo.strategy.setStrategyProfitHolder(profitHolder.address)
 
+  await tokens[vaultAsset].transfer(await vaultStrategyInfo.vault.insurance(), parseUnits('1000000', await tokens[vaultAsset].decimals()))
+
   return {
     tokens,
     vault: vaultStrategyInfo.vault,

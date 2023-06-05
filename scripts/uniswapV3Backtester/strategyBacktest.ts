@@ -1,3 +1,4 @@
+/* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
   IERC20Metadata__factory, IUniswapV3Pool__factory,
@@ -13,6 +14,8 @@ import {Misc} from "../utils/Misc";
 import {expect} from "chai";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {IBacktestResult} from "./types";
+import {UniswapV3StrategyUtils} from "../../test/UniswapV3StrategyUtils";
+import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 
 export async function strategyBacktest(
   signer: SignerWithAddress,
@@ -43,6 +46,12 @@ export async function strategyBacktest(
   const token1Symbol = await token1.symbol();
   const tickSpacing = UniswapV3Utils.getTickSpacing(await pool.fee());
   const investAmount = parseUnits(investAmountUnits, tokenADecimals)
+  let fee0 = BigNumber.from(0);
+  let fee1 = BigNumber.from(0);
+  let totalLossCovered = BigNumber.from(0)
+  let fees
+  let tx
+  let txReceipt
 
   console.log(`Starting backtest of ${await vault.name()}`);
   console.log(`Filling pool with initial liquidity from snapshot (${liquiditySnapshot.ticks.length} ticks)..`);
@@ -61,7 +70,8 @@ export async function strategyBacktest(
   console.log(`Deposit ${await tokenA.symbol()} to vault...`);
   await tokenA.approve(vault.address, Misc.MAX_UINT);
   await vault.deposit(investAmount, signer.address);
-  const totalAssetsinStrategyBefore = await strategy.totalAssets();
+  const vaultTotalAssetsBefore = await vault.totalAssets()
+  const insuranceAssetsBefore = await tokenA.balanceOf(await vault.insurance())
 
   const initialState = await strategy.getState()
   expect(initialState.totalLiquidity).gt(0)
@@ -184,9 +194,17 @@ export async function strategyBacktest(
       if (await strategy.needRebalance()) {
         rebalances++;
         process.stdout.write(`Rebalance ${rebalances}.. `);
-        const tx = await strategy.rebalance();
-        const txRes = await tx.wait();
-        console.log(`done with ${txRes.gasUsed} gas.`);
+        tx = await strategy.rebalance();
+        txReceipt = await tx.wait();
+        fees = UniswapV3StrategyUtils.extractClaimedFees(txReceipt)
+        if (fees) {
+          fee0 = fee0.add(fees[0])
+          fee1 = fee1.add(fees[1])
+        }
+        const lossCovered = UniversalTestUtils.extractLossCoveredUniversal(txReceipt)
+        console.log('LossCovered', lossCovered)
+        totalLossCovered = totalLossCovered.add(lossCovered)
+        console.log(`done with ${txReceipt.gasUsed} gas.`);
       }
 
       if ((await strategy.getState()).isFuseTriggered) {
@@ -203,11 +221,26 @@ export async function strategyBacktest(
 
   console.log('doHardWork...');
   const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
-  await strategy.connect(splitterSigner).doHardWork();
+  const hwResult = await strategy.connect(splitterSigner).callStatic.doHardWork()
+  tx = await strategy.connect(splitterSigner).doHardWork();
+  txReceipt = await tx.wait()
+  fees = UniswapV3StrategyUtils.extractClaimedFees(txReceipt)
+  if (fees) {
+    fee0 = fee0.add(fees[0])
+    fee1 = fee1.add(fees[1])
+    console.log('Total fee0', fee0.toString())
+    console.log('Total fee1', fee1.toString())
+  }
+  const lossCoveredAtHardwork = UniversalTestUtils.extractLossCoveredUniversal(txReceipt)
+  totalLossCovered = totalLossCovered.add(lossCoveredAtHardwork)
 
-  const totalAssetsinStrategyAfter = await strategy.totalAssets();
+  const strategyTotalAssetsAfter = await strategy.totalAssets();
   const endTimestampLocal = Math.floor(Date.now() / 1000);
-  const earned = totalAssetsinStrategyAfter.sub(totalAssetsinStrategyBefore);
+
+  const vaultTotalAssetsAfter = await vault.totalAssets()
+  const insuranceAssetsAfter = await tokenA.balanceOf(await vault.insurance())
+
+  const earned = tokenA.address === token0.address ? fee0.add(fee1.mul(endPrice).div(parseUnits('1', token1Decimals))) : fee1.add(fee0.mul(endPrice).div(parseUnits('1', token0Decimals)));
 
   return {
     vaultName: await vault.name(),
@@ -228,11 +261,19 @@ export async function strategyBacktest(
     tokenBSymbol: await tokenB.symbol(),
     disableBurns,
     disableMints,
+    hardworkEarned: hwResult[0],
+    hardworkLost: hwResult[1],
+    vaultTotalAssetsBefore,
+    vaultTotalAssetsAfter,
+    strategyTotalAssetsAfter,
+    insuranceAssetsBefore,
+    insuranceAssetsAfter,
+    totalLossCovered,
   };
 }
 
 export function getApr(earned: BigNumber, investAmount: BigNumber, startTimestamp: number, endTimestamp: number) {
-  const earnedPerSec1e10 = earned.mul(parseUnits('1', 10)).div(endTimestamp - startTimestamp);
+  const earnedPerSec1e10 = endTimestamp > startTimestamp ? earned.mul(parseUnits('1', 10)).div(endTimestamp - startTimestamp) : BigNumber.from(0);
   const earnedPerDay = earnedPerSec1e10.mul(86400).div(parseUnits('1', 10));
   const apr = earnedPerDay.mul(365).mul(100000000).div(investAmount).div(1000);
   return +formatUnits(apr, 3)
@@ -241,13 +282,16 @@ export function getApr(earned: BigNumber, investAmount: BigNumber, startTimestam
 export function showBacktestResult(r: IBacktestResult) {
   console.log(`Strategy ${r.vaultName}. Tick range: ${r.tickRange} (+-${r.tickRange /
   100}% price). Rebalance tick range: ${r.rebalanceTickRange} (+-${r.rebalanceTickRange / 100}% price).`);
-  const earnedPerSec1e10 = r.endTimestamp > r.startTimestamp ? r.earned.mul(parseUnits('1', 10)).div(r.endTimestamp - r.startTimestamp) : BigNumber.from(1);
-  const earnedPerDay = earnedPerSec1e10.mul(86400).div(parseUnits('1', 10));
-  const apr = earnedPerDay.mul(365).mul(100000000).div(r.investAmount).div(1000);
-  console.log(`APR: ${formatUnits(apr, 3)}%. Invest amount: ${formatUnits(
-    r.investAmount,
-    r.vaultAssetDecimals,
-  )} ${r.vaultAssetSymbol}. Earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Rebalances: ${r.rebalances}.`);
+
+  const vaultApr = getApr(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
+  console.log(`Vault APR (in ui): ${vaultApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Earned: ${formatUnits(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+  const strategyApr = getApr(r.hardworkEarned.sub(r.hardworkLost), r.strategyTotalAssetsAfter, r.startTimestamp, r.endTimestamp)
+  console.log(`Strategy APR (in ui): ${strategyApr}%. Total assets: ${formatUnits(r.strategyTotalAssetsAfter, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork earned: ${formatUnits(r.hardworkEarned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork lost: ${formatUnits(r.hardworkLost, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+  const spentFromInsurance = r.insuranceAssetsBefore.sub(r.insuranceAssetsAfter)
+  const realApr = getApr(r.earned.sub(r.totalLossCovered), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
+  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Loss covered: ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+
+  console.log(`Rebalances: ${r.rebalances}.`);
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.startTimestamp *
     1000).toLocaleTimeString('en-US')}. Finish: ${new Date(r.endTimestamp *

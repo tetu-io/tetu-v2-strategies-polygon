@@ -625,6 +625,7 @@ library UniswapV3ConverterStrategyLogicLib {
       IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee0);
       IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee1);
     }
+    emit UniV3FeesClaimed(fee0, fee1);
   }
 
   //////////////////////////////////////////

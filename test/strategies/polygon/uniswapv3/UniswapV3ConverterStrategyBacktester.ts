@@ -62,7 +62,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     token0: MaticAddresses.USDC_TOKEN,
     token1: MaticAddresses.DAI_TOKEN,
     poolFee: 100, // 0.01%
-    liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
+    liquiditySnapshotSurroundingTickSpacings: 50, // 50*1*0.01% == +-0.5% price
     tickRange: 0, // 1 tick
     rebalanceTickRange: 0, // 1 tick
   }

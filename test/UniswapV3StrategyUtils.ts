@@ -1,5 +1,5 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber } from 'ethers';
+import {BigNumber, ContractReceipt, ethers} from 'ethers';
 import {
   IERC20Metadata__factory,
   ISwapper__factory,
@@ -12,6 +12,28 @@ import { formatUnits } from 'ethers/lib/utils';
 
 
 export class UniswapV3StrategyUtils {
+  /**
+   * Finds event "UniV3FeesClaimed(fee0, fee1)" in {tx}
+   */
+  public static extractClaimedFees(cr: ContractReceipt): [BigNumber, BigNumber] | undefined {
+    const abi = [
+      "event UniV3FeesClaimed(uint fee0, uint fee1)",
+    ];
+    const iface = new ethers.utils.Interface(abi)
+    const topic = iface.getEventTopic(iface.getEvent('UniV3FeesClaimed'))
+    if (cr.events) {
+      for (const event of cr.events) {
+        if (event.topics.includes(topic)) {
+          const decoded = ethers.utils.defaultAbiCoder.decode(
+            ['uint', 'uint'],
+            event.data
+          )
+          return [decoded[0], decoded[1]];
+        }
+      }
+    }
+  }
+
   public static async movePriceUp(
     signer: SignerWithAddress,
     strategyAddress: string,
