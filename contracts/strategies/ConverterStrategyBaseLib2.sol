@@ -257,8 +257,14 @@ library ConverterStrategyBaseLib2 {
     uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
-      amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
-      IERC20(asset).transfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
+
+      // Amount limitation should be implemented in the same way as in StrategySplitterV2._coverLoss
+      // Revert or cutting amount in both cases
+
+      // amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
+      require(strategyBalance != 0, ZERO_BALANCE);
+      require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
+      IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
     }
     return amountToSend;
   }
