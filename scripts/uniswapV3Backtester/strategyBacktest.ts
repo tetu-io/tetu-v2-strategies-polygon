@@ -49,6 +49,7 @@ export async function strategyBacktest(
   let fee0 = BigNumber.from(0);
   let fee1 = BigNumber.from(0);
   let totalLossCovered = BigNumber.from(0)
+  let rebalanceLoss = BigNumber.from(0)
   let fees
   let tx
   let txReceipt
@@ -204,6 +205,9 @@ export async function strategyBacktest(
         const lossCovered = UniversalTestUtils.extractLossCoveredUniversal(txReceipt)
         console.log('LossCovered', lossCovered)
         totalLossCovered = totalLossCovered.add(lossCovered)
+        const extractedRebalanceLoss = UniswapV3StrategyUtils.extractRebalanceLoss(txReceipt)
+        console.log('RebalanceLoss', extractedRebalanceLoss)
+        rebalanceLoss = rebalanceLoss.add(extractedRebalanceLoss)
         console.log(`done with ${txReceipt.gasUsed} gas.`);
       }
 
@@ -269,6 +273,7 @@ export async function strategyBacktest(
     insuranceAssetsBefore,
     insuranceAssetsAfter,
     totalLossCovered,
+    rebalanceLoss,
   };
 }
 
@@ -287,9 +292,8 @@ export function showBacktestResult(r: IBacktestResult) {
   console.log(`Vault APR (in ui): ${vaultApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Earned: ${formatUnits(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
   const strategyApr = getApr(r.hardworkEarned.sub(r.hardworkLost), r.strategyTotalAssetsAfter, r.startTimestamp, r.endTimestamp)
   console.log(`Strategy APR (in ui): ${strategyApr}%. Total assets: ${formatUnits(r.strategyTotalAssetsAfter, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork earned: ${formatUnits(r.hardworkEarned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork lost: ${formatUnits(r.hardworkLost, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
-  const spentFromInsurance = r.insuranceAssetsBefore.sub(r.insuranceAssetsAfter)
   const realApr = getApr(r.earned.sub(r.totalLossCovered), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
-  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Loss covered: ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Rebalance loss: ${formatUnits(r.rebalanceLoss, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Other loss: ${formatUnits(r.totalLossCovered.sub(r.rebalanceLoss), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
 
   console.log(`Rebalances: ${r.rebalances}.`);
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp *

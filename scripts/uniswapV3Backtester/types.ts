@@ -95,4 +95,5 @@ export interface IBacktestResult {
   insuranceAssetsBefore: BigNumber;
   insuranceAssetsAfter: BigNumber;
   totalLossCovered: BigNumber;
+  rebalanceLoss: BigNumber;
 }
