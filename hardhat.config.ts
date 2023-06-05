@@ -15,7 +15,7 @@ import { task } from 'hardhat/config';
 import { deployContract } from './scripts/deploy/DeployContract';
 import 'hardhat-deploy';
 import { deployAddresses } from './scripts/addresses/deploy-addresses';
-import "@gelatonetwork/web3-functions-sdk/hardhat-plugin";
+import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -121,8 +121,8 @@ export default {
   },
   verify: {
     etherscan: {
-      apiKey: argv.networkScanKey
-    }
+      apiKey: argv.networkScanKey,
+    },
   },
   solidity: {
     compilers: [
@@ -133,6 +133,8 @@ export default {
             enabled: true,
             runs: 150,
           },
+          // "viaIR": true,
+          outputSelection: { '*': { '*': ['*'], '': ['*'] } },
         },
       },
     ],
@@ -167,8 +169,8 @@ export default {
   },
   namedAccounts: deployAddresses,
   w3f: {
-    rootDir: "./web3-functions",
+    rootDir: './web3-functions',
     debug: true,
-    networks: ["w3fmatic"],
+    networks: ['w3fmatic'],
   },
 };
