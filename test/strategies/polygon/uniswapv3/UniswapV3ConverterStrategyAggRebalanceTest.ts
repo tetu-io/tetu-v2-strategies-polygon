@@ -211,7 +211,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
 
       await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValue);
 
-      let state = await s.getState()
+      const state = await s.getState()
       expect(state.rebalanceResults[0]).gt(0)
       expect(state.rebalanceResults[1]).gt(0)
 
