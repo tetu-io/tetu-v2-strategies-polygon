@@ -581,7 +581,7 @@ library UniswapV3ConverterStrategyLogicLib {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
 
-    for (uint i; i < tokensOut.length; i++) {
+    for (uint i; i < tokensOut.length; ++i) {
       uint b = IERC20(tokensOut[i]).balanceOf(strategyProfitHolder);
       if (b > 0) {
         IERC20(tokensOut[i]).transferFrom(strategyProfitHolder, address(this), b);
