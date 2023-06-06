@@ -13,6 +13,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -71,8 +72,11 @@ library ConverterStrategyBaseLib2 {
     // read inside lib for reduce contract space in the main contract
     address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
 
+    console.log("sendPerformanceFee.ratio", ratio);
     toPerf = amount_ * ratio / DENOMINATOR;
     toInsurance = amount_ - toPerf;
+    console.log("sendPerformanceFee.toPerf", toPerf);
+    console.log("sendPerformanceFee.toInsurance", toInsurance);
 
     if (toPerf != 0) {
       IERC20(asset_).safeTransfer(receiver_, toPerf);

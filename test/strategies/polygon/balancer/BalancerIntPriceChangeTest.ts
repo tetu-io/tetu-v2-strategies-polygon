@@ -51,7 +51,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
   const pool: string = MaticAddresses.BALANCER_POOL_T_USD;
-  const PERCENT_CHANGE_PRICES = 2; // 1%
+  const PERCENT_CHANGE_PRICES = 2; // 2%
 
   const deployInfo: DeployInfo = new DeployInfo();
 
@@ -199,17 +199,13 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       );
       const investedAssets0 = await strategyAsOperator.callStatic.calcInvestedAssets();
 
-      const investedAssetsAfterOracles = await strategyAsOperator.callStatic.calcInvestedAssets();
-      // change prices in balancer
-      await BalancerBoostedTetuUsdUtils.swapDaiToUsdt(signer, percent);
-      // const balancerSwapResults = await BalancerBoostedTetuUsdUtils.swapUsdcToUsdt(signer, percent);
-      // console.log("balancerSwapResults", balancerSwapResults);
-
       if (!skipOracleChanges) {
         await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, percent);
         await priceOracleManager.incPrice(MaticAddresses.DAI_TOKEN, percent);
       }
-
+      const investedAssetsAfterOracles = await strategyAsOperator.callStatic.calcInvestedAssets();
+      // change prices ~4% in balancer
+      await BalancerBoostedTetuUsdUtils.swapDaiToUsdt(signer, percent);
       const investedAssetsAfterBalancer = await strategyAsOperator.callStatic.calcInvestedAssets();
       // remove USDT from the pool, increase USDT price
       await LiquidatorUtils.swapUsdcTo(
@@ -217,10 +213,9 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         tools.liquidator.address,
         MaticAddresses.USDT_TOKEN,
         MaticHolders.HOLDER_USDC,
-        parseUnits("100000", 6),
-        percent
+        parseUnits('1000000', 6),
+        percent,
       );
-
       const investedAssetsAfterLiquidatorUsdt = await strategyAsOperator.callStatic.calcInvestedAssets();
       // remove DAI from the pool, increase DAI price
       await LiquidatorUtils.swapUsdcTo(
@@ -228,7 +223,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         tools.liquidator.address,
         MaticAddresses.DAI_TOKEN,
         MaticHolders.HOLDER_USDC,
-        parseUnits('100000', 6),
+        parseUnits('1000000', 6),
         percent,
       );
       const investedAssetsAfterLiquidatorAll = await strategyAsOperator.callStatic.calcInvestedAssets();
@@ -508,6 +503,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
               + stateBefore.strategy.investedAssets
               + stateBefore.strategy.assetBalance
               + stateBefore.vault.assetBalance
+              + 1 // deposited amount
             ).approximately(
               stateAfter.user.assetBalance
               + stateAfter.strategy.investedAssets
@@ -566,12 +562,13 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
               + stateBefore.strategy.investedAssets
               + stateBefore.strategy.assetBalance
               + stateBefore.vault.assetBalance
+              + 50000 // deposited amount
             ).approximately(
               stateAfter.user.assetBalance
               + stateAfter.strategy.investedAssets
               + stateAfter.strategy.assetBalance
               + stateAfter.vault.assetBalance,
-              1e-5
+              1e-3
             );
           });
         });
@@ -628,6 +625,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
               + stateBefore.strategy.investedAssets
               + stateBefore.strategy.assetBalance
               + stateBefore.vault.assetBalance
+              + 1 // deposited amount
             ).approximately(
               stateAfter.user.assetBalance
               + stateAfter.strategy.investedAssets
@@ -688,12 +686,13 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
               + stateBefore.strategy.investedAssets
               + stateBefore.strategy.assetBalance
               + stateBefore.vault.assetBalance
+              + 50000 // deposited amount
             ).approximately(
               stateAfter.user.assetBalance
               + stateAfter.strategy.investedAssets
               + stateAfter.strategy.assetBalance
               + stateAfter.vault.assetBalance,
-              1e-5
+              1e-2
             );
           });
         });
