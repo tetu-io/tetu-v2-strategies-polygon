@@ -3,7 +3,7 @@ import {
   ForwarderV3__factory,
   IERC20__factory,
   IERC20Metadata,
-  StrategyBaseV2,
+  StrategyBaseV2, StrategyLib__factory,
   StrategySplitterV2,
   StrategySplitterV2__factory,
   TetuVaultV2,
@@ -24,7 +24,7 @@ import {
 import {
   InvestAllEventObject,
   WithdrawToSplitterEventObject,
-} from '../typechain/@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2';
+} from '../typechain/@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib';
 import {
   OnDepositorEnterEventObject,
   OnDepositorExitEventObject,
@@ -236,9 +236,9 @@ export async function handleReceiptDeposit(receipt: ContractReceipt, decimals: n
       ) as unknown) as InvestedEventObject;
       console.log('Invested', formatUnits(log.amount, decimals));
     }
-    if (event.topics[0].toLowerCase() === strategyI.getEventTopic('InvestAll').toLowerCase()) {
+    if (event.topics[0].toLowerCase() === StrategyLib__factory.createInterface().getEventTopic('InvestAll').toLowerCase()) {
       const log = (strategyI.decodeEventLog(
-        strategyI.getEvent('InvestAll'),
+        StrategyLib__factory.createInterface().getEvent('InvestAll'),
         event.data,
         event.topics,
       ) as unknown) as InvestAllEventObject;
@@ -278,9 +278,9 @@ export async function handleReceiptRedeem(receipt: ContractReceipt, decimals: nu
       ) as unknown) as LossEventObject;
       console.log('Loss', formatUnits(log.amount, decimals));
     }
-    if (event.topics[0].toLowerCase() === strategyI.getEventTopic('WithdrawToSplitter').toLowerCase()) {
+    if (event.topics[0].toLowerCase() === StrategyLib__factory.createInterface().getEventTopic('WithdrawToSplitter').toLowerCase()) {
       const log = (strategyI.decodeEventLog(
-        strategyI.getEvent('WithdrawToSplitter'),
+        StrategyLib__factory.createInterface().getEvent('WithdrawToSplitter'),
         event.data,
         event.topics,
       ) as unknown) as WithdrawToSplitterEventObject;
