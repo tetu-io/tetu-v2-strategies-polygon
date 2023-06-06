@@ -1,4 +1,4 @@
- import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import {
   ControllerV2__factory,
   IController,

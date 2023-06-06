@@ -239,7 +239,7 @@ contract ConverterStrategyBaseLibFacade {
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
-    return ConverterStrategyBaseLib.convertAfterWithdraw(
+    return ConverterStrategyBaseLib._convertAfterWithdraw(
       tetuConverter,
       liquidator,
       indexAsset,
@@ -292,11 +292,8 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function registerIncome(uint assetBefore, uint assetAfter, uint earned, uint lost) external pure returns (
-    uint _earned,
-    uint _lost
-  ) {
-    return ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter, earned, lost);
+  function registerIncome(uint assetBefore, uint assetAfter) external pure returns (uint earned, uint lost) {
+    return ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter);
   }
 
   function sendTokensToForwarder(

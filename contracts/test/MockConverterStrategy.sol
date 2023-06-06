@@ -56,12 +56,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     _updateInvestedAssets();
   }
 
-  function withdrawUniversalTestAccess(uint amount, bool all) external returns (
+  function withdrawUniversalTestAccess(uint amount, bool all, uint earnedByPrices_, uint investedAssets_) external returns (
     uint expectedWithdrewUSD,
     uint assetPrice,
-    uint strategyLoss
+    uint strategyLoss,
+    uint amountSentToInsurance
   ) {
-    return _withdrawUniversal(all ? type(uint).max : amount);
+    return _withdrawUniversal(all ? type(uint).max : amount, earnedByPrices_, investedAssets_);
   }
 
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
@@ -97,8 +98,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
-    return (earned, lost, assetBalanceAfterClaim);
+    (uint earned2, uint lost2) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
+    return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
   }
 
   struct MockedHandleRewardsParams {
@@ -126,17 +127,16 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     });
   }
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  /// _depositToPool mock
-  /////////////////////////////////////////////////////////////////////////////////////
-  struct MockedDepositToPoolParams {
+  //region -------------------------------------------- _depositToPoolUni mock
+  struct MockedDepositToPoolUniParams {
     bool initialized;
     int balanceChange;
     address providerBalanceChange;
     uint loss;
+    uint amountSentToInsurance;
   }
 
-  MockedDepositToPoolParams internal depositToPoolParams;
+  MockedDepositToPoolUniParams internal depositToPoolParams;
 
   function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns (
     uint loss
@@ -144,8 +144,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _depositToPool(amount_, updateTotalAssetsBeforeInvest_);
   }
 
-  function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
-    uint loss
+
+  function _depositToPoolUni(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
+    uint strategyLoss,
+    uint amountSentToInsurance
   ){
     if (depositToPoolParams.initialized) {
       //      console.log("_depositToPool.mocked-version is called");
@@ -161,20 +163,27 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- depositToPoolParams.balanceChange)
         );
       }
-      loss = depositToPoolParams.loss;
+      return (depositToPoolParams.loss, depositToPoolParams.amountSentToInsurance);
     } else {
-      loss = super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
+      return super._depositToPoolUni(amount_, earnedByPrices_, investedAssets_);
     }
   }
 
-  function setMockedDepositToPool(int balanceChange, address providerBalanceChange, uint loss) external {
-    depositToPoolParams = MockedDepositToPoolParams({
+  function setMockedDepositToPoolUni(
+    int balanceChange,
+    address providerBalanceChange,
+    uint loss,
+    uint amountSentToInsurance
+  ) external {
+    depositToPoolParams = MockedDepositToPoolUniParams({
       initialized: true,
       balanceChange: balanceChange,
       providerBalanceChange: providerBalanceChange,
-      loss: loss
+      loss: loss,
+      amountSentToInsurance: amountSentToInsurance
     });
   }
+  //endregion -------------------------------------------- _depositToPoolUni mock
 
   /////////////////////////////////////////////////////////////////////////////////////
   /// Others
@@ -223,11 +232,21 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint indexAsset_,
     uint[] memory amountsToConvert_,
     ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
     uint requestedAmount,
     uint[] memory expectedMainAssetAmounts
   ) external returns (
     uint expectedTotalAmountMainAsset
   ) {
-    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount, expectedMainAssetAmounts);
+    return ConverterStrategyBaseLib.makeRequestedAmount(
+      tokens_,
+      indexAsset_,
+      amountsToConvert_,
+      converter_,
+      liquidator_,
+      requestedAmount,
+      expectedMainAssetAmounts,
+      liquidationThresholds
+    );
   }
 }

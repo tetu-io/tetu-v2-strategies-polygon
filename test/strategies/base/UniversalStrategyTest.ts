@@ -66,6 +66,7 @@ async function universalStrategyTest(
   hardworkInitiator: (
     signer: SignerWithAddress,
     user: SignerWithAddress,
+    swapUser: SignerWithAddress,
     core: ICoreContractsWrapper,
     tools: IToolsContractsWrapper,
     underlying: string,
@@ -81,6 +82,7 @@ async function universalStrategyTest(
     let snapshot: string;
     let signer: SignerWithAddress;
     let user: SignerWithAddress;
+    let swapUser: SignerWithAddress;
     let asset: string;
     let vault: TetuVaultV2;
     let strategy: IStrategyV2;
@@ -92,6 +94,7 @@ async function universalStrategyTest(
       snapshotBefore = await TimeUtils.snapshot();
       signer = await DeployerUtilsLocal.impersonate(); // governance by default
       user = (await ethers.getSigners())[1];
+      swapUser = (await ethers.getSigners())[2];
       const core = deployInfo.core as ICoreContractsWrapper;
 
       const data = await deployer(signer);
@@ -154,6 +157,7 @@ async function universalStrategyTest(
       await hardworkInitiator(
         signer,
         user,
+        swapUser,
         core,
         tools,
         asset,

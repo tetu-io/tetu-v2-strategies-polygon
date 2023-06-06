@@ -36,6 +36,7 @@ import { BigNumber } from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {Uniswapv3StateUtils} from "./utils/Uniswapv3StateUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 
 const { expect } = chai;
@@ -115,6 +116,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
 
     await vault.setWithdrawRequestBlocks(0);
+
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
   });
 
   after(async function() {
@@ -194,7 +199,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2], true);
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, 100);
+      expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, 1);
 
       await redeemFromVault(vault, signer, 99, decimals, assetCtr, insurance);
       await printVaultState(
@@ -208,7 +213,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], true);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, 100);
+      expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, 1);
 
       await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
       await printVaultState(
@@ -222,7 +227,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], true);
 
       const sharePriceAfterWithdraw3 = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, 1000);
+      expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, 1);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
@@ -380,7 +385,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
-      expect(sharePriceAfter).approximately(sharePriceBefore, 10_000);
+      expect(sharePriceAfter).approximately(sharePriceBefore, 1);
 
       // decrease swap amount slowly
       swapAmount = swapAmount.div(2);

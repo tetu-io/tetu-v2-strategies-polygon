@@ -22,6 +22,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -94,6 +95,9 @@ describe('UniswapV3ConverterStrategyOutOfRangeTest', function() {
 
     await ConverterUtils.whitelist([strategy.address]);
     await vault.connect(gov).setWithdrawRequestBlocks(0)
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.WMATIC_TOKEN, MaticAddresses.MaticX_TOKEN])
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
   })
 
   after(async function() {
