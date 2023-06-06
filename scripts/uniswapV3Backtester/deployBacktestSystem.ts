@@ -385,6 +385,11 @@ export async function deployBacktestSystem(
   await vaultStrategyInfo.strategy.connect(platformVoterSigner).setCompoundRatio(100000); // 100%
   await converterController.setWhitelistValues([vaultStrategyInfo.strategy.address,], true)
 
+  const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', vaultStrategyInfo.strategy.address, [poolToken0.address, poolToken1.address])
+  await vaultStrategyInfo.strategy.setStrategyProfitHolder(profitHolder.address)
+
+  await tokens[vaultAsset].transfer(await vaultStrategyInfo.vault.insurance(), parseUnits('1000000', await tokens[vaultAsset].decimals()))
+
   return {
     tokens,
     vault: vaultStrategyInfo.vault,
