@@ -59,7 +59,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
         // setup specific name for UI
         strategySpecificName = AlgebraConverterStrategyLogicLib.createSpecificName(state);
-        emit StrategySpecificNameChanged(strategySpecificName);
+        emit StrategyLib.StrategySpecificNameChanged(strategySpecificName);
     }
 
     /////////////////////////////////////////////////////////////////////
@@ -82,6 +82,11 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
         state.fuseThreshold = newFuseThreshold;
 
         AlgebraConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
+    }
+
+    function setStrategyProfitHolder(address strategyProfitHolder) external {
+        StrategyLib.onlyOperators(controller());
+        state.strategyProfitHolder = strategyProfitHolder;
     }
 
     /////////////////////////////////////////////////////////////////////
@@ -110,8 +115,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     /////////////////////////////////////////////////////////////////////
 
     /// @dev The rebalancing functionality is the core of this strategy.
-    ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
-    ///      There is also an attempt to cover rebalancing losses with rewards.
+    ///      Swap method is used.
     function rebalance() external {
         address _controller = controller();
         StrategyLib.onlyOperators(_controller);
@@ -123,8 +127,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
         }
 
         (
-        uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-        bool isNeedFillup
+        uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
         ) = AlgebraConverterStrategyLogicLib.rebalance(
             state,
             converter,
@@ -134,18 +137,6 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
         if (tokenAmounts.length == 2) {
             _depositorEnter(tokenAmounts);
-
-            //add fill-up liquidity part of fill-up is used
-            /*if (isNeedFillup) {
-                (state.lowerTickFillup, state.upperTickFillup, state.totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.addFillup(
-                    state.pool,
-                    state.lowerTick,
-                    state.upperTick,
-                    state.tickSpacing,
-                    state.rebalanceEarned0,
-                    state.rebalanceEarned1
-                );
-            }*/
         }
 
         //updating investedAssets based on new baseAmounts
@@ -228,11 +219,6 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
         earned = AlgebraConverterStrategyLogicLib.calcEarned(state);
         (address[] memory rewardTokens, uint[] memory amounts) = _claim();
         _rewardsLiquidation(rewardTokens, amounts);
-
-        if (state.rebalanceLost > 0) {
-            lost = state.rebalanceLost;
-            state.rebalanceLost = 0;
-        }
         return (earned, lost, AppLib.balance(asset));
     }
 

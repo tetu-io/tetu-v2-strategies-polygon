@@ -21,6 +21,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -101,6 +102,10 @@ describe('AlgebraConverterStrategyTest', function() {
 
     await ConverterUtils.whitelist([strategy.address]);
     await vault.connect(gov).setWithdrawRequestBlocks(0)
+
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
   })
 
   after(async function() {

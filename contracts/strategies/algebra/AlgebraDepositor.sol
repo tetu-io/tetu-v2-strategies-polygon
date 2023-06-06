@@ -53,10 +53,9 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
         isFuseTriggered = state.isFuseTriggered;
         fuseThreshold = state.fuseThreshold;
 
-        rebalanceResults = new uint[](3);
-        rebalanceResults[0] = state.rebalanceEarned0;
-        rebalanceResults[1] = state.rebalanceEarned1;
-        rebalanceResults[2] = state.rebalanceLost;
+        rebalanceResults = new uint[](2);
+        rebalanceResults[0] = IERC20(tokenA).balanceOf(state.strategyProfitHolder);
+        rebalanceResults[1] = IERC20(tokenB).balanceOf(state.strategyProfitHolder);
     }
 
     /// @notice Returns the fees for the current state.
@@ -114,9 +113,8 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
     /// @return amountsOut The amounts of the tokens withdrawn.
     function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
         (uint fee0, uint fee1) = getFees();
-        state.rebalanceEarned0 += fee0;
-        state.rebalanceEarned1 += fee1;
         amountsOut = AlgebraConverterStrategyLogicLib.exit(state, uint128(liquidityAmount));
+        AlgebraConverterStrategyLogicLib.sendFeeToProfitHolder(state, fee0, fee1);
     }
 
     /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.

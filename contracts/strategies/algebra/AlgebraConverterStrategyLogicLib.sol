@@ -9,6 +9,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 
 library AlgebraConverterStrategyLogicLib {
+    using SafeERC20 for IERC20;
 
     //////////////////////////////////////////
     //            CONSTANTS
@@ -30,30 +31,24 @@ library AlgebraConverterStrategyLogicLib {
     event Rebalanced();
     event DisableFuse();
     event NewFuseThreshold(uint newFuseThreshold);
-    event AlgebraRewardsClaimed(uint fee0, uint fee1);
+    event AlgebraFeesClaimed(uint fee0, uint fee1);
 
     //////////////////////////////////////////
     //            STRUCTURES
     //////////////////////////////////////////
 
     struct State {
+        address strategyProfitHolder;
         address tokenA;
         address tokenB;
         IAlgebraPool pool;
         int24 tickSpacing;
-        bool fillUp;
         bool isStablePool;
         int24 lowerTick;
         int24 upperTick;
-        int24 lowerTickFillup;
-        int24 upperTickFillup;
         int24 rebalanceTickRange;
         bool depositorSwapTokens;
         uint128 totalLiquidity;
-        uint128 totalLiquidityFillup;
-        uint rebalanceEarned0;
-        uint rebalanceEarned1;
-        uint rebalanceLost;
         bool isFuseTriggered;
         uint fuseThreshold;
         uint lastPrice;
@@ -116,10 +111,6 @@ library AlgebraConverterStrategyLogicLib {
         IERC20(tokenB).approve(liquidator, type(uint).max);
         IERC20(tokenA).approve(address(ALGEBRA_NFT), type(uint).max);
         IERC20(tokenB).approve(address(ALGEBRA_NFT), type(uint).max);
-
-        /// for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
-        /// upperTick always greater then lowerTick
-        state.fillUp = state.upperTick - state.lowerTick >= 4 * state.tickSpacing;
 
         if (isStablePool) {
             /// for stable pools fuse can be enabled
@@ -302,8 +293,6 @@ library AlgebraConverterStrategyLogicLib {
 
         // check claimable amounts and compare with thresholds
         (uint fee0, uint fee1) = getFees(state);
-        fee0 += state.rebalanceEarned0;
-        fee1 += state.rebalanceEarned1;
 
         if (state.depositorSwapTokens) {
             (fee0, fee1) = (fee1, fee0);
@@ -311,6 +300,11 @@ library AlgebraConverterStrategyLogicLib {
 
         address tokenA = state.tokenA;
         address tokenB = state.tokenB;
+        address h = state.strategyProfitHolder;
+
+        fee0 += IERC20(tokenA).balanceOf(h);
+        fee1 += IERC20(tokenB).balanceOf(h);
+
         IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
         uint priceA = oracle.getAssetPrice(tokenA);
         uint priceB = oracle.getAssetPrice(tokenB);
@@ -348,6 +342,19 @@ library AlgebraConverterStrategyLogicLib {
         return fee0 + feeBinTermOfA;*/
     }
 
+    function sendFeeToProfitHolder(State storage state, uint fee0, uint fee1) external {
+        address strategyProfitHolder = state.strategyProfitHolder;
+        require(strategyProfitHolder != address (0), AlgebraStrategyErrors.ZERO_PROFIT_HOLDER);
+        if (state.depositorSwapTokens) {
+            IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee1);
+            IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee0);
+        } else {
+            IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee0);
+            IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee1);
+        }
+        emit AlgebraFeesClaimed(fee0, fee1);
+    }
+
     //////////////////////////////////////////
     //            Rebalance
     //////////////////////////////////////////
@@ -368,8 +375,7 @@ library AlgebraConverterStrategyLogicLib {
         address controller,
         uint oldInvestedAssets
     ) external returns (
-        uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-        bool isNeedFillup
+        uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
     ) {
         // todo
     }
