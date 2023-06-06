@@ -20,6 +20,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+import {parseUnits} from "ethers/lib/utils";
 
 const COMPOUND_RATIO = 50_000;
 const REINVEST_THRESHOLD_PERCENT = 1_000;
@@ -111,8 +112,15 @@ export class ConverterStrategyBaseContracts {
     await IERC20__factory.connect(asset, signer2).approve(data.vault.address, Misc.MAX_UINT);
 
     await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
-
     await data.vault.setWithdrawRequestBlocks(0);
+
+    await ConverterUtils.disableAaveV2(signer)
+
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+    await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
+
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN]);
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address);
 
     return dest;
   }
