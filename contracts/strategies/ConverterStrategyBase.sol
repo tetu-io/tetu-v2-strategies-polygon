@@ -6,7 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -128,7 +128,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   function setLiquidationThreshold(address token, uint amount) external {
     ConverterStrategyBaseLib2.checkLiquidationThresholdChanged(controller(), token, amount);
-    StrategyLib.onlyOperators(controller());
+    liquidationThresholds[token] = amount;
   }
 
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
@@ -173,15 +173,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ){
+    console.log("_depositToPoolUni.1.amount_", amount_);
+    console.log("_depositToPoolUni.1.earnedByPrices_", earnedByPrices_);
     address _asset = asset;
 
     uint amountToDeposit = amount_ > earnedByPrices_
       ? amount_ - earnedByPrices_
       : 0;
+    console.log("_depositToPoolUni.1.amountToDeposit", amountToDeposit);
+    console.log("_depositToPoolUni.1.reinvestThresholdPercent", reinvestThresholdPercent * investedAssets_ / DENOMINATOR);
 
     // skip deposit for small amounts
     if (amountToDeposit > reinvestThresholdPercent * investedAssets_ / DENOMINATOR) {
+      console.log("_depositToPoolUni.2");
       if (earnedByPrices_ != 0) {
+        console.log("_depositToPoolUni.3");
         amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
           _asset,
           earnedByPrices_,
@@ -200,15 +206,20 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
       emit OnDepositorEnter(amounts, consumedAmounts);
 
+      console.log("_depositToPoolUni.4");
       // update _investedAssets with new deposited amount
       uint updatedInvestedAssetsAfterDeposit = _updateInvestedAssets();
       // after deposit some asset can exist
       uint balanceAfter = AppLib.balance(_asset);
+      console.log("_depositToPoolUni.5.updatedInvestedAssetsAfterDeposit", updatedInvestedAssetsAfterDeposit);
 
+      console.log("_depositToPoolUni.6.balanceAfter", balanceAfter);
+      console.log("_depositToPoolUni.7.balanceBefore", balanceBefore);
       // we need to compensate difference if during deposit we lost some assets
       if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (investedAssets_ + balanceBefore)) {
         strategyLoss = (investedAssets_ + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
       }
+      console.log("_depositToPoolUni.8.strategyLoss", strategyLoss);
     } else if (earnedByPrices_ != 0) {
       // we just skip check of expectedWithdrewUSD here
       uint balance = AppLib.balance(_asset);
@@ -257,6 +268,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       indexAsset_,
       IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle())
     );
+    console.log("tokenAmounts", tokenAmounts[0], tokenAmounts[1], tokenAmounts[2]);
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
     tokenAmounts = ConverterStrategyBaseLib.getTokenAmounts(
@@ -266,6 +278,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tokenAmounts,
       liquidationThresholds[tokens_[indexAsset_]]
     );
+    console.log("tokenAmounts.2", tokenAmounts[0], tokenAmounts[1], tokenAmounts[2]);
   }
   //endregion Convert amounts before deposit
 

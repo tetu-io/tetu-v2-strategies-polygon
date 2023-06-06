@@ -2503,6 +2503,9 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       performanceFee: number;
       // governance is used as a performance receiver by default
       performanceReceiver: string;
+
+      // 100_000 - send full amount toPerf, 0 - send full amount toInsurance.
+      performanceFeeRatio?: number;
     }
 
     interface IRecycleTestResults {
@@ -2524,6 +2527,9 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
       // disable performance fee by default
       await ms.strategy.connect(await Misc.impersonate(await ms.controller.governance())).setupPerformanceFee(p.performanceFee,p.performanceReceiver);
+
+      // set performance fee ratio
+      await ms.strategy.connect(await Misc.impersonate(await ms.controller.governance())).setPerformanceFeeRatio(p?.performanceFeeRatio || 50_000);
 
       for (const tokenAmount of p.initialBalances) {
         await tokenAmount.token.mint(
@@ -2626,6 +2632,54 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           expect(r.finalRewardTokenBalances.join()).to.equal([90, 209.853659, 72].join()); // 200 - 20 + 288/328*34
         });
       });
+      describe('60% performance, 40% insurance', () => {
+        let snapshotLocal: string;
+        before(async function() {
+          snapshotLocal = await TimeUtils.snapshot();
+        });
+        after(async function() {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+
+        async function makeRecycleTest(): Promise<IRecycleTestResults> {
+          return makeRecycle({
+            performanceReceiver: ethers.Wallet.createRandom().address,
+            rewardTokens: [dai, usdc, bal],
+            rewardAmounts: ["100", "200", "400"],
+            asset: usdc,
+            compoundRate: 80_000,
+            liquidations: [
+              {tokenIn: dai, tokenOut: usdc, amountIn: "10", amountOut: "12"},
+              {tokenIn: bal, tokenOut: usdc, amountIn: "328", amountOut: "34"},
+            ],
+            thresholds: [],
+            performanceFee: 10_000,
+            initialBalances: [
+              {token: dai, amount: "100"},
+              {token: usdc, amount: "200"},
+              {token: bal, amount: "400"}
+            ],
+            performanceFeeRatio: 60_000
+          });
+        }
+
+        it('should return expected forwarderAmounts', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+        });
+        it('should return expected performanceAmounts', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.performanceAmounts).to.equal(21.687804); // (12 + 20 + 40/328*34) * 60 /100
+        });
+        it('should return expected insuranceAmounts', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.insuranceAmounts).to.equal(14.458537); // (12 + 20 + 40/328*34) * 40 / 100
+        });
+        it('should return expected final balances', async() => {
+          const r = await loadFixture(makeRecycleTest);
+          expect(r.finalRewardTokenBalances.join()).to.equal([90, 209.853659, 72].join()); // 200 - 20 + 288/328*34
+        });
+      });
       describe("too high liquidation thresholds", () => {
         describe('bal', () => {
           let snapshotLocal: string;
@@ -2659,6 +2713,24 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
             });
           }
 
+          /**
+           * 100 dai => 10 dai + 90 dai
+           *    10 dai => performance
+           *    90 dai => forwarder + compound = 18 + 72
+           * 10 dai => 12 usdc
+           * 200 usdc => 20 usdc + 180 usdc
+           *    20 usdc => performance
+           *    180 usdc => forwarder + compound = 36 + 144
+           * 400 bal => 40 bal + 360 bal
+           *    40 bal => performance
+           *    360 bal => forwarder + compound = 72 + 288
+           * 20% is sent to forwarder as is without any conversion
+           *    (40 + 360*0.8) = 328 bal => 34 usdc
+           *    we should have
+           *        34 * 360*0.8 / 328 = 29.85 => to compound
+           *        34 * 360*0.8 / 328 = 3.31 => to performance
+           *    but threshold 329 > 328, so bal is NOT CONVERTER in this test
+           */
           it('should return expected forwarderAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
             expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
@@ -2669,7 +2741,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
           it('should return expected insuranceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.performanceAmounts).to.equal(16); // (12 + 20 + 0/328*34) / 2
+            expect(r.insuranceAmounts).to.equal(16); // (12 + 20 + 0/328*34) / 2
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
@@ -2774,5 +2846,264 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
     });
   });
 
+  describe("_depositToPoolUni", () => {
+    interface IDepositToPoolUniParams {
+      amount: string;
+      earnedByPrices: string;
+      investedAssets: string;
+
+      initialBalances: string[]; // dai, usdc, usdt
+
+      reinvestThresholdPercent?: number;
+
+      beforeDeposit?: {
+        amount: string;
+        indexAsset: number;
+        tokenAmounts: string[];
+      }
+
+      depositorEnter?: {
+        amounts: string[];
+        liquidityOut: string;
+        consumedAmounts?: string[];
+      }
+
+      depositorLiquidity?: string;
+      depositorQuoteExit?: {
+        liquidityAmount: string;
+        amountsOut: string[];
+      }
+    }
+    interface IDepositToPoolUniResults {
+      insuranceBalance: number;
+      strategyLoss: number;
+      amountSentToInsurance: number;
+    }
+
+    async function makeDepositToPool(p: IDepositToPoolUniParams) : Promise<IDepositToPoolUniResults> {
+      const ms = await setupMockedStrategy();
+      await ms.strategy.connect(await Misc.impersonate(await ms.controller.platformVoter())).setCompoundRatio(50_000);
+      if (p.reinvestThresholdPercent !== undefined) {
+        await ms.strategy.connect(await Misc.impersonate(await ms.controller.governance())).setReinvestThresholdPercent(p.reinvestThresholdPercent);
+      }
+
+      // put initial balances
+      for (let i = 0; i < ms.depositorTokens.length; ++i) {
+        const token = ms.depositorTokens[i];
+        await token.mint(ms.strategy.address, parseUnits(p.initialBalances[i], await token.decimals()));
+      }
+
+      // prepare deposit-mocks
+      if (p.beforeDeposit) {
+        const tokenAmounts = p.beforeDeposit.tokenAmounts;
+        await ms.strategy.setBeforeDeposit(
+          parseUnits(p.beforeDeposit.amount, 6),
+          ms.indexAsset,
+          await Promise.all(ms.depositorTokens.map(
+            async (token, index) => parseUnits(tokenAmounts[index], await token.decimals())
+          ))
+        );
+      }
+      if (p.depositorEnter) {
+        const amounts = p.depositorEnter?.amounts;
+        const consumedAmounts = p.depositorEnter?.consumedAmounts || p.depositorEnter.amounts;
+        await ms.strategy.setDepositorEnter(
+          await Promise.all(ms.depositorTokens.map(
+            async (token, index) => parseUnits(amounts[index], await token.decimals())
+          )),
+          await Promise.all(ms.depositorTokens.map(
+            async (token, index) => parseUnits(consumedAmounts[index], await token.decimals())
+          )),
+          parseUnits(p.depositorEnter.liquidityOut, 18)
+        );
+      }
+      if (p.depositorLiquidity) {
+        await ms.strategy.setDepositorLiquidity(parseUnits(p.depositorLiquidity, 18));
+      }
+      if (p.depositorQuoteExit) {
+        const amountsOut = p.depositorQuoteExit.amountsOut;
+        await ms.strategy.setDepositorQuoteExit(
+          parseUnits(p.depositorQuoteExit.liquidityAmount, 18),
+          await Promise.all(ms.depositorTokens.map(
+            async (token, index) => parseUnits(amountsOut[index], await token.decimals())
+          )),
+        );
+      }
+
+      // make action
+      const ret = await ms.strategy.callStatic.depositToPoolUniAccess(
+        parseUnits(p.amount, 6),
+        parseUnits(p.earnedByPrices, 6),
+        parseUnits(p.investedAssets, 6)
+      );
+
+      await ms.strategy.depositToPoolUniAccess(
+        parseUnits(p.amount, 6),
+        parseUnits(p.earnedByPrices, 6),
+        parseUnits(p.investedAssets, 6)
+      );
+
+      return {
+        amountSentToInsurance: +formatUnits(ret.amountSentToInsurance, 6),
+        strategyLoss: +formatUnits(ret.strategyLoss, 6),
+        insuranceBalance: +formatUnits(await usdc.balanceOf(await ms.vault.insurance()), 6),
+      }
+    }
+
+    describe("balance >= earnedByPrices, amountToDeposit > threshold", () => {
+      let snapshotLocal: string;
+      before(async function() {
+        snapshotLocal = await TimeUtils.snapshot();
+      });
+      after(async function() {
+        await TimeUtils.rollback(snapshotLocal);
+      });
+
+      async function makeDepositToPoolTest(): Promise<IDepositToPoolUniResults> {
+        return makeDepositToPool({
+          amount: "450",
+          earnedByPrices: "400", // amount to deposit = 450 - 400 = 50
+          initialBalances: ["1", "1000", "3"], // dai, usdc, usdt
+
+          investedAssets: "1000000000",
+
+          reinvestThresholdPercent: 0,
+
+          beforeDeposit: {
+            amount: "50",
+            indexAsset: 1,  // 0=dai, 1=usdc, 2=usdt
+            tokenAmounts: ["1", "2", "3"]
+          },
+          depositorEnter: {
+            liquidityOut: "100",
+            amounts: ["1", "2", "3"],
+            consumedAmounts: ["1", "2", "3"],
+          },
+          depositorLiquidity: "11",
+          depositorQuoteExit: {
+            liquidityAmount: "111",
+            amountsOut: ["3", "4", "5"]
+          }
+        });
+      }
+
+      it("should send expected amount to insurance", async () => {
+        const ret = await loadFixture(makeDepositToPoolTest);
+        expect(ret.insuranceBalance).eq(400);
+      });
+      it("should return expected amountSentToInsurance", async () => {
+        const ret = await loadFixture(makeDepositToPoolTest);
+        expect(ret.amountSentToInsurance).eq(400);
+      });
+      it("should return zero strategy loss", async () => {
+        const ret = await loadFixture(makeDepositToPoolTest);
+        expect(ret.strategyLoss).eq(0); // todo
+      });
+
+    });
+    describe("amountToDeposit <= threshold", () => {
+      describe("earnedByPrices == 0 (no changes)", () => {
+        let snapshotLocal: string;
+        before(async function() {
+          snapshotLocal = await TimeUtils.snapshot();
+        });
+        after(async function() {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+        async function makeDepositToPoolTest(): Promise<IDepositToPoolUniResults> {
+          return makeDepositToPool({
+            amount: "1",
+            earnedByPrices: "0",
+            initialBalances: ["0", "712", "0"], // dai, usdc, usdt // 10 = initial amount, 702 - amount to deposit
+
+            investedAssets: "1000000",
+
+            reinvestThresholdPercent: 2
+          });
+        }
+
+        it("should send zero amount to insurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.insuranceBalance).eq(0);
+        });
+        it("should return zero amountSentToInsurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.amountSentToInsurance).eq(0);
+        });
+        it("should return zero strategy loss", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.strategyLoss).eq(0);
+        });
+      });
+      describe("earnedByPrices != 0, balance > earnedByPrices_ (balance => insurance)", () => {
+        let snapshotLocal: string;
+        before(async function() {
+          snapshotLocal = await TimeUtils.snapshot();
+        });
+        after(async function() {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+
+        async function makeDepositToPoolTest(): Promise<IDepositToPoolUniResults> {
+          return makeDepositToPool({
+            amount: "500",
+            earnedByPrices: "700",
+            initialBalances: ["0", "712", "0"], // dai, usdc, usdt
+
+            investedAssets: "10000000000",
+
+            reinvestThresholdPercent: 1
+          });
+        }
+
+        it("should send expected amount to insurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.insuranceBalance).eq(700);
+        });
+        it("should return expected amountSentToInsurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.amountSentToInsurance).eq(700);
+        });
+        it("should return zero strategy loss", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.strategyLoss).eq(0);
+        });
+      });
+      describe("earnedByPrices != 0, balance < earnedByPrices_ (withdraw => insurance)", () => {
+        let snapshotLocal: string;
+        before(async function() {
+          snapshotLocal = await TimeUtils.snapshot();
+        });
+        after(async function() {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+
+        async function makeDepositToPoolTest(): Promise<IDepositToPoolUniResults> {
+          return makeDepositToPool({
+            amount: "500",
+            earnedByPrices: "700",
+            initialBalances: ["0", "0", "0"], // dai, usdc, usdt
+
+            investedAssets: "1000000000",
+
+            reinvestThresholdPercent: 1
+          });
+        }
+
+        it("should send expected amount to insurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.insuranceBalance).eq(700);
+        });
+        it("should return expected amountSentToInsurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.amountSentToInsurance).eq(700);
+        });
+        it("should return zero strategy loss", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.strategyLoss).eq(0);
+        });
+      });
+    });
+  });
   //endregion Unit tests
 });
