@@ -23,7 +23,7 @@ import { ICoreContractsWrapper } from '../../../CoreContractsWrapper';
 import { IToolsContractsWrapper } from '../../../ToolsContractsWrapper';
 import {BigNumber, Signer} from 'ethers';
 import { VaultUtils } from '../../../VaultUtils';
-import { parseUnits } from 'ethers/lib/utils';
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import { BalanceUtils } from '../../../baseUT/utils/BalanceUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
@@ -51,7 +51,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
   const pool: string = MaticAddresses.BALANCER_POOL_T_USD;
-  const PERCENT_CHANGE_PRICES = 3; // 3%
+  const PERCENT_CHANGE_PRICES = 2; // 1%
 
   const deployInfo: DeployInfo = new DeployInfo();
 
@@ -199,13 +199,17 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
       );
       const investedAssets0 = await strategyAsOperator.callStatic.calcInvestedAssets();
 
-      if (!skipOracleChanges) {
-        await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, 4);
-        await priceOracleManager.incPrice(MaticAddresses.DAI_TOKEN, 4);
-      }
       const investedAssetsAfterOracles = await strategyAsOperator.callStatic.calcInvestedAssets();
-      // change prices ~4% in balancer
+      // change prices in balancer
       await BalancerBoostedTetuUsdUtils.swapDaiToUsdt(signer, percent);
+      // const balancerSwapResults = await BalancerBoostedTetuUsdUtils.swapUsdcToUsdt(signer, percent);
+      // console.log("balancerSwapResults", balancerSwapResults);
+
+      if (!skipOracleChanges) {
+        await priceOracleManager.incPrice(MaticAddresses.USDT_TOKEN, percent);
+        await priceOracleManager.incPrice(MaticAddresses.DAI_TOKEN, percent);
+      }
+
       const investedAssetsAfterBalancer = await strategyAsOperator.callStatic.calcInvestedAssets();
       // remove USDT from the pool, increase USDT price
       await LiquidatorUtils.swapUsdcTo(
@@ -213,9 +217,10 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         tools.liquidator.address,
         MaticAddresses.USDT_TOKEN,
         MaticHolders.HOLDER_USDC,
-        parseUnits('1000000', 6),
-        percent,
+        parseUnits("100000", 6),
+        percent
       );
+
       const investedAssetsAfterLiquidatorUsdt = await strategyAsOperator.callStatic.calcInvestedAssets();
       // remove DAI from the pool, increase DAI price
       await LiquidatorUtils.swapUsdcTo(
@@ -223,7 +228,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         tools.liquidator.address,
         MaticAddresses.DAI_TOKEN,
         MaticHolders.HOLDER_USDC,
-        parseUnits('1000000', 6),
+        parseUnits('100000', 6),
         percent,
       );
       const investedAssetsAfterLiquidatorAll = await strategyAsOperator.callStatic.calcInvestedAssets();
@@ -358,7 +363,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
 
         expect(ret).eq(expected);
       });
-      it('should change prices in Balancer Boosted Tetu USD', async() => {
+      it('swapDaiToUsdt should change prices in Balancer Boosted Tetu USD', async() => {
         const r = await BalancerBoostedTetuUsdUtils.swapDaiToUsdt(
           signer,
           PERCENT_CHANGE_PRICES,
@@ -373,6 +378,40 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
           false,
           true,
           // 100 // 100.678 ~ 100
+        ].join();
+
+        expect(ret).eq(expected);
+      });
+      it('swapUsdcToDai should change prices in Balancer Boosted Tetu USD', async() => {
+        const r = await BalancerBoostedTetuUsdUtils.swapUsdcToDai(
+          signer,
+          PERCENT_CHANGE_PRICES,
+          2,
+        );
+        const ret = [
+          r.priceRatioSourceAsset18.gt(Misc.ONE18),
+          r.pricesRatioTargetAsset18.gt(Misc.ONE18),
+        ].join();
+        const expected = [
+          false,
+          true,
+        ].join();
+
+        expect(ret).eq(expected);
+      });
+      it('swapUsdcToUsdt should change prices in Balancer Boosted Tetu USD', async() => {
+        const r = await BalancerBoostedTetuUsdUtils.swapUsdcToUsdt(
+          signer,
+          PERCENT_CHANGE_PRICES,
+          2,
+        );
+        const ret = [
+          r.priceRatioSourceAsset18.gt(Misc.ONE18),
+          r.pricesRatioTargetAsset18.gt(Misc.ONE18),
+        ].join();
+        const expected = [
+          false,
+          true,
         ].join();
 
         expect(ret).eq(expected);

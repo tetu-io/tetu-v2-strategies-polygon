@@ -63,12 +63,13 @@ export class LiquidatorUtils {
     assetInHolder: string,
     amountInPerSingleSwap: BigNumber,
     approxTargetPercent: number,
+    singleSwapOnly: boolean = false
   ): Promise<ILiquidatorSwapResults> {
     const assetIn = MaticAddresses.USDC_TOKEN;
     const liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, signer);
     const initialPrice = await liquidator.getPrice(assetIn, assetOut, amountInPerSingleSwap);
     let price = initialPrice;
-    while (initialPrice.sub(price).abs().lt(price.mul(approxTargetPercent).div(100))) {
+    while (!singleSwapOnly && initialPrice.sub(price).abs().lt(price.mul(approxTargetPercent).div(100))) {
       // const holderBalance = await IERC20__factory.connect(assetIn, await Misc.impersonate(assetInHolder)).balanceOf(assetInHolder);
       // console.log("swapUsdcTo.holderBalance", holderBalance, amountInPerSingleSwap);
       await IERC20__factory.connect(
