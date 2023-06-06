@@ -5,6 +5,9 @@ import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3Lib.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 
 library UniswapV3DebtLib {
 
@@ -57,37 +60,35 @@ library UniswapV3DebtLib {
   /// @param pool The IUniswapV3Pool instance.
   /// @param tokenA The address of tokenA.
   /// @param tokenB The address of tokenB.
-  /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
-  /// @param fee0 The fee amount for tokenA.
-  /// @param fee1 The fee amount for tokenB.
   function closeDebt(
     ITetuConverter tetuConverter,
     address controller,
     IUniswapV3Pool pool,
     address tokenA,
     address tokenB,
-    bool depositorSwapTokens,
-    uint fee0,
-    uint fee1,
-    uint liquidatorSwapSlippage
+    uint liquidatorSwapSlippage,
+    uint profitToCover
   ) public {
-    uint tokenAFee = depositorSwapTokens ? fee1 : fee0;
-    uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
-    _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
+    _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
+    if (profitToCover > 0) {
+      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+    }
   }
 
   function closeDebtByAgg(
     ITetuConverter tetuConverter,
     address tokenA,
     address tokenB,
-    bool depositorSwapTokens,
-    uint fee0,
-    uint fee1,
     uint liquidatorSwapSlippage,
-    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
+    uint profitToCover
   ) public {
-    uint tokenBFee = depositorSwapTokens ? fee0 : fee1;
-    _closeDebtByAgg(tetuConverter, tokenA, tokenB, tokenBFee, liquidatorSwapSlippage, aggParams);
+    _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
+    if (profitToCover > 0) {
+      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+    }
   }
 
   /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
@@ -95,21 +96,29 @@ library UniswapV3DebtLib {
     ITetuConverter tetuConverter,
     address controller,
     UniswapV3ConverterStrategyLogicLib.State storage state,
-    uint liquidatorSwapSlippage
+    uint liquidatorSwapSlippage,
+    uint profitToCover
   ) external {
     IUniswapV3Pool pool = state.pool;
     address tokenA = state.tokenA;
     address tokenB = state.tokenB;
     bool depositorSwapTokens = state.depositorSwapTokens;
-    (uint tokenAFee, uint tokenBFee) = depositorSwapTokens ? (state.rebalanceEarned1, state.rebalanceEarned0) : (state.rebalanceEarned0, state.rebalanceEarned1);
     if (state.fillUp) {
-      _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
+      if (profitToCover > 0) {
+        address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+        IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+      }
+      _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
       (state.lowerTick, state.upperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     } else {
-      _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, tokenAFee, tokenBFee, liquidatorSwapSlippage);
+      _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
+      if (profitToCover > 0) {
+        address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+        IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+      }
       (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
       bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
-      _openDebt(tetuConverter, tokenA, tokenB, entryData, tokenAFee);
+      _openDebt(tetuConverter, tokenA, tokenB, entryData);
       state.lowerTick = newLowerTick;
       state.upperTick = newUpperTick;
     }
@@ -119,17 +128,21 @@ library UniswapV3DebtLib {
     ITetuConverter tetuConverter,
     UniswapV3ConverterStrategyLogicLib.State storage state,
     uint liquidatorSwapSlippage,
-    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
+    uint profitToCover
   ) external {
     IUniswapV3Pool pool = state.pool;
     address tokenA = state.tokenA;
     address tokenB = state.tokenB;
     bool depositorSwapTokens = state.depositorSwapTokens;
-    (uint tokenAFee, uint tokenBFee) = depositorSwapTokens ? (state.rebalanceEarned1, state.rebalanceEarned0) : (state.rebalanceEarned0, state.rebalanceEarned1);
-    _closeDebtByAgg(tetuConverter, tokenA, tokenB, tokenBFee, liquidatorSwapSlippage, aggParams);
-    (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
+    if (profitToCover > 0) {
+      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
+      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+    }
+  (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
-    _openDebt(tetuConverter, tokenA, tokenB, entryData, tokenAFee);
+    _openDebt(tetuConverter, tokenA, tokenB, entryData);
     state.lowerTick = newLowerTick;
     state.upperTick = newUpperTick;
   }
@@ -193,15 +206,13 @@ library UniswapV3DebtLib {
 
   /// @notice Closes debt by liquidating tokens as necessary.
   ///         This function helps ensure that the converter strategy maintains the appropriate balances
-  ///         and debt positions for token A and token B, while accounting for fees and potential price impacts.
+  ///         and debt positions for token A and token B, while accounting for potential price impacts.
   function _closeDebt(
     ITetuConverter tetuConverter,
     address controller,
     IUniswapV3Pool pool,
     address tokenA,
     address tokenB,
-    uint feeA,
-    uint feeB,
     uint liquidatorSwapSlippage
   ) internal {
     uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
@@ -209,14 +220,6 @@ library UniswapV3DebtLib {
     if (needCloseDebt(debtAmount, tetuConverter, tokenB)) {
       uint availableBalanceTokenA = AppLib.balance(tokenA);
       uint availableBalanceTokenB = AppLib.balance(tokenB);
-
-      // exclude fees if it is possible
-      if(availableBalanceTokenA > feeA) {
-        availableBalanceTokenA -= feeA;
-      }
-      if(availableBalanceTokenB > feeB) {
-        availableBalanceTokenB -= feeB;
-      }
 
       if (availableBalanceTokenB < debtAmount) {
         uint tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
@@ -226,9 +229,6 @@ library UniswapV3DebtLib {
 
         ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, Math.min(needToSellTokenA, availableBalanceTokenA), liquidatorSwapSlippage, 0, false);
         availableBalanceTokenB = AppLib.balance(tokenB);
-        if(availableBalanceTokenB > feeB) {
-          availableBalanceTokenB -= feeB;
-        }
       }
 
       ConverterStrategyBaseLib.closePosition(
@@ -239,9 +239,6 @@ library UniswapV3DebtLib {
       );
 
       availableBalanceTokenB = AppLib.balance(tokenB);
-      if(availableBalanceTokenB > feeB) {
-        availableBalanceTokenB -= feeB;
-      }
       ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, availableBalanceTokenB, liquidatorSwapSlippage, 0, false);
     }
   }
@@ -250,7 +247,6 @@ library UniswapV3DebtLib {
     ITetuConverter tetuConverter,
     address tokenA,
     address tokenB,
-    uint feeB,
     uint liquidatorSwapSlippage,
     UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
   ) internal {
@@ -283,11 +279,6 @@ library UniswapV3DebtLib {
           liquidatorSwapSlippage
         ), AppErrors.PRICE_IMPACT);
 
-      // exclude fees if it is possible
-      if(availableBalanceTokenB > feeB) {
-        availableBalanceTokenB -= feeB;
-      }
-
       ConverterStrategyBaseLib.closePosition(
         tetuConverter,
         tokenA,
@@ -296,9 +287,6 @@ library UniswapV3DebtLib {
       );
 
       availableBalanceTokenB = AppLib.balance(tokenB);
-      if(availableBalanceTokenB > feeB) {
-        availableBalanceTokenB -= feeB;
-      }
     }
   }
 
@@ -307,20 +295,19 @@ library UniswapV3DebtLib {
   /// @param tokenA The address of token A.
   /// @param tokenB The address of token B.
   /// @param entryData The data required to open a position.
-  /// @param feeA The fee associated with token A.
   function _openDebt(
     ITetuConverter tetuConverter,
     address tokenA,
     address tokenB,
-    bytes memory entryData,
-    uint feeA
+    bytes memory entryData/*,
+    uint feeA*/
   ) internal {
     ConverterStrategyBaseLib.openPosition(
       tetuConverter,
       entryData,
       tokenA,
       tokenB,
-      AppLib.balance(tokenA) - feeA,
+      AppLib.balance(tokenA)/* - feeA*/,
       0
     );
   }
@@ -332,16 +319,15 @@ library UniswapV3DebtLib {
     IUniswapV3Pool pool,
     address tokenA,
     address tokenB,
-    uint tokenAFee,
-    uint tokenBFee,
     uint liquidatorSwapSlippage
   ) internal {
     RebalanceDebtFillUpLocalVariables memory vars;
     vars.debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
 
-    vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
-    vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
+    vars.availableBalanceTokenA = AppLib.balance(tokenA);
+    vars.availableBalanceTokenB = AppLib.balance(tokenB);
 
+    // todo fix this logic, i think its incorrect now
     if (vars.debtAmount > 0) {
       if (vars.availableBalanceTokenB > vars.debtAmount) {
         vars.needToBorrowOrFreeFromBorrow = vars.availableBalanceTokenB - vars.debtAmount;
@@ -363,11 +349,11 @@ library UniswapV3DebtLib {
             vars.debtAmount
           );
 
-          vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
+          vars.availableBalanceTokenB = AppLib.balance(tokenB);
 
           ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, vars.availableBalanceTokenB, liquidatorSwapSlippage, 0, false);
 
-          vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
+          vars.availableBalanceTokenA = AppLib.balance(tokenA);
 
           ConverterStrategyBaseLib.openPosition(
             tetuConverter,
@@ -395,7 +381,7 @@ library UniswapV3DebtLib {
           if (needToSellTokenA <= vars.availableBalanceTokenA) {
             ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, needToSellTokenA, liquidatorSwapSlippage, 0, false);
 
-            vars.availableBalanceTokenB = getBalanceWithoutFees(tokenB, tokenBFee);
+            vars.availableBalanceTokenB = AppLib.balance(tokenB);
 
             ConverterStrategyBaseLib.closePosition(
               tetuConverter,
@@ -404,7 +390,7 @@ library UniswapV3DebtLib {
               vars.debtAmount < vars.availableBalanceTokenB ? vars.debtAmount : vars.availableBalanceTokenB
             );
 
-            vars.availableBalanceTokenA = getBalanceWithoutFees(tokenA, tokenAFee);
+            vars.availableBalanceTokenA = AppLib.balance(tokenA);
 
             ConverterStrategyBaseLib.openPosition(
               tetuConverter,

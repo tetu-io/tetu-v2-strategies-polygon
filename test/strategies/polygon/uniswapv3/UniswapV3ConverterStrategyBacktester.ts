@@ -29,14 +29,14 @@ const argv = require('yargs/yargs')()
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
-  const backtestStartBlock = 42300000;
-  const backtestEndBlock = 42600000;
-  const investAmountUnits: string = '10' // 1k USDC, 1k WMATIC etc
+  const backtestStartBlock = 43400000;
+  const backtestEndBlock = 43450000;
+  const investAmountUnits: string = '10000' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
 
-  const params = {
+  /*const params = {
     vaultAsset: MaticAddresses.WMATIC_TOKEN,
     pool: MaticAddresses.UNISWAPV3_WMATIC_MaticX_500,
     token0: MaticAddresses.WMATIC_TOKEN,
@@ -45,8 +45,28 @@ describe('UmiswapV3 converter strategy backtester', function() {
     liquiditySnapshotSurroundingTickSpacings: 200, // 200*10*0.01% == +-20% price
     tickRange: 0,
     rebalanceTickRange: 0,
+  }*/
+  /*const params = {
+    vaultAsset: MaticAddresses.USDC_TOKEN,
+    pool: MaticAddresses.UNISWAPV3_USDC_USDT_100, // USDC_USDT_0.01%
+    token0: MaticAddresses.USDC_TOKEN,
+    token1: MaticAddresses.USDT_TOKEN,
+    poolFee: 100, // 0.01%
+    liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
+    tickRange: 0, // 1 tick
+    rebalanceTickRange: 0, // 1 tick
+  }*/
+  const params = {
+    vaultAsset: MaticAddresses.USDC_TOKEN,
+    pool: MaticAddresses.UNISWAPV3_USDC_DAI_100, // USDC_DAI_0.01%
+    token0: MaticAddresses.USDC_TOKEN,
+    token1: MaticAddresses.DAI_TOKEN,
+    poolFee: 100, // 0.01%
+    liquiditySnapshotSurroundingTickSpacings: 50, // 50*1*0.01% == +-0.5% price
+    tickRange: 0, // 1 tick
+    rebalanceTickRange: 0, // 1 tick
   }
-  // USDC vault
+    // USDC vault
   /*{
     vaultAsset: MaticAddresses.USDC_TOKEN,
     pool: MaticAddresses.UNISWAPV3_USDC_WETH_500,

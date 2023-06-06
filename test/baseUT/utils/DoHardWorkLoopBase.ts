@@ -35,6 +35,7 @@ export class DoHardWorkLoopBase {
 
   public readonly signer: SignerWithAddress;
   public readonly user: SignerWithAddress;
+  public readonly swapUser: SignerWithAddress;
   public readonly core: ICoreContractsWrapper;
   public readonly tools: IToolsContractsWrapper;
   public readonly underlying: string;
@@ -70,6 +71,7 @@ export class DoHardWorkLoopBase {
   constructor(
     signer: SignerWithAddress,
     user: SignerWithAddress,
+    swapUser: SignerWithAddress,
     core: ICoreContractsWrapper,
     tools: IToolsContractsWrapper,
     underlying: string,
@@ -80,6 +82,7 @@ export class DoHardWorkLoopBase {
   ) {
     this.signer = signer;
     this.user = user;
+    this.swapUser = swapUser;
     this.core = core;
     this.tools = tools;
     this.underlying = underlying;
@@ -261,7 +264,6 @@ export class DoHardWorkLoopBase {
     makeVolume?: (strategy: IStrategyV2, swapUser: SignerWithAddress) => Promise<void>,
   ) {
     console.log('loop... loops, loopValue, advanceBlocks', loops, loopValue, advanceBlocks);
-    const techSigner = await DeployerUtilsLocal.impersonate();
     for (let i = 0; i < loops; i++) {
       console.log('\n=====================\nloop i', i);
       const start = Date.now();
@@ -269,10 +271,10 @@ export class DoHardWorkLoopBase {
 
       // *********** SWAPS **************
       if (swap1 && i % 2 === 0) {
-        await swap1(this.strategy, techSigner);
+        await swap1(this.strategy, this.swapUser);
       }
       if (swap2 && i % 2 !== 0) {
-        await swap2(this.strategy, techSigner);
+        await swap2(this.strategy, this.swapUser);
       }
 
       // *********** REBALANCE **************
@@ -286,7 +288,7 @@ export class DoHardWorkLoopBase {
 
       // *********** MAKE VOLUME **************
       if (makeVolume && i % 3 === 0) {
-        await makeVolume(this.strategy, techSigner);
+        await makeVolume(this.strategy, this.swapUser);
       }
 
       // *********** DO HARD WORK **************
