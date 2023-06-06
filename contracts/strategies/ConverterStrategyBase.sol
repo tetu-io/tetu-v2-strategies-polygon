@@ -128,7 +128,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   function setLiquidationThreshold(address token, uint amount) external {
     ConverterStrategyBaseLib2.checkLiquidationThresholdChanged(controller(), token, amount);
-    StrategyLib.onlyOperators(controller());
+    liquidationThresholds[token] = amount;
   }
 
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}

@@ -258,6 +258,44 @@ describe('ConverterStrategyBaseAccessTest', () => {
     });
   });
 
+  describe('setLiquidationThreshold', () => {
+    describe('Good paths', () => {
+      it('should set max int', async() => {
+        const token = ethers.Wallet.createRandom().address;
+        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+        await strategy.connect(operator).setLiquidationThreshold(token, Misc.MAX_UINT);
+        const ret = await strategy.liquidationThresholds(token);
+
+        expect(ret.eq(Misc.MAX_UINT)).eq(true);
+      });
+      it('should set 0', async() => {
+        const token = ethers.Wallet.createRandom().address;
+        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+        await strategy.connect(operator).setLiquidationThreshold(token,0);
+        const ret = await strategy.liquidationThresholds(token);
+
+        expect(ret).eq(0);
+      });
+      it('should set 100_000', async() => {
+        const token = ethers.Wallet.createRandom().address;
+        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+        await strategy.connect(operator).setLiquidationThreshold(token,100_000);
+        const ret = await strategy.liquidationThresholds(token);
+
+        expect(ret).eq(100_000);
+      });
+    });
+    describe('Bad paths', () => {
+      it('should revert if not operator', async() => {
+        const token = ethers.Wallet.createRandom().address;
+        const notOperator = await Misc.impersonate(ethers.Wallet.createRandom().address);
+        await expect(
+          strategy.connect(notOperator).setLiquidationThreshold(token,100_000),
+        ).revertedWith('SB: Denied');
+      });
+    });
+  });
+
   // describe('_beforeDeposit', () => {
   //   interface IBeforeDepositTestResults {
   //     tokenAmounts: BigNumber[];
