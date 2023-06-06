@@ -23,7 +23,6 @@ library ConverterStrategyBaseLib2 {
   ///                        DATA TYPES
   /////////////////////////////////////////////////////////////////////
 
-
   /////////////////////////////////////////////////////////////////////
   ///                        CONSTANTS
   /////////////////////////////////////////////////////////////////////
@@ -137,10 +136,10 @@ library ConverterStrategyBaseLib2 {
       } else {
         // if we have some tokens on balance then we need to use only a part of the collateral
         uint tokenAmountToBeBorrowed = amountAssetForToken
-        * prices[indexAsset_]
-        * decs[i]
-        / prices[i]
-        / decs[indexAsset_];
+          * prices[indexAsset_]
+          * decs[i]
+          / prices[i]
+          / decs[indexAsset_];
 
         uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
         if (tokenBalance < tokenAmountToBeBorrowed) {
@@ -230,7 +229,7 @@ library ConverterStrategyBaseLib2 {
   /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
   /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
   /// @param amountsOut Amounts of available rewards
-  function  claimConverterRewards(
+  function claimConverterRewards(
     ITetuConverter converter_,
     address[] memory tokens_,
     address[] memory rewardTokens_,
@@ -296,6 +295,7 @@ library ConverterStrategyBaseLib2 {
     require(percent_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
     emit ReinvestThresholdPercentChanged(percent_);
   }
+
   function checkLiquidationThresholdChanged(address controller, address token, uint amount) external {
     StrategyLib.onlyOperators(controller);
     emit LiquidationThresholdChanged(token, amount);
