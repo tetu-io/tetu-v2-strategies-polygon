@@ -25,7 +25,7 @@ async function getPoolAdapter(
     const config = await poolAdapter.getConfig();
     if (config.collateralAsset.toLowerCase() === collateralAsset.toLowerCase() && config.borrowAsset.toLowerCase() === borrowAsset.toLowerCase()) {
       console.log("Pool adapter found, config", config);
-      // return poolAdapter;
+      return poolAdapter;
     }
     console.log("Pool adapter config", config);
   }
@@ -35,7 +35,7 @@ async function getPoolAdapter(
  * Try to move prices
  * and check how rebalancing works
  */
-describe("study, Rebalancing test", () => {
+describe("study, Rebalancing test @skip-on-coverage", () => {
   it("should return expected values", async () => {
     const signer = (await ethers.getSigners())[0];
     const tetuConverter = TetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);

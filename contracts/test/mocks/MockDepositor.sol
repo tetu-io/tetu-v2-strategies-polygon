@@ -170,6 +170,7 @@ contract MockDepositor is DepositorBase, Initializable {
 
   /// @dev Quotes output for given lp amount from the pool.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual view returns (uint[] memory amountsOut) {
+    // console.log("_depositorQuoteExit.liquidityAmount", liquidityAmount);
     bytes32 key = keccak256(abi.encodePacked(liquidityAmount + 1));
     DepositorQuoteExitParams memory p = depositorQuoteExitParams[key];
     if (p.liquidityAmount == liquidityAmount) {

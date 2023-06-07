@@ -145,6 +145,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
 
 
+  function depositToPoolUniAccess(uint amount_, uint earnedByPrices_, uint investedAssets_) external returns (
+    uint strategyLoss,
+    uint amountSentToInsurance
+  ) {
+    return _depositToPoolUni(amount_, earnedByPrices_, investedAssets_);
+  }
+
   function _depositToPoolUni(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
     uint strategyLoss,
     uint amountSentToInsurance
@@ -185,9 +192,37 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
   //endregion -------------------------------------------- _depositToPoolUni mock
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  /// Others
-  /////////////////////////////////////////////////////////////////////////////////////
+  //region ---------------------------------------- _beforeDeposit
+  struct BeforeDepositParams {
+    uint amount;
+    uint indexAsset;
+    uint[] tokenAmounts;
+  }
+  mapping(bytes32 => BeforeDepositParams) internal _beforeDepositParams;
+  function setBeforeDeposit(uint amount_, uint indexAsset_, uint[] memory tokenAmounts) external {
+    bytes32 key = keccak256(abi.encodePacked(amount_, indexAsset_));
+    _beforeDepositParams[key] = BeforeDepositParams({
+      amount: amount_,
+      indexAsset: indexAsset_,
+      tokenAmounts: tokenAmounts
+    });
+  }
+
+  function _beforeDeposit(
+    ITetuConverter tetuConverter_,
+    uint amount_,
+    address[] memory tokens_,
+    uint indexAsset_
+  ) internal override returns (
+    uint[] memory tokenAmounts
+  ) {
+    bytes32 key = keccak256(abi.encodePacked(amount_, indexAsset_));
+    if (_beforeDepositParams[key].amount == amount_) {
+      return _beforeDepositParams[key].tokenAmounts;
+    } else {
+      return super._beforeDeposit(tetuConverter_, amount_, tokens_, indexAsset_);
+    }
+  }
 
   function _beforeDepositAccess(
     ITetuConverter tetuConverter_,
@@ -204,6 +239,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       indexAsset_
     );
   }
+  //endregion ---------------------------------------- _beforeDeposit
+
+  /////////////////////////////////////////////////////////////////////////////////////
+  /// Others
+  /////////////////////////////////////////////////////////////////////////////////////
 
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();

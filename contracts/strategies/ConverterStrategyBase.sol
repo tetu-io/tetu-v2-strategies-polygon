@@ -6,7 +6,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -76,13 +75,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///         decimals = {DENOMINATOR}
   /// @dev We need this threshold to avoid numerous conversions of small amounts
   uint public reinvestThresholdPercent;
+
+  /// @notice Ratio to split performance fee on toPerf + toInsurance, [0..100_000]
+  ///         100_000 - send full amount toPerf, 0 - send full amount toInsurance.
+  uint public performanceFeeRatio;
   //endregion VARIABLES
 
   /////////////////////////////////////////////////////////////////////
   //region Events
   /////////////////////////////////////////////////////////////////////
-  event LiquidationThresholdChanged(address token, uint amount);
-  event ReinvestThresholdPercentChanged(uint amount);
   event OnDepositorEnter(uint[] amounts, uint[] consumedAmounts);
   event OnDepositorExit(uint liquidityAmount, uint[] withdrawnAmounts);
   event OnDepositorEmergencyExit(uint[] withdrawnAmounts);
@@ -121,22 +122,24 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // 1% by default
     reinvestThresholdPercent = DENOMINATOR / 100;
-    emit ReinvestThresholdPercentChanged(DENOMINATOR / 100);
+    emit ConverterStrategyBaseLib2.ReinvestThresholdPercentChanged(DENOMINATOR / 100);
   }
 
   function setLiquidationThreshold(address token, uint amount) external {
-    StrategyLib.onlyOperators(controller());
+    ConverterStrategyBaseLib2.checkLiquidationThresholdChanged(controller(), token, amount);
     liquidationThresholds[token] = amount;
-    emit LiquidationThresholdChanged(token, amount);
   }
 
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   function setReinvestThresholdPercent(uint percent_) external {
-    StrategyLib.onlyOperators(controller());
-    require(percent_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
-
+    ConverterStrategyBaseLib2.checkReinvestThresholdPercentChanged(controller(), percent_);
     reinvestThresholdPercent = percent_;
-    emit ReinvestThresholdPercentChanged(percent_);
+  }
+
+  /// @notice [0..100_000], 100_000 - send full amount toPerf, 0 - send full amount toInsurance.
+  function setPerformanceFeeRatio(uint ratio_) external {
+    ConverterStrategyBaseLib2.checkPerformanceFeeRatioChanged(controller(), ratio_);
+    performanceFeeRatio = ratio_;
   }
   //endregion Initialization and configuration
 
@@ -200,7 +203,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint updatedInvestedAssetsAfterDeposit = _updateInvestedAssets();
       // after deposit some asset can exist
       uint balanceAfter = AppLib.balance(_asset);
-
       // we need to compensate difference if during deposit we lost some assets
       if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (investedAssets_ + balanceBefore)) {
         strategyLoss = (investedAssets_ + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
@@ -503,7 +505,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     );
 
     // send performance-part of the underlying to the performance receiver and insurance
-    (uint toPerf, uint toInsurance) = ConverterStrategyBaseLib2.sendPerformanceFee(_asset, amountPerf, splitter, performanceReceiver);
+    (uint toPerf, uint toInsurance) = ConverterStrategyBaseLib2.sendPerformanceFee(
+      _asset,
+      amountPerf,
+      splitter,
+      performanceReceiver,
+      performanceFeeRatio
+    );
 
     emit Recycle(rewardTokens_, amountsToForward, toPerf, toInsurance);
   }
@@ -702,6 +710,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.
   /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[50 - 4] private __gap; // 50 - count of variables
+  uint[50 - 5] private __gap; // 50 - count of variables
 
 }

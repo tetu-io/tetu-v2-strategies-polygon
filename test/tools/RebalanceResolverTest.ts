@@ -22,6 +22,7 @@ import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {ConverterUtils} from "../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../UniswapV3StrategyUtils";
+import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 
 const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -99,6 +100,10 @@ describe('RebalanceResolver tests', function () {
     );
     vault = data.vault.connect(signer);
     strategy = data.strategy as unknown as UniswapV3ConverterStrategy;
+
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN]);
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address);
 
     await TokenUtils.getToken(asset.address, signer.address, parseUnits('100000', 6));
     await asset.approve(vault.address, Misc.MAX_UINT);

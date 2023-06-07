@@ -4849,6 +4849,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         parseUnits(p.amount, decimalsAsset),
         splitter.address,
         receiver,
+        50_000
       );
 
       const tx = await facade.sendPerformanceFee(
@@ -4856,6 +4857,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         parseUnits(p.amount, decimalsAsset),
         splitter.address,
         receiver,
+        50_000
       );
       const gasUsed = (await tx.wait()).gasUsed;
 

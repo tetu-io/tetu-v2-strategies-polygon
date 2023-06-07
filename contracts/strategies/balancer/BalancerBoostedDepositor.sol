@@ -34,6 +34,7 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   address internal constant BALANCER_HELPER = 0x239e55F427D44C3cc793f49bFB507ebe76638a2b;
   /// @notice ChildChainLiquidityGaugeFactory allows to get gauge address by pool id
   /// @dev see https://dev.balancer.fi/resources/vebal-and-gauges/gauges
+  /// todo Update to new gauges, new ChildChainGauge is 0xc9b36096f5201ea332Db35d6D195774ea0D5988f
   address internal constant CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY = 0x3b8cA519122CdD8efb272b0D3085453404B25bD0;
 
   /////////////////////////////////////////////////////////////////////

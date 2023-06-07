@@ -33,6 +33,14 @@ library ConverterStrategyBaseLib2 {
   uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = 500;
 
   /////////////////////////////////////////////////////////////////////
+  ///                        EVENTS
+  /////////////////////////////////////////////////////////////////////
+
+  event OnChangePerformanceFeeRatio(uint newRatio);
+  event LiquidationThresholdChanged(address token, uint amount);
+  event ReinvestThresholdPercentChanged(uint amount);
+
+  /////////////////////////////////////////////////////////////////////
   ///                        MAIN LOGIC
   /////////////////////////////////////////////////////////////////////
 
@@ -54,14 +62,15 @@ library ConverterStrategyBaseLib2 {
   /// @param asset_ Underlying asset
   /// @param amount_ Amount of underlying asset to be sent to
   /// @param receiver_ Performance receiver
-  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_) external returns (
+  /// @param ratio [0..100_000], 100_000 - send full amount to perf, 0 - send full amount to the insurance.
+  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) external returns (
     uint toPerf,
     uint toInsurance
   ) {
     // read inside lib for reduce contract space in the main contract
     address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
 
-    toPerf = amount_ / 2;
+    toPerf = amount_ * ratio / DENOMINATOR;
     toInsurance = amount_ - toPerf;
 
     if (toPerf != 0) {
@@ -122,10 +131,10 @@ library ConverterStrategyBaseLib2 {
       } else {
         // if we have some tokens on balance then we need to use only a part of the collateral
         uint tokenAmountToBeBorrowed = amountAssetForToken
-        * prices[indexAsset_]
-        * decs[i]
-        / prices[i]
-        / decs[indexAsset_];
+          * prices[indexAsset_]
+          * decs[i]
+          / prices[i]
+          / decs[indexAsset_];
 
         uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
         if (tokenBalance < tokenAmountToBeBorrowed) {
@@ -215,7 +224,7 @@ library ConverterStrategyBaseLib2 {
   /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
   /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
   /// @param amountsOut Amounts of available rewards
-  function  claimConverterRewards(
+  function claimConverterRewards(
     ITetuConverter converter_,
     address[] memory tokens_,
     address[] memory rewardTokens_,
@@ -264,10 +273,29 @@ library ConverterStrategyBaseLib2 {
       // amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
       require(strategyBalance != 0, AppErrors.ZERO_BALANCE);
       require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
-      IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amount);
+      IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);
     }
     return amountToSend;
   }
+
+  //region ---------------------------------------- Setters
+  function checkPerformanceFeeRatioChanged(address controller, uint ratio_) external {
+    StrategyLib.onlyOperators(controller);
+    require(ratio_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
+    emit OnChangePerformanceFeeRatio(ratio_);
+  }
+
+  function checkReinvestThresholdPercentChanged(address controller, uint percent_) external {
+    StrategyLib.onlyOperators(controller);
+    require(percent_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
+    emit ReinvestThresholdPercentChanged(percent_);
+  }
+
+  function checkLiquidationThresholdChanged(address controller, address token, uint amount) external {
+    StrategyLib.onlyOperators(controller);
+    emit LiquidationThresholdChanged(token, amount);
+  }
+  //endregion ---------------------------------------- Setters
 
 }
 
