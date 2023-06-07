@@ -840,22 +840,19 @@ library UniswapV3ConverterStrategyLogicLib {
     emit Rebalanced(loss);
   }
 
-  function calcEarned(State storage state) external view returns (uint) {
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    address h = state.strategyProfitHolder;
-
-    (uint fee0, uint fee1) = getFees(state);
-
-    if (state.depositorSwapTokens) {
-      (fee0, fee1) = (fee1, fee0);
+  function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {
+    ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
+    uint len = rewardTokens.length;
+    uint earned;
+    for (uint i; i < len; ++i) {
+      address token = rewardTokens[i];
+      if (token == asset) {
+        earned += amounts[i];
+      } else {
+        earned += liquidator.getPrice(rewardTokens[i], asset, amounts[i]);
+      }
     }
 
-    fee0 += IERC20(tokenA).balanceOf(h);
-    fee1 += IERC20(tokenB).balanceOf(h);
-
-    uint feeBinTermOfA = UniswapV3Lib.getPrice(address(state.pool), tokenB) * fee1 / 10 ** IERC20Metadata(tokenB).decimals();
-
-    return fee0 + feeBinTermOfA;
+    return earned;
   }
 }
