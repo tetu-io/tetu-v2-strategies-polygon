@@ -697,7 +697,9 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.tokenA,
         vars.tokenB,
         _getLiquidatorSwapSlippage(vars.pool),
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
     } else {
       /// rebalancing debt
@@ -707,7 +709,9 @@ library UniswapV3ConverterStrategyLogicLib {
         controller,
         state,
         _getLiquidatorSwapSlippage(vars.pool),
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
 
       tokenAmounts = new uint[](2);
@@ -800,7 +804,9 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.tokenB,
         _getLiquidatorSwapSlippage(vars.pool),
         aggParams,
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
     } else {
       /// rebalancing debt
@@ -810,7 +816,9 @@ library UniswapV3ConverterStrategyLogicLib {
         state,
         _getLiquidatorSwapSlippage(vars.pool),
         aggParams,
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
 
       tokenAmounts = new uint[](2);
