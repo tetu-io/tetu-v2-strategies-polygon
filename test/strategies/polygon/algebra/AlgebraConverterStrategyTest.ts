@@ -12,7 +12,7 @@ import {
   IERC20,
   IERC20__factory, IStrategyV2,
   ISwapper,
-  ISwapper__factory, TetuVaultV2,
+  ISwapper__factory, TetuVaultV2, VaultFactory__factory,
 } from "../../../../typechain";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
@@ -22,6 +22,8 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -57,10 +59,18 @@ describe('AlgebraConverterStrategyTest', function() {
     snapshotBefore = await TimeUtils.snapshot();
 
     const core = Addresses.getCore();
+    const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     const controller = DeployerUtilsLocal.getController(signer);
     asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
     const converterAddress = getConverterAddress();
     swapper = ISwapper__factory.connect(MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, signer);
+
+    // use the latest implementations
+    const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
+    const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
+    const vaultFactory = VaultFactory__factory.connect(core.vaultFactory, signer);
+    await vaultFactory.connect(gov).setVaultImpl(vaultLogic.address);
+    await vaultFactory.connect(gov).setSplitterImpl(splitterLogic.address);
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset.address,
@@ -106,6 +116,28 @@ describe('AlgebraConverterStrategyTest', function() {
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
     const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
     await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
+
+    /*const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
+    await strategy.connect(platformVoter).setCompoundRatio(50000);*/
+
+    const pools = [
+      {
+        pool: MaticAddresses.ALGEBRA_dQUICK_QUICK,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+        tokenIn: MaticAddresses.dQUICK_TOKEN,
+        tokenOut: MaticAddresses.QUICK_TOKEN,
+      },
+      {
+        pool: MaticAddresses.ALGEBRA_USDC_QUICK,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+        tokenIn: MaticAddresses.QUICK_TOKEN,
+        tokenOut: MaticAddresses.USDC_TOKEN,
+      },
+    ]
+    await tools.liquidator.connect(operator).addLargestPools(pools, true);
+
+    // prevent 'TC-4 zero price' because real oracles have a limited price lifetime
+    await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDC_TOKEN)
   })
 
   after(async function() {
@@ -121,7 +153,7 @@ describe('AlgebraConverterStrategyTest', function() {
   });
 
   describe('Algebra strategy tests', function() {
-    it('Deposit', async() => {
+    it('Deposit. hardwork', async() => {
       const s = strategy
 
       console.log('deposit 1...');
@@ -131,6 +163,21 @@ describe('AlgebraConverterStrategyTest', function() {
 
       console.log('deposit 2...');
       await vault.deposit(parseUnits('1000', 6), signer.address);
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+
+      console.log('Make pool volume')
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+
+      console.log('Hardwork')
+      expect(await s.isReadyToHardWork()).eq(true)
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
+      const hwResult = await strategy.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
+      await strategy.connect(splitterSigner).doHardWork()
+
+      expect(hwResult.earned).gt(0)
+
     })
   })
 })

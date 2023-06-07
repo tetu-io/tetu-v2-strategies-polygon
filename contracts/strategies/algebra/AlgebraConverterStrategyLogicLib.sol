@@ -32,6 +32,7 @@ library AlgebraConverterStrategyLogicLib {
     event DisableFuse();
     event NewFuseThreshold(uint newFuseThreshold);
     event AlgebraFeesClaimed(uint fee0, uint fee1);
+    event AlgebraRewardsClaimed(uint reward, uint bonusReward);
 
     //////////////////////////////////////////
     //            STRUCTURES
@@ -144,6 +145,10 @@ library AlgebraConverterStrategyLogicLib {
         uint priceA = oracle.getAssetPrice(tokenA);
         uint priceB = oracle.getAssetPrice(tokenB);
         return priceB * 1e18 / priceA;
+    }
+
+    function getIncentiveKey(State storage state) internal view returns(IncentiveKey memory) {
+        return IncentiveKey(state.rewardToken, state.bonusRewardToken, address(state.pool), state.startTime, state.endTime);
     }
 
     function getFees(State storage state) public view returns (uint fee0, uint fee1) {
@@ -288,8 +293,28 @@ library AlgebraConverterStrategyLogicLib {
     //            Rewards
     //////////////////////////////////////////
 
-    function isReadyToHardWork(State storage state, ITetuConverter converter) external view returns (bool isReady) {
-        // todo get reward tokens amounts
+    function isReadyToHardWork(State storage state, ITetuConverter converter, address controller) external view returns (bool isReady) {
+        address tokenA = state.tokenA;
+        address tokenB = state.tokenB;
+        uint rewardInTermOfTokenA;
+        uint bonusRewardInTermOfTokenA;
+
+        {
+            IAlgebraEternalFarming farming = FARMING_CENTER.eternalFarming();
+            IncentiveKey memory key = getIncentiveKey(state);
+            (uint reward, uint bonusReward) = farming.getRewardInfo(key, state.tokenId);
+            //console.log('isReadyToHardWork reward', reward);
+            //console.log('isReadyToHardWork bonusReward', bonusReward);
+            ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
+            if (reward > 0) {
+                rewardInTermOfTokenA = liquidator.getPrice(state.rewardToken, tokenA, reward);
+            }
+            if (bonusRewardInTermOfTokenA > 0) {
+                bonusRewardInTermOfTokenA = liquidator.getPrice(state.bonusRewardToken, tokenA, bonusReward);
+            }
+            //console.log('isReadyToHardWork rewardInTermOfTokenA', rewardInTermOfTokenA);
+            //console.log('isReadyToHardWork bonusRewardInTermOfTokenA', bonusRewardInTermOfTokenA);
+        }
 
         // check claimable amounts and compare with thresholds
         (uint fee0, uint fee1) = getFees(state);
@@ -298,8 +323,6 @@ library AlgebraConverterStrategyLogicLib {
             (fee0, fee1) = (fee1, fee0);
         }
 
-        address tokenA = state.tokenA;
-        address tokenB = state.tokenB;
         address h = state.strategyProfitHolder;
 
         fee0 += IERC20(tokenA).balanceOf(h);
@@ -312,7 +335,12 @@ library AlgebraConverterStrategyLogicLib {
         uint fee0USD = fee0 * priceA / 1e18;
         uint fee1USD = fee1 * priceB / 1e18;
 
-        return fee0USD > HARD_WORK_USD_FEE_THRESHOLD || fee1USD > HARD_WORK_USD_FEE_THRESHOLD;
+        return
+            fee0USD > HARD_WORK_USD_FEE_THRESHOLD
+            || fee1USD > HARD_WORK_USD_FEE_THRESHOLD
+            || rewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
+            || bonusRewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
+        ;
     }
 
     function claimRewards(State storage state) external returns (
@@ -320,26 +348,68 @@ library AlgebraConverterStrategyLogicLib {
         uint[] memory amountsOut,
         uint[] memory balancesBefore
     ) {
-        // todo
-    }
+        address strategyProfitHolder = state.strategyProfitHolder;
+        IAlgebraPool pool = state.pool;
+        uint tokenId = state.tokenId;
+        tokensOut = new address[](4);
+        tokensOut[0] = state.tokenA;
+        tokensOut[1] = state.tokenB;
+        tokensOut[2] = state.rewardToken;
+        tokensOut[3] = state.bonusRewardToken;
 
-    function calcEarned(State storage state) external view returns (uint) {
-        // todo reward tokens
-        // todo get price by liquidator
-        return 0;
-        /*address tokenB = state.tokenB;
-
-        (uint fee0, uint fee1) = getFees(state);
-        fee0 += state.rebalanceEarned0;
-        fee1 += state.rebalanceEarned1;
-
-        if (state.depositorSwapTokens) {
-            (fee0, fee1) = (fee1, fee0);
+        balancesBefore = new uint[](4);
+        for (uint i; i < tokensOut.length; i++) {
+            balancesBefore[i] = IERC20(tokensOut[i]).balanceOf(address(this));
         }
 
-        uint feeBinTermOfA = UniswapV3Lib.getPrice(address(state.pool), tokenB) * fee1 / 10 ** IERC20Metadata(tokenB).decimals();
+        amountsOut = new uint[](4);
+        (amountsOut[0], amountsOut[1]) = FARMING_CENTER.collect(INonfungiblePositionManager.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
 
-        return fee0 + feeBinTermOfA;*/
+        emit AlgebraFeesClaimed(amountsOut[0], amountsOut[1]);
+
+        if (state.depositorSwapTokens) {
+            (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+        }
+        //console.log('claimRewards amountsOut[0]', amountsOut[0]);
+        //console.log('claimRewards amountsOut[1]', amountsOut[1]);
+
+        (amountsOut[2], amountsOut[3]) = FARMING_CENTER.collectRewards(getIncentiveKey(state), tokenId);
+        //console.log('claimRewards amountsOut[2]', amountsOut[2]);
+        //console.log('claimRewards amountsOut[3]', amountsOut[3]);
+
+        if (amountsOut[2] > 0) {
+            FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
+        }
+
+        if (amountsOut[3] > 0) {
+            FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
+        }
+
+        emit AlgebraRewardsClaimed(amountsOut[2], amountsOut[3]);
+
+        for (uint i; i < tokensOut.length; ++i) {
+            uint b = IERC20(tokensOut[i]).balanceOf(strategyProfitHolder);
+            if (b > 0) {
+                IERC20(tokensOut[i]).transferFrom(strategyProfitHolder, address(this), b);
+                amountsOut[i] += b;
+            }
+        }
+    }
+
+    function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {
+        ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
+        uint len = rewardTokens.length;
+        uint earned;
+        for (uint i; i < len; ++i) {
+            address token = rewardTokens[i];
+            if (token == asset) {
+                earned += amounts[i];
+            } else {
+                earned += liquidator.getPrice(rewardTokens[i], asset, amounts[i]);
+            }
+        }
+
+        return earned;
     }
 
     function sendFeeToProfitHolder(State storage state, uint fee0, uint fee1) external {
@@ -354,6 +424,8 @@ library AlgebraConverterStrategyLogicLib {
         }
         emit AlgebraFeesClaimed(fee0, fee1);
     }
+
+    // todo sendRewardsToProfitHolder
 
     //////////////////////////////////////////
     //            Rebalance

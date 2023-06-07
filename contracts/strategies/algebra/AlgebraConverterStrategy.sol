@@ -96,7 +96,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     /// @notice Check if the strategy is ready for hard work.
     /// @return A boolean indicating if the strategy is ready for hard work.
     function isReadyToHardWork() override external virtual view returns (bool) {
-        return AlgebraConverterStrategyLogicLib.isReadyToHardWork(state, converter);
+        return AlgebraConverterStrategyLogicLib.isReadyToHardWork(state, converter, controller());
     }
 
     /// @notice Check if the strategy needs rebalancing.
@@ -216,8 +216,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     /// @return lost The amount of lost rewards.
     /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
     function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
-        earned = AlgebraConverterStrategyLogicLib.calcEarned(state);
         (address[] memory rewardTokens, uint[] memory amounts) = _claim();
+        earned = AlgebraConverterStrategyLogicLib.calcEarned(state.tokenA, controller(), rewardTokens, amounts);
         _rewardsLiquidation(rewardTokens, amounts);
         return (earned, lost, AppLib.balance(asset));
     }
