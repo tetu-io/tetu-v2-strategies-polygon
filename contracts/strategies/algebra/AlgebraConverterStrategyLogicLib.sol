@@ -156,7 +156,19 @@ library AlgebraConverterStrategyLogicLib {
     }
 
     function getPoolReserves(State storage state) external view returns (uint[] memory reserves) {
-        // todo
+        reserves = new uint[](2);
+        (uint160 sqrtRatioX96, , , , , ,) = state.pool.globalState();
+
+        (reserves[0], reserves[1]) = AlgebraLib.getAmountsForLiquidity(
+            sqrtRatioX96,
+            state.lowerTick,
+            state.upperTick,
+            state.totalLiquidity
+        );
+
+        if (state.depositorSwapTokens) {
+            (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
+        }
     }
 
     //////////////////////////////////////////
@@ -269,7 +281,75 @@ library AlgebraConverterStrategyLogicLib {
         State storage state,
         uint128 liquidityAmountToExit
     ) external returns (uint[] memory amountsOut) {
-        // todo
+        amountsOut = new uint[](2);
+        address strategyProfitHolder = state.strategyProfitHolder;
+        IncentiveKey memory key = getIncentiveKey(state);
+
+        uint128 liquidity = state.totalLiquidity;
+
+        require(liquidity >= liquidityAmountToExit, AlgebraStrategyErrors.WRONG_LIQUIDITY);
+
+        uint tokenId = state.tokenId;
+
+        // get reward amounts
+        (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
+        console.log('exit reward, bonusReward', reward, bonusReward);
+
+        // exit farming (undeposit)
+        FARMING_CENTER.exitFarming(getIncentiveKey(state), state.tokenId, false);
+
+        // claim rewards and send to profit holder
+        {
+            if (reward > 0) {
+                address token = state.rewardToken;
+                FARMING_CENTER.claimReward(token, address(this), 0, reward);
+                IERC20(token).safeTransfer(strategyProfitHolder, reward);
+            }
+            if (bonusReward > 0) {
+                address token = state.bonusRewardToken;
+                FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
+                IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
+            }
+        }
+
+        // withdraw nft
+        FARMING_CENTER.withdrawToken(tokenId, address(this), '');
+
+        // burn liquidity
+        (amountsOut[0], amountsOut[1]) = ALGEBRA_NFT.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams(tokenId, liquidityAmountToExit, 0, 0, block.timestamp));
+
+        {
+            // collect tokens and fee
+            (uint collected0, uint collected1) = ALGEBRA_NFT.collect(INonfungiblePositionManager.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
+
+            uint fee0 = collected0 > amountsOut[0] ? (collected0 - amountsOut[0]) : 0;
+            uint fee1 = collected1 > amountsOut[1] ? (collected1 - amountsOut[1]) : 0;
+
+            console.log('exit claimed fees', fee0, fee1);
+            emit AlgebraFeesClaimed(fee0, fee1);
+
+            if (state.depositorSwapTokens) {
+                (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+                (fee0, fee1) = (fee1, fee0);
+            }
+
+            // send fees to profit holder
+            if (fee0 > 0) {
+                IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee0);
+            }
+            if (fee1 > 0) {
+                IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee1);
+            }
+        }
+
+        liquidity -= liquidityAmountToExit;
+        state.totalLiquidity = liquidity;
+
+        if (liquidity > 0) {
+            ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
+            FARMING_CENTER.deposits(tokenId);
+            FARMING_CENTER.enterFarming(key, tokenId, 0, false);
+        }
     }
 
     function quoteExit(
@@ -349,7 +429,6 @@ library AlgebraConverterStrategyLogicLib {
         uint[] memory balancesBefore
     ) {
         address strategyProfitHolder = state.strategyProfitHolder;
-        IAlgebraPool pool = state.pool;
         uint tokenId = state.tokenId;
         tokensOut = new address[](4);
         tokensOut[0] = state.tokenA;
@@ -411,21 +490,6 @@ library AlgebraConverterStrategyLogicLib {
 
         return earned;
     }
-
-    function sendFeeToProfitHolder(State storage state, uint fee0, uint fee1) external {
-        address strategyProfitHolder = state.strategyProfitHolder;
-        require(strategyProfitHolder != address (0), AlgebraStrategyErrors.ZERO_PROFIT_HOLDER);
-        if (state.depositorSwapTokens) {
-            IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee1);
-            IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee0);
-        } else {
-            IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee0);
-            IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee1);
-        }
-        emit AlgebraFeesClaimed(fee0, fee1);
-    }
-
-    // todo sendRewardsToProfitHolder
 
     //////////////////////////////////////////
     //            Rebalance

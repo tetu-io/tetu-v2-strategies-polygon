@@ -153,7 +153,7 @@ describe('AlgebraConverterStrategyTest', function() {
   });
 
   describe('Algebra strategy tests', function() {
-    it('Deposit. hardwork', async() => {
+    it('Deposit, hardwork, withdraw', async() => {
       const s = strategy
 
       console.log('deposit 1...');
@@ -173,10 +173,28 @@ describe('AlgebraConverterStrategyTest', function() {
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
-      const hwResult = await strategy.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
-      await strategy.connect(splitterSigner).doHardWork()
+      const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
+      await s.connect(splitterSigner).doHardWork()
 
       expect(hwResult.earned).gt(0)
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+
+      console.log('Make pool volume')
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+
+      console.log('withdraw')
+      await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+
+      console.log('Make pool volume')
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+
+      console.log('withdrawAll')
+      await vault.withdrawAll()
 
     })
   })

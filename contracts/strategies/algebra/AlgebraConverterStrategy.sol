@@ -111,6 +111,19 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     }
 
     /////////////////////////////////////////////////////////////////////
+    ///                   CALLBACKS
+    /////////////////////////////////////////////////////////////////////
+
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes memory
+    ) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
+    /////////////////////////////////////////////////////////////////////
     ///                   REBALANCE
     /////////////////////////////////////////////////////////////////////
 

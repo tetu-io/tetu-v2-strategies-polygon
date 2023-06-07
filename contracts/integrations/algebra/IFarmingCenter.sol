@@ -71,4 +71,25 @@ interface IFarmingCenter {
         uint256 amountRequestedIncentive,
         uint256 amountRequestedEternal
     ) external returns (uint256 reward);
+
+    /// @notice Exits from incentive (time-limited or eternal farming) with NFT-position token
+    /// @param key The incentive event key
+    /// @param tokenId The id of position NFT
+    /// @param isLimit Is incentive time-limited or eternal
+    function exitFarming(
+        IncentiveKey memory key,
+        uint256 tokenId,
+        bool isLimit
+    ) external;
+
+    /// @notice Withdraw Algebra NFT-position token
+    /// @dev can be used via static call to get current rewards for user
+    /// @param tokenId The id of position NFT
+    /// @param to New owner of position NFT
+    /// @param data The additional data for NonfungiblePositionManager
+    function withdrawToken(
+        uint256 tokenId,
+        address to,
+        bytes memory data
+    ) external;
 }
