@@ -173,7 +173,7 @@ library ConverterStrategyBaseLib {
 
   event ReturnAssetToConverter(address asset, uint amount);
 
-  event FixChangePrices(uint investedAssetsBefore, uint investedAssetsOut);
+  event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
   //endregion Events
 
   /////////////////////////////////////////////////////////////////////
@@ -988,6 +988,7 @@ library ConverterStrategyBaseLib {
           false
         );
         amountOut += collateral;
+
         if (toRepay >= toPay) {
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         } else {
@@ -1558,10 +1559,9 @@ library ConverterStrategyBaseLib {
     if (lost != 0) {
       ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
     }
-    emit FixChangePrices(assetBefore, assetAfter);
+    emit FixPriceChanges(assetBefore, assetAfter);
   }
 
   //endregion Other helpers
-
 }
 

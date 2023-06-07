@@ -64,10 +64,10 @@ export class UniversalTestUtils {
       strategyDeployer,
       controller,
       governance,
-      params?.buffer || 100,
-      params?.depositFee || 250,
-      params?.withdrawFee || 500,
-      params?.wait || false,
+      params?.buffer ?? 100,
+      params?.depositFee ?? 250,
+      params?.withdrawFee ?? 500,
+      params?.wait ?? false,
     );
   }
 

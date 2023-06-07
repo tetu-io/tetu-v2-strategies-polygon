@@ -32,6 +32,7 @@ const libraries = new Map<string, string[]>([
   ],
   ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib']],
   ['AlgebraDebtLib', ['AlgebraLib', /*'ConverterStrategyBaseLib'*/]],
+  ['ConverterStrategyBaseLib2', ['StrategyLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(
