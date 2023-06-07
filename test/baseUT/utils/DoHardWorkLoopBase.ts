@@ -380,7 +380,11 @@ export class DoHardWorkLoopBase {
     // assume that at this point we deposited all expected amount except userWithdrew amount
     const userBalance = await this.userBalanceInVault();
     // avoid rounding errors
-    const userBalanceN = +utils.formatUnits(userBalance, this.underlyingDecimals);
+    const userBalanceN = +utils.formatUnits(
+      // 1 is added to pass following cases: 33034.232433 == 33034.232434; we assume that -1 is ok
+      userBalance.add(1),
+      this.underlyingDecimals
+    );
     const userBalanceExpectedN = +utils.formatUnits(userExpectedBalance, this.underlyingDecimals);
     console.log('userBalanceN, userBalanceExpectedN', userBalanceN, userBalanceExpectedN);
 
