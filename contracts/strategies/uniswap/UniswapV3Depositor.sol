@@ -18,7 +18,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.2";
+  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.3";
 
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
@@ -35,7 +35,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   function getState() external view returns (
     address tokenA,
     address tokenB,
-    IUniswapV3Pool pool,
+    address pool,
+    address profitHolder,
     int24 tickSpacing,
     int24 lowerTick,
     int24 upperTick,
@@ -47,7 +48,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ) {
     tokenA = state.tokenA;
     tokenB = state.tokenB;
-    pool = state.pool;
+    pool = address(state.pool);
+    profitHolder = state.strategyProfitHolder;
     tickSpacing = state.tickSpacing;
     lowerTick = state.lowerTick;
     upperTick = state.upperTick;
@@ -165,5 +167,5 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.
   /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[50-2] private __gap; // 50 - count of variables
+  uint[50 - 2] private __gap; // 50 - count of variables
 }

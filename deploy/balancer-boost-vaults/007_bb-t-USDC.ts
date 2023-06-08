@@ -43,3 +43,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 };
 export default func;
 func.tags = ['bbTUsdc4626LinearPool']
+func.skip = async () => true
