@@ -10,6 +10,8 @@ import "./AlgebraConverterStrategyLogicLib.sol";
 library AlgebraDebtLib {
 
     uint public constant SELL_GAP = 100;
+    address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
+    address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOceanExchangeProxy
 
     function calcTickRange(IAlgebraPool pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
         (, int24 tick, , , , ,) = pool.globalState();
@@ -68,6 +70,22 @@ library AlgebraDebtLib {
         }
     }
 
+    function closeDebtByAgg(
+        ITetuConverter tetuConverter,
+        address tokenA,
+        address tokenB,
+        uint liquidatorSwapSlippage,
+        AlgebraConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
+        uint profitToCover,
+        uint totalAssets,
+        address splitter
+    ) public {
+        _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
+        if (profitToCover > 0) {
+            ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
+        }
+    }
+
     /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
     function rebalanceDebt(
         ITetuConverter tetuConverter,
@@ -83,6 +101,30 @@ library AlgebraDebtLib {
         address tokenB = state.tokenB;
         bool depositorSwapTokens = state.depositorSwapTokens;
         _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
+        if (profitToCover > 0) {
+            ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
+        }
+        (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+        bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+        _openDebt(tetuConverter, tokenA, tokenB, entryData);
+        state.lowerTick = newLowerTick;
+        state.upperTick = newUpperTick;
+    }
+
+    function rebalanceDebtSwapByAgg(
+        ITetuConverter tetuConverter,
+        AlgebraConverterStrategyLogicLib.State storage state,
+        uint liquidatorSwapSlippage,
+        AlgebraConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
+        uint profitToCover,
+        uint totalAssets,
+        address splitter
+    ) external {
+        IAlgebraPool pool = state.pool;
+        address tokenA = state.tokenA;
+        address tokenB = state.tokenB;
+        bool depositorSwapTokens = state.depositorSwapTokens;
+        _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
         if (profitToCover > 0) {
             ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
         }
@@ -184,5 +226,56 @@ library AlgebraDebtLib {
             availableBalanceTokenB = AppLib.balance(tokenB);
             ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, availableBalanceTokenB, liquidatorSwapSlippage, 0, false);
         }
+    }
+
+    function _closeDebtByAgg(
+        ITetuConverter tetuConverter,
+        address tokenA,
+        address tokenB,
+        uint liquidatorSwapSlippage,
+        AlgebraConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
+    ) internal {
+        _checkSwapRouter(aggParams.agg);
+
+        uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
+
+        if (needCloseDebt(debtAmount, tetuConverter, tokenB)) {
+            uint balanceTokenABefore = AppLib.balance(tokenA);
+            uint balanceTokenBBefore = AppLib.balance(tokenB);
+
+            address tokenIn = aggParams.direction ? tokenA : tokenB;
+
+            AppLib.approveIfNeeded(tokenIn, aggParams.amount, aggParams.agg);
+
+            {
+                (bool success, bytes memory result) = aggParams.agg.call(aggParams.swapData);
+                require(success, string(result));
+            }
+
+            uint availableBalanceTokenA = AppLib.balance(tokenA);
+            uint availableBalanceTokenB = AppLib.balance(tokenB);
+
+            require(
+                tetuConverter.isConversionValid(
+                    tokenIn,
+                    aggParams.amount,
+                    aggParams.direction ? tokenB : tokenA,
+                    aggParams.direction ? availableBalanceTokenB - balanceTokenBBefore : availableBalanceTokenA - balanceTokenABefore,
+                    liquidatorSwapSlippage
+                ), AppErrors.PRICE_IMPACT);
+
+            ConverterStrategyBaseLib.closePosition(
+                tetuConverter,
+                tokenA,
+                tokenB,
+                Math.min(debtAmount, availableBalanceTokenB)
+            );
+
+            availableBalanceTokenB = AppLib.balance(tokenB);
+        }
+    }
+
+    function _checkSwapRouter(address router) internal pure {
+        require(router == ONEINCH || router == OPENOCEAN, AlgebraStrategyErrors.UNKNOWN_SWAP_ROUTER);
     }
 }

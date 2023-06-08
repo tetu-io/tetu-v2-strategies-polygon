@@ -164,6 +164,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
         address _controller = controller();
         StrategyLib.onlyOperators(_controller);
 
+        (, uint profitToCover) = _fixPriceChanges(true);
+        uint oldTotalAssets = totalAssets() - profitToCover;
+
         /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
         /// after disableFuse() liquidity is zero
         if (state.totalLiquidity > 0) {
@@ -171,16 +174,18 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
         }
 
         // _depositorEnter(tokenAmounts) if length == 2
-        (uint[] memory tokenAmounts) = AlgebraConverterStrategyLogicLib.rebalanceSwapByAgg(
+        uint[] memory tokenAmounts = AlgebraConverterStrategyLogicLib.rebalanceSwapByAgg(
             state,
             converter,
-            investedAssets(),
+            oldTotalAssets,
             AlgebraConverterStrategyLogicLib.RebalanceSwapByAggParams(
                 direction,
                 amount,
                 agg,
                 swapData
-            )
+            ),
+            profitToCover,
+            splitter
         );
 
         if (tokenAmounts.length == 2) {

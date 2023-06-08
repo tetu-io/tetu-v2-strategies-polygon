@@ -561,8 +561,31 @@ library AlgebraConverterStrategyLogicLib {
     }
 
     function quoteRebalanceSwap(State storage state, ITetuConverter converter) external returns (bool, uint) {
-        // todo
-        return (false, 0);
+        address tokenB = state.tokenB;
+        uint debtAmount = AlgebraDebtLib.getDebtTotalDebtAmountOut(converter, state.tokenA, tokenB);
+
+        if (
+            !needRebalance(state)
+            || !AlgebraDebtLib.needCloseDebt(debtAmount, converter, tokenB)
+        ) {
+            return (false, 0);
+        }
+
+        uint[] memory amountsOut = quoteExit(state, state.totalLiquidity);
+
+        if (state.depositorSwapTokens) {
+            (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+        }
+
+        if (amountsOut[1] < debtAmount) {
+            uint tokenBprice = AlgebraLib.getPrice(address(state.pool), tokenB);
+            uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
+            // add 1% gap for price impact
+            needToSellTokenA += needToSellTokenA / AlgebraDebtLib.SELL_GAP;
+            return (true, needToSellTokenA);
+        } else {
+            return (false, amountsOut[1] - debtAmount);
+        }
     }
 
     function rebalance(
@@ -660,11 +683,93 @@ library AlgebraConverterStrategyLogicLib {
     function rebalanceSwapByAgg(
         State storage state,
         ITetuConverter converter,
-        uint oldInvestedAssets,
-        RebalanceSwapByAggParams memory aggParams
+        uint oldTotalAssets,
+        RebalanceSwapByAggParams memory aggParams,
+        uint profitToCover,
+        address splitter
     ) external returns (
         uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
     ) {
-        // todo
+        uint loss;
+        tokenAmounts = new uint[](0);
+
+        RebalanceLocalVariables memory vars = RebalanceLocalVariables({
+            upperTick: state.upperTick,
+            lowerTick: state.lowerTick,
+            tickSpacing: state.tickSpacing,
+            pool: state.pool,
+            tokenA: state.tokenA,
+            tokenB: state.tokenB,
+            lastPrice: state.lastPrice,
+            fuseThreshold: state.fuseThreshold,
+            depositorSwapTokens: state.depositorSwapTokens,
+        // setup initial values
+            notCoveredLoss: 0,
+            newLowerTick: 0,
+            newUpperTick: 0,
+            isStablePool: state.isStablePool,
+            newPrice: 0,
+            newTotalAssets: 0
+        });
+
+        require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
+
+        vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+
+        if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
+            /// enabling fuse: close debt and stop providing liquidity
+            state.isFuseTriggered = true;
+            emit FuseTriggered();
+
+            AlgebraDebtLib.closeDebtByAgg(
+                converter,
+                vars.tokenA,
+                vars.tokenB,
+                _getLiquidatorSwapSlippage(vars.isStablePool),
+                aggParams,
+                profitToCover,
+                oldTotalAssets,
+                splitter
+            );
+        } else {
+            /// rebalancing debt
+            /// setting new tick range
+            AlgebraDebtLib.rebalanceDebtSwapByAgg(
+                converter,
+                state,
+                _getLiquidatorSwapSlippage(vars.isStablePool),
+                aggParams,
+                profitToCover,
+                oldTotalAssets,
+                splitter
+            );
+
+            if (oldTotalAssets > 0) {
+                tokenAmounts = new uint[](2);
+                tokenAmounts[0] = AppLib.balance(vars.tokenA);
+                tokenAmounts[1] = AppLib.balance(vars.tokenB);
+
+                address[] memory tokens = new address[](2);
+                tokens[0] = vars.tokenA;
+                tokens[1] = vars.tokenB;
+                uint[] memory amounts = new uint[](2);
+                amounts[0] = tokenAmounts[0];
+                vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+                if (vars.newTotalAssets < oldTotalAssets) {
+                    loss = oldTotalAssets - vars.newTotalAssets;
+                }
+            }
+        }
+
+        // need to update last price only for stables coz only stables have fuse mechanic
+        if (vars.isStablePool) {
+            state.lastPrice = vars.newPrice;
+        }
+
+        if (loss > 0) {
+            ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+        }
+
+        emit Rebalanced(loss);
     }
 }

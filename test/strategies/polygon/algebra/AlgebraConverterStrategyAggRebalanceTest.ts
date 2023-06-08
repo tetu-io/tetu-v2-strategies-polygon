@@ -11,7 +11,7 @@ import {
   AlgebraConverterStrategy__factory,
   IERC20,
   IERC20__factory, IStrategyV2,
-  TetuVaultV2, VaultFactory__factory,
+  TetuVaultV2,
 } from "../../../../typechain";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
@@ -20,10 +20,8 @@ import {parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
-import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {UniversalUtils} from "../../../UniversalUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -40,7 +38,7 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('AlgebraConverterStrategyTest', function() {
+describe('AlgebraConverterStrategyAggRebalanceTest', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -59,28 +57,21 @@ describe('AlgebraConverterStrategyTest', function() {
         {
           forking: {
             jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 43620959,
+            blockNumber: undefined,
           },
         },
       ],
     });
 
-    [signer] = await ethers.getSigners();
-    const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
     snapshotBefore = await TimeUtils.snapshot();
 
+    [signer] = await ethers.getSigners();
+    const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
+
     const core = Addresses.getCore();
-    const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
     const controller = DeployerUtilsLocal.getController(signer);
     asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
     const converterAddress = getConverterAddress();
-
-    // use the latest implementations
-    const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
-    const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
-    const vaultFactory = VaultFactory__factory.connect(core.vaultFactory, signer);
-    await vaultFactory.connect(gov).setVaultImpl(vaultLogic.address);
-    await vaultFactory.connect(gov).setSplitterImpl(splitterLogic.address);
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset.address,
@@ -123,31 +114,13 @@ describe('AlgebraConverterStrategyTest', function() {
     await ConverterUtils.whitelist([strategy.address]);
     await vault.connect(gov).setWithdrawRequestBlocks(0)
 
-    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    await ConverterUtils.disableAaveV2(signer)
+
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+    await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
+
     const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
     await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
-
-    /*const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
-    await strategy.connect(platformVoter).setCompoundRatio(50000);*/
-
-    const pools = [
-      {
-        pool: MaticAddresses.ALGEBRA_dQUICK_QUICK,
-        swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-        tokenIn: MaticAddresses.dQUICK_TOKEN,
-        tokenOut: MaticAddresses.QUICK_TOKEN,
-      },
-      {
-        pool: MaticAddresses.ALGEBRA_USDC_QUICK,
-        swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-        tokenIn: MaticAddresses.QUICK_TOKEN,
-        tokenOut: MaticAddresses.USDC_TOKEN,
-      },
-    ]
-    await tools.liquidator.connect(operator).addLargestPools(pools, true);
-
-    // prevent 'TC-4 zero price' because real oracles have a limited price lifetime
-    await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDC_TOKEN)
   })
 
   after(async function() {
@@ -173,66 +146,113 @@ describe('AlgebraConverterStrategyTest', function() {
     await TimeUtils.rollback(snapshot);
   });
 
-  describe('Algebra strategy tests', function() {
+  describe('Algebra strategy rebalance by agg tests', function() {
     it('Rebalance', async() => {
       const s = strategy
+      const state = await s.getState()
 
-      console.log('deposit 1...');
+      console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
       await vault.deposit(parseUnits('1000', 6), signer.address);
 
-      expect(await s.needRebalance()).eq(false)
-
-      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6));
+      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1400000', 6), 100001);
 
       expect(await s.needRebalance()).eq(true)
-      await s.rebalance()
+
+      const quote = await s.callStatic.quoteRebalanceSwap()
+      console.log('Quote', quote)
+
+      const params = {
+        fromTokenAddress: quote[0] ? state.tokenA : state.tokenB,
+        toTokenAddress: quote[0] ? state.tokenB : state.tokenA,
+        amount: quote[1].toString(),
+        fromAddress: s.address,
+        slippage: 1,
+        disableEstimate: true,
+        allowPartialFill: false,
+        protocols: 'POLYGON_BALANCER_V2',
+      };
+
+      const swapTransaction = await buildTxForSwap(JSON.stringify(params));
+      console.log('Transaction for swap: ', swapTransaction);
+
+      await s.rebalanceSwapByAgg(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data)
+
       expect(await s.needRebalance()).eq(false)
     })
-    it('Deposit, hardwork, withdraw', async() => {
+
+    it('Rebalance empty strategy', async() => {
       const s = strategy
 
-      console.log('deposit 1...');
+      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1400000', 6), 100001);
+
+      expect(await s.needRebalance()).eq(true)
+
+      const quote = await s.callStatic.quoteRebalanceSwap()
+      console.log('Quote', quote)
+
+      expect(quote[1]).eq(0)
+
+      await s.rebalanceSwapByAgg(quote[0], 0, MaticAddresses.AGG_ONEINCH_V5, '0x')
+
+      expect(await s.needRebalance()).eq(false)
+    })
+
+    it('Rebalance empty strategy after emergencyExit()', async() => {
+      const s = strategy
+
+      const swapAssetValue = parseUnits('1400000', 6);
+
+      console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
       await vault.deposit(parseUnits('1000', 6), signer.address);
 
-      console.log('deposit 2...');
-      await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAssetValue);
 
-      console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      console.log('emergency exit');
+      const operator = await UniversalTestUtils.getAnOperator(s.address, signer)
+      await s.connect(operator).emergencyExit()
 
-      console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAssetValue);
 
-      console.log('Hardwork')
-      expect(await s.isReadyToHardWork()).eq(true)
-      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
-      const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
-      await s.connect(splitterSigner).doHardWork()
+      const state = await s.getState()
+      expect(state.rebalanceResults[0]).gt(0)
+      expect(state.rebalanceResults[1]).gt(0)
 
-      expect(hwResult.earned).gt(0)
-      console.log('APR', UniversalUtils.getApr(hwResult.earned, parseUnits('2000', 6), 0, 86400))
+      expect(await s.needRebalance()).eq(true)
 
-      console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      const quote = await s.callStatic.quoteRebalanceSwap()
+      console.log('Quote', quote)
 
-      console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      expect(quote[1]).eq(0)
 
-      console.log('withdraw')
-      await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
+      await s.rebalanceSwapByAgg(quote[0], 0, MaticAddresses.AGG_ONEINCH_V5, '0x')
 
-      console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
-
-      console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
-
-      console.log('withdrawAll')
-      await vault.withdrawAll()
+      expect(await s.needRebalance()).eq(false)
     })
   })
 })
+
+function apiRequestUrl(methodName: string, queryParams: string) {
+  const chainId = hre.network.config.chainId;
+  const apiBaseUrl = 'https://api.1inch.io/v5.0/' + chainId;
+  const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
+  return apiBaseUrl + methodName + '?' + r;
+}
+
+async function buildTxForSwap(params: string, tries: number = 2) {
+  const url = apiRequestUrl('/swap', params);
+  console.log('url', url)
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url)
+      if (r && r.status === 200) {
+        return (await r.json()).tx
+      }
+    } catch (e) {
+      console.error('Err', e)
+    }
+  }
+}
