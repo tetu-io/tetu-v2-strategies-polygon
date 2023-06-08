@@ -62,6 +62,7 @@ export async function hardhatDeploy(
   deploymentName?: string,
   // tslint:disable-next-line:no-any
   args?: any[] | undefined,
+  skipIfAlreadyDeployed = false,
 ) {
   const { deployments, getNamedAccounts } = hre;
   const { deployer } = await getNamedAccounts();
@@ -77,6 +78,7 @@ export async function hardhatDeploy(
     log: true,
     args,
     libraries,
+    skipIfAlreadyDeployed,
     ...(await txParams(hre, ethers.provider)),
   });
 
