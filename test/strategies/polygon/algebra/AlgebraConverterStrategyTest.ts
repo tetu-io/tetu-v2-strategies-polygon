@@ -124,7 +124,7 @@ describe('AlgebraConverterStrategyTest', function() {
     await vault.connect(gov).setWithdrawRequestBlocks(0)
 
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
-    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.dQUICK_TOKEN, MaticAddresses.WMATIC_TOKEN,])
     await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
 
     /*const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
@@ -174,10 +174,10 @@ describe('AlgebraConverterStrategyTest', function() {
   });
 
   describe('Algebra strategy tests', function() {
-    it('Rebalance', async() => {
+    it('Rebalance, hardwork', async() => {
       const s = strategy
 
-      console.log('deposit 1...');
+      console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
       await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
       await vault.deposit(parseUnits('1000', 6), signer.address);
@@ -189,6 +189,14 @@ describe('AlgebraConverterStrategyTest', function() {
       expect(await s.needRebalance()).eq(true)
       await s.rebalance()
       expect(await s.needRebalance()).eq(false)
+
+      console.log('Hardwork')
+      expect(await s.isReadyToHardWork()).eq(true)
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
+      const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
+      await s.connect(splitterSigner).doHardWork({gasLimit: 19_000_000})
+      expect(hwResult.earned).gt(0)
+      // console.log('APR', UniversalUtils.getApr(hwResult.earned, parseUnits('2000', 6), 0, 86400))
     })
     it('Deposit, hardwork, withdraw', async() => {
       const s = strategy

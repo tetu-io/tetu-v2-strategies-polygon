@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "hardhat/console.sol";
+//import "hardhat/console.sol";
 import "./AlgebraLib.sol";
 import "./AlgebraDebtLib.sol";
 import "./AlgebraStrategyErrors.sol";
@@ -179,7 +179,8 @@ library AlgebraConverterStrategyLogicLib {
     }
 
     function getFees(State storage state) public view returns (uint fee0, uint fee1) {
-        // todo
+        (fee0, fee1) = AlgebraLib.getFees(state.pool, ALGEBRA_NFT, state.tokenId);
+        //console.log('getFees fee0 fee1', fee0, fee1);
     }
 
     function getPoolReserves(State storage state) external view returns (uint[] memory reserves) {
@@ -277,7 +278,7 @@ library AlgebraConverterStrategyLogicLib {
             if (nftLowerTick != lowerTick || nftUpperTick != upperTick) {
                 ALGEBRA_NFT.burn(tokenId);
                 tokenId = 0;
-                console.log('burn nft');
+                //console.log('burn nft');
             }
         }
 
@@ -338,7 +339,7 @@ library AlgebraConverterStrategyLogicLib {
 
         // get reward amounts
         (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
-        console.log('exit reward, bonusReward', reward, bonusReward);
+        //console.log('exit reward, bonusReward', reward, bonusReward);
 
         // exit farming (undeposit)
         FARMING_CENTER.exitFarming(getIncentiveKey(state), state.tokenId, false);
@@ -370,7 +371,7 @@ library AlgebraConverterStrategyLogicLib {
             uint fee0 = collected0 > amountsOut[0] ? (collected0 - amountsOut[0]) : 0;
             uint fee1 = collected1 > amountsOut[1] ? (collected1 - amountsOut[1]) : 0;
 
-            console.log('exit claimed fees', fee0, fee1);
+            //console.log('exit claimed fees', fee0, fee1);
             emit AlgebraFeesClaimed(fee0, fee1);
 
             if (state.depositorSwapTokens) {
@@ -420,26 +421,31 @@ library AlgebraConverterStrategyLogicLib {
 
     function isReadyToHardWork(State storage state, ITetuConverter converter, address controller) external view returns (bool isReady) {
         address tokenA = state.tokenA;
-        address tokenB = state.tokenB;
         uint rewardInTermOfTokenA;
         uint bonusRewardInTermOfTokenA;
+        address h = state.strategyProfitHolder;
 
         {
-            IAlgebraEternalFarming farming = FARMING_CENTER.eternalFarming();
+            address rewardToken = state.rewardToken;
+            address bonusRewardToken = state.bonusRewardToken;
             IncentiveKey memory key = getIncentiveKey(state);
-            (uint reward, uint bonusReward) = farming.getRewardInfo(key, state.tokenId);
+            (uint reward, uint bonusReward) = FARMING_CENTER.eternalFarming().getRewardInfo(key, state.tokenId);
+            reward += IERC20(rewardToken).balanceOf(h);
+            bonusReward += IERC20(bonusRewardToken).balanceOf(h);
             //console.log('isReadyToHardWork reward', reward);
             //console.log('isReadyToHardWork bonusReward', bonusReward);
             ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
             if (reward > 0) {
-                rewardInTermOfTokenA = liquidator.getPrice(state.rewardToken, tokenA, reward);
+                rewardInTermOfTokenA = liquidator.getPrice(rewardToken, tokenA, reward);
             }
             if (bonusRewardInTermOfTokenA > 0) {
-                bonusRewardInTermOfTokenA = liquidator.getPrice(state.bonusRewardToken, tokenA, bonusReward);
+                bonusRewardInTermOfTokenA = liquidator.getPrice(bonusRewardToken, tokenA, bonusReward);
             }
             //console.log('isReadyToHardWork rewardInTermOfTokenA', rewardInTermOfTokenA);
             //console.log('isReadyToHardWork bonusRewardInTermOfTokenA', bonusRewardInTermOfTokenA);
         }
+
+        address tokenB = state.tokenB;
 
         // check claimable amounts and compare with thresholds
         (uint fee0, uint fee1) = getFees(state);
@@ -447,8 +453,6 @@ library AlgebraConverterStrategyLogicLib {
         if (state.depositorSwapTokens) {
             (fee0, fee1) = (fee1, fee0);
         }
-
-        address h = state.strategyProfitHolder;
 
         fee0 += IERC20(tokenA).balanceOf(h);
         fee1 += IERC20(tokenB).balanceOf(h);

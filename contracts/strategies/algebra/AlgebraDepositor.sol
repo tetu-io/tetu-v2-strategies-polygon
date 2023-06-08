@@ -40,7 +40,8 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
         uint128 totalLiquidity,
         bool isFuseTriggered,
         uint fuseThreshold,
-        uint[] memory rebalanceResults
+        address profitHolder,
+        uint[] memory profitHolderBalances
     ) {
         tokenA = state.tokenA;
         tokenB = state.tokenB;
@@ -52,10 +53,12 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
         totalLiquidity = state.totalLiquidity;
         isFuseTriggered = state.isFuseTriggered;
         fuseThreshold = state.fuseThreshold;
-
-        rebalanceResults = new uint[](2);
-        rebalanceResults[0] = IERC20(tokenA).balanceOf(state.strategyProfitHolder);
-        rebalanceResults[1] = IERC20(tokenB).balanceOf(state.strategyProfitHolder);
+        profitHolder = state.strategyProfitHolder;
+        profitHolderBalances = new uint[](4);
+        profitHolderBalances[0] = IERC20(tokenA).balanceOf(profitHolder);
+        profitHolderBalances[1] = IERC20(tokenB).balanceOf(profitHolder);
+        profitHolderBalances[2] = IERC20(state.rewardToken).balanceOf(profitHolder);
+        profitHolderBalances[3] = IERC20(state.bonusRewardToken).balanceOf(profitHolder);
     }
 
     /// @notice Returns the fees for the current state.

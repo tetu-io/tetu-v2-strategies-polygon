@@ -240,6 +240,61 @@ library AlgebraLib {
         return purePrice / divider / precision / (precision > 1e18 ? (precision / 1e18) : 1);
     }
 
+    function getFees(IAlgebraPool pool, INonfungiblePositionManager nft, uint tokenId) public view returns (uint fee0, uint fee1) {
+        (, int24 tick, , , , ,) = pool.globalState();
+        (,,,,int24 lowerTick,int24 upperTick,uint128 liquidity,uint feeGrowthInside0Last, uint feeGrowthInside1Last, uint128 tokensOwed0, uint128 tokensOwed1) = nft.positions(tokenId);
+        fee0 = _computeFeesEarned(pool, lowerTick, upperTick, liquidity, true, feeGrowthInside0Last, tick) + uint(tokensOwed0);
+        fee1 = _computeFeesEarned(pool, lowerTick, upperTick, liquidity, false, feeGrowthInside1Last, tick) + uint(tokensOwed1);
+    }
+
+    function _computeFeesEarned(
+        IAlgebraPool pool,
+        int24 lowerTick,
+        int24 upperTick,
+        uint128 liquidity,
+        bool isZero,
+        uint feeGrowthInsideLast,
+        int24 tick
+    ) internal view returns (uint fee) {
+        uint feeGrowthOutsideLower;
+        uint feeGrowthOutsideUpper;
+        uint feeGrowthGlobal;
+        if (isZero) {
+            feeGrowthGlobal = pool.totalFeeGrowth0Token();
+            (,, feeGrowthOutsideLower,,,,,) = pool.ticks(lowerTick);
+            (,, feeGrowthOutsideUpper,,,,,) = pool.ticks(upperTick);
+        } else {
+            feeGrowthGlobal = pool.totalFeeGrowth1Token();
+            (,,, feeGrowthOutsideLower,,,,) = pool.ticks(lowerTick);
+            (,,, feeGrowthOutsideUpper,,,,) = pool.ticks(upperTick);
+        }
+
+        unchecked {
+            // calculate fee growth below
+            uint feeGrowthBelow;
+            if (tick >= lowerTick) {
+                feeGrowthBelow = feeGrowthOutsideLower;
+            } else {
+                feeGrowthBelow = feeGrowthGlobal - feeGrowthOutsideLower;
+            }
+            // calculate fee growth above
+            uint feeGrowthAbove;
+            if (tick < upperTick) {
+                feeGrowthAbove = feeGrowthOutsideUpper;
+            } else {
+                feeGrowthAbove = feeGrowthGlobal - feeGrowthOutsideUpper;
+            }
+
+            uint feeGrowthInside =
+                feeGrowthGlobal - feeGrowthBelow - feeGrowthAbove;
+            fee = mulDiv(
+                liquidity,
+                feeGrowthInside - feeGrowthInsideLast,
+                0x100000000000000000000000000000000
+            );
+        }
+    }
+
     /// @notice Computes the amount of liquidity received for a given amount of token0 and price range
     /// @dev Calculates amount0 * (sqrt(upper) * sqrt(lower)) / (sqrt(upper) - sqrt(lower)).
     /// @param sqrtRatioAX96 A sqrt price
