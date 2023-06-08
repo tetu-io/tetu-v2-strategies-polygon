@@ -24,7 +24,7 @@ const libraries = new Map<string, string[]>([
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib'],
   ],
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib']],
-  ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib']],
+  ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
   ['ConverterStrategyBaseLib2', ['StrategyLib']],
 ]);

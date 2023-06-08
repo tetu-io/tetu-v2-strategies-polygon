@@ -43,3 +43,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['tWMatic4626Strict'];
 func.dependencies = ['tWMaticStrategy'];
+func.skip = async () => true

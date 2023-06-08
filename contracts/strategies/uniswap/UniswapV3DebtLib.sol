@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import "../ConverterStrategyBaseLib.sol";
+import "../ConverterStrategyBaseLib2.sol";
 import "./UniswapV3Lib.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
@@ -67,12 +68,13 @@ library UniswapV3DebtLib {
     address tokenA,
     address tokenB,
     uint liquidatorSwapSlippage,
-    uint profitToCover
+    uint profitToCover,
+    uint totalAssets,
+    address splitter
   ) public {
     _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
     if (profitToCover > 0) {
-      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
-      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
     }
   }
 
@@ -82,12 +84,13 @@ library UniswapV3DebtLib {
     address tokenB,
     uint liquidatorSwapSlippage,
     UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
-    uint profitToCover
+    uint profitToCover,
+    uint totalAssets,
+    address splitter
   ) public {
     _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
     if (profitToCover > 0) {
-      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
-      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
     }
   }
 
@@ -97,7 +100,9 @@ library UniswapV3DebtLib {
     address controller,
     UniswapV3ConverterStrategyLogicLib.State storage state,
     uint liquidatorSwapSlippage,
-    uint profitToCover
+    uint profitToCover,
+    uint totalAssets,
+    address splitter
   ) external {
     IUniswapV3Pool pool = state.pool;
     address tokenA = state.tokenA;
@@ -105,16 +110,14 @@ library UniswapV3DebtLib {
     bool depositorSwapTokens = state.depositorSwapTokens;
     if (state.fillUp) {
       if (profitToCover > 0) {
-        address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
-        IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+        ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
       }
       _rebalanceDebtFillup(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
       (state.lowerTick, state.upperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     } else {
       _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
       if (profitToCover > 0) {
-        address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
-        IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+        ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
       }
       (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
       bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
@@ -129,7 +132,9 @@ library UniswapV3DebtLib {
     UniswapV3ConverterStrategyLogicLib.State storage state,
     uint liquidatorSwapSlippage,
     UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
-    uint profitToCover
+    uint profitToCover,
+    uint totalAssets,
+    address splitter
   ) external {
     IUniswapV3Pool pool = state.pool;
     address tokenA = state.tokenA;
@@ -137,8 +142,7 @@ library UniswapV3DebtLib {
     bool depositorSwapTokens = state.depositorSwapTokens;
     _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
     if (profitToCover > 0) {
-      address insurance = address(ITetuVaultV2(ISplitter(IStrategyV2(address(this)).splitter()).vault()).insurance());
-      IERC20(tokenA).transfer(insurance, Math.min(profitToCover, AppLib.balance(tokenA)));
+      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
     }
   (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);

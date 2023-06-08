@@ -43,3 +43,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func
 func.tags = ['bbTstMATIC4626LinearPool']
 func.dependencies = ['tStMatic4626Strict']
+func.skip = async () => true
