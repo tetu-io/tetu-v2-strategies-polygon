@@ -66,6 +66,10 @@ async function main() {
   const governanceAsSigner = await DeployerUtilsLocal.impersonate(await controllerV2.governance())
   await controllerV2.connect(governanceAsSigner).registerOperator(signer.address)
 
+  // set StrategyProfitHolder
+  const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+  await strategy.setStrategyProfitHolder(profitHolder.address)
+
   // start localhost hardhat node
   await run("node", {'noDeploy': true});
 }
