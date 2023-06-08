@@ -21,7 +21,7 @@ library AlgebraLib {
     /// @dev The maximum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**128
     int24 internal constant MAX_TICK = - MIN_TICK;
 
-    function tickSpacing() external view returns(int24) {
+    function tickSpacing() external pure returns(int24) {
         return TICKSPACING;
     }
 

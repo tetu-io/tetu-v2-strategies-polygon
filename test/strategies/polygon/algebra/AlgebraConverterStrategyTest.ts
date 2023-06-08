@@ -2,7 +2,7 @@
 import chai, {expect} from 'chai';
 import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {ethers} from "hardhat";
+import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
@@ -54,6 +54,18 @@ describe('AlgebraConverterStrategyTest', function() {
   let strategy: AlgebraConverterStrategy;
 
   before(async function() {
+    await hre.network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+            blockNumber: 43620959,
+          },
+        },
+      ],
+    });
+
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
     snapshotBefore = await TimeUtils.snapshot();
@@ -142,6 +154,17 @@ describe('AlgebraConverterStrategyTest', function() {
 
   after(async function() {
     await TimeUtils.rollback(snapshotBefore);
+    await hre.network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
+          },
+        },
+      ],
+    });
   });
 
   beforeEach(async function() {
@@ -153,6 +176,24 @@ describe('AlgebraConverterStrategyTest', function() {
   });
 
   describe('Algebra strategy tests', function() {
+    it('Rebalance', async() => {
+      const s = strategy
+
+      console.log('deposit 1...');
+      await asset.approve(vault.address, Misc.MAX_UINT);
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
+      await vault.deposit(parseUnits('1000', 6), signer.address);
+
+      expect(await s.needRebalance()).eq(false)
+
+      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6));
+
+      expect(await s.needRebalance()).eq(true)
+      await s.rebalance()
+      expect(await s.needRebalance()).eq(false)
+
+
+    })
     it('Deposit, hardwork, withdraw', async() => {
       const s = strategy
 
@@ -195,7 +236,6 @@ describe('AlgebraConverterStrategyTest', function() {
 
       console.log('withdrawAll')
       await vault.withdrawAll()
-
     })
   })
 })

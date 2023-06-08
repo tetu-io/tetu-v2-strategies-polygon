@@ -2,10 +2,15 @@
 pragma solidity 0.8.17;
 
 import "../ConverterStrategyBaseLib.sol";
+import "../ConverterStrategyBaseLib2.sol";
 import "./AlgebraLib.sol";
 import "./AlgebraStrategyErrors.sol";
+import "./AlgebraConverterStrategyLogicLib.sol";
 
 library AlgebraDebtLib {
+
+    uint public constant SELL_GAP = 100;
+
     function calcTickRange(IAlgebraPool pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
         (, int24 tick, , , , ,) = pool.globalState();
         if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
@@ -37,6 +42,147 @@ library AlgebraDebtLib {
             entryData = abi.encode(1, consumed1 * token1Price / token1Desired, consumed0);
         } else {
             entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
+        }
+    }
+
+    /// @dev Closes the debt positions for the given token pair.
+    /// @param tetuConverter The ITetuConverter instance.
+    /// @param controller The controller address.
+    /// @param pool The IUniswapV3Pool instance.
+    /// @param tokenA The address of tokenA.
+    /// @param tokenB The address of tokenB.
+    function closeDebt(
+        ITetuConverter tetuConverter,
+        address controller,
+        IAlgebraPool pool,
+        address tokenA,
+        address tokenB,
+        uint liquidatorSwapSlippage,
+        uint profitToCover,
+        uint totalAssets,
+        address splitter
+    ) public {
+        _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
+        if (profitToCover > 0) {
+            ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
+        }
+    }
+
+    /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
+    function rebalanceDebt(
+        ITetuConverter tetuConverter,
+        address controller,
+        AlgebraConverterStrategyLogicLib.State storage state,
+        uint liquidatorSwapSlippage,
+        uint profitToCover,
+        uint totalAssets,
+        address splitter
+    ) external {
+        IAlgebraPool pool = state.pool;
+        address tokenA = state.tokenA;
+        address tokenB = state.tokenB;
+        bool depositorSwapTokens = state.depositorSwapTokens;
+        _closeDebt(tetuConverter, controller, pool, tokenA, tokenB, liquidatorSwapSlippage);
+        if (profitToCover > 0) {
+            ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
+        }
+        (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+        bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+        _openDebt(tetuConverter, tokenA, tokenB, entryData);
+        state.lowerTick = newLowerTick;
+        state.upperTick = newUpperTick;
+    }
+
+    /// @dev Returns the total debt amount out for the given token pair.
+    /// @param tetuConverter The ITetuConverter instance.
+    /// @param tokenA The address of tokenA.
+    /// @param tokenB The address of tokenB.
+    /// @return totalDebtAmountOut The total debt amount out for the token pair.
+    function getDebtTotalDebtAmountOut(ITetuConverter tetuConverter, address tokenA, address tokenB) public returns (uint totalDebtAmountOut) {
+        (totalDebtAmountOut,) = tetuConverter.getDebtAmountCurrent(address(this), tokenA, tokenB, true);
+    }
+
+    /// @dev we close debt only if it is more than $0.1
+    function needCloseDebt(uint debtAmount, ITetuConverter tetuConverter, address tokenB) public view returns (bool) {
+        IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
+        return debtAmount * priceOracle.getAssetPrice(tokenB) / 10 ** IERC20Metadata(tokenB).decimals() > 1e17;
+    }
+
+    /// @notice Calculate the new tick range for a Algebra pool.
+    /// @param pool The Algebra pool to calculate the new tick range for.
+    /// @param lowerTick The current lower tick value for the pool.
+    /// @param upperTick The current upper tick value for the pool.
+    /// @param tickSpacing The tick spacing for the pool.
+    /// @return lowerTickNew The new lower tick value for the pool.
+    /// @return upperTickNew The new upper tick value for the pool.
+    function _calcNewTickRange(
+        IAlgebraPool pool,
+        int24 lowerTick,
+        int24 upperTick,
+        int24 tickSpacing
+    ) internal view returns (int24 lowerTickNew, int24 upperTickNew) {
+        int24 fullTickRange = upperTick - lowerTick;
+        (lowerTickNew, upperTickNew) = calcTickRange(pool, fullTickRange == tickSpacing ? int24(0) : fullTickRange / 2, tickSpacing);
+    }
+
+    /// @dev Opens a new debt position using entry data.
+    /// @param tetuConverter The TetuConverter contract.
+    /// @param tokenA The address of token A.
+    /// @param tokenB The address of token B.
+    /// @param entryData The data required to open a position.
+    function _openDebt(
+        ITetuConverter tetuConverter,
+        address tokenA,
+        address tokenB,
+        bytes memory entryData/*,
+    uint feeA*/
+    ) internal {
+        ConverterStrategyBaseLib.openPosition(
+            tetuConverter,
+            entryData,
+            tokenA,
+            tokenB,
+            AppLib.balance(tokenA)/* - feeA*/,
+            0
+        );
+    }
+
+    /// @notice Closes debt by liquidating tokens as necessary.
+    ///         This function helps ensure that the converter strategy maintains the appropriate balances
+    ///         and debt positions for token A and token B, while accounting for potential price impacts.
+    function _closeDebt(
+        ITetuConverter tetuConverter,
+        address controller,
+        IAlgebraPool pool,
+        address tokenA,
+        address tokenB,
+        uint liquidatorSwapSlippage
+    ) internal {
+        uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
+
+        if (needCloseDebt(debtAmount, tetuConverter, tokenB)) {
+            uint availableBalanceTokenA = AppLib.balance(tokenA);
+            uint availableBalanceTokenB = AppLib.balance(tokenB);
+
+            if (availableBalanceTokenB < debtAmount) {
+                uint tokenBprice = AlgebraLib.getPrice(address(pool), tokenB);
+                uint needToSellTokenA = tokenBprice * (debtAmount - availableBalanceTokenB) / 10 ** IERC20Metadata(tokenB).decimals();
+                // add 1% gap for price impact
+                needToSellTokenA += needToSellTokenA / SELL_GAP;
+
+                ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenA, tokenB, Math.min(needToSellTokenA, availableBalanceTokenA), liquidatorSwapSlippage, 0, false);
+                availableBalanceTokenB = AppLib.balance(tokenB);
+            }
+
+            ConverterStrategyBaseLib.closePosition(
+                tetuConverter,
+                tokenA,
+                tokenB,
+                Math.min(debtAmount, availableBalanceTokenB)
+            );
+
+            availableBalanceTokenB = AppLib.balance(tokenB);
+            ConverterStrategyBaseLib.liquidate(tetuConverter, ITetuLiquidator(IController(controller).liquidator()), tokenB, tokenA, availableBalanceTokenB, liquidatorSwapSlippage, 0, false);
         }
     }
 }

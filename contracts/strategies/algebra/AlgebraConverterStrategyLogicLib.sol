@@ -28,7 +28,7 @@ library AlgebraConverterStrategyLogicLib {
     //////////////////////////////////////////
 
     event FuseTriggered();
-    event Rebalanced();
+    event Rebalanced(uint loss);
     event DisableFuse();
     event NewFuseThreshold(uint newFuseThreshold);
     event AlgebraFeesClaimed(uint fee0, uint fee1);
@@ -68,6 +68,24 @@ library AlgebraConverterStrategyLogicLib {
         bytes swapData;
     }
 
+    struct RebalanceLocalVariables {
+        int24 upperTick;
+        int24 lowerTick;
+        int24 tickSpacing;
+        IAlgebraPool pool;
+        address tokenA;
+        address tokenB;
+        uint lastPrice;
+        uint fuseThreshold;
+        bool depositorSwapTokens;
+        uint notCoveredLoss;
+        int24 newLowerTick;
+        int24 newUpperTick;
+        bool isStablePool;
+        uint newPrice;
+        uint newTotalAssets;
+    }
+
     //////////////////////////////////////////
     //            HELPERS
     //////////////////////////////////////////
@@ -78,6 +96,15 @@ library AlgebraConverterStrategyLogicLib {
 
     function emitNewFuseThreshold(uint value) external {
         emit NewFuseThreshold(value);
+    }
+
+    /// @notice Check if the fuse is enabled based on the price difference and fuse threshold.
+    /// @param oldPrice The old price.
+    /// @param newPrice The new price.
+    /// @param fuseThreshold The fuse threshold.
+    /// @return A boolean indicating if the fuse is enabled.
+    function isEnableFuse(uint oldPrice, uint newPrice, uint fuseThreshold) internal pure returns (bool) {
+        return oldPrice > newPrice ? (oldPrice - newPrice) > fuseThreshold : (newPrice - oldPrice) > fuseThreshold;
     }
 
     function initStrategyState(
@@ -171,6 +198,12 @@ library AlgebraConverterStrategyLogicLib {
         }
     }
 
+    /// @dev Gets the liquidator swap slippage based on the pool type (stable or volatile).
+    /// @return The liquidator swap slippage percentage.
+    function _getLiquidatorSwapSlippage(bool isStablePool) internal pure returns (uint) {
+        return isStablePool ? LIQUIDATOR_SWAP_SLIPPAGE_STABLE : LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE;
+    }
+
     //////////////////////////////////////////
     //            Pool info
     //////////////////////////////////////////
@@ -236,12 +269,24 @@ library AlgebraConverterStrategyLogicLib {
         amountsConsumed = new uint[](2);
         uint128 liquidity;
         uint tokenId = state.tokenId;
+        int24 lowerTick = state.lowerTick;
+        int24 upperTick = state.upperTick;
+
+        if (tokenId > 0) {
+            (,,,,int24 nftLowerTick, int24 nftUpperTick,,,,,) = ALGEBRA_NFT.positions(tokenId);
+            if (nftLowerTick != lowerTick || nftUpperTick != upperTick) {
+                ALGEBRA_NFT.burn(tokenId);
+                tokenId = 0;
+                console.log('burn nft');
+            }
+        }
+
         if (tokenId == 0) {
             (tokenId, liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.mint(INonfungiblePositionManager.MintParams(
                     token0,
                     token1,
-                    state.lowerTick,
-                    state.upperTick,
+                    lowerTick,
+                    upperTick,
                     amountsDesired_[0],
                     amountsDesired_[1],
                     0,
@@ -496,8 +541,23 @@ library AlgebraConverterStrategyLogicLib {
     //////////////////////////////////////////
 
     function needRebalance(State storage state) public view returns (bool) {
-        // todo
-        return false;
+        if (state.isFuseTriggered) {
+            return false;
+        }
+
+        (, int24 tick, , , , ,) = state.pool.globalState();
+        int24 upperTick = state.upperTick;
+        int24 lowerTick = state.lowerTick;
+        if (upperTick - lowerTick == state.tickSpacing) {
+            return tick < lowerTick || tick >= upperTick;
+        } else {
+            int24 halfRange = (upperTick - lowerTick) / 2;
+            int24 oldMedianTick = lowerTick + halfRange;
+            if (tick > oldMedianTick) {
+                return tick - oldMedianTick >= state.rebalanceTickRange;
+            }
+            return oldMedianTick - tick > state.rebalanceTickRange;
+        }
     }
 
     function quoteRebalanceSwap(State storage state, ITetuConverter converter) external returns (bool, uint) {
@@ -509,11 +569,92 @@ library AlgebraConverterStrategyLogicLib {
         State storage state,
         ITetuConverter converter,
         address controller,
-        uint oldInvestedAssets
+        uint oldTotalAssets,
+        uint profitToCover,
+        address splitter
     ) external returns (
         uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
     ) {
-        // todo
+        uint loss;
+        tokenAmounts = new uint[](0);
+
+        RebalanceLocalVariables memory vars = RebalanceLocalVariables({
+            upperTick: state.upperTick,
+            lowerTick: state.lowerTick,
+            tickSpacing: state.tickSpacing,
+            pool: state.pool,
+            tokenA: state.tokenA,
+            tokenB: state.tokenB,
+            lastPrice: state.lastPrice,
+            fuseThreshold: state.fuseThreshold,
+            depositorSwapTokens: state.depositorSwapTokens,
+        // setup initial values
+            notCoveredLoss: 0,
+            newLowerTick: 0,
+            newUpperTick: 0,
+            isStablePool: state.isStablePool,
+            newPrice: 0,
+            newTotalAssets: 0
+        });
+
+        require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
+
+        vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+
+        if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
+            /// enabling fuse: close debt and stop providing liquidity
+            state.isFuseTriggered = true;
+            emit FuseTriggered();
+
+            AlgebraDebtLib.closeDebt(
+                converter,
+                controller,
+                vars.pool,
+                vars.tokenA,
+                vars.tokenB,
+                _getLiquidatorSwapSlippage(vars.isStablePool),
+                profitToCover,
+                oldTotalAssets,
+                splitter
+            );
+        } else {
+            /// rebalancing debt
+            /// setting new tick range
+            AlgebraDebtLib.rebalanceDebt(
+                converter,
+                controller,
+                state,
+                _getLiquidatorSwapSlippage(vars.isStablePool),
+                profitToCover,
+                oldTotalAssets,
+                splitter
+            );
+
+            tokenAmounts = new uint[](2);
+            tokenAmounts[0] = AppLib.balance(vars.tokenA);
+            tokenAmounts[1] = AppLib.balance(vars.tokenB);
+
+            address[] memory tokens = new address[](2);
+            tokens[0] = vars.tokenA;
+            tokens[1] = vars.tokenB;
+            uint[] memory amounts = new uint[](2);
+            amounts[0] = tokenAmounts[0];
+            vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+            if (vars.newTotalAssets < oldTotalAssets) {
+                loss = oldTotalAssets - vars.newTotalAssets;
+            }
+        }
+
+        // need to update last price only for stables coz only stables have fuse mechanic
+        if (vars.isStablePool) {
+            state.lastPrice = vars.newPrice;
+        }
+
+        if (loss > 0) {
+            ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+        }
+
+        emit Rebalanced(loss);
     }
 
     function rebalanceSwapByAgg(

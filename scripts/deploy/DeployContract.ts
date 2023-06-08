@@ -30,8 +30,8 @@ const libraries = new Map<string, string[]>([
     'AlgebraConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'AlgebraConverterStrategyLogicLib'],
   ],
-  ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib']],
-  ['AlgebraDebtLib', ['AlgebraLib', /*'ConverterStrategyBaseLib'*/]],
+  ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib']],
+  ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
   ['ConverterStrategyBaseLib2', ['StrategyLib']],
 ]);
 
