@@ -20,9 +20,9 @@ import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export class ConverterUtils {
 
-  public static async whitelist(adrs: string[]) {
+  public static async whitelist(adrs: string[], converterAddress?: string) {
     const signer = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
-    const converterControllerAddr = await TetuConverter__factory.connect(getConverterAddress(), signer).controller();
+    const converterControllerAddr = await TetuConverter__factory.connect(converterAddress || getConverterAddress(), signer).controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();
     const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
@@ -41,26 +41,26 @@ export class ConverterUtils {
    */
   public static async disableDForce(signer: SignerWithAddress) {
     console.log('disableDForce...');
-    await this.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    await this.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
     console.log('disableDForce done.\n\n');
   }
 
   public static async disableAaveV3(signer: SignerWithAddress) {
     console.log('disableAaveV3...');
-    await this.disablePlatformAdapter(signer, getAaveThreePlatformAdapter());
+    await this.disablePlatformAdapter(signer, await getAaveThreePlatformAdapter(signer));
     console.log('disableAaveV3 done.\n\n');
   }
 
   public static async disableAaveV2(signer: SignerWithAddress) {
     console.log('disableAaveV2...');
-    await this.disablePlatformAdapter(signer, getAaveTwoPlatformAdapter());
+    await this.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
     console.log('disableAaveV2 done.\n\n');
   }
 
-  public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string) {
+  public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string, converterAddress?: string) {
     console.log(`disable ${platformAdapter}`);
     const tools = Addresses.getTools();
-    const converter = TetuConverter__factory.connect(getConverterAddress(), signer);
+    const converter = TetuConverter__factory.connect(converterAddress || getConverterAddress(), signer);
     const converterControllerAddr = await converter.controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
     const converterControllerGovernanceAddr = await converterController.governance();
@@ -110,7 +110,7 @@ export class ConverterUtils {
   }
 
   /**
-   * Add {borrower} to white list of tetuController
+   * Add {borrower} to whitelist of tetuController
    */
   public static async addToWhitelist(signer: SignerWithAddress, tetuConverter: string, borrower: string) {
     const controllerAddress = await ITetuConverter__factory.connect(tetuConverter, signer).controller();

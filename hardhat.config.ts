@@ -15,6 +15,7 @@ import { task } from 'hardhat/config';
 import { deployContract } from './scripts/deploy/DeployContract';
 import 'hardhat-deploy';
 import { deployAddresses } from './scripts/addresses/deploy-addresses';
+import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -37,7 +38,7 @@ const argv = require('yargs/yargs')()
     },
     maticForkBlock: {
       type: 'number',
-      default: 41666774,
+      default: 43620959,
     },
     hardhatLogsEnabled: {
       type: 'boolean',
@@ -89,6 +90,14 @@ export default {
       // gasMultiplier: 1.3,
       accounts: [argv.privateKey],
     },
+    w3fmatic: {
+      chainId: 137,
+      accounts: [argv.privateKey],
+      url: 'http://127.0.0.1:8545',
+    },
+    localhost: {
+      timeout: 9999999999,
+    },
     eth: {
       url: argv.ethRpcUrl || '',
       chainId: 1,
@@ -112,8 +121,8 @@ export default {
   },
   verify: {
     etherscan: {
-      apiKey: argv.networkScanKey
-    }
+      apiKey: argv.networkScanKey,
+    },
   },
   solidity: {
     compilers: [
@@ -124,6 +133,8 @@ export default {
             enabled: true,
             runs: 150,
           },
+          // "viaIR": true,
+          outputSelection: { '*': { '*': ['*'], '': ['*'] } },
         },
       },
     ],
@@ -157,4 +168,9 @@ export default {
     pretty: true,
   },
   namedAccounts: deployAddresses,
+  w3f: {
+    rootDir: './web3-functions',
+    debug: true,
+    networks: ['w3fmatic'],
+  },
 };

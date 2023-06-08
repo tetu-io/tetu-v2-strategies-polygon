@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../helpers/ERC20Helpers.sol";
-
 /// @title Abstract base Depositor contract.
 /// @notice Converter strategies should inherit xDepositor.
 /// @notice All communication with external pools should be done at inherited contract
 /// @author bogdoslav
-abstract contract DepositorBase is ERC20Helpers {
+abstract contract DepositorBase {
 
   /// @notice Returns pool assets
   function _depositorPoolAssets() internal virtual view returns (address[] memory assets);

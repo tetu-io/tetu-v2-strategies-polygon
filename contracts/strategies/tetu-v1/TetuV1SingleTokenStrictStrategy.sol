@@ -6,12 +6,11 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../../integrations/tetu-v1/ISmartVault.sol";
 import "../../libs/AppLib.sol";
-import "../../helpers/ERC20Helpers.sol";
 import "../../integrations/balancer/IRateProvider.sol";
 
 /// @title Simple auto compounding strategy for TETU V1 vaults.
 /// @author AlehNat
-contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, ERC20Helpers {
+contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider {
   using SafeERC20 for IERC20;
 
   string public constant override NAME = "TetuV1 Single Token Strict Strategy";
@@ -39,7 +38,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
   // uint earned, uint lost is it in USD?
   function doHardWork() external override returns (uint earned, uint lost) {
     // if we have some asset in the strategy we need to deposit it to the pool to not liquidate it.
-    uint assetBalanceBeforeClaim = _balance(asset);
+    uint assetBalanceBeforeClaim = AppLib.balance(asset);
     if (assetBalanceBeforeClaim > 0) {
       _depositToPool(assetBalanceBeforeClaim);
     }
@@ -49,7 +48,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
     _claim();
     _unwrapXTetu();
     _liquidateReward();
-    uint assetBalance = _balance(asset);
+    uint assetBalance = AppLib.balance(asset);
     if (assetBalance > 0) {
       _depositToPool(assetBalance);
     }
@@ -81,7 +80,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
   /// @dev Withdraw all from the pool.
   /// @return investedAssetsUSD and assetPrice are not used in this strategy returns (0,0)
   function _withdrawAllFromPool() internal override returns (uint investedAssetsUSD, uint assetPrice) {
-    uint totalBalance = _balance(address(pool));
+    uint totalBalance = AppLib.balance(address(pool));
     return _withdrawFromPool(totalBalance);
   }
 
@@ -97,7 +96,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
   }
 
   function _unwrapXTetu() internal {
-    uint xTetuBalance = _balance(xTetuAddress);
+    uint xTetuBalance = AppLib.balance(xTetuAddress);
     if (xTetuBalance > 0) {
       ISmartVault(xTetuAddress).withdraw(xTetuBalance);
     }
@@ -107,7 +106,7 @@ contract TetuV1SingleTokenStrictStrategy is StrategyStrictBase, IRateProvider, E
     address [] memory rewardTokens = pool.rewardTokens();
     for (uint i = 0; i < rewardTokens.length; i = AppLib.uncheckedInc(i)) {
       address rewardToken = rewardTokens[i];
-      uint rewardBalance = _balance(rewardToken);
+      uint rewardBalance = AppLib.balance(rewardToken);
       if (rewardBalance > 0) {
         IERC20(rewardToken).safeIncreaseAllowance(address(liquidator), rewardBalance);
         liquidator.liquidate(rewardToken, asset, rewardBalance, _ASSET_LIQUIDATION_SLIPPAGE);

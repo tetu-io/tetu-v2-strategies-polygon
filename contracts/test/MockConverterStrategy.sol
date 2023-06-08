@@ -35,7 +35,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-
+  function init2(address controller_, address splitter_, address converter_) external {
+    __ConverterStrategyBase_init(
+      controller_,
+      splitter_,
+      converter_
+    );
+  }
   //////////////////////////////////////////////////////////////////////
   ///    Provide direct access to internal functions for tests
   //////////////////////////////////////////////////////////////////////
@@ -50,12 +56,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     _updateInvestedAssets();
   }
 
-  function withdrawUniversalTestAccess(uint amount, bool all) external returns (
+  function withdrawUniversalTestAccess(uint amount, bool all, uint earnedByPrices_, uint investedAssets_) external returns (
     uint expectedWithdrewUSD,
     uint assetPrice,
-    uint strategyLoss
+    uint strategyLoss,
+    uint amountSentToInsurance
   ) {
-    return _withdrawUniversal(all ? type(uint).max : amount);
+    return _withdrawUniversal(all ? type(uint).max : amount, earnedByPrices_, investedAssets_);
   }
 
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
@@ -80,19 +87,19 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- handleRewardsParams.assetBalanceChange)
         );
       }
-      return (handleRewardsParams.earned, handleRewardsParams.lost, _balance(asset));
+      return (handleRewardsParams.earned, handleRewardsParams.lost, AppLib.balance(asset));
     } else {
       return __handleRewards();
     }
   }
 
   function __handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
-    uint assetBalanceBefore = _balance(asset);
+    uint assetBalanceBefore = AppLib.balance(asset);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
-    assetBalanceAfterClaim = _balance(asset);
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim, earned, lost);
-    return (earned, lost, assetBalanceAfterClaim);
+    assetBalanceAfterClaim = AppLib.balance(asset);
+    (uint earned2, uint lost2) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
+    return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
   }
 
   struct MockedHandleRewardsParams {
@@ -120,17 +127,16 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     });
   }
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  /// _depositToPool mock
-  /////////////////////////////////////////////////////////////////////////////////////
-  struct MockedDepositToPoolParams {
+  //region -------------------------------------------- _depositToPoolUni mock
+  struct MockedDepositToPoolUniParams {
     bool initialized;
     int balanceChange;
     address providerBalanceChange;
     uint loss;
+    uint amountSentToInsurance;
   }
 
-  MockedDepositToPoolParams internal depositToPoolParams;
+  MockedDepositToPoolUniParams internal depositToPoolParams;
 
   function _depositToPoolAccess(uint amount_, bool updateTotalAssetsBeforeInvest_) external returns (
     uint loss
@@ -138,8 +144,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _depositToPool(amount_, updateTotalAssetsBeforeInvest_);
   }
 
-  function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
-    uint loss
+
+  function depositToPoolUniAccess(uint amount_, uint earnedByPrices_, uint investedAssets_) external returns (
+    uint strategyLoss,
+    uint amountSentToInsurance
+  ) {
+    return _depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
+  }
+
+  function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
+    uint strategyLoss,
+    uint amountSentToInsurance
   ){
     if (depositToPoolParams.initialized) {
       //      console.log("_depositToPool.mocked-version is called");
@@ -155,24 +170,59 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
           uint(- depositToPoolParams.balanceChange)
         );
       }
-      loss = depositToPoolParams.loss;
+      return (depositToPoolParams.loss, depositToPoolParams.amountSentToInsurance);
     } else {
-      loss = super._depositToPool(amount_, updateTotalAssetsBeforeInvest_);
+      return super._depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
     }
   }
 
-  function setMockedDepositToPool(int balanceChange, address providerBalanceChange, uint loss) external {
-    depositToPoolParams = MockedDepositToPoolParams({
+  function setMockedDepositToPoolUni(
+    int balanceChange,
+    address providerBalanceChange,
+    uint loss,
+    uint amountSentToInsurance
+  ) external {
+    depositToPoolParams = MockedDepositToPoolUniParams({
       initialized: true,
       balanceChange: balanceChange,
       providerBalanceChange: providerBalanceChange,
-      loss: loss
+      loss: loss,
+      amountSentToInsurance: amountSentToInsurance
+    });
+  }
+  //endregion -------------------------------------------- _depositToPoolUni mock
+
+  //region ---------------------------------------- _beforeDeposit
+  struct BeforeDepositParams {
+    uint amount;
+    uint indexAsset;
+    uint[] tokenAmounts;
+  }
+  mapping(bytes32 => BeforeDepositParams) internal _beforeDepositParams;
+  function setBeforeDeposit(uint amount_, uint indexAsset_, uint[] memory tokenAmounts) external {
+    bytes32 key = keccak256(abi.encodePacked(amount_, indexAsset_));
+    _beforeDepositParams[key] = BeforeDepositParams({
+      amount: amount_,
+      indexAsset: indexAsset_,
+      tokenAmounts: tokenAmounts
     });
   }
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  /// Others
-  /////////////////////////////////////////////////////////////////////////////////////
+  function _beforeDeposit(
+    ITetuConverter tetuConverter_,
+    uint amount_,
+    address[] memory tokens_,
+    uint indexAsset_
+  ) internal override returns (
+    uint[] memory tokenAmounts
+  ) {
+    bytes32 key = keccak256(abi.encodePacked(amount_, indexAsset_));
+    if (_beforeDepositParams[key].amount == amount_) {
+      return _beforeDepositParams[key].tokenAmounts;
+    } else {
+      return super._beforeDeposit(tetuConverter_, amount_, tokens_, indexAsset_);
+    }
+  }
 
   function _beforeDepositAccess(
     ITetuConverter tetuConverter_,
@@ -189,6 +239,11 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       indexAsset_
     );
   }
+  //endregion ---------------------------------------- _beforeDeposit
+
+  /////////////////////////////////////////////////////////////////////////////////////
+  /// Others
+  /////////////////////////////////////////////////////////////////////////////////////
 
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
@@ -217,11 +272,21 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint indexAsset_,
     uint[] memory amountsToConvert_,
     ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
     uint requestedAmount,
     uint[] memory expectedMainAssetAmounts
   ) external returns (
     uint expectedTotalAmountMainAsset
   ) {
-    return _makeRequestedAmount(tokens_, indexAsset_, amountsToConvert_, converter_, requestedAmount, expectedMainAssetAmounts);
+    return ConverterStrategyBaseLib.makeRequestedAmount(
+      tokens_,
+      indexAsset_,
+      amountsToConvert_,
+      converter_,
+      liquidator_,
+      requestedAmount,
+      expectedMainAssetAmounts,
+      liquidationThresholds
+    );
   }
 }

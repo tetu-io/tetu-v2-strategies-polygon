@@ -2,6 +2,8 @@
 pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
@@ -26,6 +28,18 @@ library ConverterStrategyBaseLib2 {
 
   uint internal constant DENOMINATOR = 100_000;
 
+  /// @dev 0.5% of max profit for strategy TVL
+  /// @notice Limit max amount of profit that can be send to insurance after price changing
+  uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = 500;
+
+  /////////////////////////////////////////////////////////////////////
+  ///                        EVENTS
+  /////////////////////////////////////////////////////////////////////
+
+  event OnChangePerformanceFeeRatio(uint newRatio);
+  event LiquidationThresholdChanged(address token, uint amount);
+  event ReinvestThresholdPercentChanged(uint amount);
+
   /////////////////////////////////////////////////////////////////////
   ///                        MAIN LOGIC
   /////////////////////////////////////////////////////////////////////
@@ -44,41 +58,26 @@ library ConverterStrategyBaseLib2 {
     return amountsToConvert;
   }
 
-  /// @notice Send {performanceFee_} of {rewardAmounts_} to {performanceReceiver}
-  /// @param performanceFee_ Max is FEE_DENOMINATOR
-  /// @return rewardAmountsOut = rewardAmounts_ - performanceAmounts
-  /// @return performanceAmounts Theses amounts were sent to {performanceReceiver_}
-  function sendPerformanceFee(
-    uint performanceFee_,
-    address performanceReceiver_,
-    address splitter,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) external returns (
-    uint[] memory rewardAmountsOut,
-    uint[] memory performanceAmounts
+  /// @notice Send {amount_} of {asset_} to {receiver_} and insurance
+  /// @param asset_ Underlying asset
+  /// @param amount_ Amount of underlying asset to be sent to
+  /// @param receiver_ Performance receiver
+  /// @param ratio [0..100_000], 100_000 - send full amount to perf, 0 - send full amount to the insurance.
+  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) external returns (
+    uint toPerf,
+    uint toInsurance
   ) {
-
     // read inside lib for reduce contract space in the main contract
     address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
 
-    // we assume that performanceFee_ <= FEE_DENOMINATOR and we don't need to check it here
-    uint len = rewardAmounts_.length;
-    rewardAmountsOut = new uint[](len);
-    performanceAmounts = new uint[](len);
+    toPerf = amount_ * ratio / DENOMINATOR;
+    toInsurance = amount_ - toPerf;
 
-    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      performanceAmounts[i] = rewardAmounts_[i] * performanceFee_ / DENOMINATOR;
-      rewardAmountsOut[i] = rewardAmounts_[i] - performanceAmounts[i];
-
-      uint toPerf = performanceAmounts[i] / 2;
-      uint toInsurance = performanceAmounts[i] - toPerf;
-      if (toPerf != 0) {
-        IERC20(rewardTokens_[i]).safeTransfer(performanceReceiver_, toPerf);
-      }
-      if (toInsurance != 0) {
-        IERC20(rewardTokens_[i]).safeTransfer(insurance, toInsurance);
-      }
+    if (toPerf != 0) {
+      IERC20(asset_).safeTransfer(receiver_, toPerf);
+    }
+    if (toInsurance != 0) {
+      IERC20(asset_).safeTransfer(insurance, toInsurance);
     }
   }
 
@@ -132,10 +131,10 @@ library ConverterStrategyBaseLib2 {
       } else {
         // if we have some tokens on balance then we need to use only a part of the collateral
         uint tokenAmountToBeBorrowed = amountAssetForToken
-        * prices[indexAsset_]
-        * decs[i]
-        / prices[i]
-        / decs[indexAsset_];
+          * prices[indexAsset_]
+          * decs[i]
+          / prices[i]
+          / decs[indexAsset_];
 
         uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
         if (tokenBalance < tokenAmountToBeBorrowed) {
@@ -225,7 +224,7 @@ library ConverterStrategyBaseLib2 {
   /// @param rewardTokens_ Amounts of rewards claimed from the internal pool
   /// @param tokensOut List of available rewards - not zero amounts, reward tokens don't repeat
   /// @param amountsOut Amounts of available rewards
-  function  claimConverterRewards(
+  function claimConverterRewards(
     ITetuConverter converter_,
     address[] memory tokens_,
     address[] memory rewardTokens_,
@@ -259,5 +258,44 @@ library ConverterStrategyBaseLib2 {
     // filter zero amounts out
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
   }
+
+  /// @notice Send given amount of underlying to the insurance
+  /// @param strategyBalance Total strategy balance = balance of underlying + current invested assets amount
+  /// @return Amount of underlying sent to the insurance
+  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
+    uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
+    if (amountToSend != 0) {
+      // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
+
+      // Amount limitation should be implemented in the same way as in StrategySplitterV2._coverLoss
+      // Revert or cutting amount in both cases
+
+      // amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
+      require(strategyBalance != 0, AppErrors.ZERO_BALANCE);
+      require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
+      IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);
+    }
+    return amountToSend;
+  }
+
+  //region ---------------------------------------- Setters
+  function checkPerformanceFeeRatioChanged(address controller, uint ratio_) external {
+    StrategyLib.onlyOperators(controller);
+    require(ratio_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
+    emit OnChangePerformanceFeeRatio(ratio_);
+  }
+
+  function checkReinvestThresholdPercentChanged(address controller, uint percent_) external {
+    StrategyLib.onlyOperators(controller);
+    require(percent_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
+    emit ReinvestThresholdPercentChanged(percent_);
+  }
+
+  function checkLiquidationThresholdChanged(address controller, address token, uint amount) external {
+    StrategyLib.onlyOperators(controller);
+    emit LiquidationThresholdChanged(token, amount);
+  }
+  //endregion ---------------------------------------- Setters
+
 }
 

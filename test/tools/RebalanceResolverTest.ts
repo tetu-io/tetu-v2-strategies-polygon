@@ -22,6 +22,7 @@ import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {ConverterUtils} from "../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../UniswapV3StrategyUtils";
+import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 
 const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -100,12 +101,15 @@ describe('RebalanceResolver tests', function () {
     vault = data.vault.connect(signer);
     strategy = data.strategy as unknown as UniswapV3ConverterStrategy;
 
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN]);
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address);
+
     await TokenUtils.getToken(asset.address, signer.address, parseUnits('100000', 6));
     await asset.approve(vault.address, Misc.MAX_UINT);
     await ConverterUtils.whitelist([strategy.address]);
 
-    resolver = RebalanceResolver__factory.connect(await DeployerUtils.deployProxy(signer, 'RebalanceResolver'), signer)
-    await resolver.init(controller.address)
+    resolver = await DeployerUtils.deployContract(signer, 'RebalanceResolver', strategy.address) as RebalanceResolver
     await resolver.changeOperatorStatus(signer.address, true)
   })
   after(async function () {
@@ -131,12 +135,11 @@ describe('RebalanceResolver tests', function () {
 
     const data = await resolver.checker();
     expect(data.canExec).eq(true)
-    const strategies = RebalanceResolver__factory.createInterface().decodeFunctionData('call', data.execPayload)._strategies
-    expect(strategies[0]).eq(strategy.address)
+    expect(data.execPayload).eq(RebalanceResolver__factory.createInterface().encodeFunctionData('call'))
 
-    await expect(resolver.call(strategies)).to.be.revertedWith(`Strategy error: ${strategy.address.toLowerCase()} SB: Denied`)
+    await expect(resolver.call()).to.be.revertedWith(`Strategy error: ${strategy.address.toLowerCase()} SB: Denied`)
     await controller.connect(gov).registerOperator(resolver.address)
-    await resolver.call(strategies)
+    await resolver.call()
     expect(await strategy.needRebalance()).eq(false)
     expect((await resolver.checker()).canExec).eq(false)
   })

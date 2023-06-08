@@ -8,13 +8,14 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import {
   getConverterAddress,
-  getDForcePlatformAdapter,
+  getDForcePlatformAdapter, Misc,
 } from '../../../../scripts/utils/Misc';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { ethers } from 'hardhat';
 import {
   BalancerBoostedStrategy,
   BalancerBoostedStrategy__factory,
+  ControllerV2__factory,
   IERC20Metadata__factory,
   IStrategyV2,
   TetuVaultV2
@@ -24,8 +25,15 @@ import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {IState, IStateParams, StateUtils} from "../../../StateUtils";
-import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
-import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
+import {IUniversalStrategyInputParams, universalStrategyTest} from "../../base/UniversalStrategyTest";
+import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {ICoreContractsWrapper} from "../../../CoreContractsWrapper";
+import {IToolsContractsWrapper} from "../../../ToolsContractsWrapper";
+import {IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
+import {BalancerStrategyUtils} from "../../../BalancerStrategyUtils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {LiquidatorUtils} from "./utils/LiquidatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -45,7 +53,7 @@ const argv = require('yargs/yargs')()
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe.skip('BalancerBoostedUniversalTest', async () => {
+describe('BalancerBoostedUniversalTest', async () => {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -69,7 +77,9 @@ describe.skip('BalancerBoostedUniversalTest', async () => {
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+
+    await LiquidatorUtils.addBlueChipsPools(signer, core.controller, deployInfo.tools?.liquidator);
   });
 
   after(async function() {
@@ -85,15 +95,15 @@ describe.skip('BalancerBoostedUniversalTest', async () => {
     const asset = t[0];
     const reinvestThresholdPercent = 1_000; // 1%
     const params: IUniversalStrategyInputParams = {
-      ppfsDecreaseAllowed: false,
       balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
-      loops: 3,
+      loops: 4,
       loopValue: 2000,
       advanceBlocks: true,
       specificTests: [],
       hwParams: {
-        compoundRate: 100_000, // 50%
+        // compoundRate: 100_000, // 100%
+        compoundRate: [0, 10_000, 45_000, 100_000], // 0%, 10%, 45%, 100%
       },
       stateRegistrar: async(title, h) => {
         const strategy = h.strategy as unknown as BalancerBoostedStrategy
@@ -116,6 +126,26 @@ describe.skip('BalancerBoostedUniversalTest', async () => {
           { reinvestThresholdPercent },
         );
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
+
+        await PriceOracleImitatorUtils.balancerBoosted(user, t[1], t[0])
+      },
+      swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
+        const swapAmountUnits = '10000'
+        const boostedStrategy = strategy as unknown as BalancerBoostedStrategy
+        const poolId = await boostedStrategy.poolId()
+        const otherToken = IERC20Metadata__factory.connect(await BalancerStrategyUtils.getOtherToken(poolId, t[0], MaticAddresses.BALANCER_VAULT, swapUser), swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
+        await BalancerStrategyUtils.bbSwap(poolId.substring(0, 42), t[0], otherToken.address, parseUnits(swapAmountUnits, await IERC20Metadata__factory.connect(t[0], swapUser).decimals()), MaticAddresses.BALANCER_VAULT, swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
+      },
+      swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
+        const swapAmountUnits = '10000'
+        const boostedStrategy = strategy as unknown as BalancerBoostedStrategy
+        const poolId = await boostedStrategy.poolId()
+        const otherToken = IERC20Metadata__factory.connect(await BalancerStrategyUtils.getOtherToken(poolId, t[0], MaticAddresses.BALANCER_VAULT, swapUser), swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
+        await BalancerStrategyUtils.bbSwap(poolId.substring(0, 42), otherToken.address, t[0], parseUnits(swapAmountUnits, await otherToken.decimals()), MaticAddresses.BALANCER_VAULT, swapUser)
+        console.log(`${await otherToken.symbol()} price: ${formatUnits(await PriceOracleImitatorUtils.getPrice(swapUser, otherToken.address), 8)}`)
       },
     };
 
@@ -129,23 +159,48 @@ describe.skip('BalancerBoostedUniversalTest', async () => {
         const strategy = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
         await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1]);
         const mainAssetSymbol = await IERC20Metadata__factory.connect(t[0], signer).symbol()
+        const mainAssetDecimals = await IERC20Metadata__factory.connect(t[0], signer).decimals()
         statesParams[await strategy.poolId()] = {
           mainAssetSymbol,
+          mainAssetDecimals,
         }
         return strategy as unknown as IStrategyV2;
       },
       {
         vaultName: 'tetu' + await IERC20Metadata__factory.connect(t[0], signer).symbol(),
+        depositFee: 300,
+        withdrawFee: 300,
       },
     );
 
-    /* tslint:disable:no-floating-promises */
-    startDefaultStrategyTest(
-      strategyName,
-      asset,
-      asset,
+    const hwInitiator = (
+      _signer: SignerWithAddress,
+      _user: SignerWithAddress,
+      _core: ICoreContractsWrapper,
+      _tools: IToolsContractsWrapper,
+      _underlying: string,
+      _vault: TetuVaultV2,
+      _strategy: IStrategyV2,
+      _balanceTolerance: number,
+    ) => {
+      return new BalancerRewardsHardwork(
+        _signer,
+        _user,
+        _core,
+        _tools,
+        _underlying,
+        _vault,
+        _strategy,
+        _balanceTolerance,
+        0,
+      );
+    };
+
+    universalStrategyTest(
+      strategyName + '_' + t[1],
       deployInfo,
-      deployer,
+      deployer as (signer: SignerWithAddress) => Promise<IVaultStrategyInfo>,
+      hwInitiator,
       params,
     );
   })

@@ -22,6 +22,10 @@ import "../../integrations/balancer/IBalancerGauge.sol";
 abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
+  /////////////////////////////////////////////////////////////////////
+  ///region Constants
+  /////////////////////////////////////////////////////////////////////
+
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant BALANCER_BOOSTED_DEPOSITOR_VERSION = "1.0.0";
 
@@ -30,12 +34,28 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   address internal constant BALANCER_HELPER = 0x239e55F427D44C3cc793f49bFB507ebe76638a2b;
   /// @notice ChildChainLiquidityGaugeFactory allows to get gauge address by pool id
   /// @dev see https://dev.balancer.fi/resources/vebal-and-gauges/gauges
+  /// todo Update to new gauges, new ChildChainGauge is 0xc9b36096f5201ea332Db35d6D195774ea0D5988f
   address internal constant CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY = 0x3b8cA519122CdD8efb272b0D3085453404B25bD0;
+
+  /////////////////////////////////////////////////////////////////////
+  ///endregion Constants
+  /////////////////////////////////////////////////////////////////////
+
+  /////////////////////////////////////////////////////////////////////
+  //region Variables
+  //                Keep names and ordering!
+  // Add only in the bottom and don't forget to decrease gap variable
+  /////////////////////////////////////////////////////////////////////
 
   /// @notice i.e. for "Balancer Boosted Aave USD": 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
   /// @notice i.e. for "Balancer Boosted Tetu USD": 0xb3d658d5b95bf04e2932370dd1ff976fe18dd66a000000000000000000000ace
   bytes32 public poolId;
   IBalancerGauge public gauge;
+  /////////////////////////////////////////////////////////////////////
+  ///endregion Variables
+  /////////////////////////////////////////////////////////////////////
+
+
   /////////////////////////////////////////////////////////////////////
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
@@ -207,5 +227,5 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.
   /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[16] private __gap; // TODO 16 ???
+  uint[50-2] private __gap; // 50 - count of variables
 }

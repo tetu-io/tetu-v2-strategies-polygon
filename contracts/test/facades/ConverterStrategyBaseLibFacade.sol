@@ -132,7 +132,8 @@ contract ConverterStrategyBaseLibFacade {
     address tokenOut,
     uint amountIn,
     uint slippage,
-    uint rewardLiquidationThresholdForTokenOut
+    uint rewardLiquidationThresholdForTokenOut,
+    bool skipValidation
   ) external returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -144,7 +145,8 @@ contract ConverterStrategyBaseLibFacade {
       tokenOut,
       amountIn,
       slippage,
-      rewardLiquidationThresholdForTokenOut
+      rewardLiquidationThresholdForTokenOut,
+      skipValidation
     );
   }
 
@@ -175,23 +177,11 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function sendPerformanceFee(
-    uint performanceFee_,
-    address performanceReceiver_,
-    address splitter,
-    address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_
-  ) external returns (
-    uint[] memory rewardAmounts,
-    uint[] memory performanceAmounts
+  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) external returns (
+    uint toPerf,
+    uint toInsurance
   ) {
-    return ConverterStrategyBaseLib2.sendPerformanceFee(
-      performanceFee_,
-      performanceReceiver_,
-      splitter,
-      rewardTokens_,
-      rewardAmounts_
-    );
+    return ConverterStrategyBaseLib2.sendPerformanceFee(asset_, amount_, splitter, receiver_, ratio);
   }
 
   function swapToGivenAmountAccess(
@@ -249,7 +239,7 @@ contract ConverterStrategyBaseLibFacade {
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
-    return ConverterStrategyBaseLib.convertAfterWithdraw(
+    return ConverterStrategyBaseLib._convertAfterWithdraw(
       tetuConverter,
       liquidator,
       indexAsset,
@@ -278,22 +268,6 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-//  function _closePositionUsingMainAsset(
-//    ITetuConverter converter,
-//    address collateralAsset,
-//    address borrowAsset,
-//    uint amountToRepay
-//  ) external returns (
-//    uint expectedAmountOut
-//  ) {
-//    return ConverterStrategyBaseLib._repayDebt(
-//      converter,
-//      collateralAsset,
-//      borrowAsset,
-//      amountToRepay
-//    );
-//  }
-
   function _getAmountToSell(
     uint remainingRequestedAmount,
     uint totalDebt,
@@ -318,11 +292,8 @@ contract ConverterStrategyBaseLibFacade {
     );
   }
 
-  function registerIncome(uint assetBefore, uint assetAfter, uint earned, uint lost) external pure returns (
-    uint _earned,
-    uint _lost
-  ) {
-    return ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter, earned, lost);
+  function registerIncome(uint assetBefore, uint assetAfter) external pure returns (uint earned, uint lost) {
+    return ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter);
   }
 
   function sendTokensToForwarder(
@@ -341,9 +312,11 @@ contract ConverterStrategyBaseLibFacade {
     address[] memory tokens,
     ITetuLiquidator liquidator,
     address[] memory rewardTokens,
-    uint[] memory rewardAmounts
+    uint[] memory rewardAmounts,
+    uint performanceFee
   ) external returns (
-    uint[] memory amountsToForward
+    uint[] memory amountsToForward,
+    uint amountToPerformanceAndInsurance
   ) {
     return ConverterStrategyBaseLib.recycle(
       converter_,
@@ -353,7 +326,8 @@ contract ConverterStrategyBaseLibFacade {
       liquidator,
       liquidationThresholds,
       rewardTokens,
-      rewardAmounts
+      rewardAmounts,
+      performanceFee
     );
   }
 

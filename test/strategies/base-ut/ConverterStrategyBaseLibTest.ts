@@ -1476,6 +1476,35 @@ describe('ConverterStrategyBaseLibTest', () => {
           expect(r.borrowedAmountOut.eq(0)).eq(true);
         });
       })
+      describe("No converters were found", () => {
+        it("should return zero amounts", async () => {
+          const r = await makeOpenPositionTest(
+            '0x',
+            usdc,
+            dai,
+            parseUnits('11', 6),
+            {
+              borrows: [],
+              findBorrowStrategyOutputs: [{
+                converters: [],
+                sourceToken: usdc.address,
+                targetToken: dai.address,
+                entryData: '0x',
+                aprs18: [],
+                amountIn: parseUnits('11', 6),
+                collateralAmountsOut: [],
+                amountToBorrowsOut: [],
+              }],
+              amountCollateralForFacade: parseUnits('3', 6),
+              amountBorrowAssetForTetuConverter: parseUnits('3', 18),
+              amountInIsCollateral: true,
+            },
+          );
+
+          expect(r.collateralAmountOut.eq(0)).eq(true);
+          expect(r.borrowedAmountOut.eq(0)).eq(true);
+        });
+      });
     })
     describe('Gas estimation @skip-on-coverage', () => {
       it('should not exceed gas limits', async() => {
@@ -1721,6 +1750,34 @@ describe('ConverterStrategyBaseLibTest', () => {
               const availableMainAsset = 300 * 60 / 10;
               const amountToPayTheDebt = (5117 - 117) * 20 / 10;
               const expected = 0; // amountToPayTheDebt > availableMainAsset + 500 (collateral)
+
+              expect(ret).eq(expected);
+            });
+          });
+        });
+        describe('There are two debts', () => {
+          /**
+           * Fix coverage for calcInvestedAssets:
+           * else part for "if (v.debts.length == 0)"
+           */
+          describe('Amount to repay < total amount of the debts', () => {
+            it('should return expected values', async() => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                balances: ['116', '1987', '299'],
+                prices: ['20', '10', '60'],
+                debts: [{
+                  debtAmount: '117',
+                  collateralAmount: '500',
+                  borrowAsset: dai,
+                }, {
+                  debtAmount: '300',
+                  collateralAmount: '700',
+                  borrowAsset: usdt,
+                }],
+              })).amountOut;
+              const expected = 495 + 697; // 116*500/117 = 495, 299*700/300 = 697
 
               expect(ret).eq(expected);
             });

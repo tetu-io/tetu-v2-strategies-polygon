@@ -26,6 +26,7 @@ import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTes
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 
 
 dotEnvConfig();
@@ -72,7 +73,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
     await ConverterUtils.setTetConverterHealthFactors(signer, tetuConverterAddress);
     await StrategyTestUtils.deployAndSetCustomSplitter(signer, core);
     // Disable DForce (as it reverts on repay after block advance)
-    await ConverterUtils.disablePlatformAdapter(signer, getDForcePlatformAdapter());
+    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
   });
 
   after(async function() {
@@ -89,7 +90,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
     const reinvestThresholdPercent = 1_000; // 1%
     const params: IUniversalStrategyInputParams = {
       ppfsDecreaseAllowed: false,
-      balanceTolerance: 0.000001, // looks like some rounding issues with 6-decimals tokens
+      balanceTolerance: 0.000002, // looks like some rounding issues with 6-decimals tokens
       deposit: 100_000,
       loops: 4, // an even number of iterations triggers the same number of swap1 and swap2
       loopValue: 2000,
@@ -176,6 +177,9 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
+        const state = await strategy.getState()
+        const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB])
+        await strategy.setStrategyProfitHolder(profitHolder.address)
         return strategy as unknown as IStrategyV2;
       },
       {

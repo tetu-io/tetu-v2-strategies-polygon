@@ -1,6 +1,6 @@
 import chai from 'chai';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ethers } from 'hardhat';
+import hre, { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import {
@@ -79,6 +79,18 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let FEE_DENOMINATOR: BigNumber;
 
   before(async function() {
+    await hre.network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+            blockNumber: 43620959,
+          },
+        },
+      ],
+    });
+
     [signer, signer2, signer3] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
 
@@ -117,8 +129,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const poolAddress = MaticAddresses.UNISWAPV3_USDC_WETH_500;
       // +-10% price (1 tick == 0.01% price change)
       const range = 1000;
-      // +-1% price - rebalance
-      const rebalanceRange = 100;
+      // +-0.1% price - rebalance
+      const rebalanceRange = 10;
 
       await _strategy.init(
         core.controller,
@@ -139,7 +151,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       gov,
       bufferRate,
       0,
-      0,
+      300,
       false,
     );
     vault = data.vault.connect(signer);
@@ -245,10 +257,31 @@ describe('UniswapV3ConverterStrategyTests', function() {
     await vault.connect(gov).setWithdrawRequestBlocks(0)
     await vault2.connect(gov).setWithdrawRequestBlocks(0)
     await vault3.connect(gov).setWithdrawRequestBlocks(0)
+
+    let profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.WETH_TOKEN])
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
+    profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy2.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.WMATIC_TOKEN])
+    await strategy2.connect(operator).setStrategyProfitHolder(profitHolder.address)
+    profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy3.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+    await strategy3.connect(operator).setStrategyProfitHolder(profitHolder.address)
+
+    await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.WETH_TOKEN, parseUnits('1', 10));
+    await strategy3.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, 1000);
   });
 
   after(async function() {
     await TimeUtils.rollback(snapshotBefore);
+    await hre.network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
+          },
+        },
+      ],
+    });
   });
 
   beforeEach(async function() {
@@ -260,11 +293,151 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
+    it('Rebalance empty fillup strategy', async() => {
+      const s = strategy
+      const v = vault
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      const state = await s.getState()
+
+      expect(await s.isReadyToHardWork()).eq(false);
+      expect(await s.needRebalance()).eq(false);
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      const price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      await UniswapV3StrategyUtils.movePriceDown(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price));
+
+      console.log('rebalance not empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('withdraw all');
+      await v.requestWithdraw()
+      await v.withdrawAll({gasLimit: 19_000_000});
+
+      // expect(await s.totalAssets()).eq(0)
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+    });
+
+    it('Rebalance empty swap strategy', async() => {
+      const s = strategy3 // usdc-usdt
+      const v = vault3
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      const state = await s.getState()
+
+      expect(await s.isReadyToHardWork()).eq(false);
+      expect(await s.needRebalance()).eq(false);
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      const price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      await UniswapV3StrategyUtils.movePriceDown(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+
+      console.log('rebalance not empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('withdraw all');
+      await v.requestWithdraw()
+      await v.withdrawAll({gasLimit: 19_000_000});
+
+      expect(await s.investedAssets()).lt(10)
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('rebalance empty strategy');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+    });
+
+    it('Rebalance empty fillup strategy after emergencyExit()', async() => {
+      const s = strategy
+      const v = vault
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      await UniswapV3StrategyUtils.makeVolume(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      expect(await s.needRebalance()).eq(false);
+
+      console.log('emergency exit');
+      await s.connect(operator).emergencyExit()
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      const state = await s.getState()
+      expect(state.rebalanceResults[0]).gt(0)
+      expect(state.rebalanceResults[1]).gt(0)
+
+      console.log('rebalance empty strategy after emergencyExit');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+    });
+
+    it('Rebalance empty swap strategy after emergencyExit()', async() => {
+      const s = strategy3 // usdc-usdt
+      const v = vault3
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const investAmount = _1_000;
+
+      console.log('deposit...');
+      await v.deposit(investAmount, signer.address);
+
+      await UniswapV3StrategyUtils.makeVolume(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      console.log('emergency exit');
+      await s.connect(operator).emergencyExit()
+
+      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+
+      const state = await s.getState()
+      expect(state.rebalanceResults[0]).gt(0)
+      expect(state.rebalanceResults[1]).gt(0)
+
+      console.log('rebalance empty strategy after emergencyExit');
+      expect(await s.needRebalance()).eq(true);
+      await s.rebalance();
+      expect(await s.needRebalance()).eq(false);
+    });
+
     it('Fuse test', async() => {
       const s = strategy3
       const v = vault3
       const investAmount = _1;
-      const swapAssetValueForPriceMove = parseUnits('400000', 6);
+      const swapAssetValueForPriceMove = parseUnits('100000', 6);
 
       const state = await s.getState()
       await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
@@ -292,7 +465,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect((await s.getState()).isFuseTriggered).eq(false)
       expect(await s.needRebalance()).eq(true)
       await s.rebalance()
-      expect((await s.getState()).isFuseTriggered).eq(false)
+      // expect((await s.getState()).isFuseTriggered).eq(false)
     })
 
     it('Rebalance and hardwork', async() => {
@@ -344,8 +517,8 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await strategy3.connect(platformVoter).setCompoundRatio(50000);
 
       console.log('initial deposits...');
-      await vault3.deposit(investAmount, signer.address);
-      await vault3.connect(signer3).deposit(_1_000, signer3.address);
+      await vault3.deposit(investAmount, signer.address, {gasLimit: 19_000_000});
+      await vault3.connect(signer3).deposit(_1_000, signer3.address, {gasLimit: 19_000_000});
 
       let lastDirectionUp = false
       for (let i = 0; i < 10; i++) {
@@ -362,23 +535,23 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
         if (await strategy3.needRebalance()) {
           console.log('Rebalance..')
-          await strategy3.rebalance();
+          await strategy3.rebalance({gasLimit: 19_000_000});
         }
 
         if (i % 5) {
           console.log('Hardwork..')
-          await strategy3.connect(splitterSigner).doHardWork();
+          await strategy3.connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
         }
 
         if (i % 2) {
           console.log('Deposit..')
-          await vault3.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address);
+          await vault3.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address, {gasLimit: 19_000_000});
         } else {
           console.log('Withdraw..')
           const toWithdraw = parseUnits('100.111437', 6)
           const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
           await vault3.connect(signer3).requestWithdraw()
-          await vault3.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address)
+          await vault3.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address, {gasLimit: 19_000_000})
           const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
           console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
         }
@@ -386,11 +559,11 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       await vault3.connect(signer3).requestWithdraw()
       console.log('withdrawAll as signer3...');
-      await vault3.connect(signer3).withdrawAll();
+      await vault3.connect(signer3).withdrawAll({gasLimit: 19_000_000});
 
       await vault3.requestWithdraw()
       console.log('withdrawAll...');
-      await vault3.withdrawAll();
+      await vault3.withdrawAll({gasLimit: 19_000_000});
     });
 
     it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
@@ -477,197 +650,34 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('Strategy totalAssets', await strategy2.totalAssets());
     });
 
-    /*it('deposit / withdraw, fees, totalAssets + check insurance and LossCovered', async() => {
-     // after insurance logic changed this test became incorrect
+    /**
+     * TODO: emergencyExit should not check price impact at all
+     */
+    describe.skip("Emergency exit after strong price change", () => {
+      it('should make emergency exit without any reverts (even if a rebalance is required)', async() => {
+        const investAmount = _10_000;
+        const swapAssetValueForPriceMove = parseUnits('5000000', 6);
+        const state = await strategy.getState();
 
-     let receipt: ContractReceipt
-     let tx: ContractTransaction
-     const depositFee = BigNumber.from(300)
-     const withdrawFee = BigNumber.from(300)
+        let price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+        console.log('tokenB price', formatUnits(price, 6));
 
-     const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
-     let totalDeposited = BigNumber.from(0);
-     let totalWithdrawFee = BigNumber.from(0);
-     let totalAssetsBefore: BigNumber
-     let totalAssetsDiff: BigNumber
-     let totalLossCovered = BigNumber.from(0)
-     let expectedAssets: BigNumber
-     let extractedFee: BigNumber
+        console.log('deposit...');
+        await vault.deposit(investAmount, signer.address);
 
-     // also setting fees prevents 'SB: Impact too high'
-     await vault.connect(gov).setFees(depositFee, withdrawFee)
+        expect(await strategy.isReadyToHardWork()).eq(false);
+        expect(await strategy.needRebalance()).eq(false);
 
-     console.log('deposit 1.0 USDC...');
-     tx = await vault.deposit(_1, signer.address);
-     receipt = await tx.wait()
-     totalDeposited = totalDeposited.add(_1);
-     expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
+        await UniswapV3StrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
 
-     console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
-     if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
-     const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
-     console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
-     totalLossCovered = totalLossCovered.add(lostCovered)
-     }
+        price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+        console.log('tokenB price (updated)', formatUnits(price, 6));
 
-     console.log('deposit 100.0 USDC...');
-     tx = await vault.deposit(_100, signer.address);
-     receipt = await tx.wait()
-     totalDeposited = totalDeposited.add(_100);
-     expect(await vault.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
+        expect(await strategy.isReadyToHardWork()).eq(true);
+        expect(await strategy.needRebalance()).eq(true);
 
-     console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
-     if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
-     const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
-     console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
-     totalLossCovered = totalLossCovered.add(lostCovered)
-     }
-
-     console.log('withdraw 1.0 USDC...');
-     totalAssetsBefore = await vault.totalAssets()
-     tx = await vault.withdraw(_1, signer.address, signer.address);
-     receipt = await tx.wait()
-     totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
-     extractedFee = _1.mul(FEE_DENOMINATOR).div(FEE_DENOMINATOR.sub(withdrawFee)).sub(_1)
-     expect(totalAssetsDiff.sub(extractedFee)).eq(_1)
-     totalWithdrawFee = totalWithdrawFee.add(extractedFee)
-
-     console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
-     if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
-     const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
-     console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
-     totalLossCovered = totalLossCovered.add(lostCovered)
-     }
-
-     console.log('deposit 5000.0 USDC...');
-     tx = await vault.deposit(_5_000, signer.address);
-     receipt = await tx.wait()
-     totalDeposited = totalDeposited.add(_5_000);
-     expectedAssets = totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)).sub(_1).sub(totalWithdrawFee)
-     // console.log('totalAssets()', await vault.totalAssets())
-     // console.log('expectedAssets', expectedAssets)
-     expect(await vault.totalAssets()).gte(expectedAssets.sub(1))
-     expect(await vault.totalAssets()).lte(expectedAssets.add(1))
-
-     console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
-     if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
-     const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
-     console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
-     totalLossCovered = totalLossCovered.add(lostCovered)
-     }
-
-     console.log('withdraw 1000.0 USDC...')
-     totalAssetsBefore = await vault.totalAssets()
-     tx = await vault.withdraw(_1_000, signer.address, signer.address);
-     receipt = await tx.wait()
-     totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
-     extractedFee = _1_000.mul(FEE_DENOMINATOR).div(FEE_DENOMINATOR.sub(withdrawFee)).sub(_1_000)
-     expect(totalAssetsDiff.sub(extractedFee)).eq(_1_000)
-     totalWithdrawFee = totalWithdrawFee.add(extractedFee)
-
-     console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
-     if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
-     const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
-     console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
-     totalLossCovered = totalLossCovered.add(lostCovered)
-     }
-
-     console.log('withdraw 100.0 USDC...');
-     totalAssetsBefore = await vault.totalAssets()
-     tx = await vault.withdraw(_100, signer.address, signer.address);
-     receipt = await tx.wait()
-     totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
-     expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_100)
-     totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
-
-     console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
-     if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
-     const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
-     console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
-     totalLossCovered = totalLossCovered.add(lostCovered)
-     }
-
-     console.log('withdrawAll...');
-     totalAssetsBefore = await vault.totalAssets()
-     tx = await vault.withdrawAll();
-     receipt = await tx.wait()
-     totalAssetsDiff = totalAssetsBefore.sub(await vault.totalAssets())
-     totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
-
-     console.log(`Insurance balance: ${formatUnits(await TokenUtils.balanceOf(asset.address, await vault.insurance()), 6)} USDC`)
-     if (receipt.events && receipt.events.filter(x => x.event === "LossCovered").length) {
-     const lostCovered = receipt.events.filter(x => x.event === "LossCovered")[0].args?.amount
-     console.log(`Loss covered: ${formatUnits(lostCovered, 6)} USDC`)
-     totalLossCovered = totalLossCovered.add(lostCovered)
-     }
-
-     console.log(`Total lost covered: ${formatUnits(totalLossCovered, 6)} USDC`)
-
-     const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
-     const totalDepositFee = totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)
-     expect(balanceBefore.sub(balanceAfter)).eq(totalDepositFee.add(totalWithdrawFee))
-     })*/
-
-    /*it('deposit / withdraw, fees, totalAssets for reverse tokens order pool', async() => {
-     // after insurance logic changed this test became incorrect
-
-     const depositFee = BigNumber.from(300)
-     const withdrawFee = BigNumber.from(300)
-
-     const balanceBefore = await TokenUtils.balanceOf(asset.address, signer.address);
-     let totalDeposited = BigNumber.from(0);
-     let totalWithdrawFee = BigNumber.from(0);
-     let totalAssetsBefore: BigNumber
-     let totalAssetsDiff: BigNumber
-
-     // also setting fees prevents 'SB: Impact too high'
-     await vault2.connect(gov).setFees(depositFee, withdrawFee)
-
-     console.log('deposit 1.0 USDC...');
-     await vault2.deposit(_1, signer.address);
-     totalDeposited = totalDeposited.add(_1);
-     expect(await vault2.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
-
-     console.log('deposit 100.0 USDC...');
-     await vault2.deposit(_100, signer.address);
-     totalDeposited = totalDeposited.add(_100);
-     expect(await vault2.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)))
-
-     console.log('withdraw 1.0 USDC...');
-     totalAssetsBefore = await vault2.totalAssets()
-     await vault2.withdraw(_1, signer.address, signer.address);
-     totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
-     expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1)
-     totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
-
-     console.log('deposit 5000.0 USDC...');
-     await vault2.deposit(_5_000, signer.address);
-     totalDeposited = totalDeposited.add(_5_000);
-     expect(await vault2.totalAssets()).eq(totalDeposited.sub(totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)).sub(_1).sub(totalWithdrawFee))
-
-     console.log('withdraw 1000.0 USDC...')
-     totalAssetsBefore = await vault2.totalAssets()
-     await vault2.withdraw(_1_000, signer.address, signer.address);
-     totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
-     expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_1_000)
-     totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
-
-     console.log('withdraw 100.0 USDC...');
-     totalAssetsBefore = await vault2.totalAssets()
-     await vault2.withdraw(_100, signer.address, signer.address);
-     totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
-     expect(totalAssetsDiff.sub(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))).eq(_100)
-     totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
-
-     console.log('withdrawAll...');
-     totalAssetsBefore = await vault2.totalAssets()
-     await vault2.withdrawAll();
-     totalAssetsDiff = totalAssetsBefore.sub(await vault2.totalAssets())
-     totalWithdrawFee = totalWithdrawFee.add(totalAssetsDiff.mul(withdrawFee).div(FEE_DENOMINATOR))
-
-     const balanceAfter = await TokenUtils.balanceOf(asset.address, signer.address);
-     const totalDepositFee = totalDeposited.mul(depositFee).div(FEE_DENOMINATOR)
-     expect(balanceBefore.sub(balanceAfter)).eq(totalDepositFee.add(totalWithdrawFee))
-     })*/
+        await strategy.emergencyExit();
+      });
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { BigNumber, ContractReceipt, Signer } from 'ethers';
+import {BigNumber, ContractReceipt, ethers, Signer} from 'ethers';
 import {
   ControllerV2__factory,
   IController__factory,
@@ -64,10 +64,10 @@ export class UniversalTestUtils {
       strategyDeployer,
       controller,
       governance,
-      params?.buffer || 100,
-      params?.depositFee || 250,
-      params?.withdrawFee || 500,
-      params?.wait || false,
+      params?.buffer ?? 100,
+      params?.depositFee ?? 250,
+      params?.withdrawFee ?? 500,
+      params?.wait ?? false,
     );
   }
 
@@ -112,6 +112,28 @@ export class UniversalTestUtils {
         }
       }
     }
+  }
+
+  /**
+   * Finds event "LossCovered(lossValue)" in {tx}, returns {lossValue}
+   */
+  public static extractLossCoveredUniversal(cr: ContractReceipt): BigNumber {
+    let total = BigNumber.from(0)
+    const abi = ["event LossCovered(uint amount)"]
+    const iface = new ethers.utils.Interface(abi)
+    const topic = iface.getEventTopic(iface.getEvent('LossCovered'))
+    if (cr.events) {
+      for (const event of cr.events) {
+        if (event.topics.includes(topic)) {
+          const decoded = ethers.utils.defaultAbiCoder.decode(
+            ['uint'],
+            event.data
+          )
+          total = total.add(decoded[0])
+        }
+      }
+    }
+    return total
   }
 
   public static async extractDistributed(cr: ContractReceipt, forwarder: string): Promise<IDistributedInfo[]> {

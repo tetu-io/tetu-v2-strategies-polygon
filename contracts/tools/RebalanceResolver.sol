@@ -1,44 +1,32 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity 0.8.17;
 
-import "@tetu_io/tetu-contracts-v2/contracts/proxy/ControllableV3.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/EnumerableSet.sol";
 import "../interfaces/IRebalancingStrategy.sol";
-import "../libs/AppPlatforms.sol";
 
 /// @title Gelato resolver for rebalancing strategies
 /// @author a17
-contract RebalanceResolver is ControllableV3 {
+contract RebalanceResolver {
   // --- CONSTANTS ---
 
-  string public constant VERSION = "1.1.0";
-  uint public constant DELAY_RATE_DENOMINATOR = 100_000;
+  string public constant VERSION = "2.0.0";
 
   // --- VARIABLES ---
 
+  address public immutable strategy;
   address public owner;
   address public pendingOwner;
   uint public delay;
-  uint public maxGas;
-
-  mapping(address => uint) internal _lastRebalance;
-  mapping(address => uint) public delayRate;
+  uint public lastRebalance;
   mapping(address => bool) public operators;
-
-  EnumerableSet.AddressSet internal deprecated;
 
   // --- INIT ---
 
-  function init(address controller_) external initializer {
-    ControllableV3.__Controllable_init(controller_);
-
+  constructor(address strategy_) {
     owner = msg.sender;
     delay = 1 minutes;
-    maxGas = 35 gwei;
+    strategy = strategy_;
   }
 
   modifier onlyOwner() {
@@ -62,112 +50,35 @@ contract RebalanceResolver is ControllableV3 {
     delay = value;
   }
 
-  function setMaxGas(uint value) external onlyOwner {
-    maxGas = value;
-  }
-
-  function setDelayRate(address[] memory _strategies, uint value) external onlyOwner {
-    for (uint i; i < _strategies.length; ++i) {
-      delayRate[_strategies[i]] = value;
-    }
-  }
-
   function changeOperatorStatus(address operator, bool status) external onlyOwner {
     operators[operator] = status;
   }
 
   // --- MAIN LOGIC ---
 
-  function lastRebalance(address strategy) public view returns (uint lastRebalanceTimestamp) {
-    lastRebalanceTimestamp = _lastRebalance[strategy];
-  }
-
-  function call(address[] memory _strategies) external returns (uint amountOfCalls) {
+  function call() external {
     require(operators[msg.sender], "!operator");
 
-    uint strategiesLength = _strategies.length;
-    uint counter;
-    for (uint i; i < strategiesLength; ++i) {
-      address strategy = _strategies[i];
-
-      try IRebalancingStrategy(strategy).rebalance() {} catch Error(string memory _err) {
-        revert(string(abi.encodePacked("Strategy error: 0x", _toAsciiString(strategy), " ", _err)));
-      } catch (bytes memory _err) {
-        revert(string(abi.encodePacked("Strategy low-level error: 0x", _toAsciiString(strategy), " ", string(_err))));
-      }
-      _lastRebalance[strategy] = block.timestamp;
-      counter++;
+    try IRebalancingStrategy(strategy).rebalance() {} catch Error(string memory _err) {
+      revert(string(abi.encodePacked("Strategy error: 0x", _toAsciiString(strategy), " ", _err)));
+    } catch (bytes memory _err) {
+      revert(string(abi.encodePacked("Strategy low-level error: 0x", _toAsciiString(strategy), " ", string(_err))));
     }
-
-    return counter;
+    lastRebalance = block.timestamp;
   }
 
   function checker() external view returns (bool canExec, bytes memory execPayload) {
-    IController _controller = IController(controller());
-    uint vaultsLength = _controller.vaultsListLength();
-
-    uint counter;
-    for (uint i; i < vaultsLength; ++i) {
-      ISplitter splitter = ITetuVaultV2(_controller.vaults(i)).splitter();
-      for (uint k; k < splitter.strategiesLength(); ++k) {
-        if (_needRebalance(splitter.strategies(k))) {
-          ++counter;
-        }
-      }
+    address strategy_ = strategy;
+    ISplitter splitter = ISplitter(IStrategyV2(strategy_).splitter());
+    if (
+      !splitter.pausedStrategies(strategy_)
+      && lastRebalance + delay < block.timestamp
+      && IRebalancingStrategy(strategy_).needRebalance()
+    ) {
+      return (true, abi.encodeWithSelector(RebalanceResolver.call.selector));
     }
 
-    if (counter == 0) {
-      return (false, bytes("No ready strategies"));
-    } else {
-      address[] memory strategiesResult = new address[](counter);
-      uint j;
-      for (uint i; i < vaultsLength; ++i) {
-        ISplitter splitter = ITetuVaultV2(_controller.vaults(i)).splitter();
-        for (uint k; k < splitter.strategiesLength(); ++k) {
-          if (_needRebalance(splitter.strategies(k))) {
-            strategiesResult[j] = splitter.strategies(k);
-            ++j;
-          }
-        }
-      }
-      return (true, abi.encodeWithSelector(RebalanceResolver.call.selector, strategiesResult));
-    }
-  }
-
-  function _needRebalance(address strategy_) internal view returns (bool) {
-    IStrategyV2 strategyV2 = IStrategyV2(strategy_);
-    if (keccak256(bytes(strategyV2.PLATFORM())) == keccak256(bytes(AppPlatforms.UNIV3)) && IRebalancingStrategy(strategy_).needRebalance()) {
-      uint delayAdjusted = delay;
-      uint _delayRate = delayRate[strategy_];
-      if (_delayRate != 0) {
-        delayAdjusted = delay * _delayRate / DELAY_RATE_DENOMINATOR;
-      }
-      if (lastRebalance(strategy_) + delayAdjusted < block.timestamp) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /// @dev Inspired by OraclizeAPI's implementation - MIT license
-  ///      https://github.com/oraclize/ethereum-api/blob/b42146b063c7d6ee1358846c198246239e9360e8/oraclizeAPI_0.4.25.sol
-  function _toString(uint value) internal pure returns (string memory) {
-    if (value == 0) {
-      return "0";
-    }
-    uint temp = value;
-    uint digits;
-    while (temp != 0) {
-      digits++;
-      temp /= 10;
-    }
-    bytes memory buffer = new bytes(digits);
-    while (value != 0) {
-      digits -= 1;
-      buffer[digits] = bytes1(uint8(48 + uint(value % 10)));
-      value /= 10;
-    }
-    return string(buffer);
+    return (false, bytes("Not ready to rebalance"));
   }
 
   function _toAsciiString(address x) internal pure returns (string memory) {

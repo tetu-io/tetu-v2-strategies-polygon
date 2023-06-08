@@ -3,8 +3,11 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../libs/AppErrors.sol";
@@ -20,11 +23,17 @@ library ConverterStrategyBaseLib {
   /////////////////////////////////////////////////////////////////////
   /// @notice Local vars for {_recycle}, workaround for stack too deep
   struct RecycleLocalParams {
-    uint amountToCompound;
+    /// @notice Compound amount + Performance amount
+    uint amountCP;
+    /// @notice Amount to compound
+    uint amountC;
+    /// @notice Amount to send to performance and insurance
+    uint amountP;
+    /// @notice Amount to forwarder + amount to compound
+    uint amountFC;
     address rewardToken;
     uint liquidationThresholdAsset;
     uint len;
-    uint spentAmountIn;
     uint receivedAmountOut;
   }
 
@@ -163,6 +172,8 @@ library ConverterStrategyBaseLib {
   );
 
   event ReturnAssetToConverter(address asset, uint amount);
+
+  event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
   //endregion Events
 
   /////////////////////////////////////////////////////////////////////
@@ -369,6 +380,7 @@ library ConverterStrategyBaseLib {
 
   /// @notice Open position using entry kind 1 - split provided amount on two parts according provided proportions
   /// @param amountIn_ Amount of collateral to be divided on parts. We assume {amountIn_} > 0
+  /// @param collateralThreshold_ Min allowed collateral amount to be used for new borrow, > 0
   /// @return collateralAmountOut Total collateral used to borrow {borrowedAmountOut}
   /// @return borrowedAmountOut Total borrowed amount
   function openPositionEntryKind1(
@@ -462,7 +474,8 @@ library ConverterStrategyBaseLib {
 
         // protection against dust amounts, see "openPosition.dust", just leave dust amount unused
         // we CAN NOT add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts
-        if (amountIn_ < collateralThreshold_ || amountIn_ == 0) break;
+        // we assume here, that collateralThreshold_ != 0, so check amountIn_ != 0 is not required
+        if (amountIn_ < collateralThreshold_) break;
       }
     }
 
@@ -564,6 +577,7 @@ library ConverterStrategyBaseLib {
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
+  /// @param skipValidation Don't check correctness of conversion using TetuConverter's oracle (i.e. for reward tokens)
   function liquidate(
     ITetuConverter converter,
     ITetuLiquidator liquidator_,
@@ -571,17 +585,19 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdTokenOut_
+    uint liquidationThresholdTokenOut_,
+    bool skipValidation
   ) external returns (
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
-    return _liquidate(converter, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, liquidationThresholdTokenOut_);
+    return _liquidate(converter, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, liquidationThresholdTokenOut_, skipValidation);
   }
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
-  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator
+  /// @param spentAmountIn Amount of {tokenIn} has been consumed by the liquidator (== 0 | amountIn_)
   /// @param receivedAmountOut Amount of {tokenOut_} has been returned by the liquidator
+  /// @param skipValidation Don't check correctness of conversion using TetuConverter's oracle (i.e. for reward tokens)
   function _liquidate(
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
@@ -589,7 +605,8 @@ library ConverterStrategyBaseLib {
     address tokenOut_,
     uint amountIn_,
     uint slippage_,
-    uint liquidationThresholdForTokenOut_
+    uint liquidationThresholdForTokenOut_,
+    bool skipValidation
   ) internal returns (
     uint spentAmountIn,
     uint receivedAmountOut
@@ -603,10 +620,12 @@ library ConverterStrategyBaseLib {
 
     // if the expected value is higher than threshold distribute to destinations
     return amountOut > liquidationThresholdForTokenOut_
-      ? _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_)
+      ? (amountIn_, _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, skipValidation))
       : (0, 0);
   }
 
+  /// @notice Make liquidation using given route and check correctness using TetuConverter's price oracle
+  /// @param skipValidation Don't check correctness of conversion using TetuConverter's oracle (i.e. for reward tokens)
   function _liquidateWithRoute(
     ITetuConverter converter_,
     ITetuLiquidator.PoolData[] memory route,
@@ -614,45 +633,25 @@ library ConverterStrategyBaseLib {
     address tokenIn_,
     address tokenOut_,
     uint amountIn_,
-    uint slippage_
+    uint slippage_,
+    bool skipValidation
   ) internal returns (
-    uint spentAmountIn,
     uint receivedAmountOut
   ) {
     // we need to approve each time, liquidator address can be changed in controller
     AppLib.approveIfNeeded(tokenIn_, amountIn_, address(liquidator_));
 
     uint balanceBefore = IERC20(tokenOut_).balanceOf(address(this));
-
     liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
-
-    // temporary save balance of token out after  liquidation to spentAmountIn
     uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
 
-    // assign correct values to
-    receivedAmountOut = balanceAfter > balanceBefore
-      ? balanceAfter - balanceBefore
-      : 0;
-    spentAmountIn = amountIn_;
+    require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
+    receivedAmountOut = balanceAfter - balanceBefore;
 
-    require(
-      converter_.isConversionValid(
-        tokenIn_,
-        amountIn_,
-        tokenOut_,
-        receivedAmountOut,
-        slippage_
-      ),
-      AppErrors.PRICE_IMPACT
-    );
-
-    emit Liquidation(
-      tokenIn_,
-      tokenOut_,
-      amountIn_,
-      spentAmountIn,
-      receivedAmountOut
-    );
+    // Oracle in TetuConverter "knows" only limited number of the assets
+    // It may not know prices for reward assets, so for rewards this validation should be skipped to avoid TC-4 error
+    require(skipValidation || converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
+    emit Liquidation(tokenIn_, tokenOut_, amountIn_, amountIn_, receivedAmountOut);
   }
   //endregion Liquidation
 
@@ -660,7 +659,7 @@ library ConverterStrategyBaseLib {
   //region requirePayAmountBack
   /////////////////////////////////////////////////////////////////////
 
-  /// @param amountOut Amount of the main asset requested by converter
+  /// @param amount_ Amount of the main asset requested by converter
   /// @param indexTheAsset Index of the asset required by converter in the {tokens}
   /// @param asset Main asset or underlying (it can be different from tokens[indexTheAsset])
   /// @return amountOut Amount of the main asset sent to converter
@@ -833,7 +832,8 @@ library ConverterStrategyBaseLib {
         p.tokens[p.indexTargetAsset],
         Math.min(amountIn, p.amounts[indexTokenIn]),
         _ASSET_LIQUIDATION_SLIPPAGE,
-        p.liquidationThresholdForTargetAsset
+        p.liquidationThresholdForTargetAsset,
+        false
       );
     }
 
@@ -845,20 +845,25 @@ library ConverterStrategyBaseLib {
   //region Recycle rewards
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
+  /// @notice Recycle the amounts: split each amount on tree parts: performance+insurance (P), forwarder (F), compound (C)
+  ///         Liquidate P+C, send F to the forwarder.
   /// We have two kinds of rewards:
   /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
   /// 2) any other rewards
-  /// All received rewards are immediately "recycled".
-  /// It means, they are divided on two parts: to forwarder, to compound
+  /// All received rewards divided on three parts: to performance receiver+insurance, to forwarder, to compound
   ///   Compound-part of Rewards-2 can be liquidated
-  ///   Compound part of Rewards-1 should be just added to baseAmounts
-  /// All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder.
+  ///   Compound part of Rewards-1 should be just left on the balance
+  ///   All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder outside.
+  ///   Performance amounts are liquidated, result amount of underlying is returned in {amountToPerformanceAndInsurance}
+  /// @param asset Underlying asset
+  /// @param compoundRatio Compound ration in the range [0...COMPOUND_DENOMINATOR]
   /// @param tokens tokens received from {_depositorPoolAssets}
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
   /// @param liquidationThresholds Liquidation thresholds for rewards tokens
+  /// @param performanceFee Performance fee in the range [0...FEE_DENOMINATOR]
   /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
+  /// @return amountToPerformanceAndInsurance Amount of underlying to be sent to performance receiver and insurance
   function recycle(
     ITetuConverter converter_,
     address asset,
@@ -867,9 +872,11 @@ library ConverterStrategyBaseLib {
     ITetuLiquidator liquidator,
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens,
-    uint[] memory rewardAmounts
+    uint[] memory rewardAmounts,
+    uint performanceFee
   ) external returns (
-    uint[] memory amountsToForward
+    uint[] memory amountsToForward,
+    uint amountToPerformanceAndInsurance
   ) {
     RecycleLocalParams memory p;
 
@@ -880,37 +887,62 @@ library ConverterStrategyBaseLib {
 
     amountsToForward = new uint[](p.len);
 
-    // split each amount on two parts: a part-to-compound and a part-to-transfer-to-the-forwarder
+    // rewardAmounts => P + F + C, where P - performance + insurance, F - forwarder, C - compound
     for (uint i; i < p.len; i = AppLib.uncheckedInc(i)) {
+      p.amountFC = rewardAmounts[i] * (COMPOUND_DENOMINATOR - performanceFee) / COMPOUND_DENOMINATOR;
+      p.amountC = p.amountFC * compoundRatio / COMPOUND_DENOMINATOR;
+      p.amountP = rewardAmounts[i] - p.amountFC;
       p.rewardToken = rewardTokens[i];
-      p.amountToCompound = rewardAmounts[i] * compoundRatio / COMPOUND_DENOMINATOR;
+      p.amountCP = p.amountC + p.amountP;
 
-      if (p.amountToCompound > 0) {
+      if (p.amountCP > 0) {
         if (ConverterStrategyBaseLib.getAssetIndex(tokens, p.rewardToken) != type(uint).max) {
-          // The asset is in the list of depositor's assets, liquidation is not allowed
-          // just keep on the balance, should be handled later
+          if (p.rewardToken == asset) {
+            // This is underlying, liquidation of compound part is not allowed; just keep on the balance, should be handled later
+            amountToPerformanceAndInsurance += p.amountP;
+          } else {
+            // This is secondary asset, Liquidation of compound part is not allowed, we should liquidate performance part only
+            if (p.amountP < Math.max(liquidationThresholds[p.rewardToken], DEFAULT_LIQUIDATION_THRESHOLD)) {
+              // performance amount is too small, liquidation is not allowed, we just keep that dust tokens on balance forever
+            } else {
+              (, p.receivedAmountOut) = _liquidate(
+                converter_,
+                liquidator,
+                p.rewardToken,
+                asset,
+                p.amountP,
+                _REWARD_LIQUIDATION_SLIPPAGE,
+                p.liquidationThresholdAsset,
+                false // use conversion validation for these rewards
+              );
+              amountToPerformanceAndInsurance += p.receivedAmountOut;
+            }
+          }
         } else {
-          if (p.amountToCompound < Math.max(liquidationThresholds[p.rewardToken], DEFAULT_LIQUIDATION_THRESHOLD)) {
-            // amount is too small, liquidation is not allowed
-            // we keep that dust tokens on balance forever
+          if (p.amountCP < Math.max(liquidationThresholds[p.rewardToken], DEFAULT_LIQUIDATION_THRESHOLD)) {
+            // amount is too small, liquidation is not allowed, we just keep that dust tokens on balance forever
           } else {
             // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
             // We assume here, that {token} cannot be equal to {_asset}
             // because the {_asset} is always included to the list of depositor's assets
-            (p.spentAmountIn, p.receivedAmountOut) = _liquidate(
+            (, p.receivedAmountOut) = _liquidate(
               converter_,
               liquidator,
               p.rewardToken,
               asset,
-              p.amountToCompound,
+              p.amountCP,
               _REWARD_LIQUIDATION_SLIPPAGE,
-              p.liquidationThresholdAsset
+              p.liquidationThresholdAsset,
+              true // skip conversion validation for rewards becase we can have arbitrary assets here
             );
+
+            amountToPerformanceAndInsurance += p.receivedAmountOut * (rewardAmounts[i] - p.amountFC) / p.amountCP;
           }
         }
       }
-      amountsToForward[i] = rewardAmounts[i] - p.amountToCompound;
+      amountsToForward[i] = p.amountFC - p.amountC;
     }
+    return (amountsToForward, amountToPerformanceAndInsurance);
   }
   //endregion Recycle rewards
 
@@ -938,7 +970,6 @@ library ConverterStrategyBaseLib {
       tokens,
       v.len
     );
-
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
@@ -957,6 +988,7 @@ library ConverterStrategyBaseLib {
           false
         );
         amountOut += collateral;
+
         if (toRepay >= toPay) {
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         } else {
@@ -966,12 +998,12 @@ library ConverterStrategyBaseLib {
             // lazy initialization
             v.debts = new uint[](v.len);
           }
+
           // to pay the following amount we need to swap some other asset at first
           v.debts[i] = toPay - toRepay;
         }
       }
     }
-
     if (v.debts.length == v.len) {
       // we assume here, that it would be always profitable to save collateral
       // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
@@ -1026,10 +1058,6 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    // todo make integral tests for the following cases:
-    //  1) we will withdraw not enough
-    //  2) a rare case when user exit from the vault before rebalance
-    //  3) however, if user will exit between rebalances and the gap will be lower than withdraw fee, we will put the fee to vault balance and increase share price
     return amountsOut;
   }
   //endregion getExpectedAmountMainAsset
@@ -1081,6 +1109,66 @@ library ConverterStrategyBaseLib {
       collaterals_[indexAsset_],
       IERC20(tokens_[indexAsset_]).balanceOf(address(this))
     );
+  }
+
+  /// @notice Convert {amountsToConvert_} to the main {asset}
+  ///         Swap leftovers (if any) to the main asset.
+  ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
+  /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
+  /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @param requestedAmount Amount to be withdrawn in terms of the asset in addition to the exist balance.
+  ///        Max uint means attempt to withdraw all possible invested assets.
+  /// @param amountsToConvert_ Amounts available for conversion after withdrawing from the pool
+  /// @param expectedMainAssetAmounts Amounts of main asset that we expect to receive after conversion amountsToConvert_
+  /// @return expectedAmount Expected total amount of main asset after all conversions, swaps and repays
+  function makeRequestedAmount(
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory amountsToConvert_,
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
+    uint requestedAmount,
+    uint[] memory expectedMainAssetAmounts,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (uint expectedAmount) {
+    // get the total expected amount
+    for (uint i; i < tokens_.length; i = AppLib.uncheckedInc(i)) {
+      expectedAmount += expectedMainAssetAmounts[i];
+    }
+
+    // we cannot repay a debt twice
+    // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
+    // But: we cannot make repay(1) and than repay(10). We MUST make single repay(11)
+
+    if (requestedAmount != type(uint).max
+      && expectedAmount > requestedAmount * (GAP_CONVERSION + DENOMINATOR) / DENOMINATOR
+    ) {
+      // amountsToConvert_ are enough to get requestedAmount
+      _convertAfterWithdraw(
+        converter_,
+        liquidator_,
+        indexAsset_,
+        liquidationThresholds[tokens_[indexAsset_]],
+        tokens_,
+        amountsToConvert_
+      );
+    } else {
+      // amountsToConvert_ are NOT enough to get requestedAmount
+      // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
+      // We should try to close the exist debts instead:
+      //    convert a part of main assets to get amount of secondary assets required to repay the debts
+      // and only then make conversion.
+      expectedAmount = _closePositionsToGetAmount(
+        converter_,
+        liquidator_,
+        indexAsset_,
+        liquidationThresholds,
+        requestedAmount,
+        tokens_
+      ) + expectedMainAssetAmounts[indexAsset_];
+    }
+
+    return expectedAmount;
   }
   //endregion Reduce size of ConverterStrategyBase
 
@@ -1164,14 +1252,14 @@ library ConverterStrategyBaseLib {
   /// @param amountsToConvert Amounts to convert, the order of asset is same as in {tokens}
   /// @return collateralOut Total amount of main asset returned after closing positions
   /// @return repaidAmountsOut What amounts were spent in exchange of the {collateralOut}
-  function convertAfterWithdraw(
+  function _convertAfterWithdraw(
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
     uint liquidationThreshold,
     address[] memory tokens,
     uint[] memory amountsToConvert
-  ) external returns (
+  ) internal returns (
     uint collateralOut,
     uint[] memory repaidAmountsOut
   ) {
@@ -1198,16 +1286,11 @@ library ConverterStrategyBaseLib {
           v.asset,
           amountsToConvert[i] - repaidAmountsOut[i],
           _ASSET_LIQUIDATION_SLIPPAGE,
-          liquidationThreshold
+          liquidationThreshold,
+          false
         );
         collateralOut += v.received;
-        if (v.spent != 0) {
-          repaidAmountsOut[i] += v.spent;
-          require(
-            tetuConverter.isConversionValid(tokens[i], v.spent, v.asset, v.received, PRICE_IMPACT_TOLERANCE),
-            AppErrors.PRICE_IMPACT
-          );
-        }
+        repaidAmountsOut[i] += v.spent;
       }
     }
 
@@ -1233,6 +1316,26 @@ library ConverterStrategyBaseLib {
     uint requestedAmount,
     address[] memory tokens
   ) external returns (
+    uint expectedAmount
+  ) {
+    return _closePositionsToGetAmount(
+      converter_,
+      liquidator,
+      indexAsset,
+      liquidationThresholds,
+      requestedAmount,
+      tokens
+    );
+  }
+
+  function _closePositionsToGetAmount(
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator,
+    uint indexAsset,
+    mapping(address => uint) storage liquidationThresholds,
+    uint requestedAmount,
+    address[] memory tokens
+  ) internal returns (
     uint expectedAmount
   ) {
     if (requestedAmount != 0) {
@@ -1284,7 +1387,8 @@ library ConverterStrategyBaseLib {
                 tokens[i],
                 toSell,
                 _ASSET_LIQUIDATION_SLIPPAGE,
-                liquidationThresholds[tokens[i]]
+                liquidationThresholds[tokens[i]],
+                false
               );
               tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
             }
@@ -1305,11 +1409,12 @@ library ConverterStrategyBaseLib {
               v.asset,
               tokenBalance,
               _ASSET_LIQUIDATION_SLIPPAGE,
-              liquidationThresholds[v.asset]
+              liquidationThresholds[v.asset],
+              false
             );
             if (spentAmountIn != 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
-              expectedAmount += tokenBalance * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+              expectedAmount += spentAmountIn * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
             }
           }
 
@@ -1438,18 +1543,25 @@ library ConverterStrategyBaseLib {
     return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
   }
 
-  function registerIncome(uint assetBefore, uint assetAfter, uint earned, uint lost) internal pure returns (
-    uint _earned,
-    uint _lost
-  ) {
+  function registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
     if (assetAfter > assetBefore) {
-      earned += assetAfter - assetBefore;
+      earned = assetAfter - assetBefore;
     } else {
-      lost += assetBefore - assetAfter;
+      lost = assetBefore - assetAfter;
     }
     return (earned, lost);
   }
-  //endregion Other helpers
 
+  /// @notice Register income and cover possible loss
+  function coverPossibleStrategyLoss(uint assetBefore, uint assetAfter, address splitter) external returns (uint earned) {
+    uint lost;
+    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter);
+    if (lost != 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
+    }
+    emit FixPriceChanges(assetBefore, assetAfter);
+  }
+
+  //endregion Other helpers
 }
 

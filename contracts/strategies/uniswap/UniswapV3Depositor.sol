@@ -18,7 +18,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.2";
+  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.3";
 
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
@@ -28,40 +28,6 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   UniswapV3ConverterStrategyLogicLib.State internal state;
 
   /////////////////////////////////////////////////////////////////////
-  ///                INIT
-  /////////////////////////////////////////////////////////////////////
-
-  /// @dev Initializes the contract with the provided parameters.
-  /// @param asset_ The address of the asset.
-  /// @param pool_ The address of the Uniswap V3 pool.
-  /// @param tickRange_ The tick range for the positions.
-  /// @param rebalanceTickRange_ The tick range for rebalancing.
-  function __UniswapV3Depositor_init(
-    address asset_,
-    address pool_,
-    int24 tickRange_,
-    int24 rebalanceTickRange_
-  ) internal onlyInitializing {
-    require(pool_ != address(0), AppErrors.ZERO_ADDRESS);
-    state.pool = IUniswapV3Pool(pool_);
-    state.rebalanceTickRange = rebalanceTickRange_;
-    (
-    state.tickSpacing,
-    state.lowerTick,
-    state.upperTick,
-    state.tokenA,
-    state.tokenB,
-    state.depositorSwapTokens
-    ) = UniswapV3ConverterStrategyLogicLib.calcInitialDepositorValues(
-      state.pool,
-      tickRange_,
-      rebalanceTickRange_,
-      asset_
-    );
-  }
-
-
-  /////////////////////////////////////////////////////////////////////
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
@@ -69,7 +35,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   function getState() external view returns (
     address tokenA,
     address tokenB,
-    IUniswapV3Pool pool,
+    address pool,
+    address profitHolder,
     int24 tickSpacing,
     int24 lowerTick,
     int24 upperTick,
@@ -81,7 +48,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ) {
     tokenA = state.tokenA;
     tokenB = state.tokenB;
-    pool = state.pool;
+    pool = address(state.pool);
+    profitHolder = state.strategyProfitHolder;
     tickSpacing = state.tickSpacing;
     lowerTick = state.lowerTick;
     upperTick = state.upperTick;
@@ -91,9 +59,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     fuseThreshold = state.fuseThreshold;
 
     rebalanceResults = new uint[](3);
-    rebalanceResults[0] = state.rebalanceEarned0;
-    rebalanceResults[1] = state.rebalanceEarned1;
-    rebalanceResults[2] = state.rebalanceLost;
+    rebalanceResults[0] = IERC20(tokenA).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[1] = IERC20(tokenB).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[2] = 0;
   }
 
   /// @notice Returns the fees for the current state.
@@ -170,9 +138,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @return amountsOut The amounts of the tokens withdrawn.
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     (uint fee0, uint fee1) = getFees();
-    state.rebalanceEarned0 += fee0;
-    state.rebalanceEarned1 += fee1;
-    (amountsOut, state.totalLiquidity, state.totalLiquidityFillup) = UniswapV3ConverterStrategyLogicLib.exit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, uint128(liquidityAmount), state.depositorSwapTokens);
+    amountsOut = UniswapV3ConverterStrategyLogicLib.exit(state, uint128(liquidityAmount));
+    UniswapV3ConverterStrategyLogicLib.sendFeeToProfitHolder(state, fee0, fee1);
   }
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.
@@ -194,31 +161,11 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-
-    tokensOut = new address[](2);
-    tokensOut[0] = state.tokenA;
-    tokensOut[1] = state.tokenB;
-
-    (amountsOut, balancesBefore) = UniswapV3ConverterStrategyLogicLib.claimRewards(
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.lowerTickFillup,
-      state.upperTickFillup,
-      state.rebalanceEarned0,
-      state.rebalanceEarned1,
-      state.depositorSwapTokens,
-      tokensOut,
-      state.totalLiquidity,
-      state.totalLiquidityFillup
-    );
-    state.rebalanceEarned0 = 0;
-    state.rebalanceEarned1 = 0;
+    (tokensOut, amountsOut, balancesBefore) = UniswapV3ConverterStrategyLogicLib.claimRewards(state);
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.
   /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[49] private __gap;
-
+  uint[50 - 2] private __gap; // 50 - count of variables
 }

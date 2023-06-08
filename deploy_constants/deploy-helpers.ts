@@ -1,6 +1,12 @@
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { providers } from 'ethers';
 import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { ethers } from 'hardhat';
+import { delay } from '@nomiclabs/hardhat-etherscan/dist/src/etherscan/EtherscanService';
+import { Libraries } from 'hardhat-deploy/types';
+
+// tslint:disable-next-line:no-var-requires
+const hreLocal = require('hardhat');
 
 export async function isContractExist(hre: HardhatRuntimeEnvironment, contractName: string): Promise<boolean> {
   const { deployments } = hre;
@@ -37,4 +43,92 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
   return {
     gasPrice: (gasPrice * 1.1).toFixed(0),
   };
+}
+
+export async function getDeployedContractByName(name: string) {
+  const { deployments } = hreLocal;
+  const contract = await deployments.get(name);
+  if (!contract) {
+    throw new Error(`Contract ${name} not deployed`);
+  }
+  return contract.address;
+}
+
+export async function hardhatDeploy(
+  hre: HardhatRuntimeEnvironment,
+  contractName: string,
+  verify = false,
+  libraries?: Libraries,
+  deploymentName?: string,
+  // tslint:disable-next-line:no-any
+  args?: any[] | undefined,
+  skipIfAlreadyDeployed = false,
+) {
+  const { deployments, getNamedAccounts } = hre;
+  const { deployer } = await getNamedAccounts();
+
+  let oldAdr: string | undefined;
+  try {
+    oldAdr = (await deployments.get(deploymentName || contractName)).address;
+  } catch (e) {}
+
+  await deployments.deploy(deploymentName || contractName, {
+    contract: contractName,
+    from: deployer,
+    log: true,
+    args,
+    libraries,
+    skipIfAlreadyDeployed,
+    ...(await txParams(hre, ethers.provider)),
+  });
+
+  const newAdr = await deployments.get(deploymentName || contractName);
+
+  if (!oldAdr || oldAdr !== newAdr.address) {
+    if (verify && hre.network.name !== 'hardhat') {
+      await wait(10);
+      if (args) {
+        await verifyWithArgs(newAdr.address, args);
+      } else {
+        await verifyWithoutArgs(newAdr.address);
+      }
+    }
+  }
+}
+
+
+async function wait(blocks: number) {
+  if (hreLocal.network.name === 'hardhat') {
+    return;
+  }
+  const start = hreLocal.ethers.provider.blockNumber;
+  while (true) {
+    console.log('wait 10sec');
+    await delay(10000);
+    if (hreLocal.ethers.provider.blockNumber >= start + blocks) {
+      break;
+    }
+  }
+}
+
+// tslint:disable-next-line:no-any
+async function verifyWithArgs(address: string, constructorArguments: any[]) {
+  try {
+    await hreLocal.run('verify:verify', {
+      address,
+      constructorArguments,
+    });
+  } catch (e) {
+    console.error('error verify ' + e);
+  }
+}
+
+async function verifyWithoutArgs(address: string) {
+  try {
+    await hreLocal.run('verify:verify', {
+      address,
+    });
+  } catch (e) {
+    console.error('error verify ' + e);
+  }
 }

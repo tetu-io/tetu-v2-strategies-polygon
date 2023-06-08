@@ -70,6 +70,18 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.UNISWAPV3_USDC_miMATIC_100,
     "matic": MaticAddresses.UNISWAPV3_USDC_miMATIC_100
   },
+  UNISWAPV3_USDC_DAI_100: {
+    "hardhat": MaticAddresses.UNISWAPV3_USDC_DAI_100,
+    "matic": MaticAddresses.UNISWAPV3_USDC_DAI_100
+  },
+  UNISWAPV3_WSTETH_WETH_100: {
+    "hardhat": MaticAddresses.UNISWAPV3_wstETH_WETH_100,
+    "matic": MaticAddresses.UNISWAPV3_wstETH_WETH_100
+  },
+  UNISWAPV3_WMATIC_MATICX_100: {
+    "hardhat": MaticAddresses.UNISWAPV3_WMATIC_MaticX_100,
+    "matic": MaticAddresses.UNISWAPV3_WMATIC_MaticX_100
+  },
   SPLITTER_USDC_ADDRESS: {
     "hardhat": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c",
     "matic": "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c"
@@ -89,5 +101,9 @@ export const deployAddresses = {
   ST_MATIC_RATE_PROVIDER_ADDRESS: {
     "hardhat": "0xdEd6C522d803E35f65318a9a4d7333a22d582199",
     "matic": "0xdEd6C522d803E35f65318a9a4d7333a22d582199"
-  }
+  },
+  BALANCER_POOL_T_USD: {
+    "hardhat": MaticAddresses.BALANCER_POOL_T_USD,
+    "matic": MaticAddresses.BALANCER_POOL_T_USD
+  },
 }

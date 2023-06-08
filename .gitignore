@@ -25,3 +25,4 @@ tool_addresses.txt
 .env
 docs
 cache_*
+.tmp

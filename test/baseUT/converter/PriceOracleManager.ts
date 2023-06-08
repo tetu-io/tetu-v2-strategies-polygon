@@ -89,14 +89,14 @@ export class PriceOracleManager implements IPriceOracleManager {
   public async decPrice(token: string, percent: number): Promise<void> {
     const source = this.getSourceInfo(token);
     const price = await source.aggregator.price();
-    const newPrice = price.mul(100 - percent).div(100);
+    const newPrice = price.mul(1000 - Math.round(percent*10)).div(1000);
     await source.aggregator.setPrice(newPrice);
   }
 
   public async incPrice(token: string, percent: number): Promise<void> {
     const source = this.getSourceInfo(token);
     const price = await source.aggregator.price();
-    const newPrice = price.mul(100 + percent).div(100);
+    const newPrice = price.mul(1000 + Math.round(percent*10)).div(1000);
     await source.aggregator.setPrice(newPrice);
   }
 
