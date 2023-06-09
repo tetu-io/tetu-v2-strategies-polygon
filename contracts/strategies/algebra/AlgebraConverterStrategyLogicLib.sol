@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-//import "hardhat/console.sol";
 import "./AlgebraLib.sol";
 import "./AlgebraDebtLib.sol";
 import "./AlgebraStrategyErrors.sol";
@@ -180,7 +179,6 @@ library AlgebraConverterStrategyLogicLib {
 
     function getFees(State storage state) public view returns (uint fee0, uint fee1) {
         (fee0, fee1) = AlgebraLib.getFees(state.pool, ALGEBRA_NFT, state.tokenId);
-        //console.log('getFees fee0 fee1', fee0, fee1);
     }
 
     function getPoolReserves(State storage state) external view returns (uint[] memory reserves) {
@@ -278,7 +276,6 @@ library AlgebraConverterStrategyLogicLib {
             if (nftLowerTick != lowerTick || nftUpperTick != upperTick) {
                 ALGEBRA_NFT.burn(tokenId);
                 tokenId = 0;
-                //console.log('burn nft');
             }
         }
 
@@ -296,13 +293,9 @@ library AlgebraConverterStrategyLogicLib {
                     block.timestamp
                 ));
 
-            // console.log('Algebra NFT tokenId', tokenId);
-            // console.log('liquidity', uint(liquidity));
-
             state.tokenId = tokenId;
 
             ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
-            FARMING_CENTER.deposits(tokenId);
             FARMING_CENTER.enterFarming(IncentiveKey(state.rewardToken, state.bonusRewardToken, address(state.pool), state.startTime, state.endTime), tokenId, 0, false);
         } else {
             (liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams(
@@ -313,6 +306,11 @@ library AlgebraConverterStrategyLogicLib {
                     0,
                     block.timestamp
                 ));
+
+            if (state.totalLiquidity == 0) {
+                ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
+                FARMING_CENTER.enterFarming(IncentiveKey(state.rewardToken, state.bonusRewardToken, address(state.pool), state.startTime, state.endTime), tokenId, 0, false);
+            }
         }
 
         state.totalLiquidity += liquidity;
@@ -339,7 +337,6 @@ library AlgebraConverterStrategyLogicLib {
 
         // get reward amounts
         (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
-        //console.log('exit reward, bonusReward', reward, bonusReward);
 
         // exit farming (undeposit)
         FARMING_CENTER.exitFarming(getIncentiveKey(state), state.tokenId, false);
@@ -371,7 +368,6 @@ library AlgebraConverterStrategyLogicLib {
             uint fee0 = collected0 > amountsOut[0] ? (collected0 - amountsOut[0]) : 0;
             uint fee1 = collected1 > amountsOut[1] ? (collected1 - amountsOut[1]) : 0;
 
-            //console.log('exit claimed fees', fee0, fee1);
             emit AlgebraFeesClaimed(fee0, fee1);
 
             if (state.depositorSwapTokens) {
@@ -393,7 +389,6 @@ library AlgebraConverterStrategyLogicLib {
 
         if (liquidity > 0) {
             ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
-            FARMING_CENTER.deposits(tokenId);
             FARMING_CENTER.enterFarming(key, tokenId, 0, false);
         }
     }
@@ -432,8 +427,6 @@ library AlgebraConverterStrategyLogicLib {
             (uint reward, uint bonusReward) = FARMING_CENTER.eternalFarming().getRewardInfo(key, state.tokenId);
             reward += IERC20(rewardToken).balanceOf(h);
             bonusReward += IERC20(bonusRewardToken).balanceOf(h);
-            //console.log('isReadyToHardWork reward', reward);
-            //console.log('isReadyToHardWork bonusReward', bonusReward);
             ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
             if (reward > 0) {
                 rewardInTermOfTokenA = liquidator.getPrice(rewardToken, tokenA, reward);
@@ -441,8 +434,6 @@ library AlgebraConverterStrategyLogicLib {
             if (bonusRewardInTermOfTokenA > 0) {
                 bonusRewardInTermOfTokenA = liquidator.getPrice(bonusRewardToken, tokenA, bonusReward);
             }
-            //console.log('isReadyToHardWork rewardInTermOfTokenA', rewardInTermOfTokenA);
-            //console.log('isReadyToHardWork bonusRewardInTermOfTokenA', bonusRewardInTermOfTokenA);
         }
 
         address tokenB = state.tokenB;
@@ -491,29 +482,27 @@ library AlgebraConverterStrategyLogicLib {
         }
 
         amountsOut = new uint[](4);
-        (amountsOut[0], amountsOut[1]) = FARMING_CENTER.collect(INonfungiblePositionManager.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
+        if (tokenId > 0 && state.totalLiquidity > 0) {
+            (amountsOut[0], amountsOut[1]) = FARMING_CENTER.collect(INonfungiblePositionManager.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
 
-        emit AlgebraFeesClaimed(amountsOut[0], amountsOut[1]);
+            emit AlgebraFeesClaimed(amountsOut[0], amountsOut[1]);
 
-        if (state.depositorSwapTokens) {
-            (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+            if (state.depositorSwapTokens) {
+                (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
+            }
+
+            (amountsOut[2], amountsOut[3]) = FARMING_CENTER.collectRewards(getIncentiveKey(state), tokenId);
+
+            if (amountsOut[2] > 0) {
+                FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
+            }
+
+            if (amountsOut[3] > 0) {
+                FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
+            }
+
+            emit AlgebraRewardsClaimed(amountsOut[2], amountsOut[3]);
         }
-        //console.log('claimRewards amountsOut[0]', amountsOut[0]);
-        //console.log('claimRewards amountsOut[1]', amountsOut[1]);
-
-        (amountsOut[2], amountsOut[3]) = FARMING_CENTER.collectRewards(getIncentiveKey(state), tokenId);
-        //console.log('claimRewards amountsOut[2]', amountsOut[2]);
-        //console.log('claimRewards amountsOut[3]', amountsOut[3]);
-
-        if (amountsOut[2] > 0) {
-            FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
-        }
-
-        if (amountsOut[3] > 0) {
-            FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
-        }
-
-        emit AlgebraRewardsClaimed(amountsOut[2], amountsOut[3]);
 
         for (uint i; i < tokensOut.length; ++i) {
             uint b = IERC20(tokensOut[i]).balanceOf(strategyProfitHolder);
