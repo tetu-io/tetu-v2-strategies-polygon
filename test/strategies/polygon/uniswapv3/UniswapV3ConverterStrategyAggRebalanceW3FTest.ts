@@ -12,7 +12,7 @@ import {Web3FunctionResultV2, Web3FunctionUserArgs} from "@gelatonetwork/web3-fu
 const { w3f } = hre;
 
 // How to:
-// npx hardhat run scripts/special/prepareTestEnvForW3F.ts
+// npx hardhat run scripts/special/prepareTestEnvForUniswapV3RebalanceW3F.ts
 // npx hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyAggRebalanceW3FTest.ts --network localhost
 
 dotEnvConfig();

@@ -53,7 +53,7 @@ async function main() {
 
   // prepare to rebalance
   console.log('Swap..')
-  await UniswapV3StrategyUtils.movePriceUp(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('300000', 6));
+  await UniswapV3StrategyUtils.movePriceUp(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
   const needRebalance = await strategy.needRebalance()
   if (!needRebalance) {

@@ -378,15 +378,12 @@ library UniswapV3ConverterStrategyLogicLib {
 
     uint[] memory amountsOut = quoteExit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, state.totalLiquidity, state.depositorSwapTokens);
 
-    if (state.depositorSwapTokens) {
-      (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
-    }
-
     if (amountsOut[1] < debtAmount) {
       uint tokenBprice = UniswapV3Lib.getPrice(address(state.pool), state.tokenB);
       uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(state.tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / UniswapV3DebtLib.SELL_GAP;
+      needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0]);
       return (true, needToSellTokenA);
     } else {
       return (false, amountsOut[1] - debtAmount);
