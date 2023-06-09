@@ -10,7 +10,8 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     true,
     undefined,
     'RebalanceResolver_UniswapV3_WMaticMaticX100',
-    [(await deployments.get('Strategy_UniswapV3ConverterStrategy_WMaticMaticX100')).address]
+    [(await deployments.get('Strategy_UniswapV3ConverterStrategy_WMaticMaticX100')).address],
+    true
   )
 };
 export default func;

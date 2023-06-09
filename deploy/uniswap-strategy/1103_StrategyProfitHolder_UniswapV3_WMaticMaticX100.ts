@@ -14,7 +14,8 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     true,
     undefined,
     'StrategyProfitHolder_UniswapV3_WMaticMaticX100',
-    [strategyAddress, [state.tokenA, state.tokenB]]
+    [strategyAddress, [state.tokenA, state.tokenB]],
+    true
   )
 };
 export default func;

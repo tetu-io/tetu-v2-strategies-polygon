@@ -10,7 +10,8 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     true,
     undefined,
     'RebalanceResolver_UniswapV3_UsdcDai',
-    [(await deployments.get('Strategy_UniswapV3ConverterStrategy_UsdcDai')).address]
+    [(await deployments.get('Strategy_UniswapV3ConverterStrategy_UsdcDai')).address],
+    true
   )
 };
 export default func;

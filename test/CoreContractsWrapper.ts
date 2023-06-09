@@ -1,4 +1,5 @@
 import {
+  Controller, ControllerV2,
   IBribe,
   IController,
   IERC20,
@@ -13,7 +14,7 @@ import {
 
 export interface ICoreContractsWrapper {
   tetu: IERC20;
-  controller: IController;
+  controller: ControllerV2;
   ve: IVeTetu;
   veDist: IVeDistributor;
   gauge: IGauge;

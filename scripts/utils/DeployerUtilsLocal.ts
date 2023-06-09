@@ -246,7 +246,7 @@ export class DeployerUtilsLocal {
 
     return {
       tetu: IERC20__factory.connect(core.tetu, signer),
-      controller: IController__factory.connect(core.controller, signer),
+      controller: ControllerV2__factory.connect(core.controller, signer),
       ve: IVeTetu__factory.connect(core.ve, signer),
       veDist: IVeDistributor__factory.connect(core.veDist, signer),
       gauge: IGauge__factory.connect(core.gauge, signer),
@@ -470,8 +470,10 @@ export class DeployerUtilsLocal {
 
     const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
     const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
-    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b')).setVaultImpl(vaultLogic.address);
-    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b')).setSplitterImpl(splitterLogic.address);
+    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b'))
+      .setVaultImpl(vaultLogic.address);
+    await factory.connect(await Misc.impersonate('0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b'))
+      .setSplitterImpl(splitterLogic.address);
 
     await RunHelper.runAndWait(() => factory.createVault(
       assetAddress,
