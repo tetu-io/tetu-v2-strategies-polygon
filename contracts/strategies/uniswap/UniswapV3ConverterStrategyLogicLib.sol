@@ -383,7 +383,8 @@ library UniswapV3ConverterStrategyLogicLib {
       uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(state.tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / UniswapV3DebtLib.SELL_GAP;
-      needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0]);
+      // hope underflow is impossible in this case
+      needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] + AppLib.balance(state.tokenA) - 1);
       return (true, needToSellTokenA);
     } else {
       return (false, amountsOut[1] - debtAmount);
