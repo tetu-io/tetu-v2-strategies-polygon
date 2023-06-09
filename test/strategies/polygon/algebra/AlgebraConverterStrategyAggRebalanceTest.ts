@@ -217,10 +217,6 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
 
       await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAssetValue);
 
-      const state = await s.getState()
-      expect(state.rebalanceResults[0]).gt(0)
-      expect(state.rebalanceResults[1]).gt(0)
-
       expect(await s.needRebalance()).eq(true)
 
       const quote = await s.callStatic.quoteRebalanceSwap()

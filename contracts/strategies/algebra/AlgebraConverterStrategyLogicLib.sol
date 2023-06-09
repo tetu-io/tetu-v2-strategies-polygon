@@ -566,15 +566,12 @@ library AlgebraConverterStrategyLogicLib {
 
         uint[] memory amountsOut = quoteExit(state, state.totalLiquidity);
 
-        if (state.depositorSwapTokens) {
-            (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
-        }
-
         if (amountsOut[1] < debtAmount) {
             uint tokenBprice = AlgebraLib.getPrice(address(state.pool), tokenB);
             uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
             // add 1% gap for price impact
             needToSellTokenA += needToSellTokenA / AlgebraDebtLib.SELL_GAP;
+            needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] + AppLib.balance(state.tokenA) - 1);
             return (true, needToSellTokenA);
         } else {
             return (false, amountsOut[1] - debtAmount);
