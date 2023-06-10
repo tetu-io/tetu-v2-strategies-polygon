@@ -276,42 +276,30 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   /// @notice Estimate the exit amounts for a given liquidity amount in a Uniswap V3 pool.
-  /// @param pool The Uniswap V3 pool to quote the exit amounts for.
-  /// @param lowerTick The lower tick value for the pool.
-  /// @param upperTick The upper tick value for the pool.
-  /// @param lowerTickFillup The lower tick value for the fillup range in the pool.
-  /// @param upperTickFillup The upper tick value for the fillup range in the pool.
-  /// @param liquidity The current liquidity in the pool.
-  /// @param liquidityFillup The current liquidity in the fillup range.
   /// @param liquidityAmountToExit The amount of liquidity to exit.
-  /// @param _depositorSwapTokens A boolean indicating if need to use token B instead of token A.
   /// @return amountsOut An array containing the estimated exit amounts for each token in the pool.
   function quoteExit(
-    IUniswapV3Pool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 lowerTickFillup,
-    int24 upperTickFillup,
-    uint128 liquidity,
-    uint128 liquidityFillup,
-    uint128 liquidityAmountToExit,
-    bool _depositorSwapTokens
+    State storage state,
+    uint128 liquidityAmountToExit
   ) public view returns (uint[] memory amountsOut) {
+    uint128 liquidity = state.totalLiquidity;
+    uint128 liquidityFillup = state.totalLiquidityFillup;
+
     amountsOut = new uint[](2);
-    (uint160 sqrtRatioX96, , , , , ,) = pool.slot0();
+    (uint160 sqrtRatioX96, , , , , ,) = state.pool.slot0();
 
     (amountsOut[0], amountsOut[1]) = UniswapV3Lib.getAmountsForLiquidity(
       sqrtRatioX96,
-      lowerTick,
-      upperTick,
+      state.lowerTick,
+      state.upperTick,
       liquidityAmountToExit
     );
 
     if (liquidity > 0 && liquidityFillup > 0) {
       (uint amountOut0Fillup, uint amountOut1Fillup) = UniswapV3Lib.getAmountsForLiquidity(
         sqrtRatioX96,
-        lowerTickFillup,
-        upperTickFillup,
+        state.lowerTickFillup,
+        state.upperTickFillup,
         uint128(uint(liquidityFillup) * uint(liquidityAmountToExit) / uint(liquidity))
       );
 
@@ -319,7 +307,7 @@ library UniswapV3ConverterStrategyLogicLib {
       amountsOut[1] += amountOut1Fillup;
     }
 
-    if (_depositorSwapTokens) {
+    if (state.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
   }
@@ -366,25 +354,32 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   function quoteRebalanceSwap(State storage state, ITetuConverter converter) external returns (bool, uint) {
-    uint debtAmount = UniswapV3DebtLib.getDebtTotalDebtAmountOut(converter, state.tokenA, state.tokenB);
+    address tokenA = state.tokenA;
+    address tokenB = state.tokenB;
+    IUniswapV3Pool pool = state.pool;
+    uint debtAmount = UniswapV3DebtLib.getDebtTotalDebtAmountOut(converter, tokenA, tokenB);
 
     if (
       state.fillUp
-      || !needRebalance(state.isFuseTriggered, state.pool, state.lowerTick, state.upperTick, state.tickSpacing, state.rebalanceTickRange)
-      || !UniswapV3DebtLib.needCloseDebt(debtAmount, converter, state.tokenB)
+      || !needRebalance(state.isFuseTriggered, pool, state.lowerTick, state.upperTick, state.tickSpacing, state.rebalanceTickRange)
+      || !UniswapV3DebtLib.needCloseDebt(debtAmount, converter, tokenB)
     ) {
       return (false, 0);
     }
 
-    uint[] memory amountsOut = quoteExit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, state.totalLiquidity, state.depositorSwapTokens);
+    uint[] memory amountsOut = quoteExit(state, state.totalLiquidity);
 
     if (amountsOut[1] < debtAmount) {
-      uint tokenBprice = UniswapV3Lib.getPrice(address(state.pool), state.tokenB);
-      uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(state.tokenB).decimals();
+      uint tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
+      uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / UniswapV3DebtLib.SELL_GAP;
-      // hope underflow is impossible in this case
-      needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] + AppLib.balance(state.tokenA) - 1);
+      uint b = amountsOut[0] + AppLib.balance(tokenA);
+      if (b > 0) {
+        needToSellTokenA = Math.min(needToSellTokenA, b - 1);
+      } else {
+        needToSellTokenA = 0;
+      }
       return (true, needToSellTokenA);
     } else {
       return (false, amountsOut[1] - debtAmount);
