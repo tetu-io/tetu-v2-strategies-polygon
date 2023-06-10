@@ -3,11 +3,13 @@ import { BigNumber, Contract } from 'ethers';
 import ky from 'ky';
 import { formatUnits } from 'ethers/lib/utils';
 
+// npx hardhat w3f-deploy uniswapv3-rebalance
+
 const STRATEGY_ABI = [
   'function needRebalance() external view returns (bool)',
   'function quoteRebalanceSwap() external returns (bool, uint)',
   'function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external',
-  'function getState() external view returns (address, address, address, int24, int24, int24, int24, uint128, bool, uint, uint[] memory)',
+  'function getState() external view returns (address, address, address, address, int24, int24, int24, int24, uint128, bool, uint, uint[] memory)',
 ];
 
 const ERC20_ABI = [
@@ -177,8 +179,7 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
 
     // tslint:disable-next-line:ban-ts-ignore
     // @ts-ignore
-    const sortedAggQuotes = aggQuotes.filter(p => p.status === 'fulfilled')
-      .sort((p1, p2) => BigNumber.from(p1.value.outAmount).lt(BigNumber.from(p2.value.outAmount)) ? 1 : -1);
+    const sortedAggQuotes = aggQuotes.filter(p => p.status === 'fulfilled').sort((p1, p2) => BigNumber.from(p1.value.outAmount).lt(BigNumber.from(p2.value.outAmount)) ? 1 : -1);
     if (sortedAggQuotes.length > 0) {
       // tslint:disable-next-line:ban-ts-ignore
       // @ts-ignore
