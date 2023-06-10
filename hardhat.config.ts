@@ -11,11 +11,13 @@ import 'hardhat-gas-reporter';
 import 'hardhat-tracer';
 import 'solidity-coverage';
 import 'hardhat-abi-exporter';
-import { task } from 'hardhat/config';
+import { subtask, task } from 'hardhat/config';
 import { deployContract } from './scripts/deploy/DeployContract';
 import 'hardhat-deploy';
 import { deployAddresses } from './scripts/addresses/deploy-addresses';
 import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
+import path from 'path';
+import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from 'hardhat/builtin-tasks/task-names';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -44,6 +46,10 @@ const argv = require('yargs/yargs')()
       type: 'boolean',
       default: false,
     },
+    localSolc: {
+      type: "boolean",
+      default: false
+    },
   }).argv;
 
 task('deploy1', 'Deploy contract', async function(args, hre, runSuper) {
@@ -52,6 +58,20 @@ task('deploy1', 'Deploy contract', async function(args, hre, runSuper) {
   // @ts-ignore
   await deployContract(hre, signer, args.name);
 }).addPositionalParam('name', 'Name of the smart contract to deploy');
+
+// https://binaries.soliditylang.org/linux-amd64/list.json
+subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, hre, runSuper) => {
+  if (argv.localSolc) {
+    const compilerPath = path.join(__dirname, "solc-0-8-17");
+    return {
+      compilerPath,
+      isSolcJs: false,
+      version: '0.8.17',
+      longVersion: "0.8.17+commit.8df45f5f"
+    }
+  }
+  return runSuper();
+})
 
 export default {
   defaultNetwork: 'hardhat',

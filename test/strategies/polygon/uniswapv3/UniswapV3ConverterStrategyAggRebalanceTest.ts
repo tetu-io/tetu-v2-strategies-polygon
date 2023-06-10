@@ -196,7 +196,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
     it('Rebalance empty strategy after emergencyExit()', async() => {
       const s = strategy
 
-      const swapAssetValue = parseUnits('300000', 6);
+      const swapAssetValue = parseUnits('500000', 6);
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
