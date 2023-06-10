@@ -1,0 +1,24 @@
+import { HardhatRuntimeEnvironment } from 'hardhat/types';
+import { DeployFunction } from 'hardhat-deploy/types';
+import {hardhatDeploy} from '../../deploy_constants/deploy-helpers';
+import {ethers} from "hardhat";
+
+const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
+  const { deployments, getNamedAccounts  } = hre;
+  const { WMATIC_ADDRESS, DQUICK_ADDRESS } = await getNamedAccounts();
+  const strategyAddress = (await deployments.get('Strategy_AlgebraConverterStrategy_UsdcUsdt')).address
+  const strategy = await ethers.getContractAt('AlgebraConverterStrategy', strategyAddress)
+  const state = await strategy.getState()
+  await hardhatDeploy(
+    hre,
+    'StrategyProfitHolder',
+    true,
+    undefined,
+    'StrategyProfitHolder_Algebra_UsdcUsdt',
+    [strategyAddress, [state.tokenA, state.tokenB, WMATIC_ADDRESS, DQUICK_ADDRESS]],
+    true
+  )
+};
+export default func;
+func.tags = ['StrategyProfitHolder_Algebra_UsdcUsdt'];
+func.dependencies = ['Strategy_AlgebraConverterStrategy_UsdcUsdt'];

@@ -554,8 +554,9 @@ library AlgebraConverterStrategyLogicLib {
     }
 
     function quoteRebalanceSwap(State storage state, ITetuConverter converter) external returns (bool, uint) {
+        address tokenA = state.tokenA;
         address tokenB = state.tokenB;
-        uint debtAmount = AlgebraDebtLib.getDebtTotalDebtAmountOut(converter, state.tokenA, tokenB);
+        uint debtAmount = AlgebraDebtLib.getDebtTotalDebtAmountOut(converter, tokenA, tokenB);
 
         if (
             !needRebalance(state)
@@ -571,7 +572,12 @@ library AlgebraConverterStrategyLogicLib {
             uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
             // add 1% gap for price impact
             needToSellTokenA += needToSellTokenA / AlgebraDebtLib.SELL_GAP;
-            needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] + AppLib.balance(state.tokenA) - 1);
+            uint b = amountsOut[0] + AppLib.balance(tokenA);
+            if (b > 0) {
+                needToSellTokenA = Math.min(needToSellTokenA, b - 1);
+            } else {
+                needToSellTokenA = 0;
+            }
             return (true, needToSellTokenA);
         } else {
             return (false, amountsOut[1] - debtAmount);
