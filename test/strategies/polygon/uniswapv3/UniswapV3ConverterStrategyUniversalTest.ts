@@ -27,6 +27,7 @@ import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 
 
 dotEnvConfig();
@@ -64,8 +65,10 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
   const tetuConverterAddress = getConverterAddress();
   const states: {[poolId: string]: IState[]} = {};
   const statesParams: {[poolId: string]: IStateParams} = {}
+  let snapshotBefore: string;
 
   before(async function() {
+    snapshotBefore = await TimeUtils.snapshot();
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
 
     const [signer] = await ethers.getSigners();
@@ -82,6 +85,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       await StateUtils.saveListStatesToCSVColumns(pathOut, states[poolId], statesParams[poolId])
       await StateUtils.outputProfit(states[poolId])
     }
+    await TimeUtils.rollback(snapshotBefore);
   });
 
   targets.forEach(t => {
