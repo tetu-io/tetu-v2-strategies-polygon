@@ -1,6 +1,6 @@
 import {
   Aave3AggregatorInterfaceMock, BalancerBoostedDepositorFacade,
-  BalancerLogicLibFacade,
+  BalancerLogicLibFacade, BorrowLibFacade,
   ConverterStrategyBaseLibFacade, MockController,
   MockConverterStrategy,
   MockConverterStrategy__factory,
@@ -116,5 +116,9 @@ export class MockHelper {
       signer,
       'UniswapV3LibFacade',
     )) as UniswapV3LibFacade;
+  }
+
+  public static async createBorrowLibFacade(signer: SignerWithAddress): Promise<BorrowLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'BorrowLibFacade')) as BorrowLibFacade;
   }
 }

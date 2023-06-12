@@ -14,6 +14,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -394,6 +395,7 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    console.log("openPositionEntryKind1.amountIn_", amountIn_);
     OpenPositionEntryKind1Local memory vars;
     (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
       entryData_,
@@ -402,6 +404,8 @@ library ConverterStrategyBaseLib {
       borrowAsset_,
       _LOAN_PERIOD_IN_BLOCKS
     );
+    console.log("openPositionEntryKind1.collateralsRequired", vars.collateralsRequired[0]);
+    console.log("openPositionEntryKind1.amountsToBorrow", vars.amountsToBorrow[0]);
 
     uint len = vars.converters.length;
     if (len > 0) {
@@ -410,6 +414,8 @@ library ConverterStrategyBaseLib {
       // calculate prices conversion ratio using price oracle, decimals 18
       // i.e. alpha = 1e18 * 75e6 usdc / 25e18 matic = 3e6 usdc/matic
       vars.alpha = _getCollateralToBorrowRatio(tetuConverter_, collateralAsset_, borrowAsset_);
+      console.log("openPositionEntryKind1.x", x);
+      console.log("openPositionEntryKind1.y", y);
 
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         // the lending platform allows to convert {collateralsRequired[i]} to {amountsToBorrow[i]}
@@ -442,6 +448,8 @@ library ConverterStrategyBaseLib {
           }
         }
 
+        console.log("openPositionEntryKind1.vars.collateral", vars.collateral);
+        console.log("openPositionEntryKind1.vars.amountToBorrow", vars.amountToBorrow);
         require(
           tetuConverter_.borrow(
             vars.converters[i],

@@ -24,10 +24,17 @@ export interface IBorrowParams {
 }
 export interface IBorrowParamsNum {
   collateralAsset: MockToken;
+  /** amount in */
   collateralAmount: string;
   borrowAsset: MockToken;
   converter: string;
+  /** amount out */
   maxTargetAmount: string;
+  /**
+   * amount of collateral locked by lending platform
+   * It can be different from collateralAmount for i.e. entry-kind-1
+   */
+  collateralAmountOut?: string;
 }
 export interface IRepayParams {
   collateralAsset: MockToken;

@@ -1,6 +1,6 @@
 import {MockTetuConverter, MockToken, PriceOracleMock} from "../../../typechain";
 import {IBorrowParamsNum, IQuoteRepayParams, IRepayParams} from "./TestDataTypes";
-import {parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../scripts/utils/Misc";
 
 export async function setupMockedRepay(
@@ -86,6 +86,45 @@ export async function setupMockedBorrow(converter: MockTetuConverter, user: stri
     p.converter,
     p.collateralAsset.address,
     collateralAmount,
+    p.borrowAsset.address,
+    borrowAmount,
+    user,
+    borrowAmount,
+  );
+
+  await p.borrowAsset.mint(converter.address, borrowAmount);
+}
+
+export async function setupMockedBorrowEntryKind1(
+  converter: MockTetuConverter,
+  user: string,
+  p: IBorrowParamsNum,
+  proportion0: number = 1,
+  proportion1: number = 1
+) {
+  console.log("setupMockedBorrowEntryKind1.proportion0", proportion0);
+  console.log("setupMockedBorrowEntryKind1.proportion1", proportion1);
+  const collateralAmountIn = await parseUnits(p.collateralAmount, await p.collateralAsset.decimals());
+  const collateralAmountToLock = p.collateralAmountOut
+    ? await parseUnits(p.collateralAmount, await p.collateralAsset.decimals())
+    : collateralAmountIn;
+  const borrowAmount = parseUnits(p.maxTargetAmount, await p.borrowAsset.decimals());
+  await converter.setFindBorrowStrategyOutputParams(
+    defaultAbiCoder.encode(['uint256', 'uint256', 'uint256'], [1, proportion0, proportion1]),
+    [p.converter],
+    [collateralAmountIn],
+    [borrowAmount],
+    [parseUnits("1", 18)], // apr value doesn't matter
+    p.collateralAsset.address,
+    collateralAmountToLock,
+    p.borrowAsset.address,
+    30*24*60*60/2 // === _LOAN_PERIOD_IN_BLOCKS
+  );
+
+  await converter.setBorrowParams(
+    p.converter,
+    p.collateralAsset.address,
+    collateralAmountToLock,
     p.borrowAsset.address,
     borrowAmount,
     user,
