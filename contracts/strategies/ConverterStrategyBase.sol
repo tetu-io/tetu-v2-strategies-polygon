@@ -157,7 +157,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss
   ){
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
-    (strategyLoss,) = _depositToPoolUni(amount_, earnedByPrices, updatedInvestedAssets);
+    (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
   }
 
   /// @notice Deposit {amount_} to the pool, send {earnedByPrices_} to insurance.
@@ -168,7 +168,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param investedAssets_ Invested assets value calculated with updated prices
   /// @return strategyLoss Loss happened on the depositing. It doesn't include any price-changing losses
   /// @return amountSentToInsurance Price-changing-profit that was sent to the insurance
-  function _depositToPoolUni(uint amount_, uint earnedByPrices_, uint investedAssets_) internal virtual returns (
+  function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) internal virtual returns (
     uint strategyLoss,
     uint amountSentToInsurance
   ){
@@ -558,7 +558,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (earned, lost, assetBalance) = _handleRewards();
 
     // re-invest income
-    (, uint amountSentToInsurance) = _depositToPoolUni(
+    (, uint amountSentToInsurance) = _depositToPoolUniversal(
       reInvest && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
         ? assetBalance
         : 0,

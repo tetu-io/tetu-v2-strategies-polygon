@@ -149,10 +149,10 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
-    return _depositToPoolUni(amount_, earnedByPrices_, investedAssets_);
+    return _depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
   }
 
-  function _depositToPoolUni(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
+  function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
     uint strategyLoss,
     uint amountSentToInsurance
   ){
@@ -172,7 +172,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       }
       return (depositToPoolParams.loss, depositToPoolParams.amountSentToInsurance);
     } else {
-      return super._depositToPoolUni(amount_, earnedByPrices_, investedAssets_);
+      return super._depositToPoolUniversal(amount_, earnedByPrices_, investedAssets_);
     }
   }
 

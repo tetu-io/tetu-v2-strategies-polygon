@@ -150,7 +150,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
       await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
       await vault.deposit(parseUnits('1000', 6), signer.address);
 
-      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('300000', 6), 100001);
+      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
 
       expect(await s.needRebalance()).eq(true)
 
@@ -179,7 +179,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
     it('Rebalance empty strategy', async() => {
       const s = strategy
 
-      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('300000', 6), 100001);
+      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
 
       expect(await s.needRebalance()).eq(true)
 
@@ -196,7 +196,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
     it('Rebalance empty strategy after emergencyExit()', async() => {
       const s = strategy
 
-      const swapAssetValue = parseUnits('300000', 6);
+      const swapAssetValue = parseUnits('500000', 6);
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);

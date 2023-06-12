@@ -21,3 +21,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['stMaticRateProvider']
 func.dependencies = ['tStMatic4626Strict']
+func.skip = async () => true

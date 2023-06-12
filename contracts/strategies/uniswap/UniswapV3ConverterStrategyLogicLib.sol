@@ -378,15 +378,13 @@ library UniswapV3ConverterStrategyLogicLib {
 
     uint[] memory amountsOut = quoteExit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, state.totalLiquidity, state.depositorSwapTokens);
 
-    if (state.depositorSwapTokens) {
-      (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
-    }
-
     if (amountsOut[1] < debtAmount) {
       uint tokenBprice = UniswapV3Lib.getPrice(address(state.pool), state.tokenB);
       uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(state.tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / UniswapV3DebtLib.SELL_GAP;
+      // hope underflow is impossible in this case
+      needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] + AppLib.balance(state.tokenA) - 1);
       return (true, needToSellTokenA);
     } else {
       return (false, amountsOut[1] - debtAmount);
@@ -697,7 +695,9 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.tokenA,
         vars.tokenB,
         _getLiquidatorSwapSlippage(vars.pool),
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
     } else {
       /// rebalancing debt
@@ -707,7 +707,9 @@ library UniswapV3ConverterStrategyLogicLib {
         controller,
         state,
         _getLiquidatorSwapSlippage(vars.pool),
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
 
       tokenAmounts = new uint[](2);
@@ -800,7 +802,9 @@ library UniswapV3ConverterStrategyLogicLib {
         vars.tokenB,
         _getLiquidatorSwapSlippage(vars.pool),
         aggParams,
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
     } else {
       /// rebalancing debt
@@ -810,7 +814,9 @@ library UniswapV3ConverterStrategyLogicLib {
         state,
         _getLiquidatorSwapSlippage(vars.pool),
         aggParams,
-        profitToCover
+        profitToCover,
+        oldTotalAssets,
+        splitter
       );
 
       tokenAmounts = new uint[](2);
@@ -840,22 +846,19 @@ library UniswapV3ConverterStrategyLogicLib {
     emit Rebalanced(loss);
   }
 
-  function calcEarned(State storage state) external view returns (uint) {
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    address h = state.strategyProfitHolder;
-
-    (uint fee0, uint fee1) = getFees(state);
-
-    if (state.depositorSwapTokens) {
-      (fee0, fee1) = (fee1, fee0);
+  function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {
+    ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
+    uint len = rewardTokens.length;
+    uint earned;
+    for (uint i; i < len; ++i) {
+      address token = rewardTokens[i];
+      if (token == asset) {
+        earned += amounts[i];
+      } else {
+        earned += liquidator.getPrice(rewardTokens[i], asset, amounts[i]);
+      }
     }
 
-    fee0 += IERC20(tokenA).balanceOf(h);
-    fee1 += IERC20(tokenB).balanceOf(h);
-
-    uint feeBinTermOfA = UniswapV3Lib.getPrice(address(state.pool), tokenB) * fee1 / 10 ** IERC20Metadata(tokenB).decimals();
-
-    return fee0 + feeBinTermOfA;
+    return earned;
   }
 }
