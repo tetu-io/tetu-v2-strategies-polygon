@@ -12,6 +12,7 @@ export class MaticAddresses {
   public static TETU_CONVERTER = "0x5E1226f7e743cA56537B3fab0C1A9ea2FAe7BAb1".toLowerCase(); // v.14
   public static TETU_LIQUIDATOR = "0xC737eaB847Ae6A92028862fE38b828db41314772".toLowerCase();
   public static TETU_LIQUIDATOR_UNIV3_SWAPPER = "0x7b505210a0714d2a889E41B59edc260Fa1367fFe".toLowerCase();
+  public static TETU_LIQUIDATOR_ALGEBRA_SWAPPER = "0x1d2A0025e7782f640E34Ca5aCCB14e0Ebb96B2f8".toLowerCase();
 
   // tokens
   public static WETH_TOKEN = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619".toLowerCase();
@@ -19,7 +20,7 @@ export class MaticAddresses {
   public static USDC_TOKEN = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174".toLowerCase();
   public static WMATIC_TOKEN = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270".toLowerCase();
   public static STMATIC_TOKEN = "0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4".toLowerCase();
-  public static QUICK_TOKEN = "0x831753DD7087CaC61aB5644b308642cc1c33Dc13".toLowerCase();
+  public static QUICK_TOKEN = "0xB5C064F955D8e7F38fE0460C556a72987494eE17".toLowerCase(); // QUICK (new)
   public static SUSHI_TOKEN = "0x0b3F868E0BE5597D5DB7fEB59E1CADBb0fdDa50a".toLowerCase();
   public static WBTC_TOKEN = "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6".toLowerCase();
   public static BIFI_TOKEN = "0xFbdd194376de19a88118e84E279b977f165d01b8".toLowerCase();
@@ -55,7 +56,7 @@ export class MaticAddresses {
   public static pBREW_TOKEN = "0xb5106A3277718eCaD2F20aB6b86Ce0Fee7A21F09".toLowerCase();
   public static dxTETU = "0xacee7bd17e7b04f7e48b29c0c91af67758394f0f".toLowerCase();
   public static xTETU = "0x225084D30cc297F3b177d9f93f5C3Ab8fb6a1454".toLowerCase();
-  public static dQUICK_TOKEN = "0xf28164A485B0B2C90639E47b0f377b4a438a16B1".toLowerCase();
+  public static dQUICK_TOKEN = "0x958d208Cdf087843e9AD98d23823d32E17d723A1".toLowerCase(); // dQUICK (new)
   public static TETU_TOKEN = "0x255707B70BF90aa112006E1b07B9AeA6De021424".toLowerCase();
   public static IRON_TOKEN = "0xD86b5923F3AD7b585eD81B448170ae026c65ae9a".toLowerCase();
   public static amWBTC_TOKEN = "0x5c2ed810328349100A66B82b78a1791B101C9D61".toLowerCase();
@@ -87,8 +88,6 @@ export class MaticAddresses {
   public static oZEMIT_TOKEN = '0xA34E0eaCB7fbB0b0d45da89b083E0f87fcdf6157'.toLowerCase();
   public static MaticX_TOKEN = '0xfa68FB4628DFF1028CFEc22b4162FCcd0d45efb6'.toLowerCase();
   public static wstETH_TOKEN = '0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD'.toLowerCase();
-
-  // public static dQUICK_TOKEN = "".toLowerCase();
 
   // iron
   public static IRON_MINISHEFV2 = "0x1fD1259Fa8CdC60c6E8C86cfA592CA1b8403DFaD".toLowerCase();
@@ -325,6 +324,11 @@ export class MaticAddresses {
   public static UNISWAPV3_WBTC_WETH_500 = '0x50eaEDB835021E4A108B7290636d62E9765cc6d7'.toLowerCase()
   public static UNISWAPV3_WMATIC_USDT_500 = '0x9B08288C3Be4F62bbf8d1C20Ac9C5e6f9467d8B7'.toLowerCase()
   public static UNISWAPV3_WMATIC_WETH_500 = '0x86f1d8390222A3691C28938eC7404A1661E618e0'.toLowerCase()
+
+  // ALGEBRA
+  public static ALGEBRA_USDC_USDT = '0x7b925e617aefd7fb3a93abe3a701135d7a1ba710'.toLowerCase()
+  public static ALGEBRA_dQUICK_QUICK = '0x194257104FabFd9f48bD01bd71A719637B4bbfA9'.toLowerCase()
+  public static ALGEBRA_USDC_QUICK = '0x022df0b3341B3A0157EEA97dD024A93f7496D631'.toLowerCase()
 
   // Aggregators
   public static AGG_ONEINCH_V5 = '0x1111111254EEB25477B68fb85Ed929f73A960582'.toLowerCase()
