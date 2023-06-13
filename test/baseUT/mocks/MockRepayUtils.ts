@@ -104,11 +104,17 @@ export async function setupMockedBorrowEntryKind1(
 ) {
   console.log("setupMockedBorrowEntryKind1.proportion0", proportion0);
   console.log("setupMockedBorrowEntryKind1.proportion1", proportion1);
+
   const collateralAmountIn = await parseUnits(p.collateralAmount, await p.collateralAsset.decimals());
   const collateralAmountToLock = p.collateralAmountOut
-    ? await parseUnits(p.collateralAmount, await p.collateralAsset.decimals())
+    ? await parseUnits(p.collateralAmountOut, await p.collateralAsset.decimals())
     : collateralAmountIn;
+
   const borrowAmount = parseUnits(p.maxTargetAmount, await p.borrowAsset.decimals());
+  const borrowAmountToReturn = p.borrowAmountOut
+    ? parseUnits(p.borrowAmountOut, await p.borrowAsset.decimals())
+    : borrowAmount;
+
   await converter.setFindBorrowStrategyOutputParams(
     defaultAbiCoder.encode(['uint256', 'uint256', 'uint256'], [1, proportion0, proportion1]),
     [p.converter],
@@ -126,9 +132,9 @@ export async function setupMockedBorrowEntryKind1(
     p.collateralAsset.address,
     collateralAmountToLock,
     p.borrowAsset.address,
-    borrowAmount,
+    borrowAmountToReturn,
     user,
-    borrowAmount,
+    borrowAmountToReturn,
   );
 
   await p.borrowAsset.mint(converter.address, borrowAmount);

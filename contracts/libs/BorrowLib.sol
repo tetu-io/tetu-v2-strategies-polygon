@@ -9,8 +9,11 @@ import "hardhat/console.sol";
 library BorrowLib {
 
   struct RebalanceAssetsLocal {
+    address asset0;
+    address asset1;
     uint amount0;
     uint amount1;
+    uint proportion;
     uint[] prices;
     uint[] decs;
     uint directDebt;
@@ -42,8 +45,9 @@ library BorrowLib {
     console.log("rebalanceAssets.proportion", proportion);
 
     RebalanceAssetsLocal memory v;
-    v.amount0 = IERC20(asset0).balanceOf(address(this));
-    v.amount1 = IERC20(asset1).balanceOf(address(this));
+    v.asset0 = asset0;
+    v.asset1 = asset1;
+    v.proportion = proportion;
 
     IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle());
     address[] memory tokens = new address[](2);
@@ -51,37 +55,47 @@ library BorrowLib {
     tokens[1] = asset1;
     (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(priceOracle, tokens, 2);
 
-    uint cost0 = v.amount0 * v.prices[0] / v.decs[0];
-    uint cost1 = v.amount1 * v.prices[1] / v.decs[1];
-    uint requiredCost0 = (cost0 + cost1) * proportion / 100_000;
-    console.log("rebalanceAssets.cost0", cost0);
-    console.log("rebalanceAssets.requiredCost0", requiredCost0);
-    console.log("rebalanceAssets.cost1", cost1);
+    v.amount0 = IERC20(asset0).balanceOf(address(this));
+    v.amount1 = IERC20(asset1).balanceOf(address(this));
+    console.log("rebalanceAssets.amount0", v.amount0);
+    console.log("rebalanceAssets.amount1", v.amount1);
 
     (v.directDebt, v.directCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), asset0, asset1, false);
     console.log("rebalanceAssets.directDebt", v.directDebt);
     console.log("rebalanceAssets.directCollateral", v.directCollateral);
+
     (v.reverseDebt, v.reverseCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), asset1, asset0, false);
     console.log("rebalanceAssets.reverseDebt", v.reverseDebt);
     console.log("rebalanceAssets.reverseCollateral", v.reverseCollateral);
+
+    _rebalanceAssets(v, tetuConverter_);
+  }
+
+  function _rebalanceAssets(RebalanceAssetsLocal memory v, ITetuConverter tetuConverter_) internal {
+    uint cost0 = v.amount0 * v.prices[0] / v.decs[0];
+    uint cost1 = v.amount1 * v.prices[1] / v.decs[1];
+    uint requiredCost0 = (cost0 + cost1) * v.proportion / 100_000;
+    console.log("rebalanceAssets.cost0", cost0);
+    console.log("rebalanceAssets.requiredCost0", requiredCost0);
+    console.log("rebalanceAssets.cost1", cost1);
 
     if (requiredCost0 > cost0) {
       console.log("rebalanceAssets.1");
       // we need to increase amount of asset 0 and decrease amount of asset 1
       RebalanceAssetsCore memory c10 = RebalanceAssetsCore({
         converter: tetuConverter_,
-        asset0: asset1,
-        asset1: asset0,
-        prop0: 100_000 - proportion,
-        prop1: proportion,
+        asset0: v.asset1,
+        asset1: v.asset0,
+        prop0: 100_000 - v.proportion,
+        prop1: v.proportion,
         a02a1r: 1e18 * v.prices[0] * v.decs[1] / v.prices[1] / v.decs[0]
       });
 
       if (v.directDebt > 0) {
         console.log("rebalanceAssets.2");
-        // repay of asset 1 is required
-        uint requiredAmount0 = (requiredCost0 - cost0) * v.decs[1] / v.prices[1];
-        rebalanceRepayBorrow(c10, requiredAmount0, v.directDebt, v.directCollateral);
+        // repay of v.asset1 is required
+        uint requiredAmount0 = (requiredCost0 - cost0) * v.decs[0] / v.prices[0];
+        rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt, v.directCollateral);
       } else if (v.reverseDebt > 0) {
         console.log("rebalanceAssets.3");
         // additional borrow of asset 0 is required
@@ -95,10 +109,10 @@ library BorrowLib {
       console.log("rebalanceAssets.5");
       RebalanceAssetsCore memory c01 = RebalanceAssetsCore({
         converter: tetuConverter_,
-        asset0: asset1,
-        asset1: asset0,
-        prop0: proportion,
-        prop1: 100_000 - proportion,
+        asset0: v.asset0,
+        asset1: v.asset1,
+        prop0: v.proportion,
+        prop1: 100_000 - v.proportion,
         a02a1r: 1e18 * v.prices[1] * v.decs[0] / v.prices[0] / v.decs[1]
       });
       // we need to decrease amount of asset 0 and increase amount of asset 1
@@ -108,10 +122,10 @@ library BorrowLib {
         openPosition(c01, v.amount0, v.amount1);
       } else if (v.reverseDebt > 0) {
         console.log("rebalanceAssets.7");
-        // repay of asset 0 is required
-        uint requiredCost1 = (cost0 + cost1) * (100_000 - proportion) / 100_000;
-        uint requiredAmount1 = (requiredCost1 - cost1) * v.decs[0] / v.prices[0];
-        rebalanceRepayBorrow(c01, requiredAmount1, v.reverseDebt, v.reverseCollateral);
+        // repay of v.asset0 is required
+        uint requiredCost1 = (cost0 + cost1) * (100_000 - v.proportion) / 100_000;
+        uint requiredAmount1 = (requiredCost1 - cost1) * v.decs[1] / v.prices[1];
+        rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt, v.reverseCollateral);
       } else {
         console.log("rebalanceAssets.8");
         // we need to borrow asset 1 under asset 0
@@ -156,24 +170,45 @@ library BorrowLib {
 
   /// @notice Repay {amountDebt1} fully or partially to get at least {requiredAmount0} of collateral.
   ///         Borrow asset0 under asset1 to make required proportions of the assets on the balances.
+  /// @param requiredAmount1 Amount of collateral that we need to receive after repay
+  /// @param amountDebt0 Total amount that is required to pay to close the debt
+  /// @param amountCollateral1 Total locked collateral
   function rebalanceRepayBorrow(
+    RebalanceAssetsLocal memory v,
     RebalanceAssetsCore memory c,
     uint requiredAmount1,
     uint amountDebt0,
     uint amountCollateral1
-  ) internal returns (
-    uint collateralAmountOut,
-    uint borrowedAmountOut
-  ) {
+  ) internal {
+    console.log("rebalanceRepayBorrow");
+    console.log("rebalanceRepayBorrow.requiredAmount1", requiredAmount1);
+    console.log("rebalanceRepayBorrow.amountDebt0", amountDebt0);
+    console.log("rebalanceRepayBorrow.amountCollateral1", amountCollateral1);
+    console.log("rebalanceRepayBorrow.amount0.before.repay", IERC20(v.asset0).balanceOf(address(this)));
+    console.log("rebalanceRepayBorrow.amount1.before.repay", IERC20(v.asset1).balanceOf(address(this)));
+
     // we need to get {requiredAmount0}
     // we don't know exact amount to repay
     // but we are sure that amount {requiredAmount0 ===> requiredAmount1} would be more than required
-    uint requiredAmount0 = requiredAmount1 * 1e36 / c.a02a1r;
-    ConverterStrategyBaseLib._repayDebt(c.converter, c.asset0, c.asset1, Math.min(requiredAmount0, amountDebt0));
-    return openPosition(
-      c,
-      IERC20(c.asset0).balanceOf(address(this)),
-      IERC20(c.asset1).balanceOf(address(this))
-    );
+    uint requiredAmount0 = requiredAmount1 * 1e18 / c.a02a1r;
+    console.log("rebalanceRepayBorrow.requiredAmount0", requiredAmount0);
+    console.log("rebalanceRepayBorrow._repayDebt", Math.min(requiredAmount0, amountDebt0));
+    ConverterStrategyBaseLib._repayDebt(c.converter, c.asset1, c.asset0, Math.min(requiredAmount0, amountDebt0));
+
+    // reinitialize v-variables
+    v.amount0 = IERC20(v.asset0).balanceOf(address(this));
+    v.amount1 = IERC20(v.asset1).balanceOf(address(this));
+    console.log("rebalanceRepayBorrow.amount0", v.amount0);
+    console.log("rebalanceRepayBorrow.amount1", v.amount1);
+
+    (v.directDebt, v.directCollateral) = c.converter.getDebtAmountCurrent(address(this), v.asset0, v.asset1, false);
+    console.log("rebalanceRepayBorrow.directDebt", v.directDebt);
+    console.log("rebalanceRepayBorrow.directCollateral", v.directCollateral);
+
+    (v.reverseDebt, v.reverseCollateral) = c.converter.getDebtAmountCurrent(address(this), v.asset1, v.asset0, false);
+    console.log("rebalanceRepayBorrow.reverseDebt", v.reverseDebt);
+    console.log("rebalanceRepayBorrow.reverseCollateral", v.reverseCollateral);
+
+    return _rebalanceAssets(v, c.converter);
   }
 }

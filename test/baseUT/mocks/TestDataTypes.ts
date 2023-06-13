@@ -35,6 +35,11 @@ export interface IBorrowParamsNum {
    * It can be different from collateralAmount for i.e. entry-kind-1
    */
   collateralAmountOut?: string;
+  /**
+   * amount borrowed under collateralAmountOut
+   * It can be different from maxTargetAmount for i.e. entry-kind-1
+   */
+  borrowAmountOut?: string;
 }
 export interface IRepayParams {
   collateralAsset: MockToken;

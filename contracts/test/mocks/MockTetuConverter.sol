@@ -58,11 +58,11 @@ contract MockTetuConverter is ITetuConverter {
     int[] memory aprs18
   ) {
     periodInBlocks_;
-    console.log("MockTetuConverter.findBorrowStrategies token,amountIn", sourceToken_, amountIn_);
+    console.log("MockTetuConverter.findBorrowStrategies token,amountIn", _tokenName(sourceToken_), amountIn_);
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
     console.log("MockTetuConverter.findBorrowStrategies.key", uint(key));
     FindBorrowStrategyOutputParams memory p = findBorrowStrategyOutputParams[key];
-    console.log("MockTetuConverter.p.sourceToken", p.sourceToken);
+    console.log("MockTetuConverter.p.sourceToken", _tokenName(p.sourceToken));
     if (sourceToken_ == p.sourceToken) {
       return (
         p.converters,
@@ -340,7 +340,7 @@ contract MockTetuConverter is ITetuConverter {
   ) {
     console.log("MockTetuConverter.repay collateral,borrow,amount", _tokenName(collateralAsset_), _tokenName(borrowAsset_), amountToRepay_);
 
-    require(IERC20Metadata(borrowAsset_).balanceOf(address(this)) == amountToRepay_, "MockTetuConverter.repay.amountToRepay_");
+    require(IERC20Metadata(borrowAsset_).balanceOf(address(this)) >= amountToRepay_, "MockTetuConverter.repay.amountToRepay_");
 
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     RepayParams memory p = repayParams[key];
@@ -365,6 +365,12 @@ contract MockTetuConverter is ITetuConverter {
         require(balanceBorrow >= p.returnedBorrowAmountOut, "MockTetuConverter.repay.returnedBorrowAmountOut");
         IERC20Metadata(borrowAsset_).transfer(receiver_, p.returnedBorrowAmountOut);
       }
+
+      // clear debt info
+      key = keccak256(abi.encodePacked(receiver_, collateralAsset_, borrowAsset_, true));
+      delete getDebtAmountCurrentParams[key];
+      key = keccak256(abi.encodePacked(receiver_, collateralAsset_, borrowAsset_, false));
+      delete getDebtAmountCurrentParams[key];
 
       return (
         p.collateralAmountOut,
