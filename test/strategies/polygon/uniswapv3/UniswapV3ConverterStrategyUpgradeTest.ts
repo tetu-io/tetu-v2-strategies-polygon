@@ -13,6 +13,7 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {parseUnits} from "ethers/lib/utils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 
 const { expect } = chai;
 
@@ -36,6 +37,7 @@ describe('UniswapV3ConverterStrategyUpgradeTests', function() {
     return;
   }
 
+  let snapshotBefore: string;
   const strategyAddress = '0x05C7D307632a36D31D7eECbE4cC5Aa46D15fA752' // USDC-USDT-100
   let signer: SignerWithAddress
   let strategy: UniswapV3ConverterStrategy
@@ -45,6 +47,7 @@ describe('UniswapV3ConverterStrategyUpgradeTests', function() {
   let splitterNewImpl: StrategySplitterV2
 
   before(async function() {
+    snapshotBefore = await TimeUtils.snapshot();
     [signer] = await ethers.getSigners();
 
     newImpl = await DeployerUtils.deployContract(signer, 'UniswapV3ConverterStrategy') as UniswapV3ConverterStrategy
@@ -54,6 +57,10 @@ describe('UniswapV3ConverterStrategyUpgradeTests', function() {
     splitter = StrategySplitterV2__factory.connect(await strategy.splitter(), signer)
 
     profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN]) as StrategyProfitHolder
+  })
+
+  after(async function() {
+    await TimeUtils.rollback(snapshotBefore);
   })
 
   it('Upgrade splitter and strategy', async() => {

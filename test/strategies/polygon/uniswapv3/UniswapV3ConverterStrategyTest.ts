@@ -79,6 +79,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let FEE_DENOMINATOR: BigNumber;
 
   before(async function() {
+    snapshotBefore = await TimeUtils.snapshot();
     await hre.network.provider.request({
       method: "hardhat_reset",
       params: [
@@ -93,8 +94,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
     [signer, signer2, signer3] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
-
-    snapshotBefore = await TimeUtils.snapshot();
 
     const core = Addresses.getCore();
     controller = DeployerUtilsLocal.getController(signer);
@@ -270,7 +269,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   after(async function() {
-    await TimeUtils.rollback(snapshotBefore);
     await hre.network.provider.request({
       method: "hardhat_reset",
       params: [
@@ -282,6 +280,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
         },
       ],
     });
+    await TimeUtils.rollback(snapshotBefore);
   });
 
   beforeEach(async function() {

@@ -18,7 +18,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.3";
+  string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.4";
 
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
@@ -146,7 +146,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @param liquidityAmount The amount of liquidity to quote the withdrawal for.
   /// @return amountsOut The amounts of the tokens that would be withdrawn.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = UniswapV3ConverterStrategyLogicLib.quoteExit(state.pool, state.lowerTick, state.upperTick, state.lowerTickFillup, state.upperTickFillup, state.totalLiquidity, state.totalLiquidityFillup, uint128(liquidityAmount), state.depositorSwapTokens);
+    amountsOut = UniswapV3ConverterStrategyLogicLib.quoteExit(state, uint128(liquidityAmount));
   }
 
   /////////////////////////////////////////////////////////////////////
