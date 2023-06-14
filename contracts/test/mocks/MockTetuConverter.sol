@@ -436,7 +436,7 @@ contract MockTetuConverter is ITetuConverter {
   ) {
     user_;
     // hide warning
-    console.log("MockTetuConverter.quoteRepay collateral,borrow,amount", _tokenName(collateralAsset_), _tokenName(borrowAsset_), amountToRepay_);
+    console.log("MockTetuConverter.quoteRepay collateral,borrow,amountToRepay", _tokenName(collateralAsset_), _tokenName(borrowAsset_), amountToRepay_);
 
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     QuoteRepayParams memory p = quoteRepayParams[key];
