@@ -964,7 +964,8 @@ library ConverterStrategyBaseLib {
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
-  /// @return amountOut Invested asset amount under control (in terms of {asset})
+  /// @param indexAsset Index of the underlying (main asset) in {tokens}
+  /// @return amountOut Invested asset amount under control (in terms of underlying)
   function calcInvestedAssets(
     address[] memory tokens,
     uint[] memory depositorQuoteExitAmountsOut,
@@ -985,14 +986,36 @@ library ConverterStrategyBaseLib {
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      console.log("calcInvestedAssets.i", i);
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
       } else {
-        // available amount to repay
-        uint toRepay = IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
-
+        console.log("calcInvestedAssets.not underlying", i);
+        // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(
+          address(this),
+          tokens[i],
+          tokens[indexAsset],
+          // investedAssets is calculated using exact debts, debt-gaps are not taken into account
+          false
+        );
+        console.log("calcInvestedAssets.toPay", toPay);
+        console.log("calcInvestedAssets.collateral", collateral);
+        if (amountOut < toPay) {
+          setDebt(v, indexAsset, toPay);
+          console.log("calcInvestedAssets.setDebt", v.debts[indexAsset]);
+        } else {
+          amountOut -= toPay;
+          console.log("calcInvestedAssets.amountOut.2", amountOut);
+        }
+
+        // available amount to repay
+        uint toRepay = collateral + IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
+        console.log("calcInvestedAssets.toRepay", toRepay);
+
+        // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
+        (toPay, collateral) = converter_.getDebtAmountCurrent(
           address(this),
           tokens[indexAsset],
           tokens[i],
@@ -1006,13 +1029,7 @@ library ConverterStrategyBaseLib {
         } else {
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
-          if (v.debts.length == 0) {
-            // lazy initialization
-            v.debts = new uint[](v.len);
-          }
-
-          // to pay the following amount we need to swap some other asset at first
-          v.debts[i] = toPay - toRepay;
+          setDebt(v, i, toPay - toRepay);
         }
       }
     }
@@ -1037,6 +1054,17 @@ library ConverterStrategyBaseLib {
     }
 
     return amountOut;
+  }
+
+  /// @notice Lazy initialization of v.debts, add {value} to {v.debts[index]}
+  function setDebt(CalcInvestedAssetsLocal memory v, uint index, uint value) internal {
+    if (v.debts.length == 0) {
+      // lazy initialization
+      v.debts = new uint[](v.len);
+    }
+
+    // to pay the following amount we need to swap some other asset at first
+    v.debts[index] += value;
   }
   //endregion calcInvestedAssets
 
@@ -1360,7 +1388,14 @@ library ConverterStrategyBaseLib {
         if (i == indexAsset) continue;
 
         // we need to increase balance on the following amount: requestedAmount - v.balance;
-        // we have following borrow: amount-to-pay and corresponded collateral
+        // we can have two possible borrows: 1) direct (v.asset => tokens[i]) and 2) reverse (tokens[i] => v.asset)
+        // normally we can have only one of them, not both.. but better to take into account possibility to have two debts simultaneously
+
+        // reverse debt
+        (v.totalDebt, v.totalCollateral) = converter_.getDebtAmountCurrent(address(this), tokens[i], v.asset, true);
+        // todo
+
+        // direct debt
         (v.totalDebt, v.totalCollateral) = converter_.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
 
         uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));

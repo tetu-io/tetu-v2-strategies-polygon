@@ -1591,6 +1591,8 @@ describe('ConverterStrategyBaseLibTest', () => {
         borrowAsset: MockToken;
         debtAmount: string;
         collateralAmount: string;
+        /** We need if for reverse debts. Byt default it's equal to underlying */
+        collateralAsset?: MockToken;
       }[];
     }
 
@@ -1612,13 +1614,14 @@ describe('ConverterStrategyBaseLibTest', () => {
       }
       const tc = await MockHelper.createMockTetuConverter(signer);
       if (params.debts) {
-        for (let i = 0; i < params.debts.length; ++i) {
+        for (const item of params.debts) {
+          const collateralAsset = (item.collateralAsset ?? params.tokens[params.indexAsset]);
           await tc.setGetDebtAmountCurrent(
             facade.address,
-            params.tokens[params.indexAsset].address,
-            params.debts[i].borrowAsset.address,
-            parseUnits(params.debts[i].debtAmount, decimals[i]),
-            parseUnits(params.debts[i].collateralAmount, decimals[params.indexAsset]),
+            collateralAsset.address,
+            item.borrowAsset.address,
+            parseUnits(item.debtAmount, await item.borrowAsset.decimals()),
+            parseUnits(item.collateralAmount, await collateralAsset.decimals()),
             false
           );
         }
@@ -1669,99 +1672,145 @@ describe('ConverterStrategyBaseLibTest', () => {
             expect(ret).eq(expected);
           });
         });
-        describe('There is a debt', () => {
-          describe('Amount to repay == amount of the debt', () => {
-            it('should return expected values', async() => {
-              const ret = (await makeCalcInvestedAssetsTest({
-                tokens: [dai, usdc, usdt],
-                indexAsset: 1,
-                balances: ['117', '1987', '300'],
-                prices: ['20', '10', '60'],
-                debts: [
-                  {
+        describe("Direct debts only", () => {
+          describe('There is a debt', () => {
+            describe('Amount to repay == amount of the debt', () => {
+              it('should return expected values', async () => {
+                const ret = (await makeCalcInvestedAssetsTest({
+                  tokens: [dai, usdc, usdt],
+                  indexAsset: 1,
+                  balances: ['117', '1987', '300'],
+                  prices: ['20', '10', '60'],
+                  debts: [
+                    {
+                      debtAmount: '117',
+                      collateralAmount: '1500',
+                      borrowAsset: dai,
+                    },
+                  ],
+                })).amountOut;
+                const expected = 1500 + 300 * 60 / 10;
+
+                expect(ret).eq(expected);
+              });
+            });
+            describe('Amount to repay > amount of the debt', () => {
+              it('should return expected values', async () => {
+                const ret = (await makeCalcInvestedAssetsTest({
+                  tokens: [dai, usdc, usdt],
+                  indexAsset: 1,
+                  balances: ['117', '1987', '300'],
+                  prices: ['20', '10', '60'],
+                  debts: [
+                    {
+                      debtAmount: '17',
+                      collateralAmount: '500',
+                      borrowAsset: dai,
+                    },
+                  ],
+                })).amountOut;
+                const expected = 500 + (117 - 17) * 20 / 10 + 300 * 60 / 10;
+
+                expect(ret).eq(expected);
+              });
+            });
+            describe('Amount to repay < amount of the debt, the repayment is profitable', () => {
+              it('should return expected values', async () => {
+                const ret = (await makeCalcInvestedAssetsTest({
+                  tokens: [dai, usdc, usdt],
+                  indexAsset: 1,
+                  balances: ['117', '1987', '300'],
+                  prices: ['20', '10', '60'],
+                  debts: [
+                    {
+                      debtAmount: '217',
+                      collateralAmount: '500',
+                      borrowAsset: dai,
+                    },
+                  ],
+                })).amountOut;
+                const availableMainAsset = 300 * 60 / 10;
+                const amountToPayTheDebt = (217 - 117) * 20 / 10;
+                const expected = availableMainAsset + 500 - amountToPayTheDebt;
+
+                expect(ret).eq(expected);
+              });
+            });
+            describe('Amount to repay < amount of the debt, the repayment is NOT profitable', () => {
+              it('should return expected values', async () => {
+                const ret = (await makeCalcInvestedAssetsTest({
+                  tokens: [dai, usdc, usdt],
+                  indexAsset: 1,
+                  balances: ['117', '1987', '300'],
+                  prices: ['20', '10', '60'],
+                  debts: [
+                    {
+                      debtAmount: '5117',
+                      collateralAmount: '500',
+                      borrowAsset: dai,
+                    },
+                  ],
+                })).amountOut;
+                const availableMainAsset = 300 * 60 / 10;
+                const amountToPayTheDebt = (5117 - 117) * 20 / 10;
+                const expected = 0; // amountToPayTheDebt > availableMainAsset + 500 (collateral)
+
+                expect(ret).eq(expected);
+              });
+            });
+          });
+          describe('There are two debts', () => {
+            /**
+             * Fix coverage for calcInvestedAssets:
+             * else part for "if (v.debts.length == 0)"
+             */
+            describe('Amount to repay < total amount of the debts', () => {
+              it('should return expected values', async () => {
+                const ret = (await makeCalcInvestedAssetsTest({
+                  tokens: [dai, usdc, usdt],
+                  indexAsset: 1,
+                  balances: ['116', '1987', '299'],
+                  prices: ['20', '10', '60'],
+                  debts: [{
                     debtAmount: '117',
-                    collateralAmount: '1500',
-                    borrowAsset: dai,
-                  },
-                ],
-              })).amountOut;
-              const expected = 1500 + 300 * 60 / 10;
-
-              expect(ret).eq(expected);
-            });
-          });
-          describe('Amount to repay > amount of the debt', () => {
-            it('should return expected values', async() => {
-              const ret = (await makeCalcInvestedAssetsTest({
-                tokens: [dai, usdc, usdt],
-                indexAsset: 1,
-                balances: ['117', '1987', '300'],
-                prices: ['20', '10', '60'],
-                debts: [
-                  {
-                    debtAmount: '17',
                     collateralAmount: '500',
                     borrowAsset: dai,
-                  },
-                ],
-              })).amountOut;
-              const expected = 500 + (117 - 17) * 20 / 10 + 300 * 60 / 10;
+                  }, {
+                    debtAmount: '300',
+                    collateralAmount: '700',
+                    borrowAsset: usdt,
+                  }],
+                })).amountOut;
+                const expected = 495 + 697; // 116*500/117 = 495, 299*700/300 = 697
 
-              expect(ret).eq(expected);
-            });
-          });
-          describe('Amount to repay < amount of the debt, the repayment is profitable', () => {
-            it('should return expected values', async() => {
-              const ret = (await makeCalcInvestedAssetsTest({
-                tokens: [dai, usdc, usdt],
-                indexAsset: 1,
-                balances: ['117', '1987', '300'],
-                prices: ['20', '10', '60'],
-                debts: [
-                  {
-                    debtAmount: '217',
-                    collateralAmount: '500',
-                    borrowAsset: dai,
-                  },
-                ],
-              })).amountOut;
-              const availableMainAsset = 300 * 60 / 10;
-              const amountToPayTheDebt = (217 - 117) * 20 / 10;
-              const expected = availableMainAsset + 500 - amountToPayTheDebt;
-
-              expect(ret).eq(expected);
-            });
-          });
-          describe('Amount to repay < amount of the debt, the repayment is NOT profitable', () => {
-            it('should return expected values', async() => {
-              const ret = (await makeCalcInvestedAssetsTest({
-                tokens: [dai, usdc, usdt],
-                indexAsset: 1,
-                balances: ['117', '1987', '300'],
-                prices: ['20', '10', '60'],
-                debts: [
-                  {
-                    debtAmount: '5117',
-                    collateralAmount: '500',
-                    borrowAsset: dai,
-                  },
-                ],
-              })).amountOut;
-              const availableMainAsset = 300 * 60 / 10;
-              const amountToPayTheDebt = (5117 - 117) * 20 / 10;
-              const expected = 0; // amountToPayTheDebt > availableMainAsset + 500 (collateral)
-
-              expect(ret).eq(expected);
+                expect(ret).eq(expected);
+              });
             });
           });
         });
-        describe('There are two debts', () => {
-          /**
-           * Fix coverage for calcInvestedAssets:
-           * else part for "if (v.debts.length == 0)"
-           */
-          describe('Amount to repay < total amount of the debts', () => {
-            it('should return expected values', async() => {
+        describe("Reverse debts only", () => {
+          describe('Single reverse debt', () => {
+            it('should return expected values', async () => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                balances: ['200', '1987', '300'],
+                prices: ['20', '10', '60'],
+                debts: [
+                  {
+                    debtAmount: '800',
+                    collateralAmount: '1100',
+                    borrowAsset: usdc,
+                    collateralAsset: dai
+                  },
+                ],
+              })).amountOut;
+
+              expect(ret).eq((1100 + 200) * 20 / 10 + 300 * 60 / 10 - 800);
+            });
+          });
+          describe('Two reverse debts', () => {
+            it('should return expected values', async () => {
               const ret = (await makeCalcInvestedAssetsTest({
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
@@ -1770,16 +1819,39 @@ describe('ConverterStrategyBaseLibTest', () => {
                 debts: [{
                   debtAmount: '117',
                   collateralAmount: '500',
-                  borrowAsset: dai,
+                  borrowAsset: usdc,
+                  collateralAsset: dai,
                 }, {
                   debtAmount: '300',
                   collateralAmount: '700',
-                  borrowAsset: usdt,
+                  borrowAsset: usdc,
+                  collateralAsset: usdt
                 }],
               })).amountOut;
-              const expected = 495 + 697; // 116*500/117 = 495, 299*700/300 = 697
 
-              expect(ret).eq(expected);
+              expect(ret).eq((500 + 116) * 20 / 10 + (299 + 700) * 60 / 10 - 300 - 117);
+            });
+          });
+          describe('There are reverse and direct debts at the same time (incorrect situation that should be avoided)', () => {
+            it('should return expected values', async () => {
+              const ret = (await makeCalcInvestedAssetsTest({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                balances: ['116', '1987', '299'],
+                prices: ['20', '10', '60'],
+                debts: [{ // reverse debt
+                  debtAmount: '117',
+                  collateralAmount: '500',
+                  borrowAsset: usdc,
+                  collateralAsset: dai,
+                }, { // direct debt
+                  debtAmount: '600',
+                  collateralAmount: '990',
+                  borrowAsset: dai,
+                }],
+              })).amountOut;
+
+              expect(ret).eq((500 + 116 - 600) * 20 / 10 + 299 * 60 / 10 - 117 + 990);
             });
           });
         });
