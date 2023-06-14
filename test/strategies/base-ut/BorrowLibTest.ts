@@ -19,7 +19,6 @@ import {setupMockedBorrowEntryKind1, setupMockedQuoteRepay, setupMockedRepay} fr
 import {
   Misc
 } from "../../../scripts/utils/Misc";
-import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
 
 describe('BorrowLibTest', () => {
   //region Variables
@@ -122,8 +121,12 @@ describe('BorrowLibTest', () => {
             converter,
             facade.address,
             borrow,
-            p.proportion,
-            100_000 - p.proportion
+            borrow.collateralAsset === p.tokenX
+              ? p.proportion
+              : 100_000 - p.proportion,
+            borrow.collateralAsset === p.tokenX
+              ? 100_000 - p.proportion
+              : p.proportion,
           );
           await borrow.collateralAsset.connect(await Misc.impersonate(facade.address)).approve(converter.address, Misc.MAX_UINT);
         }
@@ -613,6 +616,58 @@ describe('BorrowLibTest', () => {
               expect(r.balanceX).eq(4380);
               expect(r.balanceY).eq(4380);
             });
+          });
+        });
+      });
+
+    });
+    describe("not equal proportions", () => {
+      describe("Current state - no debts", () => {
+        describe("Need to reduce USDC, increase USDT", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+            /**
+             * 600 USDC = 100 USDC + 500 USDC
+             *      Collateral 500 USDC => 500/1.25 = 400 USDT
+             * Result:
+             *  100 USDC (+500c)
+             *  400 USDC (-400b)
+             *  Proportion is 4 usdc:1 usdt or 80:20
+             */
+            return makeRebalanceAssets({
+              tokenX: usdc,
+              tokenY: usdt,
+              proportion: 20_000, // 20 usdc:80 usdt
+              strategyBalances: {
+                balanceX: "600",
+                balanceY: "0"
+              },
+              borrows: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+
+                collateralAmount: "600", // 600 / 480 = 1.25
+                maxTargetAmount: "480",
+
+                collateralAmountOut: "499.999999", // 500 / 400 = 1.25
+                borrowAmountOut: "399.999999",
+
+                converter: ethers.Wallet.createRandom().address,
+              }]
+            })
+          }
+
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRebalanceAssetsTest);
+            expect(r.balanceX).eq(100.000001);
+            expect(r.balanceY).eq(399.999999);
           });
         });
       });

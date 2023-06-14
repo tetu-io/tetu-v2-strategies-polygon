@@ -104,6 +104,8 @@ export async function setupMockedBorrowEntryKind1(
 ) {
   console.log("setupMockedBorrowEntryKind1.proportion0", proportion0);
   console.log("setupMockedBorrowEntryKind1.proportion1", proportion1);
+  console.log("setupMockedBorrowEntryKind1.p.collateralAmount", p.collateralAmount);
+  console.log("setupMockedBorrowEntryKind1.p.collateralAmountOut", p.collateralAmountOut);
 
   const collateralAmountIn = await parseUnits(p.collateralAmount, await p.collateralAsset.decimals());
   const collateralAmountToLock = p.collateralAmountOut
@@ -122,7 +124,7 @@ export async function setupMockedBorrowEntryKind1(
     [borrowAmount],
     [parseUnits("1", 18)], // apr value doesn't matter
     p.collateralAsset.address,
-    collateralAmountToLock,
+    collateralAmountIn,
     p.borrowAsset.address,
     30*24*60*60/2 // === _LOAN_PERIOD_IN_BLOCKS
   );

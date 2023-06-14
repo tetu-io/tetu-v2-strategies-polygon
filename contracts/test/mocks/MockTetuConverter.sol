@@ -58,10 +58,12 @@ contract MockTetuConverter is ITetuConverter {
     int[] memory aprs18
   ) {
     periodInBlocks_;
-    console.log("MockTetuConverter.findBorrowStrategies token,amountIn", _tokenName(sourceToken_), amountIn_);
+    console.log("MockTetuConverter.findBorrowStrategies source token,amountIn", _tokenName(sourceToken_), amountIn_);
+    console.log("MockTetuConverter.findBorrowStrategies target token", _tokenName(targetToken_));
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
     console.log("MockTetuConverter.findBorrowStrategies.key", uint(key));
     FindBorrowStrategyOutputParams memory p = findBorrowStrategyOutputParams[key];
+    require(p.sourceToken != address(0), "findBorrowStrategies key not found");
     console.log("MockTetuConverter.p.sourceToken", _tokenName(p.sourceToken));
     if (sourceToken_ == p.sourceToken) {
       return (
@@ -87,7 +89,7 @@ contract MockTetuConverter is ITetuConverter {
     address targetToken_,
     uint periodInBlocks_
   ) external {
-    console.log("setFindBorrowStrategyOutputParams", _tokenName(sourceToken_), sourceAmount_, _tokenName(targetToken_));
+    console.log("setFindBorrowStrategyOutputParams source token, source amount, target token", _tokenName(sourceToken_), sourceAmount_, _tokenName(targetToken_));
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
     console.log("setFindBorrowStrategyOutputParams.key", uint(key));
     findBorrowStrategyOutputParams[key] = FindBorrowStrategyOutputParams({
