@@ -16,9 +16,12 @@ import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
 import {setupMockedBorrowEntryKind1, setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
-import {Misc} from "../../../scripts/utils/Misc";
+import {
+  Misc
+} from "../../../scripts/utils/Misc";
+import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
 
-describe('ConverterStrategyBaseAccessFixTest', () => {
+describe('BorrowLibTest', () => {
   //region Variables
   let snapshotBefore: string;
   let governance: SignerWithAddress;

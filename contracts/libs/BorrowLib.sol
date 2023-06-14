@@ -64,11 +64,11 @@ library BorrowLib {
     console.log("rebalanceAssets.amount0", v.amount0);
     console.log("rebalanceAssets.amount1", v.amount1);
 
-    (v.directDebt, v.directCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), asset0, asset1, false);
+    (v.directDebt, v.directCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), asset0, asset1, true);
     console.log("rebalanceAssets.directDebt", v.directDebt);
     console.log("rebalanceAssets.directCollateral", v.directCollateral);
 
-    (v.reverseDebt, v.reverseCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), asset1, asset0, false);
+    (v.reverseDebt, v.reverseCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), asset1, asset0, true);
     console.log("rebalanceAssets.reverseDebt", v.reverseDebt);
     console.log("rebalanceAssets.reverseCollateral", v.reverseCollateral);
 
@@ -211,11 +211,11 @@ library BorrowLib {
     console.log("rebalanceRepayBorrow.amount0", v.amount0);
     console.log("rebalanceRepayBorrow.amount1", v.amount1);
 
-    (v.directDebt, v.directCollateral) = c.converter.getDebtAmountCurrent(address(this), v.asset0, v.asset1, false);
+    (v.directDebt, v.directCollateral) = c.converter.getDebtAmountCurrent(address(this), v.asset0, v.asset1, true);
     console.log("rebalanceRepayBorrow.directDebt", v.directDebt);
     console.log("rebalanceRepayBorrow.directCollateral", v.directCollateral);
 
-    (v.reverseDebt, v.reverseCollateral) = c.converter.getDebtAmountCurrent(address(this), v.asset1, v.asset0, false);
+    (v.reverseDebt, v.reverseCollateral) = c.converter.getDebtAmountCurrent(address(this), v.asset1, v.asset0, true);
     console.log("rebalanceRepayBorrow.reverseDebt", v.reverseDebt);
     console.log("rebalanceRepayBorrow.reverseCollateral", v.reverseCollateral);
 

@@ -150,6 +150,10 @@ export async function getAaveThreePlatformAdapter(signer: SignerWithAddress): Pr
   return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3)).address;
 }
 
+export async function getCompoundThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.COMPOUND3_5)).address;
+}
+
 async function getPlatformAdapter(signer: SignerWithAddress, lendingPlatformKind: LendingPlatformKinds): Promise<IPlatformAdapter> {
   const borrowManager = await BorrowManager__factory.connect(
     await IConverterController__factory.connect(
