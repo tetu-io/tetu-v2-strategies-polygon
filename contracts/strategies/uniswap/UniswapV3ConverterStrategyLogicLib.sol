@@ -861,4 +861,106 @@ library UniswapV3ConverterStrategyLogicLib {
 
     return earned;
   }
+
+  function rebalanceNoSwaps(
+    State storage state,
+    ITetuConverter converter,
+    uint oldTotalAssets,
+    uint profitToCover,
+    address splitter
+  ) external returns (
+    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
+  ) {
+    uint loss;
+    tokenAmounts = new uint[](0);
+
+    if (state.fillUp) {
+      revert('Only for swap strategy.'); // todo
+    }
+
+    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
+      upperTick: state.upperTick,
+      lowerTick: state.lowerTick,
+      tickSpacing: state.tickSpacing,
+      pool: state.pool,
+      tokenA: state.tokenA,
+      tokenB: state.tokenB,
+      lastPrice: state.lastPrice,
+      fuseThreshold: state.fuseThreshold,
+      depositorSwapTokens: state.depositorSwapTokens,
+    // setup initial values
+      notCoveredLoss: 0,
+      newLowerTick: 0,
+      newUpperTick: 0,
+      fillUp: state.fillUp,
+      isStablePool: state.isStablePool,
+      newPrice: 0,
+      newTotalAssets: 0
+    });
+
+    require(needRebalance(
+      state.isFuseTriggered,
+      vars.pool,
+      vars.lowerTick,
+      vars.upperTick,
+      vars.tickSpacing,
+      state.rebalanceTickRange
+    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+
+    vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+
+    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
+      /// enabling fuse: close debt and stop providing liquidity
+      state.isFuseTriggered = true;
+      emit FuseTriggered();
+
+      UniswapV3DebtLib.closeDebtByAgg( // todo: can we use swap here?
+        converter,
+        vars.tokenA,
+        vars.tokenB,
+        _getLiquidatorSwapSlippage(vars.pool),
+        aggParams,
+        profitToCover,
+        oldTotalAssets,
+        splitter
+      );
+    } else {
+      // rebalancing debt
+      // setting new tick range
+      UniswapV3DebtLib.rebalanceNoSwaps(
+        converter,
+        state,
+        _getLiquidatorSwapSlippage(vars.pool),
+        aggParams,
+        profitToCover,
+        oldTotalAssets,
+        splitter
+      );
+
+      tokenAmounts = new uint[](2);
+      tokenAmounts[0] = AppLib.balance(vars.tokenA);
+      tokenAmounts[1] = AppLib.balance(vars.tokenB);
+
+      address[] memory tokens = new address[](2);
+      tokens[0] = vars.tokenA;
+      tokens[1] = vars.tokenB;
+      uint[] memory amounts = new uint[](2);
+      amounts[0] = tokenAmounts[0];
+      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+      if (vars.newTotalAssets < oldTotalAssets) {
+        loss = oldTotalAssets - vars.newTotalAssets;
+      }
+    }
+
+    // need to update last price only for stables coz only stables have fuse mechanic
+    if (vars.isStablePool) {
+      state.lastPrice = vars.newPrice;
+    }
+
+    if (loss > 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+    }
+
+    emit Rebalanced(loss);
+  }
 }

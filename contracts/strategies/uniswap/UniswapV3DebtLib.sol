@@ -151,6 +151,30 @@ library UniswapV3DebtLib {
     state.upperTick = newUpperTick;
   }
 
+  function rebalanceNoSwaps(
+    ITetuConverter tetuConverter,
+    UniswapV3ConverterStrategyLogicLib.State storage state,
+    uint liquidatorSwapSlippage,
+    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
+    uint profitToCover,
+    uint totalAssets,
+    address splitter
+  ) external {
+    IUniswapV3Pool pool = state.pool;
+    address tokenA = state.tokenA;
+    address tokenB = state.tokenB;
+    bool depositorSwapTokens = state.depositorSwapTokens;
+    _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
+    if (profitToCover > 0) {
+      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
+    }
+    (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+    _openDebt(tetuConverter, tokenA, tokenB, entryData);
+    state.lowerTick = newLowerTick;
+    state.upperTick = newUpperTick;
+  }
+
   function getEntryData(
     IUniswapV3Pool pool,
     int24 lowerTick,
