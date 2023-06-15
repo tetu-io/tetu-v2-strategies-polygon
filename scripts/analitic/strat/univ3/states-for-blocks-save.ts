@@ -10,31 +10,28 @@ import fs from "fs";
 import {MockHelper} from "../../../../test/baseUT/helpers/MockHelper";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
-const STRATEGY = '0xAe9842896507ba6D926E38BD1E560c3874B9a80c';
+// const STRATEGY = '0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1'; // dai
+const STRATEGY = '0x05C7D307632a36D31D7eECbE4cC5Aa46D15fA752'; // usdt
 const USER = "0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94";
 
 const blocks = [
-  // 41291000, // 9 apr 2023
-  // 41294887,
-  // 41298954,
-  // 41311047,
-  // 41329356,
-  // 41336721,
-  // 41338897,
-  // 41352779,
-  // 41358857,
-  41374971, // 11 apr 2023
-  41381882,
-  41384214,
-  41386913,
-  41389478,
-  41389510,
-  41389540,
-  41390750,
-  41391213,
-  41400812,
-  41401353,
-  41401720
+  // 43906125,
+  // 43907643,
+  // 43908898,
+  // 43910152,
+  // 43911405,
+  // 43912658,
+  // 43913914
+  // 43919173,
+  // 43920427,
+  // 43921680,
+  // 43923003,
+  // 43924257
+  43925615,
+  43926262,
+  43926875,
+  43927510,
+  43928130,
 ];
 
 async function getStateForBlock(
@@ -90,8 +87,8 @@ async function main() {
     const blockPrev = block - 1;
     console.log("block", blockPrev);
 
-    const statePrev = await getStateForBlock(signer, blockPrev, strategy, vault, "B");
-    states.push(statePrev);
+    // const statePrev = await getStateForBlock(signer, blockPrev, strategy, vault, "B");
+    // states.push(statePrev);
 
     const state = await getStateForBlock(signer, block, strategy, vault, "r");
     states.push(state);

@@ -866,6 +866,7 @@ library UniswapV3ConverterStrategyLogicLib {
     State storage state,
     ITetuConverter converter,
     uint oldTotalAssets,
+    RebalanceSwapByAggParams memory aggParams,
     uint profitToCover,
     address splitter
   ) external returns (
