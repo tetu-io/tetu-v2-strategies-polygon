@@ -4,6 +4,7 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../strategies/ConverterStrategyBaseLib.sol";
 import "hardhat/console.sol";
+import "../integrations/tetu-v1/ITetuV1Controller.sol";
 
 /// @notice Library to make new borrow, extend/reduce exist borrows and repay to keep proper assets proportions
 library BorrowLib {
@@ -160,7 +161,10 @@ library BorrowLib {
     }
   }
 
-  /// @notice borrow asset B under asset A, result balances should have proportions: (propA : propB)
+  /// @notice borrow asset B under asset A. Result balances should be A0 + A1, B0 + B1
+  ///         Where (A1 : B1) == (propA : propB), A0 and B0 are equal to {c.addonA} and {c.addonB}
+  /// @param balanceA_ Current balance of the collateral
+  /// @param balanceB_ Current balance of the borrow asset
   function openPosition(
     RebalanceAssetsCore memory c,
     uint balanceA_,
@@ -169,11 +173,43 @@ library BorrowLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    require(c.addonA == 0 || c.addonB == 0, AppErrors.INVALID_VALUES);
     console.log("openPosition.balance0_", balanceA_);
     console.log("openPosition.balance1_", balanceB_);
 
+    // we are going to borrow B under A
+    if (c.addonB != 0) {
+      // B is underlying, so we are going to borrow underlying
+      if (balanceB_ >= c.addonB) {
+        // simple case - we already have required addon on the balance. Just keep it unused
+        return _openPosition(c, balanceA_, balanceB_ - c.addonB);
+      } else {
+        return _openPosition2(c, balanceA_, c.addonB - balanceB_);
+      }
+    } else if (c.addonA != 0) {
+      // A is underlying, we need to keep c.addonA unused
+      require(balanceA_ >= c.addonA, AppErrors.WRONG_BALANCE);
+      return _openPosition(c, balanceA_ - c.addonA, balanceB_);
+    } else {
+      // simple logic, no addons
+      return _openPosition(c, balanceA_, balanceB_);
+    }
+  }
+
+  /// @notice Borrow asset B under asset A in proportions (propA : propB)
+  /// @param balanceA_ Current balance of the collateral
+  /// @param balanceB_ Current balance of the borrow asset
+  function _openPosition(
+    RebalanceAssetsCore memory c,
+    uint balanceA_,
+    uint balanceB_
+  ) internal returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
     uint untouchedAmountA;
     uint thresholdAmountIn_ = 0; // todo
+
     bytes memory entryData = abi.encode(1, c.propA, c.propB);
 
     console.log("openPosition.entryData.c.prop0", c.propA);
@@ -195,6 +231,84 @@ library BorrowLib {
       c.assetA,
       c.assetB,
       balanceA_ - untouchedAmountA,
+      thresholdAmountIn_
+    );
+  }
+
+  /// @notice Borrow underlying B under asset A using entryKind1 + approx estimation.
+  ///         Result balances: A1 and B1, where B1 = addonB_ + B2 and (A1 : B2) == (propA : propB)
+  /// @dev We assume here that balanceB is zero and {addonB_} > 0 here, see openPosition implementation
+  /// @param balanceA_ Current balance of the collateral
+  /// @param addonB_ Amount of underlying that should be kept on balance outside of the proportions
+  function _openPosition2(
+    RebalanceAssetsCore memory c,
+    uint balanceA_,
+    uint addonB_
+  ) internal returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    // Recalculate A and B to base currency C
+    // So, we have initially:
+    //    Total amount of collateral A => C0
+    //    Amount of A that should be kept on balance => Ca0
+    //    Amount of A that should be used as collateral => Ca1
+    //    Amount to borrow B => Cb0
+    //    Balance equation: C0 = Ca0 + Ca1 = Ca0 + Cb0 * alpha
+    //    alpha is collateral factor: we need to use collateral = Cb0 * alpha to borrow Cb0
+    //    We have required proportions: Pa / Pb = Ca0 / Cb0
+    // But now we should get additional amount of B = addonB_ => Cb2 to balance, so balance equation becomes different:
+    //    Balance equation: C0 = Ca0 + (Cb1 + Cb2) * alpha,  Pa / Pb = Ca0 / Cb1
+    // => Ca0 = (C0 - alpha * Cb2) / (1 + alpha * Pb / Pa)
+    // We don't know exact value of alpha, we can only estimate it using tetuConverter
+    // To make real borrow we need to use entryKind1 but with different values of proportions Pa' : Pb'
+    // => Pa' / Pb' = Ca0 / (Cb1 + Cb2)
+    // but Cb1 = Ca0 * Pb / Pa
+    //    so Pa' / Pb' = Ca0 / (Ca0 * Pb/Pa + Cb2)
+    // let gamma = Ca0 / (Ca0 * Pb/Pa + Cb2), so Pa' / Pb' = gamma
+    // We assume that Pa' + Pb' == Pa + Pb, so
+    //    Pa' / (Pa + Pb - Pa') = gamma
+    // => Pa' = gamma * (Pa + Pb) / (1 + gamma)
+    // if Cb2 = 0 we have gamma = Pa / Pb so
+    // => Pa' = gamma * (Pa + Pb) / (1 + gamma) = Pa, correct
+
+    // The algo:
+    // 1) estimate alpha, calculate Ca0
+    // 2) calculate gamma, Pa' and Pb'
+    // 3) make borrow using entrykind 1 with different proportions: Pa' and Pb'
+
+    RebalanceAssetsLocal memory v;
+    uint indexA = 0;
+    uint indexB = 0;
+
+    uint thresholdAmountIn_ = 0; // todo
+    uint alpha;
+    {
+      (, uint collateral, uint toBorrow,) = c.converter.findConversionStrategy(abi.encode(uint(0)), c.assetA, balanceA_, c.assetB, 1);
+      require(collateral != 0 && toBorrow != 0, AppErrors.BORROW_STRATEGY_NOT_FOUND);
+      uint cc = collateral * v.prices[indexA] / v.decs[indexA];
+      uint cb = toBorrow * v.prices[indexB] / v.decs[indexB];
+      alpha = cc / cb; // todo 1e18
+    }
+
+    uint c0 = balanceA_ * v.prices[indexA] / v.decs[indexA];
+    uint cb2 = addonB_ * v.prices[indexB] / v.decs[indexB];
+    uint ca0 = (c0 - alpha * cb2) / (1 + alpha * c.propB / c.propA); // todo 1e18
+    uint gamma = ca0 / (ca0 * c.propB / c.propA + cb2); // todo 1e18
+    uint pa2 = gamma * (c.propA + c.propB) / (1 + gamma);
+    uint pb2 = (c.propA + c.propB) - pa2;
+
+    bytes memory entryData = abi.encode(1, pa2, pb2);
+
+    console.log("openPosition.entryData.pa2", pa2);
+    console.log("openPosition.entryData.pb2", pb2);
+
+    return ConverterStrategyBaseLib.openPosition(
+      c.converter,
+      entryData,
+      c.assetA,
+      c.assetB,
+      balanceA_,
       thresholdAmountIn_
     );
   }

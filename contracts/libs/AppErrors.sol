@@ -54,4 +54,8 @@ library AppErrors {
   string public constant EARNED_AMOUNT_TOO_HIGH = "TS-21 earned too high";
 
   string public constant NOT_ALLOWED = "TS-22 not allowed";
+
+  string public constant INVALID_VALUES = "TS-23 invalid value";
+  string public constant WRONG_BALANCE = "TS-24 wrong balance";
+  string public constant BORROW_STRATEGY_NOT_FOUND = "TS-25 borrow not possible";
 }
