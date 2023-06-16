@@ -11,6 +11,6 @@ contract BorrowLibFacade {
     address asset1,
     uint proportion
   ) external {
-    BorrowLib.rebalanceAssets(tetuConverter_, asset0, asset1, proportion, 0); // todo
+    BorrowLib.rebalanceAssets(tetuConverter_, asset0, asset1, proportion);
   }
 }

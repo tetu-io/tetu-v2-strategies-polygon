@@ -14,7 +14,6 @@ library BorrowLib {
     uint amount0;
     uint amount1;
     uint proportion;
-    uint addition0;
 
     uint[] prices;
     uint[] decs;
@@ -32,20 +31,15 @@ library BorrowLib {
     uint propB;
     /// @notice Asset 0 to asset 1 ratio; amount0 * a02a1r => amount1
     uint alpha;
-    uint addonA;
-    uint addonB;
   }
 
   /// @notice Set balances of {asset0} and {asset1} in proportions {proportion}:{100_000-proportion} using borrow/repay
   /// @param proportion Proportion for {asset0}, [0...100_000]
-  /// @param addition0 Additional amount A0 of {asset0}.
-  ///                  Balance0 = A0 + B0, and B0 : Balance1 === {proportion}:{100_000-proportion}
   function rebalanceAssets(
     ITetuConverter tetuConverter_,
     address asset0,
     address asset1,
-    uint proportion,
-    uint addition0
+    uint proportion
   ) external {
     console.log("rebalanceAssets.asset0", asset0);
     console.log("rebalanceAssets.asset1", asset1);
@@ -55,7 +49,6 @@ library BorrowLib {
     v.asset0 = asset0;
     v.asset1 = asset1;
     v.proportion = proportion;
-    v.addition0 = addition0;
 
     IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle());
     address[] memory tokens = new address[](2);
@@ -87,11 +80,9 @@ library BorrowLib {
   function _rebalanceAssets(RebalanceAssetsLocal memory v, ITetuConverter tetuConverter_, bool repayAllowed) internal {
     uint cost0 = v.amount0 * v.prices[0] / v.decs[0];
     uint cost1 = v.amount1 * v.prices[1] / v.decs[1];
-    uint costAddition0 = v.addition0 * v.prices[0] / v.decs[0];
 
-    uint totalCost = cost0 + cost1 - costAddition0; // todo check -
-    uint requiredCost0 = totalCost * v.proportion / 100_000 + costAddition0;
-    uint requiredCost1 = totalCost * (100_000 - v.proportion) / 100_000;
+    uint requiredCost0 = (cost0 + cost1) * v.proportion / 100_000;
+    uint requiredCost1 = (cost0 + cost1) * (100_000 - v.proportion) / 100_000;
 
     console.log("rebalanceAssets.cost0", cost0);
     console.log("rebalanceAssets.requiredCost0", requiredCost0);
@@ -107,9 +98,7 @@ library BorrowLib {
         assetB: v.asset0,
         propA: 100_000 - v.proportion,
         propB: v.proportion,
-        alpha: 1e18 * v.prices[0] * v.decs[1] / v.prices[1] / v.decs[0],
-        addonA: 0,
-        addonB: v.addition0
+        alpha: 1e18 * v.prices[0] * v.decs[1] / v.prices[1] / v.decs[0]
       });
       console.log("rebalanceAssets.1.a02a1r", c10.alpha);
 
@@ -136,9 +125,7 @@ library BorrowLib {
         assetB: v.asset1,
         propA: v.proportion,
         propB: 100_000 - v.proportion,
-        alpha: 1e18 * v.prices[1] * v.decs[0] / v.prices[0] / v.decs[1],
-        addonA: v.addition0,
-        addonB: 0
+        alpha: 1e18 * v.prices[1] * v.decs[0] / v.prices[0] / v.decs[1]
       });
       console.log("rebalanceAssets.5.a02a1r", c01.alpha);
       // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)

@@ -9,8 +9,22 @@ import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "../../libs/BorrowLib.sol";
 
 library UniswapV3DebtLib {
+
+  //////////////////////////////////////////
+  //            Data types
+  //////////////////////////////////////////
+  struct RebalanceNoSwapsLocal {
+    address tokenA;
+    address tokenB;
+    bool depositorSwapTokens;
+    int24 newLowerTick;
+    int24 newUpperTick;
+    uint prop0;
+    uint prop1;
+  }
 
   //////////////////////////////////////////
   //            CONSTANTS
@@ -160,19 +174,32 @@ library UniswapV3DebtLib {
     uint totalAssets,
     address splitter
   ) external {
+    RebalanceNoSwapsLocal memory p;
     IUniswapV3Pool pool = state.pool;
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    bool depositorSwapTokens = state.depositorSwapTokens;
-    _closeDebtByAgg(tetuConverter, tokenA, tokenB, liquidatorSwapSlippage, aggParams);
+    p.tokenA = state.tokenA;
+    p.tokenB = state.tokenB;
+    p.depositorSwapTokens = state.depositorSwapTokens;
+
+    (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
+
+    BorrowLib.rebalanceAssets(
+      tetuConverter,
+      p.tokenA,
+      p.tokenB,
+      p.prop0 * 100_000 / (p.prop0 + p.prop1) // todo Probably rebalanceAssets should use original prop0, prop1
+    );
+
+    // we assume here, that profitToCover has low value
+    // so we can send it without changing proportions of the assets to much
+    // todo if it's not correct we should use more complex implementation of rebalanceAssets with "addition"
     if (profitToCover > 0) {
-      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
+      uint profitToSend = Math.min(profitToCover, IERC20(p.tokenA).balanceOf(address(this)));
+      ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);
     }
-    (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
-    bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
-    _openDebt(tetuConverter, tokenA, tokenB, entryData);
-    state.lowerTick = newLowerTick;
-    state.upperTick = newUpperTick;
+
+    state.lowerTick = p.newLowerTick;
+    state.upperTick = p.newUpperTick;
   }
 
   function getEntryData(
@@ -181,6 +208,17 @@ library UniswapV3DebtLib {
     int24 upperTick,
     bool depositorSwapTokens
   ) public view returns (bytes memory entryData) {
+    (uint prop0, uint prop1) = getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
+    entryData = abi.encode(1, prop0, prop1);
+  }
+
+  /// @notice Calculate proportions of the tokens for entry kind 1
+  function getEntryDataProportions(
+    IUniswapV3Pool pool,
+    int24 lowerTick,
+    int24 upperTick,
+    bool depositorSwapTokens
+  ) public view returns (uint, uint) {
     address token1 = pool.token1();
     uint token1Price = UniswapV3Lib.getPrice(address(pool), token1);
 
@@ -191,12 +229,9 @@ library UniswapV3DebtLib {
 
     // calculate proportions
     (uint consumed0, uint consumed1,) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
-
-    if (depositorSwapTokens) {
-      entryData = abi.encode(1, consumed1 * token1Price / token1Desired, consumed0);
-    } else {
-      entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
-    }
+    return depositorSwapTokens
+      ? (consumed1 * token1Price / token1Desired, consumed0)
+      : (consumed0, consumed1 * token1Price / token1Desired);
   }
 
   /// @dev we close debt only if it is more than $0.1
