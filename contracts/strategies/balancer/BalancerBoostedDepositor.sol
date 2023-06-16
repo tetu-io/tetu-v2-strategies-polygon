@@ -32,7 +32,7 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   /// @dev https://dev.balancer.fi/references/contracts/deployment-addresses
   IBVault internal constant BALANCER_VAULT = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
   address internal constant BALANCER_HELPER = 0x239e55F427D44C3cc793f49bFB507ebe76638a2b;
-  address public constant BAL_TOKEN = 0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3;
+  address internal constant BAL_TOKEN = 0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3;
 
   /////////////////////////////////////////////////////////////////////
   ///endregion Constants

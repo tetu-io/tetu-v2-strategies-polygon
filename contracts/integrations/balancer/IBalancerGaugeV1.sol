@@ -1,6 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-
-pragma solidity >=0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.17;
 
 /// @notice gauge-v1, see 0x2E96068b3D5B5BAE3D7515da4A1D2E52d08A2647
 /// @dev see 20220413-child-chain-gauge-factory in balancer-deployments repository
