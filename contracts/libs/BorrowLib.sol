@@ -9,6 +9,11 @@ import "../integrations/tetu-v1/ITetuV1Controller.sol";
 /// @notice Library to make new borrow, extend/reduce exist borrows and repay to keep proper assets proportions
 library BorrowLib {
 
+  struct PricesDecs {
+    uint[] prices;
+    uint[] decs;
+  }
+
   struct RebalanceAssetsLocal {
     address asset0;
     address asset1;
@@ -16,9 +21,8 @@ library BorrowLib {
     uint amount1;
     uint proportion;
     uint addition0;
+    PricesDecs pd;
 
-    uint[] prices;
-    uint[] decs;
     uint directDebt;
     uint directCollateral;
     uint reverseDebt;
@@ -35,6 +39,25 @@ library BorrowLib {
     uint alpha;
     uint addonA;
     uint addonB;
+    /// @notice Index of {assetA} in {prices} and {decs}
+    uint indexA;
+    /// @notice Index of {assetB} in {prices} and {decs}
+    uint indexB;
+  }
+
+  struct OpenPosition2Local {
+    uint collateral;
+    uint toBorrow;
+    uint cc;
+    uint cb;
+    uint c0;
+    uint cb2;
+    uint ca0;
+    uint gamma18;
+    uint pa2;
+    uint pb2;
+    bytes entryData;
+    uint alpha18;
   }
 
   /// @notice Set balances of {asset0} and {asset1} in proportions {proportion}:{100_000-proportion} using borrow/repay
@@ -62,11 +85,11 @@ library BorrowLib {
     address[] memory tokens = new address[](2);
     tokens[0] = asset0;
     tokens[1] = asset1;
-    (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(priceOracle, tokens, 2);
-    console.log("rebalanceAssets.prices0", v.prices[0]);
-    console.log("rebalanceAssets.prices1", v.prices[1]);
-    console.log("rebalanceAssets.decs0", v.decs[0]);
-    console.log("rebalanceAssets.decs1", v.decs[1]);
+    (v.pd.prices, v.pd.decs) = ConverterStrategyBaseLib._getPricesAndDecs(priceOracle, tokens, 2);
+    console.log("rebalanceAssets.prices0", v.pd.prices[0]);
+    console.log("rebalanceAssets.prices1", v.pd.prices[1]);
+    console.log("rebalanceAssets.decs0", v.pd.decs[0]);
+    console.log("rebalanceAssets.decs1", v.pd.decs[1]);
 
     v.amount0 = IERC20(asset0).balanceOf(address(this));
     v.amount1 = IERC20(asset1).balanceOf(address(this));
@@ -85,10 +108,14 @@ library BorrowLib {
   }
 
   /// @param repayAllowed Protection against recursion
-  function _rebalanceAssets(RebalanceAssetsLocal memory v, ITetuConverter tetuConverter_, bool repayAllowed) internal {
-    uint cost0 = v.amount0 * v.prices[0] / v.decs[0];
-    uint cost1 = v.amount1 * v.prices[1] / v.decs[1];
-    uint costAddition0 = v.addition0 * v.prices[0] / v.decs[0];
+  function _rebalanceAssets(
+    RebalanceAssetsLocal memory v,
+    ITetuConverter converter_,
+    bool repayAllowed
+  ) internal {
+    uint cost0 = v.amount0 * v.pd.prices[0] / v.pd.decs[0];
+    uint cost1 = v.amount1 * v.pd.prices[1] / v.pd.decs[1];
+    uint costAddition0 = v.addition0 * v.pd.prices[0] / v.pd.decs[0];
 
     uint totalCost = cost0 + cost1 - costAddition0; // todo check -
     uint requiredCost0 = totalCost * v.proportion / 100_000 + costAddition0;
@@ -103,14 +130,16 @@ library BorrowLib {
       console.log("rebalanceAssets.1");
       // we need to increase amount of asset 0 and decrease amount of asset 1, so we need to borrow asset 0 (reverse)
       RebalanceAssetsCore memory c10 = RebalanceAssetsCore({
-        converter: tetuConverter_,
+        converter: converter_,
         assetA: v.asset1,
         assetB: v.asset0,
         propA: 100_000 - v.proportion,
         propB: v.proportion,
-        alpha: 1e18 * v.prices[0] * v.decs[1] / v.prices[1] / v.decs[0],
+        alpha: 1e18 * v.pd.prices[0] * v.pd.decs[1] / v.pd.prices[1] / v.pd.decs[0],
         addonA: 0,
-        addonB: v.addition0
+        addonB: v.addition0,
+        indexA: 1,
+        indexB: 0
       });
       console.log("rebalanceAssets.1.a02a1r", c10.alpha);
 
@@ -118,45 +147,47 @@ library BorrowLib {
         require(repayAllowed, AppErrors.NOT_ALLOWED);
         console.log("rebalanceAssets.2");
         // repay of v.asset1 is required
-        uint requiredAmount0 = (requiredCost0 - cost0) * v.decs[0] / v.prices[0];
+        uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
         rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt, v.directCollateral);
       } else if (v.reverseDebt > 0) {
         console.log("rebalanceAssets.3");
         // additional borrow of asset 0 is required
-        openPosition(c10, v.amount1, v.amount0);
+        openPosition(c10, v.pd, v.amount1, v.amount0);
       } else {
         console.log("rebalanceAssets.4");
         // we need to borrow asset 0 under asset 1
-        openPosition(c10, v.amount1, v.amount0);
+        openPosition(c10, v.pd, v.amount1, v.amount0);
       }
     } else if (requiredCost0 < cost0) {
       console.log("rebalanceAssets.5");
       RebalanceAssetsCore memory c01 = RebalanceAssetsCore({
-        converter: tetuConverter_,
+        converter: converter_,
         assetA: v.asset0,
         assetB: v.asset1,
         propA: v.proportion,
         propB: 100_000 - v.proportion,
-        alpha: 1e18 * v.prices[1] * v.decs[0] / v.prices[0] / v.decs[1],
+        alpha: 1e18 * v.pd.prices[1] * v.pd.decs[0] / v.pd.prices[0] / v.pd.decs[1],
         addonA: v.addition0,
-        addonB: 0
+        addonB: 0,
+        indexA: 0,
+        indexB: 1
       });
       console.log("rebalanceAssets.5.a02a1r", c01.alpha);
       // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
       if (v.directDebt > 0) {
         console.log("rebalanceAssets.6");
         // additional borrow of asset 1 is required
-        openPosition(c01, v.amount0, v.amount1);
+        openPosition(c01, v.pd, v.amount0, v.amount1);
       } else if (v.reverseDebt > 0) {
         require(repayAllowed, AppErrors.NOT_ALLOWED);
         console.log("rebalanceAssets.7");
         // repay of v.asset0 is required
-        uint requiredAmount1 = (requiredCost1 - cost1) * v.decs[1] / v.prices[1];
+        uint requiredAmount1 = (requiredCost1 - cost1) * v.pd.decs[1] / v.pd.prices[1];
         rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt, v.reverseCollateral);
       } else {
         console.log("rebalanceAssets.8");
         // we need to borrow asset 1 under asset 0
-        openPosition(c01, v.amount0, v.amount1);
+        openPosition(c01, v.pd, v.amount0, v.amount1);
       }
     }
   }
@@ -167,6 +198,7 @@ library BorrowLib {
   /// @param balanceB_ Current balance of the borrow asset
   function openPosition(
     RebalanceAssetsCore memory c,
+    PricesDecs memory pd,
     uint balanceA_,
     uint balanceB_
   ) internal returns (
@@ -184,7 +216,7 @@ library BorrowLib {
         // simple case - we already have required addon on the balance. Just keep it unused
         return _openPosition(c, balanceA_, balanceB_ - c.addonB);
       } else {
-        return _openPosition2(c, balanceA_, c.addonB - balanceB_);
+        return _openPosition2(c, pd, balanceA_, c.addonB - balanceB_);
       }
     } else if (c.addonA != 0) {
       // A is underlying, we need to keep c.addonA unused
@@ -242,6 +274,7 @@ library BorrowLib {
   /// @param addonB_ Amount of underlying that should be kept on balance outside of the proportions
   function _openPosition2(
     RebalanceAssetsCore memory c,
+    PricesDecs memory pd,
     uint balanceA_,
     uint addonB_
   ) internal returns (
@@ -276,36 +309,43 @@ library BorrowLib {
     // 1) estimate alpha, calculate Ca0
     // 2) calculate gamma, Pa' and Pb'
     // 3) make borrow using entrykind 1 with different proportions: Pa' and Pb'
-
-    RebalanceAssetsLocal memory v;
-    uint indexA = 0;
-    uint indexB = 0;
+    OpenPosition2Local memory p;
 
     uint thresholdAmountIn_ = 0; // todo
-    uint alpha;
     {
-      (, uint collateral, uint toBorrow,) = c.converter.findConversionStrategy(abi.encode(uint(0)), c.assetA, balanceA_, c.assetB, 1);
-      require(collateral != 0 && toBorrow != 0, AppErrors.BORROW_STRATEGY_NOT_FOUND);
-      uint cc = collateral * v.prices[indexA] / v.decs[indexA];
-      uint cb = toBorrow * v.prices[indexB] / v.decs[indexB];
-      alpha = cc / cb; // todo 1e18
+      (, p.collateral, p.toBorrow,) = c.converter.findConversionStrategy(abi.encode(uint(0)), c.assetA, balanceA_, c.assetB, 1);
+      require(p.collateral != 0 && p.toBorrow != 0, AppErrors.BORROW_STRATEGY_NOT_FOUND);
+      p.cc = p.collateral * pd.prices[c.indexA] / pd.decs[c.indexA];
+      p.cb = p.toBorrow * pd.prices[c.indexB] / pd.decs[c.indexB];
+      p.alpha18 = 1e18 * p.cc / p.cb;
+      console.log("openPosition2.collateral", p.collateral);
+      console.log("openPosition2.toBorrow", p.toBorrow);
+      console.log("openPosition2.cc", p.cc);
+      console.log("openPosition2.cb", p.cb);
+      console.log("openPosition2.alpha18", p.alpha18);
     }
 
-    uint c0 = balanceA_ * v.prices[indexA] / v.decs[indexA];
-    uint cb2 = addonB_ * v.prices[indexB] / v.decs[indexB];
-    uint ca0 = (c0 - alpha * cb2) / (1 + alpha * c.propB / c.propA); // todo 1e18
-    uint gamma = ca0 / (ca0 * c.propB / c.propA + cb2); // todo 1e18
-    uint pa2 = gamma * (c.propA + c.propB) / (1 + gamma);
-    uint pb2 = (c.propA + c.propB) - pa2;
+    p.c0 = balanceA_ * pd.prices[c.indexA] / pd.decs[c.indexA];
+    p.cb2 = addonB_ * pd.prices[c.indexB] / pd.decs[c.indexB];
+    p.ca0 = 1e18 * (p.c0 - p.alpha18 * p.cb2) / (1e18 + p.alpha18 * c.propB / c.propA);
+    p.gamma18 = 1e18 * p.ca0 / (p.ca0 * c.propB / c.propA + p.cb2);
+    p.pa2 = p.gamma18 * (c.propA + c.propB) / (1e18 + p.gamma18);
+    p.pb2 = (c.propA + c.propB) - p.pa2;
+    console.log("openPosition2.c0", p.c0);
+    console.log("openPosition2.cb2", p.cb2);
+    console.log("openPosition2.ca0", p.ca0);
+    console.log("openPosition2.gamma18", p.gamma18);
+    console.log("openPosition2.pa2", p.pa2);
+    console.log("openPosition2.pb2", p.pb2);
 
-    bytes memory entryData = abi.encode(1, pa2, pb2);
+    p.entryData = abi.encode(1, p.pa2, p.pb2);
 
-    console.log("openPosition.entryData.pa2", pa2);
-    console.log("openPosition.entryData.pb2", pb2);
+    console.log("openPosition2.entryData.pa2", p.pa2);
+    console.log("openPosition2.entryData.pb2", p.pb2);
 
     return ConverterStrategyBaseLib.openPosition(
       c.converter,
-      entryData,
+      p.entryData,
       c.assetA,
       c.assetB,
       balanceA_,
