@@ -6,7 +6,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -158,7 +157,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ){
-    console.log("_depositToPool.amount_", amount_);
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
     (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
   }
@@ -175,15 +173,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ){
-    console.log("_depositToPoolUniversal.amount_", amount_);
-    console.log("_depositToPoolUniversal.earnedByPrices_", earnedByPrices_);
-    console.log("_depositToPoolUniversal.investedAssets_", investedAssets_);
     address _asset = asset;
 
     uint amountToDeposit = amount_ > earnedByPrices_
       ? amount_ - earnedByPrices_
       : 0;
-    console.log("_depositToPoolUniversal.amountToDeposit", amountToDeposit);
 
     // skip deposit for small amounts
     if (amountToDeposit > reinvestThresholdPercent * investedAssets_ / DENOMINATOR) {
@@ -253,9 +247,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) {
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
-    console.log("_beforeDeposit.weights", weights[0], weights[1], weights[2]);
-    console.log("_beforeDeposit.totalWeight", totalWeight);
-    console.log("_beforeDeposit.amount_", amount_);
 
     // temporary save collateral to tokensAmounts
     tokenAmounts = ConverterStrategyBaseLib2.getCollaterals(
@@ -266,7 +257,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       indexAsset_,
       IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle())
     );
-    console.log("_beforeDeposit.tokenAmounts.1", tokenAmounts[0], tokenAmounts[1], tokenAmounts[2]);
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
     tokenAmounts = ConverterStrategyBaseLib.getTokenAmounts(
@@ -276,7 +266,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tokenAmounts,
       liquidationThresholds[tokens_[indexAsset_]]
     );
-    console.log("_beforeDeposit.tokenAmounts.2", tokenAmounts[0], tokenAmounts[1], tokenAmounts[2]);
   }
   //endregion Convert amounts before deposit
 
@@ -561,7 +550,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    console.log("_doHardWork.start");
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
 
@@ -573,7 +561,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // re-invest income
     (, uint amountSentToInsurance) = _depositToPoolUniversal(
-      reInvest && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
+      reInvest
+      && investedAssetsNewPrices != 0
+      && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
         ? assetBalance
         : 0,
       earnedByPrices,
@@ -587,7 +577,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     _postHardWork();
 
     emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
-    console.log("_doHardWork.end");
     return (earned + earned2, lost + lost2);
   }
   //endregion Hardwork

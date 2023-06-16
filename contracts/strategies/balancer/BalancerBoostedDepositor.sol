@@ -11,7 +11,6 @@ import "../../integrations/balancer/IComposableStablePool.sol";
 import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
-import "hardhat/console.sol";
 /// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Tetu USD"
 /// @dev See https://app.balancer.fi/polygon#/polygon/pool/0xb3d658d5b95bf04e2932370dd1ff976fe18dd66a000000000000000000000ace
 ///            bb-t-DAI (DAI + tDAI) + bb-t-USDC (USDC + tUSDC) + bb-t-USDT (USDT + tUSDT)
@@ -123,7 +122,6 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
     uint[] memory amountsConsumedOut,
     uint liquidityOut
   ) {
-    console.log("_depositorEnter.amountsDesired_", amountsDesired_[0], amountsDesired_[1], amountsDesired_[2]);
     bytes32 _poolId = poolId;
     IComposableStablePool pool = IComposableStablePool(BalancerLogicLib.getPoolAddress(_poolId));
 

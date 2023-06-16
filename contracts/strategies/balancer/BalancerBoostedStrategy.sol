@@ -7,10 +7,12 @@ import "../../libs/AppPlatforms.sol";
 
 /// @title Delta-neutral converter strategy for Balancer boosted pools
 /// @author a17, dvpublic
+/// @notice Versions:
+/// 1.0.2 Add setGauge, move to balancer gauges v2
 contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDepositor {
   string public constant override NAME = "Balancer Boosted Strategy";
   string public constant override PLATFORM = AppPlatforms.BALANCER;
-  string public constant override STRATEGY_VERSION = "1.0.1";
+  string public constant override STRATEGY_VERSION = "1.0.2";
 
   function init(
     address controller_,
@@ -24,7 +26,7 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
 
     // setup specific name for UI
     strategySpecificName = BalancerLogicLib.createSpecificName(pool_);
-    emit StrategyLib.StrategySpecificNameChanged(strategySpecificName); // todo: change to _checkStrategySpecificNameChanged
+    emit StrategyLib.StrategySpecificNameChanged(strategySpecificName);
   }
 
   function _handleRewards() internal virtual override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
@@ -36,7 +38,7 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
   }
 
-  function setGauge(address gauge_) internal {
+  function setGauge(address gauge_) external {
     require(msg.sender == IController(controller()).governance(), AppErrors.GOVERNANCE_ONLY);
     gauge = IBalancerGauge(gauge_);
   }
