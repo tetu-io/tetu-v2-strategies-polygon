@@ -60,7 +60,7 @@ describe('BalancerBoostedUniversalTest', async () => {
 
   // [asset, pool]
   const targets = [
-    [MaticAddresses.USDC_TOKEN, MaticAddresses.BALANCER_POOL_T_USD],
+    [MaticAddresses.USDC_TOKEN, MaticAddresses.BALANCER_POOL_T_USD, MaticAddresses.BALANCER_GAUGE_V2_T_USD],
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();
@@ -157,7 +157,7 @@ describe('BalancerBoostedUniversalTest', async () => {
       strategyName,
       async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
         const strategy = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
-        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1]);
+        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1], t[2]);
         const mainAssetSymbol = await IERC20Metadata__factory.connect(t[0], signer).symbol()
         const mainAssetDecimals = await IERC20Metadata__factory.connect(t[0], signer).decimals()
         statesParams[await strategy.poolId()] = {
@@ -176,6 +176,7 @@ describe('BalancerBoostedUniversalTest', async () => {
     const hwInitiator = (
       _signer: SignerWithAddress,
       _user: SignerWithAddress,
+      swapUser: SignerWithAddress,
       _core: ICoreContractsWrapper,
       _tools: IToolsContractsWrapper,
       _underlying: string,
@@ -186,6 +187,7 @@ describe('BalancerBoostedUniversalTest', async () => {
       return new BalancerRewardsHardwork(
         _signer,
         _user,
+        swapUser,
         _core,
         _tools,
         _underlying,

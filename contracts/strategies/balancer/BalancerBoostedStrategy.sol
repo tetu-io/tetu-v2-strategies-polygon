@@ -16,9 +16,10 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     address controller_,
     address splitter_,
     address converter_,
-    address pool_
+    address pool_,
+    address gauge_
   ) external initializer {
-    __BalancerBoostedDepositor_init(pool_);
+    __BalancerBoostedDepositor_init(pool_, gauge_);
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
 
     // setup specific name for UI
@@ -34,4 +35,10 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     (uint earned2, uint lost2) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
     return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
   }
+
+  function setGauge(address gauge_) internal {
+    require(msg.sender == IController(controller()).governance(), AppErrors.GOVERNANCE_ONLY);
+    gauge = IBalancerGauge(gauge_);
+  }
+
 }
