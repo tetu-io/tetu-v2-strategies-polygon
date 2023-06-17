@@ -156,6 +156,8 @@ library BorrowLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    console.log("openPosition.assetA", c.assetA);
+    console.log("openPosition.assetB", c.assetB);
     console.log("openPosition.balance0_", balanceA_);
     console.log("openPosition.balance1_", balanceB_);
 
@@ -170,10 +172,10 @@ library BorrowLib {
     if (balanceB_ != 0) {
       // we are going to use {balanceA_} as collateral
       // but there is some amount on {balanceB_}, so we need to keep corresponded part of {balanceA_} untouched
-      untouchedAmountA = balanceB_ * c.alpha / 1e18;
+      untouchedAmountA = Math.min(balanceB_ * c.alpha / 1e18, balanceA_);
       console.log("openPosition.c.a02a1r", c.alpha);
-      console.log("openPosition.untouchedAmountA", untouchedAmountA);
-      require(untouchedAmountA < balanceA_, AppErrors.WRONG_VALUE);
+      console.log("openPosition.untouchedAmountA.estimated", balanceB_ * c.alpha / 1e18);
+      console.log("openPosition.untouchedAmountA.assigned", untouchedAmountA);
     }
 
     return ConverterStrategyBaseLib.openPosition(

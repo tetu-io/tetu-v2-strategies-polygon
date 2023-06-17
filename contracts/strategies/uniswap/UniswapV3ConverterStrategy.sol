@@ -187,40 +187,40 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /// @notice Rebalance using borrow/repay only, no swaps
-//  function rebalanceNoSwaps() external {
-//    address _controller = controller();
-//    StrategyLib.onlyOperators(_controller);
-//
-//    (, uint profitToCover) = _fixPriceChanges(true);
-//    uint oldTotalAssets = totalAssets() - profitToCover;
-//
-//    /// withdraw all liquidity from pool
-//    /// after disableFuse() liquidity is zero
-//    if (state.totalLiquidity > 0) {
-//      _depositorEmergencyExit();
-//    }
-//
-//    // _depositorEnter(tokenAmounts) if length == 2
-//    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
-//      state,
-//      converter,
-//      oldTotalAssets,
-//      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
-//        direction,
-//        amount,
-//        agg,
-//        swapData
-//      ),
-//      profitToCover,
-//      splitter
-//    );
-//
-//    if (tokenAmounts.length == 2) {
-//      _depositorEnter(tokenAmounts);
-//    }
-//
-//    _updateInvestedAssets();
-//  }
+  ///         Swap-by-agg can be used only if fuse was triggered on
+  function rebalanceNoSwaps(bool direction, uint amount, address agg, bytes memory swapData) external {
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
+
+    (, uint profitToCover) = _fixPriceChanges(true);
+    uint oldTotalAssets = totalAssets() - profitToCover;
+
+    // withdraw all liquidity from pool; after disableFuse() liquidity is zero
+    if (state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+
+    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
+      state,
+      converter,
+      oldTotalAssets,
+      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
+        direction,
+        amount,
+        agg,
+        swapData
+      ),
+      profitToCover,
+      splitter
+    );
+
+    if (tokenAmounts.length == 2) {
+      _depositorEnter(tokenAmounts);
+    }
+
+    _updateInvestedAssets();
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                   INTERNAL LOGIC
   /////////////////////////////////////////////////////////////////////

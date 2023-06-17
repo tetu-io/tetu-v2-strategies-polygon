@@ -454,6 +454,8 @@ library ConverterStrategyBaseLib {
 
         console.log("openPositionEntryKind1.vars.collateral", vars.collateral);
         console.log("openPositionEntryKind1.vars.amountToBorrow", vars.amountToBorrow);
+        console.log("openPositionEntryKind1.collateral.balance", IERC20(collateralAsset_).balanceOf(address(this)));
+        console.log("openPositionEntryKind1.borrow.balance", IERC20(borrowAsset_).balanceOf(address(this)));
         require(
           tetuConverter_.borrow(
             vars.converters[i],

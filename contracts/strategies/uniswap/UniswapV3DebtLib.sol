@@ -168,8 +168,6 @@ library UniswapV3DebtLib {
   function rebalanceNoSwaps(
     ITetuConverter tetuConverter,
     UniswapV3ConverterStrategyLogicLib.State storage state,
-    uint liquidatorSwapSlippage,
-    UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams,
     uint profitToCover,
     uint totalAssets,
     address splitter

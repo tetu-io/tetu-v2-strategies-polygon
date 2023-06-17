@@ -31,6 +31,7 @@ describe('BorrowLibIntTest', () => {
   let converter: ITetuConverter;
   let usdc: IERC20Metadata;
   let wmatic: IERC20Metadata;
+  let usdt: IERC20Metadata;
   let facade: BorrowLibFacade;
   let priceOracle: IPriceOracle;
   //endregion Variables
@@ -46,6 +47,7 @@ describe('BorrowLibIntTest', () => {
 
     usdc = await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer);
     wmatic = await IERC20Metadata__factory.connect(MaticAddresses.WMATIC_TOKEN, signer);
+    usdt = await IERC20Metadata__factory.connect(MaticAddresses.USDT_TOKEN, signer);
 
     facade = await MockHelper.createBorrowLibFacade(signer);
 
@@ -591,6 +593,48 @@ describe('BorrowLibIntTest', () => {
               expect(r.final.debtY).gt(0);
             });
           });
+        });
+      });
+    });
+
+    describe("USDC: USDT", () => {
+      describe("Estimated untouchedAmountA is higher than available balance", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+          return makeRebalanceAssets({
+            tokenX: usdc,
+            tokenY: usdt,
+
+            holderX: MaticHolders.HOLDER_USDC,
+            holderY: MaticHolders.HOLDER_USDT,
+
+            proportion: 3316,
+
+            init: {
+              addBeforeBorrow: {
+                balanceX: "0.000994",
+                balanceY: "816.231976"
+              }
+            },
+            preBorrow: {
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              collateralAmount: "984.543579"
+            }
+          })
+        }
+
+        it("should set expected balances", async () => {
+          const r = await loadFixture(makeRebalanceAssetsTest);
+          console.log("Results", r);
+          expect(r.final.costX*(100_000-3316)).approximately(r.final.costY*(3316), 1e-2);
         });
       });
     });

@@ -931,8 +931,6 @@ library UniswapV3ConverterStrategyLogicLib {
       UniswapV3DebtLib.rebalanceNoSwaps(
         converter,
         state,
-        _getLiquidatorSwapSlippage(vars.pool),
-        aggParams,
         profitToCover,
         oldTotalAssets,
         splitter
