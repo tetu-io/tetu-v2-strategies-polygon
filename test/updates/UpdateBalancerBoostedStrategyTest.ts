@@ -4,9 +4,7 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
-import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
-import {IController__factory} from "../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 import {Misc} from "../../scripts/utils/Misc";
 import {
   BalancerBoostedStrategy,
@@ -15,12 +13,13 @@ import {
   StrategySplitterV2__factory, TetuVaultV2__factory
 } from "../../typechain";
 import {DForceChangePriceUtils} from "../baseUT/converter/DForceChangePriceUtils";
+import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 
 /**
  * Test to check upgrade BalancerBoostedStrategy 1.0.0 to 1.0.1 (move to balancer gauges v2)
  */
-describe.skip("UpdateBalancerBoostedStrategyTest @skip-on-coverage", () => {
-  const strategyAddress = "0x87afc4441583dC32578DC9873d3073241fED9f78";
+describe("UpdateBalancerBoostedStrategyTest @skip-on-coverage", () => {
+  const strategyAddress = "0xa99478F79A82663f8A7f5D8DD4aD4A46e22Ea540";
 
   let snapshot: string;
   let snapshotForEach: string;
@@ -77,18 +76,25 @@ describe.skip("UpdateBalancerBoostedStrategyTest @skip-on-coverage", () => {
     await DForceChangePriceUtils.setupPriceOracleMock(signer);
 
     // deploy all new strategies
-    const existStrategy = await BalancerBoostedStrategy__factory.connect(strategyAddress, signer);
-    const splitter = StrategySplitterV2__factory.connect(await existStrategy.splitter(), signer);
+    const strategy = await BalancerBoostedStrategy__factory.connect(strategyAddress, signer);
+    const strategyAsOperator = strategy.connect(
+      await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    );
+    const splitter = StrategySplitterV2__factory.connect(await strategy.splitter(), signer);
     const vault = TetuVaultV2__factory.connect(await splitter.vault(), signer);
 
     const stateBefore = await vault.totalAssets();
     console.log("stateBefore", stateBefore);
+    const investedAssetsBefore = await strategyAsOperator.callStatic.calcInvestedAssets();
+    console.log("investedAssetsBefore", investedAssetsBefore);
 
     await upgradeStrategy();
     // await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
 
     const stateAfter = await vault.totalAssets();
     console.log("stateAfter", stateAfter);
+    const investedAssetsAfter = await strategyAsOperator.callStatic.calcInvestedAssets();
+    console.log("investedAssetsAfter", investedAssetsAfter);
 
     // invest amounts back from vaults to the strategies
     // await splitter.connect(await Misc.impersonate(vault.address)).doHardWork();
