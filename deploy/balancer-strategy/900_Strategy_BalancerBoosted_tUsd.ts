@@ -6,6 +6,7 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
 import { RunHelper } from '../../scripts/utils/RunHelper';
+import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
@@ -46,6 +47,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     SPLITTER_USDC_ADDRESS,
     CONVERTER_ADDRESS,
     BALANCER_POOL_T_USD,
+    MaticAddresses.BALANCER_GAUGE_V2_T_USD,
     {
       ...params,
     },
