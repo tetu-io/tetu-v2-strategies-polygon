@@ -40,7 +40,18 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
 
   function setGauge(address gauge_) external {
     require(msg.sender == IController(controller()).governance(), AppErrors.GOVERNANCE_ONLY);
-    gauge = IBalancerGauge(gauge_);
-  }
 
+    IBalancerGauge gaugeOld = IBalancerGauge(gauge);
+    uint balance = gaugeOld.balanceOf(address(this));
+    if (balance != 0) {
+      gaugeOld.withdraw(balance);
+    }
+
+    IBalancerGauge gaugeNew = IBalancerGauge(gauge_);
+    gauge = gaugeNew;
+
+    if (balance != 0) {
+      gaugeNew.deposit(balance);
+    }
+  }
 }
