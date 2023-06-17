@@ -11,7 +11,6 @@ import "../../integrations/balancer/IComposableStablePool.sol";
 import "../../integrations/balancer/IChildChainLiquidityGaugeFactory.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
 
-
 /// @title Depositor for Composable Stable Pool with several embedded linear pools like "Balancer Boosted Tetu USD"
 /// @dev See https://app.balancer.fi/polygon#/polygon/pool/0xb3d658d5b95bf04e2932370dd1ff976fe18dd66a000000000000000000000ace
 ///            bb-t-DAI (DAI + tDAI) + bb-t-USDC (USDC + tUSDC) + bb-t-USDT (USDT + tUSDT)
@@ -19,6 +18,7 @@ import "../../integrations/balancer/IBalancerGauge.sol";
 ///      Terms
 ///         bb-t-USD = pool bpt
 ///         bb-t-DAI, bb-t-USDC, bb-t-USDT = underlying bpt
+/// 1.0.1 Move to balancer gauge v2
 abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   using SafeERC20 for IERC20;
 
@@ -27,15 +27,12 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant BALANCER_BOOSTED_DEPOSITOR_VERSION = "1.0.0";
+  string public constant BALANCER_BOOSTED_DEPOSITOR_VERSION = "1.0.1";
 
   /// @dev https://dev.balancer.fi/references/contracts/deployment-addresses
   IBVault internal constant BALANCER_VAULT = IBVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
   address internal constant BALANCER_HELPER = 0x239e55F427D44C3cc793f49bFB507ebe76638a2b;
-  /// @notice ChildChainLiquidityGaugeFactory allows to get gauge address by pool id
-  /// @dev see https://dev.balancer.fi/resources/vebal-and-gauges/gauges
-  /// todo Update to new gauges, new ChildChainGauge is 0xc9b36096f5201ea332Db35d6D195774ea0D5988f
-  address internal constant CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY = 0x3b8cA519122CdD8efb272b0D3085453404B25bD0;
+  address internal constant BAL_TOKEN = 0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3;
 
   /////////////////////////////////////////////////////////////////////
   ///endregion Constants
@@ -50,6 +47,11 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   /// @notice i.e. for "Balancer Boosted Aave USD": 0x48e6b98ef6329f8f0a30ebb8c7c960330d64808500000000000000000000075b
   /// @notice i.e. for "Balancer Boosted Tetu USD": 0xb3d658d5b95bf04e2932370dd1ff976fe18dd66a000000000000000000000ace
   bytes32 public poolId;
+
+  /// @notice Gauge for a pool - it can be found in the Logs of the transactions of
+  ///         ChildChainGaugeFactory == 0x22625eEDd92c81a219A83e1dc48f88d54786B017
+  ///         Topic 1 in the first event contains address of the gauge (Vyper_contract, vyper:0.3.3)
+  ///         The gauge has field "lp_token" that contains pool address.
   IBalancerGauge public gauge;
   /////////////////////////////////////////////////////////////////////
   ///endregion Variables
@@ -60,16 +62,13 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
   ///                   Initialization
   /////////////////////////////////////////////////////////////////////
 
-  function __BalancerBoostedDepositor_init(address pool_) internal onlyInitializing {
+  function __BalancerBoostedDepositor_init(address pool_, address gauge_) internal onlyInitializing {
     poolId = IComposableStablePool(pool_).getPoolId();
 
-    gauge = IBalancerGauge(
-      IChildChainLiquidityGaugeFactory(
-        CHILD_CHAIN_LIQUIDITY_GAUGE_FACTORY
-      ).getPoolGauge(pool_)
-    );
+    gauge = IBalancerGauge(gauge_);
+
     // infinite approve of pool-BPT to the gauge todo is it safe for the external gauge?
-    IERC20(pool_).safeApprove(address(gauge), type(uint).max);
+    IERC20(pool_).safeApprove(address(gauge_), type(uint).max);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -218,10 +217,13 @@ abstract contract BalancerBoostedDepositor is DepositorBase, Initializable {
         break;
       }
     }
-    tokens = new address[](total);
+    tokens = new address[](total + 1);
     for (uint i; i < total; ++i) {
       tokens[i] = gauge.reward_tokens(i);
     }
+
+    // BAL token is special, it's not registered inside gauge.reward_tokens, we claim it through pseudo-minter
+    tokens[total] = BAL_TOKEN;
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new

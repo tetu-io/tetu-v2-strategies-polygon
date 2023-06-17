@@ -12,6 +12,7 @@ import "../../integrations/balancer/ILinearPool.sol";
 import "../../integrations/balancer/IBVault.sol";
 import "../../integrations/balancer/IBalancerHelper.sol";
 import "../../integrations/balancer/IBalancerGauge.sol";
+import "../../integrations/balancer/IBalancerMinter.sol";
 
 /// @notice Functions of BalancerBoostedDepositor
 /// @dev Many of functions are declared as external to reduce contract size
@@ -128,7 +129,6 @@ library BalancerLogicLib {
     }
   }
 
-
   /// @notice Calculate total amount of underlying asset for each token except BPT
   /// @dev Amount is calculated as MainTokenAmount + WrappedTokenAmount * WrappedTokenRate, see AaveLinearPool src
   function getTotalAssetAmounts(IBVault vault_, IERC20[] memory tokens_, uint indexBpt_) internal view returns (
@@ -142,8 +142,8 @@ library BalancerLogicLib {
         (, uint[] memory balances,) = vault_.getPoolTokens(linearPool.getPoolId());
 
         amountsOut[i] =
-        balances[linearPool.getMainIndex()]
-        + balances[linearPool.getWrappedIndex()] * linearPool.getWrappedTokenRate() / 1e18;
+          balances[linearPool.getMainIndex()]
+          + balances[linearPool.getWrappedIndex()] * linearPool.getWrappedTokenRate() / 1e18;
       }
     }
   }
@@ -181,8 +181,8 @@ library BalancerLogicLib {
       if (k == len - 2) {
         // leftovers => last item
         bptAmountsOut[k] = total > liquidityAmount_
-        ? 0
-        : liquidityAmount_ - total;
+          ? 0
+          : liquidityAmount_ - total;
       } else {
         bptAmountsOut[k] /= totalBalances;
         total += bptAmountsOut[k];
@@ -296,10 +296,10 @@ library BalancerLogicLib {
 
     // we can create funds_ once and use it several times
     IBVault.FundManagement memory funds = IBVault.FundManagement({
-      sender : address(this),
-      fromInternalBalance : false,
-      recipient : payable(address(this)),
-      toInternalBalance : false
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
     });
 
     // swap all tokens XX => bb-am-XX
@@ -329,18 +329,18 @@ library BalancerLogicLib {
       address(this),
       address(this),
       IBVault.JoinPoolRequest({
-        assets : asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
-        maxAmountsIn : amountsToDeposit,
-        userData : abi.encode(IBVault.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, userDataAmounts, 0),
-        fromInternalBalance : false
+        assets: asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        maxAmountsIn: amountsToDeposit,
+        userData: abi.encode(IBVault.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, userDataAmounts, 0),
+        fromInternalBalance: false
       })
     );
 
     uint liquidityAfter = IERC20(address(p.tokens[p.bptIndex])).balanceOf(address(this));
 
     liquidityOut = liquidityAfter > liquidityOut
-    ? liquidityAfter - liquidityOut
-    : 0;
+      ? liquidityAfter - liquidityOut
+      : 0;
   }
 
   /// @notice Withdraw given amount of LP-tokens from the pool.
@@ -365,10 +365,10 @@ library BalancerLogicLib {
       address(this),
       payable(address(this)),
       IBVault.ExitPoolRequest({
-        assets : asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
-        minAmountsOut : new uint[](p.len), // no limits
-        userData : abi.encode(IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT, liquidityAmount_),
-        toInternalBalance : false
+        assets: asIAsset(p.tokens), // must have the same length and order as the array returned by `getPoolTokens`
+        minAmountsOut: new uint[](p.len), // no limits
+        userData: abi.encode(IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT, liquidityAmount_),
+        toInternalBalance: false
       })
     );
 
@@ -376,10 +376,10 @@ library BalancerLogicLib {
 
     // we can create funds_ once and use it several times
     IBVault.FundManagement memory funds = IBVault.FundManagement({
-    sender : address(this),
-    fromInternalBalance : false,
-    recipient : payable(address(this)),
-    toInternalBalance : false
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
     });
 
     amountsOut = new uint[](p.len - 1);
@@ -419,10 +419,10 @@ library BalancerLogicLib {
 
     // we can create funds_ once and use it several times
     IBVault.FundManagement memory funds = IBVault.FundManagement({
-      sender : address(this),
-      fromInternalBalance : false,
-      recipient : payable(address(this)),
-      toInternalBalance : false
+      sender: address(this),
+      fromInternalBalance: false,
+      recipient: payable(address(this)),
+      toInternalBalance: false
     });
 
     uint liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
@@ -436,10 +436,10 @@ library BalancerLogicLib {
           address(this),
           payable(address(this)),
           IBVault.ExitPoolRequest({
-            assets : asIAsset(p.tokens),
-            minAmountsOut : new uint[](p.len), // no limits
-            userData : abi.encode(IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT, liquidityAmount),
-            toInternalBalance : false
+            assets: asIAsset(p.tokens),
+            minAmountsOut: new uint[](p.len), // no limits
+            userData: abi.encode(IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT, liquidityAmount),
+            toInternalBalance: false
           })
         );
         liquidityAmount = p.tokens[p.bptIndex].balanceOf(address(this));
@@ -535,13 +535,13 @@ library BalancerLogicLib {
       address(this),
       payable(address(this)),
       IBVault.ExitPoolRequest({
-        assets : asIAsset(p.tokens),
-        minAmountsOut : new uint[](p.len), // no limits
-        userData : abi.encode(
+        assets: asIAsset(p.tokens),
+        minAmountsOut: new uint[](p.len), // no limits
+        userData: abi.encode(
           IBVault.ExitKindComposableStable.EXACT_BPT_IN_FOR_ALL_TOKENS_OUT,
           liquidityAmount_
         ),
-        toInternalBalance : false
+        toInternalBalance: false
       })
     );
 
@@ -569,13 +569,13 @@ library BalancerLogicLib {
     IERC20(assetIn_).approve(address(vault_), amountIn_);
     vault_.swap(
       IBVault.SingleSwap({
-    poolId : poolId_,
-    kind : IBVault.SwapKind.GIVEN_IN,
-    assetIn : IAsset(assetIn_),
-    assetOut : IAsset(assetOut_),
-    amount : amountIn_,
-    userData : bytes("")
-    }),
+        poolId: poolId_,
+        kind: IBVault.SwapKind.GIVEN_IN,
+        assetIn: IAsset(assetIn_),
+        assetOut: IAsset(assetOut_),
+        amount: amountIn_,
+        userData: bytes("")
+      }),
       funds_,
       1,
       block.timestamp
@@ -612,6 +612,10 @@ library BalancerLogicLib {
       amountsOut[i] = IERC20(rewardTokens_[i]).balanceOf(address(this));
     }
 
+    // claim BAL tokens
+    IBalancerMinter(gauge_.bal_pseudo_minter()).mint(address(gauge_));
+
+    // claim other rewards
     gauge_.claim_rewards();
 
     for (uint i; i < rewardTokensLen; i = AppLib.uncheckedInc(i)) {
@@ -688,7 +692,7 @@ library BalancerLogicLib {
     } else if (nominal <= params.upperTarget) {
       return nominal;
     } else {
-      return (nominal - (params.fee * params.upperTarget / 1e18)) * 1e18/ (1e18 - params.fee);
+      return (nominal - (params.fee * params.upperTarget / 1e18)) * 1e18 / (1e18 - params.fee);
     }
   }
 

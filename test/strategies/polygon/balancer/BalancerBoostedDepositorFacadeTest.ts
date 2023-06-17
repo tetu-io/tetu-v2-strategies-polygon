@@ -37,7 +37,7 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
   const poolAmDaiId = MaticAddresses.BALANCER_POOL_T_DAI_ID;
   const poolAmUsdcId = MaticAddresses.BALANCER_POOL_T_USDC_ID;
   const poolAmUsdtId = MaticAddresses.BALANCER_POOL_T_USDT_ID;
-  const gauge = MaticAddresses.BALANCER_GAUGE_T_USD;
+  const gauge = MaticAddresses.BALANCER_GAUGE_V2_T_USD;
 
   //endregion Constants
 

@@ -9,10 +9,11 @@ import "hardhat/console.sol";
 /// @notice Provide direct access to internal functions of {BalancerBoostedDepositor}
 contract BalancerBoostedDepositorFacade is BalancerBoostedDepositor {
   function init(
-    address pool
+    address pool_,
+    address gauge_
   ) external initializer {
-    console.log("BalancerBoostedDepositorFacade.init", pool);
-    __BalancerBoostedDepositor_init(pool);
+    console.log("BalancerBoostedDepositorFacade.init pool, gauge", pool_, gauge_);
+    __BalancerBoostedDepositor_init(pool_, gauge_);
   }
 
   function _depositorPoolAssetsAccess() external virtual view returns (address[] memory poolAssets) {
