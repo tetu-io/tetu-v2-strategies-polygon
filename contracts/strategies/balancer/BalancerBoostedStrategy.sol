@@ -42,9 +42,16 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     require(msg.sender == IController(controller()).governance(), AppErrors.GOVERNANCE_ONLY);
 
     IBalancerGauge gaugeOld = IBalancerGauge(gauge);
-    gaugeOld.withdraw(gaugeOld.balanceOf(address(this)));
+    uint balance = gaugeOld.balanceOf(address(this));
+    if (balance != 0) {
+      gaugeOld.withdraw(balance);
+    }
 
-    gauge = IBalancerGauge(gauge_);
+    IBalancerGauge gaugeNew = IBalancerGauge(gauge_);
+    gauge = gaugeNew;
+
+    if (balance != 0) {
+      gaugeNew.deposit(balance);
+    }
   }
-
 }
