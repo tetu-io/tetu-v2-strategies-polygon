@@ -5,6 +5,7 @@ import "./UniswapV3Lib.sol";
 import "./UniswapV3DebtLib.sol";
 import "./Uni3StrategyErrors.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
+import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -413,12 +414,17 @@ library UniswapV3ConverterStrategyLogicLib {
     uint128 totalLiquidity,
     bool _depositorSwapTokens
   ) external returns (uint[] memory amountsConsumed, uint liquidityOut, uint128 totalLiquidityNew) {
+    console.log("enter amountsDesired_", amountsDesired_[0], amountsDesired_[1]);
+    console.log("enter totalLiquidity", totalLiquidity);
     amountsConsumed = new uint[](2);
 
     if (amountsDesired_[1] > 0) {
+      console.log("enter.1");
       if (_depositorSwapTokens) {
+        console.log("enter.2");
         (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
       }
+      console.log("enter.3");
       uint128 newLiquidity;
       (amountsConsumed[0], amountsConsumed[1], newLiquidity) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, amountsDesired_[0], amountsDesired_[1]);
       pool.mint(address(this), lowerTick, upperTick, newLiquidity, "");
@@ -427,7 +433,11 @@ library UniswapV3ConverterStrategyLogicLib {
       if (_depositorSwapTokens) {
         (amountsConsumed[0], amountsConsumed[1]) = (amountsConsumed[1], amountsConsumed[0]);
       }
+      console.log("enter.4");
     }
+    console.log("enter.amountsConsumed", amountsConsumed[0], amountsConsumed[1]);
+    console.log("enter.liquidityOut", liquidityOut);
+    console.log("enter.totalLiquidityNew", totalLiquidityNew);
 
     return (amountsConsumed, liquidityOut, totalLiquidityNew);
   }
@@ -866,12 +876,13 @@ library UniswapV3ConverterStrategyLogicLib {
     State storage state,
     ITetuConverter converter,
     uint oldTotalAssets,
-    RebalanceSwapByAggParams memory aggParams,
     uint profitToCover,
     address splitter
   ) external returns (
-    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
+    uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
+    bool fuseEnabledOut
   ) {
+    console.log("rebalanceNoSwaps.start");
     uint loss;
     tokenAmounts = new uint[](0);
 
@@ -914,18 +925,9 @@ library UniswapV3ConverterStrategyLogicLib {
       /// enabling fuse: close debt and stop providing liquidity
       state.isFuseTriggered = true;
       emit FuseTriggered();
-
-      UniswapV3DebtLib.closeDebtByAgg( // todo: can we use swap here?
-        converter,
-        vars.tokenA,
-        vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.pool),
-        aggParams,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
+      fuseEnabledOut = true;
     } else {
+      console.log("rebalanceNoSwaps.rebalanceNoSwaps.called profitToCover oldTotalAssets", profitToCover, oldTotalAssets);
       // rebalancing debt
       // setting new tick range
       UniswapV3DebtLib.rebalanceNoSwaps(
@@ -949,6 +951,7 @@ library UniswapV3ConverterStrategyLogicLib {
       if (vars.newTotalAssets < oldTotalAssets) {
         loss = oldTotalAssets - vars.newTotalAssets;
       }
+      console.log("rebalanceNoSwaps.tokenAmounts", tokenAmounts[0], tokenAmounts[1]);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic
@@ -961,5 +964,7 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     emit Rebalanced(loss);
+    fuseEnabledOut = false;
+    console.log("rebalanceNoSwaps.end", fuseEnabledOut);
   }
 }

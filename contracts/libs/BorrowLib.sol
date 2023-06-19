@@ -182,6 +182,8 @@ library BorrowLib {
       console.log("openPosition.untouchedAmountA.assigned", untouchedAmountA);
     }
 
+    console.log("openPosition.untouchedAmountA.approved", IERC20(c.assetA).allowance(address(this), address(c.converter)));
+    AppLib.approveIfNeeded(c.assetA, balanceA_ - untouchedAmountA, address(c.converter));
     return ConverterStrategyBaseLib.openPosition(
       c.converter,
       entryData,

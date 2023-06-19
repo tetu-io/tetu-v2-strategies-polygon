@@ -10,6 +10,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 library UniswapV3DebtLib {
 
@@ -172,6 +173,7 @@ library UniswapV3DebtLib {
     uint totalAssets,
     address splitter
   ) external {
+    console.log("UniswapV3DebtLib.rebalanceNoSwaps.start");
     RebalanceNoSwapsLocal memory p;
     IUniswapV3Pool pool = state.pool;
     p.tokenA = state.tokenA;
@@ -181,23 +183,28 @@ library UniswapV3DebtLib {
     (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
 
+    console.log("UniswapV3DebtLib.rebalanceNoSwaps.1");
     BorrowLib.rebalanceAssets(
       tetuConverter,
       p.tokenA,
       p.tokenB,
       p.prop0 * 100_000 / (p.prop0 + p.prop1) // todo Probably rebalanceAssets should use original prop0, prop1
     );
+    console.log("UniswapV3DebtLib.rebalanceNoSwaps.2");
 
     // we assume here, that profitToCover has low value
     // so we can send it without changing proportions of the assets to much
     // todo if it's not correct we should use more complex implementation of rebalanceAssets with "addition"
     if (profitToCover > 0) {
+      console.log("UniswapV3DebtLib.rebalanceNoSwaps.3 profitToCover", profitToCover);
+      console.log("UniswapV3DebtLib.rebalanceNoSwaps.4 balance", IERC20(p.tokenA).balanceOf(address(this)));
       uint profitToSend = Math.min(profitToCover, IERC20(p.tokenA).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);
     }
 
     state.lowerTick = p.newLowerTick;
     state.upperTick = p.newUpperTick;
+    console.log("UniswapV3DebtLib.rebalanceNoSwaps.end");
   }
 
   function getEntryData(

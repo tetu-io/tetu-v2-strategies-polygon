@@ -290,6 +290,7 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    console.log("_openPosition amountIn_", amountIn_);
     if (thresholdAmountIn_ == 0) {
       // zero threshold is not allowed because round-issues are possible, see openPosition.dust test
       // we assume here, that it's useless to borrow amount using collateral/borrow amount
@@ -456,6 +457,7 @@ library ConverterStrategyBaseLib {
         console.log("openPositionEntryKind1.vars.amountToBorrow", vars.amountToBorrow);
         console.log("openPositionEntryKind1.collateral.balance", IERC20(collateralAsset_).balanceOf(address(this)));
         console.log("openPositionEntryKind1.borrow.balance", IERC20(borrowAsset_).balanceOf(address(this)));
+
         require(
           tetuConverter_.borrow(
             vars.converters[i],
@@ -980,6 +982,7 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
+    console.log("calcInvestedAssets.len(depositorQuoteExitAmountsOut)", depositorQuoteExitAmountsOut.length);
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
 
@@ -1015,6 +1018,11 @@ library ConverterStrategyBaseLib {
           amountOut -= toPay;
           console.log("calcInvestedAssets.amountOut.2", amountOut);
         }
+        console.log("calcInvestedAssets.amountOut.3", amountOut);
+        console.log("calcInvestedAssets.collateral", collateral);
+        console.log("calcInvestedAssets.depositorQuoteExitAmountsOut[i]", depositorQuoteExitAmountsOut[i]);
+
+
 
         // available amount to repay
         uint toRepay = collateral + IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
@@ -1028,11 +1036,15 @@ library ConverterStrategyBaseLib {
           // investedAssets is calculated using exact debts, debt-gaps are not taken into account
           false
         );
+        console.log("calcInvestedAssets.toPay", toPay);
+        console.log("calcInvestedAssets.collateral", collateral);
         amountOut += collateral;
 
         if (toRepay >= toPay) {
+          console.log("calcInvestedAssets.toRepay >= toPay");
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         } else {
+          console.log("calcInvestedAssets.setDebt");
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           setDebt(v, i, toPay - toRepay);
@@ -1044,21 +1056,27 @@ library ConverterStrategyBaseLib {
       // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
       // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
       for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+        console.log("calcInvestedAssets.debts.i", i);
         if (v.debts[i] == 0) continue;
 
         // estimatedAssets should be reduced on the debt-value
         // this estimation is approx and do not count price impact on the liquidation
         // we will able to count the real output only after withdraw process
         uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+        console.log("calcInvestedAssets.debts.debtInAsset", debtInAsset);
+        console.log("calcInvestedAssets.debts.amountOut", amountOut);
         if (debtInAsset > amountOut) {
+          console.log("calcInvestedAssets.debts.1");
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
         } else {
+          console.log("calcInvestedAssets.debts.2");
           amountOut -= debtInAsset;
         }
       }
     }
 
+    console.log("calcInvestedAssets.amountOut", amountOut);
     return amountOut;
   }
 

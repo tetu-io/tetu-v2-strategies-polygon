@@ -23,6 +23,8 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/StateUtilsNum';
+import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {BigNumber} from "ethers";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -52,6 +54,7 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
   let snapshotBefore: string;
   let snapshot: string;
   let signer: SignerWithAddress;
+  let user: SignerWithAddress;
   let swapper: ISwapper;
   let asset: IERC20;
   let vault: TetuVaultV2;
@@ -75,7 +78,7 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
       ],
     });
 
-    [signer] = await ethers.getSigners();
+    [signer, user] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     const core = Addresses.getCore();
@@ -115,7 +118,10 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
     vault = data.vault.connect(signer)
 
     await ConverterUtils.whitelist([strategy.address]);
-    await vault.connect(gov).setWithdrawRequestBlocks(0)
+    const state = await strategy.getState();
+    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
+
+    await vault.connect(gov).setWithdrawRequestBlocks(0);
 
     await ConverterUtils.disableAaveV2(signer)
 
@@ -128,6 +134,7 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
     stateParams = {
       mainAssetSymbol: await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer).symbol()
     }
+
   })
 
   after(async function() {
@@ -181,64 +188,79 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
 //region Unit tests
   describe('study: UniswapV3 strategy rebalance by noSwaps tests', function() {
     it('Reduce price 10 steps, increase price 10 steps, rebalance-no-swaps each time', async() => {
-      const COUNT = 10;
-      const state = await strategy.getState()
+      const COUNT = 4;
+      const state = await strategy.getState();
       const listStates: IStateNum[] = [];
 
       console.log('deposit...');
-      await asset.approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
-      await vault.deposit(parseUnits('1000', 6), signer.address);
+      await asset.connect(user).approve(vault.address, Misc.MAX_UINT);
+      await TokenUtils.getToken(asset.address, user.address, parseUnits('1000', 6));
+      await vault.connect(user).deposit(parseUnits('1000', 6), user.address);
 
-      const stateStepInitial = await StateUtilsNum.getState(signer, signer, strategy, vault, `initial`);
+      const stateStepInitial = await StateUtilsNum.getState(signer, user, strategy, vault, `initial`);
       listStates.push(stateStepInitial);
       console.log(`initial`, stateStepInitial);
 
       for (let i = 0; i < COUNT * 2; ++i) {
+        const state0 = await strategy.getState();
+        console.log("state0", state0);
+
+        console.log("Step", i);
+
+        const swapAmount = BigNumber.from(parseUnits('200000', 6));
+        console.log("swapAmount", swapAmount);
+
         // Decrease price at first 10 steps, increase price on other 10 steps
-        if (i < COUNT) {
-          await UniswapV3StrategyUtils.movePriceDown(
-            signer,
-            strategy.address,
-            MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-            parseUnits('600000', 6),
-            100001
-          );
-        } else {
-          await UniswapV3StrategyUtils.movePriceUp(
-            signer,
-            strategy.address,
-            MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-            parseUnits('600000', 6),
-            100001
-          );
+        await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
+
+        while (! await strategy.needRebalance()) {
+          if (i < COUNT) {
+            await UniswapV3StrategyUtils.movePriceDown(
+              signer,
+              strategy.address,
+              MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+              swapAmount,
+              100001
+            );
+          } else {
+            await UniswapV3StrategyUtils.movePriceUp(
+              signer,
+              strategy.address,
+              MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+              swapAmount,
+              100001
+            );
+          }
         }
 
         expect(await strategy.needRebalance()).eq(true);
 
         // prepare swap-by-agg params - they are required only if the fuse was triggered on
-        const quote = await strategy.callStatic.quoteRebalanceSwap()
-        console.log('Quote', quote)
+        // const quote = await strategy.callStatic.quoteRebalanceSwap()
+        // console.log('Quote', quote)
+        // const params = {
+        //   fromTokenAddress: quote[0] ? state.tokenA : state.tokenB,
+        //   toTokenAddress: quote[0] ? state.tokenB : state.tokenA,
+        //   amount: quote[1].toString(),
+        //   fromAddress: strategy.address,
+        //   slippage: 1,
+        //   disableEstimate: true,
+        //   allowPartialFill: false,
+        //   protocols: 'POLYGON_BALANCER_V2',
+        // };
+        // const swapTransaction = await buildTxForSwap(JSON.stringify(params));
+        // console.log('Transaction for swap: ', swapTransaction);
+        // await strategy.rebalanceNoSwaps(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data);
 
-        const params = {
-          fromTokenAddress: quote[0] ? state.tokenA : state.tokenB,
-          toTokenAddress: quote[0] ? state.tokenB : state.tokenA,
-          amount: quote[1].toString(),
-          fromAddress: strategy.address,
-          slippage: 1,
-          disableEstimate: true,
-          allowPartialFill: false,
-          protocols: 'POLYGON_BALANCER_V2',
-        };
-
-        const swapTransaction = await buildTxForSwap(JSON.stringify(params));
-        console.log('Transaction for swap: ', swapTransaction);
-
-        await strategy.rebalanceNoSwaps(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data);
+        console.log("Start rebalance, step", i);
+        await strategy.rebalanceNoSwaps();
+        console.log("End rebalance, step", i);
 
         expect(await strategy.needRebalance()).eq(false);
 
-        const stateStep = await StateUtilsNum.getState(signer, signer, strategy, vault, `step ${i}`);
+        await TimeUtils.advanceNBlocks(300);
+
+        const stateStep = await StateUtilsNum.getState(signer, user, strategy, vault, `step ${i}`);
         listStates.push(stateStep);
         console.log(`state ${i}`, stateStep);
 
