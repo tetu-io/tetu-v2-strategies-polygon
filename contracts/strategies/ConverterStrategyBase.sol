@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -246,6 +247,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) {
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
+
     // temporary save collateral to tokensAmounts
     tokenAmounts = ConverterStrategyBaseLib2.getCollaterals(
       amount_,
@@ -559,7 +561,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // re-invest income
     (, uint amountSentToInsurance) = _depositToPoolUniversal(
-      reInvest && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
+      reInvest
+      && investedAssetsNewPrices != 0
+      && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
         ? assetBalance
         : 0,
       earnedByPrices,

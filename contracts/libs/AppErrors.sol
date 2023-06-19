@@ -53,7 +53,9 @@ library AppErrors {
   /// @notice Prices changed and invested assets amount was increased on S, value of S is too high
   string public constant EARNED_AMOUNT_TOO_HIGH = "TS-21 earned too high";
 
-  string public constant NOT_ALLOWED = "TS-22 not allowed";
+  string public constant GOVERNANCE_ONLY = "TS-22 governance only";
 
-  string public constant ZERO_VALUE = "TS-23 zero value";
+  string public constant NOT_ALLOWED = "TS-23 not allowed";
+
+  string public constant ZERO_VALUE = "TS-24 zero value";
 }
