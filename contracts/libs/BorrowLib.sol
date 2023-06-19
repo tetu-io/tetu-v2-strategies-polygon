@@ -41,6 +41,7 @@ library BorrowLib {
     address asset1,
     uint proportion
   ) external {
+    require(proportion > 0, AppErrors.ZERO_VALUE);
     console.log("rebalanceAssets.asset0", asset0);
     console.log("rebalanceAssets.asset1", asset1);
     console.log("rebalanceAssets.proportion", proportion);
@@ -158,8 +159,8 @@ library BorrowLib {
   ) {
     console.log("openPosition.assetA", c.assetA);
     console.log("openPosition.assetB", c.assetB);
-    console.log("openPosition.balance0_", balanceA_);
-    console.log("openPosition.balance1_", balanceB_);
+    console.log("openPosition.balanceA_", balanceA_);
+    console.log("openPosition.balanceB_", balanceB_);
 
     uint untouchedAmountA;
     uint thresholdAmountIn_ = 0; // todo
@@ -172,9 +173,12 @@ library BorrowLib {
     if (balanceB_ != 0) {
       // we are going to use {balanceA_} as collateral
       // but there is some amount on {balanceB_}, so we need to keep corresponded part of {balanceA_} untouched
-      untouchedAmountA = Math.min(balanceB_ * c.alpha / 1e18, balanceA_);
+      untouchedAmountA = (balanceB_ * c.alpha / 1e18) * c.propA / c.propB;
+      require(untouchedAmountA <= balanceA_, AppErrors.WRONG_VALUE);
+
       console.log("openPosition.c.a02a1r", c.alpha);
-      console.log("openPosition.untouchedAmountA.estimated", balanceB_ * c.alpha / 1e18);
+      console.log("openPosition.balanceBasA", balanceB_ * c.alpha / 1e18);
+      console.log("openPosition.untouchedAmountA.estimated", (balanceB_ * c.alpha / 1e18) * c.propA / c.propB);
       console.log("openPosition.untouchedAmountA.assigned", untouchedAmountA);
     }
 

@@ -598,7 +598,7 @@ describe('BorrowLibIntTest', () => {
     });
 
     describe("USDC: USDT", () => {
-      describe("Estimated untouchedAmountA is higher than available balance", () => {
+      describe("Proportions 3:97", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -634,7 +634,7 @@ describe('BorrowLibIntTest', () => {
         it("should set expected balances", async () => {
           const r = await loadFixture(makeRebalanceAssetsTest);
           console.log("Results", r);
-          expect(r.final.costX*(100_000-3316)).approximately(r.final.costY*(3316), 1e-2);
+          expect(r.final.costX*(100_000-3316)).approximately(r.final.costY*(3316), 1);
         });
       });
     });

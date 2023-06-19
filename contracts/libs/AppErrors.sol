@@ -54,4 +54,6 @@ library AppErrors {
   string public constant EARNED_AMOUNT_TOO_HIGH = "TS-21 earned too high";
 
   string public constant NOT_ALLOWED = "TS-22 not allowed";
+
+  string public constant ZERO_VALUE = "TS-23 zero value";
 }
