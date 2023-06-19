@@ -4,25 +4,46 @@ import hre from "hardhat";
 import {formatUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
 import {
-  BalancerBoostedStrategy__factory,
+  BalancerBoostedStrategy__factory, BorrowManager,
   ConverterStrategyBase,
-  IBalancerGauge__factory,
+  IBalancerGauge__factory, IBorrowManager,
   IBorrowManager__factory,
   IConverterController__factory,
   IERC20__factory,
   IERC20Metadata__factory,
   IPoolAdapter__factory,
   IPriceOracle__factory,
-  ISplitter__factory,
-  ITetuConverter__factory,
+  ISplitter__factory, ITetuConverter,
+  ITetuConverter__factory, IUniswapV3Pool__factory,
   TetuVaultV2,
-  UniswapV3ConverterStrategy__factory
+  UniswapV3ConverterStrategy__factory, UniswapV3LibFacade
 } from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 
+export interface IUniv3Depositor {
+  tokenA: string;
+  tokenB: string
+  tickSpacing: number;
+  lowerTick: number;
+  upperTick: number;
+  rebalanceTickRange: number;
+  totalLiquidity: BigNumber;
+  isFuseTriggered: boolean;
+  fuseThreshold: BigNumber;
+  rebalanceEarned0: BigNumber; // rebalanceResults[0]
+  rebalanceEarned1: BigNumber; // rebalanceResults[1]
+  rebalanceLost: BigNumber; // rebalanceResults[2]
+}
+
+export interface IUniv3Pool {
+  token0: string,
+  token1: string,
+  amount0: BigNumber,
+  amount1: BigNumber
+}
 /**
  * Same as IState but all numbers are without decimals
  */
@@ -68,7 +89,7 @@ export interface IStateNum {
   insurance: {
     assetBalance: number;
   };
-  converter: {
+  converterDirect: {
     collaterals: number[];
     amountsToRepay: number[];
     borrowAssetNames: string[];
@@ -78,6 +99,18 @@ export interface IStateNum {
     borrowAssets: string[];
     borrowAssetsNames: string[];
   };
+  converterReverse: {
+    collaterals: number[];
+    amountsToRepay: number[];
+    collateralAssetNames: string[];
+    healthFactors: number[][];
+    platformAdapters: string[][];
+    borrowAssetsPrices: number[];
+    borrowAssets: string[];
+    borrowAssetsNames: string[];
+  };
+  univ3Depositor?: IUniv3Depositor;
+  univ3Pool?: IUniv3Pool;
   fixPriceChanges?: IFixPricesChangesEventInfo;
 }
 
@@ -92,6 +125,19 @@ export interface IFixPricesChangesEventInfo {
 export interface IGetStateParams {
   fixChangePrices?: IFixPricesChangesEventInfo[];
 }
+
+/**
+ * Direct or reverse borrow integral info
+ */
+export interface IBorrowInfo {
+  collaterals: number[];
+  amountsToRepay: number[];
+  borrowAssetNames: string[];
+  collateralAssetNames: string[];
+  healthFactors: number[][];
+  platformAdapters: string[][];
+}
+
 /**
  * Version of StateUtils without decimals
  */
@@ -117,11 +163,14 @@ export class StateUtilsNum {
     const borrowAssetsPrices: number[] = [];
     let borrowAssetsAddresses: string[] = [];
 
-    const collaterals: number[] = [];
-    const amountsToRepay: number[] = [];
-    const converterBorrowAssetNames: string[] = []
-    const converterHealthFactors: number[][] = []
-    const converterPlatformAdapters: string[][] = [];
+    let univ3Depositor: IUniv3Depositor | undefined;
+    let univ3Pool: IUniv3Pool | undefined;
+
+    // Direct borrow: borrow an asset using the underlying as collateral
+    let directBorrows: IBorrowInfo;
+
+    // Reverse borrow: borrow the underlying using assets as collateral
+    let reverseBorrows: IBorrowInfo;
 
     let gaugeStrategyBalance: number = 0;
     let gaugeDecimals: number = 0;
@@ -136,7 +185,6 @@ export class StateUtilsNum {
       signer
     );
 
-
     if (await strategy.PLATFORM() === 'Balancer') {
       const boostedStrategy = BalancerBoostedStrategy__factory.connect(strategy.address, signer);
       const poolAddress = this.getBalancerPoolAddress(await boostedStrategy.poolId());
@@ -150,28 +198,25 @@ export class StateUtilsNum {
         const borrowAsset = await IERC20Metadata__factory.connect(item, signer);
         borrowAssetsBalances.push(+formatUnits(await borrowAsset.balanceOf(strategy.address), await borrowAsset.decimals()));
         borrowAssetsNames.push(await borrowAsset.symbol());
-
-        const debtStored = await converter.callStatic.getDebtAmountStored(strategy.address, asset.address, item, false);
-        collaterals.push(+formatUnits(debtStored[1], assetDecimals));
-        amountsToRepay.push(+formatUnits(debtStored[0], await borrowAsset.decimals()));
-        converterBorrowAssetNames.push(await borrowAsset.symbol());
-
-        const positions = await converter.callStatic.getPositions(strategy.address, asset.address, item);
-        const healthFactors: number[] = [];
-        const platformAdapters: string[] = [];
-        for (const position of positions) {
-          const poolAdapter = IPoolAdapter__factory.connect(position, signer);
-          const status = await poolAdapter.getStatus();
-          healthFactors.push(+formatUnits(status.healthFactor18, 18));
-
-          const config = await poolAdapter.getConfig();
-          platformAdapters.push(
-            await ConverterAdaptersHelper.getPlatformAdapterName(signer, await borrowManager.getPlatformAdapter(config.originConverter))
-          );
-        }
-        converterHealthFactors.push(healthFactors);
-        converterPlatformAdapters.push(platformAdapters);
       }
+
+      directBorrows = await this.getBorrowInfo(
+        signer,
+        converter,
+        borrowManager,
+        strategy,
+        [asset.address],
+        borrowAssets
+      );
+      reverseBorrows = await this.getBorrowInfo(
+        signer,
+        converter,
+        borrowManager,
+        strategy,
+        borrowAssets,
+        [asset.address],
+      );
+
       const gauge = await IBalancerGauge__factory.connect(await boostedStrategy.gauge(), user);
       gaugeDecimals = (await gauge.decimals()).toNumber();
       gaugeStrategyBalance = +formatUnits(await gauge.balanceOf(strategy.address), gaugeDecimals);
@@ -183,30 +228,59 @@ export class StateUtilsNum {
         assetDecimals // todo
       );
       const tokenB = await IERC20Metadata__factory.connect(state.tokenB, signer);
+
       borrowAssetsAddresses = [state.tokenA, state.tokenB];
       borrowAssetsBalances.push(+formatUnits(await tokenB.balanceOf(strategy.address), await tokenB.decimals()));
       borrowAssetsNames.push(await tokenB.symbol());
 
-      const debtStored = await converter.callStatic.getDebtAmountStored(strategy.address, asset.address, state.tokenB, false);
-      collaterals.push(+formatUnits(debtStored[1], assetDecimals));
-      amountsToRepay.push(+formatUnits(debtStored[0], await tokenB.decimals()));
-      converterBorrowAssetNames.push(await tokenB.symbol());
+      directBorrows = await this.getBorrowInfo(
+        signer,
+        converter,
+        borrowManager,
+        strategy,
+        [asset.address],
+        [state.tokenB]
+      );
+      reverseBorrows = await this.getBorrowInfo(
+        signer,
+        converter,
+        borrowManager,
+        strategy,
+        [state.tokenB],
+        [asset.address],
+      );
 
-      const positions = await converter.callStatic.getPositions(strategy.address, asset.address, state.tokenB);
-      const healthFactors: number[] = [];
-      const platformAdapters: string[] = [];
-      for (const position of positions) {
-        const poolAdapter = IPoolAdapter__factory.connect(position, signer);
-        const status = await poolAdapter.getStatus();
-        healthFactors.push(+formatUnits(status.healthFactor18, 18));
+      const depositorState = await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer).getState();
+      const pool = await IUniswapV3Pool__factory.connect(depositorState.pool, signer);
+      const slot0 = await pool.slot0();
+      const facade = await MockHelper.createUniswapV3LibFacade(signer);
+      const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
+        slot0.sqrtPriceX96,
+        depositorState.lowerTick,
+        depositorState.upperTick,
+        depositorState.totalLiquidity
+      );
 
-        const config = await poolAdapter.getConfig();
-        platformAdapters.push(
-          await ConverterAdaptersHelper.getPlatformAdapterName(signer, await borrowManager.getPlatformAdapter(config.originConverter))
-        );
+      univ3Depositor = {
+        tokenA: depositorState.tokenA,
+        tokenB: depositorState.tokenB,
+        tickSpacing: depositorState.tickSpacing,
+        lowerTick: depositorState.lowerTick,
+        upperTick: depositorState.upperTick,
+        rebalanceTickRange: depositorState.rebalanceTickRange,
+        totalLiquidity: depositorState.totalLiquidity,
+        isFuseTriggered: depositorState.isFuseTriggered,
+        fuseThreshold: depositorState.fuseThreshold,
+        rebalanceEarned0: depositorState.rebalanceResults[0],
+        rebalanceEarned1: depositorState.rebalanceResults[1],
+        rebalanceLost: depositorState.rebalanceResults[2],
       }
-      converterHealthFactors.push(healthFactors);
-      converterPlatformAdapters.push(platformAdapters);
+      univ3Pool = {
+        token0: await pool.token0(),
+        token1: await pool.token1(),
+        amount0: poolAmountsForLiquidity.amount0,
+        amount1: poolAmountsForLiquidity.amount1
+      };
     } else {
       throw new Error('Not supported')
     }
@@ -255,16 +329,29 @@ export class StateUtilsNum {
       gauge: {
         strategyBalance: gaugeStrategyBalance,
       },
-      converter: {
-        collaterals,
-        amountsToRepay,
-        borrowAssetNames: converterBorrowAssetNames,
-        healthFactors: converterHealthFactors,
-        platformAdapters: converterPlatformAdapters,
+      converterDirect: {
+        collaterals: directBorrows.collaterals,
+        amountsToRepay: directBorrows.amountsToRepay,
+        borrowAssetNames: directBorrows.borrowAssetNames,
+        healthFactors: directBorrows.healthFactors,
+        platformAdapters: directBorrows.platformAdapters,
         borrowAssetsPrices,
         borrowAssets: borrowAssetsAddresses,
         borrowAssetsNames
       },
+      converterReverse: {
+        collaterals: reverseBorrows.collaterals,
+        amountsToRepay: reverseBorrows.amountsToRepay,
+        collateralAssetNames: reverseBorrows.collateralAssetNames,
+        healthFactors: reverseBorrows.healthFactors,
+        platformAdapters: reverseBorrows.platformAdapters,
+        borrowAssetsPrices,
+        borrowAssets: borrowAssetsAddresses,
+        borrowAssetsNames
+      },
+      univ3Depositor,
+      univ3Pool,
+
       fixPriceChanges: p?.fixChangePrices
         ? p?.fixChangePrices[0]
         : undefined
@@ -273,6 +360,60 @@ export class StateUtilsNum {
     // console.log(dest)
 
     return dest
+  }
+
+  public static async getBorrowInfo(
+    signer: SignerWithAddress,
+    converter: ITetuConverter,
+    borrowManager: IBorrowManager,
+    strategy: ConverterStrategyBase,
+    collateralAssets: string[],
+    borrowAssets: string[]
+  ): Promise<IBorrowInfo> {
+    const collaterals: number[] = [];
+    const amountsToRepay: number[] = [];
+    const borrowAssetNames: string[] = [];
+    const collateralAssetNames: string[] = [];
+    const listHealthFactors: number[][] = []
+    const listPlatformAdapters: string[][] = [];
+
+    for (const collateralAsset of collateralAssets) {
+      for (const borrowAsset of borrowAssets) {
+        const collateralDecimals = await IERC20Metadata__factory.connect(collateralAsset, signer).decimals();
+        const borrowDecimals = await IERC20Metadata__factory.connect(borrowAsset, signer).decimals();
+
+        const directDebtStored = await converter.callStatic.getDebtAmountStored(strategy.address, collateralAsset, borrowAsset, false);
+        collaterals.push(+formatUnits(directDebtStored[1], collateralDecimals));
+        amountsToRepay.push(+formatUnits(directDebtStored[0], borrowDecimals));
+        borrowAssetNames.push(await IERC20Metadata__factory.connect(borrowAsset, signer).symbol());
+        collateralAssetNames.push(await IERC20Metadata__factory.connect(collateralAsset, signer).symbol());
+
+        const healthFactors: number[] = [];
+        const platformAdapters: string[] = [];
+        const positions = await converter.callStatic.getPositions(strategy.address, collateralAsset, borrowAsset);
+        for (const position of positions) {
+          const poolAdapter = IPoolAdapter__factory.connect(position, signer);
+          const status = await poolAdapter.getStatus();
+          healthFactors.push(+formatUnits(status.healthFactor18, 18));
+
+          const config = await poolAdapter.getConfig();
+          platformAdapters.push(
+            await ConverterAdaptersHelper.getPlatformAdapterName(signer, await borrowManager.getPlatformAdapter(config.originConverter))
+          );
+        }
+        listHealthFactors.push(healthFactors);
+        listPlatformAdapters.push(platformAdapters);
+      }
+    }
+
+    return {
+      amountsToRepay,
+      collaterals,
+      borrowAssetNames,
+      healthFactors: listHealthFactors,
+      platformAdapters: listPlatformAdapters,
+      collateralAssetNames
+    }
   }
 
   public static getTotalMainAssetAmount(state: IStateNum): number {
@@ -320,12 +461,37 @@ export class StateUtilsNum {
       `splitter.${mainAssetSymbol}`,
       'splitter.totalAssets',
 
-      'converter.collaterals',
-      'converter.amountsToRepay',
-      'converter.healthFactors',
-      'converter.platformAdapters',
-      'converter.borrowAssets',
-      'converter.prices',
+      'd-converter.collaterals',
+      'd-converter.amountsToRepay',
+      'd-converter.healthFactors',
+      'd-converter.platformAdapters',
+      'd-converter.borrowAssets',
+      'd-converter.prices',
+
+      'r-converter.collaterals',
+      'r-converter.amountsToRepay',
+      'r-converter.healthFactors',
+      'r-converter.platformAdapters',
+      'r-converter.collateralAssets',
+      'r-converter.prices',
+
+      'depositor.tokenA',
+      'depositor.tokenB',
+      'depositor.tickSpacing',
+      'depositor.lowerTick',
+      'depositor.upperTick',
+      'depositor.rebalanceTickRange',
+      'depositor.totalLiquidity',
+      'depositor.isFuseTriggered',
+      'depositor.fuseThreshold',
+      'depositor.rebalanceEarned0',
+      'depositor.rebalanceEarned1',
+      'depositor.rebalanceLost',
+
+      "pool.token0",
+      "pool.token1",
+      "pool.amount0",
+      "pool.amount1",
 
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
@@ -374,12 +540,37 @@ export class StateUtilsNum {
       item.splitter.assetBalance,
       item.splitter.totalAssets,
 
-      item.converter?.collaterals.join(' '),
-      item.converter?.amountsToRepay.join(' '),
-      item.converter?.healthFactors.map(x => x.join(" ")).join(" "),
-      item.converter?.platformAdapters.map(x => x.join(" ")).join(" "),
-      item.converter?.borrowAssetsNames?.join(" "),
-      item.converter?.borrowAssetsPrices?.join(" "),
+      item.converterDirect?.collaterals.join(' '),
+      item.converterDirect?.amountsToRepay.join(' '),
+      item.converterDirect?.healthFactors.map(x => x.join(" ")).join(" "),
+      item.converterDirect?.platformAdapters.map(x => x.join(" ")).join(" "),
+      item.converterDirect?.borrowAssetsNames?.join(" "),
+      item.converterDirect?.borrowAssetsPrices?.join(" "),
+
+      item.converterReverse?.collaterals.join(' '),
+      item.converterReverse?.amountsToRepay.join(' '),
+      item.converterReverse?.healthFactors.map(x => x.join(" ")).join(" "),
+      item.converterReverse?.platformAdapters.map(x => x.join(" ")).join(" "),
+      item.converterReverse?.collateralAssetNames?.join(" "),
+      item.converterReverse?.borrowAssetsPrices?.join(" "),
+
+      item.univ3Depositor?.tokenA,
+      item.univ3Depositor?.tokenB,
+      item.univ3Depositor?.tickSpacing,
+      item.univ3Depositor?.lowerTick,
+      item.univ3Depositor?.upperTick,
+      item.univ3Depositor?.rebalanceTickRange,
+      item.univ3Depositor?.totalLiquidity,
+      item.univ3Depositor?.isFuseTriggered,
+      item.univ3Depositor?.fuseThreshold,
+      item.univ3Depositor?.rebalanceEarned0,
+      item.univ3Depositor?.rebalanceEarned1,
+      item.univ3Depositor?.rebalanceLost,
+
+      item.univ3Pool?.token0,
+      item.univ3Pool?.token1,
+      item.univ3Pool?.amount0,
+      item.univ3Pool?.amount1,
 
       item.fixPriceChanges?.assetBefore,
       item.fixPriceChanges?.assetAfter,

@@ -201,18 +201,18 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
       listStates.push(stateStepInitial);
       console.log(`initial`, stateStepInitial);
 
+      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
+
       for (let i = 0; i < COUNT * 2; ++i) {
         const state0 = await strategy.getState();
         console.log("state0", state0);
 
         console.log("Step", i);
 
-        const swapAmount = BigNumber.from(parseUnits('200000', 6));
+        const swapAmount = BigNumber.from(parseUnits('20000', 6));
         console.log("swapAmount", swapAmount);
 
         // Decrease price at first 10 steps, increase price on other 10 steps
-        await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
-
         while (! await strategy.needRebalance()) {
           if (i < COUNT) {
             await UniswapV3StrategyUtils.movePriceDown(
@@ -235,25 +235,8 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
 
         expect(await strategy.needRebalance()).eq(true);
 
-        // prepare swap-by-agg params - they are required only if the fuse was triggered on
-        // const quote = await strategy.callStatic.quoteRebalanceSwap()
-        // console.log('Quote', quote)
-        // const params = {
-        //   fromTokenAddress: quote[0] ? state.tokenA : state.tokenB,
-        //   toTokenAddress: quote[0] ? state.tokenB : state.tokenA,
-        //   amount: quote[1].toString(),
-        //   fromAddress: strategy.address,
-        //   slippage: 1,
-        //   disableEstimate: true,
-        //   allowPartialFill: false,
-        //   protocols: 'POLYGON_BALANCER_V2',
-        // };
-        // const swapTransaction = await buildTxForSwap(JSON.stringify(params));
-        // console.log('Transaction for swap: ', swapTransaction);
-        // await strategy.rebalanceNoSwaps(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data);
-
         console.log("Start rebalance, step", i);
-        await strategy.rebalanceNoSwaps();
+        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
         console.log("End rebalance, step", i);
 
         expect(await strategy.needRebalance()).eq(false);
