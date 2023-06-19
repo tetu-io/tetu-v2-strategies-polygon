@@ -254,7 +254,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    let swapAmount = parseUnits('500000', decimals);
+    let swapAmount = parseUnits('100000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
