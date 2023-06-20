@@ -6,6 +6,7 @@ import "../DepositorBase.sol";
 import "./Uni3StrategyErrors.sol";
 import "../../integrations/uniswap/IUniswapV3MintCallback.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
+import "../../interfaces/IUniswapV3Depositor.sol";
 
 /// @title UniswapV3Depositor
 /// @dev Abstract contract that is designed to interact with Uniswap V3 pools and manage liquidity.

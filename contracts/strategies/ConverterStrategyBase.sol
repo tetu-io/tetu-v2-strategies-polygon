@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+import "../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
