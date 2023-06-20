@@ -2,6 +2,7 @@ import {MockTetuConverter, MockToken, PriceOracleMock} from "../../../typechain"
 import {IBorrowParamsNum, IQuoteRepayParams, IRepayParams} from "./TestDataTypes";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../scripts/utils/Misc";
+import {BigNumber, BigNumberish} from "ethers";
 
 export async function setupMockedRepay(
   tetuConverter: MockTetuConverter,
@@ -99,8 +100,8 @@ export async function setupMockedBorrowEntryKind1(
   converter: MockTetuConverter,
   user: string,
   p: IBorrowParamsNum,
-  proportion0: number = 1,
-  proportion1: number = 1
+  proportion0: BigNumberish = 1,
+  proportion1: BigNumberish = 1
 ) {
   console.log("setupMockedBorrowEntryKind1.proportion0", proportion0);
   console.log("setupMockedBorrowEntryKind1.proportion1", proportion1);

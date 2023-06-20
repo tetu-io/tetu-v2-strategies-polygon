@@ -111,6 +111,8 @@ describe('BorrowLibIntTest', () => {
       holderY: string;
       /** [0 .. SUM_PROPORTIONS] */
       proportion: number;
+      thresholdX?: number;
+      thresholdY?: number;
       init: {
         addBeforeBorrow: IBalancesXY;
         /** empty string == all balance */
@@ -231,7 +233,9 @@ describe('BorrowLibIntTest', () => {
         p.tokenX.address,
         p.tokenY.address,
         // 100_000 was replaced by 1e18
-        parseUnits(Number(p.proportion / SUM_PROPORTIONS).toString(), 18)
+        parseUnits(Number(p.proportion / SUM_PROPORTIONS).toString(), 18),
+        parseUnits((p.thresholdX || 0).toString(), await p.tokenX.decimals()),
+        parseUnits((p.thresholdY || 0).toString(), await p.tokenY.decimals()),
       );
       const gasUsed = (await tx.wait()).gasUsed;
 

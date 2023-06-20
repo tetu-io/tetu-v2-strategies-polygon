@@ -185,7 +185,9 @@ library UniswapV3DebtLib {
       tetuConverter,
       p.tokenA,
       p.tokenB,
-      p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1)
+      p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
+      0, // todo threshold for tokenA
+      0 // todo threshold for tokenB
     );
 
     // we assume here, that profitToCover has low value
@@ -224,6 +226,7 @@ library UniswapV3DebtLib {
 
     uint token0Desired = token1Price;
     uint token1Desired = 10 ** token1Decimals;
+    require(token1Desired != 0, AppErrors.ZERO_VALUE);
 
     // calculate proportions
     (uint consumed0, uint consumed1,) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);

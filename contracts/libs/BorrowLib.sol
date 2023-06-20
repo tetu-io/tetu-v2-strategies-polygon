@@ -16,6 +16,10 @@ library BorrowLib {
     address asset1;
     /// @notice Proportion of {asset0}, > 0; proportion of {asset1} is SUM_PROPORTIONS - prop0
     uint prop0;
+    /// @notice Min allowed amount of {asset0}-collateral, 0 - use default min value
+    uint threshold0;
+    /// @ntoice Min allowed amount of {asset1}-collateral, 0 - use default min value
+    uint threshold1;
 
     /// @notice Asset prices in USD, decimals 18
     uint[] prices;
@@ -48,17 +52,24 @@ library BorrowLib {
     uint propB;
     /// @notice {assetA} to {assetB} ratio; {amountB} * {alpha} => {amountA}, decimals 18
     uint alpha18;
+    /// @notice Min allowed amount of {assetA}-collateral, 0 - use default min value
+    uint thresholdA;
   }
   //endregion -------------------------------------------------- Data types
 
 
   //region -------------------------------------------------- External functions
   /// @notice Set balances of {asset0} and {asset1} in proportions {prop0}:{prop1} using borrow/repay (no swaps)
+  /// @param prop0 Proportion of {asset0}, > 0. Proportion of {asset1} is calculates as 1e18 - prop0
+  /// @param threshold0 Min allowed amount of {asset0}-collateral, 0 - use default min value
+  /// @param threshold1 Min allowed amount of {asset1}-collateral, 0 - use default min value
   function rebalanceAssets(
     ITetuConverter converter_,
     address asset0,
     address asset1,
-    uint prop0
+    uint prop0,
+    uint threshold0,
+    uint threshold1
   ) external {
     require(prop0 > 0, AppErrors.ZERO_VALUE);
 
@@ -66,6 +77,8 @@ library BorrowLib {
     v.asset0 = asset0;
     v.asset1 = asset1;
     v.prop0 = prop0;
+    v.threshold0 = threshold0;
+    v.threshold1 = threshold1;
 
     IPriceOracle priceOracle = IPriceOracle(IConverterController(converter_.controller()).priceOracle());
     address[] memory tokens = new address[](2);
@@ -106,7 +119,8 @@ library BorrowLib {
         assetB: v.asset0,
         propA: SUM_PROPORTIONS - v.prop0,
         propB: v.prop0,
-        alpha18: 1e18 * v.prices[0] * v.decs[1] / v.prices[1] / v.decs[0]
+        alpha18: 1e18 * v.prices[0] * v.decs[1] / v.prices[1] / v.decs[0],
+        thresholdA: v.threshold1
       });
 
       if (v.directDebt > 0) {
@@ -125,7 +139,8 @@ library BorrowLib {
         assetB: v.asset1,
         propA: v.prop0,
         propB: SUM_PROPORTIONS - v.prop0,
-        alpha18: 1e18 * v.prices[1] * v.decs[0] / v.prices[0] / v.decs[1]
+        alpha18: 1e18 * v.prices[1] * v.decs[0] / v.prices[0] / v.decs[1],
+        thresholdA: v.threshold0
       });
       // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
       if (v.reverseDebt > 0) {
@@ -147,7 +162,6 @@ library BorrowLib {
     uint borrowedAmountOut
   ) {
     uint untouchedAmountA;
-    uint thresholdAmountIn_ = 0; // todo
     bytes memory entryData = abi.encode(1, c.propA, c.propB);
 
     if (balanceB_ != 0) {
@@ -164,7 +178,7 @@ library BorrowLib {
       c.assetA,
       c.assetB,
       balanceA_ - untouchedAmountA,
-      thresholdAmountIn_
+      c.thresholdA
     );
   }
 
