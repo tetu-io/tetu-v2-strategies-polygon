@@ -8,7 +8,7 @@ import {
   MockTetuConverter,
   MockTetuConverterController,
   MockTetuLiquidatorSingleCall, MockVaultInsurance,
-  PriceOracleMock, UniswapV3LibFacade,
+  PriceOracleMock, UniswapV3ConverterStrategyReaderAccessMock, UniswapV3LibFacade,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -121,5 +121,9 @@ export class MockHelper {
 
   public static async createBorrowLibFacade(signer: SignerWithAddress): Promise<BorrowLibFacade> {
     return (await DeployerUtils.deployContract(signer, 'BorrowLibFacade')) as BorrowLibFacade;
+  }
+
+  public static async createUniswapV3ConverterStrategyReaderAccessMock(signer: SignerWithAddress): Promise<UniswapV3ConverterStrategyReaderAccessMock> {
+    return (await DeployerUtils.deployContract(signer, 'UniswapV3ConverterStrategyReaderAccessMock')) as UniswapV3ConverterStrategyReaderAccessMock;
   }
 }

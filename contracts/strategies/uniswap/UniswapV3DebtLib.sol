@@ -10,6 +10,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "../../libs/BorrowLib.sol";
+import "../../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
 
 library UniswapV3DebtLib {
 
@@ -520,4 +521,12 @@ library UniswapV3DebtLib {
   function _checkSwapRouter(address router) internal pure {
     require(router == ONEINCH || router == OPENOCEAN, Uni3StrategyErrors.UNKNOWN_SWAP_ROUTER);
   }
+
+  /// @notice Extract tokenA and tokenB from getState results
+  /// @dev External function to avoid stack too deep problem
+//  function getTokensFromState(
+//    IUniswapV3ConverterStrategyReaderAccess strategy
+//  ) external view returns (address tokenA, address tokenB){
+//    (tokenA, tokenB, ,,,,,,,,,) = strategy.getState();
+//  }
 }
