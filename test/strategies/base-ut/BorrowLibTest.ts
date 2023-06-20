@@ -21,6 +21,8 @@ import {
 } from "../../../scripts/utils/Misc";
 
 describe('BorrowLibTest', () => {
+  /** prop0 + prop1 */
+  const SUM_PROPORTIONS = 100_000;
   //region Variables
   let snapshotBefore: string;
   let governance: SignerWithAddress;
@@ -143,7 +145,7 @@ describe('BorrowLibTest', () => {
       }
 
       // make rebalancing
-      await facade.rebalanceAssets(converter.address, p.tokenX.address, p.tokenY.address, p.proportion);
+      await facade.rebalanceAssets(converter.address, p.tokenX.address, p.tokenY.address, p.proportion, SUM_PROPORTIONS - p.proportion);
 
       // get results
       return {

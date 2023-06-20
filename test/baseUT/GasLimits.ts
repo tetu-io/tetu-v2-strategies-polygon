@@ -45,3 +45,13 @@ export const GAS_CALC_INVESTED_ASSETS_SINGLE_DEBT = 150_000;
 
 export const GAS_PERFORMANCE_FEE = 187_000;
 export const GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT = 245_000;
+
+
+export const GAS_BORROW_LIB_01 = 1_688_506;
+export const GAS_BORROW_LIB_02 = 1_606_074;
+export const GAS_BORROW_LIB_03 = 2_142_292;
+export const GAS_BORROW_LIB_04 = 2_159_200;
+export const GAS_BORROW_LIB_05 = 1_623_110;
+export const GAS_BORROW_LIB_06 = 992_617;
+export const GAS_BORROW_LIB_07 = 992_617;
+export const GAS_BORROW_LIB_08 = 1_597_576;

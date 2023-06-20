@@ -22,6 +22,19 @@ import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {MaticHolders} from "../../../scripts/addresses/MaticHolders";
 import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
+import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
+import {
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_WEIGHTS,
+  GAS_BORROW_LIB_01,
+  GAS_BORROW_LIB_02,
+  GAS_BORROW_LIB_03,
+  GAS_BORROW_LIB_04,
+  GAS_BORROW_LIB_05,
+  GAS_BORROW_LIB_06,
+  GAS_BORROW_LIB_07,
+  GAS_BORROW_LIB_08
+} from "../../baseUT/GasLimits";
+import {BigNumber} from "ethers";
 
 describe('BorrowLibIntTest', () => {
   /** prop0 + prop1 */
@@ -116,6 +129,7 @@ describe('BorrowLibIntTest', () => {
       afterBorrow: IState;
       afterSub: IState;
       final: IState;
+      gasUsed: BigNumber;
     }
 
     async function getState(p: IRebalanceAssetsParams): Promise<IState> {
@@ -212,14 +226,22 @@ describe('BorrowLibIntTest', () => {
       const afterSub = await getState(p);
 
       // make rebalancing
-      await facade.rebalanceAssets(converter.address, p.tokenX.address, p.tokenY.address, p.proportion);
+      const tx = await facade.rebalanceAssets(
+        converter.address,
+        p.tokenX.address,
+        p.tokenY.address,
+        // 100_000 was replaced by 1e18
+        parseUnits(Number(p.proportion / SUM_PROPORTIONS).toString(), 18)
+      );
+      const gasUsed = (await tx.wait()).gasUsed;
 
       // get results
       return {
         initial,
         afterBorrow,
         afterSub,
-        final: await getState(p)
+        final: await getState(p),
+        gasUsed
       }
     }
 
@@ -1276,6 +1298,331 @@ describe('BorrowLibIntTest', () => {
           const r = await loadFixture(makeRebalanceAssetsTest);
           console.log("Results", r);
           expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+        });
+      });
+    });
+
+    describe("Gas estimation @skip-on-coverage", () => {
+      describe("Current state - no debts", () => {
+        describe("Need to increase WMATIC, reduce USDC", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+            return makeRebalanceAssets({
+              tokenX: wmatic,
+              tokenY: usdc,
+
+              holderX: MaticHolders.HOLDER_WMATIC,
+              holderY: MaticHolders.HOLDER_USDC,
+
+              proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+              init: {
+                addBeforeBorrow: {
+                  balanceX: "0",
+                  balanceY: "1000"
+                }
+              },
+            })
+          }
+
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRebalanceAssetsTest);
+            controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_01, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
+          });
+        });
+        describe("Need to reduce WMATIC, increase USDC", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+            return makeRebalanceAssets({
+              tokenX: wmatic,
+              tokenY: usdc,
+
+              holderX: MaticHolders.HOLDER_WMATIC,
+              holderY: MaticHolders.HOLDER_USDC,
+
+              proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+              init: {
+                addBeforeBorrow: {
+                  balanceX: "1000",
+                  balanceY: "0"
+                }
+              },
+            })
+          }
+
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRebalanceAssetsTest);
+            controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_02, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
+          });
+        });
+      });
+
+      describe("Current state - direct debt - WMATIC is borrowed under USDC", () => {
+        describe("Need to increase USDC, reduce WMATIC", () => {
+          describe("Partial repay and direct borrow are required", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+              return makeRebalanceAssets({
+                tokenX: usdc,
+                tokenY: wmatic,
+
+                holderX: MaticHolders.HOLDER_USDC,
+                holderY: MaticHolders.HOLDER_WMATIC,
+
+                proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+                init: {
+                  addBeforeBorrow: {
+                    balanceX: "100",
+                    balanceY: "100"
+                  }
+                },
+                preBorrow: {
+                  collateralAsset: usdc,
+                  borrowAsset: wmatic,
+                  collateralAmount: "1000" // usdc => ~800 wmatic
+                }
+              })
+            }
+
+            it("should set expected balances", async () => {
+              const r = await loadFixture(makeRebalanceAssetsTest);
+              controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_03, (u, t) => {
+                expect(u).to.be.below(t + 1);
+              });
+            });
+          });
+          describe("Full repay and reverse borrow are required", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+              return makeRebalanceAssets({
+                tokenX: usdc,
+                tokenY: wmatic,
+
+                holderX: MaticHolders.HOLDER_USDC,
+                holderY: MaticHolders.HOLDER_WMATIC,
+
+                proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+                init: {
+                  addBeforeBorrow: {
+                    balanceX: "0",
+                    balanceY: "10000"
+                  }
+                },
+                preBorrow: {
+                  collateralAsset: usdc,
+                  borrowAsset: wmatic,
+                  collateralAmount: "1000" // usdc => ~800 wmatic
+                }
+              })
+            }
+
+            it("should set expected balances", async () => {
+              const r = await loadFixture(makeRebalanceAssetsTest);
+              controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_04, (u, t) => {
+                expect(u).to.be.below(t + 1);
+              });
+            });
+          });
+        });
+        describe("Need to reduce USDC, increase WMATIC", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+            return makeRebalanceAssets({
+              tokenX: usdc,
+              tokenY: wmatic,
+
+              holderX: MaticHolders.HOLDER_USDC,
+              holderY: MaticHolders.HOLDER_WMATIC,
+
+              proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+              init: {
+                addBeforeBorrow: {
+                  balanceX: "5000",
+                  balanceY: "100"
+                }
+              },
+              preBorrow: {
+                collateralAsset: usdc,
+                borrowAsset: wmatic,
+                collateralAmount: "1000" // usdc => ~800 wmatic
+              }
+            })
+          }
+
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRebalanceAssetsTest);
+            controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_05, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
+          });
+        });
+      });
+
+      describe("Current state - reverse debt - USDC is borrowed under WMATIC", () => {
+        describe("Need to increase USDC, reduce WMATIC", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+            return makeRebalanceAssets({
+              tokenX: usdc,
+              tokenY: wmatic,
+
+              holderX: MaticHolders.HOLDER_USDC,
+              holderY: MaticHolders.HOLDER_WMATIC,
+
+              proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+              init: {
+                addBeforeBorrow: {
+                  balanceX: "0",
+                  balanceY: "1000"
+                }
+              },
+              preBorrow: {
+                collateralAsset: wmatic,
+                borrowAsset: usdc,
+                collateralAmount: "1000" // wmatic => ~300 usdc
+              }
+            })
+          }
+
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRebalanceAssetsTest);
+            controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_06, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
+          });
+        });
+        describe("Need to reduce USDC, increase WMATIC", () => {
+          describe("Partial repay and direct borrow are required", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+              return makeRebalanceAssets({
+                tokenX: usdc,
+                tokenY: wmatic,
+
+                holderX: MaticHolders.HOLDER_USDC,
+                holderY: MaticHolders.HOLDER_WMATIC,
+
+                proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+                init: {
+                  addBeforeBorrow: {
+                    balanceX: "500",
+                    balanceY: "500"
+                  }
+                },
+                preBorrow: {
+                  collateralAsset: wmatic,
+                  borrowAsset: usdc,
+                  collateralAmount: "1000" // wmatic => ~300 usdc
+                }
+              })
+            }
+
+            it("should set expected balances", async () => {
+              const r = await loadFixture(makeRebalanceAssetsTest);
+              controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_07, (u, t) => {
+                expect(u).to.be.below(t + 1);
+              });
+            });
+          });
+          describe("Full repay and reverse borrow are required", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+              return makeRebalanceAssets({
+                tokenX: usdc,
+                tokenY: wmatic,
+
+                holderX: MaticHolders.HOLDER_USDC,
+                holderY: MaticHolders.HOLDER_WMATIC,
+
+                proportion: SUM_PROPORTIONS - PROPORTION_SMALL,
+
+                init: {
+                  addBeforeBorrow: {
+                    balanceX: "5000",
+                    balanceY: "0"
+                  }
+                },
+                preBorrow: {
+                  collateralAsset: wmatic,
+                  borrowAsset: usdc,
+                  collateralAmount: "1000" // wmatic => ~300 usdc
+                }
+              })
+            }
+
+            it("should set expected balances", async () => {
+              const r = await loadFixture(makeRebalanceAssetsTest);
+              controlGasLimitsEx(r.gasUsed, GAS_BORROW_LIB_08, (u, t) => {
+                expect(u).to.be.below(t + 1);
+              });
+            });
+          });
         });
       });
     });

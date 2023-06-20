@@ -7,7 +7,6 @@ import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingStrategy.sol";
 import "./Uni3StrategyErrors.sol";
-import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -190,7 +189,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @return True if the fuse was triggered (so, it's necessary to call UniswapV3DebtLib.closeDebtByAgg)
   function rebalanceNoSwaps() external returns (bool) {
-    console.log("!!!rebalanceNoSwaps.start");
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
@@ -199,7 +197,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // withdraw all liquidity from pool; after disableFuse() liquidity is zero
     if (state.totalLiquidity > 0) {
-      console.log("!!!rebalanceNoSwaps.exit");
       _depositorEmergencyExit();
     }
 
@@ -211,19 +208,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       splitter
     );
 
-    console.log("!!!rebalanceNoSwaps.tokenAmounts", tokenAmounts.length);
     if (tokenAmounts.length == 2) {
-      console.log("!!!rebalanceNoSwaps.enter");
-      console.log("!!!rebalanceNoSwaps.tokenAmounts[0]", tokenAmounts[0]);
-      console.log("!!!rebalanceNoSwaps.tokenAmounts[1]", tokenAmounts[1]);
       _depositorEnter(tokenAmounts);
     }
 
-    console.log("!!!rebalanceNoSwaps._updateInvestedAssets.1", investedAssets());
     _updateInvestedAssets();
-    console.log("!!!rebalanceNoSwaps._updateInvestedAssets.2", investedAssets());
 
-    console.log("!!!rebalanceNoSwaps.end");
     return fuseEnabledOut;
   }
 
