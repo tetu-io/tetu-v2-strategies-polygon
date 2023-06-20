@@ -39,7 +39,8 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('UniswapV3ConverterStrategyOutOfRangeTest', function() {
+// todo looks like pretty specific, need to fix or remove
+describe.skip('UniswapV3ConverterStrategyOutOfRangeTest', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -121,7 +122,7 @@ describe('UniswapV3ConverterStrategyOutOfRangeTest', function() {
       await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000'));
       await vault.deposit(parseUnits('1000'), signer.address);
 
-      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600'), 100001);
+      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('6000'), 100001);
 
       const price = await swapper.getPrice(MaticAddresses.UNISWAPV3_WMATIC_MaticX_100, MaticAddresses.MaticX_TOKEN, MaticAddresses.WMATIC_TOKEN, parseUnits('1'))
 

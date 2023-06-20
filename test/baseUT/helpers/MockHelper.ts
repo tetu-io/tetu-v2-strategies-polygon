@@ -74,13 +74,14 @@ export class MockHelper {
 
   public static async createBalancerBoostedDepositorFacade(
     signer: SignerWithAddress,
-    pool: string = MaticAddresses.BALANCER_POOL_T_USD
+    pool: string = MaticAddresses.BALANCER_POOL_T_USD,
+    gauge: string = MaticAddresses.BALANCER_GAUGE_V2_T_USD
   ): Promise<BalancerBoostedDepositorFacade> {
     const ret = (await DeployerUtils.deployContract(
       signer,
       'BalancerBoostedDepositorFacade',
     )) as BalancerBoostedDepositorFacade;
-    await ret.init(pool);
+    await ret.init(pool, gauge);
     return ret;
   }
 

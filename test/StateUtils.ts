@@ -2,6 +2,7 @@
 import {BigNumber} from "ethers";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
+  AlgebraConverterStrategy__factory,
   BalancerBoostedStrategy__factory,
   ConverterStrategyBase, IBalancerGauge__factory,
   IERC20__factory, ISplitter__factory, ITetuConverter__factory,
@@ -114,6 +115,19 @@ export class StateUtils {
     } else if (await strategy.PLATFORM() === 'UniswapV3')  {
       const uniswapV3Stratety = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer)
       const state = await uniswapV3Stratety.getState()
+      liquidity = state.totalLiquidity
+      borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
+      const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
+        strategy.address,
+        asset.address,
+        state.tokenB,
+        false
+      )
+      collaterals.push(debtStored[1])
+      amountsToRepay.push(debtStored[0])
+    } else if (await strategy.PLATFORM() === 'Algebra')  {
+      const algebraStrategy = AlgebraConverterStrategy__factory.connect(strategy.address, signer)
+      const state = await algebraStrategy.getState()
       liquidity = state.totalLiquidity
       borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
       const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
@@ -329,7 +343,7 @@ export class StateUtils {
     console.log('final.getTotalMainAssetAmount', this.getTotalMainAssetAmount(final));
     console.log('enter.getTotalMainAssetAmount', this.getTotalMainAssetAmount(enter));
     console.log('Initial amount', initialAmount);
-    console.log('Final amount', initialAmount);
+    console.log('Final amount', finalAmount);
     console.log('Total profit', amountNum);
     console.log('Duration in seconds', timeSeconds);
     console.log('Duration in days', timeSeconds / (24 * 60 * 60));

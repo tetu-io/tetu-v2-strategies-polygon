@@ -253,7 +253,7 @@ describe('BalancerIntPriceChangeTest @skip-on-coverage', function() {
         'BalancerBoostedStrategy',
         async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
           const strategyContract = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
-          await strategyContract.init(core.controller, splitterAddress, tetuConverterAddress, pool);
+          await strategyContract.init(core.controller, splitterAddress, tetuConverterAddress, pool, MaticAddresses.BALANCER_GAUGE_V2_T_USD);
           return strategyContract as unknown as IStrategyV2;
         },
         {

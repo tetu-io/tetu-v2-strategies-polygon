@@ -30,6 +30,7 @@ async function startDefaultStrategyTest(
   const hwInitiator = (
     _signer: SignerWithAddress,
     _user: SignerWithAddress,
+    _swapUser: SignerWithAddress,
     _core: ICoreContractsWrapper,
     _tools: IToolsContractsWrapper,
     _underlying: string,
@@ -40,6 +41,7 @@ async function startDefaultStrategyTest(
     return new DoHardWorkLoopBase(
       _signer,
       _user,
+      _swapUser,
       _core,
       _tools,
       _underlying,

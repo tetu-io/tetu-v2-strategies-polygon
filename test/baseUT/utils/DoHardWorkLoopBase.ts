@@ -282,7 +282,7 @@ export class DoHardWorkLoopBase {
         const rebalancingStrategyContract = this.strategy as unknown as IRebalancingStrategy;
         if (await rebalancingStrategyContract.needRebalance()) {
           console.log('Rebalance..');
-          await rebalancingStrategyContract.rebalance();
+          await rebalancingStrategyContract.rebalance({gasLimit: 19_000_000});
         }
       }
 

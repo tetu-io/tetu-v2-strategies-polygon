@@ -611,6 +611,10 @@ library ConverterStrategyBaseLib {
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
+    if (amountIn_ == 0) {
+      return (0, 0);
+    }
+
     (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
 
     require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
@@ -1380,7 +1384,7 @@ library ConverterStrategyBaseLib {
             // convert {toSell} amount of main asset to tokens[i]
             if (toSell != 0 && v.balance != 0) {
               toSell = Math.min(toSell, v.balance);
-              (toSell, ) = _liquidate(
+              (toSell,) = _liquidate(
                 converter_,
                 liquidator,
                 v.asset,
@@ -1478,7 +1482,7 @@ library ConverterStrategyBaseLib {
       // Same formula: S * h = S + requestedAmount, where h = health factor => s = requestedAmount / (h - 1)
       // h = alpha * C / R
       uint alpha18 = prices[indexCollateral] * decs[indexBorrowAsset] * 1e18
-      / prices[indexBorrowAsset] / decs[indexCollateral];
+        / prices[indexBorrowAsset] / decs[indexCollateral];
 
       // if totalCollateral is zero (liquidation happens) we will have zero amount (the debt shouldn't be paid)
       amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18

@@ -101,6 +101,7 @@ library ConverterStrategyBaseLib2 {
   ///         I.e. we have 300 USDC, we need to split it on 100 USDC, 100 USDT, 100 DAI
   ///         USDC is main asset, USDT and DAI should be borrowed. We check amounts of USDT and DAI on the balance
   ///         and return collaterals reduced on that amounts. For main asset, we return full amount always (100 USDC).
+  /// @return tokenAmountsOut Length of the array is equal to the length of {tokens_}
   function getCollaterals(
     uint amount_,
     address[] memory tokens_,

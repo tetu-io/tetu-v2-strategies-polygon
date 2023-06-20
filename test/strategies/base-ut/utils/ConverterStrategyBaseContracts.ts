@@ -143,7 +143,7 @@ export class ConverterStrategyBaseContracts {
       'BalancerBoostedStrategy',
       async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
         const strategyContract = BalancerBoostedStrategy__factory.connect(strategyProxy, signer);
-        await strategyContract.init(core.controller, splitterAddress, converter, pool);
+        await strategyContract.init(core.controller, splitterAddress, converter, pool, MaticAddresses.BALANCER_GAUGE_V2_T_USD);
         return strategyContract as unknown as IStrategyV2;
       },
       {

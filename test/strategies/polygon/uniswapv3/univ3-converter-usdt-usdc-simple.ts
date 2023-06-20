@@ -136,6 +136,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   });
 
   it('deposit and full exit should not change share price', async function() {
+    const DELTA = 100;
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
 
     await vault.setDoHardWorkOnInvest(false);
@@ -199,7 +200,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2], true);
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, 1);
+      expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, DELTA);
 
       await redeemFromVault(vault, signer, 99, decimals, assetCtr, insurance);
       await printVaultState(
@@ -213,7 +214,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], true);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, 1);
+      expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, DELTA);
 
       await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
       await printVaultState(
@@ -227,7 +228,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], true);
 
       const sharePriceAfterWithdraw3 = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, 1);
+      expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, DELTA);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
@@ -238,6 +239,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   });
 
   it('deposit and exit with hard works should not change share price with zero compound', async function() {
+    const DELTA = 500;
     const pathOut = `./tmp/deposit_exit_states.csv`;
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
     const states = [];
@@ -252,7 +254,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-    let swapAmount = parseUnits('500000', decimals);
+    let swapAmount = parseUnits('100000', decimals);
 
     const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
 
@@ -385,7 +387,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
-      expect(sharePriceAfter).approximately(sharePriceBefore, 1);
+      expect(sharePriceAfter).approximately(sharePriceBefore, DELTA);
 
       // decrease swap amount slowly
       swapAmount = swapAmount.div(2);

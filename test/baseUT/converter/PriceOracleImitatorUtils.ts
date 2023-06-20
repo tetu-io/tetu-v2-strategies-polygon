@@ -6,7 +6,7 @@ import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {
   AggregatorInterface,
   IAave3PriceOracle,
-  IAave3PriceOracle__factory,
+  IAave3PriceOracle__factory, IAlgebraPool__factory,
   IBVault__factory,
   IComposableStablePool__factory,
   ILinearPool__factory,
@@ -88,6 +88,31 @@ export class PriceOracleImitatorUtils {
     const sources: AggregatorInterface[] = [
       await DeployerUtils.deployContract(signer, 'Aave3PriceSourceFixed', stableTokenPrice) as AggregatorInterface,
       await DeployerUtils.deployContract(signer, 'Aave3PriceSourceUniswapV3', pool, volatileToken) as AggregatorInterface
+    ]
+
+    await priceOracleAsPoolOwner.setAssetSources([stableToken, volatileToken], sources.map(x => x.address));
+  }
+
+  public static async algebra(
+    signer: SignerWithAddress,
+    pool: string,
+    stableToken: string,
+    stableTokenPrice: string = '100000000'
+  ) {
+    // Disable all lending platforms except AAVE3
+    await ConverterUtils.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    await ConverterUtils.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
+
+    const poolOwner = await Misc.impersonate(MaticAddresses.AAVE3_POOL_OWNER);
+    const priceOracleAsPoolOwner: IAave3PriceOracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, poolOwner);
+
+    const algebraPool = IAlgebraPool__factory.connect(pool, signer)
+    const token0 = await algebraPool.token0()
+    const token1 = await algebraPool.token1()
+    const volatileToken = token0.toLowerCase() === stableToken.toLowerCase() ? token1 : token0
+    const sources: AggregatorInterface[] = [
+      await DeployerUtils.deployContract(signer, 'Aave3PriceSourceFixed', stableTokenPrice) as AggregatorInterface,
+      await DeployerUtils.deployContract(signer, 'Aave3PriceSourceAlgebra', pool, volatileToken) as AggregatorInterface
     ]
 
     await priceOracleAsPoolOwner.setAssetSources([stableToken, volatileToken], sources.map(x => x.address));

@@ -106,4 +106,12 @@ export const deployAddresses = {
     "hardhat": MaticAddresses.BALANCER_POOL_T_USD,
     "matic": MaticAddresses.BALANCER_POOL_T_USD
   },
+  ALGEBRA_USDC_USDT: {
+    "hardhat": MaticAddresses.ALGEBRA_USDC_USDT,
+    "matic": MaticAddresses.ALGEBRA_USDC_USDT
+  },
+  DQUICK_ADDRESS: {
+    "hardhat": MaticAddresses.dQUICK_TOKEN,
+    "matic": MaticAddresses.dQUICK_TOKEN
+  },
 }
