@@ -256,7 +256,8 @@ contract ConverterStrategyBaseLibFacade {
     uint requestedAmount,
     address[] memory tokens
   ) external returns (
-    uint expectedAmountMainAssetOut
+    uint expectedAmountMainAssetOut,
+    bool noDebtsLeft
   ) {
     return ConverterStrategyBaseLib.closePositionsToGetAmount(
       tetuConverter,

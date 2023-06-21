@@ -223,33 +223,37 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Exit from pool, close all debts and swap available assets to underlying
   function withdrawByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
+    console.log("withdrawByAgg");
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
     (, uint profitToCover) = _fixPriceChanges(true);
     uint oldTotalAssets = totalAssets() - profitToCover;
+    console.log("withdrawByAgg.profitToCover", profitToCover);
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
     if (state.totalLiquidity > 0) {
+      console.log("withdrawByAgg.state.totalLiquidity", state.totalLiquidity);
       _depositorEmergencyExit();
     }
 
-// TODO
-//    // _depositorEnter(tokenAmounts) if length == 2
-//    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
-//      state,
-//      converter,
-//      oldTotalAssets,
-//      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
-//        direction,
-//        amount,
-//        agg,
-//        swapData
-//      ),
-//      profitToCover,
-//      splitter
-//    );
+    address[] memory tokens = _depositorPoolAssets();
+    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+
+    bool noDebtsLeft = false;
+    while (! noDebtsLeft) {
+      console.log("withdrawByAgg.call.closePositionsToGetAmount.gasleft", gasleft());
+      (, noDebtsLeft) = ConverterStrategyBaseLib.closePositionsToGetAmount(
+        converter,
+        _getLiquidator(controller()),
+        indexAsset,
+        liquidationThresholds,
+        type(uint).max,
+        tokens
+      );
+    }
+    console.log("withdrawByAgg.call.closePositionsToGetAmount.finish.gasleft", gasleft());
 
     _updateInvestedAssets();
   }

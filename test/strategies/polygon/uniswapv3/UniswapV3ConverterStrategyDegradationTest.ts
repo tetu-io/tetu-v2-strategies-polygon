@@ -262,7 +262,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
   describe('study: make over-collateral, withdraw all', function() {
     it('Reduce price N steps, withdraw all', async() => {
-      const COUNT = 3;
+      const COUNT = 5;
       const state = await strategy.getState();
       const listStates: IStateNum[] = [];
 
@@ -326,7 +326,9 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       }
 
       console.log("Withdraw all");
-      await vault.connect(user).withdrawAll();
+      // await vault.connect(user).withdrawAll();
+      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+      await strategy.connect(operator).withdrawByAgg(false, 0, Misc.ZERO_ADDRESS, "0x");
 
       const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
       listStates.push(stateStepFinal);
