@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import "../../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
+import "hardhat/console.sol";
 
 contract UniswapV3ConverterStrategyReaderAccessMock is IUniswapV3ConverterStrategyReaderAccess {
   address internal _converter;

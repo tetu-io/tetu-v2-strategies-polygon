@@ -45,7 +45,7 @@ const argv = require('yargs/yargs')()
  * Study noSwap-rebalance.
  * Try to change price step by step and check how strategy params are changed
  */
-describe('UniswapV3ConverterStrategyDegradationTest', function() {
+describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function() {
 //region Constants and variables
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
@@ -62,9 +62,13 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
   let stateParams: IStateParams;
 //endregion Constants and variables
 
-//region Before after
+//region before after
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
+
+    // we need to display full objects, so we use util.inspect, see
+    // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
+    require("util").inspect.defaultOptions.depth = null;
 
     await hre.network.provider.request({
       method: "hardhat_reset",
@@ -159,7 +163,7 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
   afterEach(async function() {
     await TimeUtils.rollback(snapshot);
   });
-//endregion Before after
+//endregion before after
 
 //region Utils
   function apiRequestUrl(methodName: string, queryParams: string) {
@@ -187,7 +191,7 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
 
 //region Unit tests
   describe('study: UniswapV3 strategy rebalance by noSwaps tests', function() {
-    it('Reduce price 10 steps, increase price 10 steps, rebalance-no-swaps each time', async() => {
+    it('Reduce price N steps, increase price N steps, rebalance-no-swaps each time', async() => {
       const COUNT = 4;
       const state = await strategy.getState();
       const listStates: IStateNum[] = [];
@@ -255,6 +259,82 @@ describe('UniswapV3ConverterStrategyDegradationTest', function() {
       }
     })
   })
+
+  describe('study: make over-collateral, withdraw all', function() {
+    it('Reduce price N steps, withdraw all', async() => {
+      const COUNT = 3;
+      const state = await strategy.getState();
+      const listStates: IStateNum[] = [];
+
+      console.log('deposit...');
+      await asset.connect(user).approve(vault.address, Misc.MAX_UINT);
+      await TokenUtils.getToken(asset.address, user.address, parseUnits('1000', 6));
+      await vault.connect(user).deposit(parseUnits('1000', 6), user.address);
+
+      const stateStepInitial = await StateUtilsNum.getState(signer, user, strategy, vault, `initial`);
+      listStates.push(stateStepInitial);
+      console.log(`initial`, stateStepInitial);
+
+      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
+
+      for (let i = 0; i < COUNT; ++i) {
+        const state0 = await strategy.getState();
+        console.log("state0", state0);
+
+        console.log("Step", i);
+
+        const swapAmount = BigNumber.from(parseUnits('20000', 6));
+        console.log("swapAmount", swapAmount);
+
+        // Decrease price at first 10 steps, increase price on other 10 steps
+        while (! await strategy.needRebalance()) {
+          await UniswapV3StrategyUtils.movePriceDown(
+            signer,
+            strategy.address,
+            MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+            swapAmount,
+            100001
+          );
+          // await UniswapV3StrategyUtils.movePriceUp(
+          //   signer,
+          //   strategy.address,
+          //   MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          //   swapAmount,
+          //   100001
+          // );
+        }
+
+        expect(await strategy.needRebalance()).eq(true);
+
+        console.log("Start rebalance, step", i);
+        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
+        console.log("End rebalance, step", i);
+
+        expect(await strategy.needRebalance()).eq(false);
+
+        await TimeUtils.advanceNBlocks(300);
+
+        const stateStep = await StateUtilsNum.getState(signer, user, strategy, vault, `step ${i}`);
+        listStates.push(stateStep);
+        console.log(`state ${i}`, stateStep);
+
+        await StateUtilsNum.saveListStatesToCSVColumns(
+          './tmp/degradation-withdrawAll.csv',
+          listStates,
+          stateParams
+        );
+      }
+
+      console.log("Withdraw all");
+      await vault.connect(user).withdrawAll();
+
+      const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
+      listStates.push(stateStepFinal);
+      console.log(`final`, stateStepFinal);
+    })
+  })
+
 })
+
 //endregion Unit tests
 

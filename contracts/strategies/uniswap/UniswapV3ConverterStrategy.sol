@@ -218,6 +218,45 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------ Exit, Enter
+  /////////////////////////////////////////////////////////////////////
+
+  /// @notice Exit from pool, close all debts and swap available assets to underlying
+  function withdrawByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
+
+    (, uint profitToCover) = _fixPriceChanges(true);
+    uint oldTotalAssets = totalAssets() - profitToCover;
+
+    // withdraw all liquidity from pool
+    // after disableFuse() liquidity is zero
+    if (state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+
+// TODO
+//    // _depositorEnter(tokenAmounts) if length == 2
+//    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
+//      state,
+//      converter,
+//      oldTotalAssets,
+//      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
+//        direction,
+//        amount,
+//        agg,
+//        swapData
+//      ),
+//      profitToCover,
+//      splitter
+//    );
+
+    _updateInvestedAssets();
+  }
+
+  //endregion ------------------------------------ Exit, Enter
+
+  /////////////////////////////////////////////////////////////////////
   ///                   INTERNAL LOGIC
   /////////////////////////////////////////////////////////////////////
 
