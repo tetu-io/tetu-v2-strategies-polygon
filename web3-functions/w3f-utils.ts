@@ -44,7 +44,7 @@ export async function quoteOneInch(
       allowPartialFill: false,
       protocols,
     };
-    const url = `https://api.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
+    const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
     const quote: { tx?: { to?: string, data?: string }, toTokenAmount?: string } = await ky
       .get(url, { timeout: 5_000, retry: 0 })
       .json();
