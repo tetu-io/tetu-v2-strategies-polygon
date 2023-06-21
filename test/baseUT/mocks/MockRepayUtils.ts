@@ -20,8 +20,24 @@ export async function setupMockedRepay(
     parseUnits(p.totalCollateralAmountOut, decimalsCollateral),
     false
   );
+  await tetuConverter.setGetDebtAmountStored(
+    user,
+    p.collateralAsset.address,
+    p.borrowAsset.address,
+    parseUnits(p.totalDebtAmountOut, decimalsBorrow),
+    parseUnits(p.totalCollateralAmountOut, decimalsCollateral),
+    false
+  );
   const totalDebtAmountOutWithDebtGap = (Number(p.totalDebtAmountOut) + Number(p.debtGapToSend || "0")).toString();
   await tetuConverter.setGetDebtAmountCurrent(
+    user,
+    p.collateralAsset.address,
+    p.borrowAsset.address,
+    parseUnits(totalDebtAmountOutWithDebtGap, decimalsBorrow),
+    parseUnits(p.totalCollateralAmountOut, decimalsCollateral),
+    true
+  );
+  await tetuConverter.setGetDebtAmountStored(
     user,
     p.collateralAsset.address,
     p.borrowAsset.address,

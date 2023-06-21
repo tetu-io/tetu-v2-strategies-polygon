@@ -52,13 +52,13 @@ contract UniswapV3Reader {
     (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(priceOracle, v.tokens, 2);
 
     // direct borrow: underlying is collateral
-    (v.directDebt, v.directCollateral) = v.converter.getDebtAmountStored(address(this), v.tokens[0], v.tokens[1], true);
+    (v.directDebt, v.directCollateral) = v.converter.getDebtAmountStored(strategy_, v.tokens[0], v.tokens[1], true);
 
     // reverse borrow: underlying is borrowed asset
-    (v.reverseDebt, v.reverseCollateral) = v.converter.getDebtAmountStored(address(this), v.tokens[1], v.tokens[0], true);
+    (v.reverseDebt, v.reverseCollateral) = v.converter.getDebtAmountStored(strategy_, v.tokens[1], v.tokens[0], true);
 
-    v.directDebtCost = v.directDebt * v.prices[0] * v.decs[1] / v.decs[0] / v.prices[1];
-    v.reverseCollateralCost = v.reverseCollateral * v.prices[0] * v.decs[1] / v.decs[0] / v.prices[1];
+    v.directDebtCost = v.directDebt * v.prices[1] * v.decs[0] / v.decs[1] / v.prices[0];
+    v.reverseCollateralCost = v.reverseCollateral * v.prices[1] * v.decs[0] / v.decs[1] / v.prices[0];
 
     return (
       v.directCollateral + v.reverseCollateralCost - v.directDebtCost - v.reverseDebt,

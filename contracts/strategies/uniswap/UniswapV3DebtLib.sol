@@ -527,6 +527,8 @@ library UniswapV3DebtLib {
 //  function getTokensFromState(
 //    IUniswapV3ConverterStrategyReaderAccess strategy
 //  ) external view returns (address tokenA, address tokenB){
-//    (tokenA, tokenB, ,,,,,,,,,) = strategy.getState();
+//    // (tokenA, tokenB, ,,,,,,,,,) = strategy.getState();
+//    UniswapV3ConverterStrategyLogicLib.State memory state = strategy.getState();
+//    return (state.tokenA, state.tokenB);
 //  }
 }

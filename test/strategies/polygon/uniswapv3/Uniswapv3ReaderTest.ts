@@ -7,16 +7,33 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
+  ConverterController__factory,
   IERC20,
-  IERC20__factory, IERC20Metadata__factory, IStrategyV2,
+  IERC20__factory,
+  IERC20Metadata,
+  IERC20Metadata__factory,
+  IStrategyV2,
   ISwapper,
-  ISwapper__factory, TetuVaultV2, UniswapV3ConverterStrategy,
+  ISwapper__factory,
+  ITetuConverter,
+  ITetuConverter__factory,
+  MockSplitter, MockSplitterVault, MockTetuConverter,
+  MockToken, PriceOracleMock,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
+  UniswapV3ConverterStrategyReaderAccessMock,
+  UniswapV3Reader,
 } from '../../../../typechain';
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
+import {
+  getAaveTwoPlatformAdapter, getCompoundThreePlatformAdapter,
+  getConverterAddress,
+  getDForcePlatformAdapter,
+  Misc
+} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {parseUnits} from "ethers/lib/utils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -25,6 +42,10 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/StateUtilsNum';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {IBorrowParams, IBorrowParamsNum, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
+import {setupMockedBorrow, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
+import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -52,124 +73,289 @@ describe('UniswapV3ReaderTest', function() {
   }
 
   let snapshotBefore: string;
-  let snapshot: string;
+  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
-  let user: SignerWithAddress;
-  let swapper: ISwapper;
-  let asset: IERC20;
-  let vault: TetuVaultV2;
-  let strategy: UniswapV3ConverterStrategy;
-  let stateParams: IStateParams;
+  let converter: MockTetuConverter;
+  let usdc: MockToken;
+  let wmatic: MockToken;
+  let usdt: MockToken;
+  let strategy: UniswapV3ConverterStrategyReaderAccessMock;
+  let splitter: MockSplitterVault;
+  let reader: UniswapV3Reader;
+  let priceOracle: PriceOracleMock;
 //endregion Constants and variables
 
-//region Before after
+  //region before, after
   before(async function () {
+    [signer] = await ethers.getSigners();
+
+    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
+    usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
+    wmatic = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18);
+    usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
+
     snapshotBefore = await TimeUtils.snapshot();
+    // set up TetuConverter
+    priceOracle = (await DeployerUtils.deployContract(
+      signer,
+      'PriceOracleMock',
+      [usdc.address, wmatic.address, usdt.address],
+      [parseUnits('1', 18), parseUnits('1', 18), parseUnits('1', 18)],
+    )) as PriceOracleMock;
+    const converterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+    converter = await MockHelper.createMockTetuConverter(signer);
+    await converter.setController(converterController.address);
 
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
-
-    [signer, user] = await ethers.getSigners();
-    const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
-
-    const core = Addresses.getCore();
-    const controller = DeployerUtilsLocal.getController(signer);
-    asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
-    const converterAddress = getConverterAddress();
-    swapper = ISwapper__factory.connect(MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, signer);
-
-    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
-      asset.address,
-      'TetuV2_UniswapV3_USDC_USDT-0.01%',
-      async (_splitterAddress: string) => {
-        const _strategy = UniswapV3ConverterStrategy__factory.connect(
-          await DeployerUtils.deployProxy(signer, 'UniswapV3ConverterStrategy'),
-          gov,
-        );
-
-        await _strategy.init(
-          core.controller,
-          _splitterAddress,
-          converterAddress,
-          MaticAddresses.UNISWAPV3_USDC_USDT_100,
-          0,
-          0,
-        );
-
-        return _strategy as unknown as IStrategyV2;
-      },
-      controller,
-      gov,
-      1_000,
-      300,
-      300,
-      false,
-    );
-    strategy = data.strategy as UniswapV3ConverterStrategy
-    vault = data.vault.connect(signer)
-
-    await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState();
-    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
-
-    await vault.connect(gov).setWithdrawRequestBlocks(0);
-
-    await ConverterUtils.disableAaveV2(signer)
-
-    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-    await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
-
-    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN]);
-    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address);
-
-    stateParams = {
-      mainAssetSymbol: await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer).symbol()
-    }
-  })
+    splitter = await MockHelper.createMockSplitter(signer);
+    strategy = await MockHelper.createUniswapV3ConverterStrategyReaderAccessMock(signer);
+    await strategy.setSplitter(splitter.address);
+    await strategy.setConverter(converter.address);
+    reader = await MockHelper.createUniswapV3Reader(signer);
+  });
 
   after(async function () {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
     await TimeUtils.rollback(snapshotBefore);
   });
-
-  beforeEach(async function () {
-    snapshot = await TimeUtils.snapshot();
-  });
-
-  afterEach(async function () {
-    await TimeUtils.rollback(snapshot);
-  });
-//endregion Before after
+//endregion before, after
 
 //region Unit tests
-  describe("UniswapV3Reader", () => {
-    describe("No debts", () => {
+  describe("getLockedUnderlyingAmount", () => {
+    interface IGetLockedUnderlyingAmountParams {
 
+      underlying: MockToken;
+      secondAsset: MockToken;
+
+      totalAssets: string;
+
+      repays?: IRepayParams[];
+      /** underlying, secondAsset */
+      prices?: string[];
+    }
+
+    interface IGetLockedUnderlyingAmountResults {
+      estimatedUnderlyingAmount: number;
+      totalAssets: number;
+    }
+
+    async function getLockedUnderlyingAmount(p: IGetLockedUnderlyingAmountParams): Promise<IGetLockedUnderlyingAmountResults> {
+      await strategy.setTotalAssets(parseUnits(p.totalAssets, await p.underlying.decimals()));
+      await splitter.setAsset(p.underlying.address);
+
+      if (p.prices) {
+        await priceOracle.changePrices(
+          [p.underlying.address, p.secondAsset.address],
+          [parseUnits(p.prices[0], 18), parseUnits(p.prices[1], 18)]
+        );
+      }
+
+      if (p.repays) {
+        for (const r of p.repays) {
+          await setupMockedRepay(converter, strategy.address, r);
+        }
+      }
+
+      const ret = await reader.getLockedUnderlyingAmount(strategy.address, p.underlying.address, p.secondAsset.address);
+      return {
+        estimatedUnderlyingAmount: +formatUnits(ret.estimatedUnderlyingAmount, await p.underlying.decimals()),
+        totalAssets: +formatUnits(ret.totalAssets, await p.underlying.decimals()),
+      }
+    }
+
+    describe("equal prices", () => {
+      describe("No debts", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function getLockedUnderlyingAmountTest(): Promise<IGetLockedUnderlyingAmountResults> {
+          return getLockedUnderlyingAmount({
+            underlying: usdc,
+            secondAsset: wmatic,
+            totalAssets: "500"
+          })
+        }
+
+        it("should return zero estimatedUnderlyingAmount", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.estimatedUnderlyingAmount).eq(0);
+        });
+        it("should return expected totalAssets", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.totalAssets).eq(500);
+        });
+      });
+      describe("Direct debt", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function getLockedUnderlyingAmountTest(): Promise<IGetLockedUnderlyingAmountResults> {
+          return getLockedUnderlyingAmount({
+            underlying: usdc,
+            secondAsset: wmatic,
+            totalAssets: "500",
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: wmatic,
+              totalCollateralAmountOut: "1000",
+              totalDebtAmountOut: "700",
+              collateralAmountOut: "1000",
+              amountRepay: "700",
+            }]
+          })
+        }
+
+        it("should return expected estimatedUnderlyingAmount", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.estimatedUnderlyingAmount).eq(300);
+        });
+        it("should return expected totalAssets", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.totalAssets).eq(500);
+        });
+      });
+      describe("Reverse debt", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function getLockedUnderlyingAmountTest(): Promise<IGetLockedUnderlyingAmountResults> {
+          return getLockedUnderlyingAmount({
+            underlying: usdc,
+            secondAsset: wmatic,
+            totalAssets: "500",
+            repays: [{
+              collateralAsset: wmatic,
+              borrowAsset: usdc,
+              totalCollateralAmountOut: "1000",
+              totalDebtAmountOut: "700",
+              collateralAmountOut: "1000",
+              amountRepay: "700",
+            }]
+          })
+        }
+
+        it("should return expected estimatedUnderlyingAmount", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.estimatedUnderlyingAmount).eq(300);
+        });
+        it("should return expected totalAssets", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.totalAssets).eq(500);
+        });
+      });
     });
-    describe("Direct debt", () => {
+    describe("different prices", () => {
+      describe("No debts", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
-    });
-    describe("Reverse debt", () => {
+        async function getLockedUnderlyingAmountTest(): Promise<IGetLockedUnderlyingAmountResults> {
+          return getLockedUnderlyingAmount({
+            underlying: usdc,
+            secondAsset: wmatic,
+            totalAssets: "500",
+            prices: ["0.5", "2"]
+          })
+        }
 
+        it("should return zero estimatedUnderlyingAmount", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.estimatedUnderlyingAmount).eq(0);
+        });
+        it("should return expected totalAssets", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.totalAssets).eq(500);
+        });
+      });
+      describe("Direct debt", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function getLockedUnderlyingAmountTest(): Promise<IGetLockedUnderlyingAmountResults> {
+          return getLockedUnderlyingAmount({
+            underlying: usdc,
+            secondAsset: wmatic,
+            totalAssets: "500",
+            prices: ["0.5", "2"],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: wmatic,
+              totalCollateralAmountOut: "8000",
+              totalDebtAmountOut: "1200",
+              collateralAmountOut: "8000",
+              amountRepay: "1200",
+            }]
+          })
+        }
+
+        it("should return expected estimatedUnderlyingAmount", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.estimatedUnderlyingAmount).eq(3200);
+        });
+        it("should return expected totalAssets", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.totalAssets).eq(500);
+        });
+      });
+      describe("Reverse debt", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function getLockedUnderlyingAmountTest(): Promise<IGetLockedUnderlyingAmountResults> {
+          return getLockedUnderlyingAmount({
+            underlying: usdc,
+            secondAsset: wmatic,
+            totalAssets: "500",
+            prices: ["0.5", "2"],
+            repays: [{
+              collateralAsset: wmatic,
+              borrowAsset: usdc,
+              totalCollateralAmountOut: "800",
+              totalDebtAmountOut: "1200",
+              collateralAmountOut: "800",
+              amountRepay: "1200",
+            }]
+          })
+        }
+
+        it("should return expected estimatedUnderlyingAmount", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          // 800 * 2 / 0.5 usdc - 12000 usdc = 2000 usdc
+          expect(r.estimatedUnderlyingAmount).eq(2000);
+        });
+        it("should return expected totalAssets", async () => {
+          const r = await loadFixture(getLockedUnderlyingAmountTest);
+          expect(r.totalAssets).eq(500);
+        });
+      });
     });
   });
 //endregion Unit tests
