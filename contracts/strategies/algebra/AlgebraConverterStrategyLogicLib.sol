@@ -4,8 +4,11 @@ pragma solidity 0.8.17;
 import "./AlgebraLib.sol";
 import "./AlgebraDebtLib.sol";
 import "./AlgebraStrategyErrors.sol";
+import "../../libs/AppLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
+
 
 library AlgebraConverterStrategyLogicLib {
     using SafeERC20 for IERC20;

@@ -1376,6 +1376,9 @@ library ConverterStrategyBaseLib {
     uint expectedAmount,
     bool noDebtsLeft
   ) {
+    console.log("token0 initial balance", IERC20(tokens[0]).balanceOf(address(this)));
+    console.log("token1 initial balance", IERC20(tokens[1]).balanceOf(address(this)));
+
     console.log("_closePositionsToGetAmount.requestedAmount", requestedAmount);
     if (requestedAmount != 0) {
       CloseDebtsForRequiredAmountLocal memory v;
@@ -1435,6 +1438,7 @@ library ConverterStrategyBaseLib {
             // convert {toSell} amount of main asset to tokens[i]
             if (toSell != 0 && v.tokenBalance != 0) {
               toSell = Math.min(toSell, v.tokenBalance);
+              console.log("Liquidate.reverse.to-asset", toSell);
               (toSell,) = _liquidate(
                 converter_,
                 liquidator,
@@ -1453,6 +1457,7 @@ library ConverterStrategyBaseLib {
             // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
             // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
             // will be checked below as a part of result expectedAmount
+            console.log("Repay reverse debt, repay-amount", v.balance);
             _repayDebt(converter_, tokens[i], v.asset, v.balance);
             noDebtsLeft = noDebtsLeft || (v.balance >= v.debtReverse);
             console.log("_closePositionsToGetAmount.noDebtsLeft.1", noDebtsLeft);
@@ -1482,6 +1487,7 @@ library ConverterStrategyBaseLib {
             // convert {toSell} amount of main asset to tokens[i]
             if (toSell != 0 && v.balance != 0) {
               toSell = Math.min(toSell, v.balance);
+              console.log("Liquidate.direct.from-asset", toSell);
               (toSell,) = _liquidate(
                 converter_,
                 liquidator,
@@ -1499,6 +1505,7 @@ library ConverterStrategyBaseLib {
 
             // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
             expectedAmount += _repayDebt(converter_, v.asset, tokens[i], v.tokenBalance) - toSell;
+            console.log("Repay direct debt, repay-amount", v.tokenBalance);
             noDebtsLeft = noDebtsLeft || (v.tokenBalance >= v.totalDebt);
             console.log("_closePositionsToGetAmount.noDebtsLeft.2", noDebtsLeft);
 
@@ -1510,6 +1517,7 @@ library ConverterStrategyBaseLib {
 
           // directly swap leftovers
           if (v.tokenBalance != 0) {
+            console.log("Liquidate.leftovers.to-asset", v.tokenBalance);
             (uint spentAmountIn,) = _liquidate(
               converter_,
               liquidator,
@@ -1543,7 +1551,12 @@ library ConverterStrategyBaseLib {
       }
     }
 
+    console.log("token0 final balance", IERC20(tokens[0]).balanceOf(address(this)));
+    console.log("token1 final balance", IERC20(tokens[1]).balanceOf(address(this)));
+
     console.log("expectedAmount", expectedAmount);
+
+    // todo Revert if noDebtsLeft == false (simplest workaround for over-collateral)
     return (expectedAmount, noDebtsLeft);
   }
 

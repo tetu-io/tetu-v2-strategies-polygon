@@ -25,6 +25,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/StateUtilsNum';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
+import {tetuConverter} from "../../../../typechain/@tetu_io";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -261,6 +262,112 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
   })
 
   describe('study: make over-collateral, withdraw all', function() {
+    it('Reduce price N steps, withdraw by iterations', async() => {
+      const COUNT = 5;
+      const state = await strategy.getState();
+      const listStates: IStateNum[] = [];
+
+      console.log('deposit...');
+      await asset.connect(user).approve(vault.address, Misc.MAX_UINT);
+      await TokenUtils.getToken(asset.address, user.address, parseUnits('1000', 6));
+      await vault.connect(user).deposit(parseUnits('1000', 6), user.address);
+
+      const stateStepInitial = await StateUtilsNum.getState(signer, user, strategy, vault, `initial`);
+      listStates.push(stateStepInitial);
+      console.log(`initial`, stateStepInitial);
+
+      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
+
+      for (let i = 0; i < COUNT; ++i) {
+        const state0 = await strategy.getState();
+        console.log("state0", state0);
+
+        console.log("Step", i);
+
+        const swapAmount = BigNumber.from(parseUnits('20000', 6));
+        console.log("swapAmount", swapAmount);
+
+        // Decrease price at first 10 steps, increase price on other 10 steps
+        while (! await strategy.needRebalance()) {
+          await UniswapV3StrategyUtils.movePriceDown(
+            signer,
+            strategy.address,
+            MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+            swapAmount,
+            100001
+          );
+          // await UniswapV3StrategyUtils.movePriceUp(
+          //   signer,
+          //   strategy.address,
+          //   MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          //   swapAmount,
+          //   100001
+          // );
+        }
+
+        expect(await strategy.needRebalance()).eq(true);
+
+        console.log("Start rebalance, step", i);
+        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
+        console.log("End rebalance, step", i);
+
+        expect(await strategy.needRebalance()).eq(false);
+
+        await TimeUtils.advanceNBlocks(300);
+
+        const stateStep = await StateUtilsNum.getState(signer, user, strategy, vault, `step ${i}`);
+        listStates.push(stateStep);
+        console.log(`state ${i}`, stateStep);
+
+        await StateUtilsNum.saveListStatesToCSVColumns(
+          './tmp/degradation-withdrawAll.csv',
+          listStates,
+          stateParams
+        );
+      }
+
+      console.log("Withdraw by iterations");
+      // await vault.connect(user).withdrawAll();
+      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+      const strategyAsOperator = await strategy.connect(operator);
+
+      await strategyAsOperator.withdrawByAggEntry();
+
+      let completed = false;
+      while (! completed) {
+        const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg();
+        console.log("quote", quote);
+
+        if (quote.amountToSwap.eq(0)) {
+          console.log("No swap is required");
+          completed = await strategyAsOperator.callStatic.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x");
+          await strategyAsOperator.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x");
+        } else {
+          const params = {
+            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            amount: quote.amountToSwap.toString(),
+            fromAddress: strategyAsOperator.address,
+            slippage: 1,
+            disableEstimate: true,
+            allowPartialFill: false,
+            protocols: 'POLYGON_BALANCER_V2',
+          };
+          console.log("params", params);
+
+          const swapTransaction = await buildTxForSwap(JSON.stringify(params));
+          console.log('Transaction for swap: ', swapTransaction);
+
+          completed = await strategyAsOperator.callStatic.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data);
+          await strategyAsOperator.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data);
+        }
+      }
+
+      const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
+      listStates.push(stateStepFinal);
+      console.log(`final`, stateStepFinal);
+    })
+
     it('Reduce price N steps, withdraw all', async() => {
       const COUNT = 5;
       const state = await strategy.getState();
@@ -328,7 +435,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       console.log("Withdraw all");
       // await vault.connect(user).withdrawAll();
       const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-      await strategy.connect(operator).withdrawByAgg(false, 0, Misc.ZERO_ADDRESS, "0x");
+      await strategy.connect(operator).withdrawAllByLiquidator(false, 0, Misc.ZERO_ADDRESS, "0x");
 
       const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
       listStates.push(stateStepFinal);
@@ -394,7 +501,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       console.log("Withdraw all");
       // await vault.connect(user).withdrawAll();
       const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-      await strategy.connect(operator).withdrawByAgg(false, 0, Misc.ZERO_ADDRESS, "0x");
+      await strategy.connect(operator).withdrawAllByLiquidator(false, 0, Misc.ZERO_ADDRESS, "0x");
 
       const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
       listStates.push(stateStepFinal);

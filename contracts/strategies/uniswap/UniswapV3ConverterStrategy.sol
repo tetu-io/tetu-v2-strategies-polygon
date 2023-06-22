@@ -223,7 +223,69 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Exit from pool, close all debts and swap available assets to underlying
-  function withdrawByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
+  function withdrawByAggEntry() external {
+    console.log("withdrawByAggEntry");
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
+
+    (, uint profitToCover) = _fixPriceChanges(true);
+    uint oldTotalAssets = totalAssets() - profitToCover;
+    console.log("withdrawByAggEntry.profitToCover", profitToCover);
+
+    // withdraw all liquidity from pool; after disableFuse() liquidity is zero
+    if (state.totalLiquidity > 0) {
+      console.log("withdrawByAgg._depositorEmergencyExit.totalLiquidity", state.totalLiquidity);
+      _depositorEmergencyExit();
+    }
+
+    _updateInvestedAssets();
+  }
+
+  function quoteWithdrawByAgg() external returns (
+    address tokenToSwap,
+    uint amountToSwap
+  ) {
+    address[] memory tokens = _depositorPoolAssets();
+    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+
+    return UniswapV3AggLib.quoteWithdrawByAgg(converter, tokens, indexAsset);
+  }
+
+  /// @notice Exit from pool, close all debts and swap available assets to underlying
+  /// @param tokenToSwap What token should be swapped to other
+  /// @param amount Amount that should be swapped. 0 - no swap
+  /// @param swapData Swap rote that was prepared off-chain
+  /// @return completed true - withdraw was completed, no more steps are required
+  function withdrawByAggStep(address tokenToSwap, uint amount, address agg, bytes memory swapData) external returns (bool completed) {
+    console.log("withdrawByAggStep");
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
+
+    require(state.totalLiquidity == 0, AppErrors.WITHDRAW_BY_AGG_ENTRY_REQUIRED);
+
+    address[] memory tokens = _depositorPoolAssets();
+    uint[] memory thresholds = new uint[](2);
+    thresholds[0] = liquidationThresholds[tokens[0]];
+    thresholds[1] = liquidationThresholds[tokens[1]];
+
+    // todo: check expectedAmounts here
+    (completed,) = UniswapV3AggLib.withdrawByAgg(
+      converter,
+      tokens,
+      ConverterStrategyBaseLib.getAssetIndex(tokens, asset),
+      thresholds,
+      tokenToSwap,
+      amount,
+      agg,
+      swapData
+    );
+    console.log("withdrawByAggStep.call.withdrawByAgg.finish.gasleft", gasleft());
+
+    _updateInvestedAssets();
+  }
+
+  // todo for tests only, remove
+  function withdrawAllByLiquidator(bool direction, uint amount, address agg, bytes memory swapData) external {
     console.log("withdrawByAgg");
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
@@ -239,21 +301,38 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       _depositorEmergencyExit();
     }
 
-    address[] memory tokens = _depositorPoolAssets();
-    uint[] memory thresholds = new uint[](2);
-    thresholds[0] = liquidationThresholds[tokens[0]];
-    thresholds[1] = liquidationThresholds[tokens[1]];
+//    address[] memory tokens = _depositorPoolAssets();
+//    uint[] memory thresholds = new uint[](2);
+//    thresholds[0] = liquidationThresholds[tokens[0]];
+//    thresholds[1] = liquidationThresholds[tokens[1]];
+//
+//    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+//
+//    UniswapV3AggLib.withdrawByAgg(
+//      converter,
+//      1, // use ITetuLiquidator
+//      address(_getLiquidator(controller())),
+//      tokens,
+//      indexAsset,
+//      thresholds
+//    );
+//    console.log("withdrawByAgg.call.closePositionsToGetAmount.finish.gasleft", gasleft());
 
+    address[] memory tokens = _depositorPoolAssets();
     uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
-    UniswapV3AggLib.withdrawByAgg(
-      converter,
-      1, // use ITetuLiquidator
-      address(_getLiquidator(controller())),
-      tokens,
-      indexAsset,
-      thresholds
-    );
+    bool noDebtsLeft = false;
+    while (! noDebtsLeft) {
+      console.log("withdrawByAgg.call.closePositionsToGetAmount.gasleft", gasleft());
+      (, noDebtsLeft) = ConverterStrategyBaseLib.closePositionsToGetAmount(
+        converter,
+        _getLiquidator(controller()),
+        indexAsset,
+        liquidationThresholds,
+        type(uint).max,
+        tokens
+      );
+    }
     console.log("withdrawByAgg.call.closePositionsToGetAmount.finish.gasleft", gasleft());
 
     _updateInvestedAssets();

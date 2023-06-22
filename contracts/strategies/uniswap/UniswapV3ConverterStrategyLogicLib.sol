@@ -4,7 +4,18 @@ pragma solidity 0.8.17;
 import "./UniswapV3Lib.sol";
 import "./UniswapV3DebtLib.sol";
 import "./Uni3StrategyErrors.sol";
+import "../../libs/AppLib.sol";
+import "../../libs/AppErrors.sol";
+import "../ConverterStrategyBaseLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;

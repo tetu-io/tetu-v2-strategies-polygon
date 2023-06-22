@@ -21,7 +21,7 @@ const libraries = new Map<string, string[]>([
   ['BalancerBoostedDepositorFacade', ['BalancerLogicLib']],
   [
     'UniswapV3ConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib', 'UniswapV3AggLib'],
   ],
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib']],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],

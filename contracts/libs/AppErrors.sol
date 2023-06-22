@@ -58,4 +58,8 @@ library AppErrors {
   string public constant NOT_ALLOWED = "TS-23 not allowed";
 
   string public constant ZERO_VALUE = "TS-24 zero value";
+
+  string public constant INCORRECT_SWAP_BY_AGG_PARAM = "TS-25 swap by agg";
+
+  string public constant WITHDRAW_BY_AGG_ENTRY_REQUIRED = "TS-26 entry required";
 }
