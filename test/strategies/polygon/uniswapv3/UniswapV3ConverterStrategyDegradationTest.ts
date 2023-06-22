@@ -334,6 +334,72 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       listStates.push(stateStepFinal);
       console.log(`final`, stateStepFinal);
     })
+    it('Increase price N steps, withdraw all', async() => {
+      const COUNT = 5;
+      const state = await strategy.getState();
+      const listStates: IStateNum[] = [];
+
+      console.log('deposit...');
+      await asset.connect(user).approve(vault.address, Misc.MAX_UINT);
+      await TokenUtils.getToken(asset.address, user.address, parseUnits('1000', 6));
+      await vault.connect(user).deposit(parseUnits('1000', 6), user.address);
+
+      const stateStepInitial = await StateUtilsNum.getState(signer, user, strategy, vault, `initial`);
+      listStates.push(stateStepInitial);
+      console.log(`initial`, stateStepInitial);
+
+      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
+
+      for (let i = 0; i < COUNT; ++i) {
+        const state0 = await strategy.getState();
+        console.log("state0", state0);
+
+        console.log("Step", i);
+
+        const swapAmount = BigNumber.from(parseUnits('20000', 6));
+        console.log("swapAmount", swapAmount);
+
+        // Decrease price at first 10 steps, increase price on other 10 steps
+        while (! await strategy.needRebalance()) {
+          await UniswapV3StrategyUtils.movePriceUp(
+            signer,
+            strategy.address,
+            MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+            swapAmount,
+            100001
+          );
+        }
+
+        expect(await strategy.needRebalance()).eq(true);
+
+        console.log("Start rebalance, step", i);
+        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
+        console.log("End rebalance, step", i);
+
+        expect(await strategy.needRebalance()).eq(false);
+
+        await TimeUtils.advanceNBlocks(300);
+
+        const stateStep = await StateUtilsNum.getState(signer, user, strategy, vault, `step ${i}`);
+        listStates.push(stateStep);
+        console.log(`state ${i}`, stateStep);
+
+        await StateUtilsNum.saveListStatesToCSVColumns(
+          './tmp/degradation-withdrawAll.csv',
+          listStates,
+          stateParams
+        );
+      }
+
+      console.log("Withdraw all");
+      // await vault.connect(user).withdrawAll();
+      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+      await strategy.connect(operator).withdrawByAgg(false, 0, Misc.ZERO_ADDRESS, "0x");
+
+      const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
+      listStates.push(stateStepFinal);
+      console.log(`final`, stateStepFinal);
+    })
   })
 
 })

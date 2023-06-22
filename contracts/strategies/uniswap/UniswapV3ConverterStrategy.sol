@@ -7,6 +7,7 @@ import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingStrategy.sol";
 import "./Uni3StrategyErrors.sol";
+import "./UniswapV3AggLib.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -239,20 +240,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     }
 
     address[] memory tokens = _depositorPoolAssets();
+    uint[] memory thresholds = new uint[](2);
+    thresholds[0] = liquidationThresholds[tokens[0]];
+    thresholds[1] = liquidationThresholds[tokens[1]];
+
     uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
-    bool noDebtsLeft = false;
-    while (! noDebtsLeft) {
-      console.log("withdrawByAgg.call.closePositionsToGetAmount.gasleft", gasleft());
-      (, noDebtsLeft) = ConverterStrategyBaseLib.closePositionsToGetAmount(
-        converter,
-        _getLiquidator(controller()),
-        indexAsset,
-        liquidationThresholds,
-        type(uint).max,
-        tokens
-      );
-    }
+    UniswapV3AggLib.withdrawByAgg(
+      converter,
+      1, // use ITetuLiquidator
+      address(_getLiquidator(controller())),
+      tokens,
+      indexAsset,
+      thresholds
+    );
     console.log("withdrawByAgg.call.closePositionsToGetAmount.finish.gasleft", gasleft());
 
     _updateInvestedAssets();
