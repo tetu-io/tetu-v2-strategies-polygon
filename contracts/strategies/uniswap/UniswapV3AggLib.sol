@@ -25,48 +25,6 @@ library UniswapV3AggLib {
     bytes swapData;
     bool useLiquidator;
   }
-
-  /// @notice Set of parameters required to liquidation through aggregators
-  struct InputParams {
-    ITetuConverter converter;
-
-    /// @notice Assets used by depositor stored as following way: [underlying, not-underlying]
-    address[] tokens;
-
-    /// @notice Liquidation thresholds for the {tokens}
-    uint[] liquidationThresholds;
-
-    /// @notice Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
-    ///         The leftovers should be swapped to get following result proportions of the assets:
-    ///         not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
-    uint propNotUnderlying18;
-  }
-
-  struct CloseDebtsForRequiredAmountLocal {
-    /// @notice Underlying balance
-    uint assetBalance;
-    /// @notice Not-underlying balance
-    uint tokenBalance;
-
-    uint totalDebt;
-    uint totalCollateral;
-
-    uint debtReverse;
-    uint collateralReverse;
-
-    /// @notice Cost of $1 in terms of the assets, decimals 18
-    uint[] prices;
-    /// @notice 10**decimal for the assets
-    uint[] decs;
-
-    uint toSellAssets;
-    uint toSellTokens;
-
-    uint costAssets;
-    uint costTokens;
-    uint targetAssets;
-    uint targetTokens;
-  }
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ External functions
@@ -88,7 +46,7 @@ library UniswapV3AggLib {
     address tokenToSwap,
     uint amountToSwap
   ){
-    InputParams memory p = InputParams({
+    ConverterStrategyBaseLib.InputParams memory p = ConverterStrategyBaseLib.InputParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
@@ -124,7 +82,7 @@ library UniswapV3AggLib {
   ) external returns (
     bool completed
   ){
-    InputParams memory p = InputParams({
+    ConverterStrategyBaseLib.InputParams memory p = ConverterStrategyBaseLib.InputParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
@@ -148,13 +106,19 @@ library UniswapV3AggLib {
   ///         Function returns info for first swap only.
   /// @return tokenToSwap What token should be swapped. Zero address if no swap is required
   /// @return amountToSwap Amount to swap. Zero if no swap is required.
-  function _quoteWithdrawStep(InputParams memory p) internal returns (
+  function _quoteWithdrawStep(ConverterStrategyBaseLib.InputParams memory p) internal returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
+    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+      IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
+      p.tokens,
+      2 // p.tokens.length
+    );
+
     console.log("_quoteWithdrawStep.start");
     uint indexTokenToSwapPlus1;
-    (indexTokenToSwapPlus1, amountToSwap,) = _getIterationPlan(p);
+    (indexTokenToSwapPlus1, amountToSwap,) = ConverterStrategyBaseLib._getIterationPlan(p, IDX_ASSET, IDX_TOKEN, prices, decs);
     if (indexTokenToSwapPlus1 != 0) {
       tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
@@ -166,13 +130,19 @@ library UniswapV3AggLib {
   /// @notice Make one iteration of withdraw. Each iteration can make 0 or 1 swap only
   ///         We can make only 1 of the following 3 operations per single call:
   ///         1) repay direct debt 2) repay reverse debt 3) swap leftovers to underlying
-  function _withdrawStep(InputParams memory p, SwapByAggParams memory aggParams) internal returns (
+  function _withdrawStep(ConverterStrategyBaseLib.InputParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
+    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+      IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
+        p.tokens,
+        2 // p.tokens.length
+    );
+
     console.log("makeWithdrawStep.token0 initial balance", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("makeWithdrawStep.token1 initial balance", IERC20(p.tokens[1]).balanceOf(address(this)));
 
-    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = _getIterationPlan(p);
+    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._getIterationPlan(p, IDX_ASSET, IDX_TOKEN, prices, decs);
     console.log("makeWithdrawStep.indexTokenToSwapPlus1", idxToSwap1);
     console.log("makeWithdrawStep.amountToSwap", amountToSwap);
     console.log("makeWithdrawStep.indexRepayTokenPlus1", idxToRepay1);
@@ -201,175 +171,8 @@ library UniswapV3AggLib {
     return idxToRepay1 == 0;
   }
 
-  /// @notice Generate plan for next withdraw transaction: 1) swap direction/amount 2) direction of repay (after swap)
-  /// @return indexTokenToSwapPlus1 Index of the token to be swapped + 1. 0 - no swap
-  /// @return amountToSwap Amount to be swapped. 0 - no swap
-  /// @return indexRepayTokenPlus1 Index of the token that should be used to repay borrow in converter + 1.
-  ///                              0 - no repay is required - it means that this is a last step with swapping leftovers.
-  function _getIterationPlan(InputParams memory p) internal returns (
-    uint indexTokenToSwapPlus1,
-    uint amountToSwap,
-    uint indexRepayTokenPlus1
-  ) {
-    CloseDebtsForRequiredAmountLocal memory v;
-
-    v.assetBalance = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
-    v.tokenBalance = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
-    console.log("makeWithdrawStep.v.tokenBalance", v.tokenBalance);
-
-    if (v.tokenBalance != 0) {
-      //lazy initialization of the prices and decs
-      if (v.prices.length == 0) {
-        (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(
-          IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
-          p.tokens,
-          2 // p.tokens length
-        );
-      }
-      console.log("makeWithdrawStep.prices", v.prices[0], v.prices[1]);
-
-      // we need to increase balance on the following amount: requestedAmount - v.balance;
-      // we can have two possible borrows:
-      // 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
-      // normally we can have only one of them, not both..
-      // but better to take into account possibility to have two debts simultaneously
-
-      // reverse debt
-      (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(
-        address(this),
-        p.tokens[IDX_TOKEN],
-        p.tokens[IDX_ASSET],
-        true
-      );
-      console.log("makeWithdrawStep.v.debtReverse", v.debtReverse);
-      console.log("makeWithdrawStep.v.collateralReverse", v.collateralReverse);
-
-      if (v.debtReverse == 0) {
-        // direct debt
-        (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(
-          address(this),
-          p.tokens[IDX_ASSET],
-          p.tokens[IDX_TOKEN],
-          true
-        );
-        console.log("makeWithdrawStep.v.totalDebt", v.totalDebt);
-        console.log("makeWithdrawStep.v.totalCollateral", v.totalCollateral);
-
-        if (v.totalDebt == 0) {
-          // directly swap leftovers
-          // The leftovers should be swapped to get following result proportions of the assets:
-          //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
-          (v.targetAssets, v.targetTokens) = _getTargetAmounts(
-            v.prices,
-            v.decs,
-            v.assetBalance,
-            v.tokenBalance,
-            p.propNotUnderlying18
-          );
-
-          if (v.assetBalance < v.targetAssets) {
-            // we need to swap not-underlying to underlying
-            indexTokenToSwapPlus1 = IDX_TOKEN + 1;
-            amountToSwap = v.tokenBalance - v.targetTokens;
-          } else {
-            // we need to swap underlying to not-underlying
-            indexTokenToSwapPlus1 = IDX_ASSET + 1;
-            amountToSwap = v.assetBalance - v.targetAssets;
-          }
-        } else {
-          // repay direct debt
-
-          // what amount of underlying we should sell to pay the debt
-          v.toSellAssets = ConverterStrategyBaseLib._getAmountToSell(
-            type(uint).max,
-            v.totalDebt,
-            v.totalCollateral,
-            v.prices,
-            v.decs,
-            IDX_ASSET,
-            IDX_TOKEN,
-            v.tokenBalance
-          );
-          console.log("makeWithdrawStep.toSellAssets.4", v.toSellAssets);
-
-          // convert {toSell} amount of underlying to token
-          if (v.toSellAssets != 0 && v.assetBalance != 0) {
-            v.toSellAssets = Math.min(v.toSellAssets, v.assetBalance);
-            indexTokenToSwapPlus1 = IDX_ASSET + 1;
-            amountToSwap = v.toSellAssets;
-          }
-          indexRepayTokenPlus1 = IDX_TOKEN + 1;
-        }
-      } else {
-        // repay reverse debt
-
-        // what amount of tokens[i] we should sell to pay the debt
-        v.toSellTokens = ConverterStrategyBaseLib._getAmountToSell(
-          type(uint).max,
-          v.debtReverse,
-          v.collateralReverse,
-          v.prices,
-          v.decs,
-          IDX_TOKEN,
-          IDX_ASSET,
-          v.assetBalance
-        );
-        console.log("makeWithdrawStep.toSellTokens.1", v.toSellTokens);
-
-        // convert {toSell} amount of main asset to tokens[i]
-        if (v.toSellTokens != 0 && v.tokenBalance != 0) {
-          v.toSellTokens = Math.min(v.toSellTokens, v.tokenBalance);
-          indexTokenToSwapPlus1 = IDX_TOKEN + 1;
-          amountToSwap = v.toSellTokens;
-        }
-        console.log("makeWithdrawStep.toSellTokens.2");
-
-        // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-        // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
-        // will be checked below as a part of result expectedAmount
-        indexRepayTokenPlus1 = IDX_ASSET + 1;
-        console.log("makeWithdrawStep.toSellTokens.3");
-      }
-    }
-
-    console.log("getIterationPlan.indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1", indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1);
-    return (indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1);
-  }
-
-  /// @notice Calculate what balances of underlying and not-underlying we need to fit {propNotUnderlying18}
-  /// @param prices Prices of underlying and not underlying
-  /// @param decs 10**decimals for underlying and not underlying
-  /// @param assetBalance Current balance of underlying
-  /// @param tokenBalance Current balance of not-underlying
-  /// @param propNotUnderlying18 Required proportion of not-underlying [0..1e18]
-  ///                            Proportion of underlying would be (1e18 - propNotUnderlying18)
-  function _getTargetAmounts(
-    uint[] memory prices,
-    uint[] memory decs,
-    uint assetBalance,
-    uint tokenBalance,
-    uint propNotUnderlying18
-  ) internal pure returns (
-    uint targetAssets,
-    uint targetTokens
-  ) {
-    uint costAssets = assetBalance * prices[0] / decs[0];
-    uint costTokens = tokenBalance * prices[1] / decs[1];
-    targetTokens = propNotUnderlying18 == 0
-      ? 0
-      : ((costAssets + costTokens) * propNotUnderlying18 / 1e18);
-    targetAssets = ((costAssets + costTokens) - targetTokens) * decs[1] / prices[1];
-    targetTokens *= decs[0] / prices[0];
-//    console.log("_getTargetAmounts.assetBalance", assetBalance);
-//    console.log("_getTargetAmounts.tokenBalance", tokenBalance);
-//    console.log("_getTargetAmounts.costAssets", costAssets);
-//    console.log("_getTargetAmounts.costTokens", costTokens);
-//    console.log("_getTargetAmounts.targetAssets", targetAssets);
-//    console.log("_getTargetAmounts.targetTokens", targetTokens);
-  }
-
   function _swap(
-    InputParams memory p,
+    ConverterStrategyBaseLib.InputParams memory p,
     SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,

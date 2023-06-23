@@ -120,6 +120,53 @@ library ConverterStrategyBaseLib {
     uint collateralReverse;
 
     uint tokenBalance;
+    uint[] liquidationThresholds;
+
+    uint idxToSwap1;
+    uint amountToSwap;
+    uint idxToRepay1;
+  }
+
+  /// @notice Set of parameters required to liquidation through aggregators
+  struct InputParams {
+    ITetuConverter converter;
+
+    /// @notice Assets used by depositor stored as following way: [underlying, not-underlying]
+    address[] tokens;
+
+    /// @notice Liquidation thresholds for the {tokens}
+    uint[] liquidationThresholds;
+
+    /// @notice Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+    ///         The leftovers should be swapped to get following result proportions of the assets:
+    ///         not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+    uint propNotUnderlying18;
+  }
+
+  struct GetIterationPlanLocal {
+    /// @notice Underlying balance
+    uint assetBalance;
+    /// @notice Not-underlying balance
+    uint tokenBalance;
+
+    uint totalDebt;
+    uint totalCollateral;
+
+    uint debtReverse;
+    uint collateralReverse;
+
+    /// @notice Cost of $1 in terms of the assets, decimals 18
+    uint[] prices;
+    /// @notice 10**decimal for the assets
+    uint[] decs;
+
+    uint toSellAssets;
+    uint toSellTokens;
+
+    uint costAssets;
+    uint costTokens;
+    uint targetAssets;
+    uint targetTokens;
   }
   //endregion Data types
 
@@ -1385,170 +1432,270 @@ library ConverterStrategyBaseLib {
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = tokens[indexAsset];
       v.len = tokens.length;
-      v.balance = IERC20(v.asset).balanceOf(address(this));
+
+      v.liquidationThresholds = new uint[](v.len);
+      for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+        v.liquidationThresholds[i] = liquidationThresholds[tokens[i]];
+      }
+
+      (v.prices, v.decs) = _getPricesAndDecs(
+        IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
+        tokens,
+        v.len
+      );
+
+      InputParams memory p = InputParams({
+        converter: converter_,
+        tokens: tokens,
+        liquidationThresholds: v.liquidationThresholds,
+        propNotUnderlying18: 0
+      });
 
       for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
         if (i == indexAsset) continue;
 
-        // we need to increase balance on the following amount: requestedAmount - v.balance;
-        // we can have two possible borrows: 1) direct (v.asset => tokens[i]) and 2) reverse (tokens[i] => v.asset)
-        // normally we can have only one of them, not both.. but better to take into account possibility to have two debts simultaneously
+        bool closed;
+        while (! closed) {
+          v.balance = IERC20(v.asset).balanceOf(address(this));
+          (v.idxToSwap1, v.amountToSwap, v.idxToRepay1) = _getIterationPlan(p, indexAsset, i, v.prices, v.decs);
+          console.log("_closePositionsToGetAmount.indexTokenToSwapPlus1", v.idxToSwap1);
+          console.log("_closePositionsToGetAmount.amountToSwap", v.amountToSwap);
+          console.log("_closePositionsToGetAmount.indexRepayTokenPlus1", v.idxToRepay1);
 
-        // reverse debt
-        (v.debtReverse, v.collateralReverse) = converter_.getDebtAmountCurrent(address(this), tokens[i], v.asset, true);
-        console.log("_closePositionsToGetAmount.v.debtReverse", v.debtReverse);
-        console.log("_closePositionsToGetAmount.v.collateralReverse", v.collateralReverse);
-
-        // direct debt
-        (v.totalDebt, v.totalCollateral) = converter_.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
-        console.log("_closePositionsToGetAmount.v.totalDebt", v.totalDebt);
-        console.log("_closePositionsToGetAmount.v.totalCollateral", v.totalCollateral);
-
-        v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-        console.log("_closePositionsToGetAmount.v.tokenBalance", v.tokenBalance);
-
-        if (v.totalDebt != 0 || v.tokenBalance != 0 || v.debtReverse != 0) {
-          //lazy initialization of the prices and decs
-          if (v.prices.length == 0) {
-            (v.prices, v.decs) = _getPricesAndDecs(
-              IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
-              tokens,
-              v.len
-            );
-          }
-          console.log("_closePositionsToGetAmount.prices", v.prices[0], v.prices[1]);
-
-          // repay reverse debt if any
-          if (v.debtReverse != 0) {
-            // what amount of tokens[i] we should sell to pay the debt
-            uint toSell = _getAmountToSell(
-              // {requestedAmount} recalculated to tokens[i]
-              requestedAmount == type(uint).max
-                ? requestedAmount
-                : requestedAmount * v.prices[indexAsset] * v.decs[i] / v.prices[i] / v.decs[indexAsset],
-              v.debtReverse,
-              v.collateralReverse,
-              v.prices,
-              v.decs,
-              i,
-              indexAsset,
-              v.balance
-            );
-            console.log("_closePositionsToGetAmount.toSell.1", toSell);
-
-            // convert {toSell} amount of main asset to tokens[i]
-            if (toSell != 0 && v.tokenBalance != 0) {
-              toSell = Math.min(toSell, v.tokenBalance);
-              console.log("Liquidate.reverse.to-asset", toSell);
-              (toSell,) = _liquidate(
+          if (v.idxToRepay1 == 0) {
+            // liquidate leftovers
+            if (v.idxToSwap1 != 0) {
+              uint indexIn = v.idxToSwap1 - 1;
+              uint indexOut = indexIn == indexAsset ? i : indexAsset;
+              (uint spentAmountIn,) = _liquidate(
                 converter_,
                 liquidator,
-                tokens[i],
-                v.asset,
-                toSell,
+                tokens[indexIn],
+                tokens[indexOut],
+                v.amountToSwap,
                 _ASSET_LIQUIDATION_SLIPPAGE,
-                liquidationThresholds[v.asset],
+                v.liquidationThresholds[indexOut],
                 false
               );
-              v.balance = IERC20(v.asset).balanceOf(address(this));
-              console.log("_closePositionsToGetAmount.v.toSell.2", toSell);
+              if (spentAmountIn != 0 && indexIn == i) {
+                // spentAmountIn can be zero if token balance is less than liquidationThreshold
+                expectedAmount += spentAmountIn * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+              }
+              console.log("makeWithdrawStep.token0 after swap", IERC20(p.tokens[0]).balanceOf(address(this)));
+              console.log("makeWithdrawStep.token1 after swap", IERC20(p.tokens[1]).balanceOf(address(this)));
             }
-            console.log("_closePositionsToGetAmount.v.balance.2", v.balance);
-
-            // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-            // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
-            // will be checked below as a part of result expectedAmount
-            console.log("Repay reverse debt, repay-amount", v.balance);
-            _repayDebt(converter_, tokens[i], v.asset, v.balance);
-            openDebtsExist = openDebtsExist || (v.balance < v.debtReverse);
-            console.log("_closePositionsToGetAmount.openDebtsExist.1", openDebtsExist);
-
-            // we can have some leftovers after closing the debt
-            v.balance = IERC20(v.asset).balanceOf(address(this));
-            v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-            console.log("_closePositionsToGetAmount.v.balance.3", v.balance);
-            console.log("_closePositionsToGetAmount.tokenBalance.3", v.tokenBalance);
-          }
-
-          // repay direct debt if any
-          if (v.totalDebt != 0) {
-            // what amount of main asset we should sell to pay the debt
-            uint toSell = _getAmountToSell(
-              requestedAmount,
-              v.totalDebt,
-              v.totalCollateral,
-              v.prices,
-              v.decs,
-              indexAsset,
-              i,
-              v.tokenBalance
-            );
-            console.log("_closePositionsToGetAmount.toSell.4", toSell);
-
-            // convert {toSell} amount of main asset to tokens[i]
-            if (toSell != 0 && v.balance != 0) {
-              toSell = Math.min(toSell, v.balance);
-              console.log("Liquidate.direct.from-asset", toSell);
-              (toSell,) = _liquidate(
-                converter_,
-                liquidator,
-                v.asset,
-                tokens[i],
-                toSell,
-                _ASSET_LIQUIDATION_SLIPPAGE,
-                liquidationThresholds[tokens[i]],
-                false
-              );
-              v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-            }
-            console.log("_closePositionsToGetAmount.tokenBalance.5", v.tokenBalance);
-            console.log("_closePositionsToGetAmount.toSell.5", toSell);
-
-            // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-            expectedAmount += _repayDebt(converter_, v.asset, tokens[i], v.tokenBalance) - toSell;
-            console.log("Repay direct debt, repay-amount", v.tokenBalance);
-            openDebtsExist = openDebtsExist || (v.tokenBalance < v.totalDebt);
-            console.log("_closePositionsToGetAmount.openDebtsExist.2", openDebtsExist);
-
-            // we can have some leftovers after closing the debt
-            v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
-            console.log("_closePositionsToGetAmount.v.balance.6", v.balance);
-            console.log("_closePositionsToGetAmount.tokenBalance.6", v.tokenBalance);
-          }
-
-          // directly swap leftovers
-          if (v.tokenBalance != 0) {
-            console.log("Liquidate.leftovers.to-asset", v.tokenBalance);
-            (uint spentAmountIn,) = _liquidate(
-              converter_,
-              liquidator,
-              tokens[i],
-              v.asset,
-              v.tokenBalance,
-              _ASSET_LIQUIDATION_SLIPPAGE,
-              liquidationThresholds[v.asset],
-              false
-            );
-            console.log("_closePositionsToGetAmount.tokenBalance.7", IERC20(tokens[i]).balanceOf(address(this)));
-            if (spentAmountIn != 0) {
-              // spentAmountIn can be zero if token balance is less than liquidationThreshold
-              expectedAmount += spentAmountIn * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
-            }
-          }
-
-          // reduce of requestedAmount on the balance increment
-          v.newBalance = IERC20(v.asset).balanceOf(address(this));
-          require(v.newBalance >= v.balance, AppErrors.BALANCE_DECREASE);
-          console.log("_closePositionsToGetAmount.v.newBalance.8", v.newBalance);
-
-          if (requestedAmount > v.newBalance - v.balance) {
-            requestedAmount -= (v.newBalance - v.balance);
-            v.balance = v.newBalance;
           } else {
-            // we get requestedAmount on the balance and don't need to make any other conversions
-            break;
+            // sell amount to receive amount-to-repay
+            uint toSell;
+            // liquidate leftovers
+            if (v.idxToSwap1 != 0) {
+              uint indexIn = v.idxToSwap1 - 1;
+              uint indexOut = indexIn == indexAsset ? i : indexAsset;
+              (toSell,) = _liquidate(
+                converter_,
+                liquidator,
+                tokens[indexIn],
+                tokens[indexOut],
+                v.amountToSwap,
+                _ASSET_LIQUIDATION_SLIPPAGE,
+                v.liquidationThresholds[indexOut],
+                false
+              );
+              console.log("makeWithdrawStep.token0 after swap", IERC20(p.tokens[0]).balanceOf(address(this)));
+              console.log("makeWithdrawStep.token1 after swap", IERC20(p.tokens[1]).balanceOf(address(this)));
+            }
+
+            uint indexBorrow = v.idxToRepay1 - 1;
+            uint indexCollateral = indexBorrow == indexAsset ? i : indexAsset;
+            uint expectedAmountOut = ConverterStrategyBaseLib._repayDebt(
+              p.converter,
+              p.tokens[indexCollateral],
+              p.tokens[indexBorrow],
+              IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
+            );
+            if (indexBorrow == indexAsset) {
+              expectedAmount += expectedAmountOut - toSell;
+            }
+
+            // reduce of requestedAmount on the balance increment
+            v.newBalance = IERC20(v.asset).balanceOf(address(this));
+            if (v.newBalance > v.balance) {
+              if (requestedAmount > v.newBalance - v.balance) {
+                requestedAmount -= (v.newBalance - v.balance);
+              } else {
+                // we get requestedAmount on the balance and don't need to make any other conversions
+                requestedAmount = 0;
+              }
+            } else if (requestedAmount != type(uint).max) {
+              // we temporary sold some asset to get required amount-to-repay
+              requestedAmount += (v.balance - v.newBalance);
+            }
           }
+
+          if (requestedAmount == 0) break;
         }
+
+//        // we need to increase balance on the following amount: requestedAmount - v.balance;
+//        // we can have two possible borrows: 1) direct (v.asset => tokens[i]) and 2) reverse (tokens[i] => v.asset)
+//        // normally we can have only one of them, not both.. but better to take into account possibility to have two debts simultaneously
+//
+//        // reverse debt
+//        (v.debtReverse, v.collateralReverse) = converter_.getDebtAmountCurrent(address(this), tokens[i], v.asset, true);
+//        console.log("_closePositionsToGetAmount.v.debtReverse", v.debtReverse);
+//        console.log("_closePositionsToGetAmount.v.collateralReverse", v.collateralReverse);
+//
+//        // direct debt
+//        (v.totalDebt, v.totalCollateral) = converter_.getDebtAmountCurrent(address(this), v.asset, tokens[i], true);
+//        console.log("_closePositionsToGetAmount.v.totalDebt", v.totalDebt);
+//        console.log("_closePositionsToGetAmount.v.totalCollateral", v.totalCollateral);
+//
+//        v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+//        console.log("_closePositionsToGetAmount.v.tokenBalance", v.tokenBalance);
+//
+//
+//
+//        if (v.totalDebt != 0 || v.tokenBalance != 0 || v.debtReverse != 0) {
+//          //lazy initialization of the prices and decs
+//          if (v.prices.length == 0) {
+//            (v.prices, v.decs) = _getPricesAndDecs(
+//              IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
+//              tokens,
+//              v.len
+//            );
+//          }
+//          console.log("_closePositionsToGetAmount.prices", v.prices[0], v.prices[1]);
+//
+//          // repay reverse debt if any
+//          if (v.debtReverse != 0) {
+//            // what amount of tokens[i] we should sell to pay the debt
+//            uint toSell = _getAmountToSell(
+//              // {requestedAmount} recalculated to tokens[i]
+//              requestedAmount == type(uint).max
+//                ? requestedAmount
+//                : requestedAmount * v.prices[indexAsset] * v.decs[i] / v.prices[i] / v.decs[indexAsset],
+//              v.debtReverse,
+//              v.collateralReverse,
+//              v.prices,
+//              v.decs,
+//              i,
+//              indexAsset,
+//              v.balance
+//            );
+//            console.log("_closePositionsToGetAmount.toSell.1", toSell);
+//
+//            // convert {toSell} amount of main asset to tokens[i]
+//            if (toSell != 0 && v.tokenBalance != 0) {
+//              toSell = Math.min(toSell, v.tokenBalance);
+//              console.log("Liquidate.reverse.to-asset", toSell);
+//              (toSell,) = _liquidate(
+//                converter_,
+//                liquidator,
+//                tokens[i],
+//                v.asset,
+//                toSell,
+//                _ASSET_LIQUIDATION_SLIPPAGE,
+//                liquidationThresholds[v.asset],
+//                false
+//              );
+//              v.balance = IERC20(v.asset).balanceOf(address(this));
+//              console.log("_closePositionsToGetAmount.v.toSell.2", toSell);
+//            }
+//            console.log("_closePositionsToGetAmount.v.balance.2", v.balance);
+//
+//            // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
+//            // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
+//            // will be checked below as a part of result expectedAmount
+//            console.log("Repay reverse debt, repay-amount", v.balance);
+//            _repayDebt(converter_, tokens[i], v.asset, v.balance);
+//            openDebtsExist = openDebtsExist || (v.balance < v.debtReverse);
+//            console.log("_closePositionsToGetAmount.openDebtsExist.1", openDebtsExist);
+//
+//            // we can have some leftovers after closing the debt
+//            v.balance = IERC20(v.asset).balanceOf(address(this));
+//            v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+//            console.log("_closePositionsToGetAmount.v.balance.3", v.balance);
+//            console.log("_closePositionsToGetAmount.tokenBalance.3", v.tokenBalance);
+//          }
+//
+//          // repay direct debt if any
+//          if (v.totalDebt != 0) {
+//            // what amount of main asset we should sell to pay the debt
+//            uint toSell = _getAmountToSell(
+//              requestedAmount,
+//              v.totalDebt,
+//              v.totalCollateral,
+//              v.prices,
+//              v.decs,
+//              indexAsset,
+//              i,
+//              v.tokenBalance
+//            );
+//            console.log("_closePositionsToGetAmount.toSell.4", toSell);
+//
+//            // convert {toSell} amount of main asset to tokens[i]
+//            if (toSell != 0 && v.balance != 0) {
+//              toSell = Math.min(toSell, v.balance);
+//              console.log("Liquidate.direct.from-asset", toSell);
+//              (toSell,) = _liquidate(
+//                converter_,
+//                liquidator,
+//                v.asset,
+//                tokens[i],
+//                toSell,
+//                _ASSET_LIQUIDATION_SLIPPAGE,
+//                liquidationThresholds[tokens[i]],
+//                false
+//              );
+//              v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+//            }
+//            console.log("_closePositionsToGetAmount.tokenBalance.5", v.tokenBalance);
+//            console.log("_closePositionsToGetAmount.toSell.5", toSell);
+//
+//            // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
+//            expectedAmount += _repayDebt(converter_, v.asset, tokens[i], v.tokenBalance) - toSell;
+//            console.log("Repay direct debt, repay-amount", v.tokenBalance);
+//            openDebtsExist = openDebtsExist || (v.tokenBalance < v.totalDebt);
+//            console.log("_closePositionsToGetAmount.openDebtsExist.2", openDebtsExist);
+//
+//            // we can have some leftovers after closing the debt
+//            v.tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+//            console.log("_closePositionsToGetAmount.v.balance.6", v.balance);
+//            console.log("_closePositionsToGetAmount.tokenBalance.6", v.tokenBalance);
+//          }
+//
+//          // directly swap leftovers
+//          if (v.tokenBalance != 0) {
+//            console.log("Liquidate.leftovers.to-asset", v.tokenBalance);
+//            (uint spentAmountIn,) = _liquidate(
+//              converter_,
+//              liquidator,
+//              tokens[i],
+//              v.asset,
+//              v.tokenBalance,
+//              _ASSET_LIQUIDATION_SLIPPAGE,
+//              liquidationThresholds[v.asset],
+//              false
+//            );
+//            console.log("_closePositionsToGetAmount.tokenBalance.7", IERC20(tokens[i]).balanceOf(address(this)));
+//            if (spentAmountIn != 0) {
+//              // spentAmountIn can be zero if token balance is less than liquidationThreshold
+//              expectedAmount += spentAmountIn * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+//            }
+//          }
+//
+//          // reduce of requestedAmount on the balance increment
+//          v.newBalance = IERC20(v.asset).balanceOf(address(this));
+//          require(v.newBalance >= v.balance, AppErrors.BALANCE_DECREASE);
+//          console.log("_closePositionsToGetAmount.v.newBalance.8", v.newBalance);
+//
+//          if (requestedAmount > v.newBalance - v.balance) {
+//            requestedAmount -= (v.newBalance - v.balance);
+//            v.balance = v.newBalance;
+//          } else {
+//            // we get requestedAmount on the balance and don't need to make any other conversions
+//            break;
+//          }
+//        }
       }
     }
 
@@ -1558,6 +1705,175 @@ library ConverterStrategyBaseLib {
     console.log("expectedAmount", expectedAmount);
 
     return (expectedAmount, openDebtsExist);
+  }
+
+  /// @notice Generate plan for next withdraw transaction: 1) swap direction/amount 2) direction of repay (after swap)
+  ///         We are going to swap assets/tokens or repay assets/tokens to get tokens/assets
+  /// @param indexAsset Index of the underlying in {p.tokens} array
+  /// @param indexToken Index of the not-underlying in {p.tokens} array
+  /// @return indexTokenToSwapPlus1 Index of the token to be swapped + 1. 0 - no swap
+  /// @return amountToSwap Amount to be swapped. 0 - no swap
+  /// @return indexRepayTokenPlus1 Index of the token that should be used to repay borrow in converter + 1.
+  ///                              0 - no repay is required - it means that this is a last step with swapping leftovers.
+  function _getIterationPlan(
+    InputParams memory p,
+    uint indexAsset,
+    uint indexToken,
+    uint[] memory prices,
+    uint[] memory decs
+  ) internal returns (
+    uint indexTokenToSwapPlus1,
+    uint amountToSwap,
+    uint indexRepayTokenPlus1
+  ) {
+    GetIterationPlanLocal memory v;
+
+    v.assetBalance = IERC20(p.tokens[indexAsset]).balanceOf(address(this));
+    v.tokenBalance = IERC20(p.tokens[indexToken]).balanceOf(address(this));
+    console.log("_getIterationPlan.v.tokenBalance", v.tokenBalance);
+
+    if (v.tokenBalance != 0) {
+      console.log("_getIterationPlan.prices", prices[0], prices[1]);
+      console.log("_getIterationPlan.decs", decs[0], decs[1]);
+
+      // we need to increase balance on the following amount: requestedAmount - v.balance;
+      // we can have two possible borrows:
+      // 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
+      // normally we can have only one of them, not both..
+      // but better to take into account possibility to have two debts simultaneously
+
+      // reverse debt
+      (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(
+        address(this),
+        p.tokens[indexToken],
+        p.tokens[indexAsset],
+        true
+      );
+      console.log("_getIterationPlan.v.debtReverse", v.debtReverse);
+      console.log("_getIterationPlan.v.collateralReverse", v.collateralReverse);
+
+      if (v.debtReverse == 0) {
+        // direct debt
+        (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(
+          address(this),
+          p.tokens[indexAsset],
+          p.tokens[indexToken],
+          true
+        );
+        console.log("_getIterationPlan.v.totalDebt", v.totalDebt);
+        console.log("_getIterationPlan.v.totalCollateral", v.totalCollateral);
+
+        if (v.totalDebt == 0) {
+          // directly swap leftovers
+          // The leftovers should be swapped to get following result proportions of the assets:
+          //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
+          (v.targetAssets, v.targetTokens) = _getTargetAmounts(
+            prices,
+            decs,
+            v.assetBalance,
+            v.tokenBalance,
+            p.propNotUnderlying18
+          );
+
+          if (v.assetBalance < v.targetAssets) {
+            // we need to swap not-underlying to underlying
+            indexTokenToSwapPlus1 = indexToken + 1;
+            amountToSwap = v.tokenBalance - v.targetTokens;
+          } else {
+            // we need to swap underlying to not-underlying
+            indexTokenToSwapPlus1 = indexAsset + 1;
+            amountToSwap = v.assetBalance - v.targetAssets;
+          }
+        } else {
+          // repay direct debt
+
+          // what amount of underlying we should sell to pay the debt
+          v.toSellAssets = ConverterStrategyBaseLib._getAmountToSell(
+            type(uint).max,
+            v.totalDebt,
+            v.totalCollateral,
+            prices,
+            decs,
+            indexAsset,
+            indexToken,
+            v.tokenBalance
+          );
+          console.log("_getIterationPlan.toSellAssets.4", v.toSellAssets);
+
+          // convert {toSell} amount of underlying to token
+          if (v.toSellAssets != 0 && v.assetBalance != 0) {
+            v.toSellAssets = Math.min(v.toSellAssets, v.assetBalance);
+            indexTokenToSwapPlus1 = indexAsset + 1;
+            amountToSwap = v.toSellAssets;
+          }
+          indexRepayTokenPlus1 = indexToken + 1;
+        }
+      } else {
+        // repay reverse debt
+
+        // what amount of tokens[i] we should sell to pay the debt
+        v.toSellTokens = ConverterStrategyBaseLib._getAmountToSell(
+          type(uint).max,
+          v.debtReverse,
+          v.collateralReverse,
+          prices,
+          decs,
+          indexToken,
+          indexAsset,
+          v.assetBalance
+        );
+        console.log("_getIterationPlan.toSellTokens.1", v.toSellTokens);
+
+        // convert {toSell} amount of main asset to tokens[i]
+        if (v.toSellTokens != 0 && v.tokenBalance != 0) {
+          v.toSellTokens = Math.min(v.toSellTokens, v.tokenBalance);
+          indexTokenToSwapPlus1 = indexToken + 1;
+          amountToSwap = v.toSellTokens;
+        }
+        console.log("_getIterationPlan.toSellTokens.2");
+
+        // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
+        // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
+        // will be checked below as a part of result expectedAmount
+        indexRepayTokenPlus1 = indexAsset + 1;
+        console.log("_getIterationPlan.toSellTokens.3");
+      }
+    }
+
+    console.log("getIterationPlan.indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1", indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1);
+    return (indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1);
+  }
+
+  /// @notice Calculate what balances of underlying and not-underlying we need to fit {propNotUnderlying18}
+  /// @param prices Prices of underlying and not underlying
+  /// @param decs 10**decimals for underlying and not underlying
+  /// @param assetBalance Current balance of underlying
+  /// @param tokenBalance Current balance of not-underlying
+  /// @param propNotUnderlying18 Required proportion of not-underlying [0..1e18]
+  ///                            Proportion of underlying would be (1e18 - propNotUnderlying18)
+  function _getTargetAmounts(
+    uint[] memory prices,
+    uint[] memory decs,
+    uint assetBalance,
+    uint tokenBalance,
+    uint propNotUnderlying18
+  ) internal pure returns (
+    uint targetAssets,
+    uint targetTokens
+  ) {
+    uint costAssets = assetBalance * prices[0] / decs[0];
+    uint costTokens = tokenBalance * prices[1] / decs[1];
+    targetTokens = propNotUnderlying18 == 0
+      ? 0
+      : ((costAssets + costTokens) * propNotUnderlying18 / 1e18);
+    targetAssets = ((costAssets + costTokens) - targetTokens) * decs[1] / prices[1];
+    targetTokens *= decs[0] / prices[0];
+//    console.log("_getTargetAmounts.assetBalance", assetBalance);
+//    console.log("_getTargetAmounts.tokenBalance", tokenBalance);
+//    console.log("_getTargetAmounts.costAssets", costAssets);
+//    console.log("_getTargetAmounts.costTokens", costTokens);
+//    console.log("_getTargetAmounts.targetAssets", targetAssets);
+//    console.log("_getTargetAmounts.targetTokens", targetTokens);
   }
 
   /// @notice What amount of collateral should be sold to pay the debt and receive {requestedAmount}
