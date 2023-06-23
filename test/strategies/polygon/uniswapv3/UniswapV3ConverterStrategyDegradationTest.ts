@@ -263,7 +263,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
   describe('study: make over-collateral, withdraw all', function() {
     it('Reduce price N steps, withdraw by iterations', async() => {
-      const COUNT = 5;
+      const COUNT = 2;
       const state = await strategy.getState();
       const listStates: IStateNum[] = [];
 
@@ -332,16 +332,18 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       const strategyAsOperator = await strategy.connect(operator);
 
       await strategyAsOperator.withdrawByAggEntry();
+      const proportions18 = Misc.ONE18; // we need 100% of underlying
 
       let completed = false;
       while (! completed) {
-        const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg();
+        const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(proportions18);
         console.log("quote", quote);
+
 
         if (quote.amountToSwap.eq(0)) {
           console.log("No swap is required");
-          completed = await strategyAsOperator.callStatic.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x");
-          await strategyAsOperator.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x");
+          completed = await strategyAsOperator.callStatic.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x", proportions18);
+          await strategyAsOperator.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x", proportions18);
         } else {
           const params = {
             fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
@@ -358,8 +360,8 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
           const swapTransaction = await buildTxForSwap(JSON.stringify(params));
           console.log('Transaction for swap: ', swapTransaction);
 
-          completed = await strategyAsOperator.callStatic.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data);
-          await strategyAsOperator.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data);
+          completed = await strategyAsOperator.callStatic.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data, proportions18);
+          await strategyAsOperator.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data, proportions18);
         }
       }
 

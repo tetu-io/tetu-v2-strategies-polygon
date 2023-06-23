@@ -24,6 +24,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   string public constant override STRATEGY_VERSION = "1.4.4";
 
   /////////////////////////////////////////////////////////////////////
+  ///                Data types
+  /////////////////////////////////////////////////////////////////////
+  struct WithdrawByAggStepLocal {
+    uint[] expectedAmounts;
+    uint[] amountsOut;
+    address[] tokens;
+    uint[] liquidationThresholds;
+  }
+
+  /////////////////////////////////////////////////////////////////////
   ///                INIT
   /////////////////////////////////////////////////////////////////////
 
@@ -222,9 +232,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   //region ------------------------------------ Exit, Enter
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Exit from pool, close all debts and swap available assets to underlying
+  /// @notice Fix price changes, exit from pool, prepare to calls of quoteWithdrawByAgg/withdrawByAggStep in the loop
   function withdrawByAggEntry() external {
     console.log("withdrawByAggEntry");
+    console.log("investedAssets", investedAssets());
+
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
@@ -239,50 +251,86 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     }
 
     _updateInvestedAssets();
+    console.log("investedAssets", investedAssets());
   }
 
-  function quoteWithdrawByAgg() external returns (
+  /// @notice Get info about a swap required by next call of {withdrawByAggStep}
+  /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+  ///                           The leftovers should be swapped to get following result proportions of the assets:
+  ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+  function quoteWithdrawByAgg(uint propNotUnderlying18) external returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
+    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    // get tokens as following: [underlying, not-underlying]
     address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
+    if (tokens[1] == asset) {
+      (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
+    }
 
-    return UniswapV3AggLib.quoteWithdrawByAgg(converter, tokens, indexAsset);
+    uint[] memory thresholds = new uint[](2);
+    thresholds[0] = liquidationThresholds[tokens[0]];
+    thresholds[1] = liquidationThresholds[tokens[1]];
+
+    return UniswapV3AggLib.quoteWithdrawStep(converter, tokens, thresholds, propNotUnderlying18);
   }
 
-  /// @notice Exit from pool, close all debts and swap available assets to underlying
-  /// @param tokenToSwap What token should be swapped to other
-  /// @param amount Amount that should be swapped. 0 - no swap
+  /// @notice Make withdraw iteration. Each iteration can make 0 or 1 swap only.
+  /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
+  /// @param tokenToSwap_ What token should be swapped to other
+  /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
+  /// @param aggregator_ Aggregator that should be used on next swap. 0 - no swap
   /// @param swapData Swap rote that was prepared off-chain
+  /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+  ///                           The leftovers should be swapped to get following result proportions of the assets:
+  ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
   /// @return completed true - withdraw was completed, no more steps are required
-  function withdrawByAggStep(address tokenToSwap, uint amount, address agg, bytes memory swapData) external returns (bool completed) {
+  function withdrawByAggStep(
+    address tokenToSwap_,
+    uint amountToSwap_,
+    address aggregator_,
+    bytes memory swapData,
+    uint propNotUnderlying18
+  ) external returns (bool completed) {
+    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    WithdrawByAggStepLocal memory v;
+
     console.log("withdrawByAggStep");
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
     require(state.totalLiquidity == 0, AppErrors.WITHDRAW_BY_AGG_ENTRY_REQUIRED);
 
-    address[] memory tokens = _depositorPoolAssets();
-    uint[] memory thresholds = new uint[](2);
-    thresholds[0] = liquidationThresholds[tokens[0]];
-    thresholds[1] = liquidationThresholds[tokens[1]];
+    // get tokens as following: [underlying, not-underlying]
+    v.tokens = _depositorPoolAssets();
+    if (v.tokens[1] == asset) {
+      (v.tokens[0], v.tokens[1]) = (v.tokens[1], v.tokens[0]);
+    }
+    v.liquidationThresholds = new uint[](2);
+    v.liquidationThresholds[0] = liquidationThresholds[v.tokens[0]];
+    v.liquidationThresholds[1] = liquidationThresholds[v.tokens[1]];
 
     // todo: check expectedAmounts here
-    (completed,) = UniswapV3AggLib.withdrawByAgg(
+    (completed, v.expectedAmounts, v.amountsOut) = UniswapV3AggLib.withdrawStep(
       converter,
-      tokens,
-      ConverterStrategyBaseLib.getAssetIndex(tokens, asset),
-      thresholds,
-      tokenToSwap,
-      amount,
-      agg,
-      swapData
+      v.tokens,
+      v.liquidationThresholds,
+      tokenToSwap_,
+      amountToSwap_,
+      aggregator_,
+      swapData,
+      propNotUnderlying18
     );
     console.log("withdrawByAggStep.call.withdrawByAgg.finish.gasleft", gasleft());
+    console.log("withdrawByAggStep.call.withdrawByAgg.expectedAmounts", v.expectedAmounts[0], v.expectedAmounts[1]);
+    console.log("withdrawByAggStep.call.withdrawByAgg.amountsOut", v.amountsOut[0], v.amountsOut[1]);
 
     _updateInvestedAssets();
+    console.log("investedAssets", investedAssets());
   }
+
+
 
   // todo for tests only, remove
   function withdrawAllByLiquidator(bool direction, uint amount, address agg, bytes memory swapData) external {
