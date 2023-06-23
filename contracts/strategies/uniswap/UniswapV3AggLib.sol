@@ -19,8 +19,11 @@ library UniswapV3AggLib {
   struct SwapByAggParams {
     address tokenToSwap;
     uint amountToSwap;
+    /// @notice Aggregator to make swap
     address aggregator;
+    /// @notice Swap-data prepared off-chain (route, amounts, etc). 0 - use liquidator to make swap
     bytes swapData;
+    bool useLiquidator;
   }
 
   /// @notice Set of parameters required to liquidation through aggregators
@@ -107,6 +110,7 @@ library UniswapV3AggLib {
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+  /// @return completed All debts were closed, leftovers were swapped to the required proportions
   function withdrawStep(
     ITetuConverter converter_,
     address[] memory tokens,
@@ -115,11 +119,10 @@ library UniswapV3AggLib {
     uint amountToSwap_,
     address aggregator_,
     bytes memory swapData_,
+    bool useLiquidator_,
     uint propNotUnderlying18
   ) external returns (
-    bool completed,
-    uint[] memory expectedAmounts,
-    uint[] memory amountsOut
+    bool completed
   ){
     InputParams memory p = InputParams({
       converter: converter_,
@@ -130,6 +133,7 @@ library UniswapV3AggLib {
     SwapByAggParams memory aggParams = SwapByAggParams({
       tokenToSwap: tokenToSwap_,
       amountToSwap: amountToSwap_,
+      useLiquidator: useLiquidator_,
       aggregator: aggregator_,
       swapData: swapData_
     });
@@ -153,7 +157,6 @@ library UniswapV3AggLib {
     if (requestedAmount != 0) {
       CloseDebtsForRequiredAmountLocal memory v;
       v.assetBalance = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
-
       v.tokenBalance = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
       console.log("quoteWithdrawStep.v.tokenBalance", v.tokenBalance);
 
@@ -167,6 +170,7 @@ library UniswapV3AggLib {
           );
         }
         console.log("quoteWithdrawStep.prices", v.prices[0], v.prices[1]);
+        console.log("quoteWithdrawStep.decs", v.decs[1], v.decs[1]);
 
         // we need to increase balance on the following amount: requestedAmount - v.balance;
         // we can have two possible borrows: 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
@@ -187,32 +191,26 @@ library UniswapV3AggLib {
             // directly swap leftovers
             // The leftovers should be swapped to get following result proportions of the assets:
             //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
-            v.costAssets = v.assetBalance * v.prices[0] / v.decs[0];
-            v.costTokens = v.tokenBalance * v.prices[1] / v.decs[1];
-            v.targetTokens = p.propNotUnderlying18 == 0
-              ? 0
-              : ((v.costAssets + v.costTokens) * p.propNotUnderlying18 / 1e18);
-            v.targetAssets = ((v.costAssets + v.costTokens) - v.targetTokens) * v.decs[1] / v.prices[1];
-            v.targetTokens *= v.decs[0] / v.prices[0];
-            console.log("quoteWithdrawStep.assetBalance", v.assetBalance);
-            console.log("quoteWithdrawStep.tokenBalance", v.tokenBalance);
-            console.log("quoteWithdrawStep.costAssets", v.costAssets);
-            console.log("quoteWithdrawStep.costTokens", v.costTokens);
-            console.log("quoteWithdrawStep.targetAssets", v.targetAssets);
-            console.log("quoteWithdrawStep.targetTokens", v.targetTokens);
+            (v.targetAssets, v.targetTokens) = _getTargetAmounts(
+              v.prices,
+              v.decs,
+              v.assetBalance,
+              v.tokenBalance,
+              p.propNotUnderlying18
+            );
 
             if (v.assetBalance < v.targetAssets) {
               // we need to swap not-underlying to underlying
-              if (v.targetTokens - v.tokenBalance > p.liquidationThresholds[IDX_TOKEN]) {
+              if (v.tokenBalance - v.targetTokens > p.liquidationThresholds[IDX_TOKEN]) {
                 tokenToSwap = p.tokens[IDX_TOKEN];
-                amountToSwap = v.targetTokens - v.tokenBalance;
+                amountToSwap = v.tokenBalance - v.targetTokens;
                 console.log("quoteWithdrawStep.amountToSwap.NU=>U.amountToSwap", amountToSwap, tokenToSwap);
               }
             } else {
               // we need to swap underlying to not-underlying
-              if (v.targetAssets - v.assetBalance > p.liquidationThresholds[IDX_ASSET]) {
+              if (v.assetBalance - v.targetAssets > p.liquidationThresholds[IDX_ASSET]) {
                 tokenToSwap = p.tokens[IDX_ASSET];
-                amountToSwap = v.targetAssets - v.assetBalance;
+                amountToSwap = v.assetBalance - v.targetAssets;
                 console.log("quoteWithdrawStep.amountToSwap.U=>NU.amountToSwap", amountToSwap, tokenToSwap);
               }
             }
@@ -278,15 +276,10 @@ library UniswapV3AggLib {
   ///         We can make only 1 of the following 3 operations per single call:
   ///         1) repay direct debt 2) repay reverse debt 3) swap leftovers to underlying
   function _withdrawStep(InputParams memory p, uint requestedAmount, SwapByAggParams memory aggParams) internal returns (
-    bool completed,
-    uint[] memory expectedAmounts,
-    uint[] memory amountsOut
+    bool completed
   ) {
     console.log("makeWithdrawStep.token0 initial balance", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("makeWithdrawStep.token1 initial balance", IERC20(p.tokens[1]).balanceOf(address(this)));
-
-    expectedAmounts = new uint[](2);
-    amountsOut = new uint[](2);
 
     console.log("makeWithdrawStep.requestedAmount", requestedAmount);
     if (requestedAmount != 0) {
@@ -338,44 +331,20 @@ library UniswapV3AggLib {
             // directly swap leftovers
             // The leftovers should be swapped to get following result proportions of the assets:
             //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
-            v.costAssets = v.assetBalance * v.prices[0] / v.decs[0];
-            v.costTokens = v.tokenBalance * v.prices[1] / v.decs[1];
-            v.targetTokens = p.propNotUnderlying18 == 0
-              ? 0
-              : ((v.costAssets + v.costTokens) * p.propNotUnderlying18 / 1e18);
-            v.targetAssets = ((v.costAssets + v.costTokens) - v.targetTokens) * v.decs[1] / v.prices[1];
-            v.targetTokens *= v.decs[0] / v.prices[0];
-            console.log("makeWithdrawStep.assetBalance", v.assetBalance);
-            console.log("makeWithdrawStep.tokenBalance", v.tokenBalance);
-            console.log("makeWithdrawStep.costAssets", v.costAssets);
-            console.log("makeWithdrawStep.costTokens", v.costTokens);
-            console.log("makeWithdrawStep.targetAssets", v.targetAssets);
-            console.log("makeWithdrawStep.targetTokens", v.targetTokens);
+            (v.targetAssets, v.targetTokens) = _getTargetAmounts(
+              v.prices,
+              v.decs,
+              v.assetBalance,
+              v.tokenBalance,
+              p.propNotUnderlying18
+            );
 
             if (v.assetBalance < v.targetAssets) {
               // we need to swap not-underlying to underlying
-              uint spentAmountIn = _swapByAgg(p, aggParams, IDX_TOKEN, IDX_ASSET, v.targetTokens - v.tokenBalance);
-              if (spentAmountIn != 0) {
-                // spentAmountIn can be zero if token balance is less than liquidationThreshold
-                expectedAmounts[IDX_ASSET] = spentAmountIn
-                  * v.prices[IDX_TOKEN] * v.decs[IDX_ASSET]
-                  / v.prices[IDX_ASSET] / v.decs[IDX_TOKEN];
-                amountsOut[IDX_ASSET] = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this)) - v.assetBalance;
-              }
-              console.log("makeWithdrawStep.expectedAmounts[IDX_ASSET]", expectedAmounts[IDX_ASSET]);
-              console.log("makeWithdrawStep.amountsOut[IDX_ASSET]", amountsOut[IDX_ASSET]);
+              _swap(p, aggParams, IDX_TOKEN, IDX_ASSET, v.tokenBalance - v.targetTokens);
             } else {
               // we need to swap underlying to not-underlying
-              uint spentAmountIn = _swapByAgg(p, aggParams, IDX_ASSET, IDX_TOKEN, v.targetAssets - v.assetBalance);
-              if (spentAmountIn != 0) {
-                // spentAmountIn can be zero if token balance is less than liquidationThreshold
-                expectedAmounts[IDX_TOKEN] = spentAmountIn
-                  * v.prices[IDX_ASSET] * v.decs[IDX_TOKEN]
-                  / v.prices[IDX_TOKEN] / v.decs[IDX_ASSET];
-                amountsOut[IDX_TOKEN] = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this)) - v.tokenBalance;
-              }
-              console.log("makeWithdrawStep.expectedAmounts[IDX_TOKEN]", expectedAmounts[IDX_TOKEN]);
-              console.log("makeWithdrawStep.amountsOut[IDX_TOKEN]", amountsOut[IDX_TOKEN]);
+              _swap(p, aggParams, IDX_ASSET, IDX_TOKEN, v.assetBalance - v.targetAssets);
             }
 
             // this is last step, there are no more leftovers and opened debts
@@ -399,22 +368,19 @@ library UniswapV3AggLib {
             // convert {toSell} amount of underlying to token
             if (v.toSellAssets != 0 && v.assetBalance != 0) {
               v.toSellAssets = Math.min(v.toSellAssets, v.assetBalance);
-              v.toSellAssets = _swapByAgg(p, aggParams, IDX_ASSET, IDX_TOKEN, v.toSellAssets);
+              v.toSellAssets = _swap(p, aggParams, IDX_ASSET, IDX_TOKEN, v.toSellAssets);
               v.tokenBalance = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
             }
             console.log("makeWithdrawStep.tokenBalance.5", v.tokenBalance);
             console.log("makeWithdrawStep.v.toSellAssets.5", v.toSellAssets);
 
             // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-            expectedAmounts[IDX_ASSET] = ConverterStrategyBaseLib._repayDebt(
+            ConverterStrategyBaseLib._repayDebt(
               p.converter,
               p.tokens[IDX_ASSET],
               p.tokens[IDX_TOKEN],
               v.tokenBalance
             ) - v.toSellAssets;
-
-            // token's balance can only decrease, asset's balance can only increase
-            amountsOut[IDX_ASSET] = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this)) - v.assetBalance;
           }
         } else {
           // repay reverse debt
@@ -438,7 +404,7 @@ library UniswapV3AggLib {
           // convert {toSell} amount of main asset to tokens[i]
           if (v.toSellTokens != 0 && v.tokenBalance != 0) {
             v.toSellTokens = Math.min(v.toSellTokens, v.tokenBalance);
-            v.toSellTokens = _swapByAgg(p, aggParams, IDX_TOKEN, IDX_ASSET, v.toSellTokens);
+            v.toSellTokens = _swap(p, aggParams, IDX_TOKEN, IDX_ASSET, v.toSellTokens);
             v.assetBalance = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
             console.log("makeWithdrawStep.v.toSellTokens.2", v.toSellTokens);
           }
@@ -447,14 +413,12 @@ library UniswapV3AggLib {
           // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
           // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
           // will be checked below as a part of result expectedAmount
-          expectedAmounts[IDX_TOKEN] = ConverterStrategyBaseLib._repayDebt(
+          ConverterStrategyBaseLib._repayDebt(
             p.converter,
             p.tokens[IDX_TOKEN],
             p.tokens[IDX_ASSET],
             v.assetBalance
           );
-          // token's balance can only increase, asset's balance can only decrease
-          amountsOut[IDX_TOKEN] = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this)) - v.tokenBalance;
         }
       }
     }
@@ -462,13 +426,43 @@ library UniswapV3AggLib {
     console.log("makeWithdrawStep.token0 final balance", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("makeWithdrawStep.token1 final balance", IERC20(p.tokens[1]).balanceOf(address(this)));
     console.log("makeWithdrawStep.completed", completed);
-    console.log("makeWithdrawStep.expectedAmounts", expectedAmounts[0], expectedAmounts[1]);
-    console.log("makeWithdrawStep.amountsOut", amountsOut[0], amountsOut[1]);
 
-    return (completed, expectedAmounts, amountsOut);
+    return completed;
   }
 
-  function _swapByAgg(
+  /// @notice Calculate what balances of underlying and not-underlying we need to fit {propNotUnderlying18}
+  /// @param prices Prices of underlying and not underlying
+  /// @param decs 10**decimals for underlying and not underlying
+  /// @param assetBalance Current balance of underlying
+  /// @param tokenBalance Current balance of not-underlying
+  /// @param propNotUnderlying18 Required proportion of not-underlying [0..1e18]
+  ///                            Proportion of underlying would be (1e18 - propNotUnderlying18)
+  function _getTargetAmounts(
+    uint[] memory prices,
+    uint[] memory decs,
+    uint assetBalance,
+    uint tokenBalance,
+    uint propNotUnderlying18
+  ) internal pure returns (
+    uint targetAssets,
+    uint targetTokens
+  ) {
+    uint costAssets = assetBalance * prices[0] / decs[0];
+    uint costTokens = tokenBalance * prices[1] / decs[1];
+    targetTokens = propNotUnderlying18 == 0
+      ? 0
+      : ((costAssets + costTokens) * propNotUnderlying18 / 1e18);
+    targetAssets = ((costAssets + costTokens) - targetTokens) * decs[1] / prices[1];
+    targetTokens *= decs[0] / prices[0];
+//    console.log("_getTargetAmounts.assetBalance", assetBalance);
+//    console.log("_getTargetAmounts.tokenBalance", tokenBalance);
+//    console.log("_getTargetAmounts.costAssets", costAssets);
+//    console.log("_getTargetAmounts.costTokens", costTokens);
+//    console.log("_getTargetAmounts.targetAssets", targetAssets);
+//    console.log("_getTargetAmounts.targetTokens", targetTokens);
+  }
+
+  function _swap(
     InputParams memory p,
     SwapByAggParams memory aggParams,
     uint indexIn,
@@ -477,35 +471,48 @@ library UniswapV3AggLib {
   ) internal returns (
     uint spentAmountIn
   ) {
-    UniswapV3DebtLib._checkSwapRouter(aggParams.aggregator);
-
-    console.log("_swapByAgg");
+    console.log("_swap");
     if (amountIn > p.liquidationThresholds[indexIn]) {
-      console.log("_swapByAgg.amountIn", amountIn);
-      console.log("_swapByAgg.aggParams.amount", aggParams.amountToSwap);
+      console.log("_swap.amountIn", amountIn);
+      console.log("_swap.aggParams.amount", aggParams.amountToSwap);
       AppLib.approveIfNeeded(p.tokens[indexIn], aggParams.amountToSwap, aggParams.aggregator);
 
       uint availableBalanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
-      console.log("_swapByAgg.availableBalanceTokenIn.before", AppLib.balance(p.tokens[indexIn]));
-      console.log("_swapByAgg.availableBalanceTokenOut.before", availableBalanceTokenOutBefore);
-      console.log("_swapByAgg.indexIn", indexIn);
-      console.log("_swapByAgg.INDEX_ASSET", IDX_ASSET);
-      console.log("_swapByAgg.indexOut", indexOut);
+      console.log("_swap.availableBalanceTokenIn.before", AppLib.balance(p.tokens[indexIn]));
+      console.log("_swap.availableBalanceTokenOut.before", availableBalanceTokenOutBefore);
+      console.log("_swap.indexIn", indexIn);
+      console.log("_swap.INDEX_ASSET", IDX_ASSET);
+      console.log("_swap.indexOut", indexOut);
 
-      {
+      if (aggParams.useLiquidator) {
+        console.log("Swap using liquidator");
+        (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
+          p.converter,
+          ITetuLiquidator(aggParams.aggregator),
+          p.tokens[indexIn],
+          p.tokens[indexOut],
+          amountIn,
+          _ASSET_LIQUIDATION_SLIPPAGE,
+          p.liquidationThresholds[indexIn],
+          true
+        );
+      } else {
+        console.log("Swap using aggregator");
+        UniswapV3DebtLib._checkSwapRouter(aggParams.aggregator);
+
         // let's ensure that "next swap" is made using correct token
         // todo probably we should check also amountToSwap?
         require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
         (bool success, bytes memory result) = aggParams.aggregator.call(aggParams.swapData);
-        console.log("_swapByAgg.call.made", success);
+        console.log("_swap.call.made", success);
         require(success, string(result));
 
         spentAmountIn = aggParams.amountToSwap;
       }
 
-      console.log("_swapByAgg.availableBalanceTokenIn.after", AppLib.balance(p.tokens[indexIn]));
-      console.log("_swapByAgg.availableBalanceTokenOut.after", AppLib.balance(p.tokens[indexOut]));
+      console.log("_swap.availableBalanceTokenIn.after", AppLib.balance(p.tokens[indexIn]));
+      console.log("_swap.availableBalanceTokenOut.after", AppLib.balance(p.tokens[indexOut]));
 
       require(
         p.converter.isConversionValid(

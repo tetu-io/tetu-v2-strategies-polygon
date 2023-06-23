@@ -280,8 +280,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
   /// @param tokenToSwap_ What token should be swapped to other
   /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
-  /// @param aggregator_ Aggregator that should be used on next swap. 0 - no swap
-  /// @param swapData Swap rote that was prepared off-chain
+  /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
+  /// @param swapData Swap rote that was prepared off-chain.
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
@@ -311,20 +311,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     v.liquidationThresholds[0] = liquidationThresholds[v.tokens[0]];
     v.liquidationThresholds[1] = liquidationThresholds[v.tokens[1]];
 
-    // todo: check expectedAmounts here
-    (completed, v.expectedAmounts, v.amountsOut) = UniswapV3AggLib.withdrawStep(
+    completed = UniswapV3AggLib.withdrawStep(
       converter,
       v.tokens,
       v.liquidationThresholds,
       tokenToSwap_,
       amountToSwap_,
-      aggregator_,
+      aggregator_ == address(0)
+        ? address(_getLiquidator(controller()))
+        : aggregator_,
       swapData,
+      aggregator_ == address(0),
       propNotUnderlying18
     );
     console.log("withdrawByAggStep.call.withdrawByAgg.finish.gasleft", gasleft());
-    console.log("withdrawByAggStep.call.withdrawByAgg.expectedAmounts", v.expectedAmounts[0], v.expectedAmounts[1]);
-    console.log("withdrawByAggStep.call.withdrawByAgg.amountsOut", v.amountsOut[0], v.amountsOut[1]);
 
     _updateInvestedAssets();
     console.log("investedAssets", investedAssets());

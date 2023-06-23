@@ -62,4 +62,6 @@ library AppErrors {
   string public constant INCORRECT_SWAP_BY_AGG_PARAM = "TS-25 swap by agg";
 
   string public constant WITHDRAW_BY_AGG_ENTRY_REQUIRED = "TS-26 entry required";
+
+  string public constant OVER_COLLATERAL_DETECTED = "TS-27 over-collateral";
 }

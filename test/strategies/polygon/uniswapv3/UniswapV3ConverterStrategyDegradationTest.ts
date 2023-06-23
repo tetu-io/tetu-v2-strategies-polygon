@@ -16,7 +16,7 @@ import {
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {parseUnits} from "ethers/lib/utils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -24,7 +24,7 @@ import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/StateUtilsNum';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {BigNumber} from "ethers";
+import {BigNumber, BytesLike} from "ethers";
 import {tetuConverter} from "../../../../typechain/@tetu_io";
 
 dotEnvConfig();
@@ -267,9 +267,20 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       const state = await strategy.getState();
       const listStates: IStateNum[] = [];
 
+      // const AGGREGATOR = MaticAddresses.AGG_ONEINCH_V5; // use real aggregator for swaps
+      const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
+
+      const propNotUnderlying18 = 0; // we need 100% of underlying
+      const AMOUNT_TO_DEPOSIT= "1000";
+      const MIN_AMOUNT_TO_RECEIVE_USDT = "0";
+      const MIN_AMOUNT_TO_RECEIVE_USDC = "980";
+
+      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+      const strategyAsOperator = await strategy.connect(operator);
+
       console.log('deposit...');
       await asset.connect(user).approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, user.address, parseUnits('1000', 6));
+      await TokenUtils.getToken(asset.address, user.address, parseUnits(AMOUNT_TO_DEPOSIT, 6));
       await vault.connect(user).deposit(parseUnits('1000', 6), user.address);
 
       const stateStepInitial = await StateUtilsNum.getState(signer, user, strategy, vault, `initial`);
@@ -278,6 +289,8 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
       await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
+
+      // move price and get over-collateral
       for (let i = 0; i < COUNT; ++i) {
         const state0 = await strategy.getState();
         console.log("state0", state0);
@@ -326,25 +339,25 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         );
       }
 
-      console.log("Withdraw by iterations");
-      // await vault.connect(user).withdrawAll();
-      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-      const strategyAsOperator = await strategy.connect(operator);
 
+      // try to withdraw all and get the assets in required proportions on the balance
+      console.log("Withdraw by iterations");
       await strategyAsOperator.withdrawByAggEntry();
-      const proportions18 = Misc.ONE18; // we need 100% of underlying
 
       let completed = false;
       while (! completed) {
-        const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(proportions18);
+        // get info about swap required on next iteration
+        const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(propNotUnderlying18);
         console.log("quote", quote);
 
+        // prepare swap-data for the next iteration
+        let swapData: BytesLike = "0x";
+        const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
+        const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
 
-        if (quote.amountToSwap.eq(0)) {
-          console.log("No swap is required");
-          completed = await strategyAsOperator.callStatic.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x", proportions18);
-          await strategyAsOperator.withdrawByAggStep(Misc.ZERO_ADDRESS, 0, MaticAddresses.AGG_ONEINCH_V5, "0x", proportions18);
-        } else {
+        // we can use either liquidator or real aggregator - 1inch
+        // for real aggregator we should prepare swap-transaction
+        if (AGGREGATOR === MaticAddresses.AGG_ONEINCH_V5) {
           const params = {
             fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
@@ -359,15 +372,22 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
           const swapTransaction = await buildTxForSwap(JSON.stringify(params));
           console.log('Transaction for swap: ', swapTransaction);
-
-          completed = await strategyAsOperator.callStatic.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data, proportions18);
-          await strategyAsOperator.withdrawByAggStep(quote.tokenToSwap, quote.amountToSwap, MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data, proportions18);
+          swapData = swapTransaction.data;
         }
+
+        completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, proportions18);
+        await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, proportions18);
       }
 
       const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
       listStates.push(stateStepFinal);
       console.log(`final`, stateStepFinal);
+
+      const finalUsdcBalance = +formatUnits(await IERC20__factory.connect(PolygonAddresses.USDC_TOKEN).balanceOf(strategy.address), 6);
+      const finalUsdtBalance = +formatUnits(await IERC20__factory.connect(PolygonAddresses.USDT_TOKEN).balanceOf(strategy.address), 6);
+
+      expect(finalUsdcBalance).gte(+MIN_AMOUNT_TO_RECEIVE_USDC);
+      expect(finalUsdtBalance).gte(+MIN_AMOUNT_TO_RECEIVE_USDT);
     })
 
     it('Reduce price N steps, withdraw all', async() => {
@@ -508,6 +528,8 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
       listStates.push(stateStepFinal);
       console.log(`final`, stateStepFinal);
+
+
     })
   })
 
