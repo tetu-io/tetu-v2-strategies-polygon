@@ -358,33 +358,35 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         // we can use either liquidator or real aggregator - 1inch
         // for real aggregator we should prepare swap-transaction
         if (AGGREGATOR === MaticAddresses.AGG_ONEINCH_V5) {
-          const params = {
-            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap.toString(),
-            fromAddress: strategyAsOperator.address,
-            slippage: 1,
-            disableEstimate: true,
-            allowPartialFill: false,
-            protocols: 'POLYGON_BALANCER_V2',
-          };
-          console.log("params", params);
+          if (tokenToSwap !== Misc.ZERO_ADDRESS) {
+            const params = {
+              fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+              toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+              amount: quote.amountToSwap.toString(),
+              fromAddress: strategyAsOperator.address,
+              slippage: 1,
+              disableEstimate: true,
+              allowPartialFill: false,
+              protocols: 'POLYGON_BALANCER_V2',
+            };
+            console.log("params", params);
 
-          const swapTransaction = await buildTxForSwap(JSON.stringify(params));
-          console.log('Transaction for swap: ', swapTransaction);
-          swapData = swapTransaction.data;
+            const swapTransaction = await buildTxForSwap(JSON.stringify(params));
+            console.log('Transaction for swap: ', swapTransaction);
+            swapData = swapTransaction.data;
+          }
         }
 
-        completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, proportions18);
-        await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, proportions18);
+        completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+        await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
       }
 
       const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
       listStates.push(stateStepFinal);
       console.log(`final`, stateStepFinal);
 
-      const finalUsdcBalance = +formatUnits(await IERC20__factory.connect(PolygonAddresses.USDC_TOKEN).balanceOf(strategy.address), 6);
-      const finalUsdtBalance = +formatUnits(await IERC20__factory.connect(PolygonAddresses.USDT_TOKEN).balanceOf(strategy.address), 6);
+      const finalUsdcBalance = +formatUnits(await IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer).balanceOf(strategy.address), 6);
+      const finalUsdtBalance = +formatUnits(await IERC20__factory.connect(PolygonAddresses.USDT_TOKEN, signer).balanceOf(strategy.address), 6);
 
       expect(finalUsdcBalance).gte(+MIN_AMOUNT_TO_RECEIVE_USDC);
       expect(finalUsdtBalance).gte(+MIN_AMOUNT_TO_RECEIVE_USDT);

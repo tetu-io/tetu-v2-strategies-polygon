@@ -94,7 +94,7 @@ library UniswapV3AggLib {
       liquidationThresholds: liquidationThresholds,
       propNotUnderlying18: propNotUnderlying18
     });
-    return _quoteWithdrawStep(p, type(uint).max);
+    return _quoteWithdrawStep(p);
   }
 
   /// @notice Make withdraw step with 0 or 1 swap only. The step can make one of the following actions:
@@ -137,297 +137,203 @@ library UniswapV3AggLib {
       aggregator: aggregator_,
       swapData: swapData_
     });
-    return _withdrawStep(p, type(uint).max, aggParams);
+    return _withdrawStep(p, aggParams);
   }
   //endregion ------------------------------------------------ External functions
 
 
   //region ------------------------------------------------ Internal helper functions
-
   /// @notice Quote amount of the next swap if any.
   ///         Swaps are required if direct-borrow exists OR reverse-borrow exists or not underlying leftovers exist
   ///         Function returns info for first swap only.
   /// @return tokenToSwap What token should be swapped. Zero address if no swap is required
   /// @return amountToSwap Amount to swap. Zero if no swap is required.
-  function _quoteWithdrawStep(InputParams memory p, uint requestedAmount) internal returns (
+  function _quoteWithdrawStep(InputParams memory p) internal returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
-    console.log("quoteWithdrawStep.requestedAmount", requestedAmount);
-    if (requestedAmount != 0) {
-      CloseDebtsForRequiredAmountLocal memory v;
-      v.assetBalance = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
-      v.tokenBalance = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
-      console.log("quoteWithdrawStep.v.tokenBalance", v.tokenBalance);
-
-      if (v.tokenBalance != 0) {
-        //lazy initialization of the prices and decs
-        if (v.prices.length == 0) {
-          (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(
-            IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
-            p.tokens,
-            2 // tokens length
-          );
-        }
-        console.log("quoteWithdrawStep.prices", v.prices[0], v.prices[1]);
-        console.log("quoteWithdrawStep.decs", v.decs[1], v.decs[1]);
-
-        // we need to increase balance on the following amount: requestedAmount - v.balance;
-        // we can have two possible borrows: 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
-        // normally we can have only one of them, not both.. but better to take into account possibility to have two debts simultaneously
-
-        // reverse debt
-        (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), p.tokens[IDX_TOKEN], p.tokens[IDX_ASSET], true);
-        console.log("quoteWithdrawStep.v.debtReverse", v.debtReverse);
-        console.log("quoteWithdrawStep.v.collateralReverse", v.collateralReverse);
-
-        if (v.debtReverse == 0) {
-          // direct debt
-          (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), p.tokens[IDX_ASSET], p.tokens[IDX_TOKEN], true);
-          console.log("quoteWithdrawStep.v.totalDebt", v.totalDebt);
-          console.log("quoteWithdrawStep.v.totalCollateral", v.totalCollateral);
-
-          if (v.totalDebt == 0) {
-            // directly swap leftovers
-            // The leftovers should be swapped to get following result proportions of the assets:
-            //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
-            (v.targetAssets, v.targetTokens) = _getTargetAmounts(
-              v.prices,
-              v.decs,
-              v.assetBalance,
-              v.tokenBalance,
-              p.propNotUnderlying18
-            );
-
-            if (v.assetBalance < v.targetAssets) {
-              // we need to swap not-underlying to underlying
-              if (v.tokenBalance - v.targetTokens > p.liquidationThresholds[IDX_TOKEN]) {
-                tokenToSwap = p.tokens[IDX_TOKEN];
-                amountToSwap = v.tokenBalance - v.targetTokens;
-                console.log("quoteWithdrawStep.amountToSwap.NU=>U.amountToSwap", amountToSwap, tokenToSwap);
-              }
-            } else {
-              // we need to swap underlying to not-underlying
-              if (v.assetBalance - v.targetAssets > p.liquidationThresholds[IDX_ASSET]) {
-                tokenToSwap = p.tokens[IDX_ASSET];
-                amountToSwap = v.assetBalance - v.targetAssets;
-                console.log("quoteWithdrawStep.amountToSwap.U=>NU.amountToSwap", amountToSwap, tokenToSwap);
-              }
-            }
-          } else {
-            // what amount of main asset we should sell to pay the debt
-            v.toSellAssets = ConverterStrategyBaseLib._getAmountToSell(
-              requestedAmount,
-              v.totalDebt,
-              v.totalCollateral,
-              v.prices,
-              v.decs,
-              IDX_ASSET,
-              IDX_TOKEN,
-              v.tokenBalance
-            );
-            console.log("quoteWithdrawStep.toSellAssets.4", v.toSellAssets);
-
-            // convert {toSell} amount of main asset to tokens[i]
-            if (v.toSellAssets != 0 && v.assetBalance != 0) {
-              v.toSellAssets = Math.min(v.toSellAssets, v.assetBalance);
-              if (v.toSellAssets > p.liquidationThresholds[IDX_ASSET]) {
-                tokenToSwap = p.tokens[IDX_ASSET];
-                amountToSwap = v.toSellAssets;
-                console.log("quoteWithdrawStep.amountToSwap direct borrow", amountToSwap);
-              }
-            }
-          }
-        } else {
-          // what amount of tokens[i] we should sell to pay the debt
-          v.toSellTokens = ConverterStrategyBaseLib._getAmountToSell(
-          // {requestedAmount} recalculated to tokens[i]
-            requestedAmount == type(uint).max
-              ? requestedAmount
-              : requestedAmount * v.prices[IDX_ASSET] * v.decs[IDX_TOKEN] / v.prices[IDX_TOKEN] / v.decs[IDX_ASSET],
-            v.debtReverse,
-            v.collateralReverse,
-            v.prices,
-            v.decs,
-            IDX_TOKEN,
-            IDX_ASSET,
-            v.assetBalance
-          );
-          console.log("quoteWithdrawStep.toSellTokens.1", v.toSellTokens);
-
-          // convert {toSell} amount of main asset to tokens[i]
-          if (v.toSellTokens != 0 && v.tokenBalance != 0) {
-            v.toSellTokens = Math.min(v.toSellTokens, v.tokenBalance);
-            if (v.toSellTokens > p.liquidationThresholds[IDX_TOKEN]) {
-              tokenToSwap = p.tokens[IDX_TOKEN];
-              amountToSwap = v.toSellTokens;
-              console.log("quoteWithdrawStep.amountToSwap reverse borrow", amountToSwap);
-            }
-          }
-        }
-      }
+    console.log("_quoteWithdrawStep.start");
+    uint indexTokenToSwapPlus1;
+    (indexTokenToSwapPlus1, amountToSwap,) = _getIterationPlan(p);
+    if (indexTokenToSwapPlus1 != 0) {
+      tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
-
-    console.log("quoteWithdrawStep.final", tokenToSwap, amountToSwap);
+    console.log("_quoteWithdrawStep.tokenToSwap", tokenToSwap);
+    console.log("_quoteWithdrawStep.amountToSwap", amountToSwap);
     return (tokenToSwap, amountToSwap);
   }
 
   /// @notice Make one iteration of withdraw. Each iteration can make 0 or 1 swap only
   ///         We can make only 1 of the following 3 operations per single call:
   ///         1) repay direct debt 2) repay reverse debt 3) swap leftovers to underlying
-  function _withdrawStep(InputParams memory p, uint requestedAmount, SwapByAggParams memory aggParams) internal returns (
+  function _withdrawStep(InputParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
     console.log("makeWithdrawStep.token0 initial balance", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("makeWithdrawStep.token1 initial balance", IERC20(p.tokens[1]).balanceOf(address(this)));
 
-    console.log("makeWithdrawStep.requestedAmount", requestedAmount);
-    if (requestedAmount != 0) {
-      CloseDebtsForRequiredAmountLocal memory v;
+    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = _getIterationPlan(p);
+    console.log("makeWithdrawStep.indexTokenToSwapPlus1", idxToSwap1);
+    console.log("makeWithdrawStep.amountToSwap", amountToSwap);
+    console.log("makeWithdrawStep.indexRepayTokenPlus1", idxToRepay1);
 
-      v.assetBalance = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
-      v.tokenBalance = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
-      console.log("makeWithdrawStep.v.tokenBalance", v.tokenBalance);
+    if (idxToSwap1 != 0) {
+      _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+      console.log("makeWithdrawStep.token0 after swap", IERC20(p.tokens[0]).balanceOf(address(this)));
+      console.log("makeWithdrawStep.token1 after swap", IERC20(p.tokens[1]).balanceOf(address(this)));
+    }
 
-      if (v.tokenBalance != 0) {
-        //lazy initialization of the prices and decs
-        if (v.prices.length == 0) {
-          (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(
-            IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
-            p.tokens,
-            2 // p.tokens length
-          );
-        }
-        console.log("makeWithdrawStep.prices", v.prices[0], v.prices[1]);
-
-        // we need to increase balance on the following amount: requestedAmount - v.balance;
-        // we can have two possible borrows:
-        // 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
-        // normally we can have only one of them, not both..
-        // but better to take into account possibility to have two debts simultaneously
-
-        // reverse debt
-        (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(
-          address(this),
-          p.tokens[IDX_TOKEN],
-          p.tokens[IDX_ASSET],
-          true
-        );
-        console.log("makeWithdrawStep.v.debtReverse", v.debtReverse);
-        console.log("makeWithdrawStep.v.collateralReverse", v.collateralReverse);
-
-        if (v.debtReverse == 0) {
-          // direct debt
-          (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(
-            address(this),
-            p.tokens[IDX_ASSET],
-            p.tokens[IDX_TOKEN],
-            true
-          );
-          console.log("makeWithdrawStep.v.totalDebt", v.totalDebt);
-          console.log("makeWithdrawStep.v.totalCollateral", v.totalCollateral);
-
-          if (v.totalDebt == 0) {
-            // directly swap leftovers
-            // The leftovers should be swapped to get following result proportions of the assets:
-            //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
-            (v.targetAssets, v.targetTokens) = _getTargetAmounts(
-              v.prices,
-              v.decs,
-              v.assetBalance,
-              v.tokenBalance,
-              p.propNotUnderlying18
-            );
-
-            if (v.assetBalance < v.targetAssets) {
-              // we need to swap not-underlying to underlying
-              _swap(p, aggParams, IDX_TOKEN, IDX_ASSET, v.tokenBalance - v.targetTokens);
-            } else {
-              // we need to swap underlying to not-underlying
-              _swap(p, aggParams, IDX_ASSET, IDX_TOKEN, v.assetBalance - v.targetAssets);
-            }
-
-            // this is last step, there are no more leftovers and opened debts
-            completed = true;
-          } else {
-            // repay direct debt
-
-            // what amount of underlying we should sell to pay the debt
-            v.toSellAssets = ConverterStrategyBaseLib._getAmountToSell(
-              requestedAmount,
-              v.totalDebt,
-              v.totalCollateral,
-              v.prices,
-              v.decs,
-              IDX_ASSET,
-              IDX_TOKEN,
-              v.tokenBalance
-            );
-            console.log("makeWithdrawStep.toSellAssets.4", v.toSellAssets);
-
-            // convert {toSell} amount of underlying to token
-            if (v.toSellAssets != 0 && v.assetBalance != 0) {
-              v.toSellAssets = Math.min(v.toSellAssets, v.assetBalance);
-              v.toSellAssets = _swap(p, aggParams, IDX_ASSET, IDX_TOKEN, v.toSellAssets);
-              v.tokenBalance = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
-            }
-            console.log("makeWithdrawStep.tokenBalance.5", v.tokenBalance);
-            console.log("makeWithdrawStep.v.toSellAssets.5", v.toSellAssets);
-
-            // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-            ConverterStrategyBaseLib._repayDebt(
-              p.converter,
-              p.tokens[IDX_ASSET],
-              p.tokens[IDX_TOKEN],
-              v.tokenBalance
-            ) - v.toSellAssets;
-          }
-        } else {
-          // repay reverse debt
-
-          // what amount of tokens[i] we should sell to pay the debt
-          v.toSellTokens = ConverterStrategyBaseLib._getAmountToSell(
-          // {requestedAmount} recalculated to tokens[i]
-            requestedAmount == type(uint).max
-              ? requestedAmount
-              : requestedAmount * v.prices[IDX_ASSET] * v.decs[IDX_TOKEN] / v.prices[IDX_TOKEN] / v.decs[IDX_ASSET],
-            v.debtReverse,
-            v.collateralReverse,
-            v.prices,
-            v.decs,
-            IDX_TOKEN,
-            IDX_ASSET,
-            v.assetBalance
-          );
-          console.log("makeWithdrawStep.toSellTokens.1", v.toSellTokens);
-
-          // convert {toSell} amount of main asset to tokens[i]
-          if (v.toSellTokens != 0 && v.tokenBalance != 0) {
-            v.toSellTokens = Math.min(v.toSellTokens, v.tokenBalance);
-            v.toSellTokens = _swap(p, aggParams, IDX_TOKEN, IDX_ASSET, v.toSellTokens);
-            v.assetBalance = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
-            console.log("makeWithdrawStep.v.toSellTokens.2", v.toSellTokens);
-          }
-          console.log("makeWithdrawStep.v.balance.2", v.assetBalance);
-
-          // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
-          // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
-          // will be checked below as a part of result expectedAmount
-          ConverterStrategyBaseLib._repayDebt(
-            p.converter,
-            p.tokens[IDX_TOKEN],
-            p.tokens[IDX_ASSET],
-            v.assetBalance
-          );
-        }
-      }
+    if (idxToRepay1 != 0) {
+      console.log("makeWithdrawStep._repayDebt.amount", IERC20(p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET]).balanceOf(address(this)));
+      ConverterStrategyBaseLib._repayDebt(
+        p.converter,
+        p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
+        p.tokens[idxToRepay1 - 1],
+        IERC20(p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET]).balanceOf(address(this))
+      );
     }
 
     console.log("makeWithdrawStep.token0 final balance", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("makeWithdrawStep.token1 final balance", IERC20(p.tokens[1]).balanceOf(address(this)));
-    console.log("makeWithdrawStep.completed", completed);
+    console.log("completed", idxToRepay1 == 0);
 
-    return completed;
+    // Withdraw is completed on last iteration (no debts, swapping leftovers)
+    return idxToRepay1 == 0;
+  }
+
+  /// @notice Generate plan for next withdraw transaction: 1) swap direction/amount 2) direction of repay (after swap)
+  /// @return indexTokenToSwapPlus1 Index of the token to be swapped + 1. 0 - no swap
+  /// @return amountToSwap Amount to be swapped. 0 - no swap
+  /// @return indexRepayTokenPlus1 Index of the token that should be used to repay borrow in converter + 1.
+  ///                              0 - no repay is required - it means that this is a last step with swapping leftovers.
+  function _getIterationPlan(InputParams memory p) internal returns (
+    uint indexTokenToSwapPlus1,
+    uint amountToSwap,
+    uint indexRepayTokenPlus1
+  ) {
+    CloseDebtsForRequiredAmountLocal memory v;
+
+    v.assetBalance = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
+    v.tokenBalance = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
+    console.log("makeWithdrawStep.v.tokenBalance", v.tokenBalance);
+
+    if (v.tokenBalance != 0) {
+      //lazy initialization of the prices and decs
+      if (v.prices.length == 0) {
+        (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+          IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
+          p.tokens,
+          2 // p.tokens length
+        );
+      }
+      console.log("makeWithdrawStep.prices", v.prices[0], v.prices[1]);
+
+      // we need to increase balance on the following amount: requestedAmount - v.balance;
+      // we can have two possible borrows:
+      // 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
+      // normally we can have only one of them, not both..
+      // but better to take into account possibility to have two debts simultaneously
+
+      // reverse debt
+      (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(
+        address(this),
+        p.tokens[IDX_TOKEN],
+        p.tokens[IDX_ASSET],
+        true
+      );
+      console.log("makeWithdrawStep.v.debtReverse", v.debtReverse);
+      console.log("makeWithdrawStep.v.collateralReverse", v.collateralReverse);
+
+      if (v.debtReverse == 0) {
+        // direct debt
+        (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(
+          address(this),
+          p.tokens[IDX_ASSET],
+          p.tokens[IDX_TOKEN],
+          true
+        );
+        console.log("makeWithdrawStep.v.totalDebt", v.totalDebt);
+        console.log("makeWithdrawStep.v.totalCollateral", v.totalCollateral);
+
+        if (v.totalDebt == 0) {
+          // directly swap leftovers
+          // The leftovers should be swapped to get following result proportions of the assets:
+          //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
+          (v.targetAssets, v.targetTokens) = _getTargetAmounts(
+            v.prices,
+            v.decs,
+            v.assetBalance,
+            v.tokenBalance,
+            p.propNotUnderlying18
+          );
+
+          if (v.assetBalance < v.targetAssets) {
+            // we need to swap not-underlying to underlying
+            indexTokenToSwapPlus1 = IDX_TOKEN + 1;
+            amountToSwap = v.tokenBalance - v.targetTokens;
+          } else {
+            // we need to swap underlying to not-underlying
+            indexTokenToSwapPlus1 = IDX_ASSET + 1;
+            amountToSwap = v.assetBalance - v.targetAssets;
+          }
+        } else {
+          // repay direct debt
+
+          // what amount of underlying we should sell to pay the debt
+          v.toSellAssets = ConverterStrategyBaseLib._getAmountToSell(
+            type(uint).max,
+            v.totalDebt,
+            v.totalCollateral,
+            v.prices,
+            v.decs,
+            IDX_ASSET,
+            IDX_TOKEN,
+            v.tokenBalance
+          );
+          console.log("makeWithdrawStep.toSellAssets.4", v.toSellAssets);
+
+          // convert {toSell} amount of underlying to token
+          if (v.toSellAssets != 0 && v.assetBalance != 0) {
+            v.toSellAssets = Math.min(v.toSellAssets, v.assetBalance);
+            indexTokenToSwapPlus1 = IDX_ASSET + 1;
+            amountToSwap = v.toSellAssets;
+          }
+          indexRepayTokenPlus1 = IDX_TOKEN + 1;
+        }
+      } else {
+        // repay reverse debt
+
+        // what amount of tokens[i] we should sell to pay the debt
+        v.toSellTokens = ConverterStrategyBaseLib._getAmountToSell(
+          type(uint).max,
+          v.debtReverse,
+          v.collateralReverse,
+          v.prices,
+          v.decs,
+          IDX_TOKEN,
+          IDX_ASSET,
+          v.assetBalance
+        );
+        console.log("makeWithdrawStep.toSellTokens.1", v.toSellTokens);
+
+        // convert {toSell} amount of main asset to tokens[i]
+        if (v.toSellTokens != 0 && v.tokenBalance != 0) {
+          v.toSellTokens = Math.min(v.toSellTokens, v.tokenBalance);
+          indexTokenToSwapPlus1 = IDX_TOKEN + 1;
+          amountToSwap = v.toSellTokens;
+        }
+        console.log("makeWithdrawStep.toSellTokens.2");
+
+        // sell {toSell}, repay the debt, return collateral back; we should receive amount > toSell
+        // we don't check expectedAmount explicitly - we assume, that the amount received after repaying of the debt
+        // will be checked below as a part of result expectedAmount
+        indexRepayTokenPlus1 = IDX_ASSET + 1;
+        console.log("makeWithdrawStep.toSellTokens.3");
+      }
+    }
+
+    console.log("getIterationPlan.indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1", indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1);
+    return (indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1);
   }
 
   /// @notice Calculate what balances of underlying and not-underlying we need to fit {propNotUnderlying18}
