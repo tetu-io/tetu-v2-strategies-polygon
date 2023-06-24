@@ -369,19 +369,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address[] memory tokens = _depositorPoolAssets();
     uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
 
-    bool noDebtsLeft = false;
-    while (! noDebtsLeft) {
-      console.log("withdrawByAgg.call.closePositionsToGetAmount.gasleft", gasleft());
-      (, noDebtsLeft) = ConverterStrategyBaseLib.closePositionsToGetAmount(
-        converter,
-        _getLiquidator(controller()),
-        indexAsset,
-        liquidationThresholds,
-        type(uint).max,
-        tokens
-      );
-    }
-    console.log("withdrawByAgg.call.closePositionsToGetAmount.finish.gasleft", gasleft());
+    ConverterStrategyBaseLib.closePositionsToGetAmount(
+      converter,
+      _getLiquidator(controller()),
+      indexAsset,
+      liquidationThresholds,
+      type(uint).max,
+      tokens
+    );
 
     _updateInvestedAssets();
   }

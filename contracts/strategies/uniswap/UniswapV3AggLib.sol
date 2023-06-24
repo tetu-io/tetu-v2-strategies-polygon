@@ -118,7 +118,7 @@ library UniswapV3AggLib {
 
     console.log("_quoteWithdrawStep.start");
     uint indexTokenToSwapPlus1;
-    (indexTokenToSwapPlus1, amountToSwap,) = ConverterStrategyBaseLib._getIterationPlan(p, IDX_ASSET, IDX_TOKEN, prices, decs);
+    (indexTokenToSwapPlus1, amountToSwap,) = ConverterStrategyBaseLib._getIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN, prices, decs);
     if (indexTokenToSwapPlus1 != 0) {
       tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
@@ -142,7 +142,7 @@ library UniswapV3AggLib {
     console.log("makeWithdrawStep.token0 initial balance", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("makeWithdrawStep.token1 initial balance", IERC20(p.tokens[1]).balanceOf(address(this)));
 
-    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._getIterationPlan(p, IDX_ASSET, IDX_TOKEN, prices, decs);
+    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._getIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN, prices, decs);
     console.log("makeWithdrawStep.indexTokenToSwapPlus1", idxToSwap1);
     console.log("makeWithdrawStep.amountToSwap", amountToSwap);
     console.log("makeWithdrawStep.indexRepayTokenPlus1", idxToRepay1);

@@ -1201,7 +1201,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.balances.join()).eq([0, 2115].join()); // 2880 + 2000 - 1010
+            expect(r.balances.join()).eq([2115, 0].join()); // 2880 + 2000 - 1010
           });
         });
       });
