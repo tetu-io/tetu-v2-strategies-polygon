@@ -11,6 +11,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 
 library UniswapV3DebtLib {
+  using SafeERC20 for IERC20;
 
   //////////////////////////////////////////
   //            CONSTANTS
@@ -144,7 +145,7 @@ library UniswapV3DebtLib {
     if (profitToCover > 0) {
       ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets);
     }
-  (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     bytes memory entryData = getEntryData(pool, newLowerTick, newUpperTick, depositorSwapTokens);
     _openDebt(tetuConverter, tokenA, tokenB, entryData);
     state.lowerTick = newLowerTick;
@@ -189,6 +190,29 @@ library UniswapV3DebtLib {
       lowerTick = (tick - tickRange) / tickSpacing * tickSpacing;
     }
     upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
+  }
+
+  function coverLossFromRewards(uint loss, address strategyProfitHolder, address tokenA, address tokenB, address pool) external returns (uint covered) {
+    uint bA = IERC20Metadata(tokenA).balanceOf(strategyProfitHolder);
+    uint bB = IERC20Metadata(tokenB).balanceOf(strategyProfitHolder);
+
+    if (loss <= bA) {
+      IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), loss);
+      covered = loss;
+    } else {
+      uint needToCoverA = loss;
+      if (bA > 0) {
+        IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), bA);
+        needToCoverA -= bA;
+      }
+      if (bB > 0) {
+        uint needTransferB = UniswapV3Lib.getPrice(pool, tokenA) * needToCoverA / 10 ** IERC20Metadata(tokenA).decimals();
+        uint canTransferB = Math.min(needTransferB, bB);
+        IERC20(tokenB).safeTransferFrom(strategyProfitHolder, address(this), canTransferB);
+        needToCoverA -= needToCoverA * canTransferB / needTransferB;
+      }
+      covered = loss - needToCoverA;
+    }
   }
 
   /// @notice Calculate the new tick range for a Uniswap V3 pool.
