@@ -27,7 +27,7 @@ library AlgebraConverterStrategyLogicLib {
   //////////////////////////////////////////
 
   event FuseTriggered();
-  event Rebalanced(uint loss);
+  event Rebalanced(uint loss, uint covered);
   event DisableFuse();
   event NewFuseThreshold(uint newFuseThreshold);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
@@ -143,7 +143,7 @@ library AlgebraConverterStrategyLogicLib {
       /// for stable pools fuse can be enabled
       state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
       emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
-      state.lastPrice = getOracleAssetsPrice(ITetuConverter(converter), tokenA, tokenB);
+      state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(ITetuConverter(converter), tokenA, tokenB);
     }
   }
 
@@ -159,18 +159,6 @@ library AlgebraConverterStrategyLogicLib {
 
   function createSpecificName(State storage state) external view returns (string memory) {
     return string(abi.encodePacked("Algebra ", IERC20Metadata(state.tokenA).symbol(), "/", IERC20Metadata(state.tokenB).symbol()));
-  }
-
-  /// @notice Get the price ratio of the two given tokens from the oracle.
-  /// @param converter The Tetu converter.
-  /// @param tokenA The first token address.
-  /// @param tokenB The second token address.
-  /// @return The price ratio of the two tokens.
-  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) public view returns (uint) {
-    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
-    uint priceA = oracle.getAssetPrice(tokenA);
-    uint priceB = oracle.getAssetPrice(tokenB);
-    return priceB * 1e18 / priceA;
   }
 
   function getIncentiveKey(State storage state) internal view returns (IncentiveKey memory) {
@@ -560,21 +548,22 @@ library AlgebraConverterStrategyLogicLib {
 
     if (
       !needRebalance(state)
-    || !AlgebraDebtLib.needCloseDebt(debtAmount, converter, tokenB)
+      || !AlgebraDebtLib.needCloseDebt(debtAmount, converter, tokenB)
     ) {
       return (false, 0);
     }
 
     uint[] memory amountsOut = quoteExit(state, state.totalLiquidity);
+    amountsOut[0] += AppLib.balance(tokenA);
+    amountsOut[1] += AppLib.balance(tokenB);
 
     if (amountsOut[1] < debtAmount) {
       uint tokenBprice = AlgebraLib.getPrice(address(state.pool), tokenB);
       uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / AlgebraDebtLib.SELL_GAP;
-      uint b = amountsOut[0] + AppLib.balance(tokenA);
-      if (b > 0) {
-        needToSellTokenA = Math.min(needToSellTokenA, b - 1);
+      if (amountsOut[0] > 0) {
+        needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] - 1);
       } else {
         needToSellTokenA = 0;
       }
@@ -618,7 +607,7 @@ library AlgebraConverterStrategyLogicLib {
 
     require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
 
-    vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -669,11 +658,12 @@ library AlgebraConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
+    uint covered;
     if (loss > 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+      covered = AlgebraDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
     }
 
-    emit Rebalanced(loss);
+    emit Rebalanced(loss, covered);
   }
 
   function rebalanceSwapByAgg(
@@ -710,7 +700,7 @@ library AlgebraConverterStrategyLogicLib {
 
     require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
 
-    vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -762,10 +752,11 @@ library AlgebraConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
+    uint covered;
     if (loss > 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+      covered = AlgebraDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
     }
 
-    emit Rebalanced(loss);
+    emit Rebalanced(loss, covered);
   }
 }

@@ -17,7 +17,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
-  string public constant override STRATEGY_VERSION = "1.0.0";
+  string public constant override STRATEGY_VERSION = "1.0.1";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -70,7 +70,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function disableFuse() external {
     StrategyLib.onlyOperators(controller());
     state.isFuseTriggered = false;
-    state.lastPrice = AlgebraConverterStrategyLogicLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
+    state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
 
     AlgebraConverterStrategyLogicLib.emitDisableFuse();
   }

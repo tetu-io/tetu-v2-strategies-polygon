@@ -124,7 +124,6 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
   })
 
   after(async function() {
-    await TimeUtils.rollback(snapshotBefore);
     await hre.network.provider.request({
       method: "hardhat_reset",
       params: [
@@ -136,6 +135,7 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
         },
       ],
     });
+    await TimeUtils.rollback(snapshotBefore);
   });
 
   beforeEach(async function() {
@@ -215,7 +215,7 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
       const operator = await UniversalTestUtils.getAnOperator(s.address, signer)
       await s.connect(operator).emergencyExit()
 
-      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAssetValue);
+      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAssetValue);
 
       expect(await s.needRebalance()).eq(true)
 

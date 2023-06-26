@@ -15,7 +15,7 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant Algebra_DEPOSITOR_VERSION = "1.0.0";
+  string public constant ALGEBRA_DEPOSITOR_VERSION = "1.0.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES

@@ -8,6 +8,7 @@ import "./AlgebraStrategyErrors.sol";
 import "./AlgebraConverterStrategyLogicLib.sol";
 
 library AlgebraDebtLib {
+  using SafeERC20 for IERC20;
 
   uint public constant SELL_GAP = 100;
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
@@ -148,6 +149,29 @@ library AlgebraDebtLib {
   function needCloseDebt(uint debtAmount, ITetuConverter tetuConverter, address tokenB) public view returns (bool) {
     IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
     return debtAmount * priceOracle.getAssetPrice(tokenB) / 10 ** IERC20Metadata(tokenB).decimals() > 1e17;
+  }
+
+  function coverLossFromRewards(uint loss, address strategyProfitHolder, address tokenA, address tokenB, address pool) external returns (uint covered) {
+    uint bA = IERC20Metadata(tokenA).balanceOf(strategyProfitHolder);
+    uint bB = IERC20Metadata(tokenB).balanceOf(strategyProfitHolder);
+
+    if (loss <= bA) {
+      IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), loss);
+      covered = loss;
+    } else {
+      uint needToCoverA = loss;
+      if (bA > 0) {
+        IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), bA);
+        needToCoverA -= bA;
+      }
+      if (bB > 0) {
+        uint needTransferB = AlgebraLib.getPrice(pool, tokenA) * needToCoverA / 10 ** IERC20Metadata(tokenA).decimals();
+        uint canTransferB = Math.min(needTransferB, bB);
+        IERC20(tokenB).safeTransferFrom(strategyProfitHolder, address(this), canTransferB);
+        needToCoverA -= needToCoverA * canTransferB / needTransferB;
+      }
+      covered = loss - needToCoverA;
+    }
   }
 
   /// @notice Calculate the new tick range for a Algebra pool.
