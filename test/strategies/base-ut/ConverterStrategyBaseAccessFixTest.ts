@@ -2815,7 +2815,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
                 {tokenIn: dai, tokenOut: usdc, amountIn: "10", amountOut: "12"},
                 {tokenIn: bal, tokenOut: usdc, amountIn: "328", amountOut: "34"},
               ],
-              thresholds: [{token: usdc, amount: "35"}],
+              thresholds: [{token: usdc, amount: "500"}],
               performanceFee: 10_000,
               initialBalances: [
                 {token: dai, amount: "100"},
@@ -2831,15 +2831,15 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
           it('should return expected performanceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.performanceAmounts).to.equal(10); // (0 + 20 + 0) / 2
+            expect(r.performanceAmounts).to.equal(18.07317);  // (12 + 20 + 40/328*34) / 2
           });
           it('should return expected insuranceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.performanceAmounts).to.equal(10); // (0 + 20 + 0) / 2
+            expect(r.performanceAmounts).to.equal(18.07317); // (12 + 20 + 40/328*34) / 2
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.finalRewardTokenBalances.join()).to.equal([100, 180, 400].join());
+            expect(r.finalRewardTokenBalances.join()).to.equal([90, 209.853659, 72].join()); // 180+288*34/328, 400*0.9*0.2
           });
         });
       });

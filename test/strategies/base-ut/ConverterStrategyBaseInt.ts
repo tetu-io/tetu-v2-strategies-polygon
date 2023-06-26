@@ -189,10 +189,10 @@ describe("ConverterStrategyBaseInt", () => {
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(
-            r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.beforeExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).eq(1);
           await expect(
-            r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.afterExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
         });
       });
@@ -291,10 +291,10 @@ describe("ConverterStrategyBaseInt", () => {
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndEmergencyExit);
           await expect(
-            r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.beforeExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).gt(0);
           await expect(
-            r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.afterExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
         });
       });
@@ -360,10 +360,10 @@ describe("ConverterStrategyBaseInt", () => {
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndWithdrawAll);
           await expect(
-            r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.beforeExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).eq(1);
           await expect(
-            r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.afterExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
         });
       });
@@ -424,10 +424,10 @@ describe("ConverterStrategyBaseInt", () => {
         it("should close all debts", async () => {
           const r = await loadFixture(makeDepositAndWithdrawAll);
           await expect(
-            r.beforeExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.beforeExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).gt(0);
           await expect(
-            r.afterExit.converter.platformAdapters.filter(x => x.length !== 0).length
+            r.afterExit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
           ).eq(0);
         });
       });
@@ -513,10 +513,10 @@ describe("ConverterStrategyBaseInt", () => {
       it("should close all debts before withdraw", async () => {
         const r = await loadFixture(makeRepayTheBorrowTest);
         await expect(
-          r.afterDeposit.converter.platformAdapters.filter(x => x.length !== 0).length
+          r.afterDeposit.converterDirect.platformAdapters.filter(x => x.length !== 0).length
         ).gt(0);
         await expect(
-          r.afterRepay.converter.platformAdapters.filter(x => x.length !== 0).length
+          r.afterRepay.converterDirect.platformAdapters.filter(x => x.length !== 0).length
         ).eq(0);
       });
       it("should withdraw required amount to splitter", async () => {
@@ -572,8 +572,8 @@ describe("ConverterStrategyBaseInt", () => {
         const indexUsdt2 = 0;
         const indexDai2 = 2;
         const amountToWithdrawSecondaryAssets= Math.round(
-          afterDeposit.strategy.borrowAssetsBalances[indexUsdt1] * afterDeposit.converter.borrowAssetsPrices[indexUsdt2]
-           + afterDeposit.strategy.borrowAssetsBalances[indexDai1] * afterDeposit.converter.borrowAssetsPrices[indexDai2]
+          afterDeposit.strategy.borrowAssetsBalances[indexUsdt1] * afterDeposit.converterDirect.borrowAssetsPrices[indexUsdt2]
+           + afterDeposit.strategy.borrowAssetsBalances[indexDai1] * afterDeposit.converterDirect.borrowAssetsPrices[indexDai2]
         );
         const amountToWithdraw = amountToWithdrawSecondaryAssets / 2 + afterDeposit.strategy.assetBalance;
         console.log("amountToWithdraw", amountToWithdraw);

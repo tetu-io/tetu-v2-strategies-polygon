@@ -132,7 +132,7 @@ contract ConverterStrategyBaseLibFacade {
     address tokenOut,
     uint amountIn,
     uint slippage,
-    uint rewardLiquidationThresholdForTokenOut,
+    uint rewardLiquidationThresholdForTokenIn,
     bool skipValidation
   ) external returns (
     uint spentAmountIn,
@@ -145,7 +145,7 @@ contract ConverterStrategyBaseLibFacade {
       tokenOut,
       amountIn,
       slippage,
-      rewardLiquidationThresholdForTokenOut,
+      rewardLiquidationThresholdForTokenIn,
       skipValidation
     );
   }
@@ -191,7 +191,7 @@ contract ConverterStrategyBaseLibFacade {
     address underlying_,
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
-    uint liquidationThresholdForTargetAsset_,
+    uint[] memory liquidationThresholds_,
     uint overswap_
   ) external returns (
     uint[] memory spentAmounts,
@@ -204,7 +204,7 @@ contract ConverterStrategyBaseLibFacade {
       underlying_,
       converter_,
       liquidator_,
-      liquidationThresholdForTargetAsset_,
+      liquidationThresholds_,
       overswap_
     );
   }
@@ -232,7 +232,7 @@ contract ConverterStrategyBaseLibFacade {
     ITetuConverter tetuConverter,
     ITetuLiquidator liquidator,
     uint indexAsset,
-    uint liquidationThreshold,
+    uint[] memory liquidationThresholds_,
     address[] memory tokens,
     uint[] memory amountsToConvert
   ) external returns (
@@ -243,7 +243,7 @@ contract ConverterStrategyBaseLibFacade {
       tetuConverter,
       liquidator,
       indexAsset,
-      liquidationThreshold,
+      liquidationThresholds_,
       tokens,
       amountsToConvert
     );

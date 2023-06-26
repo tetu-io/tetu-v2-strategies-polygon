@@ -398,7 +398,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     interface IConvertAfterWithdrawParams {
       tokens: MockToken[];
       indexAsset: number;
-      liquidationThreshold: string;
+      liquidationThresholds?: string[];
       amountsToConvert: string[];
       balances: string[];
       prices: string[];
@@ -448,12 +448,18 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         )
       }
 
+      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
+        ? await Promise.all(p.liquidationThresholds.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
+        ))
+        : p.tokens.map(x => BigNumber.from(0));
+
       // make test
       const ret = await facade.callStatic.convertAfterWithdraw(
         converter.address,
         liquidator.address,
         p.indexAsset,
-        parseUnits(p.liquidationThreshold, await p.tokens[p.indexAsset].decimals()),
+        liquidationThresholds,
         p.tokens.map(x => x.address),
         p.amountsToConvert.map(
           (x, index) => parseUnits(x, decimals[index])
@@ -464,7 +470,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         converter.address,
         liquidator.address,
         p.indexAsset,
-        parseUnits(p.liquidationThreshold, await p.tokens[p.indexAsset].decimals()),
+        liquidationThresholds,
         p.tokens.map(x => x.address),
         p.amountsToConvert.map(
           (x, index) => parseUnits(x, decimals[index])
@@ -501,7 +507,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             indexAsset: 1, // usdc
             amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
             balances: ["200", "91", "900"], // dai, usdc, usdt
-            liquidationThreshold: "0",
+            liquidationThresholds: ["0", "0", "0"],
             repays: [
               {
                 collateralAsset: usdc,
@@ -560,7 +566,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               indexAsset: 1, // usdc
               amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
               balances: ["200", "91", "900"], // dai, usdc, usdt
-              liquidationThreshold: "0",
+              liquidationThresholds: ["0", "0", "0"],
               repays: [
                 {
                   collateralAsset: usdc,
@@ -615,13 +621,13 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               indexAsset: 1, // usdc
               amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
               balances: ["200", "91", "900"], // dai, usdc, usdt
-              liquidationThreshold: "400", // (!) this threshold is greater than collateralAmountOut
+              liquidationThresholds: ["51", "0", "231"], // (!) these thresholds are greater than liquidation in-amounts
               repays: [
                 {
                   collateralAsset: usdc,
                   borrowAsset: dai,
                   amountRepay: "150",
-                  collateralAmountOut: "200",       // (!) less than liquidationThreshold
+                  collateralAmountOut: "200",
                   totalDebtAmountOut: "150",
                   totalCollateralAmountOut: "200"
                 },
@@ -629,7 +635,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
                   collateralAsset: usdc,
                   borrowAsset: usdt,
                   amountRepay: "270",
-                  collateralAmountOut: "370",       // (!) less than liquidationThreshold
+                  collateralAmountOut: "370",
                   totalDebtAmountOut: "270",
                   totalCollateralAmountOut: "370"
                 },
@@ -672,7 +678,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             indexAsset: 0, // usdc
             amountsToConvert: ["91", "0"], // usdc, usdt
             balances: ["91", "0"], // usdc, usdt
-            liquidationThreshold: "0",
+            liquidationThresholds: ["0", "0"],
             repays: [],
             liquidations: [],
             prices: ["1", "1"] // for simplicity
@@ -709,7 +715,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             indexAsset: 1, // usdc
             amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
             balances: ["200", "91", "900"], // dai, usdc, usdt
-            liquidationThreshold: "0",
+            liquidationThresholds: ["0", "0", "0"],
             repays: [
               {
                 collateralAsset: usdc,
@@ -1321,9 +1327,9 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             requestedAmount: "1000000", // usdc - we need as much as possible USDC
             tokens: [usdc, dai],
             indexAsset: 0,
-            balances: ["5000", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
+            balances: ["2100", "0"], // usdc, dai - we have enough USDC on balance to completely pay the debt
             prices: ["1", "1"], // for simplicity
-            liquidationThresholds: ["0", "2001"], // (!) the threshold for dai is higher than amountOut
+            liquidationThresholds: ["2101", "0"], // (!) the threshold for USDC is higher than amountIn
             liquidations: [{
               amountIn: "2000", // usdc
               amountOut: "2000", // dai
@@ -1353,7 +1359,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.balances.join()).eq([5000, 0].join());
+          expect(r.balances.join()).eq([2100, 0].join());
         });
       });
       describe("Liquidation threshold is too high to swap", () => {
@@ -1372,7 +1378,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             indexAsset: 0,
             balances: ["8000", "3000"], // usdc, dai - we have enough USDC on balance to completely pay the debt
             prices: ["1", "1"], // for simplicity
-            liquidationThresholds: ["3001", "0"], // (!) the threshold for usdc is higher than token balance
+            liquidationThresholds: ["0", "3001"], // (!) the threshold for DAI is higher than token balance
             liquidations: [{
               amountIn: "3000", // dai
               amountOut: "3000", // usdc
@@ -1457,7 +1463,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.liquidation.tokenOut.address,
         parseUnits(p.liquidation.amountIn, await p.liquidation.tokenIn.decimals()),
         p.slippage || 10_000,
-        parseUnits(p.liquidationThreshold, await p.liquidation.tokenOut.decimals()),
+        parseUnits(p.liquidationThreshold, await p.liquidation.tokenIn.decimals()),
         p?.skipConversionValidation || false
       );
 
@@ -1468,7 +1474,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.liquidation.tokenOut.address,
         parseUnits(p.liquidation.amountIn, await p.liquidation.tokenIn.decimals()),
         p.slippage || 10_000,
-        parseUnits(p.liquidationThreshold, await p.liquidation.tokenOut.decimals()),
+        parseUnits(p.liquidationThreshold, await p.liquidation.tokenIn.decimals()),
         p?.skipConversionValidation || false
       );
       const gasUsed = (await tx.wait()).gasUsed;
@@ -1482,7 +1488,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
     }
 
     describe("Good paths", () => {
-      describe("Amount out > liquidation threshold", () => {
+      describe("Amount in > liquidation threshold", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -1502,7 +1508,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               amountIn: "400",
               amountOut: "800",
             },
-            liquidationThreshold: "799",
+            liquidationThreshold: "399",
           });
         }
 
@@ -1517,7 +1523,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           expect(r.balanceTokenOut).eq(2800);
         });
       });
-      describe("Amount out < liquidation threshold", () => {
+      describe("Amount in < liquidation threshold", () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -1537,7 +1543,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               amountIn: "400",
               amountOut: "800",
             },
-            liquidationThreshold: "801", // (!)
+            liquidationThreshold: "401", // (!)
           });
         }
 
@@ -1572,7 +1578,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               amountIn: "400",
               amountOut: "800",
             },
-            liquidationThreshold: "799",
+            liquidationThreshold: "399",
             isConversionValid: false, // price impact is too high
             skipConversionValidation: true // .. but validation is skipped
           });
@@ -1601,7 +1607,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             amountIn: "400",
             amountOut: "800",
           },
-          liquidationThreshold: "799",
+          liquidationThreshold: "399",
           isConversionValid: false // (!) price impact is too high
         })).revertedWith("TS-16 price impact"); // PRICE_IMPACT
       });
@@ -1617,7 +1623,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             amountOut: "800",
           },
           noLiquidationRoute: true,
-          liquidationThreshold: "799",
+          liquidationThreshold: "399",
           isConversionValid: false // (!) price impact is too high
         })).revertedWith("TS-15 No liquidation route");
       });
@@ -1797,7 +1803,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       tokens: MockToken[];
       indexTargetAsset: number;
       underlying: MockToken;
-      liquidationThresholdForTargetAsset: string;
+      liquidationThresholds?: string[];
       overswap: number;
 
       amounts: string[];
@@ -1846,6 +1852,14 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         await setupIsConversionValid(converter, liquidation, true);
       }
 
+      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
+        ? await Promise.all(p.liquidationThresholds.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
+        ))
+        : p.tokens.map(x => BigNumber.from(0));
+
+
+
       const r = await facade.callStatic.swapToGivenAmountAccess(
         parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
         p.tokens.map(x => x.address),
@@ -1853,7 +1867,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.underlying.address,
         converter.address,
         liquidator.address,
-        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        liquidationThresholds,
         p.overswap
       );
       console.log("r", r);
@@ -1864,7 +1878,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
         p.underlying.address,
         converter.address,
         liquidator.address,
-        parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        liquidationThresholds,
         p.overswap
       );
       const gasUsed = (await tx.wait()).gasUsed;
@@ -1895,7 +1909,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           tokens: [tetu, usdc, usdt, dai],
           indexTargetAsset: 0, // TETU
           underlying: usdc,
-          liquidationThresholdForTargetAsset: "0",
+          liquidationThresholds: ["0", "0", "0", "0"],
           overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
           amounts: ["1000", "2000", "4000", "5000"], // == $100, $400, $1600, $2500
@@ -1940,7 +1954,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           tokens: [tetu, usdc, usdt, dai],
           indexTargetAsset: 0, // TETU
           underlying: usdc,
-          liquidationThresholdForTargetAsset: "0",
+          liquidationThresholds: ["0", "0", "0", "0"],
           overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
           amounts: ["900", "1800", "3600", "4500"], // == $100, $400, $1600, $2500
@@ -3169,8 +3183,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
       });
     });
     describe('Bad paths', () => {
-      describe("liquidationThresholds[main asset] is set", () => {
-        describe("Reward amount > liquidationThresholds[main asset]", () => {
+      describe("liquidationThresholds[reward token] is set", () => {
+        describe("Reward amount > liquidationThresholds[reward asset]", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -3185,7 +3199,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
               rewardAmounts: ["6"],
-              thresholds: [{token: usdc, amount: "0.11"}],
+              thresholds: [{token: tetu, amount: "1.79"}],
               initialBalances: [
                 {token: usdt, amount: "1"},
                 {token: usdc, amount: "2"},
@@ -3213,7 +3227,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             expect(r.rewardTokenBalances.join()).eq(["4.2"].join());
           });
         });
-        describe("liquidationThresholds[main asset] > Reward amount > DEFAULT_LIQUIDATION_THRESHOLD==100_000", () => {
+        describe("liquidationThresholds[reward asset] > Reward amount > DEFAULT_LIQUIDATION_THRESHOLD==100_000", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -3228,7 +3242,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
               rewardAmounts: ["6"],
-              thresholds: [{token: usdc, amount: "0.2"}],
+              thresholds: [{token: tetu, amount: "1.81"}],
               initialBalances: [
                 {token: usdt, amount: "1"},
                 {token: usdc, amount: "2"},
@@ -3256,7 +3270,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             expect(r.rewardTokenBalances.join()).eq(["6"].join());
           });
         });
-        describe("DEFAULT_LIQUIDATION_THRESHOLD > Reward amount > liquidationThresholds[main asset]", () => {
+        describe("DEFAULT_LIQUIDATION_THRESHOLD > Reward amount > liquidationThresholds[reward asset]", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -3268,31 +3282,30 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
               assetIndex: 1,
-              tokens: [usdt, usdc, dai],
-              rewardTokens: [tetu],
+              tokens: [usdc, dai],
+              rewardTokens: [usdt], // usdt is used as reward token to have decimals 6 and simplify calculations
               rewardAmounts: ["6"],
-              thresholds: [{token: usdc, amount: "0.05"}],
+              thresholds: [{token: usdt, amount: "0.012"}],
               initialBalances: [
-                {token: usdt, amount: "1"},
+                {token: usdt, amount: "6"},
                 {token: usdc, amount: "2"},
                 {token: dai, amount: "3"},
-                {token: tetu, amount: "6"}
               ],
-              compoundRatio: 30_000,
+              compoundRatio: 300,
 
-              // 0.1 > 0.09 > 0.05
-              liquidations: [{tokenIn: tetu, tokenOut: usdc, amountIn: "1.8", amountOut: "0.09"}],
+              // 0.1 > 0.018 > 0.012
+              liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "0.018", amountOut: "0.09"}],
               performanceFee: 0
             });
           }
 
           it("should return expected amounts for the forwarder", async () => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.amountsToForward.join()).eq(["4.2"].join());
+            expect(r.amountsToForward.join()).eq(["5.982"].join()); // 6*(100000-300)/100000
           });
           it("should not change balances of secondary depositor assets", async () => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.tokenBalances.join()).eq(["1", "2", "3"].join());
+            expect(r.tokenBalances.join()).eq(["2", "3"].join());
           });
           it("should set expected balances of rewards tokens", async () => {
             const r = await loadFixture(makeRecycleTest);
@@ -3300,8 +3313,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           });
         });
       });
-      describe("liquidationThresholds[reward token] is set", () => {
-        describe("amountToCompound > liquidationThresholds[reward token]", () => {
+      describe("liquidationThresholds[main asset] is set", () => {
+        describe("amountToCompound > liquidationThresholds[main asset]", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -3316,7 +3329,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
               rewardAmounts: ["6"],
-              thresholds: [{token: tetu, amount: "0.7"}],
+              thresholds: [{token: usdc, amount: "0.14"}],
               initialBalances: [
                 {token: usdt, amount: "1"},
                 {token: usdc, amount: "2"},
@@ -3378,55 +3391,13 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             const r = await loadFixture(makeRecycleTest);
             expect(r.amountsToForward.join()).eq(["4.2"].join());
           });
-          it("should not change balances of secondary depositor assets", async () => {
+          it("should change balances", async () => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.tokenBalances.join()).eq(["1", "2", "3"].join());
+            expect(r.tokenBalances.join()).eq(["1", "2.15", "3"].join());
           });
           it("should set expected balances of rewards tokens", async () => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.rewardTokenBalances.join()).eq(["6"].join());
-          });
-        });
-        describe("DEFAULT_LIQUIDATION_THRESHOLD > amountToCompound > liquidationThresholds[main asset]", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeRecycleTest(): Promise<IRecycleTestResults> {
-            return makeRecycle({
-              assetIndex: 0,
-              tokens: [usdc, dai],
-              rewardTokens: [usdt],
-              rewardAmounts: ["0.04"],
-              thresholds: [{token: usdc, amount: "0.01"}],
-              initialBalances: [
-                {token: usdt, amount: "1"},
-                {token: usdc, amount: "2"},
-                {token: dai, amount: "3"},
-              ],
-              compoundRatio: 40_000,
-
-              // 0.1 > 0.04*0.4 > 0.01
-              liquidations: [],
-              performanceFee: 0
-            });
-          }
-
-          it("should return expected amounts for the forwarder", async () => {
-            const r = await loadFixture(makeRecycleTest);
-            expect(r.amountsToForward.join()).eq(["0.024"].join());
-          });
-          it("should not change balances of secondary depositor assets", async () => {
-            const r = await loadFixture(makeRecycleTest);
-            expect(r.tokenBalances.join()).eq(["2", "3"].join());
-          });
-          it("should set expected balances of rewards tokens", async () => {
-            const r = await loadFixture(makeRecycleTest);
-            expect(r.rewardTokenBalances.join()).eq(["1"].join());
+            expect(r.rewardTokenBalances.join()).eq(["4.2"].join());
           });
         });
       });
@@ -3477,7 +3448,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             expect(r.amountToPerformanceAndInsurance).eq("7");
           });
         });
-        describe("liquidationThresholds[main asset] > performance > DEFAULT_LIQUIDATION_THRESHOLD==100_000", () => {
+        describe("liquidationThresholds[secondary asset] > performance > DEFAULT_LIQUIDATION_THRESHOLD==100_000", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -3492,7 +3463,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               tokens: [usdt, usdc, dai],
               rewardTokens: [dai],
               rewardAmounts: ["12"],
-              thresholds: [{token: usdc, amount: "6.16"}],
+              thresholds: [{token: dai, amount: "6.1"}],
               initialBalances: [
                 {token: usdt, amount: "1"},
                 {token: usdc, amount: "2"},
@@ -3500,7 +3471,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
               ],
               compoundRatio: 30_000,
 
-              // 6.16 > (12*0.5 => 6.15) > 100_000e-18
+              // 6.1 > (12*0.5 = 6) > 100_000e-18
               liquidations: [{tokenIn: dai, tokenOut: usdc, amountIn: "6", amountOut: "6.15"}],
               performanceFee: 50_000
             });
@@ -3523,7 +3494,7 @@ describe('ConverterStrategyBaseLibFixTest', () => {
             expect(r.amountToPerformanceAndInsurance).eq("0");
           });
         });
-        describe("DEFAULT_LIQUIDATION_THRESHOLD > performance > liquidationThresholds[main asset]", () => {
+        describe("DEFAULT_LIQUIDATION_THRESHOLD > performance > liquidationThresholds[secondary asset]", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -3535,19 +3506,19 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           async function makeRecycleTest(): Promise<IRecycleTestResults> {
             return makeRecycle({
               assetIndex: 0,
-              tokens: [usdc, dai],
-              rewardTokens: [dai],
+              tokens: [usdc, usdt],
+              rewardTokens: [usdt],
               rewardAmounts: ["0.08"],
-              thresholds: [{token: usdc, amount: "0.01"}],
+              thresholds: [{token: usdt, amount: "0.01"}],
               initialBalances: [
-                {token: usdt, amount: "1"},
-                {token: usdc, amount: "2"},
                 {token: dai, amount: "1"},
+                {token: usdc, amount: "2"},
+                {token: usdt, amount: "1"},
               ],
               compoundRatio: 40_000,
 
               // 0.1 > 0.08*0.5 > 0.01
-              liquidations: [{tokenIn: dai, tokenOut: usdc, amountIn: "0.04", amountOut: "0.09"}],
+              liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "0.04", amountOut: "0.09"}],
               performanceFee: 50_000
             });
           }

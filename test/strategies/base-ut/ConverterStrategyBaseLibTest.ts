@@ -1964,7 +1964,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       indexTokenIn: number;
       liquidations: ILiquidationParams[];
       underlying: MockToken;
-      liquidationThresholdForTargetAsset: string;
+      liquidationThresholds?: string[];
     }
     interface ISwapToGetAmountResults {
       amountSpent: BigNumber;
@@ -1984,6 +1984,13 @@ describe('ConverterStrategyBaseLibTest', () => {
         await setupMockedLiquidation(liquidator, liquidation);
         await setupIsConversionValid(converter, liquidation, true);
       }
+
+      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
+        ? await Promise.all(p.liquidationThresholds.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
+        ))
+        : p.tokens.map(x => BigNumber.from(0));
+
       const params = {
         targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
         tokens: p.tokens.map(x => x.address),
@@ -1992,7 +1999,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         amounts: p.amounts.map((x, index) => parseUnits(x, decimals[index])),
         converter: converter.address,
         liquidator: liquidator.address,
-        liquidationThresholdForTargetAsset: parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        liquidationThresholds,
         overswap: p.overswap
       };
       const vars = {
@@ -2021,7 +2028,6 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokens: [usdc, usdt, tetu],
             prices: ["1", "1", "0.5"],
             overswap: 0,
-            liquidationThresholdForTargetAsset: "0",
             amounts: ["1234", "0", "1000"], // no USDT on balance, but we have some USDC and TETU
             underlying: usdc,
             targetAmount: "117", // we need to get 117 USDT
@@ -2060,7 +2066,7 @@ describe('ConverterStrategyBaseLibTest', () => {
           tokens: [usdc, usdt, tetu],
           prices: ["1", "1", "0.5"],
           overswap: 0,
-          liquidationThresholdForTargetAsset: "199", // (!) the threshold 199 exceeds amountOut = 99
+          liquidationThresholds: ["0", "0", "201"], // (!) the threshold 201 exceeds amountIn = 200
           amounts: ["1234", "0", "1000"], // no USDT on balance, but we have some USDC and TETU
           underlying: usdc,
           targetAmount: "117", // we need to get 117 USDT
@@ -2098,7 +2104,6 @@ describe('ConverterStrategyBaseLibTest', () => {
           tokens: [usdc, usdt, tetu],
           prices: ["1", "1", "0.5"],
           overswap: 50_000, // (!) we are going to swap twice more than it's necessary according calculations by prices
-          liquidationThresholdForTargetAsset: "0",
           amounts: ["1234", "0", "1000"], // no USDT on balance, but we have some USDC and TETU
           underlying: usdc,
           targetAmount: "117", // we need to get 117 USDT
@@ -2136,7 +2141,6 @@ describe('ConverterStrategyBaseLibTest', () => {
           tokens: [usdc, usdt, tetu],
           prices: ["1", "1", "0.5"],
           overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-          liquidationThresholdForTargetAsset: "0",
           amounts: ["1234", "0", "200"], // (!) we need to swap 300 tetu, but we have only 200 tetu
           underlying: usdc,
           targetAmount: "117", // we need to get 117 USDT
@@ -2176,7 +2180,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       tokens: MockToken[];
       indexTargetAsset: number;
       underlying: MockToken;
-      liquidationThresholdForTargetAsset: string;
+      liquidationThresholds?: string[];
       overswap: number;
 
       amounts: string[];
@@ -2216,6 +2220,12 @@ describe('ConverterStrategyBaseLibTest', () => {
         await setupIsConversionValid(converter, liquidation, true);
       }
 
+      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
+        ? await Promise.all(p.liquidationThresholds.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
+        ))
+        : p.tokens.map(x => BigNumber.from(0));
+
       const r = await facade.callStatic._swapToGivenAmountAccess({
         targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
         tokens: p.tokens.map(x => x.address),
@@ -2224,7 +2234,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         amounts: p.amounts.map((x, index) => parseUnits(x, decimals[index])),
         converter: converter.address,
         liquidator: liquidator.address,
-        liquidationThresholdForTargetAsset: parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        liquidationThresholds,
         overswap: p.overswap
       });
       console.log("r", r);
@@ -2236,7 +2246,7 @@ describe('ConverterStrategyBaseLibTest', () => {
         amounts: p.amounts.map((x, index) => parseUnits(x, decimals[index])),
         converter: converter.address,
         liquidator: liquidator.address,
-        liquidationThresholdForTargetAsset: parseUnits(p.liquidationThresholdForTargetAsset, decimals[p.indexTargetAsset]),
+        liquidationThresholds,
         overswap: p.overswap
       });
       const gasUsed = (await tx.wait()).gasUsed;
@@ -2254,7 +2264,6 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokens: [usdc, tetu],
             indexTargetAsset: 0, // USDC
             underlying: usdc,
-            liquidationThresholdForTargetAsset: "0",
             overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
             amounts: ["0", "1000"],
@@ -2293,7 +2302,6 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokens: [usdc, tetu],
             indexTargetAsset: 1, // TETU
             underlying: usdc,
-            liquidationThresholdForTargetAsset: "0",
             overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
             amounts: ["1000", "0"],
@@ -2334,7 +2342,6 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokens: [usdc, tetu, weth],
             indexTargetAsset: 1, // TETU
             underlying: usdc,
-            liquidationThresholdForTargetAsset: "0",
             overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
             amounts: ["1000", "0", "1000"],
@@ -2375,7 +2382,6 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokens: [usdc, tetu, weth],
             indexTargetAsset: 1, // TETU
             underlying: usdc,
-            liquidationThresholdForTargetAsset: "0",
             overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
             amounts: ["1400", "0", "50"],
@@ -2429,7 +2435,6 @@ describe('ConverterStrategyBaseLibTest', () => {
             tokens: [usdc, tetu, weth],
             indexTargetAsset: 1, // TETU
             underlying: usdc,
-            liquidationThresholdForTargetAsset: "0",
             overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
             amounts: ["150", "0", "50"],
@@ -2485,7 +2490,6 @@ describe('ConverterStrategyBaseLibTest', () => {
           tokens: [usdc, tetu],
           indexTargetAsset: 1, // TETU
           underlying: usdc,
-          liquidationThresholdForTargetAsset: "0",
           overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
           amounts: ["1000", "0"],
