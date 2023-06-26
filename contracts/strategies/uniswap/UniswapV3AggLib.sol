@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "hardhat/console.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
@@ -116,14 +115,11 @@ library UniswapV3AggLib {
       2 // p.tokens.length
     );
 
-    console.log("_quoteWithdrawStep.start");
     uint indexTokenToSwapPlus1;
     (indexTokenToSwapPlus1, amountToSwap,) = ConverterStrategyBaseLib._getIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN, prices, decs);
     if (indexTokenToSwapPlus1 != 0) {
       tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
-    console.log("_quoteWithdrawStep.tokenToSwap", tokenToSwap);
-    console.log("_quoteWithdrawStep.amountToSwap", amountToSwap);
     return (tokenToSwap, amountToSwap);
   }
 
@@ -139,22 +135,13 @@ library UniswapV3AggLib {
         2 // p.tokens.length
     );
 
-    console.log("makeWithdrawStep.token0 initial balance", IERC20(p.tokens[0]).balanceOf(address(this)));
-    console.log("makeWithdrawStep.token1 initial balance", IERC20(p.tokens[1]).balanceOf(address(this)));
-
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._getIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN, prices, decs);
-    console.log("makeWithdrawStep.indexTokenToSwapPlus1", idxToSwap1);
-    console.log("makeWithdrawStep.amountToSwap", amountToSwap);
-    console.log("makeWithdrawStep.indexRepayTokenPlus1", idxToRepay1);
 
     if (idxToSwap1 != 0) {
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
-      console.log("makeWithdrawStep.token0 after swap", IERC20(p.tokens[0]).balanceOf(address(this)));
-      console.log("makeWithdrawStep.token1 after swap", IERC20(p.tokens[1]).balanceOf(address(this)));
     }
 
     if (idxToRepay1 != 0) {
-      console.log("makeWithdrawStep._repayDebt.amount", IERC20(p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET]).balanceOf(address(this)));
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
         p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
@@ -162,10 +149,6 @@ library UniswapV3AggLib {
         IERC20(p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET]).balanceOf(address(this))
       );
     }
-
-    console.log("makeWithdrawStep.token0 final balance", IERC20(p.tokens[0]).balanceOf(address(this)));
-    console.log("makeWithdrawStep.token1 final balance", IERC20(p.tokens[1]).balanceOf(address(this)));
-    console.log("completed", idxToRepay1 == 0);
 
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;
@@ -180,21 +163,12 @@ library UniswapV3AggLib {
   ) internal returns (
     uint spentAmountIn
   ) {
-    console.log("_swap");
     if (amountIn > p.liquidationThresholds[indexIn]) {
-      console.log("_swap.amountIn", amountIn);
-      console.log("_swap.aggParams.amount", aggParams.amountToSwap);
       AppLib.approveIfNeeded(p.tokens[indexIn], aggParams.amountToSwap, aggParams.aggregator);
 
       uint availableBalanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
-      console.log("_swap.availableBalanceTokenIn.before", AppLib.balance(p.tokens[indexIn]));
-      console.log("_swap.availableBalanceTokenOut.before", availableBalanceTokenOutBefore);
-      console.log("_swap.indexIn", indexIn);
-      console.log("_swap.INDEX_ASSET", IDX_ASSET);
-      console.log("_swap.indexOut", indexOut);
 
       if (aggParams.useLiquidator) {
-        console.log("Swap using liquidator");
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
           p.converter,
           ITetuLiquidator(aggParams.aggregator),
@@ -206,7 +180,6 @@ library UniswapV3AggLib {
           true
         );
       } else {
-        console.log("Swap using aggregator");
         UniswapV3DebtLib._checkSwapRouter(aggParams.aggregator);
 
         // let's ensure that "next swap" is made using correct token
@@ -214,14 +187,10 @@ library UniswapV3AggLib {
         require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
         (bool success, bytes memory result) = aggParams.aggregator.call(aggParams.swapData);
-        console.log("_swap.call.made", success);
         require(success, string(result));
 
         spentAmountIn = aggParams.amountToSwap;
       }
-
-      console.log("_swap.availableBalanceTokenIn.after", AppLib.balance(p.tokens[indexIn]));
-      console.log("_swap.availableBalanceTokenOut.after", AppLib.balance(p.tokens[indexOut]));
 
       require(
         p.converter.isConversionValid(

@@ -234,24 +234,18 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Fix price changes, exit from pool, prepare to calls of quoteWithdrawByAgg/withdrawByAggStep in the loop
   function withdrawByAggEntry() external {
-    console.log("withdrawByAggEntry");
-    console.log("investedAssets", investedAssets());
-
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
     (, uint profitToCover) = _fixPriceChanges(true);
     uint oldTotalAssets = totalAssets() - profitToCover;
-    console.log("withdrawByAggEntry.profitToCover", profitToCover);
 
     // withdraw all liquidity from pool; after disableFuse() liquidity is zero
     if (state.totalLiquidity > 0) {
-      console.log("withdrawByAgg._depositorEmergencyExit.totalLiquidity", state.totalLiquidity);
       _depositorEmergencyExit();
     }
 
     _updateInvestedAssets();
-    console.log("investedAssets", investedAssets());
   }
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep}
@@ -296,7 +290,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
     WithdrawByAggStepLocal memory v;
 
-    console.log("withdrawByAggStep");
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
@@ -324,28 +317,23 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       aggregator_ == address(0),
       propNotUnderlying18
     );
-    console.log("withdrawByAggStep.call.withdrawByAgg.finish.gasleft", gasleft());
 
     _updateInvestedAssets();
-    console.log("investedAssets", investedAssets());
   }
 
 
 
   // todo for tests only, remove
   function withdrawAllByLiquidator(bool direction, uint amount, address agg, bytes memory swapData) external {
-    console.log("withdrawByAgg");
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
     (, uint profitToCover) = _fixPriceChanges(true);
     uint oldTotalAssets = totalAssets() - profitToCover;
-    console.log("withdrawByAgg.profitToCover", profitToCover);
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
     if (state.totalLiquidity > 0) {
-      console.log("withdrawByAgg.state.totalLiquidity", state.totalLiquidity);
       _depositorEmergencyExit();
     }
 
@@ -364,7 +352,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 //      indexAsset,
 //      thresholds
 //    );
-//    console.log("withdrawByAgg.call.closePositionsToGetAmount.finish.gasleft", gasleft());
 
     address[] memory tokens = _depositorPoolAssets();
     uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
