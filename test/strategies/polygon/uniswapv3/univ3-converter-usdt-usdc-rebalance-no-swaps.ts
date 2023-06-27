@@ -35,13 +35,16 @@ import {
 import { BigNumber } from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {Uniswapv3StateUtils} from "./utils/Uniswapv3StateUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 
 
 const { expect } = chai;
 
-describe('univ3-converter-usdt-usdc-simple', function() {
+/**
+ * univ3-converter-usdt-usdc-simple + rebalanceNoSwaps
+ */
+describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -59,7 +62,6 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let asset: string;
   let assetCtr: IERC20Metadata;
   let decimals: number;
-  let stateParams: IStateParams;
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
@@ -120,11 +122,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
-    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address);
-
-    stateParams = {
-      mainAssetSymbol: await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer).symbol()
-    }
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
   });
 
   after(async function() {
@@ -182,7 +180,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state1 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s1");
+      const state1 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s1");
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -201,8 +199,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state2 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s2");
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2], stateParams,true);
+      const state2 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s2");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2], true);
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
       expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, DELTA);
@@ -215,8 +213,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state3 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s3");
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], stateParams,true);
+      const state3 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s3");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], true);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, DELTA);
@@ -229,8 +227,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state4 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s4");
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], stateParams,true);
+      const state4 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s4");
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], true);
 
       const sharePriceAfterWithdraw3 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, DELTA);
@@ -300,8 +298,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         );
       }
 
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `d${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`d${i}`));
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -336,8 +334,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         );
       }
 
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`r${i}`));
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
 
       if (i % 2 === 0) {
         const stateHardworkEvents = await doHardWorkForStrategy(
@@ -353,7 +351,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           assetCtr,
           decimals,
         );
-        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `h${i}`)); // todo: stateHardworkEvents
+        states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`h${i}`, stateHardworkEvents));
       }
 
 
@@ -397,8 +395,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       // decrease swap amount slowly
       swapAmount = swapAmount.div(2);
 
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`w${i}`));
+      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);

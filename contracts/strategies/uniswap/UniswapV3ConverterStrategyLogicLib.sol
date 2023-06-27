@@ -914,7 +914,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.rebalanceTickRange
     ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
 
-    vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -952,11 +952,12 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
+    uint covered;
     if (loss > 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+      covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
     }
 
-    emit Rebalanced(loss);
+    emit Rebalanced(loss, covered);
     fuseEnabledOut = false;
   }
 }

@@ -503,7 +503,7 @@ export class StateUtilsNum {
   /**
    * Put data of a state into a separate column
    */
-  public static saveListStatesToCSVColumns(pathOut: string, states: IStateNum[], params: IStateParams) {
+  public static saveListStatesToCSVColumns(pathOut: string, states: IStateNum[], params: IStateParams, override: boolean = true) {
     console.log("saveListStatesToCSVColumns", states);
     const { stateHeaders } = this.getCsvData(params);
     const headers = [
@@ -576,7 +576,7 @@ export class StateUtilsNum {
       item.fixPriceChanges?.assetAfter,
     ]);
 
-    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'w' });
+    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});
     for (let i = 0; i < stateHeaders.length; ++i) {
       const line = [stateHeaders[i], ...rows.map(x => x[i])];
       writeFileSync(

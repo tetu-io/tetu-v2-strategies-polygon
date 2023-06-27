@@ -77,6 +77,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     poolAssets = new address[](2);
     poolAssets[0] = state.tokenA;
     poolAssets[1] = state.tokenB;
+    console.log("_depositorPoolAssets", poolAssets[0], poolAssets[1]);
   }
 
   /// @notice Returns the pool weights and the total weight.
@@ -131,15 +132,20 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   function _depositorEnter(
     uint[] memory amountsDesired_
   ) override internal virtual returns (uint[] memory amountsConsumed, uint liquidityOut) {
+    console.log("_depositorEnter.amountsDesired_", amountsDesired_[0], amountsDesired_[1]);
     (amountsConsumed, liquidityOut, state.totalLiquidity) = UniswapV3ConverterStrategyLogicLib.enter(state.pool, state.lowerTick, state.upperTick, amountsDesired_, state.totalLiquidity, state.depositorSwapTokens);
+    console.log("_depositorEnter.amountsConsumed", amountsConsumed[0], amountsConsumed[1]);
+    console.log("_depositorEnter.liquidityOut", liquidityOut);
   }
 
   /// @notice Handles the withdrawal operation.
   /// @param liquidityAmount The amount of liquidity to be withdrawn.
   /// @return amountsOut The amounts of the tokens withdrawn.
   function _depositorExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
+    console.log("_depositorExit.liquidityAmount", liquidityAmount);
     (uint fee0, uint fee1) = getFees();
     amountsOut = UniswapV3ConverterStrategyLogicLib.exit(state, uint128(liquidityAmount));
+    console.log("_depositorExit.amountsOut", amountsOut[0], amountsOut[1]);
     UniswapV3ConverterStrategyLogicLib.sendFeeToProfitHolder(state, fee0, fee1);
   }
 
