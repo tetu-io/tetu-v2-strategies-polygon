@@ -35,7 +35,7 @@ library UniswapV3ConverterStrategyLogicLib {
   //////////////////////////////////////////
 
   event FuseTriggered();
-  event Rebalanced(uint loss);
+  event Rebalanced(uint loss, uint covered);
   event DisableFuse();
   event NewFuseThreshold(uint newFuseThreshold);
   event UniV3FeesClaimed(uint fee0, uint fee1);
@@ -66,14 +66,6 @@ library UniswapV3ConverterStrategyLogicLib {
     uint fuseThreshold;
     uint lastPrice;
     address strategyProfitHolder;
-  }
-
-  struct TryCoverLossParams {
-    IUniswapV3Pool pool;
-    address tokenA;
-    address tokenB;
-    bool depositorSwapTokens;
-    uint oldInvestedAssets;
   }
 
   struct RebalanceLocalVariables {
@@ -108,7 +100,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
   function disableFuse(State storage state, ITetuConverter converter) external {
     state.isFuseTriggered = false;
-    state.lastPrice = getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
+    state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
     emit DisableFuse();
   }
 
@@ -141,16 +133,6 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   /// @notice Get the price ratio of the two given tokens from the oracle.
-  /// @param converter The Tetu converter.
-  /// @param tokenA The first token address.
-  /// @param tokenB The second token address.
-  /// @return The price ratio of the two tokens.
-  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) public view returns (uint) {
-    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
-    uint priceA = oracle.getAssetPrice(tokenA);
-    uint priceB = oracle.getAssetPrice(tokenB);
-    return priceB * 1e18 / priceA;
-  }
 
   /// @notice Check if the fuse is enabled based on the price difference and fuse threshold.
   /// @param oldPrice The old price.
@@ -196,7 +178,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.isStablePool = true;
       state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
       emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
-      state.lastPrice = getOracleAssetsPrice(ITetuConverter(converter), state.tokenA, state.tokenB);
+      state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(ITetuConverter(converter), state.tokenA, state.tokenB);
     }
   }
 
@@ -379,15 +361,16 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     uint[] memory amountsOut = quoteExit(state, state.totalLiquidity);
+    amountsOut[0] += AppLib.balance(tokenA);
+    amountsOut[1] += AppLib.balance(tokenB);
 
     if (amountsOut[1] < debtAmount) {
       uint tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
       uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
       // add 1% gap for price impact
       needToSellTokenA += needToSellTokenA / UniswapV3DebtLib.SELL_GAP;
-      uint b = amountsOut[0] + AppLib.balance(tokenA);
-      if (b > 0) {
-        needToSellTokenA = Math.min(needToSellTokenA, b - 1);
+      if (amountsOut[0] > 0) {
+        needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] - 1);
       } else {
         needToSellTokenA = 0;
       }
@@ -687,7 +670,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.rebalanceTickRange
     ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
 
-    vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -742,11 +725,12 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
+    uint covered;
     if (loss > 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+      covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
     }
 
-    emit Rebalanced(loss);
+    emit Rebalanced(loss, covered);
   }
 
   function rebalanceSwapByAgg(
@@ -795,7 +779,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.rebalanceTickRange
     ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
 
-    vars.newPrice = getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -845,11 +829,12 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
+    uint covered;
     if (loss > 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(0, loss);
+      covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
     }
 
-    emit Rebalanced(loss);
+    emit Rebalanced(loss, covered);
   }
 
   function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {

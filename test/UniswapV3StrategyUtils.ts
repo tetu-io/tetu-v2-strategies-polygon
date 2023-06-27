@@ -12,9 +12,9 @@ import { formatUnits } from 'ethers/lib/utils';
 
 
 export class UniswapV3StrategyUtils {
-  public static extractRebalanceLoss(cr: ContractReceipt): BigNumber {
+  public static extractRebalanceLoss(cr: ContractReceipt): BigNumber[] {
     const abi = [
-      "event Rebalanced(uint loss)",
+      "event Rebalanced(uint loss, uint covered)",
     ];
     const iface = new ethers.utils.Interface(abi)
     const topic = iface.getEventTopic(iface.getEvent('Rebalanced'))
@@ -22,14 +22,14 @@ export class UniswapV3StrategyUtils {
       for (const event of cr.events) {
         if (event.topics.includes(topic)) {
           const decoded = ethers.utils.defaultAbiCoder.decode(
-            ['uint'],
+            ['uint', 'uint'],
             event.data
           )
-          return decoded[0];
+          return [decoded[0], decoded[1]];
         }
       }
     }
-    return BigNumber.from(0)
+    return [BigNumber.from(0),BigNumber.from(0)]
   }
 
   /**

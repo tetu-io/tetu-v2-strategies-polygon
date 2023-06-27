@@ -291,6 +291,18 @@ library ConverterStrategyBaseLib {
     }
     return type(uint).max;
   }
+
+  /// @notice Get the price ratio of the two given tokens from the oracle.
+  /// @param converter The Tetu converter.
+  /// @param tokenA The first token address.
+  /// @param tokenB The second token address.
+  /// @return The price ratio of the two tokens.
+  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (uint) {
+    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
+    uint priceA = oracle.getAssetPrice(tokenA);
+    uint priceB = oracle.getAssetPrice(tokenB);
+    return priceB * 1e18 / priceA;
+  }
   //endregion View functions
 
   /////////////////////////////////////////////////////////////////////

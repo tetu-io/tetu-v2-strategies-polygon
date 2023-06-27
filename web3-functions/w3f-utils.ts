@@ -33,20 +33,20 @@ export async function quoteOneInch(
   chainId: number,
   protocols?: string,
 ): Promise<IAggQuote | undefined> {
+  const params = {
+    fromTokenAddress,
+    toTokenAddress,
+    amount,
+    fromAddress,
+    slippage: '0.5',
+    disableEstimate: true,
+    allowPartialFill: false,
+    protocols,
+  };
+  const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
   try {
-    const params = {
-      fromTokenAddress,
-      toTokenAddress,
-      amount,
-      fromAddress,
-      slippage: '0.5',
-      disableEstimate: true,
-      allowPartialFill: false,
-      protocols,
-    };
-    const url = `https://api.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
     const quote: { tx?: { to?: string, data?: string }, toTokenAmount?: string } = await ky
-      .get(url, { timeout: 5_000, retry: 0 })
+      .get(url, { timeout: 5_000, retry: 3 })
       .json();
     if (quote && quote.tx && quote.tx.data && quote.tx.to && quote.toTokenAmount) {
       return {
@@ -55,11 +55,11 @@ export async function quoteOneInch(
         outAmount: quote.toTokenAmount,
       };
     } else {
-      console.error('1inch can not fetch', quote);
+      console.error('1inch can not fetch', url, quote, '\n');
       return undefined;
     }
   } catch (e) {
-    console.error('1inch error', e);
+    console.error('1inch error', url, e, '\n');
     return undefined;
   }
 }
@@ -71,21 +71,22 @@ export async function quoteOpenOcean(
   account: string,
   chainId: number,
 ): Promise<IAggQuote | undefined> {
-  try {
-    const params = {
-      chain: openOceanChains[chainId.toString()],
-      inTokenAddress,
-      outTokenAddress,
-      amount,
-      account,
-      slippage: '0.5',
-      gasPrice: 30,
-    };
 
-    const url = `https://open-api.openocean.finance/v3/${openOceanChains[chainId.toString()]}/swap_quote?${(new URLSearchParams(
-      JSON.parse(JSON.stringify(params)))).toString()}`;
+  const params = {
+    chain: openOceanChains[chainId.toString()],
+    inTokenAddress,
+    outTokenAddress,
+    amount,
+    account,
+    slippage: '0.5',
+    gasPrice: 30,
+  };
+
+  const url = `https://open-api.openocean.finance/v3/${openOceanChains[chainId.toString()]}/swap_quote?${(new URLSearchParams(
+    JSON.parse(JSON.stringify(params)))).toString()}`;
+  try {
     const quote: { data: { to?: string, data?: string, outAmount?: string } } = await ky
-      .get(url, { timeout: 5_000, retry: 0 })
+      .get(url, { timeout: 5_000, retry: 3 })
       .json();
     if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
       return {
@@ -94,11 +95,11 @@ export async function quoteOpenOcean(
         outAmount: quote.data.outAmount,
       };
     } else {
-      console.error('open ocean can not fetch', quote);
+      console.error('open ocean can not fetch', url, quote, '\n');
       return undefined;
     }
   } catch (e) {
-    console.error('open ocean error', e);
+    console.error('open ocean error', url, e, '\n');
     return undefined;
   }
 }
