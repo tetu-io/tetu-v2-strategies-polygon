@@ -35,15 +35,12 @@ import {
 import { BigNumber } from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {Uniswapv3StateUtils} from "./utils/Uniswapv3StateUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 
 
 const { expect } = chai;
 
-/**
- * univ3-converter-usdt-usdc-simple + rebalanceNoSwaps
- */
 describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
   let snapshotBefore: string;
@@ -62,6 +59,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
   let asset: string;
   let assetCtr: IERC20Metadata;
   let decimals: number;
+  let stateParams: IStateParams;
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
@@ -122,7 +120,11 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
     const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
-    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
+    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address);
+
+    stateParams = {
+      mainAssetSymbol: await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer).symbol()
+    }
   });
 
   after(async function() {
@@ -160,8 +162,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       decimals,
     );
 
+    const pathOut = `./tmp/deposit_full_exit_states.csv`;
     for (let i = 0; i < cycles; i++) {
-      const pathOut = `./tmp/deposit_full_exit_states.${i}.csv`;
       console.log('------------------ CYCLE', i, '------------------');
 
       const sharePriceBefore = await vault.sharePrice();
@@ -180,7 +182,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         assetCtr,
         decimals,
       );
-      const state1 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s1");
+      const state1 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `d1-${i}`);
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -199,8 +201,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         assetCtr,
         decimals,
       );
-      const state2 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s2");
-      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2], true);
+      const state2 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `w1-${i}`);
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2], stateParams,true);
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
       expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, DELTA);
@@ -213,8 +215,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         assetCtr,
         decimals,
       );
-      const state3 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s3");
-      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], true);
+      const state3 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `w2-${i}`);
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], stateParams,true);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, DELTA);
@@ -227,8 +229,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         assetCtr,
         decimals,
       );
-      const state4 = await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade, "s4");
-      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], true);
+      const state4 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `d4-${i}`);
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], stateParams,true);
 
       const sharePriceAfterWithdraw3 = await vault.sharePrice();
       expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, DELTA);
@@ -298,8 +300,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         );
       }
 
-      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`d${i}`));
-      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
+      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `d${i}`));
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -334,8 +336,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         );
       }
 
-      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`r${i}`));
-      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
+      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`));
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
       if (i % 2 === 0) {
         const stateHardworkEvents = await doHardWorkForStrategy(
@@ -351,7 +353,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
           assetCtr,
           decimals,
         );
-        states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`h${i}`, stateHardworkEvents));
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `h${i}`)); // todo: stateHardworkEvents
       }
 
 
@@ -395,8 +397,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       // decrease swap amount slowly
       swapAmount = swapAmount.div(2);
 
-      states.push(await Uniswapv3StateUtils.getState(signer2, signer, strategy, vault, facade,`w${i}`));
-      await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states, true);
+      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`));
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);

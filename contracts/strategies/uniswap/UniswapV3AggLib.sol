@@ -45,11 +45,18 @@ library UniswapV3AggLib {
     address tokenToSwap,
     uint amountToSwap
   ){
-    ConverterStrategyBaseLib.InputParams memory p = ConverterStrategyBaseLib.InputParams({
+    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
+      tokens,
+      2 // p.tokens.length
+    );
+    ConverterStrategyBaseLib.PlanInputParams memory p = ConverterStrategyBaseLib.PlanInputParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
-      propNotUnderlying18: propNotUnderlying18
+      propNotUnderlying18: propNotUnderlying18,
+      prices: prices,
+      decs: decs
     });
     return _quoteWithdrawStep(p);
   }
@@ -81,11 +88,19 @@ library UniswapV3AggLib {
   ) external returns (
     bool completed
   ){
-    ConverterStrategyBaseLib.InputParams memory p = ConverterStrategyBaseLib.InputParams({
+    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
+      tokens,
+      2 // p.tokens.length
+    );
+
+    ConverterStrategyBaseLib.PlanInputParams memory p = ConverterStrategyBaseLib.PlanInputParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
-      propNotUnderlying18: propNotUnderlying18
+      propNotUnderlying18: propNotUnderlying18,
+      prices: prices,
+      decs: decs
     });
     SwapByAggParams memory aggParams = SwapByAggParams({
       tokenToSwap: tokenToSwap_,
@@ -105,18 +120,12 @@ library UniswapV3AggLib {
   ///         Function returns info for first swap only.
   /// @return tokenToSwap What token should be swapped. Zero address if no swap is required
   /// @return amountToSwap Amount to swap. Zero if no swap is required.
-  function _quoteWithdrawStep(ConverterStrategyBaseLib.InputParams memory p) internal returns (
+  function _quoteWithdrawStep(ConverterStrategyBaseLib.PlanInputParams memory p) internal returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
-    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
-      IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
-      p.tokens,
-      2 // p.tokens.length
-    );
-
     uint indexTokenToSwapPlus1;
-    (indexTokenToSwapPlus1, amountToSwap,) = ConverterStrategyBaseLib._getIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN, prices, decs);
+    (indexTokenToSwapPlus1, amountToSwap,) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
     if (indexTokenToSwapPlus1 != 0) {
       tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
@@ -126,16 +135,10 @@ library UniswapV3AggLib {
   /// @notice Make one iteration of withdraw. Each iteration can make 0 or 1 swap only
   ///         We can make only 1 of the following 3 operations per single call:
   ///         1) repay direct debt 2) repay reverse debt 3) swap leftovers to underlying
-  function _withdrawStep(ConverterStrategyBaseLib.InputParams memory p, SwapByAggParams memory aggParams) internal returns (
+  function _withdrawStep(ConverterStrategyBaseLib.PlanInputParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
-    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
-      IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
-        p.tokens,
-        2 // p.tokens.length
-    );
-
-    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._getIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN, prices, decs);
+    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
 
     if (idxToSwap1 != 0) {
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
@@ -155,7 +158,7 @@ library UniswapV3AggLib {
   }
 
   function _swap(
-    ConverterStrategyBaseLib.InputParams memory p,
+    ConverterStrategyBaseLib.PlanInputParams memory p,
     SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,

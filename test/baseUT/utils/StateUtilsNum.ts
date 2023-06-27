@@ -504,7 +504,7 @@ export class StateUtilsNum {
    * Put data of a state into a separate column
    */
   public static saveListStatesToCSVColumns(pathOut: string, states: IStateNum[], params: IStateParams, override: boolean = true) {
-    console.log("saveListStatesToCSVColumns", states);
+    // console.log("saveListStatesToCSVColumns", states);
     const { stateHeaders } = this.getCsvData(params);
     const headers = [
       '',

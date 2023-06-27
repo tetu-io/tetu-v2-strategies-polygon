@@ -62,6 +62,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let stateParams: IStateParams;
 
   before(async function() {
+    // we need to display full objects, so we use util.inspect, see
+    // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
+    require("util").inspect.defaultOptions.depth = null;
+
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
     gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
@@ -162,8 +166,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       decimals,
     );
 
+    const pathOut = `./tmp/deposit_full_exit_states.csv`;
     for (let i = 0; i < cycles; i++) {
-      const pathOut = `./tmp/deposit_full_exit_states.${i}.csv`;
       console.log('------------------ CYCLE', i, '------------------');
 
       const sharePriceBefore = await vault.sharePrice();
@@ -182,7 +186,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state1 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s1");
+      const state1 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `d1-${i}`);
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -201,7 +205,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state2 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s2");
+      const state2 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `w2-${i}`);
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2], stateParams,true);
 
       const sharePriceAfterWithdraw = await vault.sharePrice();
@@ -215,7 +219,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state3 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s3");
+      const state3 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `w3-${i}`);
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], stateParams,true);
 
       const sharePriceAfterWithdraw2 = await vault.sharePrice();
@@ -229,7 +233,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
         assetCtr,
         decimals,
       );
-      const state4 = await StateUtilsNum.getState(signer2, signer, strategy, vault, "s4");
+      const state4 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `d4-${i}`);
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], stateParams,true);
 
       const sharePriceAfterWithdraw3 = await vault.sharePrice();
