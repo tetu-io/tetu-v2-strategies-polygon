@@ -32,7 +32,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const backtestStartBlock = 43400000;
   const backtestEndBlock = 43450000;
   const investAmountUnits: string = '10000' // 1k USDC, 1k WMATIC etc
-  const txLimit = 0; // 0 - unlimited
+  const txLimit = 100; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
 

@@ -182,10 +182,10 @@ export default {
     outDir: 'typechain',
   },
   abiExporter: {
-    path: './artifacts/abi',
+    path: './abis',
     runOnCompile: false,
     spacing: 2,
-    pretty: true,
+    pretty: false,
   },
   namedAccounts: deployAddresses,
   w3f: {
