@@ -6,7 +6,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
-import "../../interfaces/IUniswapV3Depositor.sol";
 import "../../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
 import "../../libs/AppLib.sol";
 import "../ConverterStrategyBaseLib.sol";
@@ -30,18 +29,16 @@ contract UniswapV3Reader {
   /// @notice Estimate amount of underlying locked in the strategy by TetuConverter
   /// @dev We cannot call strategy.getState() because of stack too deep problem
   /// @param strategy_ Instance of UniswapV3ConverterStrategy
-  /// @param tokenA TokenA from strategy.getState
-  /// @param tokenB TokenB from strategy.getState
   /// @return estimatedUnderlyingAmount Total locked amount recalculated to the underlying
   /// @return totalAssets strategy.totalAssets() - in terms of underlying
-  function getLockedUnderlyingAmount(
-    address strategy_,
-    address tokenA,
-    address tokenB
-  ) external view returns (uint estimatedUnderlyingAmount, uint totalAssets) {
+  function getLockedUnderlyingAmount(address strategy_) external view returns (
+    uint estimatedUnderlyingAmount,
+    uint totalAssets
+  ) {
     GetLockedUnderlyingAmountLocal memory v;
     IUniswapV3ConverterStrategyReaderAccess strategy = IUniswapV3ConverterStrategyReaderAccess(strategy_);
 
+    (address tokenA, address tokenB) = strategy.getPoolTokens();
     v.converter = ITetuConverter(strategy.converter());
 
     v.tokens = new address[](2);

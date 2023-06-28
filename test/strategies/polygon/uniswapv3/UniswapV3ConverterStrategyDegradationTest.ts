@@ -26,6 +26,7 @@ import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/Stat
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber, BytesLike} from "ethers";
 import {tetuConverter} from "../../../../typechain/@tetu_io";
+import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -165,30 +166,6 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
     await TimeUtils.rollback(snapshot);
   });
 //endregion before after
-
-//region Utils
-  function apiRequestUrl(methodName: string, queryParams: string) {
-    const chainId = hre.network.config.chainId;
-    const apiBaseUrl = 'https://api.1inch.io/v5.0/' + chainId;
-    const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
-    return apiBaseUrl + methodName + '?' + r;
-  }
-
-  async function buildTxForSwap(params: string, tries: number = 2) {
-    const url = apiRequestUrl('/swap', params);
-    console.log('url', url)
-    for (let i = 0; i < tries; i++) {
-      try {
-        const r = await fetch(url)
-        if (r && r.status === 200) {
-          return (await r.json()).tx
-        }
-      } catch (e) {
-        console.error('Err', e)
-      }
-    }
-  }
-//endregion Utils
 
 //region Unit tests
   describe('study: UniswapV3 strategy rebalance by noSwaps tests', function() {
@@ -371,7 +348,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
             };
             console.log("params", params);
 
-            const swapTransaction = await buildTxForSwap(JSON.stringify(params));
+            const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
             console.log('Transaction for swap: ', swapTransaction);
             swapData = swapTransaction.data;
           }
@@ -390,148 +367,6 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
       expect(finalUsdcBalance).gte(+MIN_AMOUNT_TO_RECEIVE_USDC);
       expect(finalUsdtBalance).gte(+MIN_AMOUNT_TO_RECEIVE_USDT);
-    })
-
-    it('Reduce price N steps, withdraw all', async() => {
-      const COUNT = 5;
-      const state = await strategy.getState();
-      const listStates: IStateNum[] = [];
-
-      console.log('deposit...');
-      await asset.connect(user).approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, user.address, parseUnits('1000', 6));
-      await vault.connect(user).deposit(parseUnits('1000', 6), user.address);
-
-      const stateStepInitial = await StateUtilsNum.getState(signer, user, strategy, vault, `initial`);
-      listStates.push(stateStepInitial);
-      console.log(`initial`, stateStepInitial);
-
-      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
-
-      for (let i = 0; i < COUNT; ++i) {
-        const state0 = await strategy.getState();
-        console.log("state0", state0);
-
-        console.log("Step", i);
-
-        const swapAmount = BigNumber.from(parseUnits('20000', 6));
-        console.log("swapAmount", swapAmount);
-
-        // Decrease price at first 10 steps, increase price on other 10 steps
-        while (! await strategy.needRebalance()) {
-          await UniswapV3StrategyUtils.movePriceDown(
-            signer,
-            strategy.address,
-            MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-            swapAmount,
-            100001
-          );
-          // await UniswapV3StrategyUtils.movePriceUp(
-          //   signer,
-          //   strategy.address,
-          //   MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-          //   swapAmount,
-          //   100001
-          // );
-        }
-
-        expect(await strategy.needRebalance()).eq(true);
-
-        console.log("Start rebalance, step", i);
-        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
-        console.log("End rebalance, step", i);
-
-        expect(await strategy.needRebalance()).eq(false);
-
-        await TimeUtils.advanceNBlocks(300);
-
-        const stateStep = await StateUtilsNum.getState(signer, user, strategy, vault, `step ${i}`);
-        listStates.push(stateStep);
-        console.log(`state ${i}`, stateStep);
-
-        await StateUtilsNum.saveListStatesToCSVColumns(
-          './tmp/degradation-withdrawAll.csv',
-          listStates,
-          stateParams
-        );
-      }
-
-      console.log("Withdraw all");
-      // await vault.connect(user).withdrawAll();
-      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-      await strategy.connect(operator).withdrawAllByLiquidator(false, 0, Misc.ZERO_ADDRESS, "0x");
-
-      const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
-      listStates.push(stateStepFinal);
-      console.log(`final`, stateStepFinal);
-    })
-    it('Increase price N steps, withdraw all', async() => {
-      const COUNT = 5;
-      const state = await strategy.getState();
-      const listStates: IStateNum[] = [];
-
-      console.log('deposit...');
-      await asset.connect(user).approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, user.address, parseUnits('1000', 6));
-      await vault.connect(user).deposit(parseUnits('1000', 6), user.address);
-
-      const stateStepInitial = await StateUtilsNum.getState(signer, user, strategy, vault, `initial`);
-      listStates.push(stateStepInitial);
-      console.log(`initial`, stateStepInitial);
-
-      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
-
-      for (let i = 0; i < COUNT; ++i) {
-        const state0 = await strategy.getState();
-        console.log("state0", state0);
-
-        console.log("Step", i);
-
-        const swapAmount = BigNumber.from(parseUnits('20000', 6));
-        console.log("swapAmount", swapAmount);
-
-        // Decrease price at first 10 steps, increase price on other 10 steps
-        while (! await strategy.needRebalance()) {
-          await UniswapV3StrategyUtils.movePriceUp(
-            signer,
-            strategy.address,
-            MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-            swapAmount,
-            100001
-          );
-        }
-
-        expect(await strategy.needRebalance()).eq(true);
-
-        console.log("Start rebalance, step", i);
-        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
-        console.log("End rebalance, step", i);
-
-        expect(await strategy.needRebalance()).eq(false);
-
-        await TimeUtils.advanceNBlocks(300);
-
-        const stateStep = await StateUtilsNum.getState(signer, user, strategy, vault, `step ${i}`);
-        listStates.push(stateStep);
-        console.log(`state ${i}`, stateStep);
-
-        await StateUtilsNum.saveListStatesToCSVColumns(
-          './tmp/degradation-withdrawAll.csv',
-          listStates,
-          stateParams
-        );
-      }
-
-      console.log("Withdraw all");
-      // await vault.connect(user).withdrawAll();
-      const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-      await strategy.connect(operator).withdrawAllByLiquidator(false, 0, Misc.ZERO_ADDRESS, "0x");
-
-      const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
-      listStates.push(stateStepFinal);
-      console.log(`final`, stateStepFinal);
-
-
     })
   })
 

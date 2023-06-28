@@ -331,6 +331,8 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           swapAmount,
         );
       }
+      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `p${i}`));
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
@@ -342,10 +344,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           assetCtr,
           decimals,
         );
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
       }
 
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
       if (i % 2 === 0) {
         const stateHardworkEvents = await doHardWorkForStrategy(

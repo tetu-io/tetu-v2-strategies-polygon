@@ -23,6 +23,11 @@ import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 
+export interface IRebalanceResults {
+  loss: BigNumber;
+  covered: BigNumber;
+}
+
 export interface IUniv3Depositor {
   tokenA: string;
   tokenB: string
@@ -111,6 +116,10 @@ export interface IStateNum {
   };
   univ3Depositor?: IUniv3Depositor;
   univ3Pool?: IUniv3Pool;
+  rebalanced?: {
+    loss: number;
+    covered: number;
+  }
   fixPriceChanges?: IFixPricesChangesEventInfo;
 }
 
@@ -124,6 +133,7 @@ export interface IFixPricesChangesEventInfo {
 }
 export interface IGetStateParams {
   fixChangePrices?: IFixPricesChangesEventInfo[];
+  rebalanced?: IRebalanceResults;
 }
 
 /**
@@ -352,6 +362,15 @@ export class StateUtilsNum {
       univ3Depositor,
       univ3Pool,
 
+      rebalanced: p?.rebalanced
+        ? {
+          loss: +formatUnits(p.rebalanced.loss, assetDecimals),
+          covered: +formatUnits(p.rebalanced.covered, assetDecimals),
+        }
+        : {
+          loss: 0,
+          covered: 0
+        },
       fixPriceChanges: p?.fixChangePrices
         ? p?.fixChangePrices[0]
         : undefined
@@ -493,6 +512,9 @@ export class StateUtilsNum {
       "pool.amount0",
       "pool.amount1",
 
+      'rebalanced.loss',
+      'rebalanced.covered',
+
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
     ];
@@ -571,6 +593,9 @@ export class StateUtilsNum {
       item.univ3Pool?.token1,
       item.univ3Pool?.amount0,
       item.univ3Pool?.amount1,
+
+      item.rebalanced?.loss,
+      item.rebalanced?.covered,
 
       item.fixPriceChanges?.assetBefore,
       item.fixPriceChanges?.assetAfter,
