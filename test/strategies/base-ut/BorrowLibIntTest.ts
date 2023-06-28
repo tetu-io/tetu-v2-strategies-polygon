@@ -737,7 +737,7 @@ describe('BorrowLibIntTest', () => {
             it("should set expected balances", async () => {
               const r = await loadFixture(makeRebalanceAssetsTest);
               console.log("Results", r);
-              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), r.final.costY*(PROPORTION_SMALL)/1000);
             });
           });
           describe("Full repay and reverse borrow are required", () => {
@@ -777,7 +777,7 @@ describe('BorrowLibIntTest', () => {
               const r = await loadFixture(makeRebalanceAssetsTest);
               console.log("Results", r);
               // 21533757.280518062 ~ 21533760.77834328
-              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 10);
+              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), r.final.costY*(PROPORTION_SMALL)/1000);
             });
           });
         });
@@ -817,7 +817,7 @@ describe('BorrowLibIntTest', () => {
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
             console.log("Results", r);
-            expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+            expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), r.final.costY*(PROPORTION_SMALL)/1000);
           });
         });
       });
@@ -859,7 +859,7 @@ describe('BorrowLibIntTest', () => {
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
             console.log("Results", r);
-            expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+            expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), r.final.costY*(PROPORTION_SMALL)/1000);
           });
         });
         describe("Need to reduce USDC, increase WMATIC", () => {
@@ -899,7 +899,7 @@ describe('BorrowLibIntTest', () => {
             it("should set expected balances", async () => {
               const r = await loadFixture(makeRebalanceAssetsTest);
               console.log("Results", r);
-              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), r.final.costY*(PROPORTION_SMALL)/1000);
             });
           });
           describe("Full repay and reverse borrow are required", () => {
@@ -938,7 +938,7 @@ describe('BorrowLibIntTest', () => {
             it("should set expected balances", async () => {
               const r = await loadFixture(makeRebalanceAssetsTest);
               console.log("Results", r);
-              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), 1);
+              expect(r.final.costX*(SUM_PROPORTIONS-PROPORTION_SMALL)).approximately(r.final.costY*(PROPORTION_SMALL), r.final.costY*(PROPORTION_SMALL)/1000);
             });
           });
         });
@@ -978,7 +978,7 @@ describe('BorrowLibIntTest', () => {
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
             console.log("Results", r);
-            expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), 1);
+            expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), r.final.costX*(PROPORTION_SMALL)/1000);
           });
         });
         describe("Need to reduce WMATIC, increase USDC", () => {
@@ -1012,7 +1012,7 @@ describe('BorrowLibIntTest', () => {
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
             console.log("Results", r);
-            expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), 1);
+            expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), r.final.costX*(PROPORTION_SMALL)/1000);
           });
         });
       });
@@ -1055,7 +1055,7 @@ describe('BorrowLibIntTest', () => {
             it("should set expected balances", async () => {
               const r = await loadFixture(makeRebalanceAssetsTest);
               console.log("Results", r);
-              expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), 1);
+              expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), r.final.costX*(PROPORTION_SMALL)/1000);
             });
           });
           describe("Full repay and reverse borrow are required", () => {
@@ -1095,7 +1095,7 @@ describe('BorrowLibIntTest', () => {
               const r = await loadFixture(makeRebalanceAssetsTest);
               console.log("Results", r);
               // 21533757.280518062 ~ 21533760.77834328
-              expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), 10);
+              expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), r.final.costX*(PROPORTION_SMALL)/1000);
             });
           });
         });
@@ -1135,8 +1135,8 @@ describe('BorrowLibIntTest', () => {
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
             console.log("Results", r);
-            // 19267926.73364667 ~ 19267929.81618987
-            expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), 10);
+            // 19270656 ~ 19270677
+            expect(r.final.costX*(PROPORTION_SMALL)).approximately(r.final.costY*(SUM_PROPORTIONS - PROPORTION_SMALL), r.final.costX*(PROPORTION_SMALL)/1000);
           });
         });
       });

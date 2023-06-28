@@ -1510,9 +1510,10 @@ library ConverterStrategyBaseLib {
             );
             console.log("SWAP.v.amountToSwap", v.amountToSwap);
             console.log("SWAP.spentAmountIn", spentAmountIn);
-            if (spentAmountIn != 0 && indexIn == i) {
+            if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
-              // we need to calculate expectedAmount if not-underlying is swapped to underlying only
+              // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
+              // we don't need to take into account conversion to get toSell amount
               expectedAmount += spentAmountIn * p.prices[i] * p.decs[d_.indexAsset] / p.prices[d_.indexAsset] / p.decs[i];
               console.log("SWAP.expectedAmount+", spentAmountIn * p.prices[i] * p.decs[d_.indexAsset] / p.prices[d_.indexAsset] / p.decs[i]);
               console.log("SWAP.expectedAmount", expectedAmount);
@@ -1731,7 +1732,7 @@ library ConverterStrategyBaseLib {
       indexBorrow,
       balanceBorrow
     );
-    console.log("_closePositionsToGetAmount.xxx.toSell", toSell);
+    console.log("_closePositionsToGetAmount.xxx.toSell,balanceCollateral", toSell, balanceCollateral);
 
     // convert {toSell} amount of underlying to token
     if (toSell != 0 && balanceCollateral != 0) {

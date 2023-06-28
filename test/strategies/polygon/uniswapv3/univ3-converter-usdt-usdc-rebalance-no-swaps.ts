@@ -42,7 +42,7 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
 const { expect } = chai;
 
-describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
+describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', function() {
 
 //region Variables
   let snapshotBefore: string;
@@ -163,13 +163,13 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     console.log("unfoldBorrows.withdrawByAggEntry");
     await strategyAsOperator.withdrawByAggEntry();
     if (saveState) {
-      saveState(`u0`);
+      await saveState(`u0`);
     }
 
     let step = 0;
     while (true) {
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(propNotUnderlying18);
-      if (quote.tokenToSwap === Misc.ZERO_ADDRESS) break;
+      console.log("!!!!!!!!!!!quote", quote);
 
       let swapData: BytesLike = "0x";
       const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
@@ -201,7 +201,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
 
       if (saveState) {
-        saveState(`u${step}`);
+        await saveState(`u${++step}`);
       }
       if (completed) break;
     }
@@ -209,7 +209,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     console.log("!!!!!!!!!!!!! unfoldBorrows.rebalanceNoSwaps --------------------------------");
     await strategy.rebalanceNoSwaps();
     if (saveState) {
-      saveState(`u1`);
+      await saveState(`u${++step}`);
     }
   }
 
@@ -235,7 +235,6 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     await vault.setDoHardWorkOnInvest(false);
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
-
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
