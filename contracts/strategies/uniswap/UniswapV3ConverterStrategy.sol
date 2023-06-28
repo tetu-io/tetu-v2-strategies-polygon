@@ -207,7 +207,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint oldTotalAssets = totalAssets() - profitToCover;
 
     // withdraw all liquidity from pool; after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
+    bool noLiquidity = state.totalLiquidity == 0;
+    if (! noLiquidity) {
       _depositorEmergencyExit();
     }
 
@@ -216,7 +217,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       converter,
       oldTotalAssets,
       profitToCover,
-      splitter
+      splitter,
+      !noLiquidity
     );
 
     if (tokenAmounts.length == 2) {
@@ -255,6 +257,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint amountToSwap
   ) {
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
+
     // get tokens as following: [underlying, not-underlying]
     address[] memory tokens = _depositorPoolAssets();
     if (tokens[1] == asset) {

@@ -17,6 +17,8 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 
+import "hardhat/console.sol";
+
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
 
@@ -315,18 +317,24 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 tickSpacing,
     int24 rebalanceTickRange
   ) public view returns (bool) {
+    console.log("needRebalance.isFuseTriggered");
     if (isFuseTriggered) {
       return false;
     }
     (, int24 tick, , , , ,) = pool.slot0();
+    console.log("needRebalance.tick");
+    console.logInt(tick);
     if (upperTick - lowerTick == tickSpacing) {
+      console.log("needRebalance.1", tick < lowerTick || tick >= upperTick);
       return tick < lowerTick || tick >= upperTick;
     } else {
       int24 halfRange = (upperTick - lowerTick) / 2;
       int24 oldMedianTick = lowerTick + halfRange;
       if (tick > oldMedianTick) {
+        console.log("needRebalance.2", tick - oldMedianTick >= rebalanceTickRange);
         return tick - oldMedianTick >= rebalanceTickRange;
       }
+      console.log("needRebalance.3", oldMedianTick - tick > rebalanceTickRange);
       return oldMedianTick - tick > rebalanceTickRange;
     }
   }
@@ -858,7 +866,8 @@ library UniswapV3ConverterStrategyLogicLib {
     ITetuConverter converter,
     uint oldTotalAssets,
     uint profitToCover,
-    address splitter
+    address splitter,
+    bool checkNeedRebalance
   ) external returns (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
     bool fuseEnabledOut
@@ -890,14 +899,16 @@ library UniswapV3ConverterStrategyLogicLib {
       newTotalAssets: 0
     });
 
-    require(needRebalance(
-      state.isFuseTriggered,
-      vars.pool,
-      vars.lowerTick,
-      vars.upperTick,
-      vars.tickSpacing,
-      state.rebalanceTickRange
-    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+    if (checkNeedRebalance) {
+      require(needRebalance(
+        state.isFuseTriggered,
+        vars.pool,
+        vars.lowerTick,
+        vars.upperTick,
+        vars.tickSpacing,
+        state.rebalanceTickRange
+      ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+    }
 
     vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 

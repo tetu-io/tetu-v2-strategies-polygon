@@ -36,7 +36,7 @@ import {BigNumber, BytesLike} from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
 
@@ -152,16 +152,25 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 //endregion before, after
 
 //region Utils
-  async function superRebalance(strategyAsOperator: UniswapV3ConverterStrategy) {
+  async function unfoldBorrows(
+    strategyAsOperator: UniswapV3ConverterStrategy,
+    saveState?: (title: string) => Promise<void>
+  ) {
     const state = await strategy.getState();
     const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
     const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
 
-    console.log("superRebalance.withdrawByAggEntry");
+    console.log("unfoldBorrows.withdrawByAggEntry");
     await strategyAsOperator.withdrawByAggEntry();
+    if (saveState) {
+      saveState(`u0`);
+    }
 
+    let step = 0;
     while (true) {
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(propNotUnderlying18);
+      if (quote.tokenToSwap === Misc.ZERO_ADDRESS) break;
+
       let swapData: BytesLike = "0x";
       const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
       const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
@@ -185,13 +194,22 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
           swapData = swapTransaction.data;
         }
       }
-      console.log("superRebalance.withdrawByAggStep.callStatic", quote);
+      console.log("unfoldBorrows.withdrawByAggStep.callStatic", quote);
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
 
-      console.log("superRebalance.withdrawByAggStep.execute --------------------------------", quote);
+      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
       await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
 
+      if (saveState) {
+        saveState(`u${step}`);
+      }
       if (completed) break;
+    }
+
+    console.log("!!!!!!!!!!!!! unfoldBorrows.rebalanceNoSwaps --------------------------------");
+    await strategy.rebalanceNoSwaps();
+    if (saveState) {
+      saveState(`u1`);
     }
   }
 
@@ -203,11 +221,12 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     useNoSwapRebalance: boolean;
   }
   async function makeTest(p: ITestParams) {
-    const MAX_ALLLOWED_LOCKED_PERCENT = 50;
+    const cycles = 7;
+    const MAX_ALLLOWED_LOCKED_PERCENT = 30;
     const DELTA = 500;
     const pathOut = p.filePath;
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
-    const states = [];
+    const states: IStateNum[] = [];
 
     await strategy.setFuseThreshold(parseUnits('1'));
     const strategyAsSigner = StrategyBaseV2__factory.connect(strategy.address, signer);
@@ -217,7 +236,6 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
 
-    const cycles = 5;
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
@@ -259,9 +277,9 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
 
-      console.log('------------------ REBALANCE IF NECESSARY', i, '------------------');
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
+        console.log('------------------ REBALANCE' , i, '------------------');
         const rebalanced = p.useNoSwapRebalance
           ? await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals)
           : await rebalanceUniv3Strategy(strategy, signer, decimals);
@@ -271,16 +289,20 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
       }
 
-      console.log('------------------ SUPER REBALANCE (reduce over-collateral)', i, '------------------');
+      console.log('------------------ BORROWS UNFOLDING (reduce over-collateral)', i, '------------------');
       if (p.useNoSwapRebalance) {
         const r = await reader.getLockedUnderlyingAmount(strategy.address);
-        if (! r.totalAssets.eq(0)) {
+        if (!r.totalAssets.eq(0)) {
           const percent = r.estimatedUnderlyingAmount.mul(100).div(r.totalAssets).toNumber();
           console.log("Locked percent", percent);
           if (percent > MAX_ALLLOWED_LOCKED_PERCENT) {
-            await superRebalance(strategyAsOperator);
-            states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `s${i}`));
-            await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+            await unfoldBorrows(
+              strategyAsOperator,
+              async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            );
           }
         }
       }
@@ -298,7 +320,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       if (i % 7 === 0) {
         await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
         await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
-      } else {
+      } else if (i % 5 === 0) {
         await redeemFromVault(vault, signer, 50, decimals, assetCtr, insurance);
         await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
         await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
@@ -327,7 +349,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 //region Unit tests
   it('Move price up in loop - no swap', async function() {
     await makeTest({
-      filePath: `./tmp/move_price_up_liquidator.csv`,
+      filePath: `./tmp/move_price_up_no_swap.csv`,
       movePricesUp: true,
       useNoSwapRebalance: true
     });
