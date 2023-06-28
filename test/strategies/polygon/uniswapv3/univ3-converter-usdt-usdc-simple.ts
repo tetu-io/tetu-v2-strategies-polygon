@@ -43,6 +43,7 @@ const { expect } = chai;
 
 describe('univ3-converter-usdt-usdc-simple', function() {
 
+//region Variables
   let snapshotBefore: string;
   let snapshot: string;
 
@@ -60,7 +61,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let assetCtr: IERC20Metadata;
   let decimals: number;
   let stateParams: IStateParams;
+//endregion Variables
 
+//region before, after
   before(async function() {
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
@@ -143,6 +146,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   afterEach(async function() {
     await TimeUtils.rollback(snapshot);
   });
+//endregion before, after
 
   it('deposit and full exit should not change share price', async function() {
     const DELTA = 100;
