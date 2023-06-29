@@ -620,14 +620,19 @@ library ConverterStrategyBaseLib {
 
     uint notUsedAmount;
     (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
+    console.log("_closePositionExact.collateralAsset", collateralAsset);
+    console.log("_closePositionExact.collateralOut", collateralOut);
+    console.log("_closePositionExact.amountRepay", amountRepay);
 
     emit ClosePosition(collateralAsset, borrowAsset, amountRepay, address(this), collateralOut, notUsedAmount);
     uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
+    console.log("_closePositionExact.balanceAfter", balanceAfter);
 
     // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (debt-gap)
     repaidAmountOut = balanceBorrowAsset > balanceAfter
       ? balanceBorrowAsset - balanceAfter
       : 0;
+    console.log("_closePositionExact.repaidAmountOut", repaidAmountOut);
 
     require(notUsedAmount == 0, StrategyLib.WRONG_VALUE);
   }
@@ -1866,6 +1871,7 @@ library ConverterStrategyBaseLib {
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("_repayDebt.needToRepay,amountRepay", needToRepay, amountRepay);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;

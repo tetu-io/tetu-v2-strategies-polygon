@@ -117,8 +117,25 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState()
-    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
+    const state = await strategy.getState();
+
+    // prices should be the same in the pool and in the oracle
+    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
+
+    // prices should be the same in the pool and in the liquidator
+    const pools = [
+      {
+        pool: state.pool,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        tokenIn: MaticAddresses.USDC_TOKEN,
+        tokenOut: MaticAddresses.USDT_TOKEN,
+      },
+    ]
+    const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
+    const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
+    await tools.liquidator.connect(liquidatorOperator).addLargestPools(pools, true);
+    await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(pools, true);
+
     // ---
 
     await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
