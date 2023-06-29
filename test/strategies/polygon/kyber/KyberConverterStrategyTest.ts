@@ -49,6 +49,7 @@ describe('KyberConverterStrategyTest', function() {
   let asset: IERC20;
   let vault: TetuVaultV2;
   let strategy: KyberConverterStrategy;
+  const pId = 21
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
@@ -58,7 +59,7 @@ describe('KyberConverterStrategyTest', function() {
         {
           forking: {
             jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 44366000, // after kyber swapper was deployed
+            blockNumber: 44479520,
           },
         },
       ],
@@ -97,7 +98,7 @@ describe('KyberConverterStrategyTest', function() {
           0,
           0,
           true,
-          5
+          pId
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -182,7 +183,7 @@ describe('KyberConverterStrategyTest', function() {
       await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       const farmingContract = IKyberSwapElasticLM__factory.connect('0x7D5ba536ab244aAA1EA42aB88428847F25E3E676', signer)
-      const poolInfo = await farmingContract.getPoolInfo(5)
+      const poolInfo = await farmingContract.getPoolInfo(pId)
       console.log('Farm ends', poolInfo.endTime)
       let now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
 
@@ -222,7 +223,7 @@ describe('KyberConverterStrategyTest', function() {
       // addPool
       now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
       await farmingContract.connect(admin).addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
-      const newPid = await farmingContract.poolLength() - 1
+      const newPid = (await farmingContract.poolLength()).toNumber() - 1
       await s.connect(operator).changePId(newPid)
 
       state = await s.getState()

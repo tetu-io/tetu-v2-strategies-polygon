@@ -176,7 +176,7 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
       const swapTransaction = await buildTxForSwap(JSON.stringify(params));
       console.log('Transaction for swap: ', swapTransaction);
 
-      await s.rebalanceSwapByAgg(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data)
+      await s.rebalanceSwapByAgg(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data, {gasLimit: 29_000_000})
 
       expect(await s.needRebalance()).eq(false)
     })

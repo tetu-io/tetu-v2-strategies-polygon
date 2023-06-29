@@ -62,7 +62,7 @@ async function main() {
         0,
         0,
         true,
-        5
+        21
       );
 
       return _strategy as unknown as IStrategyV2;

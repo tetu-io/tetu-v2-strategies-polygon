@@ -87,7 +87,7 @@ describe('KyberConverterStrategyAggRebalanceTest', function() {
           0,
           0,
           true,
-          5
+          21
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -153,7 +153,7 @@ describe('KyberConverterStrategyAggRebalanceTest', function() {
         state.tokenA,
         state.tokenB,
         MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
-        parseUnits('100000', 6)
+        parseUnits('200000', 6)
       );
 
       expect(await s.needRebalance()).eq(true)
@@ -190,7 +190,7 @@ describe('KyberConverterStrategyAggRebalanceTest', function() {
         state.tokenA,
         state.tokenB,
         MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
-        parseUnits('100000', 6)
+        parseUnits('200000', 6)
       );
 
       expect(await s.needRebalance()).eq(true)
@@ -209,16 +209,7 @@ describe('KyberConverterStrategyAggRebalanceTest', function() {
       const s = strategy
       const state = await s.getState()
 
-      /*await UniversalUtils.movePoolPriceDown(
-        signer,
-        state.pool,
-        state.tokenA,
-        state.tokenB,
-        MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
-        parseUnits('100000', 6)
-      );*/
-
-      const swapAssetValue = parseUnits('100000', 6);
+      const swapAssetValue = parseUnits('200000', 6);
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
