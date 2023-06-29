@@ -645,6 +645,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
     address __converter = address(converter);
+    address _asset = asset;
     require(msg.sender == __converter, StrategyLib.DENIED);
 
     // detect index of the target asset
@@ -655,12 +656,24 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // withdraw from the pool if not enough
     if (balance < amount_) {
       // the strategy doesn't have enough target asset on balance
-      // withdraw all from the pool but don't convert assets to underlying
-      uint liquidity = _depositorLiquidity();
-      if (liquidity != 0) {
-        uint[] memory withdrawnAmounts = _depositorExit(liquidity);
-        emit OnDepositorExit(liquidity, withdrawnAmounts);
+      // withdraw required amount of underlying from the pool
+
+      uint amountUnderlying;
+      if (theAsset_ == _asset) {
+        amountUnderlying = amount_;
+      } else {
+        // estimate amount of to underlying required to get {amount_}
+        // Actually, we don't need underlying, we need {theAsset_},
+        // but _withdrawFromPool is able to withdraw underlying only
+        (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+          IPriceOracle(IConverterController(ITetuConverter(__converter).controller()).priceOracle()),
+          tokens,
+          2
+        );
+        uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, _asset);
+        amountUnderlying = amount_ * prices[indexTheAsset] * decs[indexAsset] / prices[indexAsset] / decs[indexTheAsset];
       }
+      _withdrawFromPool(amountUnderlying);
     }
 
     amountOut = ConverterStrategyBaseLib.swapToGivenAmountAndSendToConverter(
@@ -669,7 +682,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tokens,
       __converter,
       controller(),
-      asset,
+      _asset,
       liquidationThresholds
     );
 
