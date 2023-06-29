@@ -221,8 +221,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
     useNoSwapRebalance: boolean;
   }
   async function makeTest(p: ITestParams) {
-    const cycles = 7;
-    const MAX_ALLLOWED_LOCKED_PERCENT = 30;
+    const cycles = 9;
+    const MAX_ALLLOWED_LOCKED_PERCENT = 25;
     const DELTA = 500;
     const pathOut = p.filePath;
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
@@ -331,7 +331,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
       // todo: expect(sharePriceAfter).approximately(sharePriceBefore, DELTA);
 
       // decrease swap amount slowly
-      swapAmount = swapAmount.mul(12).div(10); // div on 1.2
+      swapAmount = swapAmount.mul(12).div(10); // div on 1.1
 
       states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
@@ -353,6 +353,15 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
       useNoSwapRebalance: true
     });
   });
+  it('Move price down in loop - no swap', async function() {
+    await makeTest({
+      filePath: `./tmp/move_price_down_no_swap.csv`,
+      movePricesUp: true,
+      useNoSwapRebalance: true
+    });
+  });
+
+
   it('Move price up in loop - liquidator', async function() {
     await makeTest({
       filePath: `./tmp/move_price_up_liquidator.csv`,

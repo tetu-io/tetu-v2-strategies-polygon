@@ -307,6 +307,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     v.liquidationThresholds = new uint[](2);
     v.liquidationThresholds[0] = liquidationThresholds[v.tokens[0]];
     v.liquidationThresholds[1] = liquidationThresholds[v.tokens[1]];
+    console.log("withdrawByAggStep.balance[0].init", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.balance[1].init", IERC20(v.tokens[1]).balanceOf(address(this)));
+
 
     completed = UniswapV3AggLib.withdrawStep(
       converter,
@@ -323,9 +326,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     _updateInvestedAssets();
+    console.log("withdrawByAggStep.balance[0].final", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.balance[1].final", IERC20(v.tokens[1]).balanceOf(address(this)));
   }
 
-  /// @notice View function required by reader
+  /// @notice View function required by reader. TODO replace by more general function that reads slot directly
   function getPoolTokens() external view returns (address tokenA, address tokenB) {
     return (state.tokenA, state.tokenB);
   }

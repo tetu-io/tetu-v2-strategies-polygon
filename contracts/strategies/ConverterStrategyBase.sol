@@ -656,24 +656,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // withdraw from the pool if not enough
     if (balance < amount_) {
       // the strategy doesn't have enough target asset on balance
-      // withdraw required amount of underlying from the pool
+      // withdraw all from the pool but don't convert assets to underlying
 
-      uint amountUnderlying;
-      if (theAsset_ == _asset) {
-        amountUnderlying = amount_;
-      } else {
-        // estimate amount of to underlying required to get {amount_}
-        // Actually, we don't need underlying, we need {theAsset_},
-        // but _withdrawFromPool is able to withdraw underlying only
-        (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
-          IPriceOracle(IConverterController(ITetuConverter(__converter).controller()).priceOracle()),
-          tokens,
-          2
-        );
-        uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, _asset);
-        amountUnderlying = amount_ * prices[indexTheAsset] * decs[indexAsset] / prices[indexAsset] / decs[indexTheAsset];
+      // we don't close debts here because
+      // there is a chance to close the debt that is asked by the converter.
+      // We assume, that the amount is comparatively small
+      // and it's not possible to drain all liquidity here
+      uint liquidity = _depositorLiquidity();
+      if (liquidity != 0) {
+        uint[] memory withdrawnAmounts = _depositorExit(liquidity);
+        emit OnDepositorExit(liquidity, withdrawnAmounts);
       }
-      _withdrawFromPool(amountUnderlying);
     }
 
     amountOut = ConverterStrategyBaseLib.swapToGivenAmountAndSendToConverter(
