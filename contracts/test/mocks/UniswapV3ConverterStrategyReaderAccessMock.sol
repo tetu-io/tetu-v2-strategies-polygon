@@ -33,20 +33,7 @@ contract UniswapV3ConverterStrategyReaderAccessMock is IUniswapV3ConverterStrate
     return _totalAssets;
   }
 
-  function getState() external view returns (
-    address tokenA,
-    address tokenB,
-    address pool,
-    address profitHolder,
-    int24 tickSpacing,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 rebalanceTickRange,
-    uint128 totalLiquidity,
-    bool isFuseTriggered,
-    uint fuseThreshold,
-    uint[] memory rebalanceResults
-  ) {
-    return (tokenA, tokenB, pool, profitHolder, tickSpacing, lowerTick, upperTick, rebalanceTickRange, totalLiquidity, isFuseTriggered, fuseThreshold, rebalanceResults);
+  function getPoolTokens() external view returns (address tokenA, address tokenB) {
+    return (tokenA, tokenB);
   }
 }

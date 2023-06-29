@@ -788,7 +788,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "2500", // usdc
+              requestedAmount: "5000", // usdc; it should include current balance
               tokens: [usdc, dai],
               indexAsset: 0,
               balances: ["2500", "0"], // usdc, dai
@@ -822,7 +822,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "2500", // usdc
+              requestedAmount: "2607", // usdc; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["107", "2000"], // usdc, usdt
@@ -914,7 +914,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "2000", // usdc
+              requestedAmount: "3000", // usdc; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1000", "1000"], // usdc, usdt
@@ -960,7 +960,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "10000", // usdc, we need to get as much as possible
+              requestedAmount: "16000", // usdc, we need to get as much as possible; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["6000", "999"], // usdc, usdt
@@ -1009,7 +1009,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "10000", // usdc, we need to get as much as possible
+              requestedAmount: "70000", // usdc, we need to get as much as possible; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["60000", "999"], // usdc, usdt
@@ -1091,7 +1091,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "2000", // usdc
+              requestedAmount: "3004", // usdc; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1004", "1002"], // usdc, usdt
@@ -1125,7 +1125,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "2000", // usdc
+              requestedAmount: "3000", // usdc; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1000", "103"], // usdc, usdt
@@ -1165,7 +1165,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "8000", // usdc, we need to get as much as possible
+              requestedAmount: "11001", // usdc, we need to get as much as possible; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["3001", "2000"], // usdc, usdt
@@ -1213,7 +1213,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "14000", // usdc, we need to get as much as possible
+              requestedAmount: "17000", // usdc, we need to get as much as possible; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["3000", "2000"], // usdc, usdt
@@ -1261,7 +1261,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "200000", // usdc
+              requestedAmount: "200100", // usdc; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["100", "8000"], // usdc, usdt
@@ -1309,7 +1309,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "200000", // usdc
+              requestedAmount: "201000", // usdc; it should include current balance
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1000", "1500"], // usdc, usdt
@@ -1360,7 +1360,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "110000", // usdc
+              requestedAmount: "116000", // usdc; it should include current balance
               tokens: [usdc, dai, usdt],
               indexAsset: 0,
               balances: ["6000", "2000", "4000"], // usdc, dai, usdt
@@ -1416,7 +1416,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "200000", // usdc
+              requestedAmount: "203000", // usdc; it should include current balance
               tokens: [dai, usdc, usdt],
               indexAsset: 1,
               balances: ["3000", "97", "5000"], // dai, usdc, usdt
@@ -1472,7 +1472,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "110000", // usdc
+              requestedAmount: "116000", // usdc; it should include current balance
               tokens: [usdc, dai, usdt],
               indexAsset: 0,
               balances: ["6000", "20000", "400"], // usdc, dai, usdt
@@ -1528,7 +1528,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
 
           async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
             return makeRequestedAmountTest({
-              requestedAmount: "200000", // usdc
+              requestedAmount: "203000", // usdc; it should include current balance
               tokens: [dai, usdc, usdt],
               indexAsset: 1,
               balances: ["30000", "97", "500"], // dai, usdc, usdt

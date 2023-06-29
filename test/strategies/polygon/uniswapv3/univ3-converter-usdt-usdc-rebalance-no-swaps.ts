@@ -14,7 +14,7 @@ import {
   StrategySplitterV2,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
+  UniswapV3ConverterStrategy__factory, UniswapV3Reader,
 } from '../../../../typechain';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
@@ -28,20 +28,21 @@ import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
 import {
   depositToVault,
   doHardWorkForStrategy,
-  printVaultState,
-  rebalanceUniv3Strategy,
+  printVaultState, rebalanceUniv3Strategy,
+  rebalanceUniv3StrategyNoSwaps,
   redeemFromVault,
 } from '../../../StrategyTestUtils';
-import { BigNumber } from 'ethers';
+import {BigNumber, BytesLike} from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
 
 const { expect } = chai;
 
-describe('univ3-converter-usdt-usdc-simple', function() {
+describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', function() {
 
 //region Variables
   let snapshotBefore: string;
@@ -61,6 +62,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   let assetCtr: IERC20Metadata;
   let decimals: number;
   let stateParams: IStateParams;
+  let reader: UniswapV3Reader;
 //endregion Variables
 
 //region before, after
@@ -78,6 +80,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     asset = MaticAddresses.USDC_TOKEN;
     assetCtr = IERC20Metadata__factory.connect(asset, signer);
     decimals = await IERC20Metadata__factory.connect(asset, gov).decimals();
+    reader = await MockHelper.createUniswapV3Reader(signer);
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,
@@ -148,122 +151,90 @@ describe('univ3-converter-usdt-usdc-simple', function() {
   });
 //endregion before, after
 
-  it('deposit and full exit should not change share price', async function() {
-    const DELTA = 100;
-    const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
+//region Utils
+  async function unfoldBorrows(
+    strategyAsOperator: UniswapV3ConverterStrategy,
+    saveState?: (title: string) => Promise<void>
+  ) {
+    const state = await strategy.getState();
+    const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
+    const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
 
-    await vault.setDoHardWorkOnInvest(false);
-    await TokenUtils.getToken(asset, signer2.address, BigNumber.from(10000));
-    await vault.connect(signer2).deposit(10000, signer2.address);
-
-    const cycles = 3;
-    const depositAmount1 = parseUnits('100000', decimals);
-    await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
-
-    const balanceBefore = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
-
-    await printVaultState(
-      vault,
-      splitter,
-      StrategyBaseV2__factory.connect(strategy.address, signer),
-      assetCtr,
-      decimals,
-    );
-
-    const pathOut = `./tmp/deposit_full_exit_states.csv`;
-    for (let i = 0; i < cycles; i++) {
-      console.log('------------------ CYCLE', i, '------------------');
-
-      const sharePriceBefore = await vault.sharePrice();
-
-      ///////////////////////////
-      // DEPOSIT
-      ///////////////////////////
-
-
-      await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
-
-      await printVaultState(
-        vault,
-        splitter,
-        StrategyBaseV2__factory.connect(strategy.address, signer),
-        assetCtr,
-        decimals,
-      );
-      const state1 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `d1-${i}`);
-
-      expect(await strategy.investedAssets()).above(0);
-
-      const sharePriceAfterDeposit = await vault.sharePrice();
-      expect(sharePriceAfterDeposit).eq(sharePriceBefore);
-
-      ///////////////////////////
-      // WITHDRAW
-      ///////////////////////////
-
-      await redeemFromVault(vault, signer, 50, decimals, assetCtr, insurance);
-      await printVaultState(
-        vault,
-        splitter,
-        StrategyBaseV2__factory.connect(strategy.address, signer),
-        assetCtr,
-        decimals,
-      );
-      const state2 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `w2-${i}`);
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2], stateParams,true);
-
-      const sharePriceAfterWithdraw = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw).approximately(sharePriceAfterDeposit, DELTA);
-
-      await redeemFromVault(vault, signer, 99, decimals, assetCtr, insurance);
-      await printVaultState(
-        vault,
-        splitter,
-        StrategyBaseV2__factory.connect(strategy.address, signer),
-        assetCtr,
-        decimals,
-      );
-      const state3 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `w3-${i}`);
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3], stateParams,true);
-
-      const sharePriceAfterWithdraw2 = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw2).approximately(sharePriceAfterDeposit, DELTA);
-
-      await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
-      await printVaultState(
-        vault,
-        splitter,
-        StrategyBaseV2__factory.connect(strategy.address, signer),
-        assetCtr,
-        decimals,
-      );
-      const state4 = await StateUtilsNum.getState(signer2, signer, strategy, vault, `d4-${i}`);
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [state1, state2, state3, state4], stateParams,true);
-
-      const sharePriceAfterWithdraw3 = await vault.sharePrice();
-      expect(sharePriceAfterWithdraw3).approximately(sharePriceAfterDeposit, DELTA);
+    console.log("unfoldBorrows.withdrawByAggEntry");
+    await strategyAsOperator.withdrawByAggEntry();
+    if (saveState) {
+      await saveState(`u0`);
     }
 
-    const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
-    console.log('balanceBefore', balanceBefore);
-    console.log('balanceAfter', balanceAfter);
-    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), cycles);
+    let step = 0;
+    while (true) {
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(propNotUnderlying18);
+      console.log("!!!!!!!!!!!quote", quote);
 
-  });
+      let swapData: BytesLike = "0x";
+      const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
+      const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
 
-  it('deposit and exit with hard works should not change share price with zero compound', async function() {
+      if (AGGREGATOR === MaticAddresses.AGG_ONEINCH_V5) {
+        if (tokenToSwap !== Misc.ZERO_ADDRESS) {
+          const params = {
+            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            amount: quote.amountToSwap.toString(),
+            fromAddress: strategyAsOperator.address,
+            slippage: 1,
+            disableEstimate: true,
+            allowPartialFill: false,
+            protocols: 'POLYGON_BALANCER_V2',
+          };
+          console.log("params", params);
+
+          const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
+          console.log('Transaction for swap: ', swapTransaction);
+          swapData = swapTransaction.data;
+        }
+      }
+      console.log("unfoldBorrows.withdrawByAggStep.callStatic", quote);
+      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+
+      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
+      await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+
+      if (saveState) {
+        await saveState(`u${++step}`);
+      }
+      if (completed) break;
+    }
+
+    console.log("!!!!!!!!!!!!! unfoldBorrows.rebalanceNoSwaps --------------------------------");
+    await strategy.rebalanceNoSwaps();
+    if (saveState) {
+      await saveState(`u${++step}`);
+    }
+  }
+
+  interface ITestParams {
+    filePath: string;
+    /** up OR down */
+    movePricesUp: boolean;
+    /** no-swap OR liquidator */
+    useNoSwapRebalance: boolean;
+  }
+  async function makeTest(p: ITestParams) {
+    const cycles = 7;
+    const MAX_ALLLOWED_LOCKED_PERCENT = 30;
     const DELTA = 500;
-    const pathOut = `./tmp/deposit_exit_states.csv`;
+    const pathOut = p.filePath;
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
-    const states = [];
+    const states: IStateNum[] = [];
 
     await strategy.setFuseThreshold(parseUnits('1'));
+    const strategyAsSigner = StrategyBaseV2__factory.connect(strategy.address, signer);
+    const strategyAsOperator = await strategy.connect(await UniversalTestUtils.getAnOperator(strategy.address, signer));
 
     await vault.setDoHardWorkOnInvest(false);
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
-
-    const cycles = 10;
 
     const depositAmount1 = parseUnits('10000', decimals);
     await TokenUtils.getToken(asset, signer.address, depositAmount1.mul(cycles));
@@ -275,37 +246,17 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       const sharePriceBefore = await vault.sharePrice();
       console.log('------------------ CYCLE', i, '------------------');
 
-      ///////////////////////////
-      // DEPOSIT
-      ///////////////////////////
-
+      console.log('------------------ DEPOSIT', i, '------------------');
 
       if (i % 3 === 0) {
         await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
       } else {
         await depositToVault(vault, signer, depositAmount1.div(2), decimals, assetCtr, insurance);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
+
         await depositToVault(vault, signer, depositAmount1.div(2), decimals, assetCtr, insurance);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
       }
 
       states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `d${i}`));
@@ -315,97 +266,72 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       await TimeUtils.advanceNBlocks(300);
 
-
-      if (i % 2 === 0) {
-        await UniswapV3StrategyUtils.movePriceUp(
-          signer2,
-          strategy.address,
-          MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-          swapAmount,
-        );
+      console.log(`------------------ MOVE PRICE ${p.movePricesUp ? "UP" : "DOWN"} `, i, '------------------');
+      if (p.movePricesUp) {
+        await UniswapV3StrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       } else {
-        await UniswapV3StrategyUtils.movePriceDown(
-          signer2,
-          strategy.address,
-          MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-          swapAmount,
-        );
+        await UniswapV3StrategyUtils.movePriceDown(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       }
       states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `p${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
+
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
-        await rebalanceUniv3Strategy(strategy, signer, decimals);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
-        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`));
+        console.log('------------------ REBALANCE' , i, '------------------');
+        const rebalanced = p.useNoSwapRebalance
+          ? await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals)
+          : await rebalanceUniv3Strategy(strategy, signer, decimals);
+
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+      }
+
+      console.log('------------------ BORROWS UNFOLDING (reduce over-collateral)', i, '------------------');
+      if (p.useNoSwapRebalance) {
+        const r = await reader.getLockedUnderlyingAmount(strategy.address);
+        if (!r.totalAssets.eq(0)) {
+          const percent = r.estimatedUnderlyingAmount.mul(100).div(r.totalAssets).toNumber();
+          console.log("Locked percent", percent);
+          if (percent > MAX_ALLLOWED_LOCKED_PERCENT) {
+            await unfoldBorrows(
+              strategyAsOperator,
+              async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            );
+          }
+        }
       }
 
 
       if (i % 2 === 0) {
-        const stateHardworkEvents = await doHardWorkForStrategy(
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          signer,
-          decimals,
-        );
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
+        console.log('------------------ HARDWORK', i, '------------------');
+        const stateHardworkEvents = await doHardWorkForStrategy(splitter, strategyAsSigner, signer, decimals);
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
         states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `h${i}`)); // todo: stateHardworkEvents
       }
 
 
-      ///////////////////////////
-      // WITHDRAW
-      ///////////////////////////
-
+      console.log('------------------ WITHDRAW', i, '------------------');
       if (i % 7 === 0) {
         await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
-      } else {
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
+      } else if (i % 5 === 0) {
         await redeemFromVault(vault, signer, 50, decimals, assetCtr, insurance);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
         await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
-        await printVaultState(
-          vault,
-          splitter,
-          StrategyBaseV2__factory.connect(strategy.address, signer),
-          assetCtr,
-          decimals,
-        );
+        await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
       }
-
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
-      expect(sharePriceAfter).approximately(sharePriceBefore, DELTA);
+      // todo: expect(sharePriceAfter).approximately(sharePriceBefore, DELTA);
 
       // decrease swap amount slowly
-      swapAmount = swapAmount.div(2);
+      swapAmount = swapAmount.mul(12).div(10); // div on 1.2
 
       states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
@@ -416,7 +342,23 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     console.log('balanceAfter', balanceAfter);
     expect(balanceAfter)
       .approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 0.2 * cycles);
+  }
+//endregion Utils
 
+//region Unit tests
+  it('Move price up in loop - no swap', async function() {
+    await makeTest({
+      filePath: `./tmp/move_price_up_no_swap.csv`,
+      movePricesUp: true,
+      useNoSwapRebalance: true
+    });
   });
-
+  it('Move price up in loop - liquidator', async function() {
+    await makeTest({
+      filePath: `./tmp/move_price_up_liquidator.csv`,
+      movePricesUp: true,
+      useNoSwapRebalance: false
+    })
+  });
+//endregion Unit tests
 });

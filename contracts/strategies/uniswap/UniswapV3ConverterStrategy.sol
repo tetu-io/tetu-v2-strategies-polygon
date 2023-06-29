@@ -207,7 +207,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint oldTotalAssets = totalAssets() - profitToCover;
 
     // withdraw all liquidity from pool; after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
+    bool noLiquidity = state.totalLiquidity == 0;
+    if (! noLiquidity) {
       _depositorEmergencyExit();
     }
 
@@ -216,7 +217,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       converter,
       oldTotalAssets,
       profitToCover,
-      splitter
+      splitter,
+      !noLiquidity
     );
 
     if (tokenAmounts.length == 2) {
@@ -228,9 +230,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return fuseEnabledOut;
   }
 
-  /////////////////////////////////////////////////////////////////////
-  //region ------------------------------------ Exit, Enter
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------ Withdraw by iterations
 
   /// @notice Fix price changes, exit from pool, prepare to calls of quoteWithdrawByAgg/withdrawByAggStep in the loop
   function withdrawByAggEntry() external {
@@ -257,6 +257,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint amountToSwap
   ) {
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+
+    address _controller = controller();
+    StrategyLib.onlyOperators(_controller);
+
     // get tokens as following: [underlying, not-underlying]
     address[] memory tokens = _depositorPoolAssets();
     if (tokens[1] == asset) {
@@ -321,54 +325,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _updateInvestedAssets();
   }
 
-
-
-  // todo for tests only, remove
-  function withdrawAllByLiquidator(bool direction, uint amount, address agg, bytes memory swapData) external {
-    address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
-
-    (, uint profitToCover) = _fixPriceChanges(true);
-    uint oldTotalAssets = totalAssets() - profitToCover;
-
-    // withdraw all liquidity from pool
-    // after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
-
-//    address[] memory tokens = _depositorPoolAssets();
-//    uint[] memory thresholds = new uint[](2);
-//    thresholds[0] = liquidationThresholds[tokens[0]];
-//    thresholds[1] = liquidationThresholds[tokens[1]];
-//
-//    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
-//
-//    UniswapV3AggLib.withdrawByAgg(
-//      converter,
-//      1, // use ITetuLiquidator
-//      address(_getLiquidator(controller())),
-//      tokens,
-//      indexAsset,
-//      thresholds
-//    );
-
-    address[] memory tokens = _depositorPoolAssets();
-    uint indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset);
-
-    ConverterStrategyBaseLib.closePositionsToGetAmount(
-      converter,
-      _getLiquidator(controller()),
-      indexAsset,
-      liquidationThresholds,
-      type(uint).max,
-      tokens
-    );
-
-    _updateInvestedAssets();
+  /// @notice View function required by reader
+  function getPoolTokens() external view returns (address tokenA, address tokenB) {
+    return (state.tokenA, state.tokenB);
   }
 
-  //endregion ------------------------------------ Exit, Enter
+  //endregion ------------------------------------ Withdraw by iterations
 
   /////////////////////////////////////////////////////////////////////
   ///                   INTERNAL LOGIC

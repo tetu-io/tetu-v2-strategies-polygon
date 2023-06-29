@@ -193,6 +193,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint balanceBefore = AppLib.balance(_asset);
 
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);
+      console.log("_depositToPoolUniversal.balance.initial.tokens[0]", IERC20(tokens[0]).balanceOf(address(this)));
+      console.log("_depositToPoolUniversal.balance.initial.tokens[1]", IERC20(tokens[1]).balanceOf(address(this)));
+
 
       // prepare array of amounts ready to deposit, borrow missed amounts
       uint[] memory amounts = _beforeDeposit(converter, amountToDeposit, tokens, indexAsset);
@@ -209,6 +212,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (investedAssets_ + balanceBefore)) {
         strategyLoss = (investedAssets_ + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
       }
+      console.log("_depositToPoolUniversal.balance.final.tokens[0]", IERC20(tokens[0]).balanceOf(address(this)));
+      console.log("_depositToPoolUniversal.balance.final.tokens[1]", IERC20(tokens[1]).balanceOf(address(this)));
     } else if (earnedByPrices_ != 0) {
       // we just skip check of expectedWithdrewUSD here
       uint balance = AppLib.balance(_asset);
@@ -708,6 +713,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   function _getLiquidator(address controller_) internal view returns (ITetuLiquidator) {
     return ITetuLiquidator(IController(controller_).liquidator());
+  }
+
+  /// @notice Return {amount} - {delta}
+  function _dec(uint amount, uint delta) internal pure returns (uint) {
+    return amount > delta
+      ? amount - delta
+      : 0;
   }
   //endregion Others
 

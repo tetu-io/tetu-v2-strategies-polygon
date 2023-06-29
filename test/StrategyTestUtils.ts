@@ -30,6 +30,7 @@ import {
   OnDepositorExitEventObject,
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategy';
 import {
+  RebalancedEventObject,
   UniV3FeesClaimedEventObject,
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
@@ -42,6 +43,7 @@ import {
   IStateHardworkEvents,
   IUniV3FeesClaimedInfo
 } from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
+import {IRebalanceResults} from "./baseUT/utils/StateUtilsNum";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -102,24 +104,52 @@ export async function doHardWorkForStrategy(
 
 const { expect } = chai;
 
+/**
+ * Make rebalance using swaps in liquidator
+ */
 export async function rebalanceUniv3Strategy(
   strategy: UniswapV3ConverterStrategy,
   signer: SignerWithAddress,
   decimals: number,
-) {
+) : Promise<IRebalanceResults> {
   console.log('### REBALANCE CALL ###');
   const stateBefore = await strategy.getState();
 
   const tx = await strategy.connect(signer).rebalance({ gasLimit: 10_000_000 });
   const receipt = await tx.wait();
-  await handleReceiptRebalance(receipt, decimals);
+  const ret = await handleReceiptRebalance(receipt, decimals);
 
   const stateAfter = await strategy.getState();
 
   await printStateDifference(decimals, stateBefore, stateAfter);
 
   // todo check that balance on the strategy is empty after rebalance call
+  return ret;
 }
+
+/**
+ * Make rebalance using rebalanceNoSwaps
+ */
+export async function rebalanceUniv3StrategyNoSwaps(
+  strategy: UniswapV3ConverterStrategy,
+  signer: SignerWithAddress,
+  decimals: number,
+) : Promise<IRebalanceResults> {
+  console.log('### REBALANCE CALL ###');
+  const stateBefore = await strategy.getState();
+
+  const tx = await strategy.connect(signer).rebalanceNoSwaps({ gasLimit: 10_000_000 });
+  const receipt = await tx.wait();
+  const ret = await handleReceiptRebalance(receipt, decimals);
+
+  const stateAfter = await strategy.getState();
+
+  await printStateDifference(decimals, stateBefore, stateAfter);
+
+  // todo check that balance on the strategy is empty after rebalance call
+  return ret;
+}
+
 
 export async function printStateDifference(
   decimals: number,
@@ -303,7 +333,7 @@ export async function handleReceiptRedeem(receipt: ContractReceipt, decimals: nu
   console.log('*************');
 }
 
-export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number) {
+export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number): Promise<IRebalanceResults> {
   console.log('*** REBALANCE LOGS ***');
   const univ3LogicLibI = UniswapV3ConverterStrategyLogicLib__factory.createInterface();
   for (const event of (receipt.events ?? [])) {
@@ -312,9 +342,22 @@ export async function handleReceiptRebalance(receipt: ContractReceipt, decimals:
     }
     if (event.topics[0].toLowerCase() === univ3LogicLibI.getEventTopic('Rebalanced').toLowerCase()) {
       console.log('/// Strategy rebalanced');
+      const log = (univ3LogicLibI.decodeEventLog(
+        univ3LogicLibI.getEvent('Rebalanced'),
+        event.data,
+        event.topics,
+      ) as unknown) as RebalancedEventObject;
+      return {
+        loss: log.loss,
+        covered: log.covered
+      }
     }
   }
   console.log('*************');
+  return {
+    loss: BigNumber.from(0),
+    covered: BigNumber.from(0)
+  }
 }
 
 export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals: number) : Promise<IStateHardworkEvents> {
