@@ -7,10 +7,8 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
-  AlgebraConverterStrategy,
-  AlgebraConverterStrategy__factory,
   IERC20,
-  IERC20__factory, IStrategyV2,
+  IERC20__factory, IKyberSwapElasticLM__factory, IStrategyV2, KyberConverterStrategy, KyberConverterStrategy__factory,
   TetuVaultV2, VaultFactory__factory,
 } from "../../../../typechain";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
@@ -21,7 +19,6 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../UniversalUtils";
 
@@ -40,7 +37,7 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('AlgebraConverterStrategyTest', function() {
+describe('KyberConverterStrategyTest', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -48,9 +45,10 @@ describe('AlgebraConverterStrategyTest', function() {
   let snapshotBefore: string;
   let snapshot: string;
   let signer: SignerWithAddress;
+  let operator: SignerWithAddress;
   let asset: IERC20;
   let vault: TetuVaultV2;
-  let strategy: AlgebraConverterStrategy;
+  let strategy: KyberConverterStrategy;
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
@@ -60,7 +58,7 @@ describe('AlgebraConverterStrategyTest', function() {
         {
           forking: {
             jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 43620959,
+            blockNumber: 44366000, // after kyber swapper was deployed
           },
         },
       ],
@@ -84,10 +82,10 @@ describe('AlgebraConverterStrategyTest', function() {
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset.address,
-      'TetuV2_Algebra_USDC_USDT',
+      'TetuV2_Kyber_USDC_USDT',
       async(_splitterAddress: string) => {
-        const _strategy = AlgebraConverterStrategy__factory.connect(
-          await DeployerUtils.deployProxy(signer, 'AlgebraConverterStrategy'),
+        const _strategy = KyberConverterStrategy__factory.connect(
+          await DeployerUtils.deployProxy(signer, 'KyberConverterStrategy'),
           gov,
         );
 
@@ -95,17 +93,11 @@ describe('AlgebraConverterStrategyTest', function() {
           core.controller,
           _splitterAddress,
           converterAddress,
-          MaticAddresses.ALGEBRA_USDC_USDT,
+          MaticAddresses.KYBER_USDC_USDT,
           0,
           0,
           true,
-          {
-            rewardToken: MaticAddresses.dQUICK_TOKEN,
-            bonusRewardToken: MaticAddresses.WMATIC_TOKEN,
-            pool: MaticAddresses.ALGEBRA_USDC_USDT,
-            startTime: 1663631794,
-            endTime: 4104559500
-          }
+          5
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -117,30 +109,24 @@ describe('AlgebraConverterStrategyTest', function() {
       300,
       false,
     );
-    strategy = data.strategy as AlgebraConverterStrategy
+    strategy = data.strategy as KyberConverterStrategy
     vault = data.vault.connect(signer)
 
     await ConverterUtils.whitelist([strategy.address]);
     await vault.connect(gov).setWithdrawRequestBlocks(0)
 
-    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
-    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.dQUICK_TOKEN, MaticAddresses.WMATIC_TOKEN,])
+    operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.KNC_TOKEN,])
     await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
 
-    /*const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
-    await strategy.connect(platformVoter).setCompoundRatio(50000);*/
+    const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
+    await strategy.connect(platformVoter).setCompoundRatio(50000);
 
     const pools = [
       {
-        pool: MaticAddresses.ALGEBRA_dQUICK_QUICK,
-        swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-        tokenIn: MaticAddresses.dQUICK_TOKEN,
-        tokenOut: MaticAddresses.QUICK_TOKEN,
-      },
-      {
-        pool: MaticAddresses.ALGEBRA_USDC_QUICK,
-        swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-        tokenIn: MaticAddresses.QUICK_TOKEN,
+        pool: MaticAddresses.KYBER_KNC_USDC,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
+        tokenIn: MaticAddresses.KNC_TOKEN,
         tokenOut: MaticAddresses.USDC_TOKEN,
       },
     ]
@@ -173,9 +159,92 @@ describe('AlgebraConverterStrategyTest', function() {
     await TimeUtils.rollback(snapshot);
   });
 
-  describe('Algebra strategy tests', function() {
+  describe('Kyber strategy tests', function() {
+    it('Farm end', async () => {
+      const s = strategy
+
+      let state = await s.getState()
+      expect(state.flags[1]).eq(false)
+      expect(state.flags[2]).eq(false)
+      expect(state.flags[3]).eq(false)
+
+      console.log('deposit...');
+      await asset.approve(vault.address, Misc.MAX_UINT);
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
+      await vault.deposit(parseUnits('1000', 6), signer.address);
+
+      state = await s.getState()
+      expect(state.flags[1]).eq(true)
+      expect(state.flags[2]).eq(false)
+      expect(state.flags[3]).eq(false)
+
+      console.log('Make pool volume')
+      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+
+      const farmingContract = IKyberSwapElasticLM__factory.connect('0x7D5ba536ab244aAA1EA42aB88428847F25E3E676', signer)
+      const poolInfo = await farmingContract.getPoolInfo(5)
+      console.log('Farm ends', poolInfo.endTime)
+      let now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
+
+      expect(await s.needRebalance()).eq(false)
+      await TimeUtils.advanceBlocksOnTs(1 + poolInfo.endTime - now)
+
+      console.log('Rebalance for unstake')
+      expect(await s.needRebalance()).eq(true)
+
+      state = await s.getState()
+      expect(state.flags[1]).eq(true)
+      expect(state.flags[2]).eq(false)
+      expect(state.flags[3]).eq(true)
+
+      await s.rebalance()
+      expect(await s.needRebalance()).eq(false)
+      state = await s.getState()
+      expect(state.flags[1]).eq(false)
+      expect(state.flags[2]).eq(false)
+      expect(state.flags[3]).eq(false)
+      expect(state.totalLiquidity).gt(0)
+
+      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
+
+      console.log('Rebalance without stake')
+      expect(await s.needRebalance()).eq(true)
+      await s.rebalance()
+      expect(await s.needRebalance()).eq(false)
+      state = await s.getState()
+      expect(state.flags[1]).eq(false)
+      expect(state.flags[2]).eq(false)
+      expect(state.flags[3]).eq(false)
+      expect(state.totalLiquidity).gt(0)
+
+      const admin = await Misc.impersonate(await farmingContract.admin())
+
+      // addPool
+      now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
+      await farmingContract.connect(admin).addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
+      const newPid = await farmingContract.poolLength() - 1
+      await s.connect(operator).changePId(newPid)
+
+      state = await s.getState()
+      expect(state.flags[1]).eq(false)
+      expect(state.flags[2]).eq(true)
+      expect(state.flags[3]).eq(false)
+
+      console.log('Rebalance for stake')
+      expect(await s.needRebalance()).eq(true)
+      await s.rebalance()
+      expect(await s.needRebalance()).eq(false)
+      state = await s.getState()
+      expect(state.flags[1]).eq(true)
+      expect(state.flags[2]).eq(false)
+      expect(state.flags[3]).eq(false)
+      expect(state.totalLiquidity).gt(0)
+    })
+
+
     it('Rebalance, hardwork', async() => {
       const s = strategy
+      const state = await s.getState()
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
@@ -184,8 +253,9 @@ describe('AlgebraConverterStrategyTest', function() {
 
       expect(await s.needRebalance()).eq(false)
 
-      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6));
+      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
 
+      console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
       await s.rebalance()
       expect(await s.needRebalance()).eq(false)
@@ -200,6 +270,7 @@ describe('AlgebraConverterStrategyTest', function() {
     })
     it('Deposit, hardwork, withdraw', async() => {
       const s = strategy
+      const state = await s.getState()
 
       console.log('deposit 1...');
       await asset.approve(vault.address, Misc.MAX_UINT);
@@ -213,7 +284,7 @@ describe('AlgebraConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
@@ -228,7 +299,7 @@ describe('AlgebraConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       console.log('withdraw')
       await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
@@ -237,7 +308,11 @@ describe('AlgebraConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+
+      if (await s.needRebalance()) {
+        await s.rebalance()
+      }
 
       console.log('withdrawAll')
       await vault.withdrawAll()
