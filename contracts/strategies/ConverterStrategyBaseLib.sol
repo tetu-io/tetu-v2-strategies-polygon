@@ -1041,6 +1041,7 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
+    console.log("calcInvestedAssets.start");
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
 
@@ -1050,12 +1051,15 @@ library ConverterStrategyBaseLib {
       tokens,
       v.len
     );
+    console.log("calcInvestedAssets.prices", v.prices[0], v.prices[1]);
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      console.log("calcInvestedAssets.i", i);
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
+        console.log("calcInvestedAssets.depositorQuoteExitAmountsOut[i], amountOut", depositorQuoteExitAmountsOut[i], amountOut);
       } else {
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(
@@ -1065,6 +1069,7 @@ library ConverterStrategyBaseLib {
           // investedAssets is calculated using exact debts, debt-gaps are not taken into account
           false
         );
+        console.log("calcInvestedAssets.2,toPay,collateral,amountOut", toPay, collateral, amountOut);
         if (amountOut < toPay) {
           setDebt(v, indexAsset, toPay);
         } else {
@@ -1073,6 +1078,7 @@ library ConverterStrategyBaseLib {
 
         // available amount to repay
         uint toRepay = collateral + IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
+        console.log("calcInvestedAssets.3,toRepay,amountOut", toRepay, amountOut);
 
         // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
         (toPay, collateral) = converter_.getDebtAmountCurrent(
@@ -1082,14 +1088,17 @@ library ConverterStrategyBaseLib {
           // investedAssets is calculated using exact debts, debt-gaps are not taken into account
           false
         );
+        console.log("calcInvestedAssets.4,toPay,collateral,amountOut", toPay, collateral, amountOut);
         amountOut += collateral;
 
         if (toRepay >= toPay) {
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+          console.log("calcInvestedAssets.5,+amountOut", (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
         } else {
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           setDebt(v, i, toPay - toRepay);
+          console.log("calcInvestedAssets.5,toPay - toRepay", toPay - toRepay);
         }
       }
     }
@@ -1107,12 +1116,15 @@ library ConverterStrategyBaseLib {
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
+          console.log("calcInvestedAssets.6.debtInAsset, amountOut", debtInAsset, amountOut);
         } else {
           amountOut -= debtInAsset;
+          console.log("calcInvestedAssets.7.debtInAsset, amountOut", debtInAsset, amountOut);
         }
       }
     }
 
+    console.log("calcInvestedAssets.final.amountOut", amountOut);
     return amountOut;
   }
 

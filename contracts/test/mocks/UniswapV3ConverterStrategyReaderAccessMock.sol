@@ -7,6 +7,8 @@ import "hardhat/console.sol";
 contract UniswapV3ConverterStrategyReaderAccessMock is IUniswapV3ConverterStrategyReaderAccess {
   address internal _converter;
   address internal _splitter;
+  address internal _tokenA;
+  address internal _tokenB;
   uint internal _totalAssets;
 
   function setConverter(address converter_) external {
@@ -19,6 +21,11 @@ contract UniswapV3ConverterStrategyReaderAccessMock is IUniswapV3ConverterStrate
 
   function setTotalAssets(uint totalAssets_) external {
     _totalAssets = totalAssets_;
+  }
+
+  function setPoolTokens(address tokenA, address tokenB) external {
+    _tokenA = tokenA;
+    _tokenB = tokenB;
   }
 
   function converter() external view returns (address) {
@@ -34,6 +41,6 @@ contract UniswapV3ConverterStrategyReaderAccessMock is IUniswapV3ConverterStrate
   }
 
   function getPoolTokens() external view returns (address tokenA, address tokenB) {
-    return (tokenA, tokenB);
+    return (_tokenA, _tokenB);
   }
 }

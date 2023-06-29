@@ -139,6 +139,7 @@ describe('UniswapV3ReaderTest', function() {
 
     async function getLockedUnderlyingAmount(p: IGetLockedUnderlyingAmountParams): Promise<IGetLockedUnderlyingAmountResults> {
       await strategy.setTotalAssets(parseUnits(p.totalAssets, await p.underlying.decimals()));
+      await strategy.setPoolTokens(p.underlying.address, p.secondAsset.address);
       await splitter.setAsset(p.underlying.address);
 
       if (p.prices) {
@@ -154,7 +155,7 @@ describe('UniswapV3ReaderTest', function() {
         }
       }
 
-      const ret = await reader.getLockedUnderlyingAmount(strategy.address, p.underlying.address, p.secondAsset.address);
+      const ret = await reader.getLockedUnderlyingAmount(strategy.address);
       return {
         estimatedUnderlyingAmount: +formatUnits(ret.estimatedUnderlyingAmount, await p.underlying.decimals()),
         totalAssets: +formatUnits(ret.totalAssets, await p.underlying.decimals()),
