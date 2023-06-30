@@ -13,12 +13,15 @@ export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 const libraries = new Map<string, string[]>([
   ['VeTetu', ['VeTetuLogo']],
   ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib']],
+  ['ConverterStrategyBaseLib2', ['StrategyLib']],
   ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
+  // Balancer
   [
     'BalancerBoostedStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib'],
   ],
   ['BalancerBoostedDepositorFacade', ['BalancerLogicLib']],
+  // Uniswap V3
   [
     'UniswapV3ConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib', 'UniswapV3AggLib'],
@@ -26,6 +29,7 @@ const libraries = new Map<string, string[]>([
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib']],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
+  // Algebra
   [
     'AlgebraConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'AlgebraConverterStrategyLogicLib'],
@@ -36,6 +40,13 @@ const libraries = new Map<string, string[]>([
   ['BorrowLib', ['ConverterStrategyBaseLib']],
   ['BorrowLibFacade', ['BorrowLib']],
   ['UniswapV3AggLibFacade', ['UniswapV3AggLib']],
+  // Kyber
+  [
+    'KyberConverterStrategy',
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'KyberConverterStrategyLogicLib'],
+  ],
+  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib']],
+  ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(

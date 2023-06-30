@@ -53,6 +53,7 @@ describe('AlgebraConverterStrategyTest', function() {
   let strategy: AlgebraConverterStrategy;
 
   before(async function() {
+    snapshotBefore = await TimeUtils.snapshot();
     await hre.network.provider.request({
       method: "hardhat_reset",
       params: [
@@ -67,7 +68,6 @@ describe('AlgebraConverterStrategyTest', function() {
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
-    snapshotBefore = await TimeUtils.snapshot();
 
     const core = Addresses.getCore();
     const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

@@ -51,6 +51,7 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
   let strategy: AlgebraConverterStrategy;
 
   before(async function() {
+    snapshotBefore = await TimeUtils.snapshot();
     await hre.network.provider.request({
       method: "hardhat_reset",
       params: [
@@ -62,8 +63,6 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
         },
       ],
     });
-
-    snapshotBefore = await TimeUtils.snapshot();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -177,7 +176,7 @@ describe('AlgebraConverterStrategyAggRebalanceTest', function() {
       const swapTransaction = await buildTxForSwap(JSON.stringify(params));
       console.log('Transaction for swap: ', swapTransaction);
 
-      await s.rebalanceSwapByAgg(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data)
+      await s.rebalanceSwapByAgg(quote[0], quote[1], MaticAddresses.AGG_ONEINCH_V5, swapTransaction.data, {gasLimit: 29_000_000})
 
       expect(await s.needRebalance()).eq(false)
     })
