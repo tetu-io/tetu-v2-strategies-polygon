@@ -44,4 +44,16 @@ contract UniswapV3AggLibFacade {
       propNotUnderlying18
     );
   }
+
+  function _swap(
+    ConverterStrategyBaseLib.PlanInputParams memory p,
+    UniswapV3AggLib.SwapByAggParams memory aggParams,
+    uint indexIn,
+    uint indexOut,
+    uint amountIn
+  ) internal returns (
+    uint spentAmountIn
+  ) {
+    return UniswapV3AggLib._swap(p, aggParams, indexIn, indexOut, amountIn);
+  }
 }

@@ -7,6 +7,7 @@ import "./Uni3StrategyErrors.sol";
 import "../../libs/AppLib.sol";
 import "../../libs/AppErrors.sol";
 import "../ConverterStrategyBaseLib.sol";
+import "../ConverterStrategyBaseLib2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
@@ -16,8 +17,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-
-import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -317,24 +316,18 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 tickSpacing,
     int24 rebalanceTickRange
   ) public view returns (bool) {
-    console.log("needRebalance.isFuseTriggered");
     if (isFuseTriggered) {
       return false;
     }
     (, int24 tick, , , , ,) = pool.slot0();
-    console.log("needRebalance.tick");
-    console.logInt(tick);
     if (upperTick - lowerTick == tickSpacing) {
-      console.log("needRebalance.1", tick < lowerTick || tick >= upperTick);
       return tick < lowerTick || tick >= upperTick;
     } else {
       int24 halfRange = (upperTick - lowerTick) / 2;
       int24 oldMedianTick = lowerTick + halfRange;
       if (tick > oldMedianTick) {
-        console.log("needRebalance.2", tick - oldMedianTick >= rebalanceTickRange);
         return tick - oldMedianTick >= rebalanceTickRange;
       }
-      console.log("needRebalance.3", oldMedianTick - tick > rebalanceTickRange);
       return oldMedianTick - tick > rebalanceTickRange;
     }
   }
@@ -876,7 +869,7 @@ library UniswapV3ConverterStrategyLogicLib {
     tokenAmounts = new uint[](0);
 
     if (state.fillUp) {
-      revert('Only for swap strategy.'); // todo
+      revert('Only for swap strategy.'); // todo Do we need this revert?
     }
 
     RebalanceLocalVariables memory vars = RebalanceLocalVariables({
@@ -959,16 +952,21 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   /// @notice Cover possible loss after call of {withdrawByAggStep}
+  /// @param tokens [underlying, not-underlying]
   function afterWithdrawStep(
     ITetuConverter converter,
     address pool,
     address[] memory tokens,
     uint oldTotalAssets,
     uint profitToCover,
-    address strategyProfitHolder
+    address strategyProfitHolder,
+    address splitter
   ) external {
-    console.log("afterWithdrawStep.oldTotalAssets", oldTotalAssets);
-    console.log("afterWithdrawStep.profitToCover", profitToCover);
+    if (profitToCover > 0) {
+      uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
+      ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
+    }
+
     uint[] memory amounts = new uint[](2);
     amounts[0] = AppLib.balance(tokens[0]); // tokens[0] is underlying
 
@@ -982,9 +980,6 @@ library UniswapV3ConverterStrategyLogicLib {
     if (loss > 0) {
       covered = UniswapV3DebtLib.coverLossFromRewards(loss, strategyProfitHolder, tokens[0], tokens[1], pool);
     }
-    console.log("afterWithdrawStep.newTotalAssets", newTotalAssets);
-    console.log("afterWithdrawStep.loss", loss);
-    console.log("afterWithdrawStep.covered", covered);
 
     emit Rebalanced(loss, covered);
   }

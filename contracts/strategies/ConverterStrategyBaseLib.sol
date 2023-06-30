@@ -1441,7 +1441,8 @@ library ConverterStrategyBaseLib {
   /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
   /// @dev We assume here that this function is called before closing any positions in the current block
   /// @param liquidationThresholds Min allowed amounts-out for liquidations
-  /// @param requestedAmount Requested amount of main asset that should be added to the current balance
+  /// @param requestedAmount Requested amount of main asset that should be added to the current balance.
+  ///                        Pass type(uint).max to request all.
   /// @return expectedAmount Main asset amount expected to be received on balance after all conversions and swaps
   function closePositionsToGetAmount(
     ITetuConverter converter_,
@@ -1684,13 +1685,19 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice Prepare a plan to swap leftovers to required proportion
+  /// @param assetBalance Balance of underlying
+  /// @param assetBalance Balance of not-underlying
+  /// @param indexAsset Index of the underlying in {p.prices}, {p.decs}
+  /// @param indexToken Index of the not-underlying in {p.prices}, {p.decs}
+  /// @param indexTokenToSwapPlus1 Index of the token to be swapped. 0 - no swap is required
+  /// @param amountToSwap Amount to be swapped. 0 - no swap is required
   function _buildPlanForLeftovers(
     PlanInputParams memory p,
     uint assetBalance,
     uint tokenBalance,
     uint indexAsset,
     uint indexToken
-  ) internal returns (
+  ) internal view returns (
     uint indexTokenToSwapPlus1,
     uint amountToSwap
   ) {
@@ -1724,6 +1731,17 @@ library ConverterStrategyBaseLib {
   }
 
   /// @notice Prepare a plan to swap some amount of collateral to get required repay-amount and make repaying
+  /// @param requestedAmount Amount of underlying that we need to get on balance finally.
+  /// @param totalCollateral Total amount of collateral used in the borrow
+  /// @param totalDebt Total amount of debt that should be repaid to receive {totalCollateral}
+  /// @param indexCollateral Index of collateral asset in {p.prices}, {p.decs}
+  /// @param indexBorrow Index of borrow asset in {p.prices}, {p.decs}
+  /// @param balanceCollateral Current balance of the collateral asset
+  /// @param balanceBorrow Current balance of the borrowed asset
+  /// @param indexTokenToSwapPlus1 1-based index of the token to be swapped. Swap of amount of collateral asset can be required
+  ///                              to receive missed amount-to-repay. 0 - no swap is required
+  /// @param amountToSwap Amount to be swapped. 0 - no swap is required
+  /// @param indexRepayTokenPlus1 1-based index of the token to be repaied. 0 - no repaying is required
   function _buildPlanForRepay(
     uint requestedAmount,
     PlanInputParams memory p,
@@ -1733,7 +1751,7 @@ library ConverterStrategyBaseLib {
     uint indexBorrow,
     uint balanceCollateral,
     uint balanceBorrow
-  ) internal returns (
+  ) internal view returns (
     uint indexTokenToSwapPlus1,
     uint amountToSwap,
     uint indexRepayTokenPlus1
@@ -1771,6 +1789,8 @@ library ConverterStrategyBaseLib {
   /// @param tokenBalance Current balance of not-underlying
   /// @param propNotUnderlying18 Required proportion of not-underlying [0..1e18]
   ///                            Proportion of underlying would be (1e18 - propNotUnderlying18)
+  /// @param targetAssets What result balance of underlying is required to fit to required proportions
+  /// @param targetTokens What result balance of not-underlying is required to fit to required proportions
   function _getTargetAmounts(
     uint[] memory prices,
     uint[] memory decs,
@@ -1802,6 +1822,7 @@ library ConverterStrategyBaseLib {
   /// @param indexCollateral Index of the collateral asset in {prices} and {decs}
   /// @param indexBorrowAsset Index of the borrow asset in {prices} and {decs}
   /// @param balanceBorrowAsset Available balance of the borrow asset, it will be used to cover the debt
+  /// @return amountOut Amount of collateral-asset that should be sold
   function _getAmountToSell(
     uint requestedAmount,
     uint totalDebt,
@@ -1811,7 +1832,7 @@ library ConverterStrategyBaseLib {
     uint indexCollateral,
     uint indexBorrowAsset,
     uint balanceBorrowAsset
-  ) internal view returns (
+  ) internal pure returns (
     uint amountOut
   ) {
     if (totalDebt != 0) {

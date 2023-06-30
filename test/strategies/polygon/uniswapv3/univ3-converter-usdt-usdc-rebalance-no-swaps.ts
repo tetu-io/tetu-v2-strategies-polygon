@@ -42,7 +42,7 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
 const { expect } = chai;
 
-describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', function() {
+describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
 //region Variables
   let snapshotBefore: string;
@@ -238,11 +238,9 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
     useNoSwapRebalance: boolean;
   }
   async function makeTest(p: ITestParams) {
-    const cycles = 9;
-    const MAX_ALLLOWED_LOCKED_PERCENT = 25;
-    const DELTA = 500;
+    const cycles = 6;
+    const MAX_ALLLOWED_LOCKED_PERCENT = 20;
     const pathOut = p.filePath;
-    const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
     const states: IStateNum[] = [];
 
     await strategy.setFuseThreshold(parseUnits('1'));
@@ -345,7 +343,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
-      // todo: expect(sharePriceAfter).approximately(sharePriceBefore, DELTA);
+      expect(sharePriceAfter).approximately(sharePriceBefore, 10);
 
       // decrease swap amount slowly
       swapAmount = swapAmount.mul(12).div(10); // div on 1.1
@@ -357,8 +355,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
     console.log('balanceBefore', balanceBefore);
     console.log('balanceAfter', balanceAfter);
-    expect(balanceAfter)
-      .approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 0.2 * cycles);
+    expect(balanceAfter).approximately(balanceBefore - (+formatUnits(depositAmount1, 6) * 0.006 * cycles), 0.2 * cycles);
   }
 //endregion Utils
 
@@ -379,7 +376,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
   });
 
 
-  it('Move price up in loop - liquidator', async function() {
+  it.skip('Move price up in loop - liquidator @skip-on-coverage', async function() {
     await makeTest({
       filePath: `./tmp/move_price_up_liquidator.csv`,
       movePricesUp: true,

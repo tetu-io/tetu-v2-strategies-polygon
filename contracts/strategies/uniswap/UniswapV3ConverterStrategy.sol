@@ -235,20 +235,26 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   //region ------------------------------------ Withdraw by iterations
 
-  /// @notice Fix price changes, exit from pool, prepare to calls of quoteWithdrawByAgg/withdrawByAggStep in the loop
+  /// @notice Fix price changes, exit from pool, prepare to call quoteWithdrawByAgg/withdrawByAggStep in the loop
   function withdrawByAggEntry() external {
     address _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
     (, uint profitToCover) = _fixPriceChanges(true);
-    uint oldTotalAssets = totalAssets() - profitToCover;
 
     // withdraw all liquidity from pool; after disableFuse() liquidity is zero
     if (state.totalLiquidity > 0) {
       _depositorEmergencyExit();
     }
 
-    _updateInvestedAssets();
+    address _asset = asset;
+    uint balance = IERC20(_asset).balanceOf(address(this));
+    if (profitToCover != 0 && balance != 0) {
+      uint profitToSend = Math.min(profitToCover, balance);
+      ConverterStrategyBaseLib2.sendToInsurance(_asset, profitToSend, splitter, totalAssets());
+    }
+
+  _updateInvestedAssets();
   }
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep}
@@ -331,7 +337,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       v.tokens,
       v.oldTotalAssets,
       v.profitToCover,
-      state.strategyProfitHolder
+      state.strategyProfitHolder,
+      splitter
     );
 
     _updateInvestedAssets();

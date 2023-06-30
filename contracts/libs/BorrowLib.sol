@@ -35,12 +35,8 @@ library BorrowLib {
 
     /// @notice Borrowed amount of not-underlying
     uint directDebt;
-    /// @notice Amount of underlying locked as collateral
-    uint directCollateral;
     /// @notice Borrowed amount of underlying
     uint reverseDebt;
-    /// @notice Amount of not-underlying locked as collateral
-    uint reverseCollateral;
   }
 
   /// @notice Params required to borrow {assetB} under {assetA}
@@ -97,10 +93,10 @@ library BorrowLib {
     v.amount0 = IERC20(v.asset0).balanceOf(address(this));
     v.amount1 = IERC20(v.asset1).balanceOf(address(this));
 
-    (v.directDebt, v.directCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), v.asset0, v.asset1, true);
-    (v.reverseDebt, v.reverseCollateral) = tetuConverter_.getDebtAmountCurrent(address(this), v.asset1, v.asset0, true);
+    (v.directDebt, ) = tetuConverter_.getDebtAmountCurrent(address(this), v.asset0, v.asset1, true);
+    (v.reverseDebt, ) = tetuConverter_.getDebtAmountCurrent(address(this), v.asset1, v.asset0, true);
 
-    _rebalanceAssets(v, tetuConverter_, true);
+    _rebalanceAssets(v, tetuConverter_, repayAllowed);
   }
 
   /// @param repayAllowed Protection against recursion
@@ -127,7 +123,7 @@ library BorrowLib {
         require(repayAllowed, AppErrors.NOT_ALLOWED);
         // repay of v.asset1 is required
         uint requiredAmount0 = (requiredCost0 - cost0) * v.decs[0] / v.prices[0];
-        rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt, v.directCollateral);
+        rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt);
       } else {
         // new (or additional) borrow of asset 0 under asset 1 is required
         openPosition(c10, v.amount1, v.amount0);
@@ -148,7 +144,7 @@ library BorrowLib {
         // repay of v.asset0 is required
         // requiredCost0 < cost0 => requiredCost1 > cost1
         uint requiredAmount1 = (requiredCost1 - cost1) * v.decs[1] / v.prices[1];
-        rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt, v.reverseCollateral);
+        rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt);
       } else {
         // new or additional borrow of asset 1 under asset 0 is required
         openPosition(c01, v.amount0, v.amount1);
@@ -186,17 +182,15 @@ library BorrowLib {
   ///         then try to rebalance once more
   /// @param requiredAmountB Amount of collateral that we need to receive after repay
   /// @param amountDebtA Total amount that is required to pay to close the debt
-  /// @param amountCollateralB Total locked collateral
   function rebalanceRepayBorrow(
     RebalanceAssetsLocal memory v,
     RebalanceAssetsCore memory c,
     uint requiredAmountB,
-    uint amountDebtA,
-    uint amountCollateralB
+    uint amountDebtA
   ) internal {
-    // we need to get {requiredAmount0}
+    // we need to get {requiredAmountB}
     // we don't know exact amount to repay
-    // but we are sure that amount {requiredAmount0 ===> requiredAmount1} would be more than required
+    // but we are sure that amount {requiredAmountB ===> requiredAmountA} would be more than required
     uint capRequiredAmountA = requiredAmountB * c.alpha18 / 1e18;
     ConverterStrategyBaseLib._repayDebt(c.converter, c.assetB, c.assetA, Math.min(capRequiredAmountA, amountDebtA));
 
