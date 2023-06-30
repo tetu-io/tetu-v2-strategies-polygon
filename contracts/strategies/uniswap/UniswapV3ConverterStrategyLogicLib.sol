@@ -967,6 +967,8 @@ library UniswapV3ConverterStrategyLogicLib {
     uint profitToCover,
     address strategyProfitHolder
   ) external {
+    console.log("afterWithdrawStep.oldTotalAssets", oldTotalAssets);
+    console.log("afterWithdrawStep.profitToCover", profitToCover);
     uint[] memory amounts = new uint[](2);
     amounts[0] = AppLib.balance(tokens[0]); // tokens[0] is underlying
 
@@ -980,6 +982,9 @@ library UniswapV3ConverterStrategyLogicLib {
     if (loss > 0) {
       covered = UniswapV3DebtLib.coverLossFromRewards(loss, strategyProfitHolder, tokens[0], tokens[1], pool);
     }
+    console.log("afterWithdrawStep.newTotalAssets", newTotalAssets);
+    console.log("afterWithdrawStep.loss", loss);
+    console.log("afterWithdrawStep.covered", covered);
 
     emit Rebalanced(loss, covered);
   }

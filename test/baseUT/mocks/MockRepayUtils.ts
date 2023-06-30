@@ -49,9 +49,9 @@ export async function setupMockedRepay(
   await tetuConverter.setRepay(
     p.collateralAsset.address,
     p.borrowAsset.address,
-    parseUnits(p.amountRepay, decimalsBorrow),
+    parseUnits(p.amountRepay ?? p.totalDebtAmountOut, decimalsBorrow),
     user,
-    parseUnits(p.collateralAmountOut, decimalsCollateral),
+    parseUnits(p.collateralAmountOut ?? p.totalCollateralAmountOut, decimalsCollateral),
     parseUnits(p.returnedBorrowAmountOut || "0", decimalsBorrow),
     parseUnits(p.swappedLeftoverCollateralOut || "0", decimalsCollateral),
     parseUnits(p.swappedLeftoverBorrowOut || "0", decimalsBorrow),
@@ -60,7 +60,7 @@ export async function setupMockedRepay(
 
   await p.collateralAsset.mint(
     tetuConverter.address,
-    parseUnits(p.collateralAmountOut, decimalsCollateral)
+    parseUnits(p.collateralAmountOut ?? p.totalCollateralAmountOut, decimalsCollateral)
   );
 }
 

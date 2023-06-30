@@ -1789,7 +1789,7 @@ library ConverterStrategyBaseLib {
       ? 0
       : ((costAssets + costTokens) * propNotUnderlying18 / 1e18);
     targetAssets = ((costAssets + costTokens) - targetTokens) * decs[indexAsset] / prices[indexAsset];
-    targetTokens *= decs[indexToken] / prices[indexToken];
+    targetTokens = targetTokens * decs[indexToken] / prices[indexToken];
   }
 
   /// @notice What amount of collateral should be sold to pay the debt and receive {requestedAmount}

@@ -117,7 +117,6 @@ library UniswapV3AggLib {
   }
   //endregion ------------------------------------------------ External functions
 
-
   //region ------------------------------------------------ Internal helper functions
   /// @notice Quote amount of the next swap if any.
   ///         Swaps are required if direct-borrow exists OR reverse-borrow exists or not underlying leftovers exist

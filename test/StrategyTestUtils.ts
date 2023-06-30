@@ -134,11 +134,12 @@ export async function rebalanceUniv3StrategyNoSwaps(
   strategy: UniswapV3ConverterStrategy,
   signer: SignerWithAddress,
   decimals: number,
+  checkNeedRebalance: boolean = true
 ) : Promise<IRebalanceResults> {
   console.log('### REBALANCE CALL ###');
   const stateBefore = await strategy.getState();
 
-  const tx = await strategy.connect(signer).rebalanceNoSwaps({ gasLimit: 10_000_000 });
+  const tx = await strategy.connect(signer).rebalanceNoSwaps(checkNeedRebalance,{ gasLimit: 10_000_000 });
   const receipt = await tx.wait();
   const ret = await handleReceiptRebalance(receipt, decimals);
 

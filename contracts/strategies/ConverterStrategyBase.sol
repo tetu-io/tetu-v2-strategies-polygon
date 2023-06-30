@@ -720,13 +720,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _getLiquidator(address controller_) internal view returns (ITetuLiquidator) {
     return ITetuLiquidator(IController(controller_).liquidator());
   }
-
-  /// @notice Return {amount} - {delta}
-  function _dec(uint amount, uint delta) internal pure returns (uint) {
-    return amount > delta
-      ? amount - delta
-      : 0;
-  }
   //endregion Others
 
 

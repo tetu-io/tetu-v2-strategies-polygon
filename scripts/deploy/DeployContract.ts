@@ -35,6 +35,7 @@ const libraries = new Map<string, string[]>([
   ['ConverterStrategyBaseLib2', ['StrategyLib']],
   ['BorrowLib', ['ConverterStrategyBaseLib']],
   ['BorrowLibFacade', ['BorrowLib']],
+  ['UniswapV3AggLibFacade', ['UniswapV3AggLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(
