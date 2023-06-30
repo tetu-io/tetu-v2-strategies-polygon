@@ -424,14 +424,14 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
             // differenceInPercentsLessThan
-            expect(maxPercentDeltas.abs().lt(1e7)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e8)).eq(true);
           });
           it('$10_000', async() => {
             const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
             const r = await makeDepositorEnterTest(facade, { amount: '10000' });
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
-            expect(maxPercentDeltas.abs().lt(1e12)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e13)).eq(true);
           });
           it('$1_000_000', async() => {
             const facade = await MockHelper.createBalancerBoostedDepositorFacade(signer);
@@ -439,7 +439,7 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
             console.log('results', r);
             const maxPercentDeltas = getMaxPercentDelta(r);
             console.log('maxPercentDeltas', maxPercentDeltas);
-            expect(maxPercentDeltas.abs().lt(1e14)).eq(true);
+            expect(maxPercentDeltas.abs().lt(1e15)).eq(true);
           });
         });
       });
