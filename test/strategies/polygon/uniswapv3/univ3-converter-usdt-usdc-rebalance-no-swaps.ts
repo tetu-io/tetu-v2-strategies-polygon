@@ -224,7 +224,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps @skip-on-coverage', funct
     }
 
     console.log("!!!!!!!!!!!!! unfoldBorrows.rebalanceNoSwaps --------------------------------");
-    await strategy.rebalanceNoSwaps();
+    await strategy.rebalanceNoSwaps(false);
     if (saveState) {
       await saveState(`u${++step}`);
     }

@@ -27,10 +27,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///                Data types
   /////////////////////////////////////////////////////////////////////
   struct WithdrawByAggStepLocal {
+    address controller;
+    ITetuConverter converter;
     uint[] expectedAmounts;
     uint[] amountsOut;
     address[] tokens;
     uint[] liquidationThresholds;
+    uint oldTotalAssets;
+    uint profitToCover;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -199,16 +203,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @return True if the fuse was triggered (so, it's necessary to call UniswapV3DebtLib.closeDebtByAgg)
-  function rebalanceNoSwaps() external returns (bool) {
-    address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
+  /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
+  function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
+    StrategyLib.onlyOperators(controller());
 
     (, uint profitToCover) = _fixPriceChanges(true);
     uint oldTotalAssets = totalAssets() - profitToCover;
 
     // withdraw all liquidity from pool; after disableFuse() liquidity is zero
-    bool noLiquidity = state.totalLiquidity == 0;
-    if (! noLiquidity) {
+    if (state.totalLiquidity > 0) {
       _depositorEmergencyExit();
     }
 
@@ -218,7 +221,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       oldTotalAssets,
       profitToCover,
       splitter,
-      !noLiquidity
+      checkNeedRebalance
     );
 
     if (tokenAmounts.length == 2) {
@@ -257,19 +260,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint amountToSwap
   ) {
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
-
-    address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
+    StrategyLib.onlyOperators(controller());
 
     // get tokens as following: [underlying, not-underlying]
-    address[] memory tokens = _depositorPoolAssets();
-    if (tokens[1] == asset) {
-      (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
-    }
-
-    uint[] memory thresholds = new uint[](2);
-    thresholds[0] = liquidationThresholds[tokens[0]];
-    thresholds[1] = liquidationThresholds[tokens[1]];
+    (address[] memory tokens, uint[] memory thresholds) = _getTokensAndThresholds();
+    console.log("quoteWithdrawByAgg.balance[0].init", IERC20(tokens[0]).balanceOf(address(this)));
+    console.log("quoteWithdrawByAgg.balance[1].init", IERC20(tokens[1]).balanceOf(address(this)));
 
     return UniswapV3AggLib.quoteWithdrawStep(converter, tokens, thresholds, propNotUnderlying18);
   }
@@ -291,45 +287,53 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     bytes memory swapData,
     uint propNotUnderlying18
   ) external returns (bool completed) {
-    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
     WithdrawByAggStepLocal memory v;
+    v.controller = controller();
 
-    address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
-
+    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    StrategyLib.onlyOperators(v.controller);
     require(state.totalLiquidity == 0, AppErrors.WITHDRAW_BY_AGG_ENTRY_REQUIRED);
 
+    v.converter = converter;
+
+    (, v.profitToCover) = _fixPriceChanges(true);
+    v.oldTotalAssets = totalAssets() - v.profitToCover;
+
     // get tokens as following: [underlying, not-underlying]
-    v.tokens = _depositorPoolAssets();
-    if (v.tokens[1] == asset) {
-      (v.tokens[0], v.tokens[1]) = (v.tokens[1], v.tokens[0]);
-    }
-    v.liquidationThresholds = new uint[](2);
-    v.liquidationThresholds[0] = liquidationThresholds[v.tokens[0]];
-    v.liquidationThresholds[1] = liquidationThresholds[v.tokens[1]];
+    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
     console.log("withdrawByAggStep.balance[0].init", IERC20(v.tokens[0]).balanceOf(address(this)));
     console.log("withdrawByAggStep.balance[1].init", IERC20(v.tokens[1]).balanceOf(address(this)));
-
+    console.log("investedAssets.init", investedAssets());
 
     completed = UniswapV3AggLib.withdrawStep(
-      converter,
+      v.converter,
       v.tokens,
       v.liquidationThresholds,
       tokenToSwap_,
       amountToSwap_,
       aggregator_ == address(0)
-        ? address(_getLiquidator(controller()))
+        ? address(_getLiquidator(v.controller))
         : aggregator_,
       swapData,
       aggregator_ == address(0),
       propNotUnderlying18
     );
 
+    console.log("withdrawByAggStep.balance[0].after withdraw", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.balance[1].after withdraw", IERC20(v.tokens[1]).balanceOf(address(this)));
+    UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
+      v.converter,
+      address(state.pool),
+      v.tokens,
+      v.oldTotalAssets,
+      v.profitToCover,
+      state.strategyProfitHolder
+    );
+
     _updateInvestedAssets();
     console.log("withdrawByAggStep.balance[0].final", IERC20(v.tokens[0]).balanceOf(address(this)));
     console.log("withdrawByAggStep.balance[1].final", IERC20(v.tokens[1]).balanceOf(address(this)));
-
-    // todo compensate loss (same as rebalance)
+    console.log("investedAssets.final", investedAssets());
   }
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly
@@ -407,5 +411,18 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   function _beforeWithdraw(uint /*amount*/) internal view override {
     require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
+  }
+
+  /// @return tokens [underlying, not-underlying]
+  /// @return thresholds liquidationThresholds for the {tokens}
+  function _getTokensAndThresholds() internal view returns (address[] memory tokens, uint[] memory thresholds) {
+    tokens = _depositorPoolAssets();
+    if (tokens[1] == asset) {
+      (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
+    }
+
+    thresholds = new uint[](2);
+    thresholds[0] = liquidationThresholds[tokens[0]];
+    thresholds[1] = liquidationThresholds[tokens[1]];
   }
 }

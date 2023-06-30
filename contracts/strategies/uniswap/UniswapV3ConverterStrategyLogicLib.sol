@@ -928,6 +928,11 @@ library UniswapV3ConverterStrategyLogicLib {
         splitter
       );
 
+      // need to update last price only for stables coz only stables have fuse mechanic
+      if (vars.isStablePool) {
+        state.lastPrice = vars.newPrice;
+      }
+
       tokenAmounts = new uint[](2);
       tokenAmounts[0] = AppLib.balance(vars.tokenA);
       tokenAmounts[1] = AppLib.balance(vars.tokenB);
@@ -941,19 +946,41 @@ library UniswapV3ConverterStrategyLogicLib {
       if (vars.newTotalAssets < oldTotalAssets) {
         loss = oldTotalAssets - vars.newTotalAssets;
       }
-    }
 
-    // need to update last price only for stables coz only stables have fuse mechanic
-    if (vars.isStablePool) {
-      state.lastPrice = vars.newPrice;
+      uint covered;
+      if (loss > 0) {
+        covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
+      }
+
+      emit Rebalanced(loss, covered);
+
+      fuseEnabledOut = false;
+    }
+  }
+
+  /// @notice Cover possible loss after call of {withdrawByAggStep}
+  function afterWithdrawStep(
+    ITetuConverter converter,
+    address pool,
+    address[] memory tokens,
+    uint oldTotalAssets,
+    uint profitToCover,
+    address strategyProfitHolder
+  ) external {
+    uint[] memory amounts = new uint[](2);
+    amounts[0] = AppLib.balance(tokens[0]); // tokens[0] is underlying
+
+    uint newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+    uint loss;
+    if (newTotalAssets < oldTotalAssets) {
+      loss = oldTotalAssets - newTotalAssets;
     }
 
     uint covered;
     if (loss > 0) {
-      covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
+      covered = UniswapV3DebtLib.coverLossFromRewards(loss, strategyProfitHolder, tokens[0], tokens[1], pool);
     }
 
     emit Rebalanced(loss, covered);
-    fuseEnabledOut = false;
   }
 }
