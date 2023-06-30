@@ -24,7 +24,7 @@ library UniswapV3ConverterStrategyLogicLib {
   //////////////////////////////////////////
 
   event FuseTriggered();
-  event Rebalanced(uint loss, uint covered);
+  event Rebalanced(uint loss, uint coveredByRewards);
   event DisableFuse();
   event NewFuseThreshold(uint newFuseThreshold);
   event UniV3FeesClaimed(uint fee0, uint fee1);
@@ -717,6 +717,10 @@ library UniswapV3ConverterStrategyLogicLib {
     uint covered;
     if (loss > 0) {
       covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
+      uint notCovered = loss - covered;
+      if (notCovered > 0) {
+        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+      }
     }
 
     emit Rebalanced(loss, covered);
@@ -821,6 +825,10 @@ library UniswapV3ConverterStrategyLogicLib {
     uint covered;
     if (loss > 0) {
       covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
+      uint notCovered = loss - covered;
+      if (notCovered > 0) {
+        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+      }
     }
 
     emit Rebalanced(loss, covered);
