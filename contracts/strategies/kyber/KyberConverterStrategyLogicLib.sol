@@ -28,7 +28,7 @@ library KyberConverterStrategyLogicLib {
   //////////////////////////////////////////
 
   event FuseTriggered();
-  event Rebalanced(uint loss, uint covered);
+  event Rebalanced(uint loss, uint coveredByRewards);
   event DisableFuse();
   event NewFuseThreshold(uint newFuseThreshold);
   event KyberFeesClaimed(uint fee0, uint fee1);
@@ -600,6 +600,7 @@ library KyberConverterStrategyLogicLib {
       return (false, amountsOut[1] - debtAmount);
     }
   }
+
   function rebalance(
     State storage state,
     ITetuConverter converter,
@@ -688,6 +689,10 @@ library KyberConverterStrategyLogicLib {
       uint covered;
       if (loss > 0) {
         covered = KyberDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
+        uint notCovered = loss - covered;
+        if (notCovered > 0) {
+          ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+        }
       }
 
       emit Rebalanced(loss, covered);
@@ -787,6 +792,10 @@ library KyberConverterStrategyLogicLib {
       uint covered;
       if (loss > 0) {
         covered = KyberDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
+        uint notCovered = loss - covered;
+        if (notCovered > 0) {
+          ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+        }
       }
 
       emit Rebalanced(loss, covered);
