@@ -85,6 +85,14 @@ library AlgebraConverterStrategyLogicLib {
     uint newTotalAssets;
   }
 
+  struct EnterLocalVariables {
+    bool depositorSwapTokens;
+    uint128 liquidity;
+    uint tokenId;
+    int24 lowerTick;
+    int24 upperTick;
+  }
+
   //////////////////////////////////////////
   //            HELPERS
   //////////////////////////////////////////
@@ -248,31 +256,37 @@ library AlgebraConverterStrategyLogicLib {
     State storage state,
     uint[] memory amountsDesired_
   ) external returns (uint[] memory amountsConsumed, uint liquidityOut) {
-    bool depositorSwapTokens = state.depositorSwapTokens;
-    (address token0, address token1) = depositorSwapTokens ? (state.tokenB, state.tokenA) : (state.tokenA, state.tokenB);
-    if (depositorSwapTokens) {
+    EnterLocalVariables memory vars = EnterLocalVariables({
+      depositorSwapTokens : state.depositorSwapTokens,
+      liquidity : 0,
+      tokenId : state.tokenId,
+      lowerTick : state.lowerTick,
+      upperTick : state.upperTick
+    });
+
+    (address token0, address token1) = vars.depositorSwapTokens ? (state.tokenB, state.tokenA) : (state.tokenA, state.tokenB);
+    if (vars.depositorSwapTokens) {
       (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
     }
-    amountsConsumed = new uint[](2);
-    uint128 liquidity;
-    uint tokenId = state.tokenId;
-    int24 lowerTick = state.lowerTick;
-    int24 upperTick = state.upperTick;
 
-    if (tokenId > 0) {
-      (,,,,int24 nftLowerTick, int24 nftUpperTick,,,,,) = ALGEBRA_NFT.positions(tokenId);
-      if (nftLowerTick != lowerTick || nftUpperTick != upperTick) {
-        ALGEBRA_NFT.burn(tokenId);
-        tokenId = 0;
+    amountsConsumed = new uint[](2);
+
+    if (vars.tokenId > 0) {
+      (,,,,int24 nftLowerTick, int24 nftUpperTick,,,,,) = ALGEBRA_NFT.positions(vars.tokenId);
+      if (nftLowerTick != vars.lowerTick || nftUpperTick != vars.upperTick) {
+        ALGEBRA_NFT.burn(vars.tokenId);
+        vars.tokenId = 0;
       }
     }
 
-    if (tokenId == 0) {
-      (tokenId, liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.mint(INonfungiblePositionManager.MintParams(
+    IncentiveKey memory key = getIncentiveKey(state);
+
+    if (vars.tokenId == 0) {
+      (vars.tokenId, vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.mint(INonfungiblePositionManager.MintParams(
         token0,
         token1,
-        lowerTick,
-        upperTick,
+        vars.lowerTick,
+        vars.upperTick,
         amountsDesired_[0],
         amountsDesired_[1],
         0,
@@ -281,13 +295,12 @@ library AlgebraConverterStrategyLogicLib {
         block.timestamp
       ));
 
-      state.tokenId = tokenId;
+      state.tokenId = vars.tokenId;
 
-      ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
-      FARMING_CENTER.enterFarming(IncentiveKey(state.rewardToken, state.bonusRewardToken, address(state.pool), state.startTime, state.endTime), tokenId, 0, false);
+      ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
     } else {
-      (liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams(
-        tokenId,
+      (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams(
+        vars.tokenId,
         amountsDesired_[0],
         amountsDesired_[1],
         0,
@@ -295,14 +308,38 @@ library AlgebraConverterStrategyLogicLib {
         block.timestamp
       ));
 
-      if (state.totalLiquidity == 0) {
-        ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
-        FARMING_CENTER.enterFarming(IncentiveKey(state.rewardToken, state.bonusRewardToken, address(state.pool), state.startTime, state.endTime), tokenId, 0, false);
+      if (state.totalLiquidity > 0) {
+
+        // get reward amounts
+        (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, vars.tokenId);
+
+        // exit farming (undeposit)
+        FARMING_CENTER.exitFarming(key, vars.tokenId, false);
+
+        // claim rewards and send to profit holder
+        {
+          address strategyProfitHolder = state.strategyProfitHolder;
+
+          if (reward > 0) {
+            address token = state.rewardToken;
+            FARMING_CENTER.claimReward(token, address(this), 0, reward);
+            IERC20(token).safeTransfer(strategyProfitHolder, reward);
+          }
+          if (bonusReward > 0) {
+            address token = state.bonusRewardToken;
+            FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
+            IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
+          }
+        }
+      } else {
+        ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
       }
     }
 
-    state.totalLiquidity += liquidity;
-    liquidityOut = uint(liquidity);
+    FARMING_CENTER.enterFarming(key, vars.tokenId, 0, false);
+
+    state.totalLiquidity += vars.liquidity;
+    liquidityOut = uint(vars.liquidity);
   }
 
   //////////////////////////////////////////
