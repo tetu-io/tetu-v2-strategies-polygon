@@ -14,7 +14,7 @@ import { formatUnits } from 'ethers/lib/utils';
 export class UniswapV3StrategyUtils {
   public static extractRebalanceLoss(cr: ContractReceipt): BigNumber[] {
     const abi = [
-      "event Rebalanced(uint loss, uint covered)",
+      "event Rebalanced(uint loss, uint coveredByRewards)",
     ];
     const iface = new ethers.utils.Interface(abi)
     const topic = iface.getEventTopic(iface.getEvent('Rebalanced'))

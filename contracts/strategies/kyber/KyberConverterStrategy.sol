@@ -18,7 +18,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "1.0.0";
+  string public constant override STRATEGY_VERSION = "1.0.1";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
