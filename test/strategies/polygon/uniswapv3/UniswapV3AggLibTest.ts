@@ -24,7 +24,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mocks/MockLiquidationUtils";
 import {BigNumber} from "ethers";
 
-describe('UniswapV3AggLib', () => {
+describe('UniswapV3AggLibTest', () => {
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
   //region Variables

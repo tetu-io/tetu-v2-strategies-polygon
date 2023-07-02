@@ -181,8 +181,8 @@ library UniswapV3AggLib {
     if (amountIn > ConverterStrategyBaseLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
       AppLib.approveIfNeeded(p.tokens[indexIn], aggParams.amountToSwap, aggParams.aggregator);
 
-      uint availableBalanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
-      console.log("swap.availableBalanceTokenOutBefore", availableBalanceTokenOutBefore);
+      uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
+      console.log("swap.availableBalanceTokenOutBefore", balanceTokenOutBefore);
 
       if (aggParams.useLiquidator) {
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
@@ -196,6 +196,7 @@ library UniswapV3AggLib {
           true
         );
       } else {
+        console.log("aggParams.aggregator", aggParams.aggregator);
         UniswapV3DebtLib._checkSwapRouter(aggParams.aggregator);
 
         // let's ensure that "next swap" is made using correct token
@@ -214,7 +215,7 @@ library UniswapV3AggLib {
           p.tokens[indexIn],
           aggParams.amountToSwap,
           p.tokens[indexOut],
-          AppLib.balance(p.tokens[indexOut]) - availableBalanceTokenOutBefore,
+          AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
           _ASSET_LIQUIDATION_SLIPPAGE
         ), AppErrors.PRICE_IMPACT);
     }
