@@ -945,15 +945,15 @@ library UniswapV3ConverterStrategyLogicLib {
       amounts[0] = tokenAmounts[0];
       vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
       if (vars.newTotalAssets < oldTotalAssets) {
-        loss = oldTotalAssets - vars.newTotalAssets;
+        _coverLoss(
+          splitter,
+          oldTotalAssets - vars.newTotalAssets,
+          state.strategyProfitHolder,
+          vars.tokenA,
+          vars.tokenB,
+          address(vars.pool)
+        );
       }
-
-      uint covered;
-      if (loss > 0) {
-        covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-      }
-
-      emit Rebalanced(loss, covered);
 
       fuseEnabledOut = false;
     }
@@ -979,16 +979,22 @@ library UniswapV3ConverterStrategyLogicLib {
     amounts[0] = AppLib.balance(tokens[0]); // tokens[0] is underlying
 
     uint newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
-    uint loss;
     if (newTotalAssets < oldTotalAssets) {
-      loss = oldTotalAssets - newTotalAssets;
+      _coverLoss(splitter, oldTotalAssets - newTotalAssets, strategyProfitHolder, tokens[0], tokens[1], pool);
+    }
+  }
+
+  /// @notice Try to cover loss from rewards then cover remain loss from insurance.
+  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal {
+    uint coveredByRewards;
+    if (loss != 0) {
+      coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
+      uint notCovered = loss - coveredByRewards;
+      if (notCovered != 0) {
+        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+      }
     }
 
-    uint covered;
-    if (loss > 0) {
-      covered = UniswapV3DebtLib.coverLossFromRewards(loss, strategyProfitHolder, tokens[0], tokens[1], pool);
-    }
-
-    emit Rebalanced(loss, covered);
+    emit Rebalanced(loss, coveredByRewards);
   }
 }
