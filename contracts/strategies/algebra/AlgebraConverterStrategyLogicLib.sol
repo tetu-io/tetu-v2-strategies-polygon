@@ -322,12 +322,12 @@ library AlgebraConverterStrategyLogicLib {
 
           if (reward > 0) {
             address token = state.rewardToken;
-            FARMING_CENTER.claimReward(token, address(this), 0, reward);
+            reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
             IERC20(token).safeTransfer(strategyProfitHolder, reward);
           }
           if (bonusReward > 0) {
             address token = state.bonusRewardToken;
-            FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
+            bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
             IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
           }
         }
@@ -370,12 +370,12 @@ library AlgebraConverterStrategyLogicLib {
     {
       if (reward > 0) {
         address token = state.rewardToken;
-        FARMING_CENTER.claimReward(token, address(this), 0, reward);
+        reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
         IERC20(token).safeTransfer(strategyProfitHolder, reward);
       }
       if (bonusReward > 0) {
         address token = state.bonusRewardToken;
-        FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
+        bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
         IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
       }
     }
@@ -519,11 +519,11 @@ library AlgebraConverterStrategyLogicLib {
       (amountsOut[2], amountsOut[3]) = FARMING_CENTER.collectRewards(getIncentiveKey(state), tokenId);
 
       if (amountsOut[2] > 0) {
-        FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
+        amountsOut[2] = FARMING_CENTER.claimReward(tokensOut[2], address(this), 0, amountsOut[2]);
       }
 
       if (amountsOut[3] > 0) {
-        FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
+        amountsOut[3] = FARMING_CENTER.claimReward(tokensOut[3], address(this), 0, amountsOut[3]);
       }
 
       emit AlgebraRewardsClaimed(amountsOut[2], amountsOut[3]);
