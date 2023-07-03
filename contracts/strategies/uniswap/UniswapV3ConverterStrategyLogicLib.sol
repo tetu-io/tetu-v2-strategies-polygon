@@ -17,6 +17,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
+import "../../test/Typechain.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -70,22 +71,14 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   struct RebalanceLocalVariables {
-    int24 upperTick;
-    int24 lowerTick;
-    int24 tickSpacing;
     IUniswapV3Pool pool;
     address tokenA;
     address tokenB;
     uint lastPrice;
     uint fuseThreshold;
-    bool depositorSwapTokens;
-    uint notCoveredLoss;
-    int24 newLowerTick;
-    int24 newUpperTick;
     bool fillUp;
     bool isStablePool;
     uint newPrice;
-    uint newTotalAssets;
   }
 
   struct RebalanceSwapByAggParams {
@@ -643,33 +636,17 @@ library UniswapV3ConverterStrategyLogicLib {
     isNeedFillup = false;
 
     RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      upperTick: state.upperTick,
-      lowerTick: state.lowerTick,
-      tickSpacing: state.tickSpacing,
       pool: state.pool,
       tokenA: state.tokenA,
       tokenB: state.tokenB,
       lastPrice: state.lastPrice,
       fuseThreshold: state.fuseThreshold,
-      depositorSwapTokens: state.depositorSwapTokens,
-    // setup initial values
-      notCoveredLoss: 0,
-      newLowerTick: 0,
-      newUpperTick: 0,
       fillUp: state.fillUp,
       isStablePool: state.isStablePool,
-      newPrice: 0,
-      newTotalAssets: 0
+      newPrice: 0
     });
 
-    require(needRebalance(
-      state.isFuseTriggered,
-      vars.pool,
-      vars.lowerTick,
-      vars.upperTick,
-      vars.tickSpacing,
-      state.rebalanceTickRange
-    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+    _checkNeedRebalance(state, vars.pool);
 
     vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
@@ -702,23 +679,11 @@ library UniswapV3ConverterStrategyLogicLib {
         splitter
       );
 
-      tokenAmounts = new uint[](2);
-      tokenAmounts[0] = AppLib.balance(vars.tokenA);
-      tokenAmounts[1] = AppLib.balance(vars.tokenB);
-
       if (vars.fillUp) {
         isNeedFillup = true;
       }
 
-      address[] memory tokens = new address[](2);
-      tokens[0] = vars.tokenA;
-      tokens[1] = vars.tokenB;
-      uint[] memory amounts = new uint[](2);
-      amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-      if (vars.newTotalAssets < oldTotalAssets) {
-        loss = oldTotalAssets - vars.newTotalAssets;
-      }
+      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic
@@ -726,16 +691,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
-    uint covered;
-    if (loss > 0) {
-      covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-      uint notCovered = loss - covered;
-      if (notCovered > 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-      }
-    }
-
-    emit Rebalanced(loss, covered);
+    _coverLoss(splitter, loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
   }
 
   function rebalanceSwapByAgg(
@@ -756,33 +712,22 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      upperTick: state.upperTick,
-      lowerTick: state.lowerTick,
-      tickSpacing: state.tickSpacing,
       pool: state.pool,
       tokenA: state.tokenA,
       tokenB: state.tokenB,
       lastPrice: state.lastPrice,
       fuseThreshold: state.fuseThreshold,
-      depositorSwapTokens: state.depositorSwapTokens,
+//      depositorSwapTokens: state.depositorSwapTokens,
     // setup initial values
-      notCoveredLoss: 0,
-      newLowerTick: 0,
-      newUpperTick: 0,
+//      notCoveredLoss: 0,
+//      newLowerTick: 0,
+//      newUpperTick: 0,
       fillUp: state.fillUp,
       isStablePool: state.isStablePool,
-      newPrice: 0,
-      newTotalAssets: 0
+      newPrice: 0
     });
 
-    require(needRebalance(
-      state.isFuseTriggered,
-      vars.pool,
-      vars.lowerTick,
-      vars.upperTick,
-      vars.tickSpacing,
-      state.rebalanceTickRange
-    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+    _checkNeedRebalance(state, vars.pool);
 
     vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
@@ -814,19 +759,7 @@ library UniswapV3ConverterStrategyLogicLib {
         splitter
       );
 
-      tokenAmounts = new uint[](2);
-      tokenAmounts[0] = AppLib.balance(vars.tokenA);
-      tokenAmounts[1] = AppLib.balance(vars.tokenB);
-
-      address[] memory tokens = new address[](2);
-      tokens[0] = vars.tokenA;
-      tokens[1] = vars.tokenB;
-      uint[] memory amounts = new uint[](2);
-      amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-      if (vars.newTotalAssets < oldTotalAssets) {
-        loss = oldTotalAssets - vars.newTotalAssets;
-      }
+      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic
@@ -834,16 +767,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.lastPrice = vars.newPrice;
     }
 
-    uint covered;
-    if (loss > 0) {
-      covered = UniswapV3DebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-      uint notCovered = loss - covered;
-      if (notCovered > 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-      }
-    }
-
-    emit Rebalanced(loss, covered);
+    _coverLoss(splitter, loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
   }
 
   function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {
@@ -868,94 +792,53 @@ library UniswapV3ConverterStrategyLogicLib {
     uint oldTotalAssets,
     uint profitToCover,
     address splitter,
-    bool checkNeedRebalance
+    bool checkNeedRebalance_
   ) external returns (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
     bool fuseEnabledOut
   ) {
-    tokenAmounts = new uint[](0);
+    RebalanceLocalVariables memory v;
+    v.pool = state.pool;
+    if (checkNeedRebalance_) {
+      _checkNeedRebalance(state, v.pool);
+    }
 
+    v.fillUp = state.fillUp;
     if (state.fillUp) {
-      revert('Only for swap strategy.'); // todo Do we need this revert?
+      revert('Only for swap strategy.');
     }
 
-    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      upperTick: state.upperTick,
-      lowerTick: state.lowerTick,
-      tickSpacing: state.tickSpacing,
-      pool: state.pool,
-      tokenA: state.tokenA,
-      tokenB: state.tokenB,
-      lastPrice: state.lastPrice,
-      fuseThreshold: state.fuseThreshold,
-      depositorSwapTokens: state.depositorSwapTokens,
-    // setup initial values
-      notCoveredLoss: 0,
-      newLowerTick: 0,
-      newUpperTick: 0,
-      fillUp: state.fillUp,
-      isStablePool: state.isStablePool,
-      newPrice: 0,
-      newTotalAssets: 0
-    });
+    v.tokenA = state.tokenA;
+    v.tokenB = state.tokenB;
+    v.lastPrice = state.lastPrice;
+    v.fuseThreshold = state.fuseThreshold;
+    v.isStablePool = state.isStablePool;
+    v.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
 
-    if (checkNeedRebalance) {
-      require(needRebalance(
-        state.isFuseTriggered,
-        vars.pool,
-        vars.lowerTick,
-        vars.upperTick,
-        vars.tickSpacing,
-        state.rebalanceTickRange
-      ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
-    }
-
-    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
-
-    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
+    if (v.isStablePool && isEnableFuse(v.lastPrice, v.newPrice, v.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
       state.isFuseTriggered = true;
       emit FuseTriggered();
       fuseEnabledOut = true;
     } else {
-      // rebalancing debt
-      // setting new tick range
-      UniswapV3DebtLib.rebalanceNoSwaps(
-        converter,
-        state,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
+      // rebalancing debt, setting new tick range
+      UniswapV3DebtLib.rebalanceNoSwaps(converter, state, profitToCover, oldTotalAssets, splitter);
 
       // need to update last price only for stables coz only stables have fuse mechanic
-      if (vars.isStablePool) {
-        state.lastPrice = vars.newPrice;
+      if (v.isStablePool) {
+        state.lastPrice = v.newPrice;
       }
 
-      tokenAmounts = new uint[](2);
-      tokenAmounts[0] = AppLib.balance(vars.tokenA);
-      tokenAmounts[1] = AppLib.balance(vars.tokenB);
-
-      address[] memory tokens = new address[](2);
-      tokens[0] = vars.tokenA;
-      tokens[1] = vars.tokenB;
-      uint[] memory amounts = new uint[](2);
-      amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-      if (vars.newTotalAssets < oldTotalAssets) {
-        _coverLoss(
-          splitter,
-          oldTotalAssets - vars.newTotalAssets,
-          state.strategyProfitHolder,
-          vars.tokenA,
-          vars.tokenB,
-          address(vars.pool)
-        );
+      uint loss;
+      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
+      if (loss != 0) {
+        _coverLoss(splitter, loss, state.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
 
       fuseEnabledOut = false;
     }
+
+    return (tokenAmounts, fuseEnabledOut);
   }
 
   /// @notice Cover possible loss after call of {withdrawByAggStep}
@@ -995,5 +878,41 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     emit Rebalanced(loss, coveredByRewards);
+  }
+
+  /// @notice Calculate the token amounts for deposit and amount of loss (as old-total-asset - new-total-asset)
+  function _getTokenAmounts(ITetuConverter converter, uint totalAssets, address tokenA, address tokenB) internal returns (
+    uint loss,
+    uint[] memory tokenAmounts
+  ) {
+    tokenAmounts = new uint[](2);
+    tokenAmounts[0] = AppLib.balance(tokenA);
+    tokenAmounts[1] = AppLib.balance(tokenB);
+
+    address[] memory tokens = new address[](2);
+    tokens[0] = tokenA;
+    tokens[1] = tokenB;
+
+    uint[] memory amounts = new uint[](2);
+    amounts[0] = tokenAmounts[0];
+
+    uint newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
+    return (
+      newTotalAssets < totalAssets
+        ? totalAssets - newTotalAssets
+        : 0,
+      tokenAmounts
+    );
+  }
+
+  function _checkNeedRebalance(State storage state, IUniswapV3Pool pool_) internal view {
+    require(needRebalance(
+      state.isFuseTriggered,
+      pool_,
+      state.lowerTick,
+      state.upperTick,
+      state.tickSpacing,
+      state.rebalanceTickRange
+    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
   }
 }
