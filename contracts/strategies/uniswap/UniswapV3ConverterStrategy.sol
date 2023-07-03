@@ -29,8 +29,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   struct WithdrawByAggStepLocal {
     address controller;
     ITetuConverter converter;
-    uint[] expectedAmounts;
-    uint[] amountsOut;
     address[] tokens;
     uint[] liquidationThresholds;
     uint oldTotalAssets;
