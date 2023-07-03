@@ -134,7 +134,7 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
       callData: [
         {
           to: strategyAddress,
-          data: strategy.interface.encodeFunctionData('rebalanceSwapByAgg', [false, BigNumber.from(0), MaticAddresses.ZERO_ADDRESS, '0x']),
+          data: strategy.interface.encodeFunctionData('rebalanceSwapByAgg', [false, BigNumber.from(0), MaticAddresses.AGG_ONEINCH_V5, '0x']),
         },
       ],
     };
