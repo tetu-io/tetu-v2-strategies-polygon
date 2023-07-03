@@ -177,14 +177,17 @@ describe('AlgebraConverterStrategyTest', function() {
     it('Rebalance, hardwork', async() => {
       const s = strategy
 
-      console.log('deposit...');
-      await asset.approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
-      await vault.deposit(parseUnits('1000', 6), signer.address);
+      console.log('deposit...')
+      await asset.approve(vault.address, Misc.MAX_UINT)
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6))
+      await vault.deposit(parseUnits('1000', 6), signer.address)
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       expect(await s.needRebalance()).eq(false)
 
-      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6));
+      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6))
 
       expect(await s.needRebalance()).eq(true)
       await s.rebalance()
@@ -192,7 +195,7 @@ describe('AlgebraConverterStrategyTest', function() {
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
-      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
       const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
       await s.connect(splitterSigner).doHardWork({gasLimit: 19_000_000})
       expect(hwResult.earned).gt(0)
@@ -202,22 +205,22 @@ describe('AlgebraConverterStrategyTest', function() {
       const s = strategy
 
       console.log('deposit 1...');
-      await asset.approve(vault.address, Misc.MAX_UINT);
-      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
-      await vault.deposit(parseUnits('1000', 6), signer.address);
+      await asset.approve(vault.address, Misc.MAX_UINT)
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6))
+      await vault.deposit(parseUnits('1000', 6), signer.address)
 
-      console.log('deposit 2...');
-      await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+      console.log('deposit 2...')
+      await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000})
 
       console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
-      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
       const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
       await s.connect(splitterSigner).doHardWork()
 
@@ -225,22 +228,64 @@ describe('AlgebraConverterStrategyTest', function() {
       console.log('APR', UniversalUtils.getApr(hwResult.earned, parseUnits('2000', 6), 0, 86400))
 
       console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
 
       console.log('withdraw')
       await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
 
       console.log('after 1 day')
-      await TimeUtils.advanceBlocksOnTs(86400); // 1 day
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
       await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
 
       console.log('withdrawAll')
       await vault.withdrawAll()
+    })
+    it('Second deposit have rewards', async() => {
+      const s = strategy
+
+      console.log('deposit 1...')
+      await asset.approve(vault.address, Misc.MAX_UINT)
+      await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6))
+      await vault.deposit(parseUnits('1000', 6), signer.address)
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
+
+      console.log('Make pool volume')
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
+
+      console.log('Hardwork')
+      expect(await s.isReadyToHardWork()).eq(true)
+      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter())
+      const hwResult = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
+      await s.connect(splitterSigner).doHardWork()
+
+      expect(hwResult.earned).gt(0)
+      console.log('Eearned from 1000 USDC deposit', hwResult.earned.toString())
+      console.log('APR', UniversalUtils.getApr(hwResult.earned, parseUnits('1000', 6), 0, 86400))
+
+      console.log('deposit 2...')
+      await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000})
+
+      console.log('after 1 day')
+      await TimeUtils.advanceBlocksOnTs(86400) // 1 day
+
+      console.log('Make pool volume')
+      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
+
+      console.log('Hardwork')
+      expect(await s.isReadyToHardWork()).eq(true)
+      const hwResult2 = await s.connect(splitterSigner).callStatic.doHardWork({gasLimit: 19_000_000})
+      await s.connect(splitterSigner).doHardWork()
+
+      expect(hwResult2.earned).gt(hwResult.earned.mul(2).sub(hwResult.earned.div(10)))
+      console.log('Eearned from 2000 USDC deposit', hwResult2.earned.toString())
+      console.log('APR', UniversalUtils.getApr(hwResult2.earned, parseUnits('2000', 6), 0, 86400))
     })
   })
 })
