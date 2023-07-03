@@ -650,7 +650,7 @@ library AlgebraConverterStrategyLogicLib {
       tokens[1] = vars.tokenB;
       uint[] memory amounts = new uint[](2);
       amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
       if (vars.newTotalAssets < oldTotalAssets) {
         loss = oldTotalAssets - vars.newTotalAssets;
       }
@@ -747,7 +747,7 @@ library AlgebraConverterStrategyLogicLib {
         tokens[1] = vars.tokenB;
         uint[] memory amounts = new uint[](2);
         amounts[0] = tokenAmounts[0];
-        vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+        vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
         if (vars.newTotalAssets < oldTotalAssets) {
           loss = oldTotalAssets - vars.newTotalAssets;
         }

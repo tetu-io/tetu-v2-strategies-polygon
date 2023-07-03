@@ -6,8 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3DebtLib.sol";
 
-import "hardhat/console.sol";
-
 /// @notice Reimplement ConverterStrategyBaseLib.closePositionsToGetAmount with swapping through aggregators
 library UniswapV3AggLib {
   uint internal constant _ASSET_LIQUIDATION_SLIPPAGE = 300;
@@ -47,7 +45,7 @@ library UniswapV3AggLib {
     address tokenToSwap,
     uint amountToSwap
   ){
-    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(
       IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
       tokens,
       2 // p.tokens.length
@@ -90,9 +88,7 @@ library UniswapV3AggLib {
   ) external returns (
     bool completed
   ){
-    console.log("withdrawStep tokenToSwap_, amountToSwap_", tokenToSwap_, amountToSwap_);
-
-    (uint[] memory prices, uint[] memory decs) = ConverterStrategyBaseLib._getPricesAndDecs(
+    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(
       IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
       tokens,
       2 // p.tokens.length
@@ -141,19 +137,14 @@ library UniswapV3AggLib {
   function _withdrawStep(ConverterStrategyBaseLib.PlanInputParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
-    console.log("_withdrawStep.balance.initial.tokens[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
-    console.log("_withdrawStep.balance.initial.tokens[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
 
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
-    console.log("_withdrawStep.plan idxToSwap1 amountToSwap idxToRepay1", idxToSwap1, amountToSwap, idxToRepay1);
 
     if (idxToSwap1 != 0) {
-      console.log("_swap amountToSwap", amountToSwap);
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
 
     if (idxToRepay1 != 0) {
-      console.log("_repayDebt amount-to-repay", IERC20(p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET]).balanceOf(address(this)));
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
         p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
@@ -162,8 +153,6 @@ library UniswapV3AggLib {
       );
     }
 
-    console.log("_withdrawStep.balance.final.tokens[0]", IERC20(p.tokens[0]).balanceOf(address(this)));
-    console.log("_withdrawStep.balance.final.tokens[1]", IERC20(p.tokens[1]).balanceOf(address(this)));
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;
   }
@@ -177,12 +166,10 @@ library UniswapV3AggLib {
   ) internal returns (
     uint spentAmountIn
   ) {
-    console.log("swap indexIn, indexOut, amountIn", indexIn, indexOut, amountIn);
     if (amountIn > ConverterStrategyBaseLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
       AppLib.approveIfNeeded(p.tokens[indexIn], aggParams.amountToSwap, aggParams.aggregator);
 
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
-      console.log("swap.availableBalanceTokenOutBefore", balanceTokenOutBefore);
 
       if (aggParams.useLiquidator) {
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
@@ -196,7 +183,6 @@ library UniswapV3AggLib {
           true
         );
       } else {
-        console.log("aggParams.aggregator", aggParams.aggregator);
         UniswapV3DebtLib._checkSwapRouter(aggParams.aggregator);
 
         // let's ensure that "next swap" is made using correct token
@@ -209,7 +195,6 @@ library UniswapV3AggLib {
         spentAmountIn = aggParams.amountToSwap;
       }
 
-      console.log("swap.balance after", AppLib.balance(p.tokens[indexOut]));
       require(
         p.converter.isConversionValid(
           p.tokens[indexIn],

@@ -12,8 +12,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "../../libs/BorrowLib.sol";
 import "../../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
 
-import "hardhat/console.sol";
-
 library UniswapV3DebtLib {
   using SafeERC20 for IERC20;
 
@@ -256,37 +254,25 @@ library UniswapV3DebtLib {
   }
 
   function coverLossFromRewards(uint loss, address strategyProfitHolder, address tokenA, address tokenB, address pool) external returns (uint covered) {
-    console.log("coverLossFromRewards.loss", loss);
-    console.log("coverLossFromRewards.tokenA", tokenA);
-    console.log("coverLossFromRewards.tokenB", tokenB);
     uint bA = IERC20Metadata(tokenA).balanceOf(strategyProfitHolder);
     uint bB = IERC20Metadata(tokenB).balanceOf(strategyProfitHolder);
 
     if (loss <= bA) {
-      console.log("coverLossFromRewards.1.IERC20(tokenA).balance", IERC20(tokenA).balanceOf(strategyProfitHolder));
-      console.log("coverLossFromRewards.1.IERC20(tokenA).transfer.loss", loss);
       IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), loss);
       covered = loss;
     } else {
       uint needToCoverA = loss;
       if (bA > 0) {
-        console.log("coverLossFromRewards.2.IERC20(tokenA).balance", IERC20(tokenA).balanceOf(strategyProfitHolder));
-        console.log("coverLossFromRewards.2.IERC20(tokenA).transfer.loss", bA);
         IERC20(tokenA).safeTransferFrom(strategyProfitHolder, address(this), bA);
         needToCoverA -= bA;
-        console.log("coverLossFromRewards.2.needToCoverA", needToCoverA);
       }
       if (bB > 0) {
         uint needTransferB = UniswapV3Lib.getPrice(pool, tokenA) * needToCoverA / 10 ** IERC20Metadata(tokenA).decimals();
         uint canTransferB = Math.min(needTransferB, bB);
-        console.log("coverLossFromRewards.3.IERC20(tokenB).balance", IERC20(tokenB).balanceOf(strategyProfitHolder));
-        console.log("coverLossFromRewards.3.IERC20(tokenB).transfer.loss", canTransferB);
         IERC20(tokenB).safeTransferFrom(strategyProfitHolder, address(this), canTransferB);
         needToCoverA -= needToCoverA * canTransferB / needTransferB;
-        console.log("coverLossFromRewards.3.needToCoverA", needToCoverA);
       }
       covered = loss - needToCoverA;
-      console.log("coverLossFromRewards.4.covered, loss, needToCoverA", covered, loss, needToCoverA);
     }
   }
 

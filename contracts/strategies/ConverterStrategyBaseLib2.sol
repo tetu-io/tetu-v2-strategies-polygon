@@ -9,6 +9,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
@@ -18,32 +19,30 @@ import "../libs/ConverterEntryKinds.sol";
 library ConverterStrategyBaseLib2 {
   using SafeERC20 for IERC20;
 
-  /////////////////////////////////////////////////////////////////////
-  ///                        DATA TYPES
-  /////////////////////////////////////////////////////////////////////
+//region --------------------------------------- Data types
+  struct CalcInvestedAssetsLocal {
+    uint len;
+    uint[] prices;
+    uint[] decs;
+    uint[] debts;
+  }
+//endregion --------------------------------------- Data types
 
-  /////////////////////////////////////////////////////////////////////
-  ///                        CONSTANTS
-  /////////////////////////////////////////////////////////////////////
-
+//region --------------------------------------- CONSTANTS
   uint internal constant DENOMINATOR = 100_000;
 
   /// @dev 0.5% of max profit for strategy TVL
   /// @notice Limit max amount of profit that can be send to insurance after price changing
   uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = 500;
+//endregion --------------------------------------- CONSTANTS
 
-  /////////////////////////////////////////////////////////////////////
-  ///                        EVENTS
-  /////////////////////////////////////////////////////////////////////
-
+//region----------------------------------------- EVENTS
   event OnChangePerformanceFeeRatio(uint newRatio);
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
+//endregion----------------------------------------- EVENTS
 
-  /////////////////////////////////////////////////////////////////////
-  ///                        MAIN LOGIC
-  /////////////////////////////////////////////////////////////////////
-
+//region----------------------------------------- MAIN LOGIC
   /// @notice Get balances of the {tokens_} except balance of the token at {indexAsset} position
   function getAvailableBalances(
     address[] memory tokens_,
@@ -278,8 +277,9 @@ library ConverterStrategyBaseLib2 {
     }
     return amountToSend;
   }
+//endregion----------------------------------------- MAIN LOGIC
 
-  //region ---------------------------------------- Setters
+//region ---------------------------------------- Setters
   function checkPerformanceFeeRatioChanged(address controller, uint ratio_) external {
     StrategyLib.onlyOperators(controller);
     require(ratio_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
@@ -296,7 +296,231 @@ library ConverterStrategyBaseLib2 {
     StrategyLib.onlyOperators(controller);
     emit LiquidationThresholdChanged(token, amount);
   }
-  //endregion ---------------------------------------- Setters
+//endregion ---------------------------------------- Setters
 
+//region ---------------------------------------- Withdraw helpers
+  /// @notice Get amount of assets that we expect to receive after withdrawing
+  ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
+  /// @param reserves_ Reserves of the {poolAssets_}, same order, same length (we don't check it)
+  ///                  The order of tokens should be same as in {_depositorPoolAssets()},
+  ///                  one of assets must be {asset_}
+  /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
+  /// @param totalSupply_ Total amount of LP tokens in the depositor
+  /// @return withdrawnAmountsOut Expected withdrawn amounts (decimals == decimals of the tokens)
+  function getExpectedWithdrawnAmounts(
+    uint[] memory reserves_,
+    uint liquidityAmount_,
+    uint totalSupply_
+  ) internal pure returns (
+    uint[] memory withdrawnAmountsOut
+  ) {
+    uint ratio = totalSupply_ == 0
+      ? 0
+      : (liquidityAmount_ >= totalSupply_
+        ? 1e18
+        : 1e18 * liquidityAmount_ / totalSupply_
+      );
+
+    uint len = reserves_.length;
+    withdrawnAmountsOut = new uint[](len);
+
+    if (ratio != 0) {
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
+      }
+    }
+  }
+
+  /// @notice Calculate expected amount of the main asset after withdrawing
+  /// @param withdrawnAmounts_ Expected amounts to be withdrawn from the pool
+  /// @param amountsToConvert_ Amounts on balance initially available for the conversion
+  /// @return amountsOut Expected amounts of the main asset received after conversion withdrawnAmounts+amountsToConvert
+  function getExpectedAmountMainAsset(
+    address[] memory tokens,
+    uint indexAsset,
+    ITetuConverter converter,
+    uint[] memory withdrawnAmounts_,
+    uint[] memory amountsToConvert_
+  ) internal returns (
+    uint[] memory amountsOut
+  ) {
+    uint len = tokens.length;
+    amountsOut = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset) {
+        amountsOut[i] = withdrawnAmounts_[i];
+      } else {
+        uint amount = withdrawnAmounts_[i] + amountsToConvert_[i];
+        if (amount != 0) {
+          (amountsOut[i],) = converter.quoteRepay(address(this), tokens[indexAsset], tokens[i], amount);
+        }
+      }
+    }
+
+    return amountsOut;
+  }
+
+  /// @notice Add {withdrawnAmounts} to {amountsToConvert}, calculate {expectedAmountMainAsset}
+  /// @param amountsToConvert Amounts of {tokens} to be converted, they are located on the balance before withdraw
+  /// @param withdrawnAmounts Amounts of {tokens} that were withdrew from the pool
+  function postWithdrawActions(
+    ITetuConverter converter,
+    address[] memory tokens,
+    uint indexAsset,
+
+    uint[] memory reservesBeforeWithdraw,
+    uint liquidityAmountWithdrew,
+    uint totalSupplyBeforeWithdraw,
+
+    uint[] memory amountsToConvert,
+    uint[] memory withdrawnAmounts
+  ) external returns (
+    uint[] memory expectedMainAssetAmounts,
+    uint[] memory _amountsToConvert
+  ) {
+    // estimate expected amount of assets to be withdrawn
+    uint[] memory expectedWithdrawAmounts = getExpectedWithdrawnAmounts(
+      reservesBeforeWithdraw,
+      liquidityAmountWithdrew,
+      totalSupplyBeforeWithdraw
+    );
+
+    // from received amounts after withdraw calculate how much we receive from converter for them in terms of the underlying asset
+    expectedMainAssetAmounts = getExpectedAmountMainAsset(
+      tokens,
+      indexAsset,
+      converter,
+      expectedWithdrawAmounts,
+      amountsToConvert
+    );
+
+    uint len = tokens.length;
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      amountsToConvert[i] += withdrawnAmounts[i];
+    }
+
+    return (expectedMainAssetAmounts, amountsToConvert);
+  }
+
+  /// @notice return {withdrawnAmounts} with zero values and expected amount calculated using {amountsToConvert_}
+  function postWithdrawActionsEmpty(
+    ITetuConverter converter,
+    address[] memory tokens,
+    uint indexAsset,
+    uint[] memory amountsToConvert_
+  ) external returns (
+    uint[] memory expectedAmountsMainAsset
+  ) {
+    expectedAmountsMainAsset = getExpectedAmountMainAsset(
+      tokens,
+      indexAsset,
+      converter,
+      // there are no withdrawn amounts
+      new uint[](tokens.length), // array with all zero values
+      amountsToConvert_
+    );
+  }
+//endregion ------------------------------------- Withdraw helpers
+
+//region---------------------------------------- calcInvestedAssets
+
+  /// @notice Calculate amount we will receive when we withdraw all from pool
+  /// @dev This is writable function because we need to update current balances in the internal protocols.
+  /// @param indexAsset Index of the underlying (main asset) in {tokens}
+  /// @return amountOut Invested asset amount under control (in terms of underlying)
+  function calcInvestedAssets(
+    address[] memory tokens,
+    uint[] memory depositorQuoteExitAmountsOut,
+    uint indexAsset,
+    ITetuConverter converter_
+  ) external returns (
+    uint amountOut
+  ) {
+    CalcInvestedAssetsLocal memory v;
+    v.len = tokens.length;
+
+    // calculate prices, decimals
+    (v.prices, v.decs) = AppLib._getPricesAndDecs(
+      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
+      tokens,
+      v.len
+    );
+    // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
+    // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
+    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+      if (i == indexAsset) {
+        // Current strategy balance of main asset is not taken into account here because it's add by splitter
+        amountOut += depositorQuoteExitAmountsOut[i];
+      } else {
+        // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
+        (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(
+          address(this),
+          tokens[i],
+          tokens[indexAsset],
+          // investedAssets is calculated using exact debts, debt-gaps are not taken into account
+          false
+        );
+        if (amountOut < toPay) {
+          setDebt(v, indexAsset, toPay);
+        } else {
+          amountOut -= toPay;
+        }
+
+        // available amount to repay
+        uint toRepay = collateral + IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
+
+        // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
+        (toPay, collateral) = converter_.getDebtAmountCurrent(
+          address(this),
+          tokens[indexAsset],
+          tokens[i],
+          // investedAssets is calculated using exact debts, debt-gaps are not taken into account
+          false
+        );
+        amountOut += collateral;
+
+        if (toRepay >= toPay) {
+          amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+        } else {
+          // there is not enough amount to pay the debt
+          // let's register a debt and try to resolve it later below
+          setDebt(v, i, toPay - toRepay);
+        }
+      }
+    }
+    if (v.debts.length == v.len) {
+      // we assume here, that it would be always profitable to save collateral
+      // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
+      // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
+      for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
+        if (v.debts[i] == 0) continue;
+
+        // estimatedAssets should be reduced on the debt-value
+        // this estimation is approx and do not count price impact on the liquidation
+        // we will able to count the real output only after withdraw process
+        uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+        if (debtInAsset > amountOut) {
+          // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
+          amountOut = 0;
+        } else {
+          amountOut -= debtInAsset;
+        }
+      }
+    }
+
+    return amountOut;
+  }
+
+  /// @notice Lazy initialization of v.debts, add {value} to {v.debts[index]}
+  function setDebt(CalcInvestedAssetsLocal memory v, uint index, uint value) pure internal {
+    if (v.debts.length == 0) {
+      // lazy initialization
+      v.debts = new uint[](v.len);
+    }
+
+    // to pay the following amount we need to swap some other asset at first
+    v.debts[index] += value;
+  }
+//endregion------------------------------------- calcInvestedAssets
 }
 

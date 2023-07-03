@@ -14,7 +14,6 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -58,7 +57,7 @@ library ConverterStrategyBaseLib {
     uint alpha;
   }
 
-  struct CalcInvestedAssetsLocal {
+  struct SwapToGetAmountLocal {
     uint len;
     uint[] prices;
     uint[] decs;
@@ -231,78 +230,6 @@ library ConverterStrategyBaseLib {
   /////////////////////////////////////////////////////////////////////
   //region View functions
   /////////////////////////////////////////////////////////////////////
-
-  /// @notice Get amount of assets that we expect to receive after withdrawing
-  ///         ratio = amount-LP-tokens-to-withdraw / total-amount-LP-tokens-in-pool
-  /// @param reserves_ Reserves of the {poolAssets_}, same order, same length (we don't check it)
-  ///                  The order of tokens should be same as in {_depositorPoolAssets()},
-  ///                  one of assets must be {asset_}
-  /// @param liquidityAmount_ Amount of LP tokens that we are going to withdraw
-  /// @param totalSupply_ Total amount of LP tokens in the depositor
-  /// @return withdrawnAmountsOut Expected withdrawn amounts (decimals == decimals of the tokens)
-  function getExpectedWithdrawnAmounts(
-    uint[] memory reserves_,
-    uint liquidityAmount_,
-    uint totalSupply_
-  ) internal pure returns (
-    uint[] memory withdrawnAmountsOut
-  ) {
-    uint ratio = totalSupply_ == 0
-      ? 0
-      : (liquidityAmount_ >= totalSupply_
-        ? 1e18
-        : 1e18 * liquidityAmount_ / totalSupply_
-      );
-
-    uint len = reserves_.length;
-    withdrawnAmountsOut = new uint[](len);
-
-    if (ratio != 0) {
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        withdrawnAmountsOut[i] = reserves_[i] * ratio / 1e18;
-      }
-    }
-  }
-
-  /// @return prices Asset prices in USD, decimals 18
-  /// @return decs 10**decimals
-  function _getPricesAndDecs(IPriceOracle priceOracle, address[] memory tokens_, uint len) internal view returns (
-    uint[] memory prices,
-    uint[] memory decs
-  ) {
-    prices = new uint[](len);
-    decs = new uint[](len);
-    {
-      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-        decs[i] = 10 ** IERC20Metadata(tokens_[i]).decimals();
-        prices[i] = priceOracle.getAssetPrice(tokens_[i]);
-      }
-    }
-  }
-
-  function _getLiquidationThresholds(
-    mapping(address => uint) storage liquidationThresholds,
-    address[] memory tokens_,
-    uint len
-  ) internal view returns (
-    uint[] memory liquidationThresholdsOut
-  ) {
-    liquidationThresholdsOut = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      liquidationThresholdsOut[i] = liquidationThresholds[tokens_[i]];
-    }
-  }
-
-  /// @notice Find index of the given {asset_} in array {tokens_}, return type(uint).max if not found
-  function getAssetIndex(address[] memory tokens_, address asset_) internal pure returns (uint) {
-    uint len = tokens_.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (tokens_[i] == asset_) {
-        return i;
-      }
-    }
-    return type(uint).max;
-  }
 
   /// @notice Get the price ratio of the two given tokens from the oracle.
   /// @param converter The Tetu converter.
@@ -519,8 +446,6 @@ library ConverterStrategyBaseLib {
           }
         }
 
-        console.log("Borrow.collateralAsset,borrowAsset", collateralAsset_, borrowAsset_);
-        console.log("Borrow.collateral,amountToBorrow", vars.collateral, vars.amountToBorrow);
         require(
           tetuConverter_.borrow(
             vars.converters[i],
@@ -620,19 +545,14 @@ library ConverterStrategyBaseLib {
 
     uint notUsedAmount;
     (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
-    console.log("_closePositionExact.collateralAsset", collateralAsset);
-    console.log("_closePositionExact.collateralOut", collateralOut);
-    console.log("_closePositionExact.amountRepay", amountRepay);
 
     emit ClosePosition(collateralAsset, borrowAsset, amountRepay, address(this), collateralOut, notUsedAmount);
     uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
-    console.log("_closePositionExact.balanceAfter", balanceAfter);
 
     // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (debt-gap)
     repaidAmountOut = balanceBorrowAsset > balanceAfter
       ? balanceBorrowAsset - balanceAfter
       : 0;
-    console.log("_closePositionExact.repaidAmountOut", repaidAmountOut);
 
     require(notUsedAmount == 0, StrategyLib.WRONG_VALUE);
   }
@@ -697,7 +617,6 @@ library ConverterStrategyBaseLib {
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
-    console.log("_liquidate.tokenIn_,tokenOut_,amountIn_", tokenIn_, tokenOut_, amountIn_);
     // we check amountIn by threshold, not amountOut
     // because {_closePositionsToGetAmount} is implemented in {get plan, make action}-way
     // {_closePositionsToGetAmount} can be used with swap by aggregators, where amountOut cannot be calculcate
@@ -736,8 +655,6 @@ library ConverterStrategyBaseLib {
     uint balanceBefore = IERC20(tokenOut_).balanceOf(address(this));
     liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
     uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
-    console.log("_liquidateWithRoute.balanceBefore", balanceBefore);
-    console.log("_liquidateWithRoute.balanceAfter", balanceAfter);
 
     require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
     receivedAmountOut = balanceAfter - balanceBefore;
@@ -854,13 +771,13 @@ library ConverterStrategyBaseLib {
     uint[] memory spentAmounts,
     uint[] memory receivedAmounts
   ) {
-    CalcInvestedAssetsLocal memory v;
+    SwapToGetAmountLocal memory v;
     v.len = p.tokens.length;
     receivedAmounts = new uint[](v.len);
     spentAmounts = new uint[](v.len);
 
     // calculate prices, decimals
-    (v.prices, v.decs) = _getPricesAndDecs(
+    (v.prices, v.decs) = AppLib._getPricesAndDecs(
       IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
       p.tokens,
       v.len
@@ -900,7 +817,7 @@ library ConverterStrategyBaseLib {
   function _swapToGetAmount(
     uint receivedTargetAmount,
     SwapToGivenAmountInputParams memory p,
-    CalcInvestedAssetsLocal memory v,
+    SwapToGetAmountLocal memory v,
     uint indexTokenIn
   ) internal returns (
     uint amountSpent,
@@ -987,7 +904,7 @@ library ConverterStrategyBaseLib {
       p.amountCP = p.amountC + p.amountP;
 
       if (p.amountCP > 0) {
-        if (ConverterStrategyBaseLib.getAssetIndex(tokens, p.rewardToken) != type(uint).max) {
+        if (AppLib.getAssetIndex(tokens, p.rewardToken) != type(uint).max) {
           if (p.rewardToken == asset) {
             // This is underlying, liquidation of compound part is not allowed; just keep on the balance, should be handled later
             amountToPerformanceAndInsurance += p.amountP;
@@ -1030,158 +947,7 @@ library ConverterStrategyBaseLib {
   }
   //endregion Recycle rewards
 
-  /////////////////////////////////////////////////////////////////////
-  //region calcInvestedAssets
-  /////////////////////////////////////////////////////////////////////
-
-  /// @notice Calculate amount we will receive when we withdraw all from pool
-  /// @dev This is writable function because we need to update current balances in the internal protocols.
-  /// @param indexAsset Index of the underlying (main asset) in {tokens}
-  /// @return amountOut Invested asset amount under control (in terms of underlying)
-  function calcInvestedAssets(
-    address[] memory tokens,
-    uint[] memory depositorQuoteExitAmountsOut,
-    uint indexAsset,
-    ITetuConverter converter_
-  ) external returns (
-    uint amountOut
-  ) {
-    console.log("calcInvestedAssets.start");
-    CalcInvestedAssetsLocal memory v;
-    v.len = tokens.length;
-
-    // calculate prices, decimals
-    (v.prices, v.decs) = _getPricesAndDecs(
-      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
-      tokens,
-      v.len
-    );
-    console.log("calcInvestedAssets.prices", v.prices[0], v.prices[1]);
-    // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
-    // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
-    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      console.log("calcInvestedAssets.i", i);
-      if (i == indexAsset) {
-        // Current strategy balance of main asset is not taken into account here because it's add by splitter
-        amountOut += depositorQuoteExitAmountsOut[i];
-        console.log("calcInvestedAssets.depositorQuoteExitAmountsOut[i], amountOut", depositorQuoteExitAmountsOut[i], amountOut);
-      } else {
-        // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
-        (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(
-          address(this),
-          tokens[i],
-          tokens[indexAsset],
-          // investedAssets is calculated using exact debts, debt-gaps are not taken into account
-          false
-        );
-        console.log("calcInvestedAssets.2,toPay,collateral,amountOut", toPay, collateral, amountOut);
-        if (amountOut < toPay) {
-          setDebt(v, indexAsset, toPay);
-        } else {
-          amountOut -= toPay;
-        }
-
-        // available amount to repay
-        uint toRepay = collateral + IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
-        console.log("calcInvestedAssets.3,toRepay,amountOut", toRepay, amountOut);
-
-        // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
-        (toPay, collateral) = converter_.getDebtAmountCurrent(
-          address(this),
-          tokens[indexAsset],
-          tokens[i],
-          // investedAssets is calculated using exact debts, debt-gaps are not taken into account
-          false
-        );
-        console.log("calcInvestedAssets.4,toPay,collateral,amountOut", toPay, collateral, amountOut);
-        amountOut += collateral;
-
-        if (toRepay >= toPay) {
-          amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
-          console.log("calcInvestedAssets.5,+amountOut", (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
-        } else {
-          // there is not enough amount to pay the debt
-          // let's register a debt and try to resolve it later below
-          setDebt(v, i, toPay - toRepay);
-          console.log("calcInvestedAssets.5,toPay - toRepay", toPay - toRepay);
-        }
-      }
-    }
-    if (v.debts.length == v.len) {
-      // we assume here, that it would be always profitable to save collateral
-      // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
-      // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
-      for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-        if (v.debts[i] == 0) continue;
-
-        // estimatedAssets should be reduced on the debt-value
-        // this estimation is approx and do not count price impact on the liquidation
-        // we will able to count the real output only after withdraw process
-        uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
-        if (debtInAsset > amountOut) {
-          // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
-          amountOut = 0;
-          console.log("calcInvestedAssets.6.debtInAsset, amountOut", debtInAsset, amountOut);
-        } else {
-          amountOut -= debtInAsset;
-          console.log("calcInvestedAssets.7.debtInAsset, amountOut", debtInAsset, amountOut);
-        }
-      }
-    }
-
-    console.log("calcInvestedAssets.final.amountOut", amountOut);
-    return amountOut;
-  }
-
-  /// @notice Lazy initialization of v.debts, add {value} to {v.debts[index]}
-  function setDebt(CalcInvestedAssetsLocal memory v, uint index, uint value) pure internal {
-    if (v.debts.length == 0) {
-      // lazy initialization
-      v.debts = new uint[](v.len);
-    }
-
-    // to pay the following amount we need to swap some other asset at first
-    v.debts[index] += value;
-  }
-  //endregion calcInvestedAssets
-
-  /////////////////////////////////////////////////////////////////////
-  //region getExpectedAmountMainAsset
-  /////////////////////////////////////////////////////////////////////
-
-  /// @notice Calculate expected amount of the main asset after withdrawing
-  /// @param withdrawnAmounts_ Expected amounts to be withdrawn from the pool
-  /// @param amountsToConvert_ Amounts on balance initially available for the conversion
-  /// @return amountsOut Expected amounts of the main asset received after conversion withdrawnAmounts+amountsToConvert
-  function getExpectedAmountMainAsset(
-    address[] memory tokens,
-    uint indexAsset,
-    ITetuConverter converter,
-    uint[] memory withdrawnAmounts_,
-    uint[] memory amountsToConvert_
-  ) internal returns (
-    uint[] memory amountsOut
-  ) {
-    uint len = tokens.length;
-    amountsOut = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) {
-        amountsOut[i] = withdrawnAmounts_[i];
-      } else {
-        uint amount = withdrawnAmounts_[i] + amountsToConvert_[i];
-        if (amount != 0) {
-          (amountsOut[i],) = converter.quoteRepay(address(this), tokens[indexAsset], tokens[i], amount);
-        }
-      }
-    }
-
-    return amountsOut;
-  }
-  //endregion getExpectedAmountMainAsset
-
-  /////////////////////////////////////////////////////////////////////
-  //region Reduce size of ConverterStrategyBase
-  /////////////////////////////////////////////////////////////////////
+//region--------------------------------------------------- Make requested amount
 
   /// @notice Make borrow and save amounts of tokens available for deposit to tokenAmounts
   /// @param thresholdMainAsset_ Min allowed value of collateral in terms of main asset, 0 - use default min value
@@ -1265,10 +1031,6 @@ library ConverterStrategyBaseLib {
     uint[] memory expectedMainAssetAmounts,
     mapping(address => uint) storage liquidationThresholds_
   ) internal returns (uint expectedAmount) {
-    console.log("makeRequestedAmount requestedAmount", requestedAmount);
-    console.log("makeRequestedAmount amountsToConvert_", amountsToConvert_[0], amountsToConvert_[1]);
-    console.log("makeRequestedAmount expectedMainAssetAmounts[d_.indexAsset]", expectedMainAssetAmounts[d_.indexAsset]);
-
     // get the total expected amount
     for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
       expectedAmount += expectedMainAssetAmounts[i];
@@ -1285,101 +1047,28 @@ library ConverterStrategyBaseLib {
     if (requestedAmount != type(uint).max
       && expectedAmount > requestedAmount * (GAP_CONVERSION + DENOMINATOR) / DENOMINATOR
     ) {
-      console.log("makeRequestedAmount requestedAmount.1");
       // amountsToConvert_ are enough to get requestedAmount
       _convertAfterWithdraw(d_, _liquidationThresholds, amountsToConvert_);
     } else {
-      console.log("makeRequestedAmount requestedAmount.2.requestedAmount", requestedAmount);
-
       uint balance = IERC20(d_.tokens[d_.indexAsset]).balanceOf(address(this));
-      console.log("makeRequestedAmount requestedAmount.balance", balance);
       requestedAmount = requestedAmount > balance
         ? requestedAmount - balance
         : 0;
-      console.log("makeRequestedAmount requestedAmount.fixed.requestedAmount", requestedAmount);
 
       // amountsToConvert_ are NOT enough to get requestedAmount
       // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
       // We should try to close the exist debts instead:
       //    convert a part of main assets to get amount of secondary assets required to repay the debts
       // and only then make conversion.
-      expectedAmount = _closePositionsToGetAmount(d_, _liquidationThresholds, requestedAmount);
-      console.log("makeRequestedAmount.expectedAmount.1", expectedAmount);
-
-      expectedAmount += expectedMainAssetAmounts[d_.indexAsset];
-      console.log("makeRequestedAmount.expectedAmount.2", expectedAmount);
+      expectedAmount = _closePositionsToGetAmount(d_, _liquidationThresholds, requestedAmount)
+        + expectedMainAssetAmounts[d_.indexAsset];
     }
 
     return expectedAmount;
   }
-  //endregion Reduce size of ConverterStrategyBase
+  //endregion-------------------------------------------- Make requested amount
 
 //region ------------------------------------------------ Withdraw helpers
-
-  /// @notice Add {withdrawnAmounts} to {amountsToConvert}, calculate {expectedAmountMainAsset}
-  /// @param amountsToConvert Amounts of {tokens} to be converted, they are located on the balance before withdraw
-  /// @param withdrawnAmounts Amounts of {tokens} that were withdrew from the pool
-  function postWithdrawActions(
-    ITetuConverter converter,
-    address[] memory tokens,
-    uint indexAsset,
-
-    uint[] memory reservesBeforeWithdraw,
-    uint liquidityAmountWithdrew,
-    uint totalSupplyBeforeWithdraw,
-
-    uint[] memory amountsToConvert,
-    uint[] memory withdrawnAmounts
-  ) external returns (
-    uint[] memory expectedMainAssetAmounts,
-    uint[] memory _amountsToConvert
-  ) {
-    // estimate expected amount of assets to be withdrawn
-    uint[] memory expectedWithdrawAmounts = getExpectedWithdrawnAmounts(
-      reservesBeforeWithdraw,
-      liquidityAmountWithdrew,
-      totalSupplyBeforeWithdraw
-    );
-
-    // from received amounts after withdraw calculate how much we receive from converter for them in terms of the underlying asset
-    expectedMainAssetAmounts = getExpectedAmountMainAsset(
-      tokens,
-      indexAsset,
-      converter,
-      expectedWithdrawAmounts,
-      amountsToConvert
-    );
-
-    uint len = tokens.length;
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      amountsToConvert[i] += withdrawnAmounts[i];
-    }
-
-    return (expectedMainAssetAmounts, amountsToConvert);
-  }
-
-  /// @notice return {withdrawnAmounts} with zero values and expected amount calculated using {amountsToConvert_}
-  function postWithdrawActionsEmpty(
-    ITetuConverter converter,
-    address[] memory tokens,
-    uint indexAsset,
-    uint[] memory amountsToConvert_
-  ) external returns (
-    uint[] memory expectedAmountsMainAsset
-  ) {
-    expectedAmountsMainAsset = getExpectedAmountMainAsset(
-      tokens,
-      indexAsset,
-      converter,
-      // there are no withdrawn amounts
-      new uint[](tokens.length), // array with all zero values
-      amountsToConvert_
-    );
-  }
-
-//endregion ------------------------------------ Withdraw helpers
-
-//region ------------------------------------------------ convertAfterWithdraw
 
   /// @notice Convert {amountsToConvert_} (available on balance) to the main asset
   ///         Swap leftovers if any.
@@ -1473,9 +1162,6 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint expectedAmount
   ) {
-    console.log("_closePositionsToGetAmount.balance.initial.tokens[0]", IERC20(d_.tokens[0]).balanceOf(address(this)));
-    console.log("_closePositionsToGetAmount.balance.initial.tokens[1]", IERC20(d_.tokens[1]).balanceOf(address(this)));
-
     if (requestedAmount != 0) {
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = d_.tokens[d_.indexAsset];
@@ -1485,7 +1171,7 @@ library ConverterStrategyBaseLib {
       p.tokens = d_.tokens;
       p.liquidationThresholds = liquidationThresholds_;
 
-      (p.prices, p.decs) = _getPricesAndDecs(
+      (p.prices, p.decs) = AppLib._getPricesAndDecs(
         IPriceOracle(IConverterController(d_.converter.controller()).priceOracle()),
         d_.tokens,
         d_.len
@@ -1493,7 +1179,6 @@ library ConverterStrategyBaseLib {
 
 
       for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
-        console.log("_closePositionsToGetAmount.i", i);
         if (i == d_.indexAsset) continue;
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
@@ -1503,10 +1188,6 @@ library ConverterStrategyBaseLib {
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
         do {
-          console.log("_closePositionsToGetAmount.while.balances.asset,token", v.balanceAsset, v.balanceToken);
-          console.log("v.balanceAsset", v.balanceAsset);
-          console.log("v.balanceToken", v.balanceToken);
-
           // generate iteration plan: [swap], [repay]
           (v.idxToSwap1, v.amountToSwap, v.idxToRepay1) = _buildIterationPlan(p, requestedAmount, d_.indexAsset, i);
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
@@ -1526,15 +1207,11 @@ library ConverterStrategyBaseLib {
               p.liquidationThresholds[indexIn],
               false
             );
-            console.log("SWAP.v.amountToSwap", v.amountToSwap);
-            console.log("SWAP.spentAmountIn", spentAmountIn);
             if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
               // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
               // we don't need to take into account conversion to get toSell amount
               expectedAmount += spentAmountIn * p.prices[i] * p.decs[d_.indexAsset] / p.prices[d_.indexAsset] / p.decs[i];
-              console.log("SWAP.expectedAmount+", spentAmountIn * p.prices[i] * p.decs[d_.indexAsset] / p.prices[d_.indexAsset] / p.decs[i]);
-              console.log("SWAP.expectedAmount", expectedAmount);
             }
           }
 
@@ -1542,29 +1219,22 @@ library ConverterStrategyBaseLib {
           if (v.idxToRepay1 != 0) {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
-            console.log("REPAY.indexBorrow, indexCollateral", indexBorrow, indexCollateral);
-            console.log("REPAY.tokenBalance", IERC20(p.tokens[indexBorrow]).balanceOf(address(this)));
-            uint expectedAmountOut = ConverterStrategyBaseLib._repayDebt(
+            uint expectedAmountOut = _repayDebt(
               p.converter,
               p.tokens[indexCollateral],
               p.tokens[indexBorrow],
               IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
             );
-            console.log("REPAY.expectedAmountOut", expectedAmountOut);
 
             if (indexCollateral == d_.indexAsset) {
               require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
               expectedAmount += expectedAmountOut - spentAmountIn;
-              console.log("REPAY.expectedAmount+", expectedAmountOut - spentAmountIn);
-              console.log("REPAY.expectedAmount", expectedAmount);
             }
           }
 
           // update balances and requestedAmount
           v.newBalanceAsset = IERC20(v.asset).balanceOf(address(this));
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-          console.log("v.newBalanceAsset", v.newBalanceAsset);
-          console.log("v.newBalanceToken", v.newBalanceToken);
 
           if (v.newBalanceAsset > v.balanceAsset) {
             requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
@@ -1582,9 +1252,6 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    console.log("_closePositionsToGetAmount.balance.final.tokens[0]", IERC20(d_.tokens[0]).balanceOf(address(this)));
-    console.log("_closePositionsToGetAmount.balance.final.tokens[1]", IERC20(d_.tokens[1]).balanceOf(address(this)));
-    console.log("_closePositionsToGetAmount.expectedAmount.final", expectedAmount);
     return expectedAmount;
   }
 //endregion ------------------------------------------------ Close position
@@ -1632,7 +1299,6 @@ library ConverterStrategyBaseLib {
         p.tokens[indexAsset],
         true
       );
-      console.log("_closePositionsToGetAmount.reverse.debt,collateral", v.debtReverse, v.collateralReverse);
 
       if (v.debtReverse == 0) {
         // direct debt
@@ -1642,7 +1308,6 @@ library ConverterStrategyBaseLib {
           p.tokens[indexToken],
           true
         );
-        console.log("_closePositionsToGetAmount.direct.debt,collateral", v.totalDebt, v.totalCollateral);
 
         if (v.totalDebt == 0) {
           // This is final iteration - we need to swap leftovers and get amounts on balance in proper propotions.
@@ -1650,7 +1315,6 @@ library ConverterStrategyBaseLib {
           //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
           (indexTokenToSwapPlus1, amountToSwap) = _buildPlanForLeftovers(p, v.assetBalance, v.tokenBalance, indexAsset, indexToken);
         } else {
-          console.log("_closePositionsToGetAmount.repay.direct.debt");
           // repay direct debt
           (indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1) = _buildPlanForRepay(
             requestedAmount,
@@ -1664,7 +1328,6 @@ library ConverterStrategyBaseLib {
           );
         }
       } else {
-        console.log("_closePositionsToGetAmount.repay.REVERSE.debt");
         // repay reverse debt
         (indexTokenToSwapPlus1, amountToSwap, indexRepayTokenPlus1) = _buildPlanForRepay(
           requestedAmount == type(uint).max
@@ -1697,12 +1360,11 @@ library ConverterStrategyBaseLib {
     uint tokenBalance,
     uint indexAsset,
     uint indexToken
-  ) internal view returns (
+  ) internal pure returns (
     uint indexTokenToSwapPlus1,
     uint amountToSwap
   ) {
     if (tokenBalance != 0) {
-      console.log("_closePositionsToGetAmount.swap.leftovers.balances.assets,tokens", assetBalance, tokenBalance);
       (uint targetAssets, uint targetTokens) = _getTargetAmounts(
         p.prices,
         p.decs,
@@ -1751,13 +1413,13 @@ library ConverterStrategyBaseLib {
     uint indexBorrow,
     uint balanceCollateral,
     uint balanceBorrow
-  ) internal view returns (
+  ) internal pure returns (
     uint indexTokenToSwapPlus1,
     uint amountToSwap,
     uint indexRepayTokenPlus1
   ) {
     // what amount of collateral we should sell to get required amount-to-pay to pay the debt
-    uint toSell = ConverterStrategyBaseLib._getAmountToSell(
+    uint toSell = _getAmountToSell(
       requestedAmount,
       totalDebt,
       totalCollateral,
@@ -1767,12 +1429,10 @@ library ConverterStrategyBaseLib {
       indexBorrow,
       balanceBorrow
     );
-    console.log("_closePositionsToGetAmount.xxx.toSell,balanceCollateral", toSell, balanceCollateral);
 
     // convert {toSell} amount of underlying to token
     if (toSell != 0 && balanceCollateral != 0) {
       toSell = Math.min(toSell, balanceCollateral);
-      console.log("_closePositionsToGetAmount.toSell.corrected", toSell);
       if (toSell > _getLiquidationThreshold(p.liquidationThresholds[indexCollateral])) {
         amountToSwap = toSell;
         indexTokenToSwapPlus1 = indexCollateral + 1;
@@ -1886,13 +1546,11 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint expectedAmountOut
   ) {
-    console.log("_repayDebt.collateralAsset,borrowAsset,amountToRepay", collateralAsset, borrowAsset, amountToRepay);
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
 
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
-    console.log("_repayDebt.needToRepay,amountRepay", needToRepay, amountRepay);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;
@@ -1916,9 +1574,7 @@ library ConverterStrategyBaseLib {
   }
   //endregion ------------------------------------------------ Repay debts
 
-  /////////////////////////////////////////////////////////////////////
-  //region Other helpers
-  /////////////////////////////////////////////////////////////////////
+//region------------------------------------------------ Other helpers
 
   function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
     return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
@@ -1949,6 +1605,19 @@ library ConverterStrategyBaseLib {
       : DEFAULT_LIQUIDATION_THRESHOLD;
   }
 
-  //endregion Other helpers
+  function _getLiquidationThresholds(
+    mapping(address => uint) storage liquidationThresholds,
+    address[] memory tokens_,
+    uint len
+  ) internal view returns (
+    uint[] memory liquidationThresholdsOut
+  ) {
+    liquidationThresholdsOut = new uint[](len);
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      liquidationThresholdsOut[i] = liquidationThresholds[tokens_[i]];
+    }
+  }
+
+//endregion--------------------------------------------- Other helpers
 }
 

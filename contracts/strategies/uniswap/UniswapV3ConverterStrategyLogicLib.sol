@@ -715,7 +715,7 @@ library UniswapV3ConverterStrategyLogicLib {
       tokens[1] = vars.tokenB;
       uint[] memory amounts = new uint[](2);
       amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
       if (vars.newTotalAssets < oldTotalAssets) {
         loss = oldTotalAssets - vars.newTotalAssets;
       }
@@ -823,7 +823,7 @@ library UniswapV3ConverterStrategyLogicLib {
       tokens[1] = vars.tokenB;
       uint[] memory amounts = new uint[](2);
       amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
       if (vars.newTotalAssets < oldTotalAssets) {
         loss = oldTotalAssets - vars.newTotalAssets;
       }
@@ -873,7 +873,6 @@ library UniswapV3ConverterStrategyLogicLib {
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
     bool fuseEnabledOut
   ) {
-    uint loss;
     tokenAmounts = new uint[](0);
 
     if (state.fillUp) {
@@ -943,7 +942,7 @@ library UniswapV3ConverterStrategyLogicLib {
       tokens[1] = vars.tokenB;
       uint[] memory amounts = new uint[](2);
       amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
       if (vars.newTotalAssets < oldTotalAssets) {
         _coverLoss(
           splitter,
@@ -978,7 +977,7 @@ library UniswapV3ConverterStrategyLogicLib {
     uint[] memory amounts = new uint[](2);
     amounts[0] = AppLib.balance(tokens[0]); // tokens[0] is underlying
 
-    uint newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
+    uint newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
     if (newTotalAssets < oldTotalAssets) {
       _coverLoss(splitter, oldTotalAssets - newTotalAssets, strategyProfitHolder, tokens[0], tokens[1], pool);
     }

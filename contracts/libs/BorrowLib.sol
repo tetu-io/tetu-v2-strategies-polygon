@@ -53,7 +53,6 @@ library BorrowLib {
   }
   //endregion -------------------------------------------------- Data types
 
-
   //region -------------------------------------------------- External functions
   /// @notice Set balances of {asset0} and {asset1} in proportions {prop0}:{prop1} using borrow/repay (no swaps)
   /// @param prop0 Proportion of {asset0}, > 0. Proportion of {asset1} is calculates as 1e18 - prop0
@@ -80,7 +79,7 @@ library BorrowLib {
     address[] memory tokens = new address[](2);
     tokens[0] = asset0;
     tokens[1] = asset1;
-    (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(priceOracle, tokens, 2);
+    (v.prices, v.decs) = AppLib._getPricesAndDecs(priceOracle, tokens, 2);
 
     _refreshRebalance(v, converter_, true);
   }

@@ -270,8 +270,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // get tokens as following: [underlying, not-underlying]
     (address[] memory tokens, uint[] memory thresholds) = _getTokensAndThresholds();
-    console.log("quoteWithdrawByAgg.balance[0].init", IERC20(tokens[0]).balanceOf(address(this)));
-    console.log("quoteWithdrawByAgg.balance[1].init", IERC20(tokens[1]).balanceOf(address(this)));
 
     return UniswapV3AggLib.quoteWithdrawStep(converter, tokens, thresholds, propNotUnderlying18);
   }
@@ -293,7 +291,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     bytes memory swapData,
     uint propNotUnderlying18
   ) external returns (bool completed) {
-    console.log("withdrawByAggStep");
     WithdrawByAggStepLocal memory v;
     v.controller = controller();
 
@@ -305,15 +302,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     (, v.profitToCover) = _fixPriceChanges(true);
     v.oldTotalAssets = totalAssets() - v.profitToCover;
-    console.log("withdrawByAggStep.oldTotalAssets", v.oldTotalAssets);
-    console.log("withdrawByAggStep.v.profitToCover", v.profitToCover);
 
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
-    console.log("withdrawByAggStep.balance[0].init", IERC20(v.tokens[0]).balanceOf(address(this)));
-    console.log("withdrawByAggStep.balance[1].init", IERC20(v.tokens[1]).balanceOf(address(this)));
-    console.log("withdrawByAggStep.investedAssets.init", investedAssets());
-    console.log("withdrawByAggStep.totalAssets.init", totalAssets());
 
     completed = UniswapV3AggLib.withdrawStep(
       v.converter,
@@ -329,8 +320,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       propNotUnderlying18
     );
 
-    console.log("withdrawByAggStep.balance[0].after withdraw", IERC20(v.tokens[0]).balanceOf(address(this)));
-    console.log("withdrawByAggStep.balance[1].after withdraw", IERC20(v.tokens[1]).balanceOf(address(this)));
     UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
       v.converter,
       address(state.pool),
@@ -342,10 +331,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     _updateInvestedAssets();
-    console.log("withdrawByAggStep.balance[0].final", IERC20(v.tokens[0]).balanceOf(address(this)));
-    console.log("withdrawByAggStep.balance[1].final", IERC20(v.tokens[1]).balanceOf(address(this)));
-    console.log("withdrawByAggStep.investedAssets.final", investedAssets());
-    console.log("withdrawByAggStep.totalAssets.final", totalAssets());
   }
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly

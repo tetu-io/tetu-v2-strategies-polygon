@@ -46,7 +46,7 @@ contract UniswapV3Reader {
     v.tokens[1] = tokenA == v.tokens[0] ? tokenB : tokenA; // not underlying
 
     IPriceOracle priceOracle = IPriceOracle(IConverterController(v.converter.controller()).priceOracle());
-    (v.prices, v.decs) = ConverterStrategyBaseLib._getPricesAndDecs(priceOracle, v.tokens, 2);
+    (v.prices, v.decs) =  AppLib._getPricesAndDecs(priceOracle, v.tokens, 2);
 
     // direct borrow: underlying is collateral
     (v.directDebt, v.directCollateral) = v.converter.getDebtAmountStored(strategy_, v.tokens[0], v.tokens[1], true);

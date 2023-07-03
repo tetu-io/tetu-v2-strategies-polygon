@@ -22,7 +22,7 @@ contract ConverterStrategyBaseLibFacade {
   ) external pure returns (
     uint[] memory withdrawnAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
+    return ConverterStrategyBaseLib2.getExpectedWithdrawnAmounts(reserves_, liquidityAmount_, totalSupply_);
   }
 
   function getLiquidityAmount(
@@ -151,7 +151,7 @@ contract ConverterStrategyBaseLibFacade {
   }
 
   function getAssetIndex(address[] memory tokens_, address asset_) external pure returns (uint) {
-    return ConverterStrategyBaseLib.getAssetIndex(tokens_, asset_);
+    return AppLib.getAssetIndex(tokens_, asset_);
   }
 
   function getAvailableBalances(
@@ -169,12 +169,7 @@ contract ConverterStrategyBaseLibFacade {
   ) external returns (
     uint amountOut
   ) {
-    return ConverterStrategyBaseLib.calcInvestedAssets(
-      tokens,
-      amountsOut,
-      indexAsset,
-      converter_
-    );
+    return ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amountsOut, indexAsset, converter_);
   }
 
   function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) external returns (
@@ -219,7 +214,7 @@ contract ConverterStrategyBaseLibFacade {
   function swapToGetAmountAccess(
     uint receivedTargetAmount,
     ConverterStrategyBaseLib.SwapToGivenAmountInputParams memory p,
-    ConverterStrategyBaseLib.CalcInvestedAssetsLocal memory v,
+    ConverterStrategyBaseLib.SwapToGetAmountLocal memory v,
     uint indexTokenIn
   ) external returns (
     uint amountSpent,
@@ -280,7 +275,7 @@ contract ConverterStrategyBaseLibFacade {
     uint indexCollateral,
     uint indexBorrowAsset,
     uint balanceBorrowAsset
-  ) external view returns (
+  ) external pure returns (
     uint amountOut
   ) {
     return ConverterStrategyBaseLib._getAmountToSell(
@@ -417,7 +412,7 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory expectedMainAssetAmounts,
     uint[] memory _amountsToConvert
   ) {
-    return ConverterStrategyBaseLib.postWithdrawActions(
+    return ConverterStrategyBaseLib2.postWithdrawActions(
       converter,
       tokens,
       indexAsset,
@@ -437,6 +432,6 @@ contract ConverterStrategyBaseLibFacade {
   ) external returns (
     uint[] memory expectedAmountsMainAsset
   ) {
-    return ConverterStrategyBaseLib.postWithdrawActionsEmpty(converter, tokens, indexAsset, amountsToConvert_);
+    return ConverterStrategyBaseLib2.postWithdrawActionsEmpty(converter, tokens, indexAsset, amountsToConvert_);
   }
 }

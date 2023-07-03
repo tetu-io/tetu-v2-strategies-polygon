@@ -193,8 +193,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint balanceBefore = AppLib.balance(_asset);
 
       (address[] memory tokens, uint indexAsset) = _getTokens(asset);
-      console.log("_depositToPoolUniversal.balance.initial.tokens[0]", IERC20(tokens[0]).balanceOf(address(this)));
-      console.log("_depositToPoolUniversal.balance.initial.tokens[1]", IERC20(tokens[1]).balanceOf(address(this)));
 
 
       // prepare array of amounts ready to deposit, borrow missed amounts
@@ -212,8 +210,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       if ((updatedInvestedAssetsAfterDeposit + balanceAfter) < (investedAssets_ + balanceBefore)) {
         strategyLoss = (investedAssets_ + balanceBefore) - (updatedInvestedAssetsAfterDeposit + balanceAfter);
       }
-      console.log("_depositToPoolUniversal.balance.final.tokens[0]", IERC20(tokens[0]).balanceOf(address(this)));
-      console.log("_depositToPoolUniversal.balance.final.tokens[1]", IERC20(tokens[1]).balanceOf(address(this)));
     } else if (earnedByPrices_ != 0) {
       // we just skip check of expectedWithdrewUSD here
       uint balance = AppLib.balance(_asset);
@@ -335,7 +331,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       v.tokens = _depositorPoolAssets();
       v.asset = asset;
       v.converter = converter;
-      v.indexAsset = ConverterStrategyBaseLib.getAssetIndex(v.tokens, v.asset);
+      v.indexAsset = AppLib.getAssetIndex(v.tokens, v.asset);
       v.balanceBefore = AppLib.balance(v.asset);
 
       v.reservesBeforeWithdraw = _depositorPoolReserves();
@@ -370,7 +366,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // we need to call expectation after withdraw for calculate it based on the real liquidity amount that was withdrew
         // it should be called BEFORE the converter will touch our positions coz we need to call quote the estimations
         // amountsToConvert should contains amounts was withdrawn from the pool and amounts received from the converter
-        (v.expectedMainAssetAmounts, v.amountsToConvert) = ConverterStrategyBaseLib.postWithdrawActions(
+        (v.expectedMainAssetAmounts, v.amountsToConvert) = ConverterStrategyBaseLib2.postWithdrawActions(
           v.converter,
           v.tokens,
           v.indexAsset,
@@ -382,7 +378,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         );
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
-        v.expectedMainAssetAmounts = ConverterStrategyBaseLib.postWithdrawActionsEmpty(
+        v.expectedMainAssetAmounts = ConverterStrategyBaseLib2.postWithdrawActionsEmpty(
           v.converter,
           v.tokens,
           v.indexAsset,
@@ -603,7 +599,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
     (address[] memory tokens, uint indexAsset) = _getTokens(asset);
-    return ConverterStrategyBaseLib.calcInvestedAssets(
+    return ConverterStrategyBaseLib2.calcInvestedAssets(
       tokens,
       // quote exit should check zero liquidity
       _depositorQuoteExit(_depositorLiquidity()),
@@ -713,7 +709,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   function _getTokens(address asset_) internal view returns (address[] memory tokens, uint indexAsset) {
     tokens = _depositorPoolAssets();
-    indexAsset = ConverterStrategyBaseLib.getAssetIndex(tokens, asset_);
+    indexAsset = AppLib.getAssetIndex(tokens, asset_);
     require(indexAsset != type(uint).max, StrategyLib.WRONG_VALUE);
   }
 
