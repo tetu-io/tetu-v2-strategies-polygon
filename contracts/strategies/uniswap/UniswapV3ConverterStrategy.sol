@@ -123,29 +123,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /////////////////////////////////////////////////////////////////////
-  ///                   REBALANCE
+  //region--------------------------------------------- REBALANCE
   /////////////////////////////////////////////////////////////////////
 
   /// @dev The rebalancing functionality is the core of this strategy.
   ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
   ///      There is also an attempt to cover rebalancing losses with rewards.
   function rebalance() external {
-    address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
-
-    (, uint profitToCover) = _fixPriceChanges(true);
-    uint oldTotalAssets = totalAssets() - profitToCover;
-
-    /// withdraw all liquidity from pool
-    /// after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
-
-    (
-    uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-    bool isNeedFillup
-    ) = UniswapV3ConverterStrategyLogicLib.rebalance(
+    (uint profitToCover, uint oldTotalAssets, address _controller) = _rebalanceBefore(true);
+    (uint[] memory tokenAmounts, bool isNeedFillup) = UniswapV3ConverterStrategyLogicLib.rebalance(
       state,
       converter,
       _controller,
@@ -153,68 +139,29 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       profitToCover,
       splitter
     );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-
-      //add fill-up liquidity part of fill-up is used
-      if (isNeedFillup) {
-        UniswapV3ConverterStrategyLogicLib.addFillup(state);
-      }
-    }
-
-    _updateInvestedAssets();
+    _rebalanceAfter(tokenAmounts, isNeedFillup);
   }
 
   function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
-    address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
-
-    (, uint profitToCover) = _fixPriceChanges(true);
-    uint oldTotalAssets = totalAssets() - profitToCover;
-
-    /// withdraw all liquidity from pool
-    /// after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
 
     // _depositorEnter(tokenAmounts) if length == 2
     uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
       state,
       converter,
       oldTotalAssets,
-      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(
-        direction,
-        amount,
-        agg,
-        swapData
-      ),
+      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(direction, amount, agg, swapData),
       profitToCover,
       splitter
     );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    _updateInvestedAssets();
+    _rebalanceAfter(tokenAmounts, false);
   }
 
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @return True if the fuse was triggered (so, it's necessary to call UniswapV3DebtLib.closeDebtByAgg)
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
-    StrategyLib.onlyOperators(controller());
-
-    (, uint profitToCover) = _fixPriceChanges(true);
-    uint oldTotalAssets = totalAssets() - profitToCover;
-
-    // withdraw all liquidity from pool; after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
-
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
       converter,
@@ -223,48 +170,32 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       splitter,
       checkNeedRebalance
     );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    _updateInvestedAssets();
-
+    _rebalanceAfter(tokenAmounts, false);
     return fuseEnabledOut;
   }
+  //endregion--------------------------------------------- REBALANCE
 
   //region ------------------------------------ Withdraw by iterations
 
   /// @notice Fix price changes, exit from pool, prepare to call quoteWithdrawByAgg/withdrawByAggStep in the loop
   function withdrawByAggEntry() external {
-    address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
-
-    (, uint profitToCover) = _fixPriceChanges(true);
-
-    // withdraw all liquidity from pool; after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
 
     address _asset = asset;
     uint balance = IERC20(_asset).balanceOf(address(this));
     if (profitToCover != 0 && balance != 0) {
       uint profitToSend = Math.min(profitToCover, balance);
-      ConverterStrategyBaseLib2.sendToInsurance(_asset, profitToSend, splitter, totalAssets());
+      ConverterStrategyBaseLib2.sendToInsurance(_asset, profitToSend, splitter, oldTotalAssets);
     }
 
-  _updateInvestedAssets();
+    _updateInvestedAssets();
   }
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep}
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
-  function quoteWithdrawByAgg(uint propNotUnderlying18) external returns (
-    address tokenToSwap,
-    uint amountToSwap
-  ) {
+  function quoteWithdrawByAgg(uint propNotUnderlying18) external returns (address tokenToSwap, uint amountToSwap) {
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
     StrategyLib.onlyOperators(controller());
 
@@ -291,17 +222,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     bytes memory swapData,
     uint propNotUnderlying18
   ) external returns (bool completed) {
-    WithdrawByAggStepLocal memory v;
-    v.controller = controller();
-
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
-    StrategyLib.onlyOperators(v.controller);
     require(state.totalLiquidity == 0, AppErrors.WITHDRAW_BY_AGG_ENTRY_REQUIRED);
 
+    WithdrawByAggStepLocal memory v;
+    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore(false);
     v.converter = converter;
-
-    (, v.profitToCover) = _fixPriceChanges(true);
-    v.oldTotalAssets = totalAssets() - v.profitToCover;
 
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
@@ -422,4 +348,33 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     thresholds[0] = liquidationThresholds[tokens[0]];
     thresholds[1] = liquidationThresholds[tokens[1]];
   }
+
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
+  function _rebalanceBefore(bool allowExit) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
+    controllerOut = controller();
+    StrategyLib.onlyOperators(controllerOut);
+
+    (, profitToCover) = _fixPriceChanges(true);
+    oldTotalAssets = totalAssets() - profitToCover;
+
+    // withdraw all liquidity from pool
+    // after disableFuse() liquidity is zero
+    if (allowExit && state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+  }
+
+  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  function _rebalanceAfter(uint[] memory tokenAmounts, bool isNeedFillup) internal {
+    if (tokenAmounts.length == 2) {
+      _depositorEnter(tokenAmounts);
+    }
+
+    //add fill-up liquidity part of fill-up is used
+    if (isNeedFillup) {
+      UniswapV3ConverterStrategyLogicLib.addFillup(state);
+    }
+    _updateInvestedAssets();
+  }
+
 }

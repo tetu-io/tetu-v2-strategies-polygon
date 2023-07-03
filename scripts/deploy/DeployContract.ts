@@ -32,7 +32,7 @@ const libraries = new Map<string, string[]>([
   // Algebra
   [
     'AlgebraConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'AlgebraConverterStrategyLogicLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'AlgebraConverterStrategyLogicLib', 'ConverterStrategyBaseLib2'],
   ],
   ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib']],
   ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
@@ -45,7 +45,7 @@ const libraries = new Map<string, string[]>([
     'KyberConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'KyberConverterStrategyLogicLib'],
   ],
-  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib']],
+  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
 ]);
 

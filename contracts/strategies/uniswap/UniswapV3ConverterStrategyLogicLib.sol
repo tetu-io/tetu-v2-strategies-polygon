@@ -635,20 +635,8 @@ library UniswapV3ConverterStrategyLogicLib {
     tokenAmounts = new uint[](0);
     isNeedFillup = false;
 
-    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      pool: state.pool,
-      tokenA: state.tokenA,
-      tokenB: state.tokenB,
-      lastPrice: state.lastPrice,
-      fuseThreshold: state.fuseThreshold,
-      fillUp: state.fillUp,
-      isStablePool: state.isStablePool,
-      newPrice: 0
-    });
-
-    _checkNeedRebalance(state, vars.pool);
-
-    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    RebalanceLocalVariables memory vars;
+    _initLocalVars(vars, converter, state, false, true);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -707,29 +695,8 @@ library UniswapV3ConverterStrategyLogicLib {
     uint loss;
     tokenAmounts = new uint[](0);
 
-    if (state.fillUp) {
-      revert('Only for swap strategy.');
-    }
-
-    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      pool: state.pool,
-      tokenA: state.tokenA,
-      tokenB: state.tokenB,
-      lastPrice: state.lastPrice,
-      fuseThreshold: state.fuseThreshold,
-//      depositorSwapTokens: state.depositorSwapTokens,
-    // setup initial values
-//      notCoveredLoss: 0,
-//      newLowerTick: 0,
-//      newUpperTick: 0,
-      fillUp: state.fillUp,
-      isStablePool: state.isStablePool,
-      newPrice: 0
-    });
-
-    _checkNeedRebalance(state, vars.pool);
-
-    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    RebalanceLocalVariables memory vars;
+    _initLocalVars(vars, converter, state, true, true);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -786,6 +753,11 @@ library UniswapV3ConverterStrategyLogicLib {
     return earned;
   }
 
+  /// @notice Make rebalance without swaps (using borrowing only).
+  /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
+  /// @param oldTotalAssets Current value of totalAssets()
+  /// @return tokenAmounts Token amounts for deposit
+  /// @return fuseEnabledOut true if fuse is detected - we need to close all debts asap
   function rebalanceNoSwaps(
     State storage state,
     ITetuConverter converter,
@@ -798,22 +770,7 @@ library UniswapV3ConverterStrategyLogicLib {
     bool fuseEnabledOut
   ) {
     RebalanceLocalVariables memory v;
-    v.pool = state.pool;
-    if (checkNeedRebalance_) {
-      _checkNeedRebalance(state, v.pool);
-    }
-
-    v.fillUp = state.fillUp;
-    if (state.fillUp) {
-      revert('Only for swap strategy.');
-    }
-
-    v.tokenA = state.tokenA;
-    v.tokenB = state.tokenB;
-    v.lastPrice = state.lastPrice;
-    v.fuseThreshold = state.fuseThreshold;
-    v.isStablePool = state.isStablePool;
-    v.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
+    _initLocalVars(v, converter, state, true, checkNeedRebalance_);
 
     if (v.isStablePool && isEnableFuse(v.lastPrice, v.newPrice, v.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -905,14 +862,36 @@ library UniswapV3ConverterStrategyLogicLib {
     );
   }
 
-  function _checkNeedRebalance(State storage state, IUniswapV3Pool pool_) internal view {
-    require(needRebalance(
-      state.isFuseTriggered,
-      pool_,
-      state.lowerTick,
-      state.upperTick,
-      state.tickSpacing,
-      state.rebalanceTickRange
-    ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+  /// @notice Initialize {v} by state values
+  function _initLocalVars(
+    RebalanceLocalVariables memory v,
+    ITetuConverter converter,
+    State storage state,
+    bool checkFillUp,
+    bool checkNeedRebalance_
+  ) internal view {
+    v.pool = state.pool;
+    if (checkNeedRebalance_) {
+      require(needRebalance(
+        state.isFuseTriggered,
+        v.pool,
+        state.lowerTick,
+        state.upperTick,
+        state.tickSpacing,
+        state.rebalanceTickRange
+      ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+    }
+
+    v.fillUp = state.fillUp;
+    if (checkFillUp && v.fillUp) {
+      revert('Only for swap strategy.');
+    }
+
+    v.tokenA = state.tokenA;
+    v.tokenB = state.tokenB;
+    v.lastPrice = state.lastPrice;
+    v.fuseThreshold = state.fuseThreshold;
+    v.isStablePool = state.isStablePool;
+    v.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
   }
 }

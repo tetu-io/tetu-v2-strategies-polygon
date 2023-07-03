@@ -350,7 +350,7 @@ export async function handleReceiptRebalance(receipt: ContractReceipt, decimals:
       ) as unknown) as RebalancedEventObject;
       return {
         loss: log.loss,
-        covered: log.covered
+        covered: log.coveredByRewards
       }
     }
   }
