@@ -5,11 +5,11 @@ import "../ConverterStrategyBase.sol";
 import "./AlgebraDepositor.sol";
 import "./AlgebraConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
-import "../../interfaces/IRebalancingStrategy.sol";
+import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./AlgebraStrategyErrors.sol";
 
 
-contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingStrategy {
+contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
   /////////////////////////////////////////////////////////////////////
   ///                CONSTANTS
@@ -17,7 +17,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
-  string public constant override STRATEGY_VERSION = "1.0.3";
+  string public constant override STRATEGY_VERSION = "2.0.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -127,7 +127,24 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   ///                   REBALANCE
   /////////////////////////////////////////////////////////////////////
 
-  /// @dev The rebalancing functionality is the core of this strategy.
+  /// @notice Rebalance using borrow/repay only, no swaps
+  /// @return True if the fuse was triggered
+  /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
+  function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
+    (uint[] memory tokenAmounts, bool fuseEnabledOut) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
+      state,
+      converter,
+      oldTotalAssets,
+      profitToCover,
+      splitter,
+      checkNeedRebalance
+    );
+    _rebalanceAfter(tokenAmounts);
+    return fuseEnabledOut;
+  }
+
+  /*/// @dev The rebalancing functionality is the core of this strategy.
   ///      Swap method is used.
   function rebalance() external {
     address _controller = controller();
@@ -194,11 +211,35 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
-  }
+  }*/
 
   /////////////////////////////////////////////////////////////////////
   ///                   INTERNAL LOGIC
   /////////////////////////////////////////////////////////////////////
+
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
+  function _rebalanceBefore(bool allowExit) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
+    controllerOut = controller();
+    StrategyLib.onlyOperators(controllerOut);
+
+    (, profitToCover) = _fixPriceChanges(true);
+    oldTotalAssets = totalAssets() - profitToCover;
+
+    // withdraw all liquidity from pool
+    // after disableFuse() liquidity is zero
+    if (allowExit && state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+  }
+
+  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
+    if (tokenAmounts.length == 2) {
+      _depositorEnter(tokenAmounts);
+    }
+
+    _updateInvestedAssets();
+  }
 
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
