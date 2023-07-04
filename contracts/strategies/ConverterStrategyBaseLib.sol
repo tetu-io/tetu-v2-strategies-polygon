@@ -165,6 +165,14 @@ library ConverterStrategyBaseLib {
     /// @notice Length of {tokens}
     uint len;
   }
+
+  struct RecycleLocal {
+    /// @notice // total amount for the performance receiver and insurance
+    uint amountPerf;
+    uint toPerf;
+    uint toInsurance;
+    uint[] amountsToForward;
+  }
   //endregion Data types
 
   /////////////////////////////////////////////////////////////////////
@@ -224,25 +232,16 @@ library ConverterStrategyBaseLib {
 
   event ReturnAssetToConverter(address asset, uint amount);
 
-  event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
+  /// @notice Recycle was made
+  /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
+  /// @param amountsToForward Amounts to be sent to forwarder
+  event Recycle(
+    address[] rewardTokens,
+    uint[] amountsToForward,
+    uint toPerf,
+    uint toInsurance
+  );
   //endregion Events
-
-  /////////////////////////////////////////////////////////////////////
-  //region View functions
-  /////////////////////////////////////////////////////////////////////
-
-  /// @notice Get the price ratio of the two given tokens from the oracle.
-  /// @param converter The Tetu converter.
-  /// @param tokenA The first token address.
-  /// @param tokenB The second token address.
-  /// @return The price ratio of the two tokens.
-  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (uint) {
-    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
-    uint priceA = oracle.getAssetPrice(tokenA);
-    uint priceB = oracle.getAssetPrice(tokenB);
-    return priceB * 1e18 / priceA;
-  }
-  //endregion View functions
 
   /////////////////////////////////////////////////////////////////////
   //region Borrow and close positions
@@ -851,9 +850,101 @@ library ConverterStrategyBaseLib {
   }
   //endregion requirePayAmountBack
 
-  /////////////////////////////////////////////////////////////////////
-  //region Recycle rewards
-  /////////////////////////////////////////////////////////////////////
+//region--------------------------------------------------- Recycle rewards
+
+  /// @notice Recycle the amounts: liquidate a part of each amount, send the other part to the forwarder.
+  /// We have two kinds of rewards:
+  /// 1) rewards in depositor's assets (the assets returned by _depositorPoolAssets)
+  /// 2) any other rewards
+  /// All received rewards divided on three parts: to performance receiver+insurance, to forwarder, to compound
+  ///   Compound-part of Rewards-2 can be liquidated
+  ///   Compound part of Rewards-1 should be just left on the balance
+  ///   Performance amounts should be liquidate, result underlying should be sent to performance receiver and insurance.
+  ///   All forwarder-parts are returned in amountsToForward and should be transferred to the forwarder outside.
+  /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
+  /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
+  /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
+  /// @return Amounts sent to the forwarder
+  function recycle(
+    ITetuConverter converter,
+    address asset,
+    uint compoundRatio,
+    address[] memory tokens,
+    address controller,
+    mapping(address => uint) storage liquidationThresholds,
+    address[] memory rewardTokens_,
+    uint[] memory rewardAmounts_,
+    uint performanceFee,
+    address splitter,
+    address performanceReceiver,
+    uint performanceFeeRatio
+  ) external returns (uint[] memory){
+    RecycleLocal memory v;
+    (v.amountsToForward, v.amountPerf) = _recycle(
+      converter,
+      asset,
+      compoundRatio,
+      tokens,
+      _getLiquidator(controller),
+      liquidationThresholds,
+      rewardTokens_,
+      rewardAmounts_,
+      performanceFee
+    );
+
+    // send performance-part of the underlying to the performance receiver and insurance
+    (v.toPerf, v.toInsurance) = _sendPerformanceFee(
+      asset,
+      v.amountPerf,
+      splitter,
+      performanceReceiver,
+      performanceFeeRatio
+    );
+
+    _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward);
+
+    emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
+    return v.amountsToForward;
+  }
+
+  /// @notice Send {amount_} of {asset_} to {receiver_} and insurance
+  /// @param asset_ Underlying asset
+  /// @param amount_ Amount of underlying asset to be sent to
+  /// @param receiver_ Performance receiver
+  /// @param ratio [0..100_000], 100_000 - send full amount to perf, 0 - send full amount to the insurance.
+  function _sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) internal returns (
+    uint toPerf,
+    uint toInsurance
+  ) {
+    // read inside lib for reduce contract space in the main contract
+    address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
+
+    toPerf = amount_ * ratio / DENOMINATOR;
+    toInsurance = amount_ - toPerf;
+
+    if (toPerf != 0) {
+      IERC20(asset_).safeTransfer(receiver_, toPerf);
+    }
+    if (toInsurance != 0) {
+      IERC20(asset_).safeTransfer(insurance, toInsurance);
+    }
+  }
+
+  function _sendTokensToForwarder(
+    address controller_,
+    address splitter_,
+    address[] memory tokens_,
+    uint[] memory amounts_
+  ) internal {
+    uint len = tokens_.length;
+    IForwarder forwarder = IForwarder(IController(controller_).forwarder());
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
+    }
+
+    (tokens_, amounts_) = TokenAmountsLib.filterZeroAmounts(tokens_, amounts_);
+    forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
+  }
 
   /// @notice Recycle the amounts: split each amount on tree parts: performance+insurance (P), forwarder (F), compound (C)
   ///         Liquidate P+C, send F to the forwarder.
@@ -874,7 +965,7 @@ library ConverterStrategyBaseLib {
   /// @param performanceFee Performance fee in the range [0...FEE_DENOMINATOR]
   /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
   /// @return amountToPerformanceAndInsurance Amount of underlying to be sent to performance receiver and insurance
-  function recycle(
+  function _recycle(
     ITetuConverter converter_,
     address asset,
     uint compoundRatio,
@@ -884,7 +975,7 @@ library ConverterStrategyBaseLib {
     address[] memory rewardTokens,
     uint[] memory rewardAmounts,
     uint performanceFee
-  ) external returns (
+  ) internal returns (
     uint[] memory amountsToForward,
     uint amountToPerformanceAndInsurance
   ) {
@@ -945,7 +1036,7 @@ library ConverterStrategyBaseLib {
     }
     return (amountsToForward, amountToPerformanceAndInsurance);
   }
-//endregion Recycle rewards
+//endregion----------------------------------------------- Recycle rewards
 
 //region--------------------------------------------------- Before deposit
   /// @notice Default implementation of ConverterStrategyBase.beforeDeposit
@@ -1661,30 +1752,6 @@ library ConverterStrategyBaseLib {
   //endregion ------------------------------------------------ Repay debts
 
 //region------------------------------------------------ Other helpers
-
-  function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
-    return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
-  }
-
-  function registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
-    if (assetAfter > assetBefore) {
-      earned = assetAfter - assetBefore;
-    } else {
-      lost = assetBefore - assetAfter;
-    }
-    return (earned, lost);
-  }
-
-  /// @notice Register income and cover possible loss
-  function coverPossibleStrategyLoss(uint assetBefore, uint assetAfter, address splitter) external returns (uint earned) {
-    uint lost;
-    (earned, lost) = ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter);
-    if (lost != 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
-    }
-    emit FixPriceChanges(assetBefore, assetAfter);
-  }
-
   function _getLiquidationThreshold(uint threshold) internal pure returns (uint) {
     return threshold > DEFAULT_LIQUIDATION_THRESHOLD
       ? threshold
@@ -1704,6 +1771,9 @@ library ConverterStrategyBaseLib {
     }
   }
 
+  function _getLiquidator(address controller_) internal view returns (ITetuLiquidator) {
+    return ITetuLiquidator(IController(controller_).liquidator());
+  }
 //endregion--------------------------------------------- Other helpers
 }
 

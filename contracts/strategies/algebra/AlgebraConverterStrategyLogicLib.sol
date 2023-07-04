@@ -154,7 +154,7 @@ library AlgebraConverterStrategyLogicLib {
       /// for stable pools fuse can be enabled
       state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
       emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
-      state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(ITetuConverter(converter), tokenA, tokenB);
+      state.lastPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(ITetuConverter(converter), tokenA, tokenB);
     }
   }
 
@@ -647,7 +647,7 @@ library AlgebraConverterStrategyLogicLib {
 
     require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
 
-    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    vars.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -744,7 +744,7 @@ library AlgebraConverterStrategyLogicLib {
 
     require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
 
-    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
+    vars.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
 
     if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity

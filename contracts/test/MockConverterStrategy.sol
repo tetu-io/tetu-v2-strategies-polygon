@@ -98,7 +98,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
-    (uint earned2, uint lost2) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
+    (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
     return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
   }
 
@@ -264,7 +264,20 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _recycleAccess(address[] memory tokens, uint[] memory amounts) external returns (
     uint[] memory amountsToForward
   ) {
-    return _recycle(tokens, amounts);
+    return ConverterStrategyBaseLib.recycle(
+      converter,
+      asset,
+      compoundRatio,
+      _depositorPoolAssets(),
+      controller(),
+      liquidationThresholds,
+      tokens,
+      amounts,
+      performanceFee,
+      splitter,
+      performanceReceiver,
+      performanceFeeRatio
+    );
   }
 
   function _makeRequestedAmountAccess(

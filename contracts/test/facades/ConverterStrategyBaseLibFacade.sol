@@ -176,7 +176,7 @@ contract ConverterStrategyBaseLibFacade {
     uint toPerf,
     uint toInsurance
   ) {
-    return ConverterStrategyBaseLib2.sendPerformanceFee(asset_, amount_, splitter, receiver_, ratio);
+    return ConverterStrategyBaseLib._sendPerformanceFee(asset_, amount_, splitter, receiver_, ratio);
   }
 
   function swapToGivenAmountAccess(
@@ -291,7 +291,7 @@ contract ConverterStrategyBaseLibFacade {
   }
 
   function registerIncome(uint assetBefore, uint assetAfter) external pure returns (uint earned, uint lost) {
-    return ConverterStrategyBaseLib.registerIncome(assetBefore, assetAfter);
+    return ConverterStrategyBaseLib2._registerIncome(assetBefore, assetAfter);
   }
 
   function sendTokensToForwarder(
@@ -300,7 +300,7 @@ contract ConverterStrategyBaseLibFacade {
     address[] memory tokens_,
     uint[] memory amounts_
   ) external {
-    return ConverterStrategyBaseLib2.sendTokensToForwarder(controller_, splitter_, tokens_, amounts_);
+    return ConverterStrategyBaseLib._sendTokensToForwarder(controller_, splitter_, tokens_, amounts_);
   }
 
   function recycle(
@@ -316,7 +316,7 @@ contract ConverterStrategyBaseLibFacade {
     uint[] memory amountsToForward,
     uint amountToPerformanceAndInsurance
   ) {
-    return ConverterStrategyBaseLib.recycle(
+    return ConverterStrategyBaseLib._recycle(
       converter_,
       asset,
       compoundRatio,

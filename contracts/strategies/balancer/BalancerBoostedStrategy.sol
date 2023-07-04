@@ -34,7 +34,7 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
     assetBalanceAfterClaim = AppLib.balance(asset);
-    (uint earned2, uint lost2) = ConverterStrategyBaseLib.registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
+    (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(assetBalanceBefore, assetBalanceAfterClaim);
     return (earned + earned2, lost + lost2, assetBalanceAfterClaim);
   }
 

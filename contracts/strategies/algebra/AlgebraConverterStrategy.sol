@@ -70,7 +70,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function disableFuse() external {
     StrategyLib.onlyOperators(controller());
     state.isFuseTriggered = false;
-    state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
+    state.lastPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
 
     AlgebraConverterStrategyLogicLib.emitDisableFuse();
   }

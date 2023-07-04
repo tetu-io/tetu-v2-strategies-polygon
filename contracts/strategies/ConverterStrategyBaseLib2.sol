@@ -40,6 +40,7 @@ library ConverterStrategyBaseLib2 {
   event OnChangePerformanceFeeRatio(uint newRatio);
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
+  event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -57,44 +58,6 @@ library ConverterStrategyBaseLib2 {
     return amountsToConvert;
   }
 
-  /// @notice Send {amount_} of {asset_} to {receiver_} and insurance
-  /// @param asset_ Underlying asset
-  /// @param amount_ Amount of underlying asset to be sent to
-  /// @param receiver_ Performance receiver
-  /// @param ratio [0..100_000], 100_000 - send full amount to perf, 0 - send full amount to the insurance.
-  function sendPerformanceFee(address asset_, uint amount_, address splitter, address receiver_, uint ratio) external returns (
-    uint toPerf,
-    uint toInsurance
-  ) {
-    // read inside lib for reduce contract space in the main contract
-    address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
-
-    toPerf = amount_ * ratio / DENOMINATOR;
-    toInsurance = amount_ - toPerf;
-
-    if (toPerf != 0) {
-      IERC20(asset_).safeTransfer(receiver_, toPerf);
-    }
-    if (toInsurance != 0) {
-      IERC20(asset_).safeTransfer(insurance, toInsurance);
-    }
-  }
-
-  function sendTokensToForwarder(
-    address controller_,
-    address splitter_,
-    address[] memory tokens_,
-    uint[] memory amounts_
-  ) external {
-    uint len = tokens_.length;
-    IForwarder forwarder = IForwarder(IController(controller_).forwarder());
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
-    }
-
-    (tokens_, amounts_) = TokenAmountsLib.filterZeroAmounts(tokens_, amounts_);
-    forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
-  }
 
   /// @notice Calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
   ///               liquidityAmount = _depositorLiquidity() * {liquidityRatioOut} / 1e18
@@ -228,6 +191,53 @@ library ConverterStrategyBaseLib2 {
       IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);
     }
     return amountToSend;
+  }
+
+  /// @notice Get the price ratio of the two given tokens from the oracle.
+  /// @param converter The Tetu converter.
+  /// @param tokenA The first token address.
+  /// @param tokenB The second token address.
+  /// @return The price ratio of the two tokens.
+  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (uint) {
+    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
+    uint priceA = oracle.getAssetPrice(tokenA);
+    uint priceB = oracle.getAssetPrice(tokenB);
+    return priceB * 1e18 / priceA;
+  }
+
+  function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
+    return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
+  }
+
+  function _registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
+    if (assetAfter > assetBefore) {
+      earned = assetAfter - assetBefore;
+    } else {
+      lost = assetBefore - assetAfter;
+    }
+    return (earned, lost);
+  }
+
+  /// @notice Register income and cover possible loss
+  function coverPossibleStrategyLoss(uint assetBefore, uint assetAfter, address splitter) external returns (uint earned) {
+    uint lost;
+    (earned, lost) = _registerIncome(assetBefore, assetAfter);
+    if (lost != 0) {
+      ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
+    }
+    emit FixPriceChanges(assetBefore, assetAfter);
+  }
+
+  /// @notice Compare initial and final value of (invested-assets + balance) and calculate loss amount
+  function getStrategyLoss(
+    uint investedAssetsBefore,
+    uint balanceBefore,
+    uint investedAssetsAfter,
+    uint balanceAfter
+  ) internal pure returns (uint) {
+    return ((investedAssetsAfter + balanceAfter) < (investedAssetsBefore + balanceBefore))
+      ? (investedAssetsBefore + balanceBefore) - (investedAssetsAfter + balanceAfter)
+      : 0;
   }
 //endregion----------------------------------------- MAIN LOGIC
 

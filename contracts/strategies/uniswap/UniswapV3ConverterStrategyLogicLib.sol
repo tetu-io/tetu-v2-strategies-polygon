@@ -94,7 +94,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
   function disableFuse(State storage state, ITetuConverter converter) external {
     state.isFuseTriggered = false;
-    state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
+    state.lastPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
     emit DisableFuse();
   }
 
@@ -172,7 +172,7 @@ library UniswapV3ConverterStrategyLogicLib {
       state.isStablePool = true;
       state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
       emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
-      state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(ITetuConverter(converter), state.tokenA, state.tokenB);
+      state.lastPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(ITetuConverter(converter), state.tokenA, state.tokenB);
     }
   }
 
@@ -892,6 +892,6 @@ library UniswapV3ConverterStrategyLogicLib {
     v.lastPrice = state.lastPrice;
     v.fuseThreshold = state.fuseThreshold;
     v.isStablePool = state.isStablePool;
-    v.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
+    v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
   }
 }
