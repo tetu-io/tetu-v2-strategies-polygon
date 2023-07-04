@@ -671,7 +671,7 @@ library UniswapV3ConverterStrategyLogicLib {
         isNeedFillup = true;
       }
 
-      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic
@@ -726,7 +726,7 @@ library UniswapV3ConverterStrategyLogicLib {
         splitter
       );
 
-      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic
@@ -787,7 +787,7 @@ library UniswapV3ConverterStrategyLogicLib {
       }
 
       uint loss;
-      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
       if (loss != 0) {
         _coverLoss(splitter, loss, state.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
@@ -835,31 +835,6 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     emit Rebalanced(loss, coveredByRewards);
-  }
-
-  /// @notice Calculate the token amounts for deposit and amount of loss (as old-total-asset - new-total-asset)
-  function _getTokenAmounts(ITetuConverter converter, uint totalAssets, address tokenA, address tokenB) internal returns (
-    uint loss,
-    uint[] memory tokenAmounts
-  ) {
-    tokenAmounts = new uint[](2);
-    tokenAmounts[0] = AppLib.balance(tokenA);
-    tokenAmounts[1] = AppLib.balance(tokenB);
-
-    address[] memory tokens = new address[](2);
-    tokens[0] = tokenA;
-    tokens[1] = tokenB;
-
-    uint[] memory amounts = new uint[](2);
-    amounts[0] = tokenAmounts[0];
-
-    uint newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-    return (
-      newTotalAssets < totalAssets
-        ? totalAssets - newTotalAssets
-        : 0,
-      tokenAmounts
-    );
   }
 
   /// @notice Initialize {v} by state values

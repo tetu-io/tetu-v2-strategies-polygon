@@ -441,16 +441,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       ConverterStrategyBaseLib.recycle(
         converter,
         asset,
-        compoundRatio,
         _depositorPoolAssets(),
         controller(),
         liquidationThresholds,
         rewardTokens_,
         rewardAmounts_,
-        performanceFee,
         splitter,
         performanceReceiver,
-        performanceFeeRatio
+        [compoundRatio, performanceFee, performanceFeeRatio]
       );
     }
   }

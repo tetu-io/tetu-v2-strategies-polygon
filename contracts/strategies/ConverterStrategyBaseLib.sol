@@ -851,32 +851,32 @@ library ConverterStrategyBaseLib {
   /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
+  /// @param feesAndRatios [compoundRatio, performanceFee, performanceFeeRatio]
+  ///                      Three values were combined to single array to avoid stack-too-deep in coverage
   /// @return Amounts sent to the forwarder
   function recycle(
     ITetuConverter converter,
     address asset,
-    uint compoundRatio,
     address[] memory tokens,
     address controller,
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_,
-    uint performanceFee,
     address splitter,
     address performanceReceiver,
-    uint performanceFeeRatio
+    uint[3] memory feesAndRatios
   ) external returns (uint[] memory){
     RecycleLocal memory v;
     (v.amountsToForward, v.amountPerf) = _recycle(
       converter,
       asset,
-      compoundRatio,
+      feesAndRatios[0], // compoundRatio
       tokens,
       AppLib._getLiquidator(controller),
       liquidationThresholds,
       rewardTokens_,
       rewardAmounts_,
-      performanceFee
+      feesAndRatios[1] // performanceFee
     );
 
     // send performance-part of the underlying to the performance receiver and insurance
@@ -885,7 +885,7 @@ library ConverterStrategyBaseLib {
       v.amountPerf,
       splitter,
       performanceReceiver,
-      performanceFeeRatio
+      feesAndRatios[2] // performanceFeeRatio
     );
 
     _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward);
