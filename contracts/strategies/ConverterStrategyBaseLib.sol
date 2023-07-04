@@ -945,23 +945,104 @@ library ConverterStrategyBaseLib {
     }
     return (amountsToForward, amountToPerformanceAndInsurance);
   }
-  //endregion Recycle rewards
+//endregion Recycle rewards
 
-//region--------------------------------------------------- Make requested amount
-
-  /// @notice Make borrow and save amounts of tokens available for deposit to tokenAmounts
-  /// @param thresholdMainAsset_ Min allowed value of collateral in terms of main asset, 0 - use default min value
+//region--------------------------------------------------- Before deposit
+  /// @notice Default implementation of ConverterStrategyBase.beforeDeposit
+  /// @param amount_ Amount of underlying to be deposited
   /// @param tokens_ Tokens received from {_depositorPoolAssets}
+  /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @param weights_ Depositor pool weights
+  /// @param totalWeight_ Sum of {weights_}
+  function beforeDeposit(
+    ITetuConverter converter_,
+    uint amount_,
+    address[] memory tokens_,
+    uint indexAsset_,
+    uint[] memory weights_,
+    uint totalWeight_,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (
+    uint[] memory tokenAmounts
+  ) {
+    // temporary save collateral to tokensAmounts
+    tokenAmounts = _getCollaterals(
+      amount_,
+      tokens_,
+      weights_,
+      totalWeight_,
+      indexAsset_,
+      IPriceOracle(IConverterController(converter_.controller()).priceOracle())
+    );
+
+    // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
+    tokenAmounts = _getTokenAmounts(
+      converter_,
+      tokens_,
+      indexAsset_,
+      tokenAmounts,
+      liquidationThresholds[tokens_[indexAsset_]]
+    );
+  }
+
+  /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.
+  ///         I.e. we have 300 USDC, we need to split it on 100 USDC, 100 USDT, 100 DAI
+  ///         USDC is main asset, USDT and DAI should be borrowed. We check amounts of USDT and DAI on the balance
+  ///         and return collaterals reduced on that amounts. For main asset, we return full amount always (100 USDC).
+  /// @param tokens_ Tokens received from {_depositorPoolAssets}
+  /// @param indexAsset_ Index of main {asset} in {tokens}
+  /// @return tokenAmountsOut Length of the array is equal to the length of {tokens_}
+  function _getCollaterals(
+    uint amount_,
+    address[] memory tokens_,
+    uint[] memory weights_,
+    uint totalWeight_,
+    uint indexAsset_,
+    IPriceOracle priceOracle
+  ) internal view returns (
+    uint[] memory tokenAmountsOut
+  ) {
+    uint len = tokens_.length;
+    tokenAmountsOut = new uint[](len);
+
+    // get token prices and decimals
+    (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(priceOracle, tokens_, len);
+
+    // split the amount on tokens proportionally to the weights
+    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      uint amountAssetForToken = amount_ * weights_[i] / totalWeight_;
+
+      if (i == indexAsset_) {
+        tokenAmountsOut[i] = amountAssetForToken;
+      } else {
+        // if we have some tokens on balance then we need to use only a part of the collateral
+        uint tokenAmountToBeBorrowed = amountAssetForToken
+          * prices[indexAsset_]
+          * decs[i]
+          / prices[i]
+          / decs[indexAsset_];
+
+        uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
+        if (tokenBalance < tokenAmountToBeBorrowed) {
+          tokenAmountsOut[i] = amountAssetForToken * (tokenAmountToBeBorrowed - tokenBalance) / tokenAmountToBeBorrowed;
+        }
+      }
+    }
+  }
+
+  /// @notice Make borrow and return amounts of {tokens} available to deposit
+  /// @param tokens_ Tokens received from {_depositorPoolAssets}
+  /// @param indexAsset_ Index of main {asset} in {tokens}
   /// @param collaterals_ Amounts of main asset that can be used as collateral to borrow {tokens_}
-  /// @param thresholdMainAsset_ Value of liquidation threshold for the main (collateral) asset
-  /// @return tokenAmountsOut Amounts available for deposit
-  function getTokenAmounts(
-    ITetuConverter tetuConverter_,
+  /// @param thresholdAsset_ Value of liquidation threshold for the main (collateral) asset
+  /// @return tokenAmountsOut Amounts of {tokens}  available to deposit
+  function _getTokenAmounts(
+    ITetuConverter converter_,
     address[] memory tokens_,
     uint indexAsset_,
     uint[] memory collaterals_,
-    uint thresholdMainAsset_
-  ) external returns (
+    uint thresholdAsset_
+  ) internal returns (
     uint[] memory tokenAmountsOut
   ) {
     // content of tokenAmounts will be modified in place
@@ -971,14 +1052,14 @@ library ConverterStrategyBaseLib {
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i != indexAsset_) {
         if (collaterals_[i] != 0) {
-          AppLib.approveIfNeeded(tokens_[indexAsset_], collaterals_[i], address(tetuConverter_));
+          AppLib.approveIfNeeded(tokens_[indexAsset_], collaterals_[i], address(converter_));
           _openPosition(
-            tetuConverter_,
+            converter_,
             "", // entry kind = 0: fixed collateral amount, max possible borrow amount
             tokens_[indexAsset_],
             tokens_[i],
             collaterals_[i],
-            Math.max(thresholdMainAsset_, DEFAULT_LIQUIDATION_THRESHOLD)
+            _getLiquidationThreshold(thresholdAsset_)
           );
 
           // zero borrowed amount is possible here (conversion is not available)
@@ -993,6 +1074,11 @@ library ConverterStrategyBaseLib {
       IERC20(tokens_[indexAsset_]).balanceOf(address(this))
     );
   }
+//endregion--------------------------------------------------- Before deposit
+
+//region--------------------------------------------------- Make requested amount
+
+
 
   /// @notice Convert {amountsToConvert_} to the main {asset}
   ///         Swap leftovers (if any) to the main asset.

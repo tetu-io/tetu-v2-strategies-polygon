@@ -96,54 +96,6 @@ library ConverterStrategyBaseLib2 {
     forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
   }
 
-  /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.
-  ///         I.e. we have 300 USDC, we need to split it on 100 USDC, 100 USDT, 100 DAI
-  ///         USDC is main asset, USDT and DAI should be borrowed. We check amounts of USDT and DAI on the balance
-  ///         and return collaterals reduced on that amounts. For main asset, we return full amount always (100 USDC).
-  /// @return tokenAmountsOut Length of the array is equal to the length of {tokens_}
-  function getCollaterals(
-    uint amount_,
-    address[] memory tokens_,
-    uint[] memory weights_,
-    uint totalWeight_,
-    uint indexAsset_,
-    IPriceOracle priceOracle
-  ) external view returns (
-    uint[] memory tokenAmountsOut
-  ) {
-    uint len = tokens_.length;
-    tokenAmountsOut = new uint[](len);
-
-    // get token prices and decimals
-    uint[] memory prices = new uint[](len);
-    uint[] memory decs = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      decs[i] = 10 ** IERC20Metadata(tokens_[i]).decimals();
-      prices[i] = priceOracle.getAssetPrice(tokens_[i]);
-    }
-
-    // split the amount on tokens proportionally to the weights
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      uint amountAssetForToken = amount_ * weights_[i] / totalWeight_;
-
-      if (i == indexAsset_) {
-        tokenAmountsOut[i] = amountAssetForToken;
-      } else {
-        // if we have some tokens on balance then we need to use only a part of the collateral
-        uint tokenAmountToBeBorrowed = amountAssetForToken
-          * prices[indexAsset_]
-          * decs[i]
-          / prices[i]
-          / decs[indexAsset_];
-
-        uint tokenBalance = IERC20(tokens_[i]).balanceOf(address(this));
-        if (tokenBalance < tokenAmountToBeBorrowed) {
-          tokenAmountsOut[i] = amountAssetForToken * (tokenAmountToBeBorrowed - tokenBalance) / tokenAmountToBeBorrowed;
-        }
-      }
-    }
-  }
-
   /// @notice Calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
   ///               liquidityAmount = _depositorLiquidity() * {liquidityRatioOut} / 1e18
   ///         User needs to withdraw {targetAmount_} in main asset.

@@ -240,7 +240,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param indexAsset_ Index of main {asset} in {tokens}
   /// @return tokenAmounts Amounts of depositor's assets ready to invest (this array can be passed to depositorEnter)
   function _beforeDeposit(
-    ITetuConverter tetuConverter_,
+    ITetuConverter converter_,
     uint amount_,
     address[] memory tokens_,
     uint indexAsset_
@@ -249,24 +249,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ) {
     // calculate required collaterals for each token and temporary save them to tokenAmounts
     (uint[] memory weights, uint totalWeight) = _depositorPoolWeights();
-
-    // temporary save collateral to tokensAmounts
-    tokenAmounts = ConverterStrategyBaseLib2.getCollaterals(
+    return ConverterStrategyBaseLib.beforeDeposit(
+      converter_,
       amount_,
       tokens_,
+      indexAsset_,
       weights,
       totalWeight,
-      indexAsset_,
-      IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle())
-    );
-
-    // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
-    tokenAmounts = ConverterStrategyBaseLib.getTokenAmounts(
-      tetuConverter_,
-      tokens_,
-      indexAsset_,
-      tokenAmounts,
-      liquidationThresholds[tokens_[indexAsset_]]
+      liquidationThresholds
     );
   }
   //endregion Convert amounts before deposit

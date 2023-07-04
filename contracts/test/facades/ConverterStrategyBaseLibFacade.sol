@@ -56,7 +56,7 @@ contract ConverterStrategyBaseLibFacade {
     uint indexAsset_,
     IPriceOracle priceOracle
   ) external view returns (uint[] memory tokenAmountsOut) {
-    return ConverterStrategyBaseLib2.getCollaterals(
+    return ConverterStrategyBaseLib._getCollaterals(
       amount_,
       tokens_,
       weights_,
@@ -357,7 +357,7 @@ contract ConverterStrategyBaseLibFacade {
   ) external returns (
     uint[] memory tokenAmountsOut
   ) {
-    return ConverterStrategyBaseLib.getTokenAmounts(
+    return ConverterStrategyBaseLib._getTokenAmounts(
       tetuConverter_,
       tokens_,
       indexAsset_,
