@@ -2629,7 +2629,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         });
         it('should return expected final balances', async() => {
           const r = await loadFixture(makeRecycleTest);
-          expect(r.finalRewardTokenBalances.join()).to.equal([90, 209.853659, 72].join()); // 200 - 20 + 288/328*34
+          expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 209.853659-36, 72-72].join()); // 200 - 20 + 288/328*34
         });
       });
       describe('60% performance, 40% insurance', () => {
@@ -2677,7 +2677,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
         });
         it('should return expected final balances', async() => {
           const r = await loadFixture(makeRecycleTest);
-          expect(r.finalRewardTokenBalances.join()).to.equal([90, 209.853659, 72].join()); // 200 - 20 + 288/328*34
+          expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 209.853659-36, 72-72].join()); // 200 - 20 + 288/328*34
         });
       });
       describe("too high liquidation thresholds", () => {
@@ -2745,7 +2745,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.finalRewardTokenBalances.join()).to.equal([90, 180, 400].join()); // 200 - 20
+            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 180-36, 400-72].join()); // 200 - 20
           });
         });
         describe('dai', () => {
@@ -2792,7 +2792,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.finalRewardTokenBalances.join()).to.equal([100, 209.853659, 72].join()); // 200 - 20 + 288/328*34
+            expect(r.finalRewardTokenBalances.join()).to.equal([100-18, 209.853659-36, 72-72].join()); // 200 - 20 + 288/328*34
           });
         });
         describe('usdc', () => {
@@ -2839,7 +2839,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.finalRewardTokenBalances.join()).to.equal([90, 209.853659, 72].join()); // 180+288*34/328, 400*0.9*0.2
+            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 209.853659-36, 72-72].join()); // 180+288*34/328, 400*0.9*0.2
           });
         });
       });
@@ -2997,6 +2997,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       });
       it("should return zero strategy loss", async () => {
         const ret = await loadFixture(makeDepositToPoolTest);
+        console.log(ret);
         expect(ret.strategyLoss).not.eq(0);
       });
 

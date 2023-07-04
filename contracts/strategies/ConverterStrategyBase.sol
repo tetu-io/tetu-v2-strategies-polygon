@@ -6,7 +6,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-import "../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -199,11 +198,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint investedAssetsAfter = _updateInvestedAssets();
 
       // we need to compensate difference if during deposit we lost some assets
-      strategyLoss = ConverterStrategyBaseLib2.getStrategyLoss(
-        investedAssetsAfter,
-        AppLib.balance(_asset) + amountSentToInsurance,
-        investedAssets_,
-        balanceBefore
+      (,strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
+        investedAssets_ + balanceBefore,
+        investedAssetsAfter + AppLib.balance(_asset) + amountSentToInsurance
       );
     }
 
@@ -383,11 +380,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       v.balanceAfterWithdraw = AppLib.balance(v.asset);
 
       // we need to compensate difference if during withdraw we lost some assets
-      strategyLoss = ConverterStrategyBaseLib2.getStrategyLoss(
-        v.investedAssetsAfterWithdraw,
-        v.balanceAfterWithdraw + amountSentToInsurance,
-        investedAssets_,
-        v.balanceBefore
+      (, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
+        investedAssets_ + v.balanceBefore,
+        v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw + amountSentToInsurance
       );
 
       return (
@@ -581,7 +576,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
     address __converter = address(converter);
-    address _asset = asset;
     require(msg.sender == __converter, StrategyLib.DENIED);
 
     // detect index of the target asset
@@ -611,7 +605,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tokens,
       __converter,
       controller(),
-      _asset,
+      asset,
       liquidationThresholds
     );
 

@@ -153,6 +153,9 @@ library ConverterStrategyBaseLib {
     uint costTokens;
     uint targetAssets;
     uint targetTokens;
+
+    address asset;
+    address token;
   }
 
   struct DataSetLocal {
@@ -684,8 +687,11 @@ library ConverterStrategyBaseLib {
   ) external returns (
     uint amountOut
   ) {
+    address theAsset = tokens[indexTheAsset];
+    uint[] memory thresholds = _getLiquidationThresholds(liquidationThresholds, tokens, tokens.length);
+
     // msg.sender == converter; we assume here that it was checked before the call of this function
-    amountOut = IERC20(tokens[indexTheAsset]).balanceOf(address(this));
+    amountOut = IERC20(theAsset).balanceOf(address(this));
 
     // convert withdrawn assets to the target asset if not enough
     if (amountOut < amount_) {
@@ -695,24 +701,24 @@ library ConverterStrategyBaseLib {
         indexTheAsset,
         asset, // underlying === main asset
         ITetuConverter(converter),
-        ITetuLiquidator(IController(controller).liquidator()),
-        _getLiquidationThresholds(liquidationThresholds, tokens, tokens.length),
+        ConverterStrategyBaseLib._getLiquidator(controller),
+        thresholds,
         OVERSWAP
       );
-      amountOut = IERC20(tokens[indexTheAsset]).balanceOf(address(this));
+      amountOut = IERC20(theAsset).balanceOf(address(this));
     }
 
     // we should send the asset as is even if it is lower than requested
     // but shouldn't sent more amount than requested
     amountOut = Math.min(amount_, amountOut);
     if (amountOut != 0) {
-      IERC20(tokens[indexTheAsset]).safeTransfer(converter, amountOut);
+      IERC20(theAsset).safeTransfer(converter, amountOut);
     }
 
     // There are two cases of calling requirePayAmountBack by converter:
     // 1) close a borrow: we will receive collateral back and amount of investedAssets almost won't change
     // 2) rebalancing: we have real loss, it will be taken into account at next hard work
-    emit ReturnAssetToConverter(tokens[indexTheAsset], amountOut);
+    emit ReturnAssetToConverter(theAsset, amountOut);
 
     // let's leave any leftovers un-invested, they will be reinvested at next hardwork
   }
@@ -1139,16 +1145,18 @@ library ConverterStrategyBaseLib {
     // content of tokenAmounts will be modified in place
     uint len = tokens_.length;
     tokenAmountsOut = new uint[](len);
+    address asset = tokens_[indexAsset_];
 
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i != indexAsset_) {
+        address token = tokens_[i];
         if (collaterals_[i] != 0) {
-          AppLib.approveIfNeeded(tokens_[indexAsset_], collaterals_[i], address(converter_));
+          AppLib.approveIfNeeded(asset, collaterals_[i], address(converter_));
           _openPosition(
             converter_,
             "", // entry kind = 0: fixed collateral amount, max possible borrow amount
-            tokens_[indexAsset_],
-            tokens_[i],
+            asset,
+            token,
             collaterals_[i],
             _getLiquidationThreshold(thresholdAsset_)
           );
@@ -1156,13 +1164,13 @@ library ConverterStrategyBaseLib {
           // zero borrowed amount is possible here (conversion is not available)
           // if it's not suitable for depositor, the depositor should check zero amount in other places
         }
-        tokenAmountsOut[i] = IERC20(tokens_[i]).balanceOf(address(this));
+        tokenAmountsOut[i] = IERC20(token).balanceOf(address(this));
       }
     }
 
     tokenAmountsOut[indexAsset_] = Math.min(
       collaterals_[indexAsset_],
-      IERC20(tokens_[indexAsset_]).balanceOf(address(this))
+      IERC20(asset).balanceOf(address(this))
     );
   }
 //endregion--------------------------------------------------- Before deposit
@@ -1455,8 +1463,10 @@ library ConverterStrategyBaseLib {
     uint indexRepayTokenPlus1
   ) {
     GetIterationPlanLocal memory v;
+    v.asset = p.tokens[indexAsset];
+    v.token = p.tokens[indexToken];
 
-    v.assetBalance = IERC20(p.tokens[indexAsset]).balanceOf(address(this));
+    v.assetBalance = IERC20(v.asset).balanceOf(address(this));
     v.tokenBalance = IERC20(p.tokens[indexToken]).balanceOf(address(this));
 
     if (requestedAmount < _getLiquidationThreshold(p.liquidationThresholds[indexAsset])) {
@@ -1470,21 +1480,11 @@ library ConverterStrategyBaseLib {
       // but better to take into account possibility to have two debts simultaneously
 
       // reverse debt
-      (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(
-        address(this),
-        p.tokens[indexToken],
-        p.tokens[indexAsset],
-        true
-      );
+      (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
 
       if (v.debtReverse == 0) {
         // direct debt
-        (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(
-          address(this),
-          p.tokens[indexAsset],
-          p.tokens[indexToken],
-          true
-        );
+        (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
 
         if (v.totalDebt == 0) {
           // This is final iteration - we need to swap leftovers and get amounts on balance in proper propotions.

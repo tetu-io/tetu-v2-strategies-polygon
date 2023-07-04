@@ -25,6 +25,8 @@ library ConverterStrategyBaseLib2 {
     uint[] prices;
     uint[] decs;
     uint[] debts;
+    address asset;
+    address token;
   }
 //endregion --------------------------------------- Data types
 
@@ -93,10 +95,11 @@ library ConverterStrategyBaseLib2 {
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       if (i == indexAsset) continue;
 
-      uint balance = IERC20(tokens[i]).balanceOf(address(this));
+      address token = tokens[i];
+      uint balance = IERC20(token).balanceOf(address(this));
       if (balance != 0) {
         // let's estimate collateral that we received back after repaying balance-amount
-        (uint expectedCollateral,) = converter.quoteRepay(strategy_, tokens[indexAsset], tokens[i], balance);
+        (uint expectedCollateral,) = converter.quoteRepay(strategy_, tokens[indexAsset], token, balance);
 
         if (all || targetAmount_ != 0) {
           // We always repay WHOLE available balance-amount even if it gives us much more amount then we need.
@@ -226,18 +229,6 @@ library ConverterStrategyBaseLib2 {
       ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
     }
     emit FixPriceChanges(assetBefore, assetAfter);
-  }
-
-  /// @notice Compare initial and final value of (invested-assets + balance) and calculate loss amount
-  function getStrategyLoss(
-    uint investedAssetsBefore,
-    uint balanceBefore,
-    uint investedAssetsAfter,
-    uint balanceAfter
-  ) internal pure returns (uint) {
-    return ((investedAssetsAfter + balanceAfter) < (investedAssetsBefore + balanceBefore))
-      ? (investedAssetsBefore + balanceBefore) - (investedAssetsAfter + balanceAfter)
-      : 0;
   }
 //endregion----------------------------------------- MAIN LOGIC
 
@@ -400,6 +391,7 @@ library ConverterStrategyBaseLib2 {
   ) {
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
+    v.asset = tokens[indexAsset];
 
     // calculate prices, decimals
     (v.prices, v.decs) = AppLib._getPricesAndDecs(
@@ -414,14 +406,10 @@ library ConverterStrategyBaseLib2 {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
       } else {
+        v.token = tokens[i];
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
-        (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(
-          address(this),
-          tokens[i],
-          tokens[indexAsset],
-          // investedAssets is calculated using exact debts, debt-gaps are not taken into account
-          false
-        );
+        // investedAssets is calculated using exact debts, debt-gaps are not taken into account
+        (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), v.token, v.asset, false);
         if (amountOut < toPay) {
           setDebt(v, indexAsset, toPay);
         } else {
@@ -429,16 +417,11 @@ library ConverterStrategyBaseLib2 {
         }
 
         // available amount to repay
-        uint toRepay = collateral + IERC20(tokens[i]).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
+        uint toRepay = collateral + IERC20(v.token).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
 
         // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
-        (toPay, collateral) = converter_.getDebtAmountCurrent(
-          address(this),
-          tokens[indexAsset],
-          tokens[i],
-          // investedAssets is calculated using exact debts, debt-gaps are not taken into account
-          false
-        );
+        // investedAssets is calculated using exact debts, debt-gaps are not taken into account
+        (toPay, collateral) = converter_.getDebtAmountCurrent(address(this), v.asset, v.token, false);
         amountOut += collateral;
 
         if (toRepay >= toPay) {
