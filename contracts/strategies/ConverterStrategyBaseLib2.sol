@@ -202,14 +202,14 @@ library ConverterStrategyBaseLib2 {
   /// @param tokenB The second token address.
   /// @return The price ratio of the two tokens.
   function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (uint) {
-    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
+    IPriceOracle oracle = AppLib._getPriceOracle(converter);
     uint priceA = oracle.getAssetPrice(tokenA);
     uint priceB = oracle.getAssetPrice(tokenB);
     return priceB * 1e18 / priceA;
   }
 
   function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
-    return IPriceOracle(IConverterController(converter.controller()).priceOracle()).getAssetPrice(token);
+    return AppLib._getPriceOracle(converter).getAssetPrice(token);
   }
 
   function _registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
@@ -394,11 +394,7 @@ library ConverterStrategyBaseLib2 {
     v.asset = tokens[indexAsset];
 
     // calculate prices, decimals
-    (v.prices, v.decs) = AppLib._getPricesAndDecs(
-      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
-      tokens,
-      v.len
-    );
+    (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {

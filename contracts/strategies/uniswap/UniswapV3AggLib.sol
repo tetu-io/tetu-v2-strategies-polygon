@@ -45,11 +45,7 @@ library UniswapV3AggLib {
     address tokenToSwap,
     uint amountToSwap
   ){
-    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(
-      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
-      tokens,
-      2 // p.tokens.length
-    );
+    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
     ConverterStrategyBaseLib.PlanInputParams memory p = ConverterStrategyBaseLib.PlanInputParams({
       converter: converter_,
       tokens: tokens,
@@ -88,11 +84,7 @@ library UniswapV3AggLib {
   ) external returns (
     bool completed
   ){
-    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(
-      IPriceOracle(IConverterController(converter_.controller()).priceOracle()),
-      tokens,
-      2 // p.tokens.length
-    );
+    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
 
     ConverterStrategyBaseLib.PlanInputParams memory p = ConverterStrategyBaseLib.PlanInputParams({
       converter: converter_,

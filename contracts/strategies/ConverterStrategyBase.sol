@@ -361,7 +361,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         v.indexAsset,
         v.amountsToConvert,
         v.converter,
-        ConverterStrategyBaseLib._getLiquidator(controller()),
+        AppLib._getLiquidator(controller()),
         v.all ? amount : amount + earnedByPrices_,
         v.expectedMainAssetAmounts,
         liquidationThresholds
@@ -404,7 +404,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (address[] memory tokens, uint indexAsset) = _getTokens(asset);
     ConverterStrategyBaseLib.closePositionsToGetAmount(
       converter,
-      ConverterStrategyBaseLib._getLiquidator(controller()),
+      AppLib._getLiquidator(controller()),
       indexAsset,
       liquidationThresholds,
       type(uint).max,

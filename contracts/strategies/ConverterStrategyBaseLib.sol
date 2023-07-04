@@ -61,12 +61,10 @@ library ConverterStrategyBaseLib {
     uint len;
     uint[] prices;
     uint[] decs;
-    uint[] debts;
   }
 
   struct ConvertAfterWithdrawLocal {
     address asset;
-    uint collateral;
     uint spent;
     uint received;
     uint balance;
@@ -100,16 +98,8 @@ library ConverterStrategyBaseLib {
     uint balanceAsset;
     uint balanceToken;
 
-    uint totalDebt;
-    uint totalCollateral;
-
     uint newBalanceAsset;
     uint newBalanceToken;
-
-    uint debtReverse;
-    uint collateralReverse;
-
-    uint tokenBalance;
 
     uint idxToSwap1;
     uint amountToSwap;
@@ -148,11 +138,6 @@ library ConverterStrategyBaseLib {
 
     uint debtReverse;
     uint collateralReverse;
-
-    uint costAssets;
-    uint costTokens;
-    uint targetAssets;
-    uint targetTokens;
 
     address asset;
     address token;
@@ -490,11 +475,11 @@ library ConverterStrategyBaseLib {
 
   /// @notice Get ratio18 = collateral / borrow
   function _getCollateralToBorrowRatio(
-    ITetuConverter tetuConverter_,
+    ITetuConverter converter_,
     address collateralAsset_,
     address borrowAsset_
   ) internal view returns (uint){
-    IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter_.controller()).priceOracle());
+    IPriceOracle priceOracle = AppLib._getPriceOracle(converter_);
     uint priceCollateral = priceOracle.getAssetPrice(collateralAsset_);
     uint priceBorrow = priceOracle.getAssetPrice(borrowAsset_);
     return 1e18 * priceBorrow * 10 ** IERC20Metadata(collateralAsset_).decimals()
@@ -701,7 +686,7 @@ library ConverterStrategyBaseLib {
         indexTheAsset,
         asset, // underlying === main asset
         ITetuConverter(converter),
-        ConverterStrategyBaseLib._getLiquidator(controller),
+        AppLib._getLiquidator(controller),
         thresholds,
         OVERSWAP
       );
@@ -782,11 +767,7 @@ library ConverterStrategyBaseLib {
     spentAmounts = new uint[](v.len);
 
     // calculate prices, decimals
-    (v.prices, v.decs) = AppLib._getPricesAndDecs(
-      IPriceOracle(IConverterController(p.converter.controller()).priceOracle()),
-      p.tokens,
-      v.len
-    );
+    (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(p.converter), p.tokens, v.len);
 
     // we need to swap other assets to the asset
     // at first we should swap NOT underlying.
@@ -891,7 +872,7 @@ library ConverterStrategyBaseLib {
       asset,
       compoundRatio,
       tokens,
-      _getLiquidator(controller),
+      AppLib._getLiquidator(controller),
       liquidationThresholds,
       rewardTokens_,
       rewardAmounts_,
@@ -1063,23 +1044,10 @@ library ConverterStrategyBaseLib {
     uint[] memory tokenAmounts
   ) {
     // temporary save collateral to tokensAmounts
-    tokenAmounts = _getCollaterals(
-      amount_,
-      tokens_,
-      weights_,
-      totalWeight_,
-      indexAsset_,
-      IPriceOracle(IConverterController(converter_.controller()).priceOracle())
-    );
+    tokenAmounts = _getCollaterals(amount_, tokens_, weights_, totalWeight_, indexAsset_, AppLib._getPriceOracle(converter_));
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
-    tokenAmounts = _getTokenAmounts(
-      converter_,
-      tokens_,
-      indexAsset_,
-      tokenAmounts,
-      liquidationThresholds[tokens_[indexAsset_]]
-    );
+    tokenAmounts = _getTokenAmounts(converter_, tokens_, indexAsset_, tokenAmounts, liquidationThresholds[tokens_[indexAsset_]]);
   }
 
   /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.
@@ -1356,11 +1324,7 @@ library ConverterStrategyBaseLib {
       p.tokens = d_.tokens;
       p.liquidationThresholds = liquidationThresholds_;
 
-      (p.prices, p.decs) = AppLib._getPricesAndDecs(
-        IPriceOracle(IConverterController(d_.converter.controller()).priceOracle()),
-        d_.tokens,
-        d_.len
-      );
+      (p.prices, p.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(d_.converter), d_.tokens, d_.len);
 
 
       for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
@@ -1769,10 +1733,6 @@ library ConverterStrategyBaseLib {
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
       liquidationThresholdsOut[i] = liquidationThresholds[tokens_[i]];
     }
-  }
-
-  function _getLiquidator(address controller_) internal view returns (ITetuLiquidator) {
-    return ITetuLiquidator(IController(controller_).liquidator());
   }
 //endregion--------------------------------------------- Other helpers
 }

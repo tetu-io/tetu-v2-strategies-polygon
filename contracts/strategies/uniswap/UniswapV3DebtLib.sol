@@ -239,7 +239,7 @@ library UniswapV3DebtLib {
 
   /// @dev we close debt only if it is more than $0.1
   function needCloseDebt(uint debtAmount, ITetuConverter tetuConverter, address tokenB) public view returns (bool) {
-    IPriceOracle priceOracle = IPriceOracle(IConverterController(tetuConverter.controller()).priceOracle());
+    IPriceOracle priceOracle = AppLib._getPriceOracle(tetuConverter);
     return debtAmount * priceOracle.getAssetPrice(tokenB) / 10 ** IERC20Metadata(tokenB).decimals() > 1e17;
   }
 

@@ -5,6 +5,10 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 
 /// @notice Common internal utils
 library AppLib {
@@ -56,5 +60,13 @@ library AppLib {
       }
     }
     return type(uint).max;
+  }
+
+  function _getLiquidator(address controller_) internal view returns (ITetuLiquidator) {
+    return ITetuLiquidator(IController(controller_).liquidator());
+  }
+
+  function _getPriceOracle(ITetuConverter converter_) internal view returns (IPriceOracle) {
+    return IPriceOracle(IConverterController(converter_.controller()).priceOracle());
   }
 }

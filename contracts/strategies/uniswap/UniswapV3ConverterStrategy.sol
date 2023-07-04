@@ -237,7 +237,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       tokenToSwap_,
       amountToSwap_,
       aggregator_ == address(0)
-        ? address(ConverterStrategyBaseLib._getLiquidator(v.controller))
+        ? address(AppLib._getLiquidator(v.controller))
         : aggregator_,
       swapData,
       aggregator_ == address(0),

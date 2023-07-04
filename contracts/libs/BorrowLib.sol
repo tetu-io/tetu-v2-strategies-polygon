@@ -75,7 +75,7 @@ library BorrowLib {
     v.threshold0 = threshold0;
     v.threshold1 = threshold1;
 
-    IPriceOracle priceOracle = IPriceOracle(IConverterController(converter_.controller()).priceOracle());
+    IPriceOracle priceOracle = AppLib._getPriceOracle(converter_);
     address[] memory tokens = new address[](2);
     tokens[0] = asset0;
     tokens[1] = asset1;

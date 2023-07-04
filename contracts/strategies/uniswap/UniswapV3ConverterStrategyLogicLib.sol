@@ -586,7 +586,7 @@ library UniswapV3ConverterStrategyLogicLib {
     fee0 += IERC20(tokenA).balanceOf(h);
     fee1 += IERC20(tokenB).balanceOf(h);
 
-    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
+    IPriceOracle oracle = AppLib._getPriceOracle(converter);
     uint priceA = oracle.getAssetPrice(tokenA);
     uint priceB = oracle.getAssetPrice(tokenB);
 
