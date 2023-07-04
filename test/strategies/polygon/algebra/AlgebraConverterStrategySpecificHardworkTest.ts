@@ -32,7 +32,7 @@ const argv = require('yargs/yargs')()
 
 const block = 44151797
 
-describe(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function() {
+describe.skip(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }

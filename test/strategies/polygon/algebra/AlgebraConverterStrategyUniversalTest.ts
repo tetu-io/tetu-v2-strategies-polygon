@@ -12,7 +12,7 @@ import hre, {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 import {
-  AlgebraConverterStrategy, AlgebraConverterStrategy__factory,
+  AlgebraConverterStrategy, AlgebraConverterStrategy__factory, ConverterStrategyBase,
   IERC20Metadata__factory,
   IStrategyV2,
   TetuVaultV2,
@@ -171,7 +171,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         states[poolId].push(await StateUtils.getState(
           h.signer,
           h.user,
-          strategy,
+          strategy as unknown as ConverterStrategyBase,
           h.vault,
           title,
         ));
@@ -180,7 +180,19 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         await StrategyTestUtils.setThresholds(
           strategy as unknown as IStrategyV2,
           user,
-          { reinvestThresholdPercent },
+          {
+            reinvestThresholdPercent,
+            rewardLiquidationThresholds: [
+              {
+                asset: MaticAddresses.dQUICK_TOKEN,
+                threshold: BigNumber.from('1000'),
+              },
+              {
+                asset: MaticAddresses.USDT_TOKEN,
+                threshold: BigNumber.from('1000'),
+              },
+            ],
+          },
         );
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
         await PriceOracleImitatorUtils.algebra(user, t[1], t[0])
@@ -188,10 +200,10 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
         const state = await algebraStrategy.getState()
-        const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
-        const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('1050000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniswapV3StrategyUtils.movePriceUp(
+        const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
+        const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
+        const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
+        await UniswapV3StrategyUtils.movePriceDown(
           swapUser,
           strategy.address,
           MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
@@ -201,10 +213,10 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
         const state = await algebraStrategy.getState()
-        const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
-        const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('1050000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
-        await UniswapV3StrategyUtils.movePriceDown(
+        const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
+        const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
+        const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+        await UniswapV3StrategyUtils.movePriceUp(
           swapUser,
           strategy.address,
           MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,

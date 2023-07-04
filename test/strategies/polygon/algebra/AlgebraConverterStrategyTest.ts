@@ -24,6 +24,8 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../UniversalUtils";
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+import {BigNumber} from "ethers";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -148,6 +150,21 @@ describe('AlgebraConverterStrategyTest', function() {
 
     // prevent 'TC-4 zero price' because real oracles have a limited price lifetime
     await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDC_TOKEN)
+
+    await StrategyTestUtils.setThresholds(
+      strategy as unknown as IStrategyV2,
+      signer,
+      { rewardLiquidationThresholds: [
+          {
+            asset: MaticAddresses.dQUICK_TOKEN,
+            threshold: BigNumber.from('1000'),
+          },
+          {
+            asset: MaticAddresses.USDT_TOKEN,
+            threshold: BigNumber.from('1000'),
+          },
+        ] },
+    );
   })
 
   after(async function() {
@@ -189,8 +206,9 @@ describe('AlgebraConverterStrategyTest', function() {
 
       await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6))
 
+      console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalance()
+      await s.rebalanceNoSwaps(true)
       expect(await s.needRebalance()).eq(false)
 
       console.log('Hardwork')

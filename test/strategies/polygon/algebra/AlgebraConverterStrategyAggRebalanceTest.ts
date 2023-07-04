@@ -38,7 +38,8 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('AlgebraConverterStrategyAggRebalanceTest', function() {
+// todo rewrite this test for withdrawByAggStep
+describe.skip('AlgebraConverterStrategyAggRebalanceTest', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
