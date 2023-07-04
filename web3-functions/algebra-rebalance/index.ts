@@ -10,6 +10,8 @@ const STRATEGY_ABI = [
   'function getState() external view returns (address, address, address, int24, int24, int24, int24, uint128, bool, uint, address, uint[] memory)',
 ];
 
+// hardhat w3f-deploy algebra-rebalance
+
 Web3Function.onRun(async(context: Web3FunctionContext) => {
   const { userArgs, multiChainProvider } = context;
   const strategyAddress = userArgs.strategy as string;

@@ -85,10 +85,12 @@ export async function hardhatDeploy(
   const newAdr = await deployments.get(deploymentName || contractName);
 
   if (!oldAdr || oldAdr !== newAdr.address) {
-    if (verify && hre.network.name !== 'hardhat') {
-      await wait(10);
+    // disabled, uer scripts/verify.ts instead
+    if (verify && hre.network.name !== 'hardhat' && false) {
+      await wait(60);
       if (args) {
-        await verifyWithArgs(newAdr.address, args);
+        // tslint:disable-next-line:no-any
+        await verifyWithArgs(newAdr.address, args as any[]);
       } else {
         await verifyWithoutArgs(newAdr.address);
       }

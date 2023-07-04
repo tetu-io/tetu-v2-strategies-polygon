@@ -29,7 +29,7 @@ export class VerifyUtils {
         address
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
@@ -40,7 +40,7 @@ export class VerifyUtils {
         address, constructorArguments: args
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
@@ -51,7 +51,7 @@ export class VerifyUtils {
         address, contract: contractPath, constructorArguments: args
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
@@ -62,7 +62,7 @@ export class VerifyUtils {
         address, constructorArguments: args, contract: contractPath
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
@@ -76,7 +76,7 @@ export class VerifyUtils {
           `address=${adr}`);
       // log.info("proxy verify resp", resp.data);
     } catch (e) {
-      log.info('error proxy verify ' + adr + e);
+      log.error('error proxy verify ' + adr + e);
     }
   }
 

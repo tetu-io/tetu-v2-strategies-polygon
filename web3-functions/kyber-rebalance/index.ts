@@ -11,6 +11,8 @@ const STRATEGY_ABI = [
   'function getState() external view returns (address, address, address, address, uint128, uint, int24[] memory, uint[] memory, bool[] memory)',
 ];
 
+// hardhat w3f-deploy kyber-rebalance
+
 Web3Function.onRun(async(context: Web3FunctionContext) => {
   const { userArgs, multiChainProvider } = context;
   const strategyAddress = userArgs.strategy as string;
