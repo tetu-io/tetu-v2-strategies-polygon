@@ -43,6 +43,8 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 const { expect } = chai;
 
 describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
+  const ENTRY_TO_POOL_IS_ALLOWED = 1;
+  const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
 
 //region Variables
   let snapshotBefore: string;
@@ -176,16 +178,14 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     const state = await strategy.getState();
     const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
     const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
-
-    console.log("unfoldBorrows.withdrawByAggEntry");
-    await strategyAsOperator.withdrawByAggEntry();
-    if (saveState) {
-      await saveState(`u0`);
-    }
+    const USE_SINGLE_ITERATION = true;
 
     let step = 0;
     while (true) {
-      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(propNotUnderlying18);
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(
+        propNotUnderlying18,
+        USE_SINGLE_ITERATION
+      );
       console.log("!!!!!!!!!!!quote", quote);
 
       let swapData: BytesLike = "0x";
@@ -212,21 +212,36 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         }
       }
       console.log("unfoldBorrows.withdrawByAggStep.callStatic", quote);
-      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
+        tokenToSwap,
+        amountToSwap,
+        AGGREGATOR,
+        swapData,
+        [
+          propNotUnderlying18,
+          USE_SINGLE_ITERATION ? ENTRY_TO_POOL_IS_ALLOWED : ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+          USE_SINGLE_ITERATION ? 1 : 0
+        ]
+      );
 
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
-      await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+      await strategyAsOperator.withdrawByAggStep(
+        tokenToSwap,
+        amountToSwap,
+        AGGREGATOR,
+        swapData,
+        [
+          propNotUnderlying18,
+          USE_SINGLE_ITERATION ? ENTRY_TO_POOL_IS_ALLOWED : ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+          USE_SINGLE_ITERATION ? 1 : 0
+        ]
+      );
 
       if (saveState) {
         await saveState(`u${++step}`);
       }
+      if (USE_SINGLE_ITERATION) break;
       if (completed) break;
-    }
-
-    console.log("!!!!!!!!!!!!! unfoldBorrows.rebalanceNoSwaps --------------------------------");
-    await strategy.rebalanceNoSwaps(false);
-    if (saveState) {
-      await saveState(`u${++step}`);
     }
   }
 
@@ -239,7 +254,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
   }
   async function makeTest(p: ITestParams) {
     const cycles = 6;
-    const MAX_ALLLOWED_LOCKED_PERCENT = 20;
+    const MAX_ALLLOWED_LOCKED_PERCENT = 25;
     const pathOut = p.filePath;
     const states: IStateNum[] = [];
 

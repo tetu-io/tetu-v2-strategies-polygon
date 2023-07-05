@@ -5,6 +5,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3DebtLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Reimplement ConverterStrategyBaseLib.closePositionsToGetAmount with swapping through aggregators
 library UniswapV3AggLib {
@@ -34,25 +35,32 @@ library UniswapV3AggLib {
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+  /// @param amountsFromPool Amounts of {tokens} that will be received from the pool before calling withdraw
   /// @return tokenToSwap Address of the token that will be swapped on the next swap. 0 - no swap
   /// @return amountToSwap Amount that will be swapped on the next swap. 0 - no swap
   function quoteWithdrawStep(
     ITetuConverter converter_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
-    uint propNotUnderlying18
+    uint propNotUnderlying18,
+    uint[] memory amountsFromPool,
+    bool singleIteration
   ) external returns (
     address tokenToSwap,
     uint amountToSwap
   ){
-    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
-    ConverterStrategyBaseLib.PlanInputParams memory p = ConverterStrategyBaseLib.PlanInputParams({
+    (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p = ConverterStrategyBaseLib.SwapRepayPlanParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
       propNotUnderlying18: propNotUnderlying18,
       prices: prices,
-      decs: decs
+      decs: decs,
+      balanceAdditions: amountsFromPool,
+      planKind: singleIteration
+      ? ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY
+      : ConverterStrategyBaseLib.SwapRepayPlanKind.SWAP_REPAY
     });
     return _quoteWithdrawStep(p);
   }
@@ -80,19 +88,24 @@ library UniswapV3AggLib {
     address aggregator_,
     bytes memory swapData_,
     bool useLiquidator_,
-    uint propNotUnderlying18
+    uint propNotUnderlying18,
+    bool singleIteration
   ) external returns (
     bool completed
   ){
-    (uint[] memory prices, uint[] memory decs) =  AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
+    (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
 
-    ConverterStrategyBaseLib.PlanInputParams memory p = ConverterStrategyBaseLib.PlanInputParams({
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p = ConverterStrategyBaseLib.SwapRepayPlanParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
       propNotUnderlying18: propNotUnderlying18,
       prices: prices,
-      decs: decs
+      decs: decs,
+      balanceAdditions: new uint[](2), // 2 = tokens.length
+      planKind: singleIteration
+      ? ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY
+      : ConverterStrategyBaseLib.SwapRepayPlanKind.SWAP_REPAY
     });
     SwapByAggParams memory aggParams = SwapByAggParams({
       tokenToSwap: tokenToSwap_,
@@ -111,7 +124,7 @@ library UniswapV3AggLib {
   ///         Function returns info for first swap only.
   /// @return tokenToSwap What token should be swapped. Zero address if no swap is required
   /// @return amountToSwap Amount to swap. Zero if no swap is required.
-  function _quoteWithdrawStep(ConverterStrategyBaseLib.PlanInputParams memory p) internal returns (
+  function _quoteWithdrawStep(ConverterStrategyBaseLib.SwapRepayPlanParams memory p) internal returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
@@ -126,31 +139,44 @@ library UniswapV3AggLib {
   /// @notice Make one iteration of withdraw. Each iteration can make 0 or 1 swap only
   ///         We can make only 1 of the following 3 operations per single call:
   ///         1) repay direct debt 2) repay reverse debt 3) swap leftovers to underlying
-  function _withdrawStep(ConverterStrategyBaseLib.PlanInputParams memory p, SwapByAggParams memory aggParams) internal returns (
+  function _withdrawStep(ConverterStrategyBaseLib.SwapRepayPlanParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
-
+    console.log("_withdrawStep");
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
 
-    if (idxToSwap1 != 0) {
+    console.log("_withdrawStep.balance.init.0", IERC20(p.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawStep.balance.init.1", IERC20(p.tokens[1]).balanceOf(address(this)));
+    if (idxToSwap1 != 0 && p.planKind != ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY) {
+      console.log("_withdrawStep.swap1", amountToSwap, idxToSwap1);
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
 
     if (idxToRepay1 != 0) {
+      console.log("_withdrawStep.repay", idxToRepay1, IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this)));
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
         p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
         p.tokens[idxToRepay1 - 1],
         IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this))
       );
+      console.log("_withdrawStep.balance.after.repay.0", IERC20(p.tokens[0]).balanceOf(address(this)));
+      console.log("_withdrawStep.balance.after.repay.1", IERC20(p.tokens[1]).balanceOf(address(this)));
     }
+
+    if (idxToSwap1 != 0 && p.planKind == ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY) {
+      console.log("_withdrawStep.swap2", amountToSwap, idxToSwap1);
+      _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+    }
+    console.log("_withdrawStep.balance.final.0", IERC20(p.tokens[0]).balanceOf(address(this)));
+    console.log("_withdrawStep.balance.final.1", IERC20(p.tokens[1]).balanceOf(address(this)));
 
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;
   }
 
   function _swap(
-    ConverterStrategyBaseLib.PlanInputParams memory p,
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
     SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,

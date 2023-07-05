@@ -11,12 +11,14 @@ contract UniswapV3AggLibFacade {
     ITetuConverter converter_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
-    uint propNotUnderlying18
+    uint propNotUnderlying18,
+    uint[] memory amountsFromPool,
+    bool singleIteration
   ) external returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
-    return UniswapV3AggLib.quoteWithdrawStep(converter_, tokens, liquidationThresholds, propNotUnderlying18);
+    return UniswapV3AggLib.quoteWithdrawStep(converter_, tokens, liquidationThresholds, propNotUnderlying18, amountsFromPool, singleIteration);
   }
 
   function withdrawStep(
@@ -28,7 +30,8 @@ contract UniswapV3AggLibFacade {
     address aggregator_,
     bytes memory swapData_,
     bool useLiquidator_,
-    uint propNotUnderlying18
+    uint propNotUnderlying18,
+    bool singleIteration
   ) external returns (
     bool completed
   ) {
@@ -41,12 +44,13 @@ contract UniswapV3AggLibFacade {
       aggregator_,
       swapData_,
       useLiquidator_,
-      propNotUnderlying18
+      propNotUnderlying18,
+      singleIteration
     );
   }
 
   function _swap(
-    ConverterStrategyBaseLib.PlanInputParams memory p,
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
     UniswapV3AggLib.SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,

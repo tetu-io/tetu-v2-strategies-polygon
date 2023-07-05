@@ -119,7 +119,8 @@ describe('UniswapV3AggLibIntTest', () => {
 
           prices: [0, 0],
           propNotUnderlying18: 0,
-          decs: [0, 0]
+          decs: [0, 0],
+          balanceAdditions: [0, 0]
         };
       const aggParams = {
         useLiquidator: p.useLiquidator,

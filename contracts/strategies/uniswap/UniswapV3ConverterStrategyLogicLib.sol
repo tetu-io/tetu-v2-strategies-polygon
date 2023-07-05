@@ -802,24 +802,23 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param tokens [underlying, not-underlying]
   function afterWithdrawStep(
     ITetuConverter converter,
-    address pool,
+    IUniswapV3Pool pool,
     address[] memory tokens,
     uint oldTotalAssets,
     uint profitToCover,
     address strategyProfitHolder,
     address splitter
-  ) external {
+  ) external returns (uint[] memory tokenAmounts) {
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
     }
 
-    uint[] memory amounts = new uint[](2);
-    amounts[0] = AppLib.balance(tokens[0]); // tokens[0] is underlying
+    uint loss;
+    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
 
-    uint newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-    if (newTotalAssets < oldTotalAssets) {
-      _coverLoss(splitter, oldTotalAssets - newTotalAssets, strategyProfitHolder, tokens[0], tokens[1], pool);
+    if (loss != 0) {
+      _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
   }
 

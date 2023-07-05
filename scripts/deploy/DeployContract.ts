@@ -36,7 +36,6 @@ const libraries = new Map<string, string[]>([
   ],
   ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib']],
   ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
-  ['ConverterStrategyBaseLib2', ['StrategyLib']],
   ['BorrowLib', ['ConverterStrategyBaseLib']],
   ['BorrowLibFacade', ['BorrowLib']],
   ['UniswapV3AggLibFacade', ['UniswapV3AggLib']],

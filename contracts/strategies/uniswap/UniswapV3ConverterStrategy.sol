@@ -22,6 +22,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
   string public constant override STRATEGY_VERSION = "1.4.7";
+  uint internal constant ENTRY_TO_POOL_IS_ALLOWED = 1;
+  uint internal constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
 
   /////////////////////////////////////////////////////////////////////
   ///                Data types
@@ -128,7 +130,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
   ///      There is also an attempt to cover rebalancing losses with rewards.
   function rebalance() external {
-    (uint profitToCover, uint oldTotalAssets, address _controller) = _rebalanceBefore(true);
+    (uint profitToCover, uint oldTotalAssets, address _controller) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool isNeedFillup) = UniswapV3ConverterStrategyLogicLib.rebalance(
       state,
       converter,
@@ -141,7 +143,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
 
     // _depositorEnter(tokenAmounts) if length == 2
     uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
@@ -159,7 +161,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return True if the fuse was triggered (so, it's necessary to call UniswapV3DebtLib.closeDebtByAgg)
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
       converter,
@@ -175,61 +177,62 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   //region ------------------------------------ Withdraw by iterations
 
-  /// @notice Fix price changes, exit from pool, prepare to call quoteWithdrawByAgg/withdrawByAggStep in the loop
-  function withdrawByAggEntry() external {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
-
-    address _asset = asset;
-    uint balance = IERC20(_asset).balanceOf(address(this));
-    if (profitToCover != 0 && balance != 0) {
-      uint profitToSend = Math.min(profitToCover, balance);
-      ConverterStrategyBaseLib2.sendToInsurance(_asset, profitToSend, splitter, oldTotalAssets);
-    }
-
-    _updateInvestedAssets();
-  }
-
   /// @notice Get info about a swap required by next call of {withdrawByAggStep}
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
-  function quoteWithdrawByAgg(uint propNotUnderlying18) external returns (address tokenToSwap, uint amountToSwap) {
+  function quoteWithdrawByAgg(uint propNotUnderlying18, bool singleIteration) external returns (address tokenToSwap, uint amountToSwap) {
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
     StrategyLib.onlyOperators(controller());
 
     // get tokens as following: [underlying, not-underlying]
     (address[] memory tokens, uint[] memory thresholds) = _getTokensAndThresholds();
 
-    return UniswapV3AggLib.quoteWithdrawStep(converter, tokens, thresholds, propNotUnderlying18);
+    // estimate amounts to be withdrawn from the pool
+    uint totalLiquidity = state.totalLiquidity;
+    uint[] memory amountsOut = (totalLiquidity == 0)
+      ? new uint[](2)
+      : _depositorQuoteExit(totalLiquidity);
+
+    return UniswapV3AggLib.quoteWithdrawStep(converter, tokens, thresholds, propNotUnderlying18, amountsOut, singleIteration);
   }
 
-  /// @notice Make withdraw iteration. Each iteration can make 0 or 1 swap only.
+  /// @notice Make withdraw iteration: [exit from the pool], [make 1 swap], [repay a debt], [enter to the pool]
+  ///         Typical sequence of the actions is: exit from the pool, make 1 swap, repay 1 debt.
+  ///         You can enter to the pool if you are sure that you won't have borrow + repay on AAVE3 in the same block.
   /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
   /// @param tokenToSwap_ What token should be swapped to other
   /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
   /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
   /// @param swapData Swap rote that was prepared off-chain.
-  /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+  /// @param options 3 items packed to single array:
+  ///   0: propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
-  /// @return completed true - withdraw was completed, no more steps are required
+  ///   1: allowEntryToPool Allow to enter to the pool at the end. Use false if you are going to make several iterations.
+  ///                         It's possible to enter back to the pool by calling {rebalanceNoSwaps} at any moment
+  ///                         0 - not allowed, 1 - allowed, 2 - allowed only if completed
+  ///   2: singleIteration 0 - single iteration (repay then swap), 1 - multiple iterations (swap then repay)
+  /// @return completed All debts were closed, leftovers were swapped to the required proportions.
   function withdrawByAggStep(
     address tokenToSwap_,
     uint amountToSwap_,
     address aggregator_,
     bytes memory swapData,
-    uint propNotUnderlying18
+    uint[3] calldata options // uint propNotUnderlying18, uint allowEntryToPool, uint singleIteration
   ) external returns (bool completed) {
-    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
-    require(state.totalLiquidity == 0, AppErrors.WITHDRAW_BY_AGG_ENTRY_REQUIRED);
+    require(options[0] <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
 
     WithdrawByAggStepLocal memory v;
-    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore(false);
+    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
     v.converter = converter;
 
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
+    console.log("withdrawByAggStep.init.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.init.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
+    // make at most 1 swap and repay at most 1 debt
     completed = UniswapV3AggLib.withdrawStep(
       v.converter,
       v.tokens,
@@ -241,18 +244,43 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         : aggregator_,
       swapData,
       aggregator_ == address(0),
-      propNotUnderlying18
+      options[0], // propNotUnderlying18
+      options[2] != 0 // single iteration
     );
 
-    UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
-      v.converter,
-      address(state.pool),
-      v.tokens,
-      v.oldTotalAssets,
-      v.profitToCover,
-      state.strategyProfitHolder,
-      splitter
-    );
+    console.log("withdrawByAggStep.after.withdrawStep.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.after.withdrawStep.1", IERC20(v.tokens[1]).balanceOf(address(this)));
+
+    if (options[1] == ENTRY_TO_POOL_IS_ALLOWED
+      || (options[1] == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    ) {
+      // make rebalance and enter back to the pool. We won't have any swaps here
+      (uint[] memory tokenAmounts, bool fuseEnabledOut) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
+        state,
+        converter,
+        v.oldTotalAssets,
+        v.profitToCover,
+        splitter,
+        false
+      );
+      console.log("withdrawByAggStep.after.rebalanceNoSwaps.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+      console.log("withdrawByAggStep.after.rebalanceNoSwaps.1", IERC20(v.tokens[1]).balanceOf(address(this)));
+
+      _rebalanceAfter(tokenAmounts, false);
+    } else {
+      // fix loss / profitToCover
+      UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
+        converter,
+        state.pool,
+        v.tokens,
+        v.oldTotalAssets,
+        v.profitToCover,
+        state.strategyProfitHolder,
+        splitter
+      );
+    }
+    console.log("withdrawByAggStep.final.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.final.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
     _updateInvestedAssets();
   }
@@ -347,8 +375,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     thresholds[1] = liquidationThresholds[tokens[1]];
   }
 
-  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
-  function _rebalanceBefore(bool allowExit) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
     controllerOut = controller();
     StrategyLib.onlyOperators(controllerOut);
 
@@ -357,7 +385,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (allowExit && state.totalLiquidity > 0) {
+    if (state.totalLiquidity != 0) {
       _depositorEmergencyExit();
     }
   }
