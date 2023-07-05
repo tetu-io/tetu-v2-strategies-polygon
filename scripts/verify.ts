@@ -4,35 +4,32 @@ import { VerifyUtils } from './utils/VerifyUtils';
 async function main() {
   const { deployments } = hre;
 
-  await hre.run("verify:verify", {
-    address: '0x3CFb9dB5bAc2137491853175a8CBF9FfAcE5C9dd',
-    libraries: {
-      StrategyLib: '0x6d1f7FE0d9D168B6b2cEC568f2b8aA2bcAb942cf',
-    }
-  })
+  await verify('StrategyLib');
+  await verify('ConverterStrategyBaseLib', 'contracts/strategies/');
+  await verify('ConverterStrategyBaseLib2', 'contracts/strategies/');
+  await verify('BalancerLogicLib', 'contracts/strategies/balancer/');
+  await verify('BalancerBoostedStrategy', 'contracts/strategies/balancer/');
+  await verify('UniswapV3Lib', 'contracts/strategies/uniswap/');
+  await verify('UniswapV3DebtLib', 'contracts/strategies/uniswap/');
+  await verify('UniswapV3ConverterStrategyLogicLib', 'contracts/strategies/uniswap/');
+  await verify('UniswapV3ConverterStrategy', 'contracts/strategies/uniswap/');
+  await verify('AlgebraLib', 'contracts/strategies/algebra/');
+  await verify('AlgebraConverterStrategyLogicLib', 'contracts/strategies/algebra/');
+  await verify('AlgebraDebtLib', 'contracts/strategies/algebra/');
+  await verify('AlgebraConverterStrategy', 'contracts/strategies/algebra/');
+  await verify('KyberLib', 'contracts/strategies/kyber/');
+  await verify('KyberDebtLib', 'contracts/strategies/kyber/');
+  await verify('KyberConverterStrategyLogicLib', 'contracts/strategies/kyber/');
+  await verify('KyberConverterStrategy', 'contracts/strategies/kyber/');
+}
 
-  // await VerifyUtils.verify((await deployments.get('StrategyLib')).address);
-  // await VerifyUtils.verify((await deployments.get('ConverterStrategyBaseLib')).address);
-  // await VerifyUtils.verify((await deployments.get('ConverterStrategyBaseLib2')).address);
-
-  // await VerifyUtils.verify((await deployments.get('UniswapV3Lib')).address);
-  // await VerifyUtils.verify((await deployments.get('UniswapV3DebtLib')).address);
-  // await VerifyUtils.verify((await deployments.get('UniswapV3ConverterStrategyLogicLib')).address);
-  // await VerifyUtils.verify((await deployments.get('UniswapV3ConverterStrategy')).address);
-
-  // await VerifyUtils.verify((await deployments.get('AlgebraLib')).address);
-  // await VerifyUtils.verify((await deployments.get('AlgebraConverterStrategyLogicLib')).address);
-  // await VerifyUtils.verify((await deployments.get('AlgebraDebtLib')).address);
-  // await VerifyUtils.verify((await deployments.get('AlgebraConverterStrategy')).address);
-
-
-  // await VerifyUtils.verify((await deployments.get('BalancerLogicLib')).address);
-  // await VerifyUtils.verify((await deployments.get('BalancerBoostedStrategy')).address);
-
-  // await VerifyUtils.verify((await deployments.get('KyberLib')).address);
-  // await VerifyUtils.verify((await deployments.get('KyberDebtLib')).address);
-  // await VerifyUtils.verify((await deployments.get('KyberConverterStrategyLogicLib')).address);
-  // await VerifyUtils.verify((await deployments.get('KyberConverterStrategy')).address);
+async function verify(name: string, pkg?: string) {
+  const { deployments } = hre;
+  if (pkg) {
+    await VerifyUtils.verifyWithContractName((await deployments.get(name)).address, `${pkg}/${name}.sol:${name}`);
+  } else {
+    await VerifyUtils.verify((await deployments.get(name)).address);
+  }
 }
 
 

@@ -20,12 +20,14 @@ const argv = require('yargs/yargs')()
   }).argv;
 
 
+const VERIFY= 'verify1';
+
 export class VerifyUtils {
 
 
   public static async verify(address: string) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address
       })
     } catch (e) {
@@ -36,7 +38,7 @@ export class VerifyUtils {
   // tslint:disable-next-line:no-any
   public static async verifyWithArgs(address: string, args: any[]) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address, constructorArguments: args
       })
     } catch (e) {
@@ -47,7 +49,7 @@ export class VerifyUtils {
   // tslint:disable-next-line:no-any
   public static async verifyWithContractName(address: string, contractPath: string, args?: any[]) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address, contract: contractPath, constructorArguments: args
       })
     } catch (e) {
@@ -58,7 +60,7 @@ export class VerifyUtils {
   // tslint:disable-next-line:no-any
   public static async verifyWithArgsAndContractName(address: string, args: any[], contractPath: string) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address, constructorArguments: args, contract: contractPath
       })
     } catch (e) {
