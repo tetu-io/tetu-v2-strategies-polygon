@@ -15,6 +15,11 @@ library UniswapV3AggLib {
   /// @notice In all functions below array {token} contains not-underlying at the second position
   uint internal constant IDX_TOKEN = 1;
 
+  uint internal constant IDX_SWAP_1 = 0;
+  uint internal constant IDX_REPAY_1 = 1;
+  uint internal constant IDX_SWAP_2 = 0;
+  uint internal constant IDX_REPAY_2 = 0;
+
   //region ------------------------------------------------ Data types
   struct SwapByAggParams {
     bool useLiquidator;
@@ -42,9 +47,9 @@ library UniswapV3AggLib {
     ITetuConverter converter_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
-    uint propNotUnderlying18,
     uint[] memory amountsFromPool,
-    bool singleIteration
+    uint planKind,
+    uint propNotUnderlying18
   ) external returns (
     address tokenToSwap,
     uint amountToSwap
@@ -58,9 +63,7 @@ library UniswapV3AggLib {
       prices: prices,
       decs: decs,
       balanceAdditions: amountsFromPool,
-      planKind: singleIteration
-      ? ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY
-      : ConverterStrategyBaseLib.SwapRepayPlanKind.SWAP_REPAY
+      planKind: planKind
     });
     return _quoteWithdrawStep(p);
   }
@@ -88,8 +91,8 @@ library UniswapV3AggLib {
     address aggregator_,
     bytes memory swapData_,
     bool useLiquidator_,
-    uint propNotUnderlying18,
-    bool singleIteration
+    uint planKind,
+    uint propNotUnderlying18
   ) external returns (
     bool completed
   ){
@@ -103,9 +106,7 @@ library UniswapV3AggLib {
       prices: prices,
       decs: decs,
       balanceAdditions: new uint[](2), // 2 = tokens.length
-      planKind: singleIteration
-      ? ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY
-      : ConverterStrategyBaseLib.SwapRepayPlanKind.SWAP_REPAY
+      planKind: planKind
     });
     SwapByAggParams memory aggParams = SwapByAggParams({
       tokenToSwap: tokenToSwap_,
@@ -143,16 +144,23 @@ library UniswapV3AggLib {
     bool completed
   ) {
     console.log("_withdrawStep");
-    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
-
     console.log("_withdrawStep.balance.init.0", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("_withdrawStep.balance.init.1", IERC20(p.tokens[1]).balanceOf(address(this)));
-    if (idxToSwap1 != 0 && p.planKind != ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY) {
+
+    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
+    bool[4] memory actions = [
+      p.planKind == IterationPlanKinds.PLAN_SWAP_ONLY || p.planKind == IterationPlanKinds.PLAN_SWAP_REPAY, // swap 1
+      p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY || p.planKind == IterationPlanKinds.PLAN_SWAP_REPAY, // repay 1
+      p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY, // swap 2
+      p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY // repay 2
+    ];
+
+    if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       console.log("_withdrawStep.swap1", amountToSwap, idxToSwap1);
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
 
-    if (idxToRepay1 != 0) {
+    if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
       console.log("_withdrawStep.repay", idxToRepay1, IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this)));
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
@@ -164,10 +172,13 @@ library UniswapV3AggLib {
       console.log("_withdrawStep.balance.after.repay.1", IERC20(p.tokens[1]).balanceOf(address(this)));
     }
 
-    if (idxToSwap1 != 0 && p.planKind == ConverterStrategyBaseLib.SwapRepayPlanKind.REPAY_SWAP_REPAY) {
+    if (idxToSwap1 != 0 && actions[IDX_SWAP_2]) {
       console.log("_withdrawStep.swap2", amountToSwap, idxToSwap1);
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
+
+    // todo repay 2
+
     console.log("_withdrawStep.balance.final.0", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("_withdrawStep.balance.final.1", IERC20(p.tokens[1]).balanceOf(address(this)));
 

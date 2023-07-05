@@ -868,4 +868,18 @@ library UniswapV3ConverterStrategyLogicLib {
     v.isStablePool = state.isStablePool;
     v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
   }
+
+  /// @notice Get proportion of not-underlying in the pool, [0...1e18]
+  ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
+  function getPropNotUnderlying18(State storage state) view external returns (uint) {
+    // pool proportions
+    (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(
+      state.pool,
+      state.lowerTick,
+      state.upperTick,
+      state.depositorSwapTokens
+    );
+    require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
+    return consumed1 * 1e18 / (consumed0 + consumed1);
+  }
 }

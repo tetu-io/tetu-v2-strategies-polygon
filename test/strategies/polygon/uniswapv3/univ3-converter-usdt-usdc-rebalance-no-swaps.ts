@@ -20,7 +20,7 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
@@ -45,6 +45,11 @@ const { expect } = chai;
 describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
   const ENTRY_TO_POOL_IS_ALLOWED = 1;
   const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+  const ENTRY_TO_POOL_WITH_REBALANCE = 3;
+
+  const PLAN_SWAP_REPAY = 0;
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_SWAP_ONLY = 2;
 
 //region Variables
   let snapshotBefore: string;
@@ -179,13 +184,14 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
     const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
     const USE_SINGLE_ITERATION = true;
+    const planEntryData = defaultAbiCoder.encode(
+      ["uint256"],
+      [PLAN_REPAY_SWAP_REPAY]
+    );
 
     let step = 0;
     while (true) {
-      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(
-        propNotUnderlying18,
-        USE_SINGLE_ITERATION
-      );
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
       console.log("!!!!!!!!!!!quote", quote);
 
       let swapData: BytesLike = "0x";
@@ -213,28 +219,20 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       }
       console.log("unfoldBorrows.withdrawByAggStep.callStatic", quote);
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
-        tokenToSwap,
+        [tokenToSwap, AGGREGATOR],
         amountToSwap,
-        AGGREGATOR,
         swapData,
-        [
-          propNotUnderlying18,
-          USE_SINGLE_ITERATION ? ENTRY_TO_POOL_IS_ALLOWED : ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-          USE_SINGLE_ITERATION ? 1 : 0
-        ]
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED
       );
 
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
       await strategyAsOperator.withdrawByAggStep(
-        tokenToSwap,
+        [tokenToSwap, AGGREGATOR],
         amountToSwap,
-        AGGREGATOR,
         swapData,
-        [
-          propNotUnderlying18,
-          USE_SINGLE_ITERATION ? ENTRY_TO_POOL_IS_ALLOWED : ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
-          USE_SINGLE_ITERATION ? 1 : 0
-        ]
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED
       );
 
       if (saveState) {
