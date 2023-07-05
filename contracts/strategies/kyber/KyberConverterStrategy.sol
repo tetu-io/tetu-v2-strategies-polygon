@@ -5,12 +5,12 @@ import "../ConverterStrategyBase.sol";
 import "./KyberDepositor.sol";
 import "./KyberConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
-import "../../interfaces/IRebalancingStrategy.sol";
+import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../../interfaces/IFarmingStrategy.sol";
 import "./KyberStrategyErrors.sol";
 
 
-contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebalancingStrategy, IFarmingStrategy {
+contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebalancingV2Strategy, IFarmingStrategy {
 
   /////////////////////////////////////////////////////////////////////
   ///                CONSTANTS
@@ -18,7 +18,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "1.0.1";
+  string public constant override STRATEGY_VERSION = "2.0.0";
 
   /////////////////////////////////////////////////////////////////////
   ///                INIT
@@ -104,10 +104,10 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     return KyberConverterStrategyLogicLib.needRebalance(state) || needStake || needUnstake;
   }
 
-  /// @return swapAtoB, swapAmount
+  /*/// @return swapAtoB, swapAmount
   function quoteRebalanceSwap() external returns (bool, uint) {
     return KyberConverterStrategyLogicLib.quoteRebalanceSwap(state, converter);
-  }
+  }*/
 
   function canFarm() external view returns (bool) {
     return !KyberConverterStrategyLogicLib.isFarmEnded(state.pId);
@@ -130,7 +130,24 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   ///                   REBALANCE
   /////////////////////////////////////////////////////////////////////
 
-  /// @dev The rebalancing functionality is the core of this strategy.
+  /// @notice Rebalance using borrow/repay only, no swaps
+  /// @return True if the fuse was triggered
+  /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
+  function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true, checkNeedRebalance);
+    (uint[] memory tokenAmounts, bool fuseEnabledOut) = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
+      state,
+      converter,
+      oldTotalAssets,
+      profitToCover,
+      splitter,
+      checkNeedRebalance
+    );
+    _rebalanceAfter(tokenAmounts);
+    return fuseEnabledOut;
+  }
+
+/*  /// @dev The rebalancing functionality is the core of this strategy.
   ///      Swap method is used.
   function rebalance() external {
     (uint profitToCover, uint oldTotalAssets, address _controller) = _startRebalance();
@@ -177,13 +194,41 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
     //updating investedAssets based on new baseAmounts
     _updateInvestedAssets();
-  }
+  }*/
 
   /////////////////////////////////////////////////////////////////////
   ///                   INTERNAL LOGIC
   /////////////////////////////////////////////////////////////////////
 
-  function _startRebalance() internal returns(uint profitToCover, uint oldTotalAssets,  address _controller) {
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
+  function _rebalanceBefore(bool allowExit, bool checkNeedRebalance) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
+    controllerOut = controller();
+    StrategyLib.onlyOperators(controllerOut);
+
+    require(needRebalance() || !checkNeedRebalance, KyberStrategyErrors.NO_REBALANCE_NEEDED);
+
+    (, profitToCover) = _fixPriceChanges(true);
+    oldTotalAssets = totalAssets() - profitToCover;
+
+    KyberConverterStrategyLogicLib.claimRewardsBeforeExitIfRequired(state);
+
+    // withdraw all liquidity from pool
+    // after disableFuse() liquidity is zero
+    if (allowExit && state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+  }
+
+  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
+    if (tokenAmounts.length == 2) {
+      _depositorEnter(tokenAmounts);
+    }
+
+    _updateInvestedAssets();
+  }
+
+  /*function _startRebalance() internal returns(uint profitToCover, uint oldTotalAssets,  address _controller) {
     _controller = controller();
     StrategyLib.onlyOperators(_controller);
 
@@ -199,7 +244,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     if (state.totalLiquidity > 0) {
       _depositorEmergencyExit();
     }
-  }
+  }*/
 
   function _beforeDeposit(
     ITetuConverter tetuConverter_,

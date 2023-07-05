@@ -67,21 +67,21 @@ library KyberConverterStrategyLogicLib {
   }
 
   struct RebalanceLocalVariables {
-    int24 upperTick;
-    int24 lowerTick;
-    int24 tickSpacing;
+//    int24 upperTick;
+//    int24 lowerTick;
+//    int24 tickSpacing;
     IPool pool;
     address tokenA;
     address tokenB;
     uint lastPrice;
     uint fuseThreshold;
-    bool depositorSwapTokens;
-    uint notCoveredLoss;
-    int24 newLowerTick;
-    int24 newUpperTick;
+//    bool depositorSwapTokens;
+//    uint notCoveredLoss;
+//    int24 newLowerTick;
+//    int24 newUpperTick;
     bool isStablePool;
     uint newPrice;
-    uint newTotalAssets;
+//    uint newTotalAssets;
     bool needRebalance;
   }
 
@@ -601,7 +601,58 @@ library KyberConverterStrategyLogicLib {
     }
   }
 
-  function rebalance(
+  /// @notice Make rebalance without swaps (using borrowing only).
+  /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
+  /// @param oldTotalAssets Current value of totalAssets()
+  /// @return tokenAmounts Token amounts for deposit
+  /// @return fuseEnabledOut true if fuse is detected - we need to close all debts asap
+  function rebalanceNoSwaps(
+    State storage state,
+    ITetuConverter converter,
+    uint oldTotalAssets,
+    uint profitToCover,
+    address splitter,
+    bool checkNeedRebalance_
+  ) external returns (
+    uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
+    bool fuseEnabledOut
+  ) {
+    RebalanceLocalVariables memory v;
+    _initLocalVars(v, converter, state);
+
+    if (v.needRebalance || !checkNeedRebalance_) {
+      if (v.isStablePool && isEnableFuse(v.lastPrice, v.newPrice, v.fuseThreshold)) {
+        /// enabling fuse: close debt and stop providing liquidity
+        state.isFuseTriggered = true;
+        emit FuseTriggered();
+        fuseEnabledOut = true;
+      } else {
+        // rebalancing debt, setting new tick range
+        KyberDebtLib.rebalanceNoSwaps(converter, state, profitToCover, oldTotalAssets, splitter);
+
+        // need to update last price only for stables coz only stables have fuse mechanic
+        if (v.isStablePool) {
+          state.lastPrice = v.newPrice;
+        }
+
+        uint loss;
+        (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
+        if (loss != 0) {
+          _coverLoss(splitter, loss, state.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        }
+
+//        fuseEnabledOut = false;
+      }
+    } else {
+      tokenAmounts = new uint[](2);
+      tokenAmounts[0] = AppLib.balance(v.tokenA);
+      tokenAmounts[1] = AppLib.balance(v.tokenB);
+    }
+
+    return (tokenAmounts, fuseEnabledOut);
+  }
+
+  /*function rebalance(
     State storage state,
     ITetuConverter converter,
     address controller,
@@ -804,5 +855,60 @@ library KyberConverterStrategyLogicLib {
       tokenAmounts[0] = AppLib.balance(vars.tokenA);
       tokenAmounts[1] = AppLib.balance(vars.tokenB);
     }
+  }*/
+
+  /// @notice Try to cover loss from rewards then cover remain loss from insurance.
+  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal {
+    uint coveredByRewards;
+    if (loss != 0) {
+      coveredByRewards = KyberDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
+      uint notCovered = loss - coveredByRewards;
+      if (notCovered != 0) {
+        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+      }
+    }
+
+    emit Rebalanced(loss, coveredByRewards);
+  }
+
+  /// @notice Calculate the token amounts for deposit and amount of loss (as old-total-asset - new-total-asset)
+  function _getTokenAmounts(ITetuConverter converter, uint totalAssets, address tokenA, address tokenB) internal returns (
+    uint loss,
+    uint[] memory tokenAmounts
+  ) {
+    tokenAmounts = new uint[](2);
+    tokenAmounts[0] = AppLib.balance(tokenA);
+    tokenAmounts[1] = AppLib.balance(tokenB);
+
+    address[] memory tokens = new address[](2);
+    tokens[0] = tokenA;
+    tokens[1] = tokenB;
+
+    uint[] memory amounts = new uint[](2);
+    amounts[0] = tokenAmounts[0];
+
+    uint newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
+    return (
+      newTotalAssets < totalAssets
+        ? totalAssets - newTotalAssets
+        : 0,
+      tokenAmounts
+    );
+  }
+
+  /// @notice Initialize {v} by state values
+  function _initLocalVars(
+    RebalanceLocalVariables memory v,
+    ITetuConverter converter,
+    State storage state
+  ) internal view {
+    v.pool = state.pool;
+    v.needRebalance = needRebalance(state);
+    v.tokenA = state.tokenA;
+    v.tokenB = state.tokenB;
+    v.lastPrice = state.lastPrice;
+    v.fuseThreshold = state.fuseThreshold;
+    v.isStablePool = state.isStablePool;
+    v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
   }
 }

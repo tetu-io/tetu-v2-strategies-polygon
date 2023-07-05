@@ -6,9 +6,28 @@ import "../ConverterStrategyBaseLib2.sol";
 import "./KyberLib.sol";
 import "./KyberStrategyErrors.sol";
 import "./KyberConverterStrategyLogicLib.sol";
+import "../../libs/BorrowLib.sol";
 
 library KyberDebtLib {
   using SafeERC20 for IERC20;
+
+  //////////////////////////////////////////
+  //            Data types
+  //////////////////////////////////////////
+
+  struct RebalanceNoSwapsLocal {
+    address tokenA;
+    address tokenB;
+    bool depositorSwapTokens;
+    int24 newLowerTick;
+    int24 newUpperTick;
+    uint prop0;
+    uint prop1;
+  }
+
+  //////////////////////////////////////////
+  //            CONSTANTS
+  //////////////////////////////////////////
 
   uint public constant SELL_GAP = 100;
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
@@ -24,12 +43,13 @@ library KyberDebtLib {
     upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
   }
 
-  function getEntryData(
+  /// @notice Calculate proportions of the tokens for entry kind 1
+  function getEntryDataProportions(
     IPool pool,
     int24 lowerTick,
     int24 upperTick,
     bool depositorSwapTokens
-  ) public view returns (bytes memory entryData) {
+  ) public view returns (uint, uint) {
     address token1 = address(pool.token1());
     uint token1Price = KyberLib.getPrice(address(pool), token1);
 
@@ -37,15 +57,23 @@ library KyberDebtLib {
 
     uint token0Desired = token1Price;
     uint token1Desired = 10 ** token1Decimals;
+    require(token1Desired != 0, AppErrors.ZERO_VALUE);
 
     // calculate proportions
     (uint consumed0, uint consumed1,) = KyberLib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
+    return depositorSwapTokens
+      ? (consumed1 * token1Price / token1Desired, consumed0)
+      : (consumed0, consumed1 * token1Price / token1Desired);
+  }
 
-    if (depositorSwapTokens) {
-      entryData = abi.encode(1, consumed1 * token1Price / token1Desired, consumed0);
-    } else {
-      entryData = abi.encode(1, consumed0, consumed1 * token1Price / token1Desired);
-    }
+  function getEntryData(
+    IPool pool,
+    int24 lowerTick,
+    int24 upperTick,
+    bool depositorSwapTokens
+  ) public view returns (bytes memory entryData) {
+    (uint prop0, uint prop1) = getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
+    entryData = abi.encode(1, prop0, prop1);
   }
 
   /// @dev Closes the debt positions for the given token pair.
@@ -134,6 +162,43 @@ library KyberDebtLib {
     _openDebt(tetuConverter, tokenA, tokenB, entryData);
     state.lowerTick = newLowerTick;
     state.upperTick = newUpperTick;
+  }
+
+  function rebalanceNoSwaps(
+    ITetuConverter tetuConverter,
+    KyberConverterStrategyLogicLib.State storage state,
+    uint profitToCover,
+    uint totalAssets,
+    address splitter
+  ) external {
+    RebalanceNoSwapsLocal memory p;
+    IPool pool = state.pool;
+    p.tokenA = state.tokenA;
+    p.tokenB = state.tokenB;
+    p.depositorSwapTokens = state.depositorSwapTokens;
+
+    (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
+
+    BorrowLib.rebalanceAssets(
+      tetuConverter,
+      p.tokenA,
+      p.tokenB,
+      p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
+      0, // todo threshold for tokenA
+      0 // todo threshold for tokenB
+    );
+
+    // we assume here, that profitToCover has low value
+    // so we can send it without changing proportions of the assets to much
+    // todo if it's not correct we should use more complex implementation of rebalanceAssets with "addition"
+    if (profitToCover > 0) {
+      uint profitToSend = Math.min(profitToCover, IERC20(p.tokenA).balanceOf(address(this)));
+      ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);
+    }
+
+    state.lowerTick = p.newLowerTick;
+    state.upperTick = p.newUpperTick;
   }
 
   /// @dev Returns the total debt amount out for the given token pair.
