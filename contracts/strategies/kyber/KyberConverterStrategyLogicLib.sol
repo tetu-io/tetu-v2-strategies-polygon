@@ -384,7 +384,6 @@ library KyberConverterStrategyLogicLib {
     (amountsOut[0], amountsOut[1], rTokensOwed) = KYBER_NFT.removeLiquidity(IBasePositionManager.RemoveLiquidityParams(nftIds[0], liquidityAmountToExit, 0, 0, block.timestamp));
 
     if (rTokensOwed > 0) {
-      KYBER_NFT.syncFeeGrowth(nftIds[0]);
       (,uint amount0, uint amount1) = KYBER_NFT.burnRTokens(IBasePositionManager.BurnRTokenParams(nftIds[0], 0, 0, block.timestamp));
       if (state.depositorSwapTokens) {
         feeA += amount1;
