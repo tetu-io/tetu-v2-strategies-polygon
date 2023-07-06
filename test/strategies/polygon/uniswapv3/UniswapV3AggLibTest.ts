@@ -25,6 +25,10 @@ import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mo
 import {BigNumber} from "ethers";
 
 describe('UniswapV3AggLibTest', () => {
+  const PLAN_SWAP_REPAY = 0;
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_SWAP_ONLY = 2;
+
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
   //region Variables
@@ -141,11 +145,12 @@ describe('UniswapV3AggLibTest', () => {
           parseUnits(p.liquidationThresholds[0], await p.tokenX.decimals()),
           parseUnits(p.liquidationThresholds[1], await p.tokenX.decimals())
         ],
-        parseUnits(p.propNotUnderlying18 || "0", 18),
         [
           p.balanceAdditions ? parseUnits(p.balanceAdditions[0], await p.tokenX.decimals()) : 0,
           p.balanceAdditions ? parseUnits(p.balanceAdditions[1], await p.tokenX.decimals()) : 0
         ],
+        PLAN_SWAP_REPAY, // todo
+        parseUnits(p.propNotUnderlying18 || "0", 18),
       );
 
       return {
@@ -1361,6 +1366,7 @@ describe('UniswapV3AggLibTest', () => {
         liquidator.address,
         "0x",
         true,
+        PLAN_SWAP_REPAY, // todo
         parseUnits(p.propNotUnderlying18 || "0", 18)
       );
 
@@ -1378,6 +1384,7 @@ describe('UniswapV3AggLibTest', () => {
         liquidator.address,
         "0x",
         true,
+        PLAN_SWAP_REPAY, // todo
         parseUnits(p.propNotUnderlying18 || "0", 18)
       );
 
@@ -1706,5 +1713,258 @@ describe('UniswapV3AggLibTest', () => {
 
   });
 
+  describe("_getAmountToRepay2", () => {
+    interface IGetAmountToRepay2Params {
+      tokens: MockToken[];
+      balances: string[];
+      indicesCollateralBorrow: number[];
+      propNotUnderlying18: string;
+      prices: string[];
+
+      repays?: IRepayParams[];
+    }
+    interface IGetAmountToRepay2Results {
+      amountToRepay: number;
+    }
+
+    async function makeGetAmountToRepay2(p: IGetAmountToRepay2Params) : Promise<IGetAmountToRepay2Results> {
+      // initial balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
+      }
+
+      // setup repays
+      if (p.repays) {
+        for (const r of p.repays) {
+          await setupMockedRepay(converter, facade.address, r);
+        }
+      }
+
+      const amountToRepay = await facade._getAmountToRepay2({
+          tokens: [p.tokens[0].address, p.tokens[1].address],
+          prices: [
+            parseUnits(p.prices[0], 18),
+            parseUnits(p.prices[1], 18),
+          ],
+          decs: [
+            parseUnits("1", await p.tokens[0].decimals()),
+            parseUnits("1", await p.tokens[1].decimals()),
+          ],
+          balanceAdditions: [], // not used here
+          liquidationThresholds: [], // not used here
+          converter: converter.address,
+          planKind: 0, // not used here
+          propNotUnderlying18: parseUnits(p.propNotUnderlying18, 18)
+        },
+        p.indicesCollateralBorrow[0],
+        p.indicesCollateralBorrow[1]
+      );
+
+      return {
+        amountToRepay: +formatUnits(amountToRepay, await p.tokens[p.indicesCollateralBorrow[1]].decimals())
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("Same prices, same decimals, direct borrow", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["1000", "200"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+            propNotUnderlying18: "0.25"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(400);
+        })
+      });
+      describe("Same prices, same decimals, reverse borrow", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdt, usdc],
+            balances: ["200", "1000"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [1, 0],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+            propNotUnderlying18: "0.25"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(400);
+        })
+      });
+      describe("Same prices, different decimals", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, tetu],
+            balances: ["1000", "200"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: tetu,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+            propNotUnderlying18: "0.25"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(400);
+        })
+      });
+      describe("Different prices, same decimals", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["500", "400"],
+            prices: ["2", "0.5"],
+
+            indicesCollateralBorrow: [0, 1],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "5000",
+              totalDebtAmountOut: "10000"
+            }],
+            propNotUnderlying18: "0.25"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(800);
+        })
+      });
+    });
+    describe("Bad paths", () => {
+      describe("No borrow", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["1000", "200"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            propNotUnderlying18: "0.25"
+          });
+          expect(ret.amountToRepay).eq(0);
+        })
+      });
+      describe("Negative B, balances", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["1", "200"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            propNotUnderlying18: "0.25",
+
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+          });
+          expect(ret.amountToRepay).eq(0);
+        })
+      });
+      describe("Negative B, proportions", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["1000", "200"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            propNotUnderlying18: "0.98",
+
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+          });
+          expect(ret.amountToRepay).eq(0);
+        })
+      });
+    });
+  });
 //endregion Unit tests
 });

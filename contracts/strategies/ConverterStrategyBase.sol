@@ -573,6 +573,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount_ Required amount of the {theAsset_}
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
+
+    ///////////////////////////////////////////////////////////////////////////////
+    // todo Current implementation doesn't take into account over-collateration
+    // it's too dangerous to use liquidity from the pool for getting {amount_}
+    // there is a chance to waste
+    revert(AppErrors.NOT_IMPLEMENTED);
+    ///////////////////////////////////////////////////////////////////////////////
+
+
+
     address __converter = address(converter);
     require(msg.sender == __converter, StrategyLib.DENIED);
 

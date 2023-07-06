@@ -60,4 +60,12 @@ contract UniswapV3AggLibFacade {
   ) {
     return UniswapV3AggLib._swap(p, aggParams, indexIn, indexOut, amountIn);
   }
+
+  function _getAmountToRepay2(
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    uint indexCollateral,
+    uint indexBorrow
+  ) external view returns (uint) {
+    return UniswapV3AggLib._getAmountToRepay2(p, indexCollateral, indexBorrow);
+  }
 }

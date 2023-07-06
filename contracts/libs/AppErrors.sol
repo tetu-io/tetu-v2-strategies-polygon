@@ -64,4 +64,6 @@ library AppErrors {
   string public constant UNFOLDING_2_ITERATIONS_REQUIRED = "TS-26 need 2 iterations of unfolding";
 
   string public constant OVER_COLLATERAL_DETECTED = "TS-27 over-collateral";
+
+  string public constant NOT_IMPLEMENTED = "TS-28 not implemented";
 }

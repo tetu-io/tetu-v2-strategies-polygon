@@ -17,8 +17,8 @@ library UniswapV3AggLib {
 
   uint internal constant IDX_SWAP_1 = 0;
   uint internal constant IDX_REPAY_1 = 1;
-  uint internal constant IDX_SWAP_2 = 0;
-  uint internal constant IDX_REPAY_2 = 0;
+  uint internal constant IDX_SWAP_2 = 2;
+  uint internal constant IDX_REPAY_2 = 3;
 
   //region ------------------------------------------------ Data types
   struct SwapByAggParams {
@@ -29,6 +29,15 @@ library UniswapV3AggLib {
     uint amountToSwap;
     /// @notice Swap-data prepared off-chain (route, amounts, etc). 0 - use liquidator to make swap
     bytes swapData;
+  }
+
+  struct SwapAmountToRepay2 {
+    uint x;
+    uint y;
+    uint c0;
+    uint b0;
+    uint alpha;
+    int b;
   }
   //endregion ------------------------------------------------ Data types
 
@@ -175,15 +184,86 @@ library UniswapV3AggLib {
     if (idxToSwap1 != 0 && actions[IDX_SWAP_2]) {
       console.log("_withdrawStep.swap2", amountToSwap, idxToSwap1);
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
-    }
 
-    // todo repay 2
+      if (actions[IDX_REPAY_2]) {
+        console.log("_withdrawStep.repay2", amountToSwap, idxToSwap1);
+        // see calculations inside estimateSwapAmountForRepaySwapRepay
+        // There are two possibilities here:
+        // 1) All collateral asset available on balance was swapped.
+        //   We need additional repay to get assets in right proportions
+        // 2) Only part of collateral asset was swapped, so assets are already in right proportions. Repay 2 is not needed
+        uint amountToRepay2 = _getAmountToRepay2(
+          p,
+          idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
+          idxToRepay1 - 1
+        );
+        if (amountToRepay2 != 0) { // todo threshold
+          ConverterStrategyBaseLib._repayDebt(
+            p.converter,
+            p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
+            p.tokens[idxToRepay1 - 1],
+            amountToRepay2
+          );
+        }
+      }
+    }
 
     console.log("_withdrawStep.balance.final.0", IERC20(p.tokens[0]).balanceOf(address(this)));
     console.log("_withdrawStep.balance.final.1", IERC20(p.tokens[1]).balanceOf(address(this)));
 
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;
+  }
+
+  /// @notice Calculate amount that should be repaid to get right proportions of assets on balance
+  ///         Analyse only single borrow-direction: indexCollateral => indexBorrow
+  ///         if borrow is required then return 0
+  function _getAmountToRepay2(
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    uint indexCollateral,
+    uint indexBorrow
+  ) internal view returns (
+    uint amountToRepay
+  ) {
+    console.log("_getAmountToRepay2");
+    SwapAmountToRepay2 memory v;
+    v.c0 = IERC20(p.tokens[indexCollateral]).balanceOf(address(this)) * p.prices[indexCollateral] / p.decs[indexCollateral];
+    v.b0 = IERC20(p.tokens[indexBorrow]).balanceOf(address(this)) * p.prices[indexBorrow] / p.decs[indexBorrow];
+    v.x = 1e18 - p.propNotUnderlying18;
+    v.y = p.propNotUnderlying18;
+
+    console.log("_getAmountToRepay2.v.c0", v.c0);
+    console.log("_getAmountToRepay2.v.b0", v.b0);
+    console.log("_getAmountToRepay2.v.x", v.x);
+    console.log("_getAmountToRepay2.v.y", v.y);
+
+    (uint needToRepay, uint collateralAmountOut) = p.converter.getDebtAmountStored(
+      address(this),
+      p.tokens[indexCollateral],
+      p.tokens[indexBorrow],
+      true
+    );
+    console.log("_getAmountToRepay2.needToRepay", needToRepay);
+    console.log("_getAmountToRepay2.collateralAmountOut", collateralAmountOut);
+
+    if (needToRepay != 0) {
+      // initial balances: c0, b0
+      // we are going to repay amount b and receive (alpha * b, b), where alpha ~ totalCollateral / totalBorrow
+      // we should have x/y = (c0 + alpha * b) / (b0 + b)
+      // so b = (x * b0 - y * c0) / (alpha * y - x)
+      v.alpha = collateralAmountOut * p.prices[indexCollateral] * p.decs[indexBorrow] * 1e18
+         / needToRepay / p.prices[indexBorrow] / p.decs[indexCollateral];
+      v.b = (int(v.x * v.b0) - int(v.y * v.c0)) / (int(v.alpha * v.y / 1e18) - int(v.x));
+      if (v.b > 0) {
+        amountToRepay = uint(v.b);
+      }
+      console.log("_getAmountToRepay2.v.alpha", v.alpha);
+      console.log("_getAmountToRepay2.v.b");
+      console.logInt(v.b);
+    }
+
+    console.log("_getAmountToRepay2.amountToRepay", amountToRepay);
+    return amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow];
   }
 
   function _swap(
