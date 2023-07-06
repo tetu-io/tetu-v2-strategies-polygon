@@ -127,7 +127,7 @@ export class UniversalUtils {
     console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
     console.log('swap in pool tokenB to tokenA...', tokenBName, '->', tokenAName);
     await TokenUtils.transfer(tokenB, signer, swapper.address, swapAmount.toString());
-    await swapper.connect(signer).swap(pool, tokenB, tokenA, signer.address, priceImpactTolerance);
+    await swapper.connect(signer).swap(pool, tokenB, tokenA, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
     priceA = await swapper.getPrice(pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceB = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));

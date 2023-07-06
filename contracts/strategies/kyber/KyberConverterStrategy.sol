@@ -113,6 +113,11 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     return !KyberConverterStrategyLogicLib.isFarmEnded(state.pId);
   }
 
+  /// @notice View function required by reader
+  function getPoolTokens() external view returns (address tokenA, address tokenB) {
+    return (state.tokenA, state.tokenB);
+  }
+
   /////////////////////////////////////////////////////////////////////
   ///                   CALLBACKS
   /////////////////////////////////////////////////////////////////////
