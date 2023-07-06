@@ -5,22 +5,22 @@ async function main() {
   const { deployments } = hre;
 
   await verify('StrategyLib');
-  await verify('ConverterStrategyBaseLib', 'contracts/strategies/');
-  await verify('ConverterStrategyBaseLib2', 'contracts/strategies/');
-  await verify('BalancerLogicLib', 'contracts/strategies/balancer/');
-  await verify('BalancerBoostedStrategy', 'contracts/strategies/balancer/');
-  await verify('UniswapV3Lib', 'contracts/strategies/uniswap/');
-  await verify('UniswapV3DebtLib', 'contracts/strategies/uniswap/');
-  await verify('UniswapV3ConverterStrategyLogicLib', 'contracts/strategies/uniswap/');
-  await verify('UniswapV3ConverterStrategy', 'contracts/strategies/uniswap/');
-  await verify('AlgebraLib', 'contracts/strategies/algebra/');
-  await verify('AlgebraConverterStrategyLogicLib', 'contracts/strategies/algebra/');
-  await verify('AlgebraDebtLib', 'contracts/strategies/algebra/');
-  await verify('AlgebraConverterStrategy', 'contracts/strategies/algebra/');
-  await verify('KyberLib', 'contracts/strategies/kyber/');
-  await verify('KyberDebtLib', 'contracts/strategies/kyber/');
-  await verify('KyberConverterStrategyLogicLib', 'contracts/strategies/kyber/');
-  await verify('KyberConverterStrategy', 'contracts/strategies/kyber/');
+  await verify('ConverterStrategyBaseLib', 'contracts/strategies');
+  await verify('ConverterStrategyBaseLib2', 'contracts/strategies');
+  await verify('BalancerLogicLib', 'contracts/strategies/balancer');
+  await verify('BalancerBoostedStrategy', 'contracts/strategies/balancer');
+  await verify('UniswapV3Lib', 'contracts/strategies/uniswap');
+  await verify('UniswapV3DebtLib', 'contracts/strategies/uniswap');
+  await verify('UniswapV3ConverterStrategyLogicLib', 'contracts/strategies/uniswap');
+  await verify('UniswapV3ConverterStrategy', 'contracts/strategies/uniswap');
+  await verify('AlgebraLib', 'contracts/strategies/algebra');
+  await verify('AlgebraConverterStrategyLogicLib', 'contracts/strategies/algebra');
+  await verify('AlgebraDebtLib', 'contracts/strategies/algebra');
+  await verify('AlgebraConverterStrategy', 'contracts/strategies/algebra');
+  await verify('KyberLib', 'contracts/strategies/kyber');
+  await verify('KyberDebtLib', 'contracts/strategies/kyber');
+  await verify('KyberConverterStrategyLogicLib', 'contracts/strategies/kyber');
+  await verify('KyberConverterStrategy', 'contracts/strategies/kyber');
 }
 
 async function verify(name: string, pkg?: string) {

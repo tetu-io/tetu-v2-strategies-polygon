@@ -48,6 +48,7 @@ export class VerifyUtils {
 
   // tslint:disable-next-line:no-any
   public static async verifyWithContractName(address: string, contractPath: string, args?: any[]) {
+    // console.log('contractPath', contractPath)
     try {
       await hre.run(VERIFY + ":verify", {
         address, contract: contractPath, constructorArguments: args
