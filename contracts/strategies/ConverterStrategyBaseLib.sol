@@ -1598,17 +1598,24 @@ library ConverterStrategyBaseLib {
     console.log("_buildPlanRepaySwapRepay.indexB", idxAB[1]);
     console.log("_buildPlanRepaySwapRepay.totalCollateralA", totalCollateralA);
     console.log("_buildPlanRepaySwapRepay.totalBorrowB", totalBorrowB);
+    console.log("_buildPlanRepaySwapRepay.token0", p.tokens[0]);
+    console.log("_buildPlanRepaySwapRepay.token1", p.tokens[1]);
+    console.log("_buildPlanRepaySwapRepay.prices0", p.prices[0]);
+    console.log("_buildPlanRepaySwapRepay.prices1", p.prices[1]);
 
     require(balancesAB[1] != 0, AppErrors.UNFOLDING_2_ITERATIONS_REQUIRED);
     // use all available tokenB to repay debt and receive as much as possible tokenA
     uint amountToRepay = Math.min(balancesAB[1], totalBorrowB);
+    console.log("_buildPlanRepaySwapRepay.amountToRepay", amountToRepay);
+
     (uint collateralAmount,) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
+    console.log("_buildPlanRepaySwapRepay.collateralAmount", collateralAmount);
 
     // swap A to B: full or partial
     amountToSwap = estimateSwapAmountForRepaySwapRepay(
       p,
       balancesAB[0],
-      0,
+      balancesAB[1],
       idxAB[0],
       idxAB[1],
       propB,
@@ -1618,8 +1625,6 @@ library ConverterStrategyBaseLib {
       amountToRepay
     );
 
-    console.log("_buildPlanRepaySwapRepay.collateralAmount", collateralAmount);
-    console.log("_buildPlanRepaySwapRepay.amountToRepay", amountToRepay);
     console.log("_buildPlanRepaySwapRepay.amountToSwap, indexRepayTokenPlus1, indexTokenToSwapPlus1", idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
 
     return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
@@ -1640,8 +1645,17 @@ library ConverterStrategyBaseLib {
     uint totalBorrowB,
     uint collateralA,
     uint amountToRepayB
-  ) internal pure returns(uint) {
+  ) internal view returns(uint) {
     // todo This function should be optimized (reduce amount of vars and params)
+    console.log("estimateSwapAmountForRepaySwapRepay.balanceA", balanceA);
+    console.log("estimateSwapAmountForRepaySwapRepay.balanceB", balanceB);
+    console.log("estimateSwapAmountForRepaySwapRepay.indexA", indexA);
+    console.log("estimateSwapAmountForRepaySwapRepay.indexB", indexB);
+    console.log("estimateSwapAmountForRepaySwapRepay.propB", propB);
+    console.log("estimateSwapAmountForRepaySwapRepay.totalCollateralA", totalCollateralA);
+    console.log("estimateSwapAmountForRepaySwapRepay.totalBorrowB", totalBorrowB);
+    console.log("estimateSwapAmountForRepaySwapRepay.collateralA", collateralA);
+    console.log("estimateSwapAmountForRepaySwapRepay.amountToRepayB", amountToRepayB);
 
     // N - number of the state
     // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
@@ -1664,14 +1678,30 @@ library ConverterStrategyBaseLib {
     EstimateSwapAmountForRepaySwapRepayLocal memory v;
     v.x = 1e18 - propB;
     v.y = propB;
+    console.log("estimateSwapAmountForRepaySwapRepay.1");
+    console.log("estimateSwapAmountForRepaySwapRepay.v.x", v.x);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.y", v.y);
+    console.log("estimateSwapAmountForRepaySwapRepay.prices.0", p.prices[0]);
+    console.log("estimateSwapAmountForRepaySwapRepay.prices.1", p.prices[1]);
+    console.log("estimateSwapAmountForRepaySwapRepay.decs.0", p.decs[0]);
+    console.log("estimateSwapAmountForRepaySwapRepay.decs.1", p.decs[1]);
 
 // 1. repay 1
     // convert amounts A, amounts B to cost A, cost B in USD
     v.bA1 = (balanceA + collateralA) * p.prices[indexA] / p.decs[indexA];
+    console.log("estimateSwapAmountForRepaySwapRepay.111");
     v.bB1 = (balanceB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
+    console.log("estimateSwapAmountForRepaySwapRepay.222");
     v.cB1 = (totalBorrowB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
+    console.log("estimateSwapAmountForRepaySwapRepay.333");
     v.alpha = 1e18 * totalCollateralA * p.prices[indexA] * p.decs[indexB]
       / p.decs[indexA] / p.prices[indexB] / totalBorrowB; // (!) approx estimation
+
+    console.log("estimateSwapAmountForRepaySwapRepay.v.bA1",v.bA1);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.bB1",v.bB1);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.cB1",v.cB1);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.alpha",v.alpha);
+    console.log("estimateSwapAmountForRepaySwapRepay.2");
 
 // 2. full swap
     v.aA2 = v.bA1;
@@ -1679,14 +1709,27 @@ library ConverterStrategyBaseLib {
     v.bA2 = v.bA1 - v.aA2;
     v.bB2 = v.bB1 + v.aA2 * v.s / 1e18;
 
+    console.log("estimateSwapAmountForRepaySwapRepay.v.aA2",v.aA2);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.s",v.s);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.bA2",v.bA2);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.bB2",v.bB2);
+
 // 3. repay 2
+    console.log("estimateSwapAmountForRepaySwapRepay.3");
+
     v.aB3 = (v.x * v.bB2 - v.y * v.bA2) / (v.alpha * v.y / 1e18 + v.x);
+    console.log("estimateSwapAmountForRepaySwapRepay.v.aB3",v.aB3);
+
+    console.log("estimateSwapAmountForRepaySwapRepay.4");
 
     if (v.aB3 > v.cB1) {
+      console.log("estimateSwapAmountForRepaySwapRepay.5");
       // there is not enough debt to make second repay
       // we need to make partial swap and receive assets in right proportions in result
       v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
       v.aA2 = v.bA1 * v.gamma / 1e18;
+      console.log("estimateSwapAmountForRepaySwapRepay.v.gamma",v.gamma);
+      console.log("estimateSwapAmountForRepaySwapRepay.v.aA2",v.aA2);
     }
 
     return v.aA2 * p.decs[indexA] / p.prices[indexA];

@@ -167,6 +167,8 @@ library UniswapV3AggLib {
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       console.log("_withdrawStep.swap1", amountToSwap, idxToSwap1);
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+      console.log("_withdrawStep.balance.after.swap1", IERC20(p.tokens[0]).balanceOf(address(this)));
+      console.log("_withdrawStep.balance.after.swap1", IERC20(p.tokens[1]).balanceOf(address(this)));
     }
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
@@ -184,6 +186,8 @@ library UniswapV3AggLib {
     if (idxToSwap1 != 0 && actions[IDX_SWAP_2]) {
       console.log("_withdrawStep.swap2", amountToSwap, idxToSwap1);
       _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+      console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[0]).balanceOf(address(this)));
+      console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[1]).balanceOf(address(this)));
 
       if (actions[IDX_REPAY_2]) {
         console.log("_withdrawStep.repay2", amountToSwap, idxToSwap1);
@@ -204,6 +208,8 @@ library UniswapV3AggLib {
             p.tokens[idxToRepay1 - 1],
             amountToRepay2
           );
+          console.log("_withdrawStep.balance.after.repay2", IERC20(p.tokens[0]).balanceOf(address(this)));
+          console.log("_withdrawStep.balance.after.repay2", IERC20(p.tokens[1]).balanceOf(address(this)));
         }
       }
     }
@@ -229,8 +235,8 @@ library UniswapV3AggLib {
     SwapAmountToRepay2 memory v;
     v.c0 = IERC20(p.tokens[indexCollateral]).balanceOf(address(this)) * p.prices[indexCollateral] / p.decs[indexCollateral];
     v.b0 = IERC20(p.tokens[indexBorrow]).balanceOf(address(this)) * p.prices[indexBorrow] / p.decs[indexBorrow];
-    v.x = 1e18 - p.propNotUnderlying18;
-    v.y = p.propNotUnderlying18;
+    v.x = indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18;
+    v.y = indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18;
 
     console.log("_getAmountToRepay2.v.c0", v.c0);
     console.log("_getAmountToRepay2.v.b0", v.b0);
@@ -249,11 +255,11 @@ library UniswapV3AggLib {
     if (needToRepay != 0) {
       // initial balances: c0, b0
       // we are going to repay amount b and receive (alpha * b, b), where alpha ~ totalCollateral / totalBorrow
-      // we should have x/y = (c0 + alpha * b) / (b0 + b)
-      // so b = (x * b0 - y * c0) / (alpha * y - x)
+      // we should have x/y = (c0 + alpha * b) / (b0 - b)
+      // so b = (x * b0 - y * c0) / (alpha * y + x)
       v.alpha = collateralAmountOut * p.prices[indexCollateral] * p.decs[indexBorrow] * 1e18
          / needToRepay / p.prices[indexBorrow] / p.decs[indexCollateral];
-      v.b = (int(v.x * v.b0) - int(v.y * v.c0)) / (int(v.alpha * v.y / 1e18) - int(v.x));
+      v.b = (int(v.x * v.b0) - int(v.y * v.c0)) / (int(v.alpha * v.y / 1e18) + int(v.x));
       if (v.b > 0) {
         amountToRepay = uint(v.b);
       }

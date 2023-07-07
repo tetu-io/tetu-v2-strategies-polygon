@@ -1779,7 +1779,7 @@ describe('UniswapV3AggLibTest', () => {
           // 20230706.2.calc.xlsx
           const ret = await makeGetAmountToRepay2({
             tokens: [usdc, usdt],
-            balances: ["1000", "200"],
+            balances: ["400", "1000"],
             prices: ["1", "1"],
 
             indicesCollateralBorrow: [0, 1],
@@ -1792,7 +1792,7 @@ describe('UniswapV3AggLibTest', () => {
             propNotUnderlying18: "0.25"
           });
           // 20230706.2.calc.xlsx
-          expect(ret.amountToRepay).eq(400);
+          expect(ret.amountToRepay).eq(520);
         })
       });
       describe("Same prices, same decimals, reverse borrow", () => {
@@ -1808,7 +1808,7 @@ describe('UniswapV3AggLibTest', () => {
           // 20230706.2.calc.xlsx
           const ret = await makeGetAmountToRepay2({
             tokens: [usdt, usdc],
-            balances: ["200", "1000"],
+            balances: ["1000", "400"],
             prices: ["1", "1"],
 
             indicesCollateralBorrow: [1, 0],
@@ -1818,10 +1818,10 @@ describe('UniswapV3AggLibTest', () => {
               totalCollateralAmountOut: "10000",
               totalDebtAmountOut: "5000"
             }],
-            propNotUnderlying18: "0.25"
+            propNotUnderlying18: "0.75"
           });
           // 20230706.2.calc.xlsx
-          expect(ret.amountToRepay).eq(400);
+          expect(ret.amountToRepay).eq(520);
         })
       });
       describe("Same prices, different decimals", () => {
@@ -1837,7 +1837,7 @@ describe('UniswapV3AggLibTest', () => {
           // 20230706.2.calc.xlsx
           const ret = await makeGetAmountToRepay2({
             tokens: [usdc, tetu],
-            balances: ["1000", "200"],
+            balances: ["400", "1000"],
             prices: ["1", "1"],
 
             indicesCollateralBorrow: [0, 1],
@@ -1850,7 +1850,7 @@ describe('UniswapV3AggLibTest', () => {
             propNotUnderlying18: "0.25"
           });
           // 20230706.2.calc.xlsx
-          expect(ret.amountToRepay).eq(400);
+          expect(ret.amountToRepay).eq(520);
         })
       });
       describe("Different prices, same decimals", () => {
@@ -1866,7 +1866,7 @@ describe('UniswapV3AggLibTest', () => {
           // 20230706.2.calc.xlsx
           const ret = await makeGetAmountToRepay2({
             tokens: [usdc, usdt],
-            balances: ["500", "400"],
+            balances: ["200", "2000"],
             prices: ["2", "0.5"],
 
             indicesCollateralBorrow: [0, 1],
@@ -1879,7 +1879,7 @@ describe('UniswapV3AggLibTest', () => {
             propNotUnderlying18: "0.25"
           });
           // 20230706.2.calc.xlsx
-          expect(ret.amountToRepay).eq(800);
+          expect(ret.amountToRepay).eq(1040);
         })
       });
     });
@@ -1897,7 +1897,7 @@ describe('UniswapV3AggLibTest', () => {
           // 20230706.2.calc.xlsx
           const ret = await makeGetAmountToRepay2({
             tokens: [usdc, usdt],
-            balances: ["1000", "200"],
+            balances: ["1440", "480"],
             prices: ["1", "1"],
 
             indicesCollateralBorrow: [0, 1],
@@ -1919,11 +1919,11 @@ describe('UniswapV3AggLibTest', () => {
           // 20230706.2.calc.xlsx
           const ret = await makeGetAmountToRepay2({
             tokens: [usdc, usdt],
-            balances: ["1", "200"],
+            balances: ["200", "1000"],
             prices: ["1", "1"],
 
             indicesCollateralBorrow: [0, 1],
-            propNotUnderlying18: "0.25",
+            propNotUnderlying18: "0.99",
 
             repays: [{
               collateralAsset: usdc,
