@@ -194,6 +194,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
+    console.log("quoteWithdrawByAgg.start");
     StrategyLib.onlyOperators(controller());
     QuoteWithdrawByAggLocal memory v;
 
@@ -238,6 +239,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     bytes memory planEntryData,
     uint allowEntryToPool
   ) external returns (bool completed) {
+    console.log("withdrawByAggStep.start");
     WithdrawByAggStepLocal memory v;
     (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
     v.converter = converter;
@@ -275,6 +277,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     console.log("withdrawByAggStep.after.withdrawStep.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
     if (allowEntryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
+      console.log("!!!!! UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps");
       // make rebalance and enter back to the pool. We won't have any swaps here
       (v.tokenAmounts,) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
         state,
@@ -286,6 +289,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       );
       _rebalanceAfter(v.tokenAmounts, false);
     } else {
+      console.log("!!!!! UniswapV3ConverterStrategyLogicLib.afterWithdrawStep");
       // fix loss / profitToCover
       v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
         converter,
@@ -312,6 +316,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     console.log("withdrawByAggStep.final.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
     _updateInvestedAssets();
+    console.log("withdrawByAggStep.END");
   }
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly
@@ -320,6 +325,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function _extractProp(uint planKind, bytes memory planEntryData) internal view returns(uint propNotUnderlying18) {
+    console.log("_extractProp.start");
     if (planKind == IterationPlanKinds.PLAN_SWAP_REPAY) {
       // custom proportions
       (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
@@ -328,6 +334,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     }
 
     require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    console.log("_extractProp.end", propNotUnderlying18);
     return propNotUnderlying18;
   }
   //endregion ------------------------------------ Withdraw by iterations
@@ -432,9 +439,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts, bool isNeedFillup) internal {
+    console.log("_rebalanceAfter.balance.0", IERC20(state.tokenA).balanceOf(address(this)));
+    console.log("_rebalanceAfter.balance.1", IERC20(state.tokenB).balanceOf(address(this)));
+    console.log("_rebalanceAfter.propNotUnderlying18", UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state));
+
     if (tokenAmounts.length == 2) {
       _depositorEnter(tokenAmounts);
     }
+    console.log("_rebalanceAfter.balance.after.enter.0", IERC20(state.tokenA).balanceOf(address(this)));
+    console.log("_rebalanceAfter.balance.after.enter.1", IERC20(state.tokenB).balanceOf(address(this)));
 
     //add fill-up liquidity part of fill-up is used
     if (isNeedFillup) {

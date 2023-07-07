@@ -17,7 +17,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-import "../../test/Typechain.sol";
+// import "../../test/Typechain.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -872,13 +872,14 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]
   ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
   function getPropNotUnderlying18(State storage state) view external returns (uint) {
-    // pool proportions
-    (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.depositorSwapTokens
-    );
+    // get pool proportions
+    IUniswapV3Pool pool = state.pool;
+    address tokenA = state.tokenA;
+    address tokenB = state.tokenB;
+    bool depositorSwapTokens = state.depositorSwapTokens;
+    (int24 newLowerTick, int24 newUpperTick) = UniswapV3DebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+
     require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
     return consumed1 * 1e18 / (consumed0 + consumed1);
   }

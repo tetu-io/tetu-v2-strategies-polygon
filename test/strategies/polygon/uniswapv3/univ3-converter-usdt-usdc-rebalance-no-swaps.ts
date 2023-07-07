@@ -191,8 +191,9 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
     let step = 0;
     while (true) {
+      console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
-      console.log("!!!!!!!!!!!quote", quote);
+      console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
 
       let swapData: BytesLike = "0x";
       const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
@@ -217,7 +218,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
           swapData = swapTransaction.data;
         }
       }
-      console.log("unfoldBorrows.withdrawByAggStep.callStatic", quote);
+      console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
         [tokenToSwap, AGGREGATOR],
         amountToSwap,
@@ -234,6 +235,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         planEntryData,
         ENTRY_TO_POOL_IS_ALLOWED
       );
+      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
 
       if (saveState) {
         await saveState(`u${++step}`);
