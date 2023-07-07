@@ -94,8 +94,10 @@ export class TokenUtils {
     return IERC20__factory.connect(tokenAddress, signer).allowance(signer.address, spender);
   }
 
-  public static async transfer(tokenAddress: string, signer: SignerWithAddress, destination: string, amount: string) {
-    console.log('transfer', await TokenUtils.tokenSymbol(tokenAddress), amount);
+  public static async transfer(tokenAddress: string, signer: SignerWithAddress, destination: string, amount: string, silent?: boolean) {
+    if (!silent) {
+      console.log('transfer', await TokenUtils.tokenSymbol(tokenAddress), amount);
+    }
     return IERC20__factory.connect(tokenAddress, signer).transfer(destination, BigNumber.from(amount))
   }
 
@@ -141,9 +143,11 @@ export class TokenUtils {
     return IERC721Enumerable__factory.connect(tokenAddress, ethers.provider).tokenOfOwnerByIndex(account, index);
   }*/
 
-  public static async getToken(token: string, to: string, amount?: BigNumber) {
+  public static async getToken(token: string, to: string, amount?: BigNumber, silent?: boolean) {
     const start = Date.now();
-    console.log('transfer token from biggest holder', token, amount?.toString());
+    if (!silent) {
+      console.log('transfer token from biggest holder', token, amount?.toString());
+    }
 
     if (token.toLowerCase() === await DeployerUtilsLocal.getNetworkTokenAddress()) {
       await IWmatic__factory.connect(token, await DeployerUtilsLocal.impersonate(to)).deposit({value: amount});
@@ -154,15 +158,19 @@ export class TokenUtils {
     if (!holder) {
       throw new Error('Please add holder for ' + token);
     }
-    const signer = await DeployerUtilsLocal.impersonate(holder);
+    const signer = await DeployerUtilsLocal.impersonate(holder, silent);
     const balance = (await TokenUtils.balanceOf(token, holder)).div(100);
-    console.log('holder balance', balance.toString());
-    if (amount) {
-      await TokenUtils.transfer(token, signer, to, amount.toString());
-    } else {
-      await TokenUtils.transfer(token, signer, to, balance.toString());
+    if (!silent) {
+      console.log('holder balance', balance.toString());
     }
-    TokenUtils.printDuration('getToken completed', start);
+    if (amount) {
+      await TokenUtils.transfer(token, signer, to, amount.toString(), silent);
+    } else {
+      await TokenUtils.transfer(token, signer, to, balance.toString(), silent);
+    }
+    if (!silent) {
+      TokenUtils.printDuration('getToken completed', start);
+    }
     return balance;
   }
 

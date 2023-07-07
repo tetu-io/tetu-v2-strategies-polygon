@@ -105,7 +105,8 @@ export class UniversalUtils {
     tokenB: string,
     swapperAddress: string,
     amount: BigNumber,
-    priceImpactTolerance = 40000 // 40%
+    priceImpactTolerance = 40000, // 40%,
+    silent = false
   ) {
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, signer).decimals()
@@ -118,21 +119,26 @@ export class UniversalUtils {
     let priceBBefore;
     const signerBalanceOfTokenB = await TokenUtils.balanceOf(tokenB, signer.address);
     if (signerBalanceOfTokenB.lt(swapAmount)) {
-      await TokenUtils.getToken(tokenB, signer.address, amount);
+      await TokenUtils.getToken(tokenB, signer.address, amount, silent);
     }
 
-    console.log('Moving price down...');
+    if (!silent) {
+      console.log('Moving price down...');
+    }
     priceABefore = await swapper.getPrice(pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceBBefore = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-    console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
-    console.log('swap in pool tokenB to tokenA...', tokenBName, '->', tokenAName);
-    await TokenUtils.transfer(tokenB, signer, swapper.address, swapAmount.toString());
+    if (!silent) {
+      console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
+      console.log('swap in pool tokenB to tokenA...', tokenBName, '->', tokenAName);
+    }
+    await TokenUtils.transfer(tokenB, signer, swapper.address, swapAmount.toString(), silent);
     await swapper.connect(signer).swap(pool, tokenB, tokenA, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
     priceA = await swapper.getPrice(pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceB = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-    console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
-    console.log('Price change', '-' + formatUnits(priceA.sub(priceABefore).mul(1e13).div(priceABefore).div(1e8), 3) + '%');
-
+    if (!silent) {
+      console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
+      console.log('Price change', '-' + formatUnits(priceA.sub(priceABefore).mul(1e13).div(priceABefore).div(1e8), 3) + '%');
+    }
     return {
       priceAChange: priceA.sub(priceABefore).mul(1e9).mul(1e9).div(priceABefore),
       priceBChange: priceB.sub(priceBBefore).mul(1e9).mul(1e9).div(priceBBefore),

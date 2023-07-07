@@ -305,7 +305,7 @@ export class DeployerUtilsLocal {
     }
   }
 
-  public static async impersonate(address: string | null = null) {
+  public static async impersonate(address: string | null = null, silent?: boolean) {
     if (address === null) {
       address = await DeployerUtilsLocal.getGovernance();
     }
@@ -318,7 +318,9 @@ export class DeployerUtilsLocal {
       method: 'hardhat_setBalance',
       params: [address, '0x1431E0FAE6D7217CAA0000000'],
     });
-    console.log('address impersonated', address);
+    if (!silent) {
+      console.log('address impersonated', address);
+    }
     return ethers.getSigner(address || '');
   }
 

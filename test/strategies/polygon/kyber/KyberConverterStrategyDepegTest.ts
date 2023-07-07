@@ -14,14 +14,14 @@ import {
   IStrategyV2,
   ITetuConverter__factory, IUniswapV3ConverterStrategyReaderAccess__factory,
   KyberConverterStrategy,
-  KyberConverterStrategy__factory,
+  KyberConverterStrategy__factory, KyberLib,
   TetuVaultV2,
   VaultFactory__factory,
 } from "../../../../typechain";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {parseUnits} from "ethers/lib/utils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -29,6 +29,9 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../UniversalUtils";
 import {StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {KyberLiquidityUtils} from "./utils/KyberLiquidityUtils";
+import {writeFileSyncRestoreFolder} from "../../../baseUT/utils/FileUtils";
+import {writeFileSync} from "fs";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -57,6 +60,7 @@ describe('KyberConverterStrategyDepegTest', function() {
   let asset: IERC20;
   let vault: TetuVaultV2;
   let strategy: KyberConverterStrategy;
+  let lib: KyberLib;
   const pId = 21
 
   before(async function() {
@@ -113,8 +117,8 @@ describe('KyberConverterStrategyDepegTest', function() {
       },
       controller,
       gov,
-      1_000,
-      300,
+      0,
+      0,
       300,
       false,
     );
@@ -144,6 +148,8 @@ describe('KyberConverterStrategyDepegTest', function() {
     // prevent 'TC-4 zero price' because real oracles have a limited price lifetime
     // await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDC_TOKEN)
     await PriceOracleImitatorUtils.kyber(signer, MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDC_TOKEN)
+
+    lib = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib
   })
 
   after(async function() {
@@ -169,22 +175,10 @@ describe('KyberConverterStrategyDepegTest', function() {
     await TimeUtils.rollback(snapshot);
   });
 
-  it('Depeg USDT', async() => {
-    // USDT (tokenB) start price 0.999896
-    const swaps = [
-      parseUnits('200000', 6), // 1 -0.021% 0.999678
-      parseUnits('40000', 6), // 2 -0.014% 0.999534
-      parseUnits('4000', 6), // 3 -0.055% 0.99898
-      parseUnits('1000', 6), // 4 -0.049% 0.998482
-      parseUnits('500', 6), // 5 -0.013% 0.998346
-      parseUnits('500', 6), // 6 -0.145% 0.996896
-      parseUnits('400', 6), // 7 -0.049% 0.996407
-      parseUnits('400', 6), // 8
-      parseUnits('280', 6), // 9
-      parseUnits('190', 6), // 10 -0.091% 0.994254
-      // parseUnits('170', 6), // todo fix 'SS: Loss too high'
-    ]
-
+  it.only('Depeg USDT', async() => {
+    const changeTicksPerStep = 10
+    const rowsCaption = ['Step', 'USDT Price', 'Total assets', 'USDT Collateral', 'USDC Amount to repay', 'Locked underlying', 'Health Factor']
+    const rows: [string, number, number, number, number, number, number][] = []
     const s = strategy
     const state = await s.getState()
 
@@ -193,24 +187,65 @@ describe('KyberConverterStrategyDepegTest', function() {
     await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
     await vault.deposit(parseUnits('1000', 6), signer.address);
 
-    expect(await s.needRebalance()).eq(false)
+    let amounts
+    let priceA
+    let swapAmount
+    let borrowInfo = await getBorrowInfo(s as unknown as ConverterStrategyBase, signer)
+    const priceBStart = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
+    rows.push(['#0', +formatUnits(priceBStart, 6), +formatUnits(await s.totalAssets(), 6), borrowInfo[1].collaterals[0], borrowInfo[1].amountsToRepay[0], borrowInfo[1].totalLockedAmountInUnderlying, borrowInfo[0].healthFactors[0][0]])
 
-    console.log('After deposit')
-    await getBorrowInfo(s as unknown as ConverterStrategyBase, signer)
+    for (let i = 1; i <= 50; i++) {
+      console.log(``)
+      console.log(`## STEP ${i}`)
+      // console.log(`# changing price to ${changeTicksPerStep} ticks lower`)
+      const priceBBefore = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
+      for (let k = 0; k < changeTicksPerStep; k++) {
+        amounts = await KyberLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.KYBER_USDC_USDT)
+        // console.log(amounts)
+        priceA = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDC_TOKEN)
+        // console.log('priceA', priceA)
+        swapAmount = amounts[0].mul(priceA).div(parseUnits('1', 6))
+        if (k > 0) {
+          swapAmount = swapAmount.add(swapAmount.div(100))
+        } else {
+          swapAmount = swapAmount.add(parseUnits('0.001', 6))
+        }
+        // console.log ('SwapAmount to change tick', swapAmount)
+        // console.log(`Price down ${i}`)
+        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
+      }
 
-    let i = 1
-    for (const swapAmount of swaps) {
-      console.log(`Price down ${i}`)
-      await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount);
+      // console.log(`# setting price to middle of tick`)
+      amounts = await KyberLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.KYBER_USDC_USDT)
+      priceA = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDC_TOKEN)
+      swapAmount = amounts[0].mul(priceA).div(parseUnits('1', 6)).div(2)
+      // console.log ('swapAmount to set middle tick price', swapAmount)
+      await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
 
-      console.log(`Rebalance ${i}`)
-      expect(await s.needRebalance()).eq(true)
-      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000,})
-      expect(await s.needRebalance()).eq(false)
+      const priceBAfter = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
+      console.log(`# USDT price changed: ${formatUnits(priceBBefore, 6)} -> ${formatUnits(priceBAfter, 6)}`)
 
-      await getBorrowInfo(s as unknown as ConverterStrategyBase, signer)
+      if (await s.needRebalance()) {
+        console.log(`# Rebalance..`)
+        // expect(await s.needRebalance()).eq(true)
+        await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000,})
+        expect(await s.needRebalance()).eq(false)
 
-      i++
+        borrowInfo = await getBorrowInfo(s as unknown as ConverterStrategyBase, signer)
+        const row: [string, number, number, number, number, number, number] = ['#' + i, +formatUnits(priceBAfter, 6), +formatUnits(await s.totalAssets(), 6), borrowInfo[1].collaterals[0], borrowInfo[1].amountsToRepay[0], borrowInfo[1].totalLockedAmountInUnderlying, borrowInfo[1].healthFactors[0][0]]
+        console.log(row)
+        rows.push(row)
+      }
+    }
+
+    const pathOut = 'tmp/Kyber_depeg_USDT.csv'
+    writeFileSyncRestoreFolder(pathOut, rowsCaption.join(';') + '\n', { encoding: 'utf8', flag: 'w'});
+    for (const row of rows) {
+      writeFileSync(
+        pathOut,
+        row.join(';') + '\n',
+        { encoding: 'utf8', flag: 'a' },
+      );
     }
   })
 })
@@ -231,12 +266,13 @@ async function getBorrowInfo(
 
   const strategyReaderReaderAccess = IUniswapV3ConverterStrategyReaderAccess__factory.connect(strategy.address, signer)
   const [tokenA, tokenB] = await strategyReaderReaderAccess.getPoolTokens()
-  console.log('tokenA', tokenA)
-  console.log('tokenB', tokenB)
+  // console.log('tokenA', tokenA)
+  // console.log('tokenB', tokenB)
 
   const directBorrows = await StateUtilsNum.getBorrowInfo(signer, converter, borrowManager, strategy, [tokenA], [tokenB], priceOracle, true);
   const reverseBorrows = await StateUtilsNum.getBorrowInfo(signer, converter, borrowManager, strategy, [tokenB], [tokenA], priceOracle, false);
 
-  console.log('directBorrows', directBorrows)
-  console.log('reverseBorrows', reverseBorrows)
+  // console.log('directBorrows', directBorrows)
+  // console.log('reverseBorrows', reverseBorrows)
+  return [directBorrows, reverseBorrows]
 }
