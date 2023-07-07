@@ -1622,6 +1622,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             item.borrowAsset.address,
             parseUnits(item.debtAmount, await item.borrowAsset.decimals()),
             parseUnits(item.collateralAmount, await collateralAsset.decimals()),
+            false,
             false
           );
         }

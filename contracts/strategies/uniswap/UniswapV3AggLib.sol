@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "./UniswapV3DebtLib.sol";
 import "hardhat/console.sol";
+import "../../interfaces/IPoolProportionsProvider.sol";
 
 /// @notice Reimplement ConverterStrategyBaseLib.closePositionsToGetAmount with swapping through aggregators
 library UniswapV3AggLib {
@@ -189,6 +190,9 @@ library UniswapV3AggLib {
       console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[0]).balanceOf(address(this)));
       console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[1]).balanceOf(address(this)));
 
+      // todo Read actual proportions from pool
+      // todo probably borrow will be required, we need to check possibility of repay-borrow, borrow-repay
+
       if (actions[IDX_REPAY_2]) {
         console.log("_withdrawStep.repay2", amountToSwap, idxToSwap1);
         // see calculations inside estimateSwapAmountForRepaySwapRepay
@@ -235,8 +239,15 @@ library UniswapV3AggLib {
     SwapAmountToRepay2 memory v;
     v.c0 = IERC20(p.tokens[indexCollateral]).balanceOf(address(this)) * p.prices[indexCollateral] / p.decs[indexCollateral];
     v.b0 = IERC20(p.tokens[indexBorrow]).balanceOf(address(this)) * p.prices[indexBorrow] / p.decs[indexBorrow];
-    v.x = indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18;
-    v.y = indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18;
+
+    console.log("UPDATE propNotUnderlying18, current value=", p.propNotUnderlying18);
+    // p.propNotUnderlying18 contains original proportions that were actual before the swap
+    // after swap() we need to receive actual values
+    uint propNotUnderlying18 = IPoolProportionsProvider(address(this)).getPropNotUnderlying18();
+    console.log("UPDATED VALUE OF propNotUnderlying18", propNotUnderlying18);
+
+    v.x = indexCollateral == IDX_ASSET ? 1e18 - propNotUnderlying18 : propNotUnderlying18;
+    v.y = indexCollateral == IDX_ASSET ? propNotUnderlying18 : 1e18 - propNotUnderlying18;
 
     console.log("_getAmountToRepay2.v.c0", v.c0);
     console.log("_getAmountToRepay2.v.b0", v.b0);

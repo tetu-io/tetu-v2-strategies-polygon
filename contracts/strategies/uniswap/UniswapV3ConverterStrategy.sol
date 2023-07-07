@@ -8,12 +8,13 @@ import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingStrategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3AggLib.sol";
+import "../../interfaces/IPoolProportionsProvider.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
 ///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
 /// @author a17
-contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy {
+contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy, IPoolProportionsProvider {
 
   /////////////////////////////////////////////////////////////////////
   ///                CONSTANTS
@@ -456,4 +457,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _updateInvestedAssets();
   }
 
+  /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
+  /// @return Proportion of the not-underlying [0...1e18]
+  function getPropNotUnderlying18() external view returns (uint) {
+    return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
+  }
 }
