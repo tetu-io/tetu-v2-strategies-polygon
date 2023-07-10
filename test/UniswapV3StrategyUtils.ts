@@ -85,7 +85,7 @@ export class UniswapV3StrategyUtils {
     console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
     console.log('swap in pool tokenA to tokenB...', tokenAName, '->', tokenBName);
     await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString());
-    await swapper.connect(signer).swap(state.pool, tokenA, tokenB, signer.address, priceImpactTolerance);
+    await swapper.connect(signer).swap(state.pool, tokenA, tokenB, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
     priceA = await swapper.getPrice(state.pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
     priceB = await swapper.getPrice(state.pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
