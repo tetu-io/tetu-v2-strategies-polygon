@@ -376,7 +376,6 @@ library ConverterStrategyBaseLib2 {
 //endregion ------------------------------------- Withdraw helpers
 
 //region---------------------------------------- calcInvestedAssets
-
   /// @notice Calculate amount we will receive when we withdraw all from pool
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @param indexAsset Index of the underlying (main asset) in {tokens}
@@ -387,6 +386,20 @@ library ConverterStrategyBaseLib2 {
     uint indexAsset,
     ITetuConverter converter_
   ) external returns (
+    uint amountOut
+  ) {
+    return _calcInvestedAssets(tokens, depositorQuoteExitAmountsOut, indexAsset, converter_);
+  }
+  /// @notice Calculate amount we will receive when we withdraw all from pool
+  /// @dev This is writable function because we need to update current balances in the internal protocols.
+  /// @param indexAsset Index of the underlying (main asset) in {tokens}
+  /// @return amountOut Invested asset amount under control (in terms of underlying)
+  function _calcInvestedAssets(
+    address[] memory tokens,
+    uint[] memory depositorQuoteExitAmountsOut,
+    uint indexAsset,
+    ITetuConverter converter_
+  ) internal returns (
     uint amountOut
   ) {
     CalcInvestedAssetsLocal memory v;
@@ -461,6 +474,31 @@ library ConverterStrategyBaseLib2 {
 
     // to pay the following amount we need to swap some other asset at first
     v.debts[index] += value;
+  }
+
+  /// @notice Calculate the token amounts for deposit and amount of loss (as old-total-asset - new-total-asset)
+  function getTokenAmounts(ITetuConverter converter, uint totalAssets, address tokenA, address tokenB) external returns (
+    uint loss,
+    uint[] memory tokenAmounts
+  ) {
+    tokenAmounts = new uint[](2);
+    tokenAmounts[0] = AppLib.balance(tokenA);
+    tokenAmounts[1] = AppLib.balance(tokenB);
+
+    address[] memory tokens = new address[](2);
+    tokens[0] = tokenA;
+    tokens[1] = tokenB;
+
+    uint[] memory amounts = new uint[](2);
+    amounts[0] = tokenAmounts[0];
+
+    uint newTotalAssets = _calcInvestedAssets(tokens, amounts, 0, converter);
+    return (
+      newTotalAssets < totalAssets
+        ? totalAssets - newTotalAssets
+        : 0,
+      tokenAmounts
+    );
   }
 //endregion------------------------------------- calcInvestedAssets
 }

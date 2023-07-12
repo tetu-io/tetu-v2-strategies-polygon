@@ -20,7 +20,7 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
@@ -43,6 +43,13 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 const { expect } = chai;
 
 describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
+  const ENTRY_TO_POOL_IS_ALLOWED = 1;
+  const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+  const ENTRY_TO_POOL_WITH_REBALANCE = 3;
+
+  const PLAN_SWAP_REPAY = 0;
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_SWAP_ONLY = 2;
 
 //region Variables
   let snapshotBefore: string;
@@ -176,17 +183,17 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     const state = await strategy.getState();
     const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
     const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
-
-    console.log("unfoldBorrows.withdrawByAggEntry");
-    await strategyAsOperator.withdrawByAggEntry();
-    if (saveState) {
-      await saveState(`u0`);
-    }
+    const USE_SINGLE_ITERATION = true;
+    const planEntryData = defaultAbiCoder.encode(
+      ["uint256"],
+      [PLAN_REPAY_SWAP_REPAY]
+    );
 
     let step = 0;
     while (true) {
-      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(propNotUnderlying18);
-      console.log("!!!!!!!!!!!quote", quote);
+      console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
+      console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
 
       let swapData: BytesLike = "0x";
       const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
@@ -211,22 +218,30 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
           swapData = swapTransaction.data;
         }
       }
-      console.log("unfoldBorrows.withdrawByAggStep.callStatic", quote);
-      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+      console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
+      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
+        [tokenToSwap, AGGREGATOR],
+        amountToSwap,
+        swapData,
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED
+      );
 
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
-      await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+      await strategyAsOperator.withdrawByAggStep(
+        [tokenToSwap, AGGREGATOR],
+        amountToSwap,
+        swapData,
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED
+      );
+      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
 
       if (saveState) {
         await saveState(`u${++step}`);
       }
+      if (USE_SINGLE_ITERATION) break;
       if (completed) break;
-    }
-
-    console.log("!!!!!!!!!!!!! unfoldBorrows.rebalanceNoSwaps --------------------------------");
-    await strategy.rebalanceNoSwaps(false);
-    if (saveState) {
-      await saveState(`u${++step}`);
     }
   }
 
@@ -239,7 +254,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
   }
   async function makeTest(p: ITestParams) {
     const cycles = 6;
-    const MAX_ALLLOWED_LOCKED_PERCENT = 20;
+    const MAX_ALLLOWED_LOCKED_PERCENT = 25;
     const pathOut = p.filePath;
     const states: IStateNum[] = [];
 

@@ -8,12 +8,13 @@ import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingStrategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3AggLib.sol";
+import "../../interfaces/IPoolProportionsProvider.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
 ///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
 /// @author a17
-contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy {
+contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy, IPoolProportionsProvider {
 
   /////////////////////////////////////////////////////////////////////
   ///                CONSTANTS
@@ -22,6 +23,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
   string public constant override STRATEGY_VERSION = "1.4.7";
+
+  /// @notice Enter to the pool at the end of withdrawByAggStep
+  uint internal constant ENTRY_TO_POOL_IS_ALLOWED = 1;
+  /// @notice Enter to the pool at the end of withdrawByAggStep only if full withdrawing has been completed
+  uint internal constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+  /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
+  uint internal constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
 
   /////////////////////////////////////////////////////////////////////
   ///                Data types
@@ -33,6 +41,19 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint[] liquidationThresholds;
     uint oldTotalAssets;
     uint profitToCover;
+    uint[] tokenAmounts;
+    uint planKind;
+    uint propNotUnderlying18;
+    address tokenToSwap;
+    address aggregator;
+    bool useLiquidator;
+  }
+
+  struct QuoteWithdrawByAggLocal {
+    address[] tokens;
+    uint[] liquidationThresholds;
+    uint planKind;
+    uint totalLiquidity;
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -128,7 +149,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
   ///      There is also an attempt to cover rebalancing losses with rewards.
   function rebalance() external {
-    (uint profitToCover, uint oldTotalAssets, address _controller) = _rebalanceBefore(true);
+    (uint profitToCover, uint oldTotalAssets, address _controller) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool isNeedFillup) = UniswapV3ConverterStrategyLogicLib.rebalance(
       state,
       converter,
@@ -141,7 +162,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
 
     // _depositorEnter(tokenAmounts) if length == 2
     uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
@@ -159,7 +180,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return True if the fuse was triggered (so, it's necessary to call UniswapV3DebtLib.closeDebtByAgg)
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
       converter,
@@ -175,84 +196,115 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   //region ------------------------------------ Withdraw by iterations
 
-  /// @notice Fix price changes, exit from pool, prepare to call quoteWithdrawByAgg/withdrawByAggStep in the loop
-  function withdrawByAggEntry() external {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
-
-    address _asset = asset;
-    uint balance = IERC20(_asset).balanceOf(address(this));
-    if (profitToCover != 0 && balance != 0) {
-      uint profitToSend = Math.min(profitToCover, balance);
-      ConverterStrategyBaseLib2.sendToInsurance(_asset, profitToSend, splitter, oldTotalAssets);
-    }
-
-    _updateInvestedAssets();
-  }
-
-  /// @notice Get info about a swap required by next call of {withdrawByAggStep}
-  /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
-  ///                           The leftovers should be swapped to get following result proportions of the assets:
-  ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
-  function quoteWithdrawByAgg(uint propNotUnderlying18) external returns (address tokenToSwap, uint amountToSwap) {
-    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+  /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
+  function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
     StrategyLib.onlyOperators(controller());
-
-    // get tokens as following: [underlying, not-underlying]
-    (address[] memory tokens, uint[] memory thresholds) = _getTokensAndThresholds();
-
-    return UniswapV3AggLib.quoteWithdrawStep(converter, tokens, thresholds, propNotUnderlying18);
-  }
-
-  /// @notice Make withdraw iteration. Each iteration can make 0 or 1 swap only.
-  /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
-  /// @param tokenToSwap_ What token should be swapped to other
-  /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
-  /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
-  /// @param swapData Swap rote that was prepared off-chain.
-  /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
-  ///                           The leftovers should be swapped to get following result proportions of the assets:
-  ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
-  /// @return completed true - withdraw was completed, no more steps are required
-  function withdrawByAggStep(
-    address tokenToSwap_,
-    uint amountToSwap_,
-    address aggregator_,
-    bytes memory swapData,
-    uint propNotUnderlying18
-  ) external returns (bool completed) {
-    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
-    require(state.totalLiquidity == 0, AppErrors.WITHDRAW_BY_AGG_ENTRY_REQUIRED);
-
-    WithdrawByAggStepLocal memory v;
-    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore(false);
-    v.converter = converter;
+    QuoteWithdrawByAggLocal memory v;
 
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
 
+    v.planKind = IterationPlanKinds.getEntryKind(planEntryData);
+
+    // estimate amounts to be withdrawn from the pool
+    v.totalLiquidity = state.totalLiquidity;
+    uint[] memory amountsOut = (v.totalLiquidity == 0)
+      ? new uint[](2)
+      : _depositorQuoteExit(v.totalLiquidity);
+
+    return UniswapV3AggLib.quoteWithdrawStep(
+      converter,
+      v.tokens,
+      v.liquidationThresholds,
+      amountsOut,
+      v.planKind,
+      _extractProp(v.planKind, planEntryData)
+    );
+  }
+
+  /// @notice Make withdraw iteration: [exit from the pool], [make 1 swap], [repay a debt], [enter to the pool]
+  ///         Typical sequence of the actions is: exit from the pool, make 1 swap, repay 1 debt.
+  ///         You can enter to the pool if you are sure that you won't have borrow + repay on AAVE3 in the same block.
+  /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
+  /// @param tokenToSwapAndAggregator Array with two params (workaround for stack too deep):
+  ///             [0] tokenToSwap_ What token should be swapped to other
+  ///             [1] aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
+  /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
+  /// @param swapData Swap rote that was prepared off-chain.
+  /// @param planEntryData PLAN_XXX + additional data, see IterationPlanKinds
+  /// @param entryToPool Allow to enter to the pool at the end. Use false if you are going to make several iterations.
+  ///                    It's possible to enter back to the pool by calling {rebalanceNoSwaps} at any moment
+  ///                    0 - not allowed, 1 - allowed, 2 - allowed only if completed
+  /// @return completed All debts were closed, leftovers were swapped to the required proportions.
+  function withdrawByAggStep(
+    address[2] calldata tokenToSwapAndAggregator,
+    uint amountToSwap_,
+    bytes memory swapData,
+    bytes memory planEntryData,
+    uint entryToPool
+  ) external returns (bool completed) {
+    // Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
+    WithdrawByAggStepLocal memory v;
+    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
+    v.converter = converter;
+
+    // decode tokenToSwapAndAggregator
+    v.tokenToSwap = tokenToSwapAndAggregator[0];
+    v.aggregator = tokenToSwapAndAggregator[1];
+    if (v.aggregator == address(0)) {
+      v.useLiquidator = true;
+      v.aggregator = address(AppLib._getLiquidator(v.controller));
+    }
+
+    // get tokens as following: [underlying, not-underlying]
+    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
+    v.planKind = IterationPlanKinds.getEntryKind(planEntryData);
+    v.propNotUnderlying18 = _extractProp(v.planKind, planEntryData);
+
+    // make withdraw iteration according to the selected plan
     completed = UniswapV3AggLib.withdrawStep(
       v.converter,
       v.tokens,
       v.liquidationThresholds,
-      tokenToSwap_,
+      v.tokenToSwap,
       amountToSwap_,
-      aggregator_ == address(0)
-        ? address(AppLib._getLiquidator(v.controller))
-        : aggregator_,
+      v.aggregator,
       swapData,
-      aggregator_ == address(0),
-      propNotUnderlying18
+      v.useLiquidator,
+      v.planKind,
+      v.propNotUnderlying18
     );
 
-    UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
-      v.converter,
-      address(state.pool),
-      v.tokens,
-      v.oldTotalAssets,
-      v.profitToCover,
-      state.strategyProfitHolder,
-      splitter
-    );
+    if (entryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
+      // make rebalance and enter back to the pool. We won't have any swaps here
+      (v.tokenAmounts,) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
+        state,
+        converter,
+        v.oldTotalAssets,
+        v.profitToCover,
+        splitter,
+        false
+      );
+      _rebalanceAfter(v.tokenAmounts, false);
+    } else {
+      // fix loss / profitToCover
+      v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
+        converter,
+        state.pool,
+        v.tokens,
+        v.oldTotalAssets,
+        v.profitToCover,
+        state.strategyProfitHolder,
+        splitter
+      );
+
+      if (entryToPool == ENTRY_TO_POOL_IS_ALLOWED
+        || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+      ) {
+        // Make actions after rebalance: depositor enter, update invested assets
+        _rebalanceAfter(v.tokenAmounts, false);
+      }
+    }
 
     _updateInvestedAssets();
   }
@@ -262,6 +314,19 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return (state.tokenA, state.tokenB);
   }
 
+  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns(uint propNotUnderlying18) {
+    if (planKind == IterationPlanKinds.PLAN_SWAP_REPAY) {
+      // custom proportions
+      (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
+      require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    } else if (planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY) {
+      // the proportions should be taken from the pool
+      // new value of the proportions should also be read from the pool after each swap
+      propNotUnderlying18 = type(uint).max;
+    }
+
+    return propNotUnderlying18;
+  }
   //endregion ------------------------------------ Withdraw by iterations
 
   /////////////////////////////////////////////////////////////////////
@@ -347,8 +412,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     thresholds[1] = liquidationThresholds[tokens[1]];
   }
 
-  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
-  function _rebalanceBefore(bool allowExit) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
     controllerOut = controller();
     StrategyLib.onlyOperators(controllerOut);
 
@@ -357,7 +422,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (allowExit && state.totalLiquidity > 0) {
+    if (state.totalLiquidity != 0) {
       _depositorEmergencyExit();
     }
   }
@@ -375,4 +440,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _updateInvestedAssets();
   }
 
+  /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
+  /// @return Proportion of the not-underlying [0...1e18]
+  function getPropNotUnderlying18() external view returns (uint) {
+    return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
+  }
 }

@@ -191,7 +191,8 @@ describe('ConverterStrategyBaseInternalTests', function() {
           borrowAsset.address,
           needToRepay,
           collateralAmount,
-          true
+          true,
+          false
         );
         await tetuConverter.setRepay(
           collateralAsset.address,

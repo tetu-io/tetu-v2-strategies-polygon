@@ -232,6 +232,7 @@ library UniswapV3DebtLib {
 
     // calculate proportions
     (uint consumed0, uint consumed1,) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
+
     return depositorSwapTokens
       ? (consumed1 * token1Price / token1Desired, consumed0)
       : (consumed0, consumed1 * token1Price / token1Desired);

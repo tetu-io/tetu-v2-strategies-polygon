@@ -53,6 +53,11 @@ export interface IRepayParams {
   swappedLeftoverBorrowOut?: string;
   debtGapToSend?: string;
   debtGapToReturn?: string;
+  /**
+   * Params of getDebtAmountCurrentParams/getDebtAmountStoredParams are cleared/replaced after call of repay().
+   * addToQueue allows to set up second repay, so params of the second repay will be used after first call of repay.
+   */
+  addToQueue?: boolean;
 }
 export interface IQuoteRepayParams {
   collateralAsset: MockToken;

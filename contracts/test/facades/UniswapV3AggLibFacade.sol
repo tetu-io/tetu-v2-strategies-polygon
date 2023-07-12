@@ -11,12 +11,14 @@ contract UniswapV3AggLibFacade {
     ITetuConverter converter_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
+    uint[] memory amountsFromPool,
+    uint planKind,
     uint propNotUnderlying18
   ) external returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
-    return UniswapV3AggLib.quoteWithdrawStep(converter_, tokens, liquidationThresholds, propNotUnderlying18);
+    return UniswapV3AggLib.quoteWithdrawStep(converter_, tokens, liquidationThresholds, amountsFromPool, planKind, propNotUnderlying18);
   }
 
   function withdrawStep(
@@ -28,6 +30,7 @@ contract UniswapV3AggLibFacade {
     address aggregator_,
     bytes memory swapData_,
     bool useLiquidator_,
+    uint planKind,
     uint propNotUnderlying18
   ) external returns (
     bool completed
@@ -41,19 +44,29 @@ contract UniswapV3AggLibFacade {
       aggregator_,
       swapData_,
       useLiquidator_,
+      planKind,
       propNotUnderlying18
     );
   }
 
   function _swap(
-    ConverterStrategyBaseLib.PlanInputParams memory p,
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
     UniswapV3AggLib.SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,
     uint amountIn
   ) external returns (
-    uint spentAmountIn
+    uint spentAmountIn,
+    uint updatedPropNotUnderlying18
   ) {
     return UniswapV3AggLib._swap(p, aggParams, indexIn, indexOut, amountIn);
+  }
+
+  function _getAmountToRepay2(
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    uint indexCollateral,
+    uint indexBorrow
+  ) external view returns (uint) {
+    return UniswapV3AggLib._getAmountToRepay2(p, indexCollateral, indexBorrow);
   }
 }

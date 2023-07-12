@@ -1,30 +1,17 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
-import {
-  ILiquidationParams,
-  IQuoteRepayParams,
-  IRepayParams
-} from "../../../baseUT/mocks/TestDataTypes";
-import {setupMockedQuoteRepay, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {
   ConverterController__factory,
-  IConverterController__factory,
-  IERC20Metadata__factory, ITetuConverter, ITetuConverter__factory, ITetuLiquidator,
-  MockForwarder,
-  MockTetuConverter, MockTetuLiquidatorSingleCall,
-  MockToken, PriceOracleMock,
-  UniswapV3AggLibFacade
+  IERC20Metadata__factory, ITetuConverter__factory, UniswapV3AggLibFacade
 } from "../../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mocks/MockLiquidationUtils";
-import {BigNumber, BytesLike} from "ethers";
+import {BytesLike} from "ethers";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
@@ -114,12 +101,15 @@ describe('UniswapV3AggLibIntTest', () => {
               await IERC20Metadata__factory.connect(token, signer).decimals()
             )
           )),
+          usePoolProportions: false,
 
           // not used by _swap()
 
           prices: [0, 0],
           propNotUnderlying18: 0,
-          decs: [0, 0]
+          decs: [0, 0],
+          balanceAdditions: [0, 0],
+          planKind: 0
         };
       const aggParams = {
         useLiquidator: p.useLiquidator,
@@ -133,11 +123,11 @@ describe('UniswapV3AggLibIntTest', () => {
         swapData
       };
 
-      const ret = await facade.callStatic._swap(planInputParams, aggParams, p.indexIn, p.indexOut, amountIn);
+      const {spentAmountIn, updatedPropNotUnderlying18} = await facade.callStatic._swap(planInputParams, aggParams, p.indexIn, p.indexOut, amountIn);
       await facade._swap(planInputParams, aggParams, p.indexIn, p.indexOut, amountIn);
 
       return {
-        spentAmountIn: +formatUnits(ret, decimalsTokenIn),
+        spentAmountIn: +formatUnits(spentAmountIn, decimalsTokenIn),
         balances: await Promise.all(p.tokens.map(
           async (token: string, index: number) => +formatUnits(
             await IERC20Metadata__factory.connect(token, signer).balanceOf(facade.address),

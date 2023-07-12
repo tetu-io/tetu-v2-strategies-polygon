@@ -267,16 +267,14 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return ConverterStrategyBaseLib.recycle(
       converter,
       asset,
-      compoundRatio,
       _depositorPoolAssets(),
       controller(),
       liquidationThresholds,
       tokens,
       amounts,
-      performanceFee,
       splitter,
       performanceReceiver,
-      performanceFeeRatio
+      [compoundRatio, performanceFee, performanceFeeRatio]
     );
   }
 

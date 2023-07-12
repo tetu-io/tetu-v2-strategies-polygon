@@ -17,7 +17,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-import "../../test/Typechain.sol";
+// import "../../test/Typechain.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -671,7 +671,7 @@ library UniswapV3ConverterStrategyLogicLib {
         isNeedFillup = true;
       }
 
-      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic
@@ -726,7 +726,7 @@ library UniswapV3ConverterStrategyLogicLib {
         splitter
       );
 
-      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
     }
 
     // need to update last price only for stables coz only stables have fuse mechanic
@@ -787,7 +787,7 @@ library UniswapV3ConverterStrategyLogicLib {
       }
 
       uint loss;
-      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
       if (loss != 0) {
         _coverLoss(splitter, loss, state.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
@@ -802,24 +802,23 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param tokens [underlying, not-underlying]
   function afterWithdrawStep(
     ITetuConverter converter,
-    address pool,
+    IUniswapV3Pool pool,
     address[] memory tokens,
     uint oldTotalAssets,
     uint profitToCover,
     address strategyProfitHolder,
     address splitter
-  ) external {
+  ) external returns (uint[] memory tokenAmounts) {
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
     }
 
-    uint[] memory amounts = new uint[](2);
-    amounts[0] = AppLib.balance(tokens[0]); // tokens[0] is underlying
+    uint loss;
+    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
 
-    uint newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-    if (newTotalAssets < oldTotalAssets) {
-      _coverLoss(splitter, oldTotalAssets - newTotalAssets, strategyProfitHolder, tokens[0], tokens[1], pool);
+    if (loss != 0) {
+      _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
   }
 
@@ -835,31 +834,6 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     emit Rebalanced(loss, coveredByRewards);
-  }
-
-  /// @notice Calculate the token amounts for deposit and amount of loss (as old-total-asset - new-total-asset)
-  function _getTokenAmounts(ITetuConverter converter, uint totalAssets, address tokenA, address tokenB) internal returns (
-    uint loss,
-    uint[] memory tokenAmounts
-  ) {
-    tokenAmounts = new uint[](2);
-    tokenAmounts[0] = AppLib.balance(tokenA);
-    tokenAmounts[1] = AppLib.balance(tokenB);
-
-    address[] memory tokens = new address[](2);
-    tokens[0] = tokenA;
-    tokens[1] = tokenB;
-
-    uint[] memory amounts = new uint[](2);
-    amounts[0] = tokenAmounts[0];
-
-    uint newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-    return (
-      newTotalAssets < totalAssets
-        ? totalAssets - newTotalAssets
-        : 0,
-      tokenAmounts
-    );
   }
 
   /// @notice Initialize {v} by state values
@@ -893,5 +867,18 @@ library UniswapV3ConverterStrategyLogicLib {
     v.fuseThreshold = state.fuseThreshold;
     v.isStablePool = state.isStablePool;
     v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
+  }
+
+  /// @notice Get proportion of not-underlying in the pool, [0...1e18]
+  ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
+  function getPropNotUnderlying18(State storage state) view external returns (uint) {
+    // get pool proportions
+    IUniswapV3Pool pool = state.pool;
+    bool depositorSwapTokens = state.depositorSwapTokens;
+    (int24 newLowerTick, int24 newUpperTick) = UniswapV3DebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+
+    require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
+    return consumed1 * 1e18 / (consumed0 + consumed1);
   }
 }

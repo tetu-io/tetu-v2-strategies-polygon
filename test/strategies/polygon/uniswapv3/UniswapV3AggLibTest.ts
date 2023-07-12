@@ -25,6 +25,10 @@ import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mo
 import {BigNumber} from "ethers";
 
 describe('UniswapV3AggLibTest', () => {
+  const PLAN_SWAP_REPAY = 0;
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_SWAP_ONLY = 2;
+
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
   //region Variables
@@ -82,6 +86,7 @@ describe('UniswapV3AggLibTest', () => {
       /** This is underlying always */
       tokenX: MockToken;
       tokenY: MockToken;
+      planKind: number;
 
       liquidationThresholds: string[];
       propNotUnderlying18?: string;
@@ -94,6 +99,7 @@ describe('UniswapV3AggLibTest', () => {
       }
       repays?: IRepayParams[];
       quoteRepays?: IQuoteRepayParams[];
+      balanceAdditions?: string[];
     }
 
     interface IQouteWithdrawStepResults {
@@ -140,7 +146,12 @@ describe('UniswapV3AggLibTest', () => {
           parseUnits(p.liquidationThresholds[0], await p.tokenX.decimals()),
           parseUnits(p.liquidationThresholds[1], await p.tokenX.decimals())
         ],
-        parseUnits(p.propNotUnderlying18 || "0", 18)
+        [
+          p.balanceAdditions ? parseUnits(p.balanceAdditions[0], await p.tokenX.decimals()) : 0,
+          p.balanceAdditions ? parseUnits(p.balanceAdditions[1], await p.tokenX.decimals()) : 0
+        ],
+        p.planKind,
+        parseUnits(p.propNotUnderlying18 || "0", 18),
       );
 
       return {
@@ -151,217 +162,1192 @@ describe('UniswapV3AggLibTest', () => {
       }
     }
 
-    describe("Default liquidationThresholds, all required amounts are higher then thresholds", () => {
-      describe("Swap is not required", () => {
-        describe("Direct repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
+    describe("PLAN_SWAP_REPAY", () => {
+      describe("Zero balanceAdditions", () => {
+        describe("Default liquidationThresholds, all required amounts are higher then thresholds", () => {
+          describe("Swap is not required", () => {
+            describe("Direct repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
-          async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-            return makeQuoteWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
 
-              liquidationThresholds: ["0", "0"],
-              balanceX: "0",
-              balanceY: "1000",
+                  tokenX: usdc,
+                  tokenY: usdt,
 
-              repays: [{
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }]
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "0",
+                  balanceY: "1000",
+
+                  repays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }]
+                });
+              }
+
+              it("should return zero tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+              });
+
+              it("should return zero amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(0);
+              });
             });
-          }
+            describe("Reverse repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
-          it("should return zero tokenToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "1000",
+                  balanceY: "0",
+
+                  repays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }]
+                });
+              }
+
+              it("should return zero tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+              });
+
+              it("should return zero amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(0);
+              });
+            });
+            describe("No debts", () => {
+              describe("Zero balances", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "0",
+                    balanceY: "0",
+
+                    repays: []
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+              describe("Assets are allocated in required proportion 1:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "1000",
+                    balanceY: "1000",
+
+                    repays: [],
+                    propNotUnderlying18: "0.5",
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+              describe("Assets are allocated in required proportion 0:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "0",
+                    balanceY: "1000",
+
+                    repays: [],
+                    propNotUnderlying18: "1",
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+              describe("Assets are allocated in required proportion 1:0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "1000",
+                    balanceY: "0",
+
+                    repays: [],
+                    propNotUnderlying18: "0",
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+            });
           });
+          describe("Swap is required", () => {
+            describe("Direct repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
-          it("should return zero amountToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(0);
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "500",
+                  balanceY: "500",
+
+                  repays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }]
+                });
+              }
+
+              it("should return expected tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(usdc.address);
+              });
+
+              it("should return expected amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(500);
+              });
+            });
+            describe("Reverse repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "500",
+                  balanceY: "500",
+
+                  repays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }]
+                });
+              }
+
+              it("should return expected tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(usdt.address);
+              });
+
+              it("should return expected amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(500);
+              });
+            });
+            describe("No debts (swap letfovers)", () => {
+              describe("Proportions 1e18:0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: []
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdt.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(900);
+                });
+              });
+              describe("Proportions 0:1e18", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: [],
+                    propNotUnderlying18: "1"
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdc.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(500);
+                });
+              });
+              describe("Proportions 1:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: [],
+                    propNotUnderlying18: "0.5"
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdt.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(200);
+                });
+              });
+            });
           });
         });
-        describe("Reverse repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
+        describe("Custom liquidationThresholds, all required amounts are higher then thresholds", () => {
+          describe("Swap is required", () => {
+            describe("Direct repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
-          async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-            return makeQuoteWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
 
-              liquidationThresholds: ["0", "0"],
-              balanceX: "1000",
-              balanceY: "0",
+                  tokenX: usdc,
+                  tokenY: usdt,
 
-              repays: [{
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }]
+                  liquidationThresholds: ["599", "0"],
+                  balanceX: "600",
+                  balanceY: "700",
+
+                  repays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalCollateralAmountOut: "5000",
+                    totalDebtAmountOut: "3000",
+                  }]
+                });
+              }
+
+              it("should return expected tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(usdc.address);
+              });
+
+              it("should return expected amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(600);
+              });
             });
-          }
+            describe("Reverse repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
-          it("should return zero tokenToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-          });
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
 
-          it("should return zero amountToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(0);
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "699"],
+                  balanceX: "600",
+                  balanceY: "700",
+
+                  repays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    totalCollateralAmountOut: "5000",
+                    totalDebtAmountOut: "3000",
+                  }]
+                });
+              }
+
+              it("should return expected tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(usdt.address);
+              });
+
+              it("should return expected amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(700);
+              });
+            });
+            describe("No debts (swap letfovers)", () => {
+              describe("Proportions 1e18:0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "899"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: []
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdt.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(900);
+                });
+              });
+              describe("Proportions 0:1e18", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["499", "0"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: [],
+                    propNotUnderlying18: "1"
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdc.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(500);
+                });
+              });
+              describe("Proportions 1:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "199"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: [],
+                    propNotUnderlying18: "0.5"
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdt.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(200);
+                });
+              });
+            });
           });
         });
-        describe("No debts", () => {
-          describe("Zero balances", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "0"],
-                balanceX: "0",
-                balanceY: "0",
-
-                repays: []
+        describe("Custom liquidationThresholds, all required amounts are lower then thresholds", () => {
+          describe("Swap is required", () => {
+            describe("Direct repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
               });
-            }
-
-            it("should return zero tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-            });
-
-            it("should return zero amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(0);
-            });
-          });
-          describe("Assets are allocated in required proportion 1:1", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "0"],
-                balanceX: "1000",
-                balanceY: "1000",
-
-                repays: [],
-                propNotUnderlying18: "0.5",
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
               });
-            }
 
-            it("should return zero tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-            });
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
 
-            it("should return zero amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(0);
-            });
-          });
-          describe("Assets are allocated in required proportion 0:1", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
+                  tokenX: usdc,
+                  tokenY: usdt,
 
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
+                  liquidationThresholds: ["601", "0"],
+                  balanceX: "600",
+                  balanceY: "700",
 
-                liquidationThresholds: ["0", "0"],
-                balanceX: "0",
-                balanceY: "1000",
+                  repays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }]
+                });
+              }
 
-                repays: [],
-                propNotUnderlying18: "1",
+              it("should return zero tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
               });
-            }
 
-            it("should return zero tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-            });
-
-            it("should return zero amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(0);
-            });
-          });
-          describe("Assets are allocated in required proportion 1:0", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "0"],
-                balanceX: "1000",
-                balanceY: "0",
-
-                repays: [],
-                propNotUnderlying18: "0",
+              it("should return zero amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(0);
               });
-            }
-
-            it("should return zero tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
             });
+            describe("Reverse repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
 
-            it("should return zero amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(0);
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "701"],
+                  balanceX: "600",
+                  balanceY: "700",
+
+                  repays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }]
+                });
+              }
+
+              it("should return zero tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+              });
+
+              it("should return zero amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(0);
+              });
+            });
+            describe("No debts (swap letfovers)", () => {
+              describe("Proportions 1e18:0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "901"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: []
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+              describe("Proportions 0:1e18", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["501", "0"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: [],
+                    propNotUnderlying18: "1"
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+              describe("Proportions 1:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "201"],
+                    balanceX: "500",
+                    balanceY: "900",
+
+                    repays: [],
+                    propNotUnderlying18: "0.5"
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
             });
           });
         });
       });
-      describe("Swap is required", () => {
+      describe("Not zero balanceAdditions", () => {
+        describe("Default liquidationThresholds, all required amounts are higher then thresholds", () => {
+          describe("Swap is not required", () => {
+            describe("Direct repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "0",
+                  balanceY: "700",
+
+                  repays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }],
+
+                  balanceAdditions: ["0", "300"]
+                });
+              }
+
+              it("should return zero tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+              });
+
+              it("should return zero amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(0);
+              });
+            });
+            describe("Reverse repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "700",
+                  balanceY: "0",
+
+                  repays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }],
+
+                  balanceAdditions: ["300", "0"]
+                });
+              }
+
+              it("should return zero tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+              });
+
+              it("should return zero amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(0);
+              });
+            });
+            describe("No debts", () => {
+              describe("Assets are allocated in required proportion 1:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "600",
+                    balanceY: "800",
+
+                    repays: [],
+                    propNotUnderlying18: "0.5",
+                    balanceAdditions: ["400", "200"]
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+              describe("Assets are allocated in required proportion 0:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "0",
+                    balanceY: "0",
+
+                    repays: [],
+                    propNotUnderlying18: "1",
+
+                    balanceAdditions: ["0", "1000"]
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+              describe("Assets are allocated in required proportion 1:0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "300",
+                    balanceY: "0",
+
+                    repays: [],
+                    propNotUnderlying18: "0",
+
+                    balanceAdditions: ["700", "0"]
+                  });
+                }
+
+                it("should return zero tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
+                });
+
+                it("should return zero amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(0);
+                });
+              });
+            });
+          });
+          describe("Swap is required", () => {
+            describe("Direct repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "300",
+                  balanceY: "250",
+
+                  repays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }],
+
+                  balanceAdditions: ["200", "250"]
+                });
+              }
+
+              it("should return expected tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(usdc.address);
+              });
+
+              it("should return expected amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(500);
+              });
+            });
+            describe("Reverse repay", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                return makeQuoteWithdrawStep({
+                  planKind: PLAN_SWAP_REPAY,
+
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "500",
+                  balanceY: "500",
+
+                  repays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    totalCollateralAmountOut: "2000",
+                    totalDebtAmountOut: "1000",
+                  }]
+                });
+              }
+
+              it("should return expected tokenToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.tokenToSwap).eq(usdt.address);
+              });
+
+              it("should return expected amountToSwap", async () => {
+                const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                expect(ret.amountToSwap).eq(500);
+              });
+            });
+            describe("No debts (swap letfovers)", () => {
+              describe("Proportions 1e18:0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "400",
+                    balanceY: "750",
+
+                    repays: [],
+
+                    balanceAdditions: ["100", "150"]
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdt.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(900);
+                });
+              });
+              describe("Proportions 0:1e18", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "100",
+                    balanceY: "100",
+
+                    repays: [],
+                    propNotUnderlying18: "1",
+
+                    balanceAdditions: ["400", "800"]
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdc.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(500);
+                });
+              });
+              describe("Proportions 1:1", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+                  return makeQuoteWithdrawStep({
+                    planKind: PLAN_SWAP_REPAY,
+
+                    tokenX: usdc,
+                    tokenY: usdt,
+
+                    liquidationThresholds: ["0", "0"],
+                    balanceX: "100",
+                    balanceY: "100",
+
+                    repays: [],
+                    propNotUnderlying18: "0.5",
+
+                    balanceAdditions: ["400", "800"]
+                  });
+                }
+
+                it("should return expected tokenToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.tokenToSwap).eq(usdt.address);
+                });
+
+                it("should return expected amountToSwap", async () => {
+                  const ret = await loadFixture(makeQuoteWithdrawStepTest);
+                  expect(ret.amountToSwap).eq(200);
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+
+    describe("PLAN_REPAY_SWAP_REPAY", () => {
+      describe("Default liquidationThresholds, all required amounts are higher then thresholds", () => {
         describe("Direct repay", () => {
           let snapshot: string;
           before(async function () {
@@ -373,19 +1359,31 @@ describe('UniswapV3AggLibTest', () => {
 
           async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
             return makeQuoteWithdrawStep({
+              planKind: PLAN_REPAY_SWAP_REPAY,
+
               tokenX: usdc,
               tokenY: usdt,
 
+              propNotUnderlying18: "0",
+
               liquidationThresholds: ["0", "0"],
-              balanceX: "500",
-              balanceY: "500",
+              balanceX: "100",
+              balanceY: "200",
 
               repays: [{
                 collateralAsset: usdc,
                 borrowAsset: usdt,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }]
+                totalCollateralAmountOut: "20000",
+                totalDebtAmountOut: "10000",
+              }],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                collateralAmountOut: "1400",
+                amountRepay: "700",
+              }],
+
+              balanceAdditions: ["200", "500"]
             });
           }
 
@@ -396,7 +1394,7 @@ describe('UniswapV3AggLibTest', () => {
 
           it("should return expected amountToSwap", async () => {
             const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(500);
+            expect(ret.amountToSwap).eq(1700); // 1400 + 200 + 100
           });
         });
         describe("Reverse repay", () => {
@@ -410,19 +1408,28 @@ describe('UniswapV3AggLibTest', () => {
 
           async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
             return makeQuoteWithdrawStep({
+              planKind: PLAN_REPAY_SWAP_REPAY,
+
               tokenX: usdc,
               tokenY: usdt,
 
               liquidationThresholds: ["0", "0"],
-              balanceX: "500",
-              balanceY: "500",
+              balanceX: "100",
+              balanceY: "300",
 
               repays: [{
                 collateralAsset: usdt,
                 borrowAsset: usdc,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }]
+                totalCollateralAmountOut: "20000",
+                totalDebtAmountOut: "10000",
+              }],
+              quoteRepays: [{
+                collateralAsset: usdt,
+                borrowAsset: usdc,
+                collateralAmountOut: "600",
+                amountRepay: "300",
+              }],
+              balanceAdditions: ["200", "500"]
             });
           }
 
@@ -433,114 +1440,10 @@ describe('UniswapV3AggLibTest', () => {
 
           it("should return expected amountToSwap", async () => {
             const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(500);
+            expect(ret.amountToSwap).eq(1400);
           });
         });
         describe("No debts (swap letfovers)", () => {
-          describe("Proportions 1e18:0", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "0"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: []
-              });
-            }
-
-            it("should return expected tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(usdt.address);
-            });
-
-            it("should return expected amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(900);
-            });
-          });
-          describe("Proportions 0:1e18", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "0"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: [],
-                propNotUnderlying18: "1"
-              });
-            }
-
-            it("should return expected tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(usdc.address);
-            });
-
-            it("should return expected amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(500);
-            });
-          });
-          describe("Proportions 1:1", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "0"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: [],
-                propNotUnderlying18: "0.5"
-              });
-            }
-
-            it("should return expected tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(usdt.address);
-            });
-
-            it("should return expected amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(200);
-            });
-          });
-        });
-      });
-    });
-    describe("Custom liquidationThresholds, all required amounts are higher then thresholds", () => {
-      describe("Swap is required", () => {
-        describe("Direct repay", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -551,56 +1454,19 @@ describe('UniswapV3AggLibTest', () => {
 
           async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
             return makeQuoteWithdrawStep({
+              planKind: PLAN_REPAY_SWAP_REPAY,
+
               tokenX: usdc,
               tokenY: usdt,
 
-              liquidationThresholds: ["599", "0"],
-              balanceX: "600",
-              balanceY: "700",
+              liquidationThresholds: ["0", "0"],
+              balanceX: "100",
+              balanceY: "100",
 
-              repays: [{
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                totalCollateralAmountOut: "5000",
-                totalDebtAmountOut: "3000",
-              }]
-            });
-          }
+              repays: [],
+              propNotUnderlying18: "0.5",
 
-          it("should return expected tokenToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.tokenToSwap).eq(usdc.address);
-          });
-
-          it("should return expected amountToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(600);
-          });
-        });
-        describe("Reverse repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-            return makeQuoteWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              liquidationThresholds: ["0", "699"],
-              balanceX: "600",
-              balanceY: "700",
-
-              repays: [{
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                totalCollateralAmountOut: "5000",
-                totalDebtAmountOut: "3000",
-              }]
+              balanceAdditions: ["400", "800"]
             });
           }
 
@@ -611,290 +1477,61 @@ describe('UniswapV3AggLibTest', () => {
 
           it("should return expected amountToSwap", async () => {
             const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(700);
-          });
-        });
-        describe("No debts (swap letfovers)", () => {
-          describe("Proportions 1e18:0", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "899"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: []
-              });
-            }
-
-            it("should return expected tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(usdt.address);
-            });
-
-            it("should return expected amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(900);
-            });
-          });
-          describe("Proportions 0:1e18", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["499", "0"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: [],
-                propNotUnderlying18: "1"
-              });
-            }
-
-            it("should return expected tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(usdc.address);
-            });
-
-            it("should return expected amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(500);
-            });
-          });
-          describe("Proportions 1:1", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "199"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: [],
-                propNotUnderlying18: "0.5"
-              });
-            }
-
-            it("should return expected tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(usdt.address);
-            });
-
-            it("should return expected amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(200);
-            });
-          });
-        });
-      });
-    });
-    describe("Custom liquidationThresholds, all required amounts are lower then thresholds", () => {
-      describe("Swap is required", () => {
-        describe("Direct repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-            return makeQuoteWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              liquidationThresholds: ["601", "0"],
-              balanceX: "600",
-              balanceY: "700",
-
-              repays: [{
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }]
-            });
-          }
-
-          it("should return zero tokenToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-          });
-
-          it("should return zero amountToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(0);
-          });
-        });
-        describe("Reverse repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-            return makeQuoteWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              liquidationThresholds: ["0", "701"],
-              balanceX: "600",
-              balanceY: "700",
-
-              repays: [{
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }]
-            });
-          }
-
-          it("should return zero tokenToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-          });
-
-          it("should return zero amountToSwap", async () => {
-            const ret = await loadFixture(makeQuoteWithdrawStepTest);
-            expect(ret.amountToSwap).eq(0);
-          });
-        });
-        describe("No debts (swap letfovers)", () => {
-          describe("Proportions 1e18:0", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "901"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: []
-              });
-            }
-
-            it("should return zero tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-            });
-
-            it("should return zero amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(0);
-            });
-          });
-          describe("Proportions 0:1e18", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["501", "0"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: [],
-                propNotUnderlying18: "1"
-              });
-            }
-
-            it("should return zero tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-            });
-
-            it("should return zero amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(0);
-            });
-          });
-          describe("Proportions 1:1", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
-              return makeQuoteWithdrawStep({
-                tokenX: usdc,
-                tokenY: usdt,
-
-                liquidationThresholds: ["0", "201"],
-                balanceX: "500",
-                balanceY: "900",
-
-                repays: [],
-                propNotUnderlying18: "0.5"
-              });
-            }
-
-            it("should return zero tokenToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.tokenToSwap).eq(Misc.ZERO_ADDRESS);
-            });
-
-            it("should return zero amountToSwap", async () => {
-              const ret = await loadFixture(makeQuoteWithdrawStepTest);
-              expect(ret.amountToSwap).eq(0);
-            });
+            expect(ret.amountToSwap).eq(200);
           });
         });
       });
     });
 
+    describe("PLAN_SWAP_ONLY", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeQuoteWithdrawStepTest(): Promise<IQouteWithdrawStepResults> {
+        return makeQuoteWithdrawStep({
+          planKind: PLAN_SWAP_ONLY,
+
+          tokenX: usdc,
+          tokenY: usdt,
+
+          liquidationThresholds: ["0", "0"],
+          balanceX: "100",
+          balanceY: "100",
+
+          propNotUnderlying18: "0.5",
+
+          balanceAdditions: ["400", "800"],
+
+          repays: [{
+            collateralAsset: usdc,
+            borrowAsset: usdt,
+            totalCollateralAmountOut: "20000",
+            totalDebtAmountOut: "10000",
+          }],
+          quoteRepays: [{
+            collateralAsset: usdc,
+            borrowAsset: usdt,
+            collateralAmountOut: "1400",
+            amountRepay: "700",
+          }],
+        });
+      }
+
+      it("should return expected tokenToSwap", async () => {
+        const ret = await loadFixture(makeQuoteWithdrawStepTest);
+        expect(ret.tokenToSwap).eq(usdt.address);
+      });
+
+      it("should return expected amountToSwap", async () => {
+        const ret = await loadFixture(makeQuoteWithdrawStepTest);
+        expect(ret.amountToSwap).eq(200);
+      });
+    });
   });
 
   describe("withdrawStep", () => {
@@ -908,6 +1545,8 @@ describe('UniswapV3AggLibTest', () => {
 
       liquidationThresholds: string[];
       propNotUnderlying18?: string;
+
+      planKind: number;
 
       balanceX: string;
       balanceY: string;
@@ -981,6 +1620,7 @@ describe('UniswapV3AggLibTest', () => {
         liquidator.address,
         "0x",
         true,
+        p.planKind,
         parseUnits(p.propNotUnderlying18 || "0", 18)
       );
 
@@ -998,6 +1638,7 @@ describe('UniswapV3AggLibTest', () => {
         liquidator.address,
         "0x",
         true,
+        p.planKind,
         parseUnits(p.propNotUnderlying18 || "0", 18)
       );
 
@@ -1008,209 +1649,10 @@ describe('UniswapV3AggLibTest', () => {
       }
     }
 
-    describe("Default liquidationThresholds, all required amounts are higher then thresholds", () => {
-      describe("Swap is not required", () => {
-        describe("No debts", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
-            return makeWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              amountToSwap: "0",
-
-              liquidationThresholds: ["0", "0"],
-              balanceX: "1000",
-              balanceY: "0",
-
-              repays: [],
-
-            });
-          }
-
-          it("should complete the withdraw", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect(ret.completed).eq(true);
-          });
-
-          it("should not change balances", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect([ret.balanceX, ret.balanceY].join()).eq([1000, 0].join());
-          });
-        });
-        describe("Direct repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
-            return makeWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              amountToSwap: "0",
-
-              liquidationThresholds: ["0", "0"],
-              balanceX: "0",
-              balanceY: "1000",
-
-              repays: [{
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }],
-
-            });
-          }
-
-          it("should not complete withdraw", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect(ret.completed).eq(false);
-          });
-
-          it("should set expected balances", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect([ret.balanceX, ret.balanceY].join()).eq([2000, 0].join());
-          });
-        });
-        describe("Reverse repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
-            return makeWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              amountToSwap: "0",
-
-              liquidationThresholds: ["0", "0"],
-              balanceX: "1000",
-              balanceY: "0",
-
-              repays: [{
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }],
-            });
-          }
-
-          it("should not complete withdraw", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect(ret.completed).eq(false);
-          });
-
-          it("should set expected balances", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect([ret.balanceX, ret.balanceY].join()).eq([0, 2000].join());
-          });
-        });
-      });
-      describe("Swap is required", () => {
-        describe("Direct repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
-            return makeWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              amountToSwap: "500",
-              tokenToSwap: usdc,
-
-              liquidationThresholds: ["0", "0"],
-              balanceX: "500",
-              balanceY: "500",
-
-              repays: [{
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }],
-              liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "500", amountOut: "501"}]
-            });
-          }
-
-          it("should not complete the withdraw", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect(ret.completed).eq(false);
-          });
-
-          it("should set expected balances", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect([ret.balanceX, ret.balanceY].join()).eq([2000, 1].join());
-          });
-        });
-        describe("Reverse repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
-            return makeWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              amountToSwap: "500",
-              tokenToSwap: usdt,
-
-              liquidationThresholds: ["0", "0"],
-              balanceX: "500",
-              balanceY: "500",
-
-              repays: [{
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                totalCollateralAmountOut: "2000",
-                totalDebtAmountOut: "1000",
-              }],
-
-              liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "500", amountOut: "501"}]
-            });
-          }
-
-          it("should not complete the withdraw", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect(ret.completed).eq(false);
-          });
-
-          it("should set expected balances", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect([ret.balanceX, ret.balanceY].join()).eq([1, 2000].join());
-          });
-        });
-        describe("No debts (swap letfovers)", () => {
-          describe("Swap part of usdt", () => {
+    describe("PLAN_SWAP_REPAY", () => {
+      describe("Default liquidationThresholds, all required amounts are higher then thresholds", () => {
+        describe("Swap is not required", () => {
+          describe("No debts", () => {
             let snapshot: string;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
@@ -1224,16 +1666,15 @@ describe('UniswapV3AggLibTest', () => {
                 tokenX: usdc,
                 tokenY: usdt,
 
-                amountToSwap: "200",
-                tokenToSwap: usdt,
+                amountToSwap: "0",
+                planKind: PLAN_SWAP_REPAY,
 
                 liquidationThresholds: ["0", "0"],
-                balanceX: "500",
-                balanceY: "900",
+                balanceX: "1000",
+                balanceY: "0",
 
-                liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "200", amountOut: "201"}],
+                repays: [],
 
-                propNotUnderlying18: "0.5"
               });
             }
 
@@ -1242,12 +1683,12 @@ describe('UniswapV3AggLibTest', () => {
               expect(ret.completed).eq(true);
             });
 
-            it("should set expected balances", async () => {
+            it("should not change balances", async () => {
               const ret = await loadFixture(makeWithdrawStepTest);
-              expect([ret.balanceX, ret.balanceY].join()).eq([701, 700].join());
+              expect([ret.balanceX, ret.balanceY].join()).eq([1000, 0].join());
             });
           });
-          describe("Swap all usdt", () => {
+          describe("Direct repay", () => {
             let snapshot: string;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
@@ -1261,30 +1702,76 @@ describe('UniswapV3AggLibTest', () => {
                 tokenX: usdc,
                 tokenY: usdt,
 
-                amountToSwap: "900",
-                tokenToSwap: usdt,
+                amountToSwap: "0",
+                planKind: PLAN_SWAP_REPAY,
 
                 liquidationThresholds: ["0", "0"],
-                balanceX: "500",
-                balanceY: "900",
+                balanceX: "0",
+                balanceY: "1000",
 
-                liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "900", amountOut: "901"}],
+                repays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalCollateralAmountOut: "2000",
+                  totalDebtAmountOut: "1000",
+                }],
 
-                propNotUnderlying18: "0"
               });
             }
 
-            it("should complete the withdraw", async () => {
+            it("should not complete withdraw", async () => {
               const ret = await loadFixture(makeWithdrawStepTest);
-              expect(ret.completed).eq(true);
+              expect(ret.completed).eq(false);
             });
 
             it("should set expected balances", async () => {
               const ret = await loadFixture(makeWithdrawStepTest);
-              expect([ret.balanceX, ret.balanceY].join()).eq([1401, 0].join());
+              expect([ret.balanceX, ret.balanceY].join()).eq([2000, 0].join());
             });
           });
-          describe("Swap all usdc", () => {
+          describe("Reverse repay", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+              return makeWithdrawStep({
+                tokenX: usdc,
+                tokenY: usdt,
+
+                amountToSwap: "0",
+                planKind: PLAN_SWAP_REPAY,
+
+                liquidationThresholds: ["0", "0"],
+                balanceX: "1000",
+                balanceY: "0",
+
+                repays: [{
+                  collateralAsset: usdt,
+                  borrowAsset: usdc,
+                  totalCollateralAmountOut: "2000",
+                  totalDebtAmountOut: "1000",
+                }],
+              });
+            }
+
+            it("should not complete withdraw", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect(ret.completed).eq(false);
+            });
+
+            it("should set expected balances", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect([ret.balanceX, ret.balanceY].join()).eq([0, 2000].join());
+            });
+          });
+        });
+        describe("Swap is required", () => {
+          describe("Direct repay", () => {
             let snapshot: string;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
@@ -1300,31 +1787,668 @@ describe('UniswapV3AggLibTest', () => {
 
                 amountToSwap: "500",
                 tokenToSwap: usdc,
+                planKind: PLAN_SWAP_REPAY,
 
                 liquidationThresholds: ["0", "0"],
                 balanceX: "500",
-                balanceY: "900",
+                balanceY: "500",
 
-                liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "500", amountOut: "501"}],
-                propNotUnderlying18: "1"
+                repays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalCollateralAmountOut: "2000",
+                  totalDebtAmountOut: "1000",
+                }],
+                liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "500", amountOut: "501"}]
               });
             }
 
-            it("should complete the withdraw", async () => {
+            it("should not complete the withdraw", async () => {
               const ret = await loadFixture(makeWithdrawStepTest);
-              expect(ret.completed).eq(true);
+              expect(ret.completed).eq(false);
             });
 
             it("should set expected balances", async () => {
               const ret = await loadFixture(makeWithdrawStepTest);
-              expect([ret.balanceX, ret.balanceY].join()).eq([0, 1401].join());
+              expect([ret.balanceX, ret.balanceY].join()).eq([2000, 1].join());
+            });
+          });
+          describe("Reverse repay", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+              return makeWithdrawStep({
+                tokenX: usdc,
+                tokenY: usdt,
+
+                amountToSwap: "500",
+                tokenToSwap: usdt,
+                planKind: PLAN_SWAP_REPAY,
+
+                liquidationThresholds: ["0", "0"],
+                balanceX: "500",
+                balanceY: "500",
+
+                repays: [{
+                  collateralAsset: usdt,
+                  borrowAsset: usdc,
+                  totalCollateralAmountOut: "2000",
+                  totalDebtAmountOut: "1000",
+                }],
+
+                liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "500", amountOut: "501"}]
+              });
+            }
+
+            it("should not complete the withdraw", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect(ret.completed).eq(false);
+            });
+
+            it("should set expected balances", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect([ret.balanceX, ret.balanceY].join()).eq([1, 2000].join());
+            });
+          });
+          describe("No debts (swap letfovers)", () => {
+            describe("Swap part of usdt", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+                return makeWithdrawStep({
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  amountToSwap: "200",
+                  tokenToSwap: usdt,
+                  planKind: PLAN_SWAP_REPAY,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "500",
+                  balanceY: "900",
+
+                  liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "200", amountOut: "201"}],
+
+                  propNotUnderlying18: "0.5"
+                });
+              }
+
+              it("should complete the withdraw", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                expect(ret.completed).eq(true);
+              });
+
+              it("should set expected balances", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                expect([ret.balanceX, ret.balanceY].join()).eq([701, 700].join());
+              });
+            });
+            describe("Swap all usdt", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+                return makeWithdrawStep({
+                  tokenX: usdc,
+                  tokenY: usdt,
+                  planKind: PLAN_SWAP_REPAY,
+
+                  amountToSwap: "900",
+                  tokenToSwap: usdt,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "500",
+                  balanceY: "900",
+
+                  liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "900", amountOut: "901"}],
+
+                  propNotUnderlying18: "0"
+                });
+              }
+
+              it("should complete the withdraw", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                expect(ret.completed).eq(true);
+              });
+
+              it("should set expected balances", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                expect([ret.balanceX, ret.balanceY].join()).eq([1401, 0].join());
+              });
+            });
+            describe("Swap all usdc", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+                return makeWithdrawStep({
+                  tokenX: usdc,
+                  tokenY: usdt,
+                  planKind: PLAN_SWAP_REPAY,
+
+                  amountToSwap: "500",
+                  tokenToSwap: usdc,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "500",
+                  balanceY: "900",
+
+                  liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "500", amountOut: "501"}],
+                  propNotUnderlying18: "1"
+                });
+              }
+
+              it("should complete the withdraw", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                expect(ret.completed).eq(true);
+              });
+
+              it("should set expected balances", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                expect([ret.balanceX, ret.balanceY].join()).eq([0, 1401].join());
+              });
             });
           });
         });
       });
     });
 
+    describe("PLAN_REPAY_SWAP_REPAY", () => {
+      describe("full swap, 100% underlying", () => {
+        describe("Direct repay", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+            return makeWithdrawStep({
+              tokenX: usdc,
+              tokenY: usdt,
+
+              amountToSwap: "1501",
+              tokenToSwap: usdc,
+
+              planKind: PLAN_REPAY_SWAP_REPAY,
+              propNotUnderlying18: "0",
+
+              liquidationThresholds: ["0", "0"],
+              balanceX: "500",
+              balanceY: "500",
+
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                totalCollateralAmountOut: "20000",
+                totalDebtAmountOut: "10000",
+                collateralAmountOut: "1001",
+                amountRepay: "500",
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                totalCollateralAmountOut: "20000",
+                totalDebtAmountOut: "10000",
+                collateralAmountOut: "3004",
+                amountRepay: "1502",
+                addToQueue: true
+              }],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "500",
+                collateralAmountOut: "1001"
+              }],
+              liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "1501", amountOut: "1502"}]
+            });
+          }
+
+          it("should not complete the withdraw", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect(ret.completed).eq(false);
+          });
+
+          it("should set expected balances", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect([ret.balanceX, ret.balanceY].join()).eq([3004, 0].join());
+          });
+        });
+        describe("Reverse repay", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+            return makeWithdrawStep({
+              tokenX: usdc,
+              tokenY: usdt,
+
+              amountToSwap: "1501",
+              tokenToSwap: usdc,
+              planKind: PLAN_REPAY_SWAP_REPAY,
+
+              liquidationThresholds: ["0", "0"],
+              balanceX: "500",
+              balanceY: "500",
+
+              repays: [{
+                collateralAsset: usdt,
+                borrowAsset: usdc,
+                totalCollateralAmountOut: "20000",
+                totalDebtAmountOut: "10000",
+                collateralAmountOut: "1001",
+                amountRepay: "500",
+              }, {
+                collateralAsset: usdt,
+                borrowAsset: usdc,
+                totalCollateralAmountOut: "20000",
+                totalDebtAmountOut: "10000",
+                collateralAmountOut: "3004",
+                amountRepay: "1502",
+                addToQueue: true
+              }],
+              quoteRepays: [{
+                collateralAsset: usdt,
+                borrowAsset: usdc,
+                amountRepay: "500",
+                collateralAmountOut: "1001"
+              }],
+              liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "1501", amountOut: "1502"}]
+            });
+          }
+
+          it("should not complete the withdraw", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect(ret.completed).eq(false);
+          });
+
+          it("should set expected balances", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect([ret.balanceX, ret.balanceY].join()).eq([1502, 0].join());
+          });
+        });
+      });
+      describe("partial swap, 20% underlying", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+          // 20230706.2.calc.xlsx
+          return makeWithdrawStep({
+            tokenX: usdc,
+            tokenY: usdt,
+
+            amountToSwap: "1040",
+            tokenToSwap: usdc,
+
+            planKind: PLAN_REPAY_SWAP_REPAY,
+            propNotUnderlying18: "0.8",
+
+            liquidationThresholds: ["0", "0"],
+            balanceX: "300",
+            balanceY: "500",
+
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "1000",
+              totalDebtAmountOut: "500",
+              collateralAmountOut: "1000",
+              amountRepay: "500",
+            }],
+            quoteRepays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              amountRepay: "500",
+              collateralAmountOut: "1000",
+            }],
+            liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "1040", amountOut: "1040"}]
+          });
+        }
+
+        it("should not complete the withdraw", async () => {
+          const ret = await loadFixture(makeWithdrawStepTest);
+          expect(ret.completed).eq(false);
+        });
+
+        it("should set expected balances", async () => {
+          const ret = await loadFixture(makeWithdrawStepTest);
+          expect([ret.balanceX, ret.balanceY].join()).eq([260, 1040].join()); // 20% 80%
+        });
+      });
+    });
+
+    describe("PLAN_SWAP_ONLY", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+        return makeWithdrawStep({
+          tokenX: usdc,
+          tokenY: usdt,
+
+          amountToSwap: "500",
+          tokenToSwap: usdt,
+          planKind: PLAN_SWAP_ONLY,
+
+          liquidationThresholds: ["0", "0"],
+          balanceX: "500",
+          balanceY: "500",
+
+          repays: [{
+            collateralAsset: usdc,
+            borrowAsset: usdt,
+            totalCollateralAmountOut: "2000",
+            totalDebtAmountOut: "1000",
+          }],
+          liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "500", amountOut: "501"}]
+        });
+      }
+
+      it("should complete the withdraw", async () => {
+        const ret = await loadFixture(makeWithdrawStepTest);
+        // Leftovers were swapped, so withdraw is completed even if any debts still exist
+        expect(ret.completed).eq(true);
+      });
+
+      it("should set expected balances", async () => {
+        const ret = await loadFixture(makeWithdrawStepTest);
+        expect([ret.balanceX, ret.balanceY].join()).eq([1001, 0].join());
+      });
+    });
   });
 
+  describe("_getAmountToRepay2", () => {
+    interface IGetAmountToRepay2Params {
+      tokens: MockToken[];
+      balances: string[];
+      indicesCollateralBorrow: number[];
+      propNotUnderlying18: string;
+      prices: string[];
+
+      repays?: IRepayParams[];
+    }
+    interface IGetAmountToRepay2Results {
+      amountToRepay: number;
+    }
+
+    async function makeGetAmountToRepay2(p: IGetAmountToRepay2Params) : Promise<IGetAmountToRepay2Results> {
+      // initial balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
+      }
+
+      // setup repays
+      if (p.repays) {
+        for (const r of p.repays) {
+          await setupMockedRepay(converter, facade.address, r);
+        }
+      }
+
+      const amountToRepay = await facade._getAmountToRepay2({
+          tokens: [p.tokens[0].address, p.tokens[1].address],
+          prices: [
+            parseUnits(p.prices[0], 18),
+            parseUnits(p.prices[1], 18),
+          ],
+          decs: [
+            parseUnits("1", await p.tokens[0].decimals()),
+            parseUnits("1", await p.tokens[1].decimals()),
+          ],
+          balanceAdditions: [], // not used here
+          liquidationThresholds: [], // not used here
+          converter: converter.address,
+          planKind: 0, // not used here
+          usePoolProportions: false, // not used here
+          propNotUnderlying18: parseUnits(p.propNotUnderlying18, 18),
+        },
+        p.indicesCollateralBorrow[0],
+        p.indicesCollateralBorrow[1],
+      );
+
+      return {
+        amountToRepay: +formatUnits(amountToRepay, await p.tokens[p.indicesCollateralBorrow[1]].decimals())
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("Same prices, same decimals, direct borrow", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["400", "1000"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+            propNotUnderlying18: "0.25"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(520);
+        })
+      });
+      describe("Same prices, same decimals, reverse borrow", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdt, usdc],
+            balances: ["1000", "400"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [1, 0],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+            propNotUnderlying18: "0.75"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(520);
+        })
+      });
+      describe("Same prices, different decimals", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, tetu],
+            balances: ["400", "1000"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: tetu,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+            propNotUnderlying18: "0.25"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(520);
+        })
+      });
+      describe("Different prices, same decimals", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return expected amount-to-repay", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["200", "2000"],
+            prices: ["2", "0.5"],
+
+            indicesCollateralBorrow: [0, 1],
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "5000",
+              totalDebtAmountOut: "10000"
+            }],
+            propNotUnderlying18: "0.25"
+          });
+          // 20230706.2.calc.xlsx
+          expect(ret.amountToRepay).eq(1040);
+        })
+      });
+    });
+    describe("Bad paths", () => {
+      describe("No borrow", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["1440", "480"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            propNotUnderlying18: "0.25"
+          });
+          expect(ret.amountToRepay).eq(0);
+        })
+      });
+      describe("Negative B, balances", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["200", "1000"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            propNotUnderlying18: "0.99",
+
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+          });
+          expect(ret.amountToRepay).eq(0);
+        })
+      });
+      describe("Negative B, proportions", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should return zero", async () => {
+          // 20230706.2.calc.xlsx
+          const ret = await makeGetAmountToRepay2({
+            tokens: [usdc, usdt],
+            balances: ["1000", "200"],
+            prices: ["1", "1"],
+
+            indicesCollateralBorrow: [0, 1],
+            propNotUnderlying18: "0.98",
+
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              totalCollateralAmountOut: "10000",
+              totalDebtAmountOut: "5000"
+            }],
+          });
+          expect(ret.amountToRepay).eq(0);
+        })
+      });
+    });
+  });
 //endregion Unit tests
 });
