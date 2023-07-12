@@ -446,7 +446,7 @@ contract ConverterStrategyBaseLibFacade {
     uint collateralA,
     uint totalCollateralA,
     uint totalBorrowB
-  ) external view returns(uint) {
+  ) external pure returns(uint) {
     return ConverterStrategyBaseLib.estimateSwapAmountForRepaySwapRepay(
       p,
       balanceA,

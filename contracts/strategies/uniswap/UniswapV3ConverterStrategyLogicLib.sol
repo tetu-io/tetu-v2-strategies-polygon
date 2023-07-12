@@ -874,8 +874,6 @@ library UniswapV3ConverterStrategyLogicLib {
   function getPropNotUnderlying18(State storage state) view external returns (uint) {
     // get pool proportions
     IUniswapV3Pool pool = state.pool;
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
     bool depositorSwapTokens = state.depositorSwapTokens;
     (int24 newLowerTick, int24 newUpperTick) = UniswapV3DebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
