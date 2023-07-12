@@ -73,6 +73,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   /// _handleRewards, mocked version + accessor
   /////////////////////////////////////////////////////////////////////////////////////
   function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+    address asset = baseState.asset;
     if (handleRewardsParams.initialized) {
       //      console.log("_handleRewards.mocked-version is called");
       if (handleRewardsParams.assetBalanceChange > 0) {
@@ -94,6 +95,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
 
   function __handleRewards() internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+    address asset = baseState.asset;
     uint assetBalanceBefore = AppLib.balance(asset);
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     _rewardsLiquidation(rewardTokens, amounts);
@@ -155,7 +157,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _depositToPoolUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) override internal virtual returns (
     uint strategyLoss,
     uint amountSentToInsurance
-  ){
+  ) {
+    address asset = baseState.asset;
     if (depositToPoolParams.initialized) {
       //      console.log("_depositToPool.mocked-version is called");
       if (depositToPoolParams.balanceChange > 0) {
@@ -265,16 +268,14 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint[] memory amountsToForward
   ) {
     return ConverterStrategyBaseLib.recycle(
+      baseState,
       converter,
-      asset,
       _depositorPoolAssets(),
       controller(),
       liquidationThresholds,
       tokens,
       amounts,
-      splitter,
-      performanceReceiver,
-      [compoundRatio, performanceFee, performanceFeeRatio]
+      performanceFeeRatio
     );
   }
 

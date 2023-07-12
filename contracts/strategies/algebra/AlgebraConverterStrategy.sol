@@ -58,8 +58,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     );
 
     // setup specific name for UI
-    strategySpecificName = AlgebraConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib.StrategySpecificNameChanged(strategySpecificName);
+    baseState.strategySpecificName = AlgebraConverterStrategyLogicLib.createSpecificName(state);
+    emit StrategyLib.StrategySpecificNameChanged(baseState.strategySpecificName);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -142,7 +142,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       converter,
       oldTotalAssets,
       profitToCover,
-      splitter,
+      baseState.splitter,
       checkNeedRebalance
     );
     _rebalanceAfter(tokenAmounts);
@@ -287,7 +287,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
     earned = AlgebraConverterStrategyLogicLib.calcEarned(state.tokenA, controller(), rewardTokens, amounts);
     _rewardsLiquidation(rewardTokens, amounts);
-    return (earned, lost, AppLib.balance(asset));
+    return (earned, lost, AppLib.balance(baseState.asset));
   }
 
   /// @notice Deposit given amount to the pool.

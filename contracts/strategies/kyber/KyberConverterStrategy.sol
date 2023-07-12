@@ -56,8 +56,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     state.pId = pId;
 
     // setup specific name for UI
-    strategySpecificName = KyberConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib.StrategySpecificNameChanged(strategySpecificName);
+    baseState.strategySpecificName = KyberConverterStrategyLogicLib.createSpecificName(state);
+    emit StrategyLib.StrategySpecificNameChanged(baseState.strategySpecificName);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -145,7 +145,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       converter,
       oldTotalAssets,
       profitToCover,
-      splitter,
+      baseState.splitter,
       checkNeedRebalance
     );
     _rebalanceAfter(tokenAmounts);
@@ -289,8 +289,9 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @return lost The amount of lost rewards.
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+    address asset = baseState.asset;
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    earned = KyberConverterStrategyLogicLib.calcEarned(state.tokenA, controller(), rewardTokens, amounts);
+    earned = KyberConverterStrategyLogicLib.calcEarned(asset, controller(), rewardTokens, amounts);
     _rewardsLiquidation(rewardTokens, amounts);
     return (earned, lost, AppLib.balance(asset));
   }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyBaseV3.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol";
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
@@ -15,8 +15,8 @@ import "./DepositorBase.sol";
 
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
-/// @author bogdoslav, dvpublic
-abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV2 {
+/// @author bogdoslav, dvpublic, a17
+abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV3 {
   using SafeERC20 for IERC20;
 
   /////////////////////////////////////////////////////////////////////
@@ -49,7 +49,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "1.3.0";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.0";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -163,7 +163,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ){
-    address _asset = asset;
+    address _asset = baseState.asset;
 
     uint amountToDeposit = amount_ > earnedByPrices_
       ? amount_ - earnedByPrices_
@@ -176,7 +176,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // send earned-by-prices to the insurance
     if (earnedByPrices_ != 0) {
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
-        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, splitter, investedAssets_ + balanceBefore);
+        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
       } else {
         // needToDeposit is false and we don't have enough amount to cover earned-by-prices, we need to withdraw
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
@@ -297,7 +297,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       // --- init variables ---
       v.tokens = _depositorPoolAssets();
-      v.asset = asset;
+      v.asset = baseState.asset;
       v.converter = converter;
       v.indexAsset = AppLib.getAssetIndex(v.tokens, v.asset);
       v.balanceBefore = AppLib.balance(v.asset);
@@ -371,7 +371,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
           v.asset,
           earnedByPrices_,
-          splitter,
+          baseState.splitter,
           investedAssets_ + v.balanceBefore
         );
       }
@@ -401,7 +401,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     emit OnDepositorEmergencyExit(withdrawnAmounts);
 
     // convert amounts to main asset
-    (address[] memory tokens, uint indexAsset) = _getTokens(asset);
+    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
     ConverterStrategyBaseLib.closePositionsToGetAmount(
       converter,
       AppLib._getLiquidator(controller()),
@@ -439,16 +439,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal {
     if (rewardTokens_.length != 0) {
       ConverterStrategyBaseLib.recycle(
+        baseState,
         converter,
-        asset,
         _depositorPoolAssets(),
         controller(),
         liquidationThresholds,
         rewardTokens_,
         rewardAmounts_,
-        splitter,
-        performanceReceiver,
-        [compoundRatio, performanceFee, performanceFeeRatio]
+        performanceFeeRatio
       );
     }
   }
@@ -474,7 +472,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function doHardWork() override public returns (uint earned, uint lost) {
-    require(msg.sender == splitter, StrategyLib.DENIED);
+    require(msg.sender == baseState.splitter, StrategyLib.DENIED);
     return _doHardWork(true);
   }
 
@@ -506,7 +504,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     );
     (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(
       investedAssetsNewPrices + assetBalance, // assets in use before deposit
-      _investedAssets + AppLib.balance(asset) + amountSentToInsurance // assets in use after deposit
+      _investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
     );
 
     _postHardWork();
@@ -531,7 +529,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
-    (address[] memory tokens, uint indexAsset) = _getTokens(asset);
+    (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
     return ConverterStrategyBaseLib2.calcInvestedAssets(
       tokens,
       // quote exit should check zero liquidity
@@ -556,7 +554,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     if (updateInvestedAssetsAmount_) {
       uint investedAssetsBefore = _investedAssets;
       investedAssetsOut = _updateInvestedAssets();
-      earnedOut = ConverterStrategyBaseLib2.coverPossibleStrategyLoss(investedAssetsBefore, investedAssetsOut, splitter);
+      earnedOut = ConverterStrategyBaseLib2.coverPossibleStrategyLoss(investedAssetsBefore, investedAssetsOut, baseState.splitter);
     } else {
       investedAssetsOut = _investedAssets;
       earnedOut = 0;
@@ -613,7 +611,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       tokens,
       __converter,
       controller(),
-      asset,
+      baseState.asset,
       liquidationThresholds
     );
 

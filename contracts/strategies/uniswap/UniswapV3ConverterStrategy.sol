@@ -87,8 +87,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     // setup specific name for UI
-    strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib.StrategySpecificNameChanged(strategySpecificName); // todo: change to _checkStrategySpecificNameChanged
+    baseState.strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);
+    emit StrategyLib.StrategySpecificNameChanged(baseState.strategySpecificName); // todo: change to _checkStrategySpecificNameChanged
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -156,7 +156,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       _controller,
       oldTotalAssets,
       profitToCover,
-      splitter
+      baseState.splitter
     );
     _rebalanceAfter(tokenAmounts, isNeedFillup);
   }
@@ -171,7 +171,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       oldTotalAssets,
       UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(direction, amount, agg, swapData),
       profitToCover,
-      splitter
+      baseState.splitter
     );
     _rebalanceAfter(tokenAmounts, false);
   }
@@ -186,7 +186,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       converter,
       oldTotalAssets,
       profitToCover,
-      splitter,
+      baseState.splitter,
       checkNeedRebalance
     );
     _rebalanceAfter(tokenAmounts, false);
@@ -282,7 +282,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         converter,
         v.oldTotalAssets,
         v.profitToCover,
-        splitter,
+        baseState.splitter,
         false
       );
       _rebalanceAfter(v.tokenAmounts, false);
@@ -295,7 +295,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         v.oldTotalAssets,
         v.profitToCover,
         state.strategyProfitHolder,
-        splitter
+        baseState.splitter
       );
 
       if (entryToPool == ENTRY_TO_POOL_IS_ALLOWED
@@ -372,7 +372,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    earned = UniswapV3ConverterStrategyLogicLib.calcEarned(state.tokenA, controller(), rewardTokens, amounts);
+    address asset = baseState.asset;
+    earned = UniswapV3ConverterStrategyLogicLib.calcEarned(asset, controller(), rewardTokens, amounts);
     _rewardsLiquidation(rewardTokens, amounts);
     lost = 0; // hide warning
     assetBalanceAfterClaim = AppLib.balance(asset);
@@ -403,7 +404,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return thresholds liquidationThresholds for the {tokens}
   function _getTokensAndThresholds() internal view returns (address[] memory tokens, uint[] memory thresholds) {
     tokens = _depositorPoolAssets();
-    if (tokens[1] == asset) {
+    if (tokens[1] == baseState.asset) {
       (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
     }
 

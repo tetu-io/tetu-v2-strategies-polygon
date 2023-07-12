@@ -5,7 +5,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IForwarder.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
@@ -167,6 +167,9 @@ library ConverterStrategyBaseLib {
   }
 
   struct RecycleLocal {
+    address asset;
+    uint compoundRatio;
+    uint performanceFee;
     /// @notice // total amount for the performance receiver and insurance
     uint amountPerf;
     uint toPerf;
@@ -470,7 +473,7 @@ library ConverterStrategyBaseLib {
             vars.amountToBorrow,
             address(this)
           ) == vars.amountToBorrow,
-          StrategyLib.WRONG_VALUE
+          StrategyLib2.WRONG_VALUE
         );
         emit OpenPosition(
           vars.converters[i],
@@ -569,7 +572,7 @@ library ConverterStrategyBaseLib {
       ? balanceBorrowAsset - balanceAfter
       : 0;
 
-    require(notUsedAmount == 0, StrategyLib.WRONG_VALUE);
+    require(notUsedAmount == 0, StrategyLib2.WRONG_VALUE);
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result
@@ -879,41 +882,42 @@ library ConverterStrategyBaseLib {
   /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
-  /// @param feesAndRatios [compoundRatio, performanceFee, performanceFeeRatio]
-  ///                      Three values were combined to single array to avoid stack-too-deep in coverage
   /// @return Amounts sent to the forwarder
   function recycle(
+    IStrategyV3.BaseState storage baseState,
     ITetuConverter converter,
-    address asset,
     address[] memory tokens,
     address controller,
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_,
-    address splitter,
-    address performanceReceiver,
-    uint[3] memory feesAndRatios
-  ) external returns (uint[] memory){
+    uint performanceFeeRatio
+  ) external returns (uint[] memory) {
     RecycleLocal memory v;
+    v.asset = baseState.asset;
+    v.compoundRatio = baseState.compoundRatio;
+    v.performanceFee = baseState.performanceFee;
     (v.amountsToForward, v.amountPerf) = _recycle(
       converter,
-      asset,
-      feesAndRatios[0], // compoundRatio
+      v.asset,
+      v.compoundRatio,
       tokens,
       AppLib._getLiquidator(controller),
       liquidationThresholds,
       rewardTokens_,
       rewardAmounts_,
-      feesAndRatios[1] // performanceFee
+      v.performanceFee
     );
+
+    address splitter = baseState.splitter;
 
     // send performance-part of the underlying to the performance receiver and insurance
     (v.toPerf, v.toInsurance) = _sendPerformanceFee(
-      asset,
+      v.asset,
       v.amountPerf,
       splitter,
-      performanceReceiver,
-      feesAndRatios[2] // performanceFeeRatio
+      baseState.performanceReceiver,
+      performanceFeeRatio
     );
 
     _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward);
