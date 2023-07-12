@@ -24,8 +24,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   string public constant override PLATFORM = AppPlatforms.UNIV3;
   string public constant override STRATEGY_VERSION = "1.4.7";
 
+  /// @notice Enter to the pool at the end of withdrawByAggStep
   uint internal constant ENTRY_TO_POOL_IS_ALLOWED = 1;
+  /// @notice Enter to the pool at the end of withdrawByAggStep only if full withdrawing has been completed
   uint internal constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+  /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
   uint internal constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
 
   /////////////////////////////////////////////////////////////////////
@@ -229,22 +232,26 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///             [1] aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
   /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
   /// @param swapData Swap rote that was prepared off-chain.
-  /// @param allowEntryToPool Allow to enter to the pool at the end. Use false if you are going to make several iterations.
-  ///                         It's possible to enter back to the pool by calling {rebalanceNoSwaps} at any moment
-  ///                         0 - not allowed, 1 - allowed, 2 - allowed only if completed
+  /// @param planEntryData PLAN_XXX + additional data, see IterationPlanKinds
+  /// @param entryToPool Allow to enter to the pool at the end. Use false if you are going to make several iterations.
+  ///                    It's possible to enter back to the pool by calling {rebalanceNoSwaps} at any moment
+  ///                    0 - not allowed, 1 - allowed, 2 - allowed only if completed
   /// @return completed All debts were closed, leftovers were swapped to the required proportions.
   function withdrawByAggStep(
     address[2] calldata tokenToSwapAndAggregator,
     uint amountToSwap_,
     bytes memory swapData,
     bytes memory planEntryData,
-    uint allowEntryToPool
+    uint entryToPool
   ) external returns (bool completed) {
     console.log("withdrawByAggStep.start");
+
+    // Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
     WithdrawByAggStepLocal memory v;
     (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
     v.converter = converter;
 
+    // decode tokenToSwapAndAggregator
     v.tokenToSwap = tokenToSwapAndAggregator[0];
     v.aggregator = tokenToSwapAndAggregator[1];
     if (v.aggregator == address(0)) {
@@ -277,7 +284,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     console.log("withdrawByAggStep.after.withdrawStep.0", IERC20(v.tokens[0]).balanceOf(address(this)));
     console.log("withdrawByAggStep.after.withdrawStep.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
-    if (allowEntryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
+    if (entryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
       console.log("!!!!! UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps");
       // make rebalance and enter back to the pool. We won't have any swaps here
       (v.tokenAmounts,) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
@@ -306,9 +313,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       console.log("withdrawByAggStep.tokenAmounts.0", v.tokenAmounts.length != 0 ? v.tokenAmounts[0] : 0);
       console.log("withdrawByAggStep.tokenAmounts.1", v.tokenAmounts.length != 0 ? v.tokenAmounts[1] : 0);
 
-      if (allowEntryToPool == ENTRY_TO_POOL_IS_ALLOWED
-        || (allowEntryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+      if (entryToPool == ENTRY_TO_POOL_IS_ALLOWED
+        || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
       ) {
+        // Make actions after rebalance: depositor enter, update invested assets
         _rebalanceAfter(v.tokenAmounts, false);
       }
     }
