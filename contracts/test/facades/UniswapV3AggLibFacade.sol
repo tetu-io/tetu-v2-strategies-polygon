@@ -56,7 +56,8 @@ contract UniswapV3AggLibFacade {
     uint indexOut,
     uint amountIn
   ) external returns (
-    uint spentAmountIn
+    uint spentAmountIn,
+    uint updatedPropNotUnderlying18
   ) {
     return UniswapV3AggLib._swap(p, aggParams, indexIn, indexOut, amountIn);
   }

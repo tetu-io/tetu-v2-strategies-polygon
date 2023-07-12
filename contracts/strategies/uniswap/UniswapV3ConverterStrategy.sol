@@ -330,11 +330,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (planKind == IterationPlanKinds.PLAN_SWAP_REPAY) {
       // custom proportions
       (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
+      require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
     } else if (planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY) {
-      propNotUnderlying18 = UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
+      // the proportions should be taken from the pool
+      // new value of the proportions should also be read from the pool after each swap
+      propNotUnderlying18 = type(uint).max;
     }
 
-    require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
     console.log("_extractProp.end", propNotUnderlying18);
     return propNotUnderlying18;
   }

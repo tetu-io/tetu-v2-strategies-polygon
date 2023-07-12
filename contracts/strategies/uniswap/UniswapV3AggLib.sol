@@ -48,8 +48,9 @@ library UniswapV3AggLib {
   /// @param tokens Tokens used by depositor (length == 2: underlying and not-underlying)
   /// @param liquidationThresholds Liquidation thresholds for the {tokens}
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
-  ///                           The leftovers should be swapped to get following result proportions of the assets:
-  ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+  ///                            The leftovers should be swapped to get following result proportions of the assets:
+  ///                            not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
+  ///                            Value type(uint).max means that the proportions should be read from the pool.
   /// @param amountsFromPool Amounts of {tokens} that will be received from the pool before calling withdraw
   /// @return tokenToSwap Address of the token that will be swapped on the next swap. 0 - no swap
   /// @return amountToSwap Amount that will be swapped on the next swap. 0 - no swap
@@ -69,11 +70,14 @@ library UniswapV3AggLib {
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
-      propNotUnderlying18: propNotUnderlying18,
+      propNotUnderlying18: propNotUnderlying18 == type(uint).max
+        ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
+        : propNotUnderlying18,
       prices: prices,
       decs: decs,
       balanceAdditions: amountsFromPool,
-      planKind: planKind
+      planKind: planKind,
+      usePoolProportions: propNotUnderlying18 == type(uint).max
     });
     return _quoteWithdrawStep(p);
   }
@@ -112,11 +116,14 @@ library UniswapV3AggLib {
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
-      propNotUnderlying18: propNotUnderlying18,
+      propNotUnderlying18: propNotUnderlying18 == type(uint).max
+        ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
+        : propNotUnderlying18,
       prices: prices,
       decs: decs,
       balanceAdditions: new uint[](2), // 2 = tokens.length
-      planKind: planKind
+      planKind: planKind,
+      usePoolProportions: propNotUnderlying18 == type(uint).max
     });
     SwapByAggParams memory aggParams = SwapByAggParams({
       tokenToSwap: tokenToSwap_,
@@ -167,9 +174,10 @@ library UniswapV3AggLib {
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       console.log("_withdrawStep.swap1", amountToSwap, idxToSwap1);
-      _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+      (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
       console.log("_withdrawStep.balance.after.swap1", IERC20(p.tokens[0]).balanceOf(address(this)));
       console.log("_withdrawStep.balance.after.swap1", IERC20(p.tokens[1]).balanceOf(address(this)));
+      console.log("_withdrawStep.propNotUnderlying18.after.swap1", p.propNotUnderlying18);
     }
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
@@ -186,12 +194,10 @@ library UniswapV3AggLib {
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_2]) {
       console.log("_withdrawStep.swap2", amountToSwap, idxToSwap1);
-      _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+      (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
       console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[0]).balanceOf(address(this)));
       console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[1]).balanceOf(address(this)));
-
-      // todo Read actual proportions from pool
-      // todo probably borrow will be required, we need to check possibility of repay-borrow, borrow-repay
+      console.log("_withdrawStep.propNotUnderlying18.after.swap2", p.propNotUnderlying18);
 
       if (actions[IDX_REPAY_2]) {
         console.log("_withdrawStep.repay2", amountToSwap, idxToSwap1);
@@ -205,7 +211,8 @@ library UniswapV3AggLib {
           idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
           idxToRepay1 - 1
         );
-        if (amountToRepay2 != 0) { // todo threshold
+
+        if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
           ConverterStrategyBaseLib._repayDebt(
             p.converter,
             p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
@@ -240,14 +247,10 @@ library UniswapV3AggLib {
     v.c0 = IERC20(p.tokens[indexCollateral]).balanceOf(address(this)) * p.prices[indexCollateral] / p.decs[indexCollateral];
     v.b0 = IERC20(p.tokens[indexBorrow]).balanceOf(address(this)) * p.prices[indexBorrow] / p.decs[indexBorrow];
 
-    console.log("UPDATE propNotUnderlying18, current value=", p.propNotUnderlying18);
-    // p.propNotUnderlying18 contains original proportions that were actual before the swap
-    // after swap() we need to receive actual values
-    uint propNotUnderlying18 = IPoolProportionsProvider(address(this)).getPropNotUnderlying18();
-    console.log("UPDATED VALUE OF propNotUnderlying18", propNotUnderlying18);
+    console.log("propNotUnderlying18", p.propNotUnderlying18);
 
-    v.x = indexCollateral == IDX_ASSET ? 1e18 - propNotUnderlying18 : propNotUnderlying18;
-    v.y = indexCollateral == IDX_ASSET ? propNotUnderlying18 : 1e18 - propNotUnderlying18;
+    v.x = indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18;
+    v.y = indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18;
 
     console.log("_getAmountToRepay2.v.c0", v.c0);
     console.log("_getAmountToRepay2.v.b0", v.b0);
@@ -280,6 +283,7 @@ library UniswapV3AggLib {
     }
 
     console.log("_getAmountToRepay2.amountToRepay", amountToRepay);
+
     return amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow];
   }
 
@@ -290,7 +294,8 @@ library UniswapV3AggLib {
     uint indexOut,
     uint amountIn
   ) internal returns (
-    uint spentAmountIn
+    uint spentAmountIn,
+    uint updatedPropNotUnderlying18
   ) {
     if (amountIn > ConverterStrategyBaseLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
       AppLib.approveIfNeeded(p.tokens[indexIn], aggParams.amountToSwap, aggParams.aggregator);
@@ -331,7 +336,14 @@ library UniswapV3AggLib {
         ), AppErrors.PRICE_IMPACT);
     }
 
-    return spentAmountIn;
+    return (
+      spentAmountIn,
+    // p.propNotUnderlying18 contains original proportions that were vaild before the swap
+    // after swap() we need to re-read new values from the pool
+      p.usePoolProportions
+        ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
+      : p.propNotUnderlying18
+    );
   }
   //endregion ------------------------------------------------ Internal helper functions
 }

@@ -133,6 +133,9 @@ library ConverterStrategyBaseLib {
     ///         The leftovers should be swapped to get following result proportions of the assets:
     ///         not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
     uint propNotUnderlying18;
+
+    /// @notice proportions should be taken from the pool and re-read from the pool after each swap
+    bool usePoolProportions;
   }
 
   struct GetIterationPlanLocal {

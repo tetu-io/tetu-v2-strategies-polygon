@@ -2237,10 +2237,11 @@ describe('UniswapV3AggLibTest', () => {
           liquidationThresholds: [], // not used here
           converter: converter.address,
           planKind: 0, // not used here
-          propNotUnderlying18: parseUnits(p.propNotUnderlying18, 18)
+          usePoolProportions: false, // not used here
+          propNotUnderlying18: parseUnits(p.propNotUnderlying18, 18),
         },
         p.indicesCollateralBorrow[0],
-        p.indicesCollateralBorrow[1]
+        p.indicesCollateralBorrow[1],
       );
 
       return {
