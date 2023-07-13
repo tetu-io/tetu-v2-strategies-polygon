@@ -195,8 +195,8 @@ library UniswapV3AggLib {
     if (idxToSwap1 != 0 && actions[IDX_SWAP_2]) {
       console.log("_withdrawStep.swap2", amountToSwap, idxToSwap1);
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
-      console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[0]).balanceOf(address(this)));
-      console.log("_withdrawStep.balance.after.swap2", IERC20(p.tokens[1]).balanceOf(address(this)));
+      console.log("_withdrawStep.balance.after.swap2.0", IERC20(p.tokens[0]).balanceOf(address(this)));
+      console.log("_withdrawStep.balance.after.swap2.1", IERC20(p.tokens[1]).balanceOf(address(this)));
       console.log("_withdrawStep.propNotUnderlying18.after.swap2", p.propNotUnderlying18);
 
       if (actions[IDX_REPAY_2]) {
@@ -213,12 +213,17 @@ library UniswapV3AggLib {
         );
 
         if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
-          ConverterStrategyBaseLib._repayDebt(
+          (, uint repaidAmount) = ConverterStrategyBaseLib._repayDebt(
             p.converter,
             p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
             p.tokens[idxToRepay1 - 1],
             amountToRepay2
           );
+          console.log("_withdrawStep.amountToRepay2", amountToRepay2);
+          console.log("_withdrawStep.repaidAmount", repaidAmount);
+          if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
+            borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
+          }
           console.log("_withdrawStep.balance.after.repay2", IERC20(p.tokens[0]).balanceOf(address(this)));
           console.log("_withdrawStep.balance.after.repay2", IERC20(p.tokens[1]).balanceOf(address(this)));
         }
@@ -230,6 +235,48 @@ library UniswapV3AggLib {
 
     // Withdraw is completed on last iteration (no debts, swapping leftovers)
     return idxToRepay1 == 0;
+  }
+
+  /// @notice borrow borrow-asset under collateral-asset, result balances should match to propNotUnderlying18
+  function borrowToProportions(
+    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    uint indexCollateral,
+    uint indexBorrow
+  ) internal {
+    console.log("borrowToProportions.indexCollateral", indexCollateral);
+    console.log("borrowToProportions.indexBorrow", indexBorrow);
+    BorrowLib.RebalanceAssetsCore memory cac = BorrowLib.RebalanceAssetsCore({
+      converter: p.converter,
+      assetA: p.tokens[indexCollateral],
+      assetB: p.tokens[indexBorrow],
+      propA: indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18,
+      propB: indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18,
+      // {assetA} to {assetB} ratio; {amountB} * {alpha} => {amountA}, decimals 18
+      alpha18: 1e18 * p.prices[indexBorrow] * p.decs[indexCollateral] / p.prices[indexCollateral] / p.decs[indexBorrow],
+      thresholdA: p.liquidationThresholds[indexCollateral]
+    });
+    console.log("borrowToProportions.assetA", cac.assetA);
+    console.log("borrowToProportions.assetB", cac.assetB);
+    console.log("borrowToProportions.propA", cac.propA);
+    console.log("borrowToProportions.propB", cac.propB);
+    console.log("borrowToProportions.alpha18", cac.alpha18);
+    console.log("borrowToProportions.thresholdA", cac.thresholdA);
+
+    // we are going to change direction of the borrow
+    // let's ensure that there is no debt in opposite direction
+    (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
+    console.log("borrowToProportions.needToRepay", needToRepay);
+    require(needToRepay == 0, AppErrors.OPPOSITE_DEBT_EXISTS);
+
+    console.log("borrowToProportions.before.openPosition.balance", indexCollateral, IERC20(p.tokens[indexCollateral]).balanceOf(address(this)));
+    console.log("borrowToProportions.before.openPosition.balance", indexBorrow, IERC20(p.tokens[indexBorrow]).balanceOf(address(this)));
+    BorrowLib.openPosition(
+      cac,
+      IERC20(p.tokens[indexCollateral]).balanceOf(address(this)),
+      IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
+    );
+    console.log("borrowToProportions.after.openPosition.balance", indexCollateral, IERC20(p.tokens[indexCollateral]).balanceOf(address(this)));
+    console.log("borrowToProportions.after.openPosition.balance", indexBorrow, IERC20(p.tokens[indexBorrow]).balanceOf(address(this)));
   }
 
   /// @notice Calculate amount that should be repaid to get right proportions of assets on balance

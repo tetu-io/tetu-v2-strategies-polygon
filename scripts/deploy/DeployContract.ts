@@ -38,7 +38,8 @@ const libraries = new Map<string, string[]>([
   ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
   ['BorrowLib', ['ConverterStrategyBaseLib']],
   ['BorrowLibFacade', ['BorrowLib']],
-  ['UniswapV3AggLibFacade', ['UniswapV3AggLib']],
+  ['UniswapV3AggLib', ['ConverterStrategyBaseLib']],
+  ['UniswapV3AggLibFacade', ['UniswapV3AggLib', 'ConverterStrategyBaseLib']],
   // Kyber
   [
     'KyberConverterStrategy',

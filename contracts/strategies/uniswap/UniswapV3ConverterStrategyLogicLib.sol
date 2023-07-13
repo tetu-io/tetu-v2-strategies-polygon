@@ -886,11 +886,14 @@ library UniswapV3ConverterStrategyLogicLib {
   ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
   function getPropNotUnderlying18(State storage state) view external returns (uint) {
     // get pool proportions
+    console.log("getPropNotUnderlying18");
     IUniswapV3Pool pool = state.pool;
     bool depositorSwapTokens = state.depositorSwapTokens;
     (int24 newLowerTick, int24 newUpperTick) = UniswapV3DebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
 
+    console.log("getPropNotUnderlying18.consumed0", consumed0);
+    console.log("getPropNotUnderlying18.consumed1", consumed1);
     require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
     return consumed1 * 1e18 / (consumed0 + consumed1);
   }

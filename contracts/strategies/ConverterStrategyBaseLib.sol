@@ -1398,7 +1398,7 @@ library ConverterStrategyBaseLib {
           if (v.idxToRepay1 != 0) {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
-            uint expectedAmountOut = _repayDebt(
+            (uint expectedAmountOut,) = _repayDebt(
               p.converter,
               p.tokens[indexCollateral],
               p.tokens[indexBorrow],
@@ -1836,13 +1836,15 @@ library ConverterStrategyBaseLib {
   ///         Take into account possible debt-gap and the fact that the amount of debt may be less than {amountIn}
   /// @param amountToRepay Max available amount of borrow asset that we can repay
   /// @return expectedAmountOut Estimated amount of main asset that should be added to balance = collateral - {toSell}
+  /// @return repaidAmountOut Actually paid amount
   function _repayDebt(
     ITetuConverter converter,
     address collateralAsset,
     address borrowAsset,
     uint amountToRepay
   ) internal returns (
-    uint expectedAmountOut
+    uint expectedAmountOut,
+    uint repaidAmountOut
   ) {
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
 
@@ -1866,9 +1868,9 @@ library ConverterStrategyBaseLib {
     }
 
     // close the debt
-    _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
+    (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
 
-    return expectedAmountOut;
+    return (expectedAmountOut, repaidAmountOut);
   }
   //endregion ------------------------------------------------ Repay debts
 

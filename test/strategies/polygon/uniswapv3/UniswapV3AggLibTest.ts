@@ -2,13 +2,20 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {
+  IBorrowParams, IBorrowParamsNum,
   ILiquidationParams,
   IQuoteRepayParams,
   IRepayParams
 } from "../../../baseUT/mocks/TestDataTypes";
-import {setupMockedQuoteRepay, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
+import {
+  setupMockedBorrow,
+  setupMockedBorrowEntryKind1,
+  setupMockedQuoteRepay,
+  setupMockedRepay
+} from "../../../baseUT/mocks/MockRepayUtils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {
+  IERC20__factory,
   IERC20Metadata__factory,
   MockForwarder,
   MockTetuConverter, MockTetuLiquidatorSingleCall,
@@ -1544,7 +1551,8 @@ describe('UniswapV3AggLibTest', () => {
       amountToSwap: string;
 
       liquidationThresholds: string[];
-      propNotUnderlying18?: string;
+      /** Array means type(uint).max, undefined value means 0 */
+      propNotUnderlying18?: string | string[];
 
       planKind: number;
 
@@ -1605,6 +1613,14 @@ describe('UniswapV3AggLibTest', () => {
         }
       }
 
+      // setup IPoolProportionsProvider
+      if (Array.isArray(p.propNotUnderlying18)) {
+        await facade.setPropNotUnderlying18(
+          p.propNotUnderlying18.map(x => parseUnits(x, 18)),
+          usdc.address
+        );
+      }
+
       // make withdraw
       const completed = await facade.callStatic.withdrawStep(
         converter.address,
@@ -1621,7 +1637,9 @@ describe('UniswapV3AggLibTest', () => {
         "0x",
         true,
         p.planKind,
-        parseUnits(p.propNotUnderlying18 || "0", 18)
+        Array.isArray(p.propNotUnderlying18)
+          ? Misc.MAX_UINT
+          : parseUnits(p.propNotUnderlying18 || "0", 18)
       );
 
       await facade.withdrawStep(
@@ -1639,7 +1657,9 @@ describe('UniswapV3AggLibTest', () => {
         "0x",
         true,
         p.planKind,
-        parseUnits(p.propNotUnderlying18 || "0", 18)
+        Array.isArray(p.propNotUnderlying18)
+          ? Misc.MAX_UINT
+          : parseUnits(p.propNotUnderlying18 || "0", 18)
       );
 
       return {
@@ -1976,7 +1996,183 @@ describe('UniswapV3AggLibTest', () => {
     });
 
     describe("PLAN_REPAY_SWAP_REPAY", () => {
-      describe("full swap, 100% underlying", () => {
+      describe("Custom value of propNotUnderlying18", () => {
+        describe("full swap, 100% underlying", () => {
+          describe("Direct repay", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+              return makeWithdrawStep({
+                tokenX: usdc,
+                tokenY: usdt,
+
+                amountToSwap: "1501",
+                tokenToSwap: usdc,
+
+                planKind: PLAN_REPAY_SWAP_REPAY,
+                propNotUnderlying18: "0",
+
+                liquidationThresholds: ["0", "0"],
+                balanceX: "500",
+                balanceY: "500",
+
+                repays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalCollateralAmountOut: "20000",
+                  totalDebtAmountOut: "10000",
+                  collateralAmountOut: "1001",
+                  amountRepay: "500",
+                }, {
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  totalCollateralAmountOut: "20000",
+                  totalDebtAmountOut: "10000",
+                  collateralAmountOut: "3004",
+                  amountRepay: "1502",
+                  addToQueue: true
+                }],
+                quoteRepays: [{
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+                  amountRepay: "500",
+                  collateralAmountOut: "1001"
+                }],
+                liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "1501", amountOut: "1502"}]
+              });
+            }
+
+            it("should not complete the withdraw", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect(ret.completed).eq(false);
+            });
+
+            it("should set expected balances", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect([ret.balanceX, ret.balanceY].join()).eq([3004, 0].join());
+            });
+          });
+          describe("Reverse repay", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+              return makeWithdrawStep({
+                tokenX: usdc,
+                tokenY: usdt,
+
+                amountToSwap: "1501",
+                tokenToSwap: usdc,
+                planKind: PLAN_REPAY_SWAP_REPAY,
+
+                liquidationThresholds: ["0", "0"],
+                balanceX: "500",
+                balanceY: "500",
+
+                repays: [{
+                  collateralAsset: usdt,
+                  borrowAsset: usdc,
+                  totalCollateralAmountOut: "20000",
+                  totalDebtAmountOut: "10000",
+                  collateralAmountOut: "1001",
+                  amountRepay: "500",
+                }, {
+                  collateralAsset: usdt,
+                  borrowAsset: usdc,
+                  totalCollateralAmountOut: "20000",
+                  totalDebtAmountOut: "10000",
+                  collateralAmountOut: "3004",
+                  amountRepay: "1502",
+                  addToQueue: true
+                }],
+                quoteRepays: [{
+                  collateralAsset: usdt,
+                  borrowAsset: usdc,
+                  amountRepay: "500",
+                  collateralAmountOut: "1001"
+                }],
+                liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "1501", amountOut: "1502"}]
+              });
+            }
+
+            it("should not complete the withdraw", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect(ret.completed).eq(false);
+            });
+
+            it("should set expected balances", async () => {
+              const ret = await loadFixture(makeWithdrawStepTest);
+              expect([ret.balanceX, ret.balanceY].join()).eq([1502, 0].join());
+            });
+          });
+        });
+        describe("partial swap, 20% underlying", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+            // 20230706.2.calc.xlsx
+            return makeWithdrawStep({
+              tokenX: usdc,
+              tokenY: usdt,
+
+              amountToSwap: "1040",
+              tokenToSwap: usdc,
+
+              planKind: PLAN_REPAY_SWAP_REPAY,
+              propNotUnderlying18: "0.8",
+
+              liquidationThresholds: ["0", "0"],
+              balanceX: "300",
+              balanceY: "500",
+
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                totalCollateralAmountOut: "1000",
+                totalDebtAmountOut: "500",
+                collateralAmountOut: "1000",
+                amountRepay: "500",
+              }],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "500",
+                collateralAmountOut: "1000",
+              }],
+              liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "1040", amountOut: "1040"}]
+            });
+          }
+
+          it("should not complete the withdraw", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect(ret.completed).eq(false);
+          });
+
+          it("should set expected balances", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect([ret.balanceX, ret.balanceY].join()).eq([260, 1040].join()); // 20% 80%
+          });
+        });
+      });
+
+      describe("Read propNotUnderlying18 from pool", () => {
         describe("Direct repay", () => {
           let snapshot: string;
           before(async function () {
@@ -1995,7 +2191,12 @@ describe('UniswapV3AggLibTest', () => {
               tokenToSwap: usdc,
 
               planKind: PLAN_REPAY_SWAP_REPAY,
-              propNotUnderlying18: "0",
+
+              // At first, we need proportion 0 (all not-underlying)
+              // The app will swap all usdt to usdt
+              // After the swap we change proportion to 1 (all underlying)
+              // so, it will be necessary to make a borrow to get required amount of usdt
+              propNotUnderlying18: ["1", "0"],
 
               liquidationThresholds: ["0", "0"],
               balanceX: "500",
@@ -2004,18 +2205,10 @@ describe('UniswapV3AggLibTest', () => {
               repays: [{
                 collateralAsset: usdc,
                 borrowAsset: usdt,
-                totalCollateralAmountOut: "20000",
-                totalDebtAmountOut: "10000",
+                totalCollateralAmountOut: "1001",
+                totalDebtAmountOut: "500",
                 collateralAmountOut: "1001",
                 amountRepay: "500",
-              }, {
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                totalCollateralAmountOut: "20000",
-                totalDebtAmountOut: "10000",
-                collateralAmountOut: "3004",
-                amountRepay: "1502",
-                addToQueue: true
               }],
               quoteRepays: [{
                 collateralAsset: usdc,
@@ -2034,119 +2227,8 @@ describe('UniswapV3AggLibTest', () => {
 
           it("should set expected balances", async () => {
             const ret = await loadFixture(makeWithdrawStepTest);
-            expect([ret.balanceX, ret.balanceY].join()).eq([3004, 0].join());
-          });
-        });
-        describe("Reverse repay", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
-            return makeWithdrawStep({
-              tokenX: usdc,
-              tokenY: usdt,
-
-              amountToSwap: "1501",
-              tokenToSwap: usdc,
-              planKind: PLAN_REPAY_SWAP_REPAY,
-
-              liquidationThresholds: ["0", "0"],
-              balanceX: "500",
-              balanceY: "500",
-
-              repays: [{
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                totalCollateralAmountOut: "20000",
-                totalDebtAmountOut: "10000",
-                collateralAmountOut: "1001",
-                amountRepay: "500",
-              }, {
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                totalCollateralAmountOut: "20000",
-                totalDebtAmountOut: "10000",
-                collateralAmountOut: "3004",
-                amountRepay: "1502",
-                addToQueue: true
-              }],
-              quoteRepays: [{
-                collateralAsset: usdt,
-                borrowAsset: usdc,
-                amountRepay: "500",
-                collateralAmountOut: "1001"
-              }],
-              liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "1501", amountOut: "1502"}]
-            });
-          }
-
-          it("should not complete the withdraw", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
-            expect(ret.completed).eq(false);
-          });
-
-          it("should set expected balances", async () => {
-            const ret = await loadFixture(makeWithdrawStepTest);
             expect([ret.balanceX, ret.balanceY].join()).eq([1502, 0].join());
           });
-        });
-      });
-      describe("partial swap, 20% underlying", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
-          // 20230706.2.calc.xlsx
-          return makeWithdrawStep({
-            tokenX: usdc,
-            tokenY: usdt,
-
-            amountToSwap: "1040",
-            tokenToSwap: usdc,
-
-            planKind: PLAN_REPAY_SWAP_REPAY,
-            propNotUnderlying18: "0.8",
-
-            liquidationThresholds: ["0", "0"],
-            balanceX: "300",
-            balanceY: "500",
-
-            repays: [{
-              collateralAsset: usdc,
-              borrowAsset: usdt,
-              totalCollateralAmountOut: "1000",
-              totalDebtAmountOut: "500",
-              collateralAmountOut: "1000",
-              amountRepay: "500",
-            }],
-            quoteRepays: [{
-              collateralAsset: usdc,
-              borrowAsset: usdt,
-              amountRepay: "500",
-              collateralAmountOut: "1000",
-            }],
-            liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "1040", amountOut: "1040"}]
-          });
-        }
-
-        it("should not complete the withdraw", async () => {
-          const ret = await loadFixture(makeWithdrawStepTest);
-          expect(ret.completed).eq(false);
-        });
-
-        it("should set expected balances", async () => {
-          const ret = await loadFixture(makeWithdrawStepTest);
-          expect([ret.balanceX, ret.balanceY].join()).eq([260, 1040].join()); // 20% 80%
         });
       });
     });
@@ -2447,6 +2529,149 @@ describe('UniswapV3AggLibTest', () => {
           });
           expect(ret.amountToRepay).eq(0);
         })
+      });
+    });
+  });
+
+  describe("borrowToProportions", () => {
+    interface IBorrowToProportionsParams {
+      tokens: MockToken[];
+      balances: string[];
+      prices?: string[];
+      liquidationThresholds: string[];
+
+      indexCollateral: number;
+      indexBorrow: number;
+      propNotUnderlying18: string;
+
+      liquidations?: ILiquidationParams[];
+      repays?: IRepayParams[];
+      borrows?: IBorrowParamsNum[];
+      quoteRepays?: IQuoteRepayParams[];
+    }
+    interface IBorrowToProportionsResults {
+      balances: number[];
+    }
+
+    async function callBorrowToProportions(p: IBorrowToProportionsParams): Promise<IBorrowToProportionsResults> {
+      const decimals: number[] = await Promise.all(p.tokens.map(
+        async x => x.decimals()
+      ));
+
+      // set up current balances
+      for (let i = 0; i < p.tokens.length; ++i) {
+        await p.tokens[i].mint(
+          facade.address,
+          parseUnits(p.balances[i], await p.tokens[i].decimals())
+        );
+      }
+
+      // set prices (1 by default)
+      if (p.prices) {
+        await priceOracleMock.changePrices(
+          p.tokens.map(x => x.address),
+          p.prices.map(price => parseUnits(price, 18))
+        );
+      }
+
+      // set up liquidations
+      if (p.liquidations) {
+        for (const liquidation of p.liquidations) {
+          await setupMockedLiquidation(liquidator, liquidation);
+          await setupIsConversionValid(converter, liquidation, true);
+        }
+      }
+
+      // setup repays
+      if (p.repays) {
+        for (const r of p.repays) {
+          await setupMockedRepay(converter, facade.address, r);
+        }
+      }
+      if (p.quoteRepays) {
+        for (const q of p.quoteRepays) {
+          await setupMockedQuoteRepay(converter, facade.address, q);
+        }
+      }
+
+      // setup borrows
+      if (p.borrows) {
+        for (const b of p.borrows) {
+          await setupMockedBorrowEntryKind1(
+            converter,
+            facade.address,
+            b,
+            p.indexCollateral === 0
+              ? parseUnits((1 - +p.propNotUnderlying18).toString(), 18)
+              : parseUnits((+p.propNotUnderlying18).toString(), 18),
+            p.indexCollateral === 0
+              ? parseUnits((+p.propNotUnderlying18).toString(), 18)
+              : parseUnits((1 - +p.propNotUnderlying18).toString(), 18),
+          );
+          await b.collateralAsset.connect(await Misc.impersonate(facade.address)).approve(converter.address, Misc.MAX_UINT);
+        }
+      }
+
+      await facade.borrowToProportions(
+        {
+          planKind: 0, // not use here
+          tokens: p.tokens.map(x => x.address),
+          prices: p.prices
+            ? p.prices.map(price => parseUnits(price, 18))
+            : p.tokens.map(x => parseUnits("1", 18)),
+          propNotUnderlying18: parseUnits((+p.propNotUnderlying18).toString(), 18),
+          converter: converter.address,
+          liquidationThresholds: p.liquidationThresholds.map(
+            (threshold, index) => parseUnits(threshold, decimals[index])
+          ),
+          balanceAdditions: [], // not used here
+          decs: decimals.map(x => parseUnits("1", x)),
+          usePoolProportions: false // not used here
+        },
+        p.indexCollateral,
+        p.indexBorrow
+      )
+
+      return {
+        balances: await Promise.all(p.tokens.map(
+          async (x, index) => +formatUnits(await x.balanceOf(facade.address), decimals[index])
+        ))
+      };
+    }
+
+    describe("Good paths", () => {
+      describe("Direct debt", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function callBorrowToProportionsTest(): Promise<IBorrowToProportionsResults> {
+          return callBorrowToProportions({
+            tokens: [usdc, usdt],
+            indexCollateral: 0,
+            indexBorrow: 1,
+            balances: ["400", "100"],
+            liquidationThresholds: ["0", "0"],
+            propNotUnderlying18: "0.5",
+            borrows: [{
+              collateralAsset: usdc,
+              borrowAsset: usdt,
+              converter: converter.address,
+              collateralAmount: "300",
+              maxTargetAmount: "150",
+              collateralAmountOut: "200",
+              borrowAmountOut: "100",
+            }]
+          });
+        }
+
+        it("should return expected values", async () => {
+          const ret = await loadFixture(callBorrowToProportionsTest);
+        });
       });
     });
   });
