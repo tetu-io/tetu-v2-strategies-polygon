@@ -9,6 +9,7 @@ import "../../interfaces/IRebalancingStrategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3AggLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
+import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -274,6 +275,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       v.planKind,
       v.propNotUnderlying18
     );
+    console.log("withdrawByAggStep.after.withdrawStep.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.after.withdrawStep.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
     if (entryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
       // make rebalance and enter back to the pool. We won't have any swaps here
@@ -297,16 +300,22 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         state.strategyProfitHolder,
         splitter
       );
+      console.log("withdrawByAggStep.after.afterWithdrawStep.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+      console.log("withdrawByAggStep.after.afterWithdrawStep.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
       if (entryToPool == ENTRY_TO_POOL_IS_ALLOWED
         || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
       ) {
         // Make actions after rebalance: depositor enter, update invested assets
         _rebalanceAfter(v.tokenAmounts, false);
+        console.log("withdrawByAggStep.after._rebalanceAfter.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+        console.log("withdrawByAggStep.after._rebalanceAfter.1", IERC20(v.tokens[1]).balanceOf(address(this)));
       }
     }
 
     _updateInvestedAssets();
+    console.log("withdrawByAggStep.after._updateInvestedAssets.0", IERC20(v.tokens[0]).balanceOf(address(this)));
+    console.log("withdrawByAggStep.after._updateInvestedAssets.1", IERC20(v.tokens[1]).balanceOf(address(this)));
   }
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly
