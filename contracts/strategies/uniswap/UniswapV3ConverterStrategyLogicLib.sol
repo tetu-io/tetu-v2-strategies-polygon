@@ -836,9 +836,13 @@ library UniswapV3ConverterStrategyLogicLib {
     uint coveredByRewards;
     if (loss != 0) {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
+      console.log("_coverLoss.1", IERC20(tokenA).balanceOf(address(this)));
+      console.log("_coverLoss.1", IERC20(tokenB).balanceOf(address(this)));
       uint notCovered = loss - coveredByRewards;
       if (notCovered != 0) {
         ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+        console.log("_coverLoss.2", IERC20(tokenA).balanceOf(address(this)));
+        console.log("_coverLoss.2", IERC20(tokenB).balanceOf(address(this)));
       }
     }
 

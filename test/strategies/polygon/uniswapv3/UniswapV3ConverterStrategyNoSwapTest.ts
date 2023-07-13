@@ -463,7 +463,9 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
       it("should set investedAssets to zero", async () => {
         const ret = await loadFixture(makeWithdrawAll);
         const [stateLast, ...rest] = [...ret.states].reverse();
-        expect(stateLast.strategy.investedAssets).eq(0);
+        // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
+        // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
+        expect(stateLast.strategy.investedAssets).lt(1);
       });
       it("should receive totalAssets on balance", async () => {
         const ret = await loadFixture(makeWithdrawAll);
@@ -535,7 +537,9 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
       it("should set investedAssets to zero", async () => {
         const ret = await loadFixture(makeWithdrawAll);
         const [stateLast, ...rest] = [...ret.states].reverse();
-        expect(stateLast.strategy.investedAssets).eq(0);
+        // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
+        // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
+        expect(stateLast.strategy.investedAssets).lt(1);
       });
       it("should receive totalAssets on balance", async () => {
         const ret = await loadFixture(makeWithdrawAll);
