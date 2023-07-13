@@ -76,10 +76,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///         decimals = {DENOMINATOR}
   /// @dev We need this threshold to avoid numerous conversions of small amounts
   uint public reinvestThresholdPercent;
-
-  /// @notice Ratio to split performance fee on toPerf + toInsurance, [0..100_000]
-  ///         100_000 - send full amount toPerf, 0 - send full amount toInsurance.
-  uint public performanceFeeRatio;
   //endregion VARIABLES
 
   /////////////////////////////////////////////////////////////////////
@@ -125,12 +121,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function setReinvestThresholdPercent(uint percent_) external {
     ConverterStrategyBaseLib2.checkReinvestThresholdPercentChanged(controller(), percent_);
     reinvestThresholdPercent = percent_;
-  }
-
-  /// @notice [0..100_000], 100_000 - send full amount toPerf, 0 - send full amount toInsurance.
-  function setPerformanceFeeRatio(uint ratio_) external {
-    ConverterStrategyBaseLib2.checkPerformanceFeeRatioChanged(controller(), ratio_);
-    performanceFeeRatio = ratio_;
   }
   //endregion Initialization and configuration
 
@@ -445,8 +435,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         controller(),
         liquidationThresholds,
         rewardTokens_,
-        rewardAmounts_,
-        performanceFeeRatio
+        rewardAmounts_
       );
     }
   }
@@ -472,7 +461,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function doHardWork() override public returns (uint earned, uint lost) {
-    require(msg.sender == baseState.splitter, StrategyLib.DENIED);
+    require(msg.sender == baseState.splitter, StrategyLib2.DENIED);
     return _doHardWork(true);
   }
 
@@ -540,7 +529,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   function calcInvestedAssets() external returns (uint) {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     return _calcInvestedAssets();
   }
 
@@ -582,7 +571,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
 
     address __converter = address(converter);
-    require(msg.sender == __converter, StrategyLib.DENIED);
+    require(msg.sender == __converter, StrategyLib2.DENIED);
 
     // detect index of the target asset
     (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
@@ -623,7 +612,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param assets_ Any asset sent to the balance, i.e. inside repayTheBorrow
   /// @param amounts_ Amount of {asset_} that has been sent to the user's balance
   function onTransferAmounts(address[] memory assets_, uint[] memory amounts_) external override {
-    require(msg.sender == address(converter), StrategyLib.DENIED);
+    require(msg.sender == address(converter), StrategyLib2.DENIED);
     require(assets_.length == amounts_.length, AppErrors.INCORRECT_LENGTHS);
 
     // TetuConverter is able two call this function in two cases:
@@ -648,7 +637,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _getTokens(address asset_) internal view returns (address[] memory tokens, uint indexAsset) {
     tokens = _depositorPoolAssets();
     indexAsset = AppLib.getAssetIndex(tokens, asset_);
-    require(indexAsset != type(uint).max, StrategyLib.WRONG_VALUE);
+    require(indexAsset != type(uint).max, StrategyLib2.WRONG_VALUE);
   }
   //endregion Others
 

@@ -59,7 +59,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     // setup specific name for UI
     baseState.strategySpecificName = AlgebraConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib.StrategySpecificNameChanged(baseState.strategySpecificName);
+    emit StrategyLib2.StrategySpecificNameChanged(baseState.strategySpecificName);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -68,7 +68,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   /// @notice Disable fuse for the strategy.
   function disableFuse() external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     state.isFuseTriggered = false;
     state.lastPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
 
@@ -78,14 +78,14 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Set the fuse threshold for the strategy.
   /// @param newFuseThreshold The new fuse threshold value.
   function setFuseThreshold(uint newFuseThreshold) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     state.fuseThreshold = newFuseThreshold;
 
     AlgebraConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
   }
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     state.strategyProfitHolder = strategyProfitHolder;
   }
 
@@ -153,7 +153,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   ///      Swap method is used.
   function rebalance() external {
     address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
+    StrategyLib2.onlyOperators(_controller);
 
     (, uint profitToCover) = _fixPriceChanges(true);
     uint oldTotalAssets = totalAssets() - profitToCover;
@@ -184,7 +184,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
     address _controller = controller();
-    StrategyLib.onlyOperators(_controller);
+    StrategyLib2.onlyOperators(_controller);
 
     (, uint profitToCover) = _fixPriceChanges(true);
     uint oldTotalAssets = totalAssets() - profitToCover;
@@ -225,7 +225,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
   function _rebalanceBefore(bool allowExit) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
     controllerOut = controller();
-    StrategyLib.onlyOperators(controllerOut);
+    StrategyLib2.onlyOperators(controllerOut);
 
     (, profitToCover) = _fixPriceChanges(true);
     oldTotalAssets = totalAssets() - profitToCover;

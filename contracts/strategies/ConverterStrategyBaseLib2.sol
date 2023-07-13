@@ -39,7 +39,6 @@ library ConverterStrategyBaseLib2 {
 //endregion --------------------------------------- CONSTANTS
 
 //region----------------------------------------- EVENTS
-  event OnChangePerformanceFeeRatio(uint newRatio);
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
   event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
@@ -233,12 +232,6 @@ library ConverterStrategyBaseLib2 {
 //endregion----------------------------------------- MAIN LOGIC
 
 //region ---------------------------------------- Setters
-  function checkPerformanceFeeRatioChanged(address controller, uint ratio_) external {
-    StrategyLib.onlyOperators(controller);
-    require(ratio_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);
-    emit OnChangePerformanceFeeRatio(ratio_);
-  }
-
   function checkReinvestThresholdPercentChanged(address controller, uint percent_) external {
     StrategyLib.onlyOperators(controller);
     require(percent_ <= DENOMINATOR, StrategyLib.WRONG_VALUE);

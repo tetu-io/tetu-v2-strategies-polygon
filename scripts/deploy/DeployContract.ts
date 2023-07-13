@@ -12,7 +12,7 @@ export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 
 const libraries = new Map<string, string[]>([
   ['VeTetu', ['VeTetuLogo']],
-  ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib']],
+  ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2']],
   // common
   ['ConverterStrategyBaseLib2', ['StrategyLib']],
   ['BorrowLib', ['ConverterStrategyBaseLib']],
@@ -21,13 +21,13 @@ const libraries = new Map<string, string[]>([
   // Balancer
   [
     'BalancerBoostedStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib2'],
   ],
   ['BalancerBoostedDepositorFacade', ['BalancerLogicLib']],
   // Uniswap V3
   [
     'UniswapV3ConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib', 'UniswapV3AggLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'UniswapV3ConverterStrategyLogicLib', 'UniswapV3AggLib'],
   ],
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2']],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
@@ -36,14 +36,14 @@ const libraries = new Map<string, string[]>([
   // Algebra
   [
     'AlgebraConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'AlgebraConverterStrategyLogicLib', 'ConverterStrategyBaseLib2'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'AlgebraConverterStrategyLogicLib', 'ConverterStrategyBaseLib2'],
   ],
   ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2']],
   ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
   // Kyber
   [
     'KyberConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'KyberConverterStrategyLogicLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib'],
   ],
   ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2']],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],

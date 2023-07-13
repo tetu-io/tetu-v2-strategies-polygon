@@ -274,8 +274,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       controller(),
       liquidationThresholds,
       tokens,
-      amounts,
-      performanceFeeRatio
+      amounts
     );
   }
 

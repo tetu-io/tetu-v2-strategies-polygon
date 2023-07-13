@@ -890,8 +890,7 @@ library ConverterStrategyBaseLib {
     address controller,
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens_,
-    uint[] memory rewardAmounts_,
-    uint performanceFeeRatio
+    uint[] memory rewardAmounts_
   ) external returns (uint[] memory) {
     RecycleLocal memory v;
     v.asset = baseState.asset;
@@ -917,7 +916,7 @@ library ConverterStrategyBaseLib {
       v.amountPerf,
       splitter,
       baseState.performanceReceiver,
-      performanceFeeRatio
+      baseState.performanceFeeRatio
     );
 
     _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward);

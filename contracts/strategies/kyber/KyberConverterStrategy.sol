@@ -57,7 +57,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
     // setup specific name for UI
     baseState.strategySpecificName = KyberConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib.StrategySpecificNameChanged(baseState.strategySpecificName);
+    emit StrategyLib2.StrategySpecificNameChanged(baseState.strategySpecificName);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -66,7 +66,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   /// @notice Disable fuse for the strategy.
   function disableFuse() external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     state.isFuseTriggered = false;
     state.lastPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
 
@@ -74,7 +74,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   }
 
   function changePId(uint pId) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     require(!state.staked, KyberStrategyErrors.NOT_UNSTAKED);
     state.pId = pId;
   }
@@ -82,14 +82,14 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @notice Set the fuse threshold for the strategy.
   /// @param newFuseThreshold The new fuse threshold value.
   function setFuseThreshold(uint newFuseThreshold) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     state.fuseThreshold = newFuseThreshold;
 
     KyberConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
   }
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     state.strategyProfitHolder = strategyProfitHolder;
   }
 
@@ -208,7 +208,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
   function _rebalanceBefore(bool allowExit, bool checkNeedRebalance) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
     controllerOut = controller();
-    StrategyLib.onlyOperators(controllerOut);
+    StrategyLib2.onlyOperators(controllerOut);
 
     require(needRebalance() || !checkNeedRebalance, KyberStrategyErrors.NO_REBALANCE_NEEDED);
 
@@ -235,7 +235,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   /*function _startRebalance() internal returns(uint profitToCover, uint oldTotalAssets,  address _controller) {
     _controller = controller();
-    StrategyLib.onlyOperators(_controller);
+    StrategyLib2.onlyOperators(_controller);
 
     require(needRebalance(), KyberStrategyErrors.NO_REBALANCE_NEEDED);
 

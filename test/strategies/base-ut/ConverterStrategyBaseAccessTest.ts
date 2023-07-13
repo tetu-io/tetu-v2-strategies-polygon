@@ -218,46 +218,6 @@ describe('ConverterStrategyBaseAccessTest', () => {
     });
   });
 
-  describe('setPerformanceFeeRatio', () => {
-    describe('Good paths', () => {
-      it('should set 10_000', async() => {
-        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-        await strategy.connect(operator).setPerformanceFeeRatio(10_000);
-        const ret = await strategy.performanceFeeRatio();
-
-        expect(ret).eq(10_000);
-      });
-      it('should set 0', async() => {
-        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-        await strategy.connect(operator).setPerformanceFeeRatio(0);
-        const ret = await strategy.performanceFeeRatio();
-
-        expect(ret).eq(0);
-      });
-      it('should set 100_000', async() => {
-        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-        await strategy.connect(operator).setPerformanceFeeRatio(100_000);
-        const ret = await strategy.performanceFeeRatio();
-
-        expect(ret).eq(100_000);
-      });
-    });
-    describe('Bad paths', () => {
-      it('should revert if not operator', async() => {
-        const notOperator = await Misc.impersonate(ethers.Wallet.createRandom().address);
-        await expect(
-          strategy.connect(notOperator).setPerformanceFeeRatio(100_000),
-        ).revertedWith('SB: Denied');
-      });
-      it('should revert if value is too high', async() => {
-        const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
-        await expect(
-          strategy.connect(operator).setPerformanceFeeRatio(100_001),
-        ).revertedWith('SB: Wrong value'); // WRONG_VALUE
-      });
-    });
-  });
-
   describe('setLiquidationThreshold', () => {
     describe('Good paths', () => {
       it('should set max int', async() => {

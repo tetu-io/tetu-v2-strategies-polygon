@@ -2526,10 +2526,7 @@ describe('ConverterStrategyBaseAccessFixTest', () => {
       await ms.strategy.connect(await Misc.impersonate(await ms.controller.platformVoter())).setCompoundRatio(p.compoundRate);
 
       // disable performance fee by default
-      await ms.strategy.connect(await Misc.impersonate(await ms.controller.governance())).setupPerformanceFee(p.performanceFee,p.performanceReceiver);
-
-      // set performance fee ratio
-      await ms.strategy.connect(await Misc.impersonate(await ms.controller.governance())).setPerformanceFeeRatio(p?.performanceFeeRatio || 50_000);
+      await ms.strategy.connect(await Misc.impersonate(await ms.controller.governance())).setupPerformanceFee(p.performanceFee,p.performanceReceiver, p?.performanceFeeRatio || 50_000);
 
       for (const tokenAmount of p.initialBalances) {
         await tokenAmount.token.mint(

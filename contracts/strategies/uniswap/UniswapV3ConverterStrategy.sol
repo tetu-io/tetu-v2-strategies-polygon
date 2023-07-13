@@ -89,7 +89,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // setup specific name for UI
     baseState.strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib.StrategySpecificNameChanged(baseState.strategySpecificName); // todo: change to _checkStrategySpecificNameChanged
+    emit StrategyLib2.StrategySpecificNameChanged(baseState.strategySpecificName); // todo: change to _checkStrategySpecificNameChanged
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -98,19 +98,19 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Disable fuse for the strategy.
   function disableFuse() external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     UniswapV3ConverterStrategyLogicLib.disableFuse(state, converter);
   }
 
   /// @notice Set the fuse threshold for the strategy.
   /// @param newFuseThreshold The new fuse threshold value.
   function setFuseThreshold(uint newFuseThreshold) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     UniswapV3ConverterStrategyLogicLib.newFuseThreshold(state, newFuseThreshold);
   }
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     state.strategyProfitHolder = strategyProfitHolder;
   }
 
@@ -199,7 +199,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     QuoteWithdrawByAggLocal memory v;
 
     // get tokens as following: [underlying, not-underlying]
@@ -425,7 +425,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
   function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
     controllerOut = controller();
-    StrategyLib.onlyOperators(controllerOut);
+    StrategyLib2.onlyOperators(controllerOut);
 
     (, profitToCover) = _fixPriceChanges(true);
     oldTotalAssets = totalAssets() - profitToCover;
