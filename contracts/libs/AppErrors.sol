@@ -66,4 +66,7 @@ library AppErrors {
   string public constant OVER_COLLATERAL_DETECTED = "TS-27 over-collateral";
 
   string public constant NOT_IMPLEMENTED = "TS-28 not implemented";
+
+  /// @notice You are not allowed to make direct debt if a reverse debt exists and visa verse.
+  string public constant OPPOSITE_DEBT_EXISTS = "TS-29 opposite debt exists";
 }

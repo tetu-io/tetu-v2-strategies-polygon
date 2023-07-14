@@ -9,7 +9,6 @@ import "../../interfaces/IRebalancingStrategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3AggLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
-import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -17,9 +16,7 @@ import "hardhat/console.sol";
 /// @author a17
 contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy, IPoolProportionsProvider {
 
-  /////////////////////////////////////////////////////////////////////
-  ///                CONSTANTS
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------- Constants
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
@@ -31,10 +28,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   uint internal constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
   /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
   uint internal constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
+  //endregion ------------------------------------------------- Constants
 
-  /////////////////////////////////////////////////////////////////////
-  ///                Data types
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------- Data types
+
   struct WithdrawByAggStepLocal {
     address controller;
     ITetuConverter converter;
@@ -56,10 +53,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint planKind;
     uint totalLiquidity;
   }
+  //endregion ------------------------------------------------- Data types
 
-  /////////////////////////////////////////////////////////////////////
-  ///                INIT
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------- INIT
 
   /// @notice Initialize the strategy with the given parameters.
   /// @param controller_ The address of the controller.
@@ -91,10 +87,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     baseState.strategySpecificName = UniswapV3ConverterStrategyLogicLib.createSpecificName(state);
     emit StrategyLib2.StrategySpecificNameChanged(baseState.strategySpecificName); // todo: change to _checkStrategySpecificNameChanged
   }
+  //endregion ------------------------------------------------- INIT
 
-  /////////////////////////////////////////////////////////////////////
-  ///                OPERATOR ACTIONS
-  /////////////////////////////////////////////////////////////////////
+  //region --------------------------------------------- OPERATOR ACTIONS
 
   /// @notice Disable fuse for the strategy.
   function disableFuse() external {
@@ -113,10 +108,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     StrategyLib2.onlyOperators(controller());
     state.strategyProfitHolder = strategyProfitHolder;
   }
+  //endregion --------------------------------------------- OPERATOR ACTIONS
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   METRIC VIEWS
-  /////////////////////////////////////////////////////////////////////
+  //region --------------------------------------------- METRIC VIEWS
 
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
@@ -141,46 +135,21 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function quoteRebalanceSwap() external returns (bool, uint) {
     return UniswapV3ConverterStrategyLogicLib.quoteRebalanceSwap(state, converter);
   }
+  //endregion ---------------------------------------------- METRIC VIEWS
 
-  /////////////////////////////////////////////////////////////////////
   //region--------------------------------------------- REBALANCE
-  /////////////////////////////////////////////////////////////////////
-
-  /// @dev The rebalancing functionality is the core of this strategy.
-  ///      Depending on the size of the range of liquidity provided, the Fill-up or Swap method is used.
-  ///      There is also an attempt to cover rebalancing losses with rewards.
   function rebalance() external {
-    (uint profitToCover, uint oldTotalAssets, address _controller) = _rebalanceBefore();
-    (uint[] memory tokenAmounts, bool isNeedFillup) = UniswapV3ConverterStrategyLogicLib.rebalance(
-      state,
-      converter,
-      _controller,
-      oldTotalAssets,
-      profitToCover,
-      baseState.splitter
-    );
-    _rebalanceAfter(tokenAmounts, isNeedFillup);
-  }
-
-  function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
-
-    // _depositorEnter(tokenAmounts) if length == 2
-    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceSwapByAgg(
-      state,
-      converter,
-      oldTotalAssets,
-      UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams(direction, amount, agg, swapData),
-      profitToCover,
-      baseState.splitter
-    );
-    _rebalanceAfter(tokenAmounts, false);
+    _rebalanceNoSwaps(true);
   }
 
   /// @notice Rebalance using borrow/repay only, no swaps
-  /// @return True if the fuse was triggered (so, it's necessary to call UniswapV3DebtLib.closeDebtByAgg)
+  /// @return True if the fuse was triggered
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
+    return _rebalanceNoSwaps(checkNeedRebalance);
+  }
+
+  function _rebalanceNoSwaps(bool checkNeedRebalance) internal returns (bool) {
     (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
@@ -195,7 +164,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
   //endregion--------------------------------------------- REBALANCE
 
-  //region ------------------------------------ Withdraw by iterations
+  //region --------------------------------------------- Withdraw by iterations
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
@@ -275,8 +244,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       v.planKind,
       v.propNotUnderlying18
     );
-    console.log("withdrawByAggStep.after.withdrawStep.0", IERC20(v.tokens[0]).balanceOf(address(this)));
-    console.log("withdrawByAggStep.after.withdrawStep.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
     if (entryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
       // make rebalance and enter back to the pool. We won't have any swaps here
@@ -300,22 +267,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         state.strategyProfitHolder,
         baseState.splitter
       );
-      console.log("withdrawByAggStep.after.afterWithdrawStep.0", IERC20(v.tokens[0]).balanceOf(address(this)));
-      console.log("withdrawByAggStep.after.afterWithdrawStep.1", IERC20(v.tokens[1]).balanceOf(address(this)));
 
       if (entryToPool == ENTRY_TO_POOL_IS_ALLOWED
         || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
       ) {
         // Make actions after rebalance: depositor enter, update invested assets
         _rebalanceAfter(v.tokenAmounts, false);
-        console.log("withdrawByAggStep.after._rebalanceAfter.0", IERC20(v.tokens[0]).balanceOf(address(this)));
-        console.log("withdrawByAggStep.after._rebalanceAfter.1", IERC20(v.tokens[1]).balanceOf(address(this)));
       }
     }
 
     _updateInvestedAssets();
-    console.log("withdrawByAggStep.after._updateInvestedAssets.0", IERC20(v.tokens[0]).balanceOf(address(this)));
-    console.log("withdrawByAggStep.after._updateInvestedAssets.1", IERC20(v.tokens[1]).balanceOf(address(this)));
   }
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly
@@ -323,24 +284,14 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return (state.tokenA, state.tokenB);
   }
 
-  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns(uint propNotUnderlying18) {
-    if (planKind == IterationPlanKinds.PLAN_SWAP_REPAY) {
-      // custom proportions
-      (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
-      require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
-    } else if (planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY) {
-      // the proportions should be taken from the pool
-      // new value of the proportions should also be read from the pool after each swap
-      propNotUnderlying18 = type(uint).max;
-    }
-
-    return propNotUnderlying18;
+  /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
+  /// @return Proportion of the not-underlying [0...1e18]
+  function getPropNotUnderlying18() external view returns (uint) {
+    return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
   }
   //endregion ------------------------------------ Withdraw by iterations
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   INTERNAL LOGIC
-  /////////////////////////////////////////////////////////////////////
+  //region--------------------------------------------- INTERNAL LOGIC
 
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
@@ -450,9 +401,18 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _updateInvestedAssets();
   }
 
-  /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
-  /// @return Proportion of the not-underlying [0...1e18]
-  function getPropNotUnderlying18() external view returns (uint) {
-    return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
+  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns(uint propNotUnderlying18) {
+    if (planKind == IterationPlanKinds.PLAN_SWAP_REPAY) {
+      // custom proportions
+      (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
+      require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    } else if (planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY) {
+      // the proportions should be taken from the pool
+      // new value of the proportions should also be read from the pool after each swap
+      propNotUnderlying18 = type(uint).max;
+    }
+
+    return propNotUnderlying18;
   }
+  //endregion--------------------------------------- INTERNAL LOGIC
 }

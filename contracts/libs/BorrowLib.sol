@@ -167,6 +167,7 @@ library BorrowLib {
     }
 
     AppLib.approveIfNeeded(c.assetA, balanceA_ - untouchedAmountA, address(c.converter));
+
     return ConverterStrategyBaseLib.openPosition(
       c.converter,
       entryData,

@@ -343,10 +343,10 @@ export class StateUtilsNum {
         borrowAssets: borrowAssetsAddresses,
         borrowAssetsNames
       },
-      lockedInConverter: directBorrows.totalLockedAmountInUnderlying + reverseBorrows.totalLockedAmountInUnderlying,
+      lockedInConverter: Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying),
       lockedPercent: totalAssets === 0
         ? 0
-        : (directBorrows.totalLockedAmountInUnderlying + reverseBorrows.totalLockedAmountInUnderlying) / totalAssets,
+        : (Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying)) / totalAssets,
 
       univ3Depositor,
       univ3Pool,

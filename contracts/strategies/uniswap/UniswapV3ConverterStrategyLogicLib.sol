@@ -17,7 +17,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -613,130 +612,6 @@ library UniswapV3ConverterStrategyLogicLib {
   //            Rebalance
   //////////////////////////////////////////
 
-  /// @dev Rebalances the current position, adjusts the tick range, and attempts to cover loss with pool rewards.
-  /// @param state The State storage object.
-  /// @param converter The TetuConverter contract.
-  /// @param controller The Tetu controller address.
-  /// @param oldTotalAssets The amount of total assets before rebalancing.
-  /// @return tokenAmounts The token amounts for deposit (if length != 2 then do nothing).
-  /// @return isNeedFillup Indicates if fill-up is required after rebalancing.
-  function rebalance(
-    State storage state,
-    ITetuConverter converter,
-    address controller,
-    uint oldTotalAssets,
-    uint profitToCover,
-    address splitter
-  ) external returns (
-    uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
-    bool isNeedFillup
-  ) {
-    uint loss;
-    tokenAmounts = new uint[](0);
-    isNeedFillup = false;
-
-    RebalanceLocalVariables memory vars;
-    _initLocalVars(vars, converter, state, false, true);
-
-    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
-      /// enabling fuse: close debt and stop providing liquidity
-      state.isFuseTriggered = true;
-      emit FuseTriggered();
-
-      UniswapV3DebtLib.closeDebt(
-        converter,
-        controller,
-        vars.pool,
-        vars.tokenA,
-        vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.pool),
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-    } else {
-      /// rebalancing debt
-      /// setting new tick range
-      UniswapV3DebtLib.rebalanceDebt(
-        converter,
-        controller,
-        state,
-        _getLiquidatorSwapSlippage(vars.pool),
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-
-      if (vars.fillUp) {
-        isNeedFillup = true;
-      }
-
-      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
-    }
-
-    // need to update last price only for stables coz only stables have fuse mechanic
-    if (vars.isStablePool) {
-      state.lastPrice = vars.newPrice;
-    }
-
-    _coverLoss(splitter, loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-  }
-
-  function rebalanceSwapByAgg(
-    State storage state,
-    ITetuConverter converter,
-    uint oldTotalAssets,
-    RebalanceSwapByAggParams memory aggParams,
-    uint profitToCover,
-    address splitter
-  ) external returns (
-    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
-  ) {
-    uint loss;
-    tokenAmounts = new uint[](0);
-
-    RebalanceLocalVariables memory vars;
-    _initLocalVars(vars, converter, state, true, true);
-
-    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
-      /// enabling fuse: close debt and stop providing liquidity
-      state.isFuseTriggered = true;
-      emit FuseTriggered();
-
-      UniswapV3DebtLib.closeDebtByAgg(
-        converter,
-        vars.tokenA,
-        vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.pool),
-        aggParams,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-    } else {
-      /// rebalancing debt
-      /// setting new tick range
-      UniswapV3DebtLib.rebalanceDebtSwapByAgg(
-        converter,
-        state,
-        _getLiquidatorSwapSlippage(vars.pool),
-        aggParams,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-
-      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, vars.tokenA, vars.tokenB);
-    }
-
-    // need to update last price only for stables coz only stables have fuse mechanic
-    if (vars.isStablePool) {
-      state.lastPrice = vars.newPrice;
-    }
-
-    _coverLoss(splitter, loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-  }
-
   function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
     uint len = rewardTokens.length;
@@ -809,25 +684,16 @@ library UniswapV3ConverterStrategyLogicLib {
     address strategyProfitHolder,
     address splitter
   ) external returns (uint[] memory tokenAmounts) {
-    console.log("afterWithdrawStep.0", IERC20(tokens[0]).balanceOf(address(this)));
-    console.log("afterWithdrawStep.1", IERC20(tokens[1]).balanceOf(address(this)));
-
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
     }
-    console.log("afterWithdrawStep.1.0", IERC20(tokens[0]).balanceOf(address(this)));
-    console.log("afterWithdrawStep.1.1", IERC20(tokens[1]).balanceOf(address(this)));
 
     uint loss;
     (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
-    console.log("afterWithdrawStep.2.0", IERC20(tokens[0]).balanceOf(address(this)));
-    console.log("afterWithdrawStep.2.1", IERC20(tokens[1]).balanceOf(address(this)));
 
     if (loss != 0) {
       _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
-      console.log("afterWithdrawStep.3.0", IERC20(tokens[0]).balanceOf(address(this)));
-      console.log("afterWithdrawStep.3.1", IERC20(tokens[1]).balanceOf(address(this)));
     }
   }
 
@@ -836,13 +702,9 @@ library UniswapV3ConverterStrategyLogicLib {
     uint coveredByRewards;
     if (loss != 0) {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
-      console.log("_coverLoss.1", IERC20(tokenA).balanceOf(address(this)));
-      console.log("_coverLoss.1", IERC20(tokenB).balanceOf(address(this)));
       uint notCovered = loss - coveredByRewards;
       if (notCovered != 0) {
         ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-        console.log("_coverLoss.2", IERC20(tokenA).balanceOf(address(this)));
-        console.log("_coverLoss.2", IERC20(tokenB).balanceOf(address(this)));
       }
     }
 

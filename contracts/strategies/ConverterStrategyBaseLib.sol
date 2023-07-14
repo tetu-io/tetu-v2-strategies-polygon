@@ -54,7 +54,6 @@ library ConverterStrategyBaseLib {
     uint amountToBorrow;
     uint c1;
     uint c3;
-    uint ratio;
     uint alpha;
   }
 
@@ -444,12 +443,15 @@ library ConverterStrategyBaseLib {
         // as result, remaining C1 will be too big after conversion and we need to make another borrow
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
         vars.c1 = x * vars.c3 / y;
-        vars.ratio = (vars.collateralsRequired[i] + vars.c1) > amountIn_
-          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
-          : 1e18;
 
-        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
-        vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
+        // we doesn't calculate an intermediate ratio cR/(cR+c1) to avoid lost of precision
+        if ((vars.collateralsRequired[i] + vars.c1) > amountIn_) {
+          vars.collateral = vars.collateralsRequired[i] * amountIn_ / (vars.collateralsRequired[i] + vars.c1);
+          vars.amountToBorrow = vars.amountsToBorrow[i] * amountIn_ / (vars.collateralsRequired[i] + vars.c1);
+        } else {
+          vars.collateral = vars.collateralsRequired[i];
+          vars.amountToBorrow = vars.amountsToBorrow[i];
+        }
 
         // skip any attempts to borrow zero amount or use too little collateral
         if (vars.collateral < collateralThreshold_ || vars.amountToBorrow == 0) {
@@ -1401,7 +1403,7 @@ library ConverterStrategyBaseLib {
           if (v.idxToRepay1 != 0) {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
-            uint expectedAmountOut = _repayDebt(
+            (uint expectedAmountOut,) = _repayDebt(
               p.converter,
               p.tokens[indexCollateral],
               p.tokens[indexBorrow],
@@ -1839,13 +1841,15 @@ library ConverterStrategyBaseLib {
   ///         Take into account possible debt-gap and the fact that the amount of debt may be less than {amountIn}
   /// @param amountToRepay Max available amount of borrow asset that we can repay
   /// @return expectedAmountOut Estimated amount of main asset that should be added to balance = collateral - {toSell}
+  /// @return repaidAmountOut Actually paid amount
   function _repayDebt(
     ITetuConverter converter,
     address collateralAsset,
     address borrowAsset,
     uint amountToRepay
   ) internal returns (
-    uint expectedAmountOut
+    uint expectedAmountOut,
+    uint repaidAmountOut
   ) {
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
 
@@ -1869,9 +1873,9 @@ library ConverterStrategyBaseLib {
     }
 
     // close the debt
-    _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
+    (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
 
-    return expectedAmountOut;
+    return (expectedAmountOut, repaidAmountOut);
   }
   //endregion ------------------------------------------------ Repay debts
 

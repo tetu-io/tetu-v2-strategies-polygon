@@ -5039,7 +5039,8 @@ describe('ConverterStrategyBaseLibFixTest', () => {
           liquidationThresholds: [], // not used here
           balanceAdditions: [], // not used here
           planKind: 0, // not used here
-          propNotUnderlying18: 0 // not used here
+          propNotUnderlying18: 0, // not used here
+          usePoolProportions: false
         },
         parseUnits(p.balancesAB[0], decimalsA),
         parseUnits(p.balancesAB[1], decimalsB),
