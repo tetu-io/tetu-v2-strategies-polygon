@@ -3,7 +3,7 @@ import {
   BalancerBoostedDepositorFacade,
   BalancerLogicLibFacade,
   BorrowLibFacade,
-  ConverterStrategyBaseLibFacade,
+  ConverterStrategyBaseLibFacade, ConverterStrategyBaseLibFacade2,
   MockController,
   MockConverterStrategy,
   MockConverterStrategy__factory,
@@ -79,6 +79,13 @@ export class MockHelper {
       signer,
       'ConverterStrategyBaseLibFacade',
     )) as ConverterStrategyBaseLibFacade;
+  }
+
+  public static async createConverterStrategyBaseLibFacade2(signer: SignerWithAddress): Promise<ConverterStrategyBaseLibFacade2> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      'ConverterStrategyBaseLibFacade2',
+    )) as ConverterStrategyBaseLibFacade2;
   }
 
   public static async createBalancerBoostedDepositorFacade(
