@@ -237,7 +237,7 @@ contract ConverterStrategyBaseLibFacade {
   ) external pure returns (
     uint amountOut
   ) {
-    return ConverterStrategyBaseLib._getAmountToSell(
+    return IterationPlanLib._getAmountToSell(
       remainingRequestedAmount,
       totalDebt,
       totalCollateral,
@@ -334,7 +334,7 @@ contract ConverterStrategyBaseLibFacade {
   }
 
   function estimateSwapAmountForRepaySwapRepay(
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    IterationPlanLib.SwapRepayPlanParams memory p,
     uint balanceA,
     uint balanceB,
     uint indexA,
@@ -345,7 +345,7 @@ contract ConverterStrategyBaseLibFacade {
     uint totalCollateralA,
     uint totalBorrowB
   ) external pure returns(uint) {
-    return ConverterStrategyBaseLib.estimateSwapAmountForRepaySwapRepay(
+    return IterationPlanLib.estimateSwapAmountForRepaySwapRepay(
       p,
       balanceA,
       balanceB,

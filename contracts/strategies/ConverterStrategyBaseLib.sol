@@ -14,7 +14,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
-import "../libs/IterationPlanKinds.sol";
+import "../libs/IterationPlanLib.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -104,17 +104,6 @@ library ConverterStrategyBaseLib {
     uint idxToSwap1;
     uint amountToSwap;
     uint idxToRepay1;
-  }
-
-  /// @notice Set of parameters required to liquidation through aggregators
-  struct SwapRepayPlanParams {
-    ITetuConverter converter;
-
-    /// @notice Assets used by depositor stored as following way: [underlying, not-underlying]
-    address[] tokens;
-
-    /// @notice Liquidation thresholds for the {tokens}
-    uint[] liquidationThresholds;
 
     /// @notice Cost of $1 in terms of the assets, decimals 18
     uint[] prices;
@@ -124,9 +113,6 @@ library ConverterStrategyBaseLib {
     /// @notice Amounts that will be received on balance before execution of the plan.
     uint[] balanceAdditions;
 
-    /// @notice Plan kind extracted from entry data, see {IterationPlanKinds}
-    uint planKind;
-
     /// @notice Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
     ///         The leftovers should be swapped to get following result proportions of the assets:
     ///         not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
@@ -134,24 +120,8 @@ library ConverterStrategyBaseLib {
 
     /// @notice proportions should be taken from the pool and re-read from the pool after each swap
     bool usePoolProportions;
-  }
 
-  struct GetIterationPlanLocal {
-    /// @notice Underlying balance
-    uint assetBalance;
-    /// @notice Not-underlying balance
-    uint tokenBalance;
-
-    uint totalDebt;
-    uint totalCollateral;
-
-    uint debtReverse;
-    uint collateralReverse;
-
-    address asset;
-    address token;
-
-    bool swapLeftoversNeeded;
+    bool exitLoop;
   }
 
   struct DataSetLocal {
@@ -175,22 +145,6 @@ library ConverterStrategyBaseLib {
     uint toInsurance;
     uint[] amountsToForward;
   }
-
-  struct EstimateSwapAmountForRepaySwapRepayLocal {
-    uint x;
-    uint y;
-    uint bA1;
-    uint bB1;
-    uint bA2;
-    uint bB2;
-    uint gamma;
-    uint alpha;
-    uint s;
-    uint aB3;
-    uint cA1;
-    uint cB1;
-    uint aA2;
-  }
   //endregion Data types
 
   /////////////////////////////////////////////////////////////////////
@@ -201,7 +155,6 @@ library ConverterStrategyBaseLib {
   uint internal constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
   uint internal constant _REWARD_LIQUIDATION_SLIPPAGE = 5_000; // 5%
   uint internal constant COMPOUND_DENOMINATOR = 100_000;
-  uint internal constant DENOMINATOR = 100_000;
   uint internal constant _ASSET_LIQUIDATION_SLIPPAGE = 300;
   uint internal constant PRICE_IMPACT_TOLERANCE = 300;
   /// @notice borrow/collateral amount cannot be less than given number of tokens
@@ -209,11 +162,6 @@ library ConverterStrategyBaseLib {
   /// @notice Allow to swap more then required (i.e. 1_000 => +1%) inside {swapToGivenAmount}
   ///         to avoid additional swap if the swap will return amount a bit less than we expected
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
-  /// @dev Absolute value for any token
-  uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 100_000;
-  /// @notice 1% gap to cover possible liquidation inefficiency
-  /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
-  uint internal constant GAP_CONVERSION = 1_000;
   //endregion Constants
 
   /////////////////////////////////////////////////////////////////////
@@ -852,7 +800,7 @@ library ConverterStrategyBaseLib {
         (p.targetAmount - receivedTargetAmount)
         * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
         / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
-      ) * (p.overswap + DENOMINATOR) / DENOMINATOR;
+      ) * (p.overswap + AppLib.DENOMINATOR) / AppLib.DENOMINATOR;
 
       (amountSpent, amountReceived) = _liquidate(
         p.converter,
@@ -939,7 +887,7 @@ library ConverterStrategyBaseLib {
     // read inside lib for reduce contract space in the main contract
     address insurance = address(ITetuVaultV2(ISplitter(splitter).vault()).insurance());
 
-    toPerf = amount_ * ratio / DENOMINATOR;
+    toPerf = amount_ * ratio / AppLib.DENOMINATOR;
     toInsurance = amount_ - toPerf;
 
     if (toPerf != 0) {
@@ -1159,7 +1107,7 @@ library ConverterStrategyBaseLib {
             asset,
             token,
             collaterals_[i],
-            _getLiquidationThreshold(thresholdAsset_)
+            AppLib._getLiquidationThreshold(thresholdAsset_)
           );
 
           // zero borrowed amount is possible here (conversion is not available)
@@ -1231,7 +1179,7 @@ library ConverterStrategyBaseLib {
     //       but it doesn't allow to make borrow and repay in a single block.
 
     if (requestedAmount != type(uint).max
-      && expectedAmount > requestedAmount * (GAP_CONVERSION + DENOMINATOR) / DENOMINATOR
+      && expectedAmount > requestedAmount * (AppLib.GAP_CONVERSION + AppLib.DENOMINATOR) / AppLib.DENOMINATOR
     ) {
       // amountsToConvert_ are enough to get requestedAmount
       _convertAfterWithdraw(d_, _liquidationThresholds, amountsToConvert_);
@@ -1341,7 +1289,7 @@ library ConverterStrategyBaseLib {
     );
   }
 
-  /// @dev Implements {IterationPlanKinds.PLAN_SWAP_REPAY} only
+  /// @dev Implements {IterationPlanLib.PLAN_SWAP_REPAY} only
   function _closePositionsToGetAmount(
     DataSetLocal memory d_,
     uint[] memory liquidationThresholds_,
@@ -1353,27 +1301,30 @@ library ConverterStrategyBaseLib {
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = d_.tokens[d_.indexAsset];
 
-      SwapRepayPlanParams memory p;
-      p.converter = d_.converter;
-      // p.planKind = IterationPlanKinds.PLAN_SWAP_REPAY; // PLAN_SWAP_REPAY == 0, so we don't need this line
-      p.tokens = d_.tokens;
-      p.liquidationThresholds = liquidationThresholds_;
-      p.balanceAdditions = new uint[](d_.len);
+      // v.planKind = IterationPlanLib.PLAN_SWAP_REPAY; // PLAN_SWAP_REPAY == 0, so we don't need this line
+      v.balanceAdditions = new uint[](d_.len);
 
-      (p.prices, p.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(d_.converter), d_.tokens, d_.len);
+      (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(d_.converter), d_.tokens, d_.len);
 
       for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
         if (i == d_.indexAsset) continue;
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-        bool changed;
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
         do {
           // generate iteration plan: [swap], [repay]
-          (v.idxToSwap1, v.amountToSwap, v.idxToRepay1) = _buildIterationPlan(p, requestedAmount, d_.indexAsset, i);
+          (v.idxToSwap1, v.amountToSwap, v.idxToRepay1) = IterationPlanLib.buildIterationPlan(
+            d_.converter,
+            d_.tokens,
+            liquidationThresholds_,
+            v.prices,
+            v.decs,
+            v.balanceAdditions,
+            [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedAmount, d_.indexAsset, i]
+          );
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
 
           // make swap if necessary
@@ -1388,14 +1339,14 @@ library ConverterStrategyBaseLib {
               d_.tokens[indexOut],
               v.amountToSwap,
               _ASSET_LIQUIDATION_SLIPPAGE,
-              p.liquidationThresholds[indexIn],
+              liquidationThresholds_[indexIn],
               false
             );
             if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
               // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
               // we don't need to take into account conversion to get toSell amount
-              expectedAmount += spentAmountIn * p.prices[i] * p.decs[d_.indexAsset] / p.prices[d_.indexAsset] / p.decs[i];
+              expectedAmount += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
             }
           }
 
@@ -1404,10 +1355,10 @@ library ConverterStrategyBaseLib {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             (uint expectedAmountOut,) = _repayDebt(
-              p.converter,
-              p.tokens[indexCollateral],
-              p.tokens[indexBorrow],
-              IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
+              d_.converter,
+              d_.tokens[indexCollateral],
+              d_.tokens[indexBorrow],
+              IERC20(d_.tokens[indexBorrow]).balanceOf(address(this))
             );
 
             if (indexCollateral == d_.indexAsset) {
@@ -1426,415 +1377,18 @@ library ConverterStrategyBaseLib {
               : 0;
           }
 
-          changed = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
+          v.exitLoop = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
           v.balanceAsset = v.newBalanceAsset;
           v.balanceToken = v.newBalanceToken;
-        }
-        while (!changed);
+        } while (!v.exitLoop);
 
-        if (requestedAmount < _getLiquidationThreshold(p.liquidationThresholds[d_.indexAsset])) break;
+        if (requestedAmount < AppLib._getLiquidationThreshold(liquidationThresholds_[d_.indexAsset])) break;
       }
     }
 
     return expectedAmount;
   }
 //endregion ------------------------------------------------ Close position
-
-//region ------------------------------------------------ Build plan
-  /// @notice Generate plan for next withdraw iteration. We can do only one swap per iteration.
-  ///         In general, we cam make 1) single swap (direct or reverse) and 2) repay
-  ///         Swap is required to get required repay-amount OR to swap leftovers on final iteration.
-  /// @param requestedAmount Amount of underlying that we need to get on balance finally.
-  /// @param indexAsset Index of the underlying in {p.tokens} array
-  /// @param indexToken Index of the not-underlying in {p.tokens} array
-  /// @return indexToSwapPlus1 1-based index of the token to be swapped; 0 means swap is not required.
-  /// @return amountToSwap Amount to be swapped. 0 - no swap
-  /// @return indexToRepayPlus1 1-based index of the token that should be used to repay borrow in converter.
-  ///                            0 - no repay is required - it means that this is a last step with swapping leftovers.
-  function _buildIterationPlan(
-    SwapRepayPlanParams memory p,
-    uint requestedAmount,
-    uint indexAsset,
-    uint indexToken
-  ) internal returns (
-    uint indexToSwapPlus1,
-    uint amountToSwap,
-    uint indexToRepayPlus1
-  ) {
-    GetIterationPlanLocal memory v;
-    v.asset = p.tokens[indexAsset];
-    v.token = p.tokens[indexToken];
-
-    v.assetBalance = IERC20(v.asset).balanceOf(address(this)) + p.balanceAdditions[indexAsset];
-    v.tokenBalance = IERC20(p.tokens[indexToken]).balanceOf(address(this)) + p.balanceAdditions[indexToken];
-
-    if (p.planKind == IterationPlanKinds.PLAN_SWAP_ONLY) {
-      v.swapLeftoversNeeded = true;
-    } else {
-      if (requestedAmount < _getLiquidationThreshold(p.liquidationThresholds[indexAsset])) {
-        // we don't need to repay any debts anymore, but we should swap leftovers
-        v.swapLeftoversNeeded = true;
-      } else {
-        // we need to increase balance on the following amount: requestedAmount - v.balance;
-        // we can have two possible borrows:
-        // 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
-        // normally we can have only one of them, not both..
-        // but better to take into account possibility to have two debts simultaneously
-
-        // reverse debt
-        (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
-
-        if (v.debtReverse == 0) {
-          // direct debt
-          (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
-
-          if (v.totalDebt == 0) {
-            // This is final iteration - we need to swap leftovers and get amounts on balance in proper proportions.
-            // The leftovers should be swapped to get following result proportions of the assets:
-            //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
-            v.swapLeftoversNeeded = true;
-          } else {
-            // repay direct debt
-            if (p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY) {
-              (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
-                p,
-                [v.assetBalance, v.tokenBalance],
-                [indexAsset, indexToken],
-                p.propNotUnderlying18,
-                v.totalCollateral,
-                v.totalDebt
-              );
-            } else {
-              (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
-                requestedAmount,
-                p,
-                v.totalCollateral,
-                v.totalDebt,
-                indexAsset,
-                indexToken,
-                v.assetBalance,
-                v.tokenBalance
-              );
-            }
-          }
-        } else {
-          // repay reverse debt
-          if (p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY) {
-            (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
-              p,
-              [v.tokenBalance, v.assetBalance],
-              [indexToken, indexAsset],
-              1e18 - p.propNotUnderlying18,
-              v.collateralReverse,
-              v.debtReverse
-            );
-          } else {
-            (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
-              requestedAmount == type(uint).max
-                ? type(uint).max
-                : requestedAmount * p.prices[indexAsset] * p.decs[indexToken] / p.prices[indexToken] / p.decs[indexAsset],
-              p,
-              v.collateralReverse,
-              v.debtReverse,
-              indexToken,
-              indexAsset,
-              v.tokenBalance,
-              v.assetBalance
-            );
-          }
-        }
-      }
-    }
-
-    if (v.swapLeftoversNeeded) {
-      (indexToSwapPlus1, amountToSwap) = _buildPlanForLeftovers(p, v.assetBalance, v.tokenBalance, indexAsset, indexToken, p.propNotUnderlying18);
-    }
-
-    return (indexToSwapPlus1, amountToSwap, indexToRepayPlus1);
-  }
-
-  /// @notice Repay B, get collateral A, then swap A => B, [make one more repay B] => get A:B in required proportions
-  /// @param balancesAB [balanceA, balanceB]
-  /// @param idxAB [indexA, indexB]
-  function _buildPlanRepaySwapRepay(
-    SwapRepayPlanParams memory p,
-    uint[2] memory balancesAB,
-    uint[2] memory idxAB,
-    uint propB,
-    uint totalCollateralA,
-    uint totalBorrowB
-  ) internal returns (
-    uint indexToSwapPlus1,
-    uint amountToSwap,
-    uint indexToRepayPlus1
-  ) {
-    require(balancesAB[1] != 0, AppErrors.UNFOLDING_2_ITERATIONS_REQUIRED);
-    // use all available tokenB to repay debt and receive as much as possible tokenA
-    uint amountToRepay = Math.min(balancesAB[1], totalBorrowB);
-
-    (uint collateralAmount,) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
-
-    // swap A to B: full or partial
-    amountToSwap = estimateSwapAmountForRepaySwapRepay(
-      p,
-      balancesAB[0],
-      balancesAB[1],
-      idxAB[0],
-      idxAB[1],
-      propB,
-      totalCollateralA,
-      totalBorrowB,
-      collateralAmount,
-      amountToRepay
-    );
-
-    return (idxAB[0] + 1, amountToSwap, idxAB[1] + 1);
-  }
-
-  /// @notice Estimate swap amount for iteration "repay-swap-repay"
-  ///         The iteration should give us amounts of assets in required proportions.
-  ///         There are two cases here: full swap and partial swap. Second repay is not required if the swap is partial.
-  /// @param collateralA Estimated value of collateral A received after repay balanceB
-  function estimateSwapAmountForRepaySwapRepay(
-    SwapRepayPlanParams memory p,
-    uint balanceA,
-    uint balanceB,
-    uint indexA,
-    uint indexB,
-    uint propB,
-    uint totalCollateralA,
-    uint totalBorrowB,
-    uint collateralA,
-    uint amountToRepayB
-  ) internal pure returns(uint) {
-    // todo This function should be optimized (reduce amount of vars and params)
-    // N - number of the state
-    // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
-    // alpha ~ cAN/cBN - estimated ratio of collateral/borrow
-    // s = swap ratio, aA is swapped to aB, so aA = s * aB
-    // g = split ratio, bA1 is divided on two parts: bA1 * gamma, bA1 * (1 + gamma). First part is swapped.
-    // X = proportion of A, Y = proportion of B
-
-    // Formulas
-    // aB3 = (x * bB2 - Y * bA2) / (alpha * y + x)
-    // gamma = (y * bA1 - x * bB1) / (bA1 * (x * s + y))
-
-    // There are following stages:
-    // 0. init (we have at least not zero amount of B and not zero debt of B)
-    // 1. repay 1 (repay all available amount of B OR all available debt)
-    // 2. swap (swap A fully or partially to B)
-    // 3. repay 2 (optional: we need this stage if full swap produces amount of B that is <= available debt)
-    // 4. final (we have assets in right proportion on the balance)
-
-    EstimateSwapAmountForRepaySwapRepayLocal memory v;
-    v.x = 1e18 - propB;
-    v.y = propB;
-
-// 1. repay 1
-    // convert amounts A, amounts B to cost A, cost B in USD
-    v.bA1 = (balanceA + collateralA) * p.prices[indexA] / p.decs[indexA];
-    v.bB1 = (balanceB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
-    v.cB1 = (totalBorrowB - amountToRepayB) * p.prices[indexB] / p.decs[indexB];
-    v.alpha = 1e18 * totalCollateralA * p.prices[indexA] * p.decs[indexB]
-      / p.decs[indexA] / p.prices[indexB] / totalBorrowB; // (!) approx estimation
-
-// 2. full swap
-    v.aA2 = v.bA1;
-    v.s = 1e18 * p.prices[indexB] / p.prices[indexA]; // no decimals because we use costs: costA = s * costB
-    v.bA2 = v.bA1 - v.aA2;
-    v.bB2 = v.bB1 + v.aA2 * v.s / 1e18;
-
-// 3. repay 2
-    v.aB3 = (v.x * v.bB2 - v.y * v.bA2) / (v.alpha * v.y / 1e18 + v.x);
-    if (v.aB3 > v.cB1) {
-      // there is not enough debt to make second repay
-      // we need to make partial swap and receive assets in right proportions in result
-      v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
-      v.aA2 = v.bA1 * v.gamma / 1e18;
-    }
-
-    return v.aA2 * p.decs[indexA] / p.prices[indexA];
-  }
-
-  /// @notice Prepare a plan to swap leftovers to required proportion
-  /// @param balanceA Balance of token A, i.e. underlying
-  /// @param balanceB Balance of token B, i.e. not-underlying
-  /// @param indexA Index of the token A, i.e. underlying, in {p.prices} and {p.decs}
-  /// @param indexB Index of the token B, i.e. not-underlying, in {p.prices} and {p.decs}
-  /// @param propB Required proportion of TokenB [0..1e18]. Proportion of token A is (1e18-propB)
-  /// @return indexTokenToSwapPlus1 Index of the token to be swapped. 0 - no swap is required
-  /// @return amountToSwap Amount to be swapped. 0 - no swap is required
-  function _buildPlanForLeftovers(
-    SwapRepayPlanParams memory p,
-    uint balanceA,
-    uint balanceB,
-    uint indexA,
-    uint indexB,
-    uint propB
-  ) internal pure returns (
-    uint indexTokenToSwapPlus1,
-    uint amountToSwap
-  ) {
-    if (balanceB != 0) {
-      (uint targetA, uint targetB) = _getTargetAmounts(p.prices, p.decs, balanceA, balanceB, propB, indexA, indexB);
-      if (balanceA < targetA) {
-        // we need to swap not-underlying to underlying
-        if (balanceB - targetB > _getLiquidationThreshold(p.liquidationThresholds[indexB])) {
-          amountToSwap = balanceB - targetB;
-          indexTokenToSwapPlus1 = indexB + 1;
-        }
-      } else {
-        // we need to swap underlying to not-underlying
-        if (balanceA - targetA > _getLiquidationThreshold(p.liquidationThresholds[indexA])) {
-          amountToSwap = balanceA - targetA;
-          indexTokenToSwapPlus1 = indexA + 1;
-        }
-      }
-    }
-    return (indexTokenToSwapPlus1, amountToSwap);
-  }
-
-  /// @notice Prepare a plan to swap some amount of collateral to get required repay-amount and make repaying
-  ///         1) Sell collateral-asset to get missed amount-to-repay 2) make repay and get more collateral back
-  /// @param requestedAmount Amount of underlying that we need to get on balance finally.
-  /// @param totalCollateral Total amount of collateral used in the borrow
-  /// @param totalDebt Total amount of debt that should be repaid to receive {totalCollateral}
-  /// @param indexCollateral Index of collateral asset in {p.prices}, {p.decs}
-  /// @param indexBorrow Index of borrow asset in {p.prices}, {p.decs}
-  /// @param balanceCollateral Current balance of the collateral asset
-  /// @param balanceBorrow Current balance of the borrowed asset
-  /// @param indexTokenToSwapPlus1 1-based index of the token to be swapped. Swap of amount of collateral asset can be required
-  ///                              to receive missed amount-to-repay. 0 - no swap is required
-  /// @param amountToSwap Amount to be swapped. 0 - no swap is required
-  /// @param indexRepayTokenPlus1 1-based index of the token to be repaied. 0 - no repaying is required
-  function _buildPlanForSellAndRepay(
-    uint requestedAmount,
-    SwapRepayPlanParams memory p,
-    uint totalCollateral,
-    uint totalDebt,
-    uint indexCollateral,
-    uint indexBorrow,
-    uint balanceCollateral,
-    uint balanceBorrow
-  ) internal pure returns (
-    uint indexTokenToSwapPlus1,
-    uint amountToSwap,
-    uint indexRepayTokenPlus1
-  ) {
-    // what amount of collateral we should sell to get required amount-to-pay to pay the debt
-    uint toSell = _getAmountToSell(
-      requestedAmount,
-      totalDebt,
-      totalCollateral,
-      p.prices,
-      p.decs,
-      indexCollateral,
-      indexBorrow,
-      balanceBorrow
-    );
-
-    // convert {toSell} amount of underlying to token
-    if (toSell != 0 && balanceCollateral != 0) {
-      toSell = Math.min(toSell, balanceCollateral);
-      if (toSell > _getLiquidationThreshold(p.liquidationThresholds[indexCollateral])) {
-        amountToSwap = toSell;
-        indexTokenToSwapPlus1 = indexCollateral + 1;
-      }
-    }
-
-    return (indexTokenToSwapPlus1, amountToSwap, indexBorrow + 1);
-  }
-
-  /// @notice Calculate what balances of underlying and not-underlying we need to fit {propNotUnderlying18}
-  /// @param prices Prices of underlying and not underlying
-  /// @param decs 10**decimals for underlying and not underlying
-  /// @param assetBalance Current balance of underlying
-  /// @param tokenBalance Current balance of not-underlying
-  /// @param propNotUnderlying18 Required proportion of not-underlying [0..1e18]
-  ///                            Proportion of underlying would be (1e18 - propNotUnderlying18)
-  /// @param targetAssets What result balance of underlying is required to fit to required proportions
-  /// @param targetTokens What result balance of not-underlying is required to fit to required proportions
-  function _getTargetAmounts(
-    uint[] memory prices,
-    uint[] memory decs,
-    uint assetBalance,
-    uint tokenBalance,
-    uint propNotUnderlying18,
-    uint indexAsset,
-    uint indexToken
-  ) internal pure returns (
-    uint targetAssets,
-    uint targetTokens
-  ) {
-    uint costAssets = assetBalance * prices[indexAsset] / decs[indexAsset];
-    uint costTokens = tokenBalance * prices[indexToken] / decs[indexToken];
-    targetTokens = propNotUnderlying18 == 0
-      ? 0
-      : ((costAssets + costTokens) * propNotUnderlying18 / 1e18);
-    targetAssets = ((costAssets + costTokens) - targetTokens) * decs[indexAsset] / prices[indexAsset];
-    targetTokens = targetTokens * decs[indexToken] / prices[indexToken];
-  }
-
-  /// @notice What amount of collateral should be sold to pay the debt and receive {requestedAmount}
-  /// @dev It doesn't allow to sell more than the amount of total debt in the borrow
-  /// @param requestedAmount We need to increase balance (of collateral asset) on this amount
-  /// @param totalDebt Total debt of the borrow in terms of borrow asset
-  /// @param totalCollateral Total collateral of the borrow in terms of collateral asset
-  /// @param prices Cost of $1 in terms of the asset, decimals 18
-  /// @param decs 10**decimals for each asset
-  /// @param indexCollateral Index of the collateral asset in {prices} and {decs}
-  /// @param indexBorrowAsset Index of the borrow asset in {prices} and {decs}
-  /// @param balanceBorrowAsset Available balance of the borrow asset, it will be used to cover the debt
-  /// @return amountOut Amount of collateral-asset that should be sold
-  function _getAmountToSell(
-    uint requestedAmount,
-    uint totalDebt,
-    uint totalCollateral,
-    uint[] memory prices,
-    uint[] memory decs,
-    uint indexCollateral,
-    uint indexBorrowAsset,
-    uint balanceBorrowAsset
-  ) internal pure returns (
-    uint amountOut
-  ) {
-    if (totalDebt != 0) {
-      if (balanceBorrowAsset != 0) {
-        // there is some borrow asset on balance
-        // it will be used to cover the debt
-        // let's reduce the size of totalDebt/Collateral to exclude balanceBorrowAsset
-        uint sub = Math.min(balanceBorrowAsset, totalDebt);
-        totalCollateral -= totalCollateral * sub / totalDebt;
-        totalDebt -= sub;
-      }
-
-      // for definiteness: usdc - collateral asset, dai - borrow asset
-      // Pc = price of the USDC, Pb = price of the DAI, alpha = Pc / Pb [DAI / USDC]
-      // S [USDC] - amount to sell, R [DAI] = alpha * S - amount to repay
-      // After repaying R we get: alpha * S * C / R
-      // Balance should be increased on: requestedAmount = alpha * S * C / R - S
-      // So, we should sell: S = requestedAmount / (alpha * C / R - 1))
-      // We can lost some amount on liquidation of S => R, so we need to use some gap = {GAP_AMOUNT_TO_SELL}
-      // Same formula: S * h = S + requestedAmount, where h = health factor => s = requestedAmount / (h - 1)
-      // h = alpha * C / R
-      uint alpha18 = prices[indexCollateral] * decs[indexBorrowAsset] * 1e18
-        / prices[indexBorrowAsset] / decs[indexCollateral];
-
-      // if totalCollateral is zero (liquidation happens) we will have zero amount (the debt shouldn't be paid)
-      amountOut = totalDebt != 0 && alpha18 * totalCollateral / totalDebt > 1e18
-        ? Math.min(requestedAmount, totalCollateral) * 1e18 / (alpha18 * totalCollateral / totalDebt - 1e18)
-        : 0;
-
-      if (amountOut != 0) {
-        // we shouldn't try to sell amount greater than amount of totalDebt in terms of collateral asset
-        // but we always asks +1% because liquidation results can be different a bit from expected
-        amountOut = (GAP_CONVERSION + DENOMINATOR) * Math.min(amountOut, totalDebt * 1e18 / alpha18) / DENOMINATOR;
-      }
-    }
-
-    return amountOut;
-  }
-//endregion ------------------------------------------------ Build plan
 
 //region ------------------------------------------------ Repay debts
   /// @notice Repay {amountIn} and get collateral in return, calculate expected amount
@@ -1880,12 +1434,6 @@ library ConverterStrategyBaseLib {
   //endregion ------------------------------------------------ Repay debts
 
 //region------------------------------------------------ Other helpers
-  function _getLiquidationThreshold(uint threshold) internal pure returns (uint) {
-    return threshold > DEFAULT_LIQUIDATION_THRESHOLD
-      ? threshold
-      : DEFAULT_LIQUIDATION_THRESHOLD;
-  }
-
   function _getLiquidationThresholds(
     mapping(address => uint) storage liquidationThresholds,
     address[] memory tokens_,

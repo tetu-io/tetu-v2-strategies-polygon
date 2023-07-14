@@ -105,29 +105,6 @@ export async function doHardWorkForStrategy(
 const { expect } = chai;
 
 /**
- * Make rebalance using swaps in liquidator
- */
-export async function rebalanceUniv3Strategy(
-  strategy: UniswapV3ConverterStrategy,
-  signer: SignerWithAddress,
-  decimals: number,
-) : Promise<IRebalanceResults> {
-  console.log('### REBALANCE CALL ###');
-  const stateBefore = await strategy.getState();
-
-  const tx = await strategy.connect(signer).rebalance({ gasLimit: 10_000_000 });
-  const receipt = await tx.wait();
-  const ret = await handleReceiptRebalance(receipt, decimals);
-
-  const stateAfter = await strategy.getState();
-
-  await printStateDifference(decimals, stateBefore, stateAfter);
-
-  // todo check that balance on the strategy is empty after rebalance call
-  return ret;
-}
-
-/**
  * Make rebalance using rebalanceNoSwaps
  */
 export async function rebalanceUniv3StrategyNoSwaps(

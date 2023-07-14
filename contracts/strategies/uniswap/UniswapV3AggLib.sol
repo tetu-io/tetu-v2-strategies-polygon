@@ -65,7 +65,7 @@ library UniswapV3AggLib {
     uint amountToSwap
   ){
     (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p = ConverterStrategyBaseLib.SwapRepayPlanParams({
+    IterationPlanLib.SwapRepayPlanParams memory p = IterationPlanLib.SwapRepayPlanParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
@@ -111,7 +111,7 @@ library UniswapV3AggLib {
   ){
     (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
 
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p = ConverterStrategyBaseLib.SwapRepayPlanParams({
+    IterationPlanLib.SwapRepayPlanParams memory p = IterationPlanLib.SwapRepayPlanParams({
       converter: converter_,
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
@@ -141,12 +141,27 @@ library UniswapV3AggLib {
   ///         Function returns info for first swap only.
   /// @return tokenToSwap What token should be swapped. Zero address if no swap is required
   /// @return amountToSwap Amount to swap. Zero if no swap is required.
-  function _quoteWithdrawStep(ConverterStrategyBaseLib.SwapRepayPlanParams memory p) internal returns (
+  function _quoteWithdrawStep(IterationPlanLib.SwapRepayPlanParams memory p) internal returns (
     address tokenToSwap,
     uint amountToSwap
   ) {
     uint indexTokenToSwapPlus1;
-    (indexTokenToSwapPlus1, amountToSwap,) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
+    (indexTokenToSwapPlus1, amountToSwap,) = IterationPlanLib.buildIterationPlan(
+      p.converter,
+      p.tokens,
+      p.liquidationThresholds,
+      p.prices,
+      p.decs,
+      p.balanceAdditions,
+      [
+        p.usePoolProportions ? 1 : 0,
+        p.planKind,
+        p.propNotUnderlying18,
+        type(uint).max,
+        IDX_ASSET,
+        IDX_TOKEN
+      ]
+    );
     if (indexTokenToSwapPlus1 != 0) {
       tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
@@ -156,15 +171,31 @@ library UniswapV3AggLib {
   /// @notice Make one iteration of withdraw. Each iteration can make 0 or 1 swap only
   ///         We can make only 1 of the following 3 operations per single call:
   ///         1) repay direct debt 2) repay reverse debt 3) swap leftovers to underlying
-  function _withdrawStep(ConverterStrategyBaseLib.SwapRepayPlanParams memory p, SwapByAggParams memory aggParams) internal returns (
+  function _withdrawStep(IterationPlanLib.SwapRepayPlanParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
-    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = ConverterStrategyBaseLib._buildIterationPlan(p, type(uint).max, IDX_ASSET, IDX_TOKEN);
+    (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = IterationPlanLib.buildIterationPlan(
+      p.converter,
+      p.tokens,
+      p.liquidationThresholds,
+      p.prices,
+      p.decs,
+      p.balanceAdditions,
+      [
+        p.usePoolProportions ? 1 : 0,
+        p.planKind,
+        p.propNotUnderlying18,
+        type(uint).max,
+        IDX_ASSET,
+        IDX_TOKEN
+      ]
+    );
+
     bool[4] memory actions = [
-      p.planKind == IterationPlanKinds.PLAN_SWAP_ONLY || p.planKind == IterationPlanKinds.PLAN_SWAP_REPAY, // swap 1
-      p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY || p.planKind == IterationPlanKinds.PLAN_SWAP_REPAY, // repay 1
-      p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY, // swap 2
-      p.planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY // repay 2
+      p.planKind == IterationPlanLib.PLAN_SWAP_ONLY || p.planKind == IterationPlanLib.PLAN_SWAP_REPAY, // swap 1
+      p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY || p.planKind == IterationPlanLib.PLAN_SWAP_REPAY, // repay 1
+      p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY, // swap 2
+      p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY // repay 2
     ];
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
@@ -216,7 +247,7 @@ library UniswapV3AggLib {
 
   /// @notice borrow borrow-asset under collateral-asset, result balances should match to propNotUnderlying18
   function borrowToProportions(
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow
   ) internal {
@@ -249,7 +280,7 @@ library UniswapV3AggLib {
   /// @return borrowInsteadRepay true if repay is not necessary at all and borrow is required instead
   ///                            if we need both repay and borrow then false is returned
   function _getAmountToRepay2(
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow
   ) internal view returns (
@@ -292,7 +323,7 @@ library UniswapV3AggLib {
   }
 
   function _swap(
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    IterationPlanLib.SwapRepayPlanParams memory p,
     SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,
@@ -301,7 +332,7 @@ library UniswapV3AggLib {
     uint spentAmountIn,
     uint updatedPropNotUnderlying18
   ) {
-    if (amountIn > ConverterStrategyBaseLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
+    if (amountIn > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
       AppLib.approveIfNeeded(p.tokens[indexIn], aggParams.amountToSwap, aggParams.aggregator);
 
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);

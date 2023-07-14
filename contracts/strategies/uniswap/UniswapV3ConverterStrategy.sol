@@ -173,7 +173,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
 
-    v.planKind = IterationPlanKinds.getEntryKind(planEntryData);
+    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
 
     // estimate amounts to be withdrawn from the pool
     v.totalLiquidity = state.totalLiquidity;
@@ -227,7 +227,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
-    v.planKind = IterationPlanKinds.getEntryKind(planEntryData);
+    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
     v.propNotUnderlying18 = _extractProp(v.planKind, planEntryData);
 
     // make withdraw iteration according to the selected plan
@@ -401,11 +401,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns(uint propNotUnderlying18) {
-    if (planKind == IterationPlanKinds.PLAN_SWAP_REPAY) {
+    if (planKind == IterationPlanLib.PLAN_SWAP_REPAY) {
       // custom proportions
       (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
       require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
-    } else if (planKind == IterationPlanKinds.PLAN_REPAY_SWAP_REPAY) {
+    } else if (planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
       // the proportions should be taken from the pool
       // new value of the proportions should also be read from the pool after each swap
       propNotUnderlying18 = type(uint).max;

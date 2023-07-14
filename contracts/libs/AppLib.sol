@@ -14,6 +14,13 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 library AppLib {
   using SafeERC20 for IERC20;
 
+  /// @notice 1% gap to cover possible liquidation inefficiency
+  /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
+  uint internal constant GAP_CONVERSION = 1_000;
+  /// @dev Absolute value for any token
+  uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 100_000;
+  uint internal constant DENOMINATOR = 100_000;
+
   /// @notice Unchecked increment for for-cycles
   function uncheckedInc(uint i) internal pure returns (uint) {
     unchecked {
@@ -68,5 +75,11 @@ library AppLib {
 
   function _getPriceOracle(ITetuConverter converter_) internal view returns (IPriceOracle) {
     return IPriceOracle(IConverterController(converter_.controller()).priceOracle());
+  }
+
+  function _getLiquidationThreshold(uint threshold) internal pure returns (uint) {
+    return threshold > AppLib.DEFAULT_LIQUIDATION_THRESHOLD
+      ? threshold
+      : AppLib.DEFAULT_LIQUIDATION_THRESHOLD;
   }
 }

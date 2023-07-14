@@ -14,6 +14,7 @@ const libraries = new Map<string, string[]>([
   ['VeTetu', ['VeTetuLogo']],
   ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2']],
   // common
+  ['ConverterStrategyBaseLib', ['IterationPlanLib']],
   ['ConverterStrategyBaseLib2', ['StrategyLib']],
   ['BorrowLib', ['ConverterStrategyBaseLib']],
   ['BorrowLibFacade', ['BorrowLib']],
@@ -32,7 +33,7 @@ const libraries = new Map<string, string[]>([
   ],
   ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2']],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
-  ['UniswapV3AggLib', ['ConverterStrategyBaseLib']],
+  ['UniswapV3AggLib', ['ConverterStrategyBaseLib', 'IterationPlanLib']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
   ['UniswapV3AggLibFacade', ['UniswapV3AggLib', 'ConverterStrategyBaseLib']],
   // Algebra

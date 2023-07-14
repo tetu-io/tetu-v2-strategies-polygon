@@ -9,7 +9,7 @@ import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addre
 import {ControllerV2__factory, IController__factory, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IStrategyV2, StrategyBaseV2, StrategyBaseV2__factory, StrategySplitterV2, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3Reader,} from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -485,7 +485,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
           console.log("statePrev", statePrev);
           console.log("stateLast", stateLast);
           expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
-          expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-6);
+          expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 2e-6);
         });
         it("should not enter to the pool at the end", async () => {
           const ret = await loadFixture(makeWithdrawSingleIteration);

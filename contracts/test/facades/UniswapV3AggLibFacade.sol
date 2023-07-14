@@ -51,7 +51,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
   }
 
   function _swap(
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    IterationPlanLib.SwapRepayPlanParams memory p,
     UniswapV3AggLib.SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,
@@ -64,7 +64,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
   }
 
   function _getAmountToRepay2(
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow
   ) external view returns (
@@ -75,7 +75,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
   }
 
   function borrowToProportions(
-    ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
+    IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow
   ) external {
