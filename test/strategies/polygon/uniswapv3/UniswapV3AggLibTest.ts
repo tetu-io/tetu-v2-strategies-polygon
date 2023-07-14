@@ -5,8 +5,7 @@ import {IBorrowParamsNum, ILiquidationParams, IQuoteRepayParams, IRepayParams} f
 import {
   setupMockedQuoteRepay,
   setupMockedBorrowEntryKind1,
-  setupMockedRepay,
-  setupMockedBorrow
+  setupMockedRepay
 } from "../../../baseUT/mocks/MockRepayUtils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MockForwarder, IERC20Metadata__factory, MockTetuConverter, MockTetuLiquidatorSingleCall, MockToken, PriceOracleMock, UniswapV3AggLibFacade} from "../../../../typechain";

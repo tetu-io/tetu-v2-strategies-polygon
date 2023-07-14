@@ -1,11 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {
-  BorrowLibFacade,
-  MockForwarder,
-  MockTetuConverter,
-  MockTetuLiquidatorSingleCall,
-  MockToken, PriceOracleMock
-} from "../../../typechain";
+import {BorrowLibFacade, MockForwarder, MockTetuConverter, MockTetuLiquidatorSingleCall, MockToken, PriceOracleMock} from "../../../typechain";
 import {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";

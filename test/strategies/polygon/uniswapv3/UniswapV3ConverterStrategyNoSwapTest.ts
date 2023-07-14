@@ -653,7 +653,24 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
   });
 
   describe('rebalanceNoSwaps', function() {
-// todo
+    it('should change needRebalance() result to false', async() => {
+      const s = strategy
+      const state = await s.getState()
+
+      console.log('deposit...');
+      await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
+      await TokenUtils.getToken(asset, signer.address, parseUnits('1000', 6));
+      await vault.deposit(parseUnits('1000', 6), signer.address);
+
+      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
+
+      const needRebalanceBefore = await s.needRebalance();
+      await s.rebalanceNoSwaps(true);
+      const needRebalanceAfter = await s.needRebalance();
+
+      expect(needRebalanceBefore).eq(true);
+      expect(needRebalanceAfter).eq(false);
+    })
   });
 
 //endregion Unit tests
