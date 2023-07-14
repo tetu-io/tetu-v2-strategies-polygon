@@ -149,74 +149,23 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     return fuseEnabledOut;
   }
 
-  /*/// @dev The rebalancing functionality is the core of this strategy.
-  ///      Swap method is used.
-  function rebalance() external {
-    address _controller = controller();
-    StrategyLib2.onlyOperators(_controller);
-
-    (, uint profitToCover) = _fixPriceChanges(true);
-    uint oldTotalAssets = totalAssets() - profitToCover;
-
-    /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
-    /// after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
-
-    // _depositorEnter(tokenAmounts) if length == 2
-    uint[] memory tokenAmounts = AlgebraConverterStrategyLogicLib.rebalance(
-      state,
-      converter,
-      _controller,
-      oldTotalAssets,
-      profitToCover,
-      splitter
-    );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    //updating investedAssets based on new baseAmounts
-    _updateInvestedAssets();
+  function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
+    revert('Not implemented yet');
   }
 
-  function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
-    address _controller = controller();
-    StrategyLib2.onlyOperators(_controller);
+  function withdrawByAggStep(
+    address[2] calldata tokenToSwapAndAggregator,
+    uint amountToSwap_,
+    bytes memory swapData,
+    bytes memory planEntryData,
+    uint entryToPool
+  ) external returns (bool completed) {
+    revert('Not implemented yet');
+  }
 
-    (, uint profitToCover) = _fixPriceChanges(true);
-    uint oldTotalAssets = totalAssets() - profitToCover;
-
-    /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
-    /// after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
-
-    // _depositorEnter(tokenAmounts) if length == 2
-    uint[] memory tokenAmounts = AlgebraConverterStrategyLogicLib.rebalanceSwapByAgg(
-      state,
-      converter,
-      oldTotalAssets,
-      AlgebraConverterStrategyLogicLib.RebalanceSwapByAggParams(
-        direction,
-        amount,
-        agg,
-        swapData
-      ),
-      profitToCover,
-      splitter
-    );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    //updating investedAssets based on new baseAmounts
-    _updateInvestedAssets();
-  }*/
+  function getPropNotUnderlying18() external view returns (uint) {
+    revert('Not implemented yet');
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                   INTERNAL LOGIC

@@ -5,22 +5,21 @@ import "../ConverterStrategyBase.sol";
 import "./UniswapV3Depositor.sol";
 import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
-import "../../interfaces/IRebalancingStrategy.sol";
+import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "./UniswapV3AggLib.sol";
-import "../../interfaces/IPoolProportionsProvider.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
 ///         by utilizing fill-up and swap methods depending on the range size of the liquidity provided.
 /// @author a17
-contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingStrategy, IPoolProportionsProvider {
+contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
   //region ------------------------------------------------- Constants
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "1.4.7";
+  string public constant override STRATEGY_VERSION = "2.0.0";
 
   /// @notice Enter to the pool at the end of withdrawByAggStep
   uint internal constant ENTRY_TO_POOL_IS_ALLOWED = 1;
@@ -131,16 +130,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
   }
 
-  /// @return swapAtoB, swapAmount
+  /*/// @return swapAtoB, swapAmount
   function quoteRebalanceSwap() external returns (bool, uint) {
     return UniswapV3ConverterStrategyLogicLib.quoteRebalanceSwap(state, converter);
-  }
+  }*/
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region--------------------------------------------- REBALANCE
-  function rebalance() external {
+  /*function rebalance() external {
     _rebalanceNoSwaps(true);
-  }
+  }*/
 
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @return True if the fuse was triggered

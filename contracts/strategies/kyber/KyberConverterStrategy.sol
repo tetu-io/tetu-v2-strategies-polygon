@@ -152,54 +152,23 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     return fuseEnabledOut;
   }
 
-/*  /// @dev The rebalancing functionality is the core of this strategy.
-  ///      Swap method is used.
-  function rebalance() external {
-    (uint profitToCover, uint oldTotalAssets, address _controller) = _startRebalance();
-
-    // _depositorEnter(tokenAmounts) if length == 2
-    uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalance(
-      state,
-      converter,
-      _controller,
-      oldTotalAssets,
-      profitToCover,
-      splitter
-    );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    //updating investedAssets based on new baseAmounts
-    _updateInvestedAssets();
+  function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
+    revert('Not implemented yet');
   }
 
-  function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
-    (uint profitToCover, uint oldTotalAssets,) = _startRebalance();
+  function withdrawByAggStep(
+    address[2] calldata tokenToSwapAndAggregator,
+    uint amountToSwap_,
+    bytes memory swapData,
+    bytes memory planEntryData,
+    uint entryToPool
+  ) external returns (bool completed) {
+    revert('Not implemented yet');
+  }
 
-    // _depositorEnter(tokenAmounts) if length == 2
-    uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalanceSwapByAgg(
-      state,
-      converter,
-      oldTotalAssets,
-      KyberConverterStrategyLogicLib.RebalanceSwapByAggParams(
-        direction,
-        amount,
-        agg,
-        swapData
-      ),
-      profitToCover,
-      splitter
-    );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    //updating investedAssets based on new baseAmounts
-    _updateInvestedAssets();
-  }*/
+  function getPropNotUnderlying18() external view returns (uint) {
+    revert('Not implemented yet');
+  }
 
   /////////////////////////////////////////////////////////////////////
   ///                   INTERNAL LOGIC
