@@ -519,6 +519,8 @@ contract MockTetuConverter is ITetuConverter {
     bool useDebtGap,
     bool addToQueue
   ) external {
+    console.log("setGetDebtAmountCurrent, user, collateral asset, borrow asset", user_, _tokenName(collateralAsset_), _tokenName(borrowAsset_));
+    console.log("setGetDebtAmountCurrent, totalDebtAmountOut, totalCollateralAmountOut, useDebtGap", totalDebtAmountOut, totalCollateralAmountOut, useDebtGap);
     bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap));
     GetDebtAmountParams memory data = GetDebtAmountParams({
       user: user_,
@@ -580,6 +582,8 @@ contract MockTetuConverter is ITetuConverter {
     bool useDebtGap,
     bool addToQueue
   ) external {
+    console.log("setGetDebtAmountStored, user, collateral asset, borrow asset", user_,  _tokenName(collateralAsset_), _tokenName(borrowAsset_));
+    console.log("setGetDebtAmountStored, totalDebtAmountOut, totalCollateralAmountOut, useDebtGap", totalDebtAmountOut, totalCollateralAmountOut, useDebtGap);
     bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap));
     GetDebtAmountParams memory data = GetDebtAmountParams({
       user: user_,

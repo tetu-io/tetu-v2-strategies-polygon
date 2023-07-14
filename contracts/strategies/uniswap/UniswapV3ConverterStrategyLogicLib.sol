@@ -17,7 +17,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
-import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -809,25 +808,16 @@ library UniswapV3ConverterStrategyLogicLib {
     address strategyProfitHolder,
     address splitter
   ) external returns (uint[] memory tokenAmounts) {
-    console.log("afterWithdrawStep.0", IERC20(tokens[0]).balanceOf(address(this)));
-    console.log("afterWithdrawStep.1", IERC20(tokens[1]).balanceOf(address(this)));
-
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
     }
-    console.log("afterWithdrawStep.1.0", IERC20(tokens[0]).balanceOf(address(this)));
-    console.log("afterWithdrawStep.1.1", IERC20(tokens[1]).balanceOf(address(this)));
 
     uint loss;
     (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
-    console.log("afterWithdrawStep.2.0", IERC20(tokens[0]).balanceOf(address(this)));
-    console.log("afterWithdrawStep.2.1", IERC20(tokens[1]).balanceOf(address(this)));
 
     if (loss != 0) {
       _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
-      console.log("afterWithdrawStep.3.0", IERC20(tokens[0]).balanceOf(address(this)));
-      console.log("afterWithdrawStep.3.1", IERC20(tokens[1]).balanceOf(address(this)));
     }
   }
 
@@ -836,13 +826,9 @@ library UniswapV3ConverterStrategyLogicLib {
     uint coveredByRewards;
     if (loss != 0) {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
-      console.log("_coverLoss.1", IERC20(tokenA).balanceOf(address(this)));
-      console.log("_coverLoss.1", IERC20(tokenB).balanceOf(address(this)));
       uint notCovered = loss - coveredByRewards;
       if (notCovered != 0) {
         ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-        console.log("_coverLoss.2", IERC20(tokenA).balanceOf(address(this)));
-        console.log("_coverLoss.2", IERC20(tokenB).balanceOf(address(this)));
       }
     }
 
@@ -886,14 +872,11 @@ library UniswapV3ConverterStrategyLogicLib {
   ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
   function getPropNotUnderlying18(State storage state) view external returns (uint) {
     // get pool proportions
-    console.log("getPropNotUnderlying18");
     IUniswapV3Pool pool = state.pool;
     bool depositorSwapTokens = state.depositorSwapTokens;
     (int24 newLowerTick, int24 newUpperTick) = UniswapV3DebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
     (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
 
-    console.log("getPropNotUnderlying18.consumed0", consumed0);
-    console.log("getPropNotUnderlying18.consumed1", consumed1);
     require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
     return consumed1 * 1e18 / (consumed0 + consumed1);
   }

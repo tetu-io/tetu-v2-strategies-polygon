@@ -54,7 +54,6 @@ library ConverterStrategyBaseLib {
     uint amountToBorrow;
     uint c1;
     uint c3;
-    uint ratio;
     uint alpha;
   }
 
@@ -441,12 +440,15 @@ library ConverterStrategyBaseLib {
         // as result, remaining C1 will be too big after conversion and we need to make another borrow
         vars.c3 = vars.alpha * vars.amountsToBorrow[i] / 1e18;
         vars.c1 = x * vars.c3 / y;
-        vars.ratio = (vars.collateralsRequired[i] + vars.c1) > amountIn_
-          ? 1e18 * amountIn_ / (vars.collateralsRequired[i] + vars.c1)
-          : 1e18;
 
-        vars.collateral = vars.collateralsRequired[i] * vars.ratio / 1e18;
-        vars.amountToBorrow = vars.amountsToBorrow[i] * vars.ratio / 1e18;
+        // we doesn't calculate an intermediate ratio cR/(cR+c1) to avoid lost of precision
+        if ((vars.collateralsRequired[i] + vars.c1) > amountIn_) {
+          vars.collateral = vars.collateralsRequired[i] * amountIn_ / (vars.collateralsRequired[i] + vars.c1);
+          vars.amountToBorrow = vars.amountsToBorrow[i] * amountIn_ / (vars.collateralsRequired[i] + vars.c1);
+        } else {
+          vars.collateral = vars.collateralsRequired[i];
+          vars.amountToBorrow = vars.amountsToBorrow[i];
+        }
 
         // skip any attempts to borrow zero amount or use too little collateral
         if (vars.collateral < collateralThreshold_ || vars.amountToBorrow == 0) {

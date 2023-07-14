@@ -672,8 +672,8 @@ describe('BorrowLibTest', () => {
                 collateralAmount: "600", // 600 / 480 = 1.25
                 maxTargetAmount: "480",
 
-                collateralAmountOut: "499.999999", // 500 / 400 = 1.25
-                borrowAmountOut: "399.999999",
+                collateralAmountOut: "500", // 500 / 400 = 1.25
+                borrowAmountOut: "400",
 
                 converter: ethers.Wallet.createRandom().address,
               }]
@@ -682,8 +682,8 @@ describe('BorrowLibTest', () => {
 
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRebalanceAssetsTest);
-            expect(r.balanceX).eq(100.000001);
-            expect(r.balanceY).eq(399.999999);
+            expect(r.balanceX).eq(100);
+            expect(r.balanceY).eq(400);
           });
         });
       });

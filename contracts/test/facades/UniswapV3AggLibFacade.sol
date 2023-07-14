@@ -67,7 +67,10 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
     ConverterStrategyBaseLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow
-  ) external view returns (uint) {
+  ) external view returns (
+    uint amountToRepay,
+    bool borrowInsteadRepay
+  ) {
     return UniswapV3AggLib._getAmountToRepay2(p, indexCollateral, indexBorrow);
   }
 
