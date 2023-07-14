@@ -660,7 +660,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
       console.log('deposit...');
       await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
       await TokenUtils.getToken(asset, signer.address, parseUnits('1000', 6));
-      await vault.deposit(parseUnits('1000', 6), signer.address);
+      await vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
 
       await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
 
