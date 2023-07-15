@@ -175,7 +175,7 @@ describe('KyberConverterStrategyDepegTest', function() {
     await TimeUtils.rollback(snapshot);
   });
 
-  it.only('Depeg USDT', async() => {
+  it('Depeg USDT', async() => {
     const changeTicksPerStep = 10
     const rowsCaption = ['Step', 'USDT Price', 'Total assets', 'USDT Collateral', 'USDC Amount to repay', 'Locked underlying', 'Health Factor']
     const rows: [string, number, number, number, number, number, number][] = []

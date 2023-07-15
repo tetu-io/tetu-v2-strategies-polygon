@@ -7,7 +7,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
 
-
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
 
@@ -23,6 +22,7 @@ library IterationPlanLib {
 
   /// @notice Repay available amount-to-repay, swap all or part of collateral to borrowed-asset, make one repay if needed.
   ///         Swap + second repay tries to make asset balances to proportions required by the pool.
+  ///         Proportions are read from pool through IPoolProportionsProvider(this) and re-read after swapping.
   ///         (uint256) - (entry kind)
   uint constant public PLAN_REPAY_SWAP_REPAY = 1;
 
@@ -107,13 +107,23 @@ library IterationPlanLib {
   }
 
 //region ------------------------------------------------ Build plan
+  /// @notice Build plan to make single iteration of withdraw according to the selected plan
+  ///         The goal is to withdraw {requestedAmount} and receive {asset}:{token} in proper proportions on the balance
+  /// @param tokens List of the pool tokens. One of them is underlying and one of then is not-underlying
+  ///               that we are going to withdraw
+  /// @param liquidationThresholds Liquidation thresholds for the {tokens}. If amount is less then the threshold,
+  ///                              we cannot swap it.
+  /// @param prices Prices of the {tokens}, decimals 18, [$/token]
+  /// @param decs 10**decimal for each token of the {tokens}
+  /// @param balanceAdditions Amounts that will be added to the current balances of the {tokens}
+  ///                         to the moment of the plan execution
   /// @param packedData Several values packed to fixed-size array (to reduce number of params)
-  ///    0: usePoolProportions,
-  ///    1: planKind,
-  ///    2: propNotUnderlying18,
-  ///    3: requestedAmount,
-  ///    4: indexAsset,
-  ///    5: indexToken
+  ///    0: usePoolProportions: 1 - read proportions from the pool through IPoolProportionsProvider(this)
+  ///    1: planKind: selected plan, one of PLAN_XXX
+  ///    2: propNotUnderlying18: value of not-underlying proportion [0..1e18] if usePoolProportions == 0
+  ///    3: requestedAmount: total amount that should be withdrawn, it can be type(uint).max
+  ///    4: indexAsset: index of the underlying in {tokens} array
+  ///    5: indexToken: index of the token in {tokens} array. We are going to withdraw the token and convert it to the asset
   function buildIterationPlan(
     ITetuConverter converter,
     address[] memory tokens,
