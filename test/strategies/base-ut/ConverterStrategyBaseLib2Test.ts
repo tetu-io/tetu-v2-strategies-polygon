@@ -912,6 +912,206 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
+  describe("sendToInsurance", () =>{
+    interface ISendToInsuranceParams {
+      asset: MockToken;
+      amount: string;
+      totalAssets: string;
+      insuranceBalance: string;
+      strategyBalance: string;
+    }
+    interface ISendToInsuranceResults {
+      amountToSend: number;
+      strategyBalance: number;
+      insuranceBalance: number;
+    }
+
+    async function callSendToInsurance(p: ISendToInsuranceParams): Promise<ISendToInsuranceResults> {
+      const insurance = ethers.Wallet.createRandom().address;
+      const decimals = await p.asset.decimals();
+
+      const vault = await MockHelper.createMockVault(signer);
+      await vault.setInsurance(insurance);
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      await splitter.setVault(vault.address);
+
+      await p.asset.mint(facade.address, parseUnits(p.strategyBalance, decimals));
+
+      const amountToSend = await facade.callStatic.sendToInsurance(
+        p.asset.address,
+        parseUnits(p.amount, decimals),
+        splitter.address,
+        parseUnits(p.totalAssets, decimals)
+      );
+      await facade.sendToInsurance(
+        p.asset.address,
+        parseUnits(p.amount, decimals),
+        splitter.address,
+        parseUnits(p.totalAssets, decimals)
+      );
+
+      return {
+        amountToSend: +formatUnits(amountToSend, decimals),
+        insuranceBalance: +formatUnits(await p.asset.balanceOf(insurance), decimals),
+        strategyBalance: +formatUnits(await p.asset.balanceOf(facade.address), decimals),
+      }
+    }
+
+    describe("Good paths", () => {
+      describe("Amount <= current balance", () => {
+        describe("Amount <= max allowed value", () => {
+          let snapshot: string;
+          before(async function() {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function() {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+            // max allowed value = 500 * 200_000 / 100_000 = 1000
+            return callSendToInsurance({
+              asset: usdc,
+              insuranceBalance: "0",
+              amount: "999",
+              strategyBalance: "1000",
+              totalAssets: "200000"
+            });
+          }
+          it("should send amount to insurance", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.insuranceBalance).eq(999);
+          })
+          it("should reduce strategy balance on amount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.strategyBalance).eq(1000-999);
+          })
+          it("should return amount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.amountToSend).eq(999);
+          })
+        });
+        describe("Amount > max allowed value", () => {
+          let snapshot: string;
+          before(async function() {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function() {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+            // max allowed value = 500 * 200_000 / 100_000 = 1000
+            return callSendToInsurance({
+              asset: usdc,
+              insuranceBalance: "0",
+              amount: "1020",
+              strategyBalance: "2000",
+              totalAssets: "200000"
+            });
+          }
+          it("should send expected amount to insurance", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.insuranceBalance).eq(1000);
+          })
+          it("should reduce strategy balance on expected amount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.strategyBalance).eq(2000-1000);
+          })
+          it("should return amount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.amountToSend).eq(1000);
+          })
+        });
+        describe("Current balance is zero", () => {
+          let snapshot: string;
+          before(async function() {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function() {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+            // max allowed value = 500 * 200_000 / 100_000 = 1000
+            return callSendToInsurance({
+              asset: usdc,
+              insuranceBalance: "0",
+              amount: "1020",
+              strategyBalance: "0",
+              totalAssets: "200000"
+            });
+          }
+          it("should send nothing to insurance", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.insuranceBalance).eq(0);
+          })
+          it("should not change strategy balance", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.strategyBalance).eq(0);
+          })
+          it("should return zero", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.amountToSend).eq(0);
+          })
+        });
+      });
+      describe("Amount > current balance", () => {
+        describe("Amount <= max allowed value", () => {
+          let snapshot: string;
+          before(async function() {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function() {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+            // max allowed value = 500 * 200_000 / 100_000 = 1000
+            return callSendToInsurance({
+              asset: usdc,
+              insuranceBalance: "0",
+              amount: "500",
+              strategyBalance: "100",
+              totalAssets: "200000"
+            });
+          }
+          it("should send amount to insurance", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.insuranceBalance).eq(100);
+          })
+          it("should reduce strategy balance on amount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.strategyBalance).eq(0);
+          })
+          it("should return amount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.amountToSend).eq(100);
+          })
+        });
+      });
+    });
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function() {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function() {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      it("should revert if totalAssets is zero", async () => {
+        await expect(callSendToInsurance({
+          asset: usdc,
+          insuranceBalance: "0",
+          amount: "500",
+          strategyBalance: "10",
+          totalAssets: "0"
+        })).revertedWith("TS-5 zero balance"); // ZERO_BALANCE
+      });
+    });
+  });
 
 
 

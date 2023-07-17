@@ -34,13 +34,13 @@ library ConverterStrategyBaseLib2 {
 //region --------------------------------------- CONSTANTS
   uint internal constant DENOMINATOR = 100_000;
 
-  /// @dev 0.5% of max profit for strategy TVL
-  /// @notice Limit max amount of profit that can be send to insurance after price changing
-  uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = 500;
-
   /// @dev 0.5% of max loss for strategy TVL
   /// @notice Same value as StrategySplitterV2.HARDWORK_LOSS_TOLERANCE
   uint public constant HARDWORK_LOSS_TOLERANCE = 500;
+
+  /// @dev 0.5% of max profit for strategy TVL
+  /// @notice Limit max amount of profit that can be send to insurance after price changing
+  uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = HARDWORK_LOSS_TOLERANCE;
 
 //endregion --------------------------------------- CONSTANTS
 
@@ -201,9 +201,9 @@ library ConverterStrategyBaseLib2 {
 
 //region -------------------------------------------- Cover loss, send profit to insurance
   /// @notice Send given amount of underlying to the insurance
-  /// @param strategyBalance Total strategy balance = balance of underlying + current invested assets amount
+  /// @param totalAssets_ Total strategy balance = balance of underlying + current invested assets amount
   /// @return Amount of underlying sent to the insurance
-  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
+  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_) external returns (uint) {
     uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
@@ -211,8 +211,8 @@ library ConverterStrategyBaseLib2 {
       // Amount limitation should be implemented in the same way as in StrategySplitterV2._coverLoss
       // Revert or cut amount in both cases
 
-      require(strategyBalance != 0, AppErrors.ZERO_BALANCE);
-      amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
+      require(totalAssets_ != 0, AppErrors.ZERO_BALANCE);
+      amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * totalAssets_ / 100_000);
       //require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
 
       IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);

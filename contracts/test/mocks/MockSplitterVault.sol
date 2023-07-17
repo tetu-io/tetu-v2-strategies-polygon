@@ -5,6 +5,7 @@ pragma solidity 0.8.17;
 contract MockSplitterVault {
   address private _vault;
   address private _asset;
+  address private _insurance;
 
   function setVault(address vault_) external {
     _vault = vault_;
@@ -19,4 +20,12 @@ contract MockSplitterVault {
   function asset() external view returns (address) {
     return _asset;
   }
+
+  function setInsurance(address insurance_) external {
+    _insurance = insurance_;
+  }
+  function insurance() external view returns (address) {
+    return _insurance;
+  }
+
 }
