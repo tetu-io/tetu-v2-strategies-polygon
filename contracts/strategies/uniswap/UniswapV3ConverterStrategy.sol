@@ -158,7 +158,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       baseState.splitter,
       checkNeedRebalance
     );
-    _rebalanceAfter(tokenAmounts, false);
+    _rebalanceAfter(tokenAmounts);
     return fuseEnabledOut;
   }
   //endregion--------------------------------------------- REBALANCE
@@ -254,7 +254,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         baseState.splitter,
         false
       );
-      _rebalanceAfter(v.tokenAmounts, false);
+      _rebalanceAfter(v.tokenAmounts);
     } else {
       // fix loss / profitToCover
       v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
@@ -271,7 +271,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
       ) {
         // Make actions after rebalance: depositor enter, update invested assets
-        _rebalanceAfter(v.tokenAmounts, false);
+        _rebalanceAfter(v.tokenAmounts);
       }
     }
 
@@ -388,15 +388,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
-  function _rebalanceAfter(uint[] memory tokenAmounts, bool isNeedFillup) internal {
+  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
     if (tokenAmounts.length == 2) {
       _depositorEnter(tokenAmounts);
     }
 
-    //add fill-up liquidity part of fill-up is used
-    if (isNeedFillup) {
-      UniswapV3ConverterStrategyLogicLib.addFillup(state);
-    }
     _updateInvestedAssets();
   }
 
