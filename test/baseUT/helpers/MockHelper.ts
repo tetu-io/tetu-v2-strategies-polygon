@@ -3,7 +3,7 @@ import {
   BalancerBoostedDepositorFacade,
   BalancerLogicLibFacade,
   BorrowLibFacade,
-  ConverterStrategyBaseLibFacade, ConverterStrategyBaseLibFacade2,
+  ConverterStrategyBaseLibFacade, ConverterStrategyBaseLibFacade2, IterationPlanLibFacade,
   MockController,
   MockConverterStrategy,
   MockConverterStrategy__factory,
@@ -138,6 +138,11 @@ export class MockHelper {
   public static async createBorrowLibFacade(signer: SignerWithAddress): Promise<BorrowLibFacade> {
     return (await DeployerUtils.deployContract(signer, 'BorrowLibFacade')) as BorrowLibFacade;
   }
+
+  public static async createIterationPlanLibFacade(signer: SignerWithAddress): Promise<IterationPlanLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'IterationPlanLibFacade')) as IterationPlanLibFacade;
+  }
+
 
   public static async createUniswapV3ConverterStrategyReaderAccessMock(signer: SignerWithAddress): Promise<UniswapV3ConverterStrategyReaderAccessMock> {
     return (await DeployerUtils.deployContract(signer, 'UniswapV3ConverterStrategyReaderAccessMock')) as UniswapV3ConverterStrategyReaderAccessMock;
