@@ -13,6 +13,5 @@ library AlgebraStrategyErrors {
   string public constant NO_REBALANCE_NEEDED = "AS-9 No rebalance needed";
   string public constant BALANCE_LOWER_THAN_FEE = "AS-10 Balance lower than fee";
   string public constant NOT_CALLBACK_CALLER = "AS-11 Not callback caller";
-  string public constant UNKNOWN_SWAP_ROUTER = "AS-12 Unknown router";
   string public constant ZERO_PROFIT_HOLDER = "AS-13 Zero strategy profit holder";
 }

@@ -14,10 +14,10 @@ import {
   MockTetuLiquidatorSingleCall,
   MockVaultInsurance,
   PriceOracleMock,
-  UniswapV3AggLibFacade,
-  UniswapV3ConverterStrategyReaderAccessMock,
+  PairBasedStrategyLibFacade,
+  PairBasedStrategyReaderAccessMock,
   UniswapV3LibFacade,
-  UniswapV3Reader,
+  PairBasedStrategyReader,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -144,15 +144,15 @@ export class MockHelper {
   }
 
 
-  public static async createUniswapV3ConverterStrategyReaderAccessMock(signer: SignerWithAddress): Promise<UniswapV3ConverterStrategyReaderAccessMock> {
-    return (await DeployerUtils.deployContract(signer, 'UniswapV3ConverterStrategyReaderAccessMock')) as UniswapV3ConverterStrategyReaderAccessMock;
+  public static async createPairBasedStrategyReaderAccessMock(signer: SignerWithAddress): Promise<PairBasedStrategyReaderAccessMock> {
+    return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyReaderAccessMock')) as PairBasedStrategyReaderAccessMock;
   }
 
-  public static async createUniswapV3Reader(signer: SignerWithAddress): Promise<UniswapV3Reader> {
-    return (await DeployerUtils.deployContract(signer, 'UniswapV3Reader')) as UniswapV3Reader;
+  public static async createPairBasedStrategyReader(signer: SignerWithAddress): Promise<PairBasedStrategyReader> {
+    return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyReader')) as PairBasedStrategyReader;
   }
 
-  public static async createUniswapV3AggLibFacade(signer: SignerWithAddress): Promise<UniswapV3AggLibFacade> {
-    return (await DeployerUtils.deployContract(signer, 'UniswapV3AggLibFacade')) as UniswapV3AggLibFacade;
+  public static async createPairBasedStrategyLibFacade(signer: SignerWithAddress): Promise<PairBasedStrategyLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyLibFacade')) as PairBasedStrategyLibFacade;
   }
 }

@@ -22,8 +22,8 @@ import {
   TetuVaultV2,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-  UniswapV3ConverterStrategyReaderAccessMock,
-  UniswapV3Reader,
+  PairBasedStrategyReaderAccessMock,
+  PairBasedStrategyReader,
 } from '../../../../typechain';
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {
@@ -66,7 +66,7 @@ const argv = require('yargs/yargs')()
  * Study noSwap-rebalance.
  * Try to change price step by step and check how strategy params are changed
  */
-describe('UniswapV3ReaderTest', function() {
+describe('PairBasedStrategyReaderTest', function() {
 //region Constants and variables
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
@@ -79,9 +79,9 @@ describe('UniswapV3ReaderTest', function() {
   let usdc: MockToken;
   let wmatic: MockToken;
   let usdt: MockToken;
-  let strategy: UniswapV3ConverterStrategyReaderAccessMock;
+  let strategy: PairBasedStrategyReaderAccessMock;
   let splitter: MockSplitterVault;
-  let reader: UniswapV3Reader;
+  let reader: PairBasedStrategyReader;
   let priceOracle: PriceOracleMock;
 //endregion Constants and variables
 
@@ -107,10 +107,10 @@ describe('UniswapV3ReaderTest', function() {
     await converter.setController(converterController.address);
 
     splitter = await MockHelper.createMockSplitter(signer);
-    strategy = await MockHelper.createUniswapV3ConverterStrategyReaderAccessMock(signer);
+    strategy = await MockHelper.createPairBasedStrategyReaderAccessMock(signer);
     await strategy.setSplitter(splitter.address);
     await strategy.setConverter(converter.address);
-    reader = await MockHelper.createUniswapV3Reader(signer);
+    reader = await MockHelper.createPairBasedStrategyReader(signer);
   });
 
   after(async function () {

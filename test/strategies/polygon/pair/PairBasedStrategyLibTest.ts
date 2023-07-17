@@ -8,7 +8,7 @@ import {
   setupMockedRepay
 } from "../../../baseUT/mocks/MockRepayUtils";
 import {Misc} from "../../../../scripts/utils/Misc";
-import {MockForwarder, IERC20Metadata__factory, MockTetuConverter, MockTetuLiquidatorSingleCall, MockToken, PriceOracleMock, UniswapV3AggLibFacade} from "../../../../typechain";
+import {MockForwarder, IERC20Metadata__factory, MockTetuConverter, MockTetuLiquidatorSingleCall, MockToken, PriceOracleMock, PairBasedStrategyLibFacade} from "../../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
@@ -18,7 +18,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mocks/MockLiquidationUtils";
 import {BigNumber} from "ethers";
 
-describe('UniswapV3AggLibTest', () => {
+describe('PairBasedStrategyLibTest', () => {
   const PLAN_SWAP_REPAY = 0;
   const PLAN_REPAY_SWAP_REPAY = 1;
   const PLAN_SWAP_ONLY = 2;
@@ -37,7 +37,7 @@ describe('UniswapV3AggLibTest', () => {
   let weth: MockToken;
   let liquidator: MockTetuLiquidatorSingleCall;
   let forwarder: MockForwarder;
-  let facade: UniswapV3AggLibFacade;
+  let facade: PairBasedStrategyLibFacade;
   let converter: MockTetuConverter;
   let priceOracleMock: PriceOracleMock;
   //endregion Variables
@@ -58,7 +58,7 @@ describe('UniswapV3AggLibTest', () => {
 
     liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
     forwarder = await MockHelper.createMockForwarder(signer);
-    facade = await MockHelper.createUniswapV3AggLibFacade(signer);
+    facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
     converter = await MockHelper.createMockTetuConverter(signer);
     priceOracleMock = await MockHelper.createPriceOracle(
       signer,

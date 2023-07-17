@@ -7,7 +7,7 @@ import "./UniswapV3ConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
-import "./UniswapV3AggLib.sol";
+import "../pair/PairBasedStrategyLib.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -181,7 +181,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       ? new uint[](2)
       : _depositorQuoteExit(v.totalLiquidity);
 
-    return UniswapV3AggLib.quoteWithdrawStep(
+    return PairBasedStrategyLib.quoteWithdrawStep(
       converter,
       v.tokens,
       v.liquidationThresholds,
@@ -231,7 +231,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     v.propNotUnderlying18 = _extractProp(v.planKind, planEntryData);
 
     // make withdraw iteration according to the selected plan
-    completed = UniswapV3AggLib.withdrawStep(
+    completed = PairBasedStrategyLib.withdrawStep(
       v.converter,
       v.tokens,
       v.liquidationThresholds,

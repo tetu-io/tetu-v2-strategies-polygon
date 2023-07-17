@@ -6,7 +6,7 @@ import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {ControllerV2__factory, IController__factory, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IStrategyV2, StrategyBaseV2, StrategyBaseV2__factory, StrategySplitterV2, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3Reader,} from "../../../../typechain";
+import {ControllerV2__factory, IController__factory, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IStrategyV2, StrategyBaseV2, StrategyBaseV2__factory, StrategySplitterV2, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, PairBasedStrategyReader,} from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
@@ -68,7 +68,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
   let assetCtr: IERC20Metadata;
   let decimals: number;
   let stateParams: IStateParams;
-  let reader: UniswapV3Reader;
+  let reader: PairBasedStrategyReader;
 
   let strategyAsSigner: StrategyBaseV2;
   let strategyAsOperator: UniswapV3ConverterStrategy;
@@ -89,7 +89,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
     asset = MaticAddresses.USDC_TOKEN;
     assetCtr = IERC20Metadata__factory.connect(asset, signer);
     decimals = await IERC20Metadata__factory.connect(asset, gov).decimals();
-    reader = await MockHelper.createUniswapV3Reader(signer);
+    reader = await MockHelper.createPairBasedStrategyReader(signer);
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,

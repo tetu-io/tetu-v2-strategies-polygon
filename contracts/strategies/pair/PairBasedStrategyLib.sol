@@ -4,11 +4,11 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
-import "./UniswapV3DebtLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
+import "../../libs/BorrowLib.sol";
 
-/// @notice Reimplement ConverterStrategyBaseLib.closePositionsToGetAmount with swapping through aggregators
-library UniswapV3AggLib {
+/// @notice Library for the UniV3-like strategies with two tokens in the pool
+library PairBasedStrategyLib {
   uint internal constant _ASSET_LIQUIDATION_SLIPPAGE = 300;
   /// @notice In all functions below array {token} contains underlying at the first position
   uint internal constant IDX_ASSET = 0;
@@ -19,6 +19,10 @@ library UniswapV3AggLib {
   uint internal constant IDX_REPAY_1 = 1;
   uint internal constant IDX_SWAP_2 = 2;
   uint internal constant IDX_REPAY_2 = 3;
+
+  string public constant UNKNOWN_SWAP_ROUTER = "PBS-1 Unknown router";
+  address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
+  address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOceanExchangeProxy
 
   //region ------------------------------------------------ Data types
   struct SwapByAggParams {
@@ -349,7 +353,7 @@ library UniswapV3AggLib {
           true
         );
       } else {
-        UniswapV3DebtLib._checkSwapRouter(aggParams.aggregator);
+        _checkSwapRouter(aggParams.aggregator);
 
         // let's ensure that "next swap" is made using correct token
         // todo probably we should check also amountToSwap?
@@ -381,4 +385,10 @@ library UniswapV3AggLib {
     );
   }
   //endregion ------------------------------------------------ Internal helper functions
+
+  //region ----------------------------------------- Utils
+  function _checkSwapRouter(address router) internal pure {
+    require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
+  }
+  //endregion ------------------------------------------ Utils
 }

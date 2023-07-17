@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
+import "../../interfaces/IPairBasedStrategyReaderAccess.sol";
 import "hardhat/console.sol";
 
-contract UniswapV3ConverterStrategyReaderAccessMock is IUniswapV3ConverterStrategyReaderAccess {
+contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
   address internal _converter;
   address internal _splitter;
   address internal _tokenA;

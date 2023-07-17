@@ -4,7 +4,7 @@ import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {
   ConverterController__factory,
-  IERC20Metadata__factory, ITetuConverter__factory, UniswapV3AggLibFacade
+  IERC20Metadata__factory, ITetuConverter__factory, PairBasedStrategyLibFacade
 } from "../../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
@@ -17,14 +17,14 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 
-describe('UniswapV3AggLibIntTest', () => {
+describe('PairBasedStrategyLibIntTest', () => {
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
   //region Variables
   let snapshotBefore: string;
   let governance: SignerWithAddress;
   let signer: SignerWithAddress;
-  let facade: UniswapV3AggLibFacade;
+  let facade: PairBasedStrategyLibFacade;
   //endregion Variables
 
   //region before, after
@@ -34,7 +34,7 @@ describe('UniswapV3AggLibIntTest', () => {
     governance = await DeployerUtilsLocal.getControllerGovernance(signer);
     snapshotBefore = await TimeUtils.snapshot();
 
-    facade = await MockHelper.createUniswapV3AggLibFacade(signer);
+    facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
     const converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
     const converterController = await ConverterController__factory.connect(await converter.controller(), signer);
     const converterGovernance = await converterController.governance();
@@ -367,7 +367,7 @@ describe('UniswapV3AggLibIntTest', () => {
         it("should revert", async () => {
           await expect(
             loadFixture(makeSwapTest)
-          ).revertedWith("U3S-12 Unknown router"); // UNKNOWN_SWAP_ROUTER
+          ).revertedWith("PBS-1 Unknown router"); // UNKNOWN_SWAP_ROUTER
         })
       });
     });

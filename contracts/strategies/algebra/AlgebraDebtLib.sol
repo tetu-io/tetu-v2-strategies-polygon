@@ -7,6 +7,7 @@ import "./AlgebraLib.sol";
 import "./AlgebraStrategyErrors.sol";
 import "./AlgebraConverterStrategyLogicLib.sol";
 import "../../libs/BorrowLib.sol";
+import "../pair/PairBasedStrategyLib.sol";
 
 library AlgebraDebtLib {
   using SafeERC20 for IERC20;
@@ -323,7 +324,7 @@ library AlgebraDebtLib {
     uint liquidatorSwapSlippage,
     AlgebraConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
   ) internal {
-    _checkSwapRouter(aggParams.agg);
+    PairBasedStrategyLib._checkSwapRouter(aggParams.agg);
 
     uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
 
@@ -361,9 +362,5 @@ library AlgebraDebtLib {
 
       availableBalanceTokenB = AppLib.balance(tokenB);
     }
-  }
-
-  function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH || router == OPENOCEAN, AlgebraStrategyErrors.UNKNOWN_SWAP_ROUTER);
   }
 }

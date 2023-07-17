@@ -10,7 +10,8 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
 import "../../libs/BorrowLib.sol";
-import "../../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
+import "../../interfaces/IPairBasedStrategyReaderAccess.sol";
+import "../pair/PairBasedStrategyLib.sol";
 
 library UniswapV3DebtLib {
   using SafeERC20 for IERC20;
@@ -35,8 +36,6 @@ library UniswapV3DebtLib {
   uint public constant SELL_GAP = 100;
   /// @dev should be placed local, probably will be adjusted later
   uint internal constant BORROW_PERIOD_ESTIMATION = 30 days / 2;
-  address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
-  address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOceanExchangeProxy
 
   //////////////////////////////////////////
   //            STRUCTURES
@@ -343,7 +342,7 @@ library UniswapV3DebtLib {
     uint liquidatorSwapSlippage,
     UniswapV3ConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
   ) internal {
-    _checkSwapRouter(aggParams.agg);
+    PairBasedStrategyLib._checkSwapRouter(aggParams.agg);
 
     uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
 
@@ -546,14 +545,10 @@ library UniswapV3DebtLib {
     balanceWithoutFees -= fee;
   }
 
-  function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH || router == OPENOCEAN, Uni3StrategyErrors.UNKNOWN_SWAP_ROUTER);
-  }
-
   /// @notice Extract tokenA and tokenB from getState results
   /// @dev External function to avoid stack too deep problem
 //  function getTokensFromState(
-//    IUniswapV3ConverterStrategyReaderAccess strategy
+//    IPairBasedStrategyReaderAccess strategy
 //  ) external view returns (address tokenA, address tokenB){
 //    // (tokenA, tokenB, ,,,,,,,,,) = strategy.getState();
 //    UniswapV3ConverterStrategyLogicLib.State memory state = strategy.getState();

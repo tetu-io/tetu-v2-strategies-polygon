@@ -14,7 +14,7 @@ import {
   StrategySplitterV2,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory, UniswapV3Reader,
+  UniswapV3ConverterStrategy__factory, PairBasedStrategyReader,
 } from '../../../../typechain';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
@@ -69,7 +69,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
   let assetCtr: IERC20Metadata;
   let decimals: number;
   let stateParams: IStateParams;
-  let reader: UniswapV3Reader;
+  let reader: PairBasedStrategyReader;
 //endregion Variables
 
 //region before, after
@@ -87,7 +87,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     asset = MaticAddresses.USDC_TOKEN;
     assetCtr = IERC20Metadata__factory.connect(asset, signer);
     decimals = await IERC20Metadata__factory.connect(asset, gov).decimals();
-    reader = await MockHelper.createUniswapV3Reader(signer);
+    reader = await MockHelper.createPairBasedStrategyReader(signer);
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,
