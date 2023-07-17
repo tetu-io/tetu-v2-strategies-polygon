@@ -8,6 +8,7 @@ import "../../strategies/ConverterStrategyBaseLib2.sol";
 /// @notice Provide public access to internal functions of ConverterStrategyBaseLib2
 contract ConverterStrategyBaseLibFacade2 {
   mapping(address => uint) private liquidationThresholds;
+  IStrategyV3.BaseState private baseState;
 
   function setLiquidationThreshold(address asset, uint values) external {
     liquidationThresholds[asset] = values;
@@ -123,5 +124,40 @@ contract ConverterStrategyBaseLibFacade2 {
     uint[] memory expectedAmountsMainAsset
   ) {
     return ConverterStrategyBaseLib2.postWithdrawActionsEmpty(converter, tokens, indexAsset, amountsToConvert_);
+  }
+
+  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
+    return ConverterStrategyBaseLib2.sendToInsurance(asset, amount, splitter, strategyBalance);
+  }
+
+  function getSafeLossToCover(uint loss, uint totalAssets_) external pure returns (uint) {
+    return ConverterStrategyBaseLib2.getSafeLossToCover(loss, totalAssets_);
+  }
+
+  function setBaseState(
+    address asset,
+    address splitter,
+    address performanceReceiver,
+    uint performanceFee,
+    uint performanceFeeRatio,
+    uint compoundRatio,
+    string memory strategySpecificName
+  ) external {
+    baseState.asset = asset;
+    baseState.splitter = splitter;
+    baseState.performanceFee = performanceFee;
+    baseState.performanceReceiver = performanceReceiver;
+    baseState.performanceFeeRatio = performanceFeeRatio;
+    baseState.compoundRatio = compoundRatio;
+    baseState.strategySpecificName = strategySpecificName;
+  }
+
+  function coverLossAfterPriceChanging(uint investedAssetsBefore, uint investedAssetsAfter) external returns (uint earned) {
+    require(baseState.splitter != address(0), "baseState not initialized");
+    return ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsAfter, baseState);
+  }
+
+  function getHardworkLossToleranceValue() external pure returns (uint) {
+    return ConverterStrategyBaseLib2.HARDWORK_LOSS_TOLERANCE;
   }
 }

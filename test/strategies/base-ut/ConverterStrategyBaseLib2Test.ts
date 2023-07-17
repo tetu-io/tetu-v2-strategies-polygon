@@ -3,7 +3,11 @@ import {ethers} from 'hardhat';
 import {TimeUtils} from '../../../scripts/utils/TimeUtils';
 import {DeployerUtils} from '../../../scripts/utils/DeployerUtils';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
-import {ConverterStrategyBaseLibFacade2, MockToken, PriceOracleMock} from '../../../typechain';
+import {
+  ConverterStrategyBaseLibFacade2,
+  MockToken,
+  PriceOracleMock, StrategySplitterV2
+} from '../../../typechain';
 import {expect} from 'chai';
 import {MockHelper} from '../../baseUT/helpers/MockHelper';
 import {IQuoteRepayParams, ITokenAmountNum} from "../../baseUT/mocks/TestDataTypes";
@@ -878,6 +882,38 @@ describe('ConverterStrategyBaseLibTest', () => {
       });
     })
   });
+
+  describe("HARDWORK_LOSS_TOLERANCE", () => {
+    let snapshot: string;
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+    it("should be equal to the value from StrategySplitterV2", async () => {
+      const splitter = await DeployerUtils.deployContract(signer,"StrategySplitterV2") as StrategySplitterV2;
+      const toleranceInStrategySplitterV2 = (await splitter.HARDWORK_LOSS_TOLERANCE()).toNumber();
+      const toleranceInLib = (await facade.getHardworkLossToleranceValue()).toNumber();
+      expect(toleranceInStrategySplitterV2).eq(toleranceInLib);
+    });
+  });
+
+  describe("getSafeLossToCover", () => {
+    it("should return original value", async () => {
+      // 500 * 200_000 / 100_000 = 1000
+      const ret = (await facade.getSafeLossToCover(1000, 200_000)).toNumber();
+      expect(ret).eq(1000);
+    });
+    it("should return cut value", async () => {
+      // 500 * 200_000 / 100_000 = 1000
+      const ret = (await facade.getSafeLossToCover(1001, 200_000)).toNumber();
+      expect(ret).eq(1000);
+    });
+  });
+
+
+
 
 
   describe('getExpectedWithdrawnAmounts', () => {

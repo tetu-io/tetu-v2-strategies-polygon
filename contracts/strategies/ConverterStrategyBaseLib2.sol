@@ -14,6 +14,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV3.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -36,6 +37,11 @@ library ConverterStrategyBaseLib2 {
   /// @dev 0.5% of max profit for strategy TVL
   /// @notice Limit max amount of profit that can be send to insurance after price changing
   uint public constant PRICE_CHANGE_PROFIT_TOLERANCE = 500;
+
+  /// @dev 0.5% of max loss for strategy TVL
+  /// @notice Same value as StrategySplitterV2.HARDWORK_LOSS_TOLERANCE
+  uint public constant HARDWORK_LOSS_TOLERANCE = 500;
+
 //endregion --------------------------------------- CONSTANTS
 
 //region----------------------------------------- EVENTS
@@ -176,25 +182,6 @@ library ConverterStrategyBaseLib2 {
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
   }
 
-  /// @notice Send given amount of underlying to the insurance
-  /// @param strategyBalance Total strategy balance = balance of underlying + current invested assets amount
-  /// @return Amount of underlying sent to the insurance
-  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
-    uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
-    if (amountToSend != 0) {
-      // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
-
-      // Amount limitation should be implemented in the same way as in StrategySplitterV2._coverLoss
-      // Revert or cutting amount in both cases
-
-      // amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
-      require(strategyBalance != 0, AppErrors.ZERO_BALANCE);
-      require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
-      IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);
-    }
-    return amountToSend;
-  }
-
   /// @notice Get the price ratio of the two given tokens from the oracle.
   /// @param converter The Tetu converter.
   /// @param tokenA The first token address.
@@ -210,6 +197,28 @@ library ConverterStrategyBaseLib2 {
   function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
     return AppLib._getPriceOracle(converter).getAssetPrice(token);
   }
+//endregion ----------------------------------------- MAIN LOGIC
+
+//region -------------------------------------------- Cover loss, send profit to insurance
+  /// @notice Send given amount of underlying to the insurance
+  /// @param strategyBalance Total strategy balance = balance of underlying + current invested assets amount
+  /// @return Amount of underlying sent to the insurance
+  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
+    uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
+    if (amountToSend != 0) {
+      // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
+
+      // Amount limitation should be implemented in the same way as in StrategySplitterV2._coverLoss
+      // Revert or cut amount in both cases
+
+      require(strategyBalance != 0, AppErrors.ZERO_BALANCE);
+      amountToSend = Math.min(amountToSend, PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000);
+      //require(amountToSend <= PRICE_CHANGE_PROFIT_TOLERANCE * strategyBalance / 100_000, AppErrors.EARNED_AMOUNT_TOO_HIGH);
+
+      IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);
+    }
+    return amountToSend;
+  }
 
   function _registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
     if (assetAfter > assetBefore) {
@@ -220,16 +229,32 @@ library ConverterStrategyBaseLib2 {
     return (earned, lost);
   }
 
-  /// @notice Register income and cover possible loss
-  function coverPossibleStrategyLoss(uint assetBefore, uint assetAfter, address splitter) external returns (uint earned) {
+  /// @notice Register income and cover possible loss after price changing, emit FixPriceChanges
+  function coverLossAfterPriceChanging(
+    uint investedAssetsBefore,
+    uint investedAssetsAfter,
+    IStrategyV3.BaseState storage baseState
+  ) external returns (uint earned) {
     uint lost;
-    (earned, lost) = _registerIncome(assetBefore, assetAfter);
+    (earned, lost) = _registerIncome(investedAssetsBefore, investedAssetsAfter);
     if (lost != 0) {
-      ISplitter(splitter).coverPossibleStrategyLoss(earned, lost);
+      ISplitter(baseState.splitter).coverPossibleStrategyLoss(
+        earned,
+        getSafeLossToCover(
+          lost,
+          investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this)) // totalAssets
+        )
+      );
     }
-    emit FixPriceChanges(assetBefore, assetAfter);
+    emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter);
   }
-//endregion----------------------------------------- MAIN LOGIC
+
+  /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter
+  function getSafeLossToCover(uint loss, uint totalAssets_) internal pure returns (uint) {
+    // see StrategySplitterV2._declareStrategyIncomeAndCoverLoss, _coverLoss implementations
+    return Math.min(loss, HARDWORK_LOSS_TOLERANCE * totalAssets_ / 100_000);
+  }
+//endregion -------------------------------------------- Cover loss, send profit to insurance
 
 //region ---------------------------------------- Setters
   function checkReinvestThresholdPercentChanged(address controller, uint percent_) external {

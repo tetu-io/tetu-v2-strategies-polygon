@@ -543,7 +543,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     if (updateInvestedAssetsAmount_) {
       uint investedAssetsBefore = _investedAssets;
       investedAssetsOut = _updateInvestedAssets();
-      earnedOut = ConverterStrategyBaseLib2.coverPossibleStrategyLoss(investedAssetsBefore, investedAssetsOut, baseState.splitter);
+      earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsOut, baseState);
     } else {
       investedAssetsOut = _investedAssets;
       earnedOut = 0;
@@ -562,7 +562,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
 
     ///////////////////////////////////////////////////////////////////////////////
-    // todo Current implementation doesn't take into account over-collateration
+    // todo Current implementation doesn't take into account over-collateralization
     // it's too dangerous to use liquidity from the pool for getting {amount_}
     // there is a chance to waste
     revert(AppErrors.NOT_IMPLEMENTED);
