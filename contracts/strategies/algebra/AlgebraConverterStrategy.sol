@@ -6,22 +6,56 @@ import "./AlgebraDepositor.sol";
 import "./AlgebraConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingV2Strategy.sol";
+import "../pair/PairBasedStrategyLib.sol";
 import "./AlgebraStrategyErrors.sol";
 
 
 contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
-  /////////////////////////////////////////////////////////////////////
-  ///                CONSTANTS
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------- Constants
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
   string public constant override STRATEGY_VERSION = "2.0.0";
 
-  /////////////////////////////////////////////////////////////////////
-  ///                INIT
-  /////////////////////////////////////////////////////////////////////
+  /// @notice Enter to the pool at the end of withdrawByAggStep
+  uint internal constant ENTRY_TO_POOL_IS_ALLOWED = 1;
+  /// @notice Enter to the pool at the end of withdrawByAggStep only if full withdrawing has been completed
+  uint internal constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+  /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
+  uint internal constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
+  //endregion ------------------------------------------------- Constants
+
+  //region ------------------------------------------------- Data types
+
+  struct WithdrawByAggStepLocal {
+    address controller;
+    ITetuConverter converter;
+    address[] tokens;
+    uint[] liquidationThresholds;
+    uint oldTotalAssets;
+    uint profitToCover;
+    uint[] tokenAmounts;
+    uint planKind;
+    uint propNotUnderlying18;
+    address tokenToSwap;
+    address aggregator;
+    bool useLiquidator;
+    int24 newLowerTick;
+    int24 newUpperTick;
+    IAlgebraPool pool;
+  }
+
+  struct QuoteWithdrawByAggLocal {
+    address[] tokens;
+    uint[] liquidationThresholds;
+    uint planKind;
+    uint totalLiquidity;
+  }
+
+  //endregion ------------------------------------------------- Data types
+
+  //region ------------------------------------------------- INIT
 
   /// @notice Initialize the strategy with the given parameters.
   /// @param controller_ The address of the controller.
@@ -61,10 +95,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     baseState.strategySpecificName = AlgebraConverterStrategyLogicLib.createSpecificName(state);
     emit StrategyLib2.StrategySpecificNameChanged(baseState.strategySpecificName);
   }
+  //endregion ------------------------------------------------- INIT
 
-  /////////////////////////////////////////////////////////////////////
-  ///                OPERATOR ACTIONS
-  /////////////////////////////////////////////////////////////////////
+  //region --------------------------------------------- OPERATOR ACTIONS
 
   /// @notice Disable fuse for the strategy.
   function disableFuse() external {
@@ -88,10 +121,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     StrategyLib2.onlyOperators(controller());
     state.strategyProfitHolder = strategyProfitHolder;
   }
+  //endregion --------------------------------------------- OPERATOR ACTIONS
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   METRIC VIEWS
-  /////////////////////////////////////////////////////////////////////
+  //region --------------------------------------------- METRIC VIEWS
 
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
@@ -114,10 +146,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function getPoolTokens() external view returns (address tokenA, address tokenB) {
     return (state.tokenA, state.tokenB);
   }
+  //endregion ---------------------------------------------- METRIC VIEWS
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   CALLBACKS
-  /////////////////////////////////////////////////////////////////////
+  //region --------------------------------------------- CALLBACKS
 
   function onERC721Received(
     address,
@@ -128,15 +159,15 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     return this.onERC721Received.selector;
   }
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   REBALANCE
-  /////////////////////////////////////////////////////////////////////
+  //endregion --------------------------------------------- CALLBACKS
+
+  //region--------------------------------------------- REBALANCE
 
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @return True if the fuse was triggered
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(true);
+    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
       converter,
@@ -148,9 +179,33 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     _rebalanceAfter(tokenAmounts);
     return fuseEnabledOut;
   }
+  //endregion--------------------------------------------- REBALANCE
+
+  //region --------------------------------------------- Withdraw by iterations
 
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
-    revert('Not implemented yet');
+    StrategyLib2.onlyOperators(controller());
+    QuoteWithdrawByAggLocal memory v;
+
+    // get tokens as following: [underlying, not-underlying]
+    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
+
+    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
+
+    // estimate amounts to be withdrawn from the pool
+    v.totalLiquidity = state.totalLiquidity;
+    uint[] memory amountsOut = (v.totalLiquidity == 0)
+      ? new uint[](2)
+      : _depositorQuoteExit(v.totalLiquidity);
+
+    return PairBasedStrategyLib.quoteWithdrawStep(
+      converter,
+      v.tokens,
+      v.liquidationThresholds,
+      amountsOut,
+      v.planKind,
+      _extractProp(v.planKind, planEntryData)
+    );
   }
 
   function withdrawByAggStep(
@@ -160,19 +215,86 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     bytes memory planEntryData,
     uint entryToPool
   ) external returns (bool completed) {
-    revert('Not implemented yet');
+    // Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
+    WithdrawByAggStepLocal memory v;
+    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
+    v.converter = converter;
+
+    // decode tokenToSwapAndAggregator
+    v.tokenToSwap = tokenToSwapAndAggregator[0];
+    v.aggregator = tokenToSwapAndAggregator[1];
+    if (v.aggregator == address(0)) {
+      v.useLiquidator = true;
+      v.aggregator = address(AppLib._getLiquidator(v.controller));
+    }
+
+    // get tokens as following: [underlying, not-underlying]
+    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
+    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
+    v.propNotUnderlying18 = _extractProp(v.planKind, planEntryData);
+
+    // make withdraw iteration according to the selected plan
+    completed = PairBasedStrategyLib.withdrawStep(
+      v.converter,
+      v.tokens,
+      v.liquidationThresholds,
+      v.tokenToSwap,
+      amountToSwap_,
+      v.aggregator,
+      swapData,
+      v.useLiquidator,
+      v.planKind,
+      v.propNotUnderlying18
+    );
+
+    if (entryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
+      // make rebalance and enter back to the pool. We won't have any swaps here
+      (v.tokenAmounts,) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
+        state,
+        converter,
+        v.oldTotalAssets,
+        v.profitToCover,
+        baseState.splitter,
+        false
+      );
+      _rebalanceAfter(v.tokenAmounts);
+    } else {
+      v.pool = state.pool;
+      // fix loss / profitToCover
+      v.tokenAmounts = AlgebraConverterStrategyLogicLib.afterWithdrawStep(
+        converter,
+        v.pool,
+        v.tokens,
+        v.oldTotalAssets,
+        v.profitToCover,
+        state.strategyProfitHolder,
+        baseState.splitter
+      );
+
+      if (entryToPool == ENTRY_TO_POOL_IS_ALLOWED
+        || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+      ) {
+        // Make actions after rebalance: depositor enter, update invested assets
+        (v.newLowerTick, v.newUpperTick) = AlgebraDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
+        state.lowerTick = v.newLowerTick;
+        state.upperTick = v.newUpperTick;
+
+        _rebalanceAfter(v.tokenAmounts);
+      }
+    }
+
+    _updateInvestedAssets();
   }
 
   function getPropNotUnderlying18() external view returns (uint) {
-    revert('Not implemented yet');
+    return AlgebraConverterStrategyLogicLib.getPropNotUnderlying18(state);
   }
+  //endregion ------------------------------------ Withdraw by iterations
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   INTERNAL LOGIC
-  /////////////////////////////////////////////////////////////////////
+  //region--------------------------------------------- INTERNAL LOGIC
 
   /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
-  function _rebalanceBefore(bool allowExit) internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
     controllerOut = controller();
     StrategyLib2.onlyOperators(controllerOut);
 
@@ -181,7 +303,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (allowExit && state.totalLiquidity > 0) {
+    if (state.totalLiquidity > 0) {
       _depositorEmergencyExit();
     }
   }
@@ -259,4 +381,32 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function _beforeWithdraw(uint /*amount*/) internal view override {
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
   }
+
+  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns(uint propNotUnderlying18) {
+    if (planKind == IterationPlanLib.PLAN_SWAP_REPAY) {
+      // custom proportions
+      (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
+      require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    } else if (planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
+      // the proportions should be taken from the pool
+      // new value of the proportions should also be read from the pool after each swap
+      propNotUnderlying18 = type(uint).max;
+    }
+
+    return propNotUnderlying18;
+  }
+
+  /// @return tokens [underlying, not-underlying]
+  /// @return thresholds liquidationThresholds for the {tokens}
+  function _getTokensAndThresholds() internal view returns (address[] memory tokens, uint[] memory thresholds) {
+    tokens = _depositorPoolAssets();
+    if (tokens[1] == baseState.asset) {
+      (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
+    }
+
+    thresholds = new uint[](2);
+    thresholds[0] = liquidationThresholds[tokens[0]];
+    thresholds[1] = liquidationThresholds[tokens[1]];
+  }
+  //endregion--------------------------------------- INTERNAL LOGIC
 }

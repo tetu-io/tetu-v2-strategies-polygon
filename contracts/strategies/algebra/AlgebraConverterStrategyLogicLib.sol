@@ -658,200 +658,29 @@ library AlgebraConverterStrategyLogicLib {
     }
   }
 
-  /*function rebalance(
-    State storage state,
+  /// @notice Cover possible loss after call of {withdrawByAggStep}
+  /// @param tokens [underlying, not-underlying]
+  function afterWithdrawStep(
     ITetuConverter converter,
-    address controller,
+    IAlgebraPool pool,
+    address[] memory tokens,
     uint oldTotalAssets,
     uint profitToCover,
+    address strategyProfitHolder,
     address splitter
-  ) external returns (
-    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
-  ) {
+  ) external returns (uint[] memory tokenAmounts) {
+    if (profitToCover > 0) {
+      uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
+      ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
+    }
+
     uint loss;
-    tokenAmounts = new uint[](0);
+    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
 
-    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      upperTick: state.upperTick,
-      lowerTick: state.lowerTick,
-      tickSpacing: state.tickSpacing,
-      pool: state.pool,
-      tokenA: state.tokenA,
-      tokenB: state.tokenB,
-      lastPrice: state.lastPrice,
-      fuseThreshold: state.fuseThreshold,
-      depositorSwapTokens: state.depositorSwapTokens,
-    // setup initial values
-      notCoveredLoss: 0,
-      newLowerTick: 0,
-      newUpperTick: 0,
-      isStablePool: state.isStablePool,
-      newPrice: 0,
-      newTotalAssets: 0
-    });
-
-    require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
-
-    vars.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
-
-    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
-      /// enabling fuse: close debt and stop providing liquidity
-      state.isFuseTriggered = true;
-      emit FuseTriggered();
-
-      AlgebraDebtLib.closeDebt(
-        converter,
-        controller,
-        vars.pool,
-        vars.tokenA,
-        vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-    } else {
-      /// rebalancing debt
-      /// setting new tick range
-      AlgebraDebtLib.rebalanceDebt(
-        converter,
-        controller,
-        state,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-
-      tokenAmounts = new uint[](2);
-      tokenAmounts[0] = AppLib.balance(vars.tokenA);
-      tokenAmounts[1] = AppLib.balance(vars.tokenB);
-
-      address[] memory tokens = new address[](2);
-      tokens[0] = vars.tokenA;
-      tokens[1] = vars.tokenB;
-      uint[] memory amounts = new uint[](2);
-      amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-      if (vars.newTotalAssets < oldTotalAssets) {
-        loss = oldTotalAssets - vars.newTotalAssets;
-      }
+    if (loss != 0) {
+      _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
-
-    // need to update last price only for stables coz only stables have fuse mechanic
-    if (vars.isStablePool) {
-      state.lastPrice = vars.newPrice;
-    }
-
-    uint covered;
-    if (loss > 0) {
-      covered = AlgebraDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-      uint notCovered = loss - covered;
-      if (notCovered > 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-      }
-    }
-
-    emit Rebalanced(loss, covered);
-  }*/
-
-  /*function rebalanceSwapByAgg(
-    State storage state,
-    ITetuConverter converter,
-    uint oldTotalAssets,
-    RebalanceSwapByAggParams memory aggParams,
-    uint profitToCover,
-    address splitter
-  ) external returns (
-    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
-  ) {
-    uint loss;
-    tokenAmounts = new uint[](0);
-
-    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      upperTick: state.upperTick,
-      lowerTick: state.lowerTick,
-      tickSpacing: state.tickSpacing,
-      pool: state.pool,
-      tokenA: state.tokenA,
-      tokenB: state.tokenB,
-      lastPrice: state.lastPrice,
-      fuseThreshold: state.fuseThreshold,
-      depositorSwapTokens: state.depositorSwapTokens,
-    // setup initial values
-      notCoveredLoss: 0,
-      newLowerTick: 0,
-      newUpperTick: 0,
-      isStablePool: state.isStablePool,
-      newPrice: 0,
-      newTotalAssets: 0
-    });
-
-    require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
-
-    vars.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
-
-    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
-      /// enabling fuse: close debt and stop providing liquidity
-      state.isFuseTriggered = true;
-      emit FuseTriggered();
-
-      AlgebraDebtLib.closeDebtByAgg(
-        converter,
-        vars.tokenA,
-        vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        aggParams,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-    } else {
-      /// rebalancing debt
-      /// setting new tick range
-      AlgebraDebtLib.rebalanceDebtSwapByAgg(
-        converter,
-        state,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        aggParams,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-
-      if (oldTotalAssets > 0) {
-        tokenAmounts = new uint[](2);
-        tokenAmounts[0] = AppLib.balance(vars.tokenA);
-        tokenAmounts[1] = AppLib.balance(vars.tokenB);
-
-        address[] memory tokens = new address[](2);
-        tokens[0] = vars.tokenA;
-        tokens[1] = vars.tokenB;
-        uint[] memory amounts = new uint[](2);
-        amounts[0] = tokenAmounts[0];
-        vars.newTotalAssets = ConverterStrategyBaseLib2.calcInvestedAssets(tokens, amounts, 0, converter);
-        if (vars.newTotalAssets < oldTotalAssets) {
-          loss = oldTotalAssets - vars.newTotalAssets;
-        }
-      }
-    }
-
-    // need to update last price only for stables coz only stables have fuse mechanic
-    if (vars.isStablePool) {
-      state.lastPrice = vars.newPrice;
-    }
-
-    uint covered;
-    if (loss > 0) {
-      covered = AlgebraDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-      uint notCovered = loss - covered;
-      if (notCovered > 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-      }
-    }
-
-    emit Rebalanced(loss, covered);
-  }*/
+  }
 
   /// @notice Try to cover loss from rewards then cover remain loss from insurance.
   function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal {
@@ -910,5 +739,18 @@ library AlgebraConverterStrategyLogicLib {
     v.fuseThreshold = state.fuseThreshold;
     v.isStablePool = state.isStablePool;
     v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
+  }
+
+  /// @notice Get proportion of not-underlying in the pool, [0...1e18]
+  ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
+  function getPropNotUnderlying18(State storage state) view external returns (uint) {
+    // get pool proportions
+    IAlgebraPool pool = state.pool;
+    bool depositorSwapTokens = state.depositorSwapTokens;
+    (int24 newLowerTick, int24 newUpperTick) = AlgebraDebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (uint consumed0, uint consumed1) = AlgebraDebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+
+    require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
+    return consumed1 * 1e18 / (consumed0 + consumed1);
   }
 }
