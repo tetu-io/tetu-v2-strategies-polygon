@@ -24,6 +24,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   uint internal constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
   /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
   uint internal constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
+  /// @notice A gap to reduce AmountToSwap calculated inside quoteWithdrawByAgg, [0...100_000]
+  uint public constant GAP_AMOUNT_TO_SWAP = 100;
   //endregion ------------------------------------------------- Constants
 
   //region ------------------------------------------------- Data types
@@ -192,7 +194,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       ? new uint[](2)
       : _depositorQuoteExit(v.totalLiquidity);
 
-    return PairBasedStrategyLib.quoteWithdrawStep(
+    (tokenToSwap, amountToSwap) = PairBasedStrategyLib.quoteWithdrawStep(
       converter,
       v.tokens,
       v.liquidationThresholds,
@@ -200,6 +202,14 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       v.planKind,
       _extractProp(v.planKind, planEntryData)
     );
+    if (amountToSwap != 0) {
+      // withdrawByAggStep will execute REPAY1 - SWAP - REPAY2
+      // but quoteWithdrawByAgg and withdrawByAggStep are executed in different blocks
+      // so, REPAY1 can return less collateral than quoteWithdrawByAgg expected
+      // As result, we can have less amount on balance than required amountToSwap
+      // So, we need to reduce amountToSwap on small gap amount
+      amountToSwap -= amountToSwap * GAP_AMOUNT_TO_SWAP / 100_000;
+    }
   }
 
   function withdrawByAggStep(
