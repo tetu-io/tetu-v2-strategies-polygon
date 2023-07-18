@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 library PairBasedStrategyLib {
@@ -23,6 +24,7 @@ library PairBasedStrategyLib {
   string public constant UNKNOWN_SWAP_ROUTER = "PBS-1 Unknown router";
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
   address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOceanExchangeProxy
+  address internal constant TETU_LIQUIDATOR = 0xC737eaB847Ae6A92028862fE38b828db41314772; // Tetu Liquidator
 
   //region ------------------------------------------------ Data types
   struct SwapByAggParams {
@@ -57,6 +59,7 @@ library PairBasedStrategyLib {
   /// @param amountsFromPool Amounts of {tokens} that will be received from the pool before calling withdraw
   /// @return tokenToSwap Address of the token that will be swapped on the next swap. 0 - no swap
   /// @return amountToSwap Amount that will be swapped on the next swap. 0 - no swap
+  ///                      This amount is NOT reduced on {GAP_AMOUNT_TO_SWAP}, it should be reduced after the call if necessary.
   function quoteWithdrawStep(
     ITetuConverter converter_,
     address[] memory tokens,
@@ -95,6 +98,12 @@ library PairBasedStrategyLib {
   /// @param swapData_ Swap data to be passed to the aggregator on the next swap.
   ///                  Swap data contains swap-route, amount and all other required info for the swap.
   ///                  Swap data should be prepared on-chain on the base of data received by {quoteWithdrawStep}
+  /// @param useLiquidator_ Use liquidator instead of aggregator.
+  ///                       Aggregator swaps amount reduced on {GAP_AMOUNT_TO_SWAP}.
+  ///                       Liquidator doesn't use {GAP_AMOUNT_TO_SWAP}.
+  ///                       It's allowed to pass liquidator address in {aggregator_} and set {useLiquidator_} to false -
+  ///                       the liquidator will be used in same way as aggregator in this case.
+  /// @param planKind One of IterationPlanLib.PLAN_XXX
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                           The leftovers should be swapped to get following result proportions of the assets:
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
@@ -326,6 +335,10 @@ library PairBasedStrategyLib {
     return (amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow], borrowInsteadRepay);
   }
 
+  /// @notice Swap {aggParams.amountToSwap} using either liquidator or aggregator
+  /// @dev You can use liquidator as aggregator, so aggregator's logic will be used for the liquidator
+  /// @param amountIn Calculated amount to be swapped. It can be different from {aggParams.amountToSwap} a bit,
+  ///                 but aggregators require exact value {aggParams.amountToSwap}, so amountIn is not used with agg.
   function _swap(
     IterationPlanLib.SwapRepayPlanParams memory p,
     SwapByAggParams memory aggParams,
@@ -336,8 +349,31 @@ library PairBasedStrategyLib {
     uint spentAmountIn,
     uint updatedPropNotUnderlying18
   ) {
+    // liquidator and aggregator have different logic here:
+    // - liquidator uses amountIn to swap
+    // - Aggregator uses amountToSwap for which a route was built off-chain before the call of the swap()
+    // It's allowed to use aggregator == liquidator, so in this way liquidator will use aggregator's logic (for tests)
+
+    console.log("_swap");
+    console.log("_swap.amountIn", amountIn);
+    console.log("_swap.amountToSwap", aggParams.amountToSwap);
+    console.log("_swap.balance", IERC20(p.tokens[indexIn]).balanceOf(address(this)));
+    console.log("_swap.aggParams.aggregator", aggParams.aggregator);
+    console.log("_swap.aggParams.tokenToSwap", aggParams.tokenToSwap);
+    console.log("_swap.aggParams.swapData", aggParams.swapData.length);
+    console.log("_swap.prices[0]", p.prices[0]);
+    console.log("_swap.prices[1]", p.prices[1]);
+
+    if (!aggParams.useLiquidator) {
+      // aggregator requires exact input amount - aggParams.amountToSwap
+      // actual amount can be a bit different because the quote function was called in different block
+      amountIn = aggParams.amountToSwap;
+    }
+
+    require(amountIn <= IERC20(p.tokens[indexIn]).balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
+
     if (amountIn > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
-      AppLib.approveIfNeeded(p.tokens[indexIn], aggParams.amountToSwap, aggParams.aggregator);
+      AppLib.approveIfNeeded(p.tokens[indexIn], amountIn, aggParams.aggregator);
 
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
 
@@ -356,19 +392,21 @@ library PairBasedStrategyLib {
         _checkSwapRouter(aggParams.aggregator);
 
         // let's ensure that "next swap" is made using correct token
-        // todo probably we should check also amountToSwap?
         require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
         (bool success, bytes memory result) = aggParams.aggregator.call(aggParams.swapData);
+        console.log("_swap.success", success);
+        console.log("_swap.result", result.length);
         require(success, string(result));
 
-        spentAmountIn = aggParams.amountToSwap;
+        spentAmountIn = amountIn;
       }
 
+      console.log("Received amount", AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore);
       require(
         p.converter.isConversionValid(
           p.tokens[indexIn],
-          aggParams.amountToSwap,
+          amountIn,
           p.tokens[indexOut],
           AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
           _ASSET_LIQUIDATION_SLIPPAGE
@@ -388,7 +426,8 @@ library PairBasedStrategyLib {
 
   //region ----------------------------------------- Utils
   function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
+    // TETU_LIQUIDATOR is added for tests to use liquidator with aggregator's logic
+    require(router == ONEINCH || router == OPENOCEAN || router == TETU_LIQUIDATOR, UNKNOWN_SWAP_ROUTER);
   }
   //endregion ------------------------------------------ Utils
 }
