@@ -58,8 +58,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     );
 
     // setup specific name for UI
-    baseState.strategySpecificName = AlgebraConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib2.StrategySpecificNameChanged(baseState.strategySpecificName);
+    StrategyLib2._changeStrategySpecificName(baseState, AlgebraConverterStrategyLogicLib.createSpecificName(state));
   }
 
   /////////////////////////////////////////////////////////////////////
