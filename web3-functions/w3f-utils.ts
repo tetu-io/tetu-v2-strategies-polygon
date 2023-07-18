@@ -2,14 +2,18 @@ import ky from 'ky';
 
 export const STRATEGY_ABI = [
   'function needRebalance() external view returns (bool)',
-  'function quoteRebalanceSwap() external returns (bool, uint)',
-  'function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external',
+  'function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap)',
+  'function withdrawByAggStep(address[2] calldata tokenToSwapAndAggregator, uint amountToSwap_, bytes memory swapData, bytes memory planEntryData, uint entryToPool)  external returns (bool completed)',
   'function getState() external view returns (address, address, address, address, int24, int24, int24, int24, uint128, bool, uint, uint[] memory)',
 ];
 
 export const ERC20_ABI = [
   'function decimals() external view returns (uint)',
 ];
+
+export const READER_ABI = [
+  'function getLockedUnderlyingAmount(address strategy_) external view returns (uint estimatedUnderlyingAmount, uint totalAssets)',
+]
 
 export interface IAggQuote {
   to: string,
@@ -44,6 +48,7 @@ export async function quoteOneInch(
     protocols,
   };
   const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
+  console.log(url)
   try {
     const quote: { tx?: { to?: string, data?: string }, toTokenAmount?: string } = await ky
       .get(url, { timeout: 5_000, retry: 3 })
