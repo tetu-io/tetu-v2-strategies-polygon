@@ -569,43 +569,42 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     ///////////////////////////////////////////////////////////////////////////////
 
 
-
-    address __converter = address(converter);
-    require(msg.sender == __converter, StrategyLib2.DENIED);
-
-    // detect index of the target asset
-    (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
-    // get amount of target asset available to be sent
-    uint balance = AppLib.balance(theAsset_);
-
-    // withdraw from the pool if not enough
-    if (balance < amount_) {
-      // the strategy doesn't have enough target asset on balance
-      // withdraw all from the pool but don't convert assets to underlying
-
-      // we don't close debts here because
-      // there is a chance to close the debt that is asked by the converter.
-      // We assume, that the amount is comparatively small
-      // and it's not possible to drain all liquidity here
-      uint liquidity = _depositorLiquidity();
-      if (liquidity != 0) {
-        uint[] memory withdrawnAmounts = _depositorExit(liquidity);
-        emit OnDepositorExit(liquidity, withdrawnAmounts);
-      }
-    }
-
-    amountOut = ConverterStrategyBaseLib.swapToGivenAmountAndSendToConverter(
-      amount_,
-      indexTheAsset,
-      tokens,
-      __converter,
-      controller(),
-      baseState.asset,
-      liquidationThresholds
-    );
-
-    // update invested assets anyway, even if we suppose it will be called in other places
-    _updateInvestedAssets();
+//    address __converter = address(converter);
+//    require(msg.sender == __converter, StrategyLib2.DENIED);
+//
+//    // detect index of the target asset
+//    (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
+//    // get amount of target asset available to be sent
+//    uint balance = AppLib.balance(theAsset_);
+//
+//    // withdraw from the pool if not enough
+//    if (balance < amount_) {
+//      // the strategy doesn't have enough target asset on balance
+//      // withdraw all from the pool but don't convert assets to underlying
+//
+//      // we don't close debts here because
+//      // there is a chance to close the debt that is asked by the converter.
+//      // We assume, that the amount is comparatively small
+//      // and it's not possible to drain all liquidity here
+//      uint liquidity = _depositorLiquidity();
+//      if (liquidity != 0) {
+//        uint[] memory withdrawnAmounts = _depositorExit(liquidity);
+//        emit OnDepositorExit(liquidity, withdrawnAmounts);
+//      }
+//    }
+//
+//    amountOut = ConverterStrategyBaseLib.swapToGivenAmountAndSendToConverter(
+//      amount_,
+//      indexTheAsset,
+//      tokens,
+//      __converter,
+//      controller(),
+//      baseState.asset,
+//      liquidationThresholds
+//    );
+//
+//    // update invested assets anyway, even if we suppose it will be called in other places
+//    _updateInvestedAssets();
   }
 
   /// @notice TetuConverter calls this function when it sends any amount to user's balance
