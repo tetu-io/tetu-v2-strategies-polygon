@@ -251,7 +251,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     movePricesUp: boolean;
   }
   async function makeTest(p: ITestParams) {
-    const cycles = 6;
+    const cycles = 5;
     const MAX_ALLLOWED_LOCKED_PERCENT = 25;
     const pathOut = p.filePath;
     const states: IStateNum[] = [];
@@ -327,6 +327,15 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
             }
           );
+
+          if (await strategy.needRebalance()) {
+            console.log('------------------ REBALANCE-AFTER-UNFOLDING' , i, '------------------');
+            const rebalanced = await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals);
+
+            await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
+            states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
+            await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+          }
         }
       }
 
@@ -357,7 +366,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       expect(sharePriceAfter).approximately(sharePriceBefore, 10);
 
       // decrease swap amount slowly
-      swapAmount = swapAmount.mul(10).div(12);
+      swapAmount = swapAmount.mul(10).div(11);
 
       states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
