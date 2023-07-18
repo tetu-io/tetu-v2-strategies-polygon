@@ -25,7 +25,7 @@ contract BalancerBoostedStrategy is ConverterStrategyBase, BalancerBoostedDeposi
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
 
     // setup specific name for UI
-    StrategyLib2._changeStrategySpecificName(baseState, BalancerLogicLib.createSpecificName(state));
+    StrategyLib2._changeStrategySpecificName(baseState, BalancerLogicLib.createSpecificName(pool_));
   }
 
   function _handleRewards() internal virtual override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
