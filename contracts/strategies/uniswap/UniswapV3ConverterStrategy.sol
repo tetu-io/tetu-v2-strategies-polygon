@@ -8,6 +8,7 @@ import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
+import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -44,6 +45,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address tokenToSwap;
     address aggregator;
     bool useLiquidator;
+    int24 newLowerTick;
+    int24 newUpperTick;
+    IUniswapV3Pool pool;
   }
 
   struct QuoteWithdrawByAggLocal {
@@ -256,10 +260,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       );
       _rebalanceAfter(v.tokenAmounts);
     } else {
+      v.pool = state.pool;
       // fix loss / profitToCover
       v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
         converter,
-        state.pool,
+        v.pool,
         v.tokens,
         v.oldTotalAssets,
         v.profitToCover,
@@ -271,6 +276,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
       ) {
         // Make actions after rebalance: depositor enter, update invested assets
+        (v.newLowerTick, v.newUpperTick) = UniswapV3DebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
+        state.lowerTick = v.newLowerTick;
+        state.upperTick = v.newUpperTick;
+
         _rebalanceAfter(v.tokenAmounts);
       }
     }
@@ -286,6 +295,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view returns (uint) {
+    console.log("getPropNotUnderlying18", UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state));
     return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
   }
   //endregion ------------------------------------ Withdraw by iterations
@@ -390,6 +400,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
     if (tokenAmounts.length == 2) {
+      console.log("_rebalanceAfter.tokenAmounts[0]", tokenAmounts[0]);
+      console.log("_rebalanceAfter.tokenAmounts[1]", tokenAmounts[1]);
       _depositorEnter(tokenAmounts);
     }
 
