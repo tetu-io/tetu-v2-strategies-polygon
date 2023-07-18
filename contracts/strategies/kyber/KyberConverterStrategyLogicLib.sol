@@ -857,6 +857,30 @@ library KyberConverterStrategyLogicLib {
     }
   }*/
 
+  /// @notice Cover possible loss after call of {withdrawByAggStep}
+  /// @param tokens [underlying, not-underlying]
+  function afterWithdrawStep(
+    ITetuConverter converter,
+    IPool pool,
+    address[] memory tokens,
+    uint oldTotalAssets,
+    uint profitToCover,
+    address strategyProfitHolder,
+    address splitter
+  ) external returns (uint[] memory tokenAmounts) {
+    if (profitToCover > 0) {
+      uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
+      ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
+    }
+
+    uint loss;
+    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
+
+    if (loss != 0) {
+      _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
+    }
+  }
+
   /// @notice Try to cover loss from rewards then cover remain loss from insurance.
   function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal {
     uint coveredByRewards;
@@ -910,5 +934,18 @@ library KyberConverterStrategyLogicLib {
     v.fuseThreshold = state.fuseThreshold;
     v.isStablePool = state.isStablePool;
     v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
+  }
+
+  /// @notice Get proportion of not-underlying in the pool, [0...1e18]
+  ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
+  function getPropNotUnderlying18(State storage state) view external returns (uint) {
+    // get pool proportions
+    IPool pool = state.pool;
+    bool depositorSwapTokens = state.depositorSwapTokens;
+    (int24 newLowerTick, int24 newUpperTick) = KyberDebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (uint consumed0, uint consumed1) = KyberDebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+
+    require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
+    return consumed1 * 1e18 / (consumed0 + consumed1);
   }
 }

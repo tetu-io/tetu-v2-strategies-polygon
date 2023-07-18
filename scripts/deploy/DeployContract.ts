@@ -46,7 +46,7 @@ const libraries = new Map<string, string[]>([
   // Kyber
   [
     'KyberConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib'],
   ],
   ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2']],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
