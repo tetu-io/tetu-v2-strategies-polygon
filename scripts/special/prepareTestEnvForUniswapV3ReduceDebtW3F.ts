@@ -126,7 +126,7 @@ async function main() {
 
   console.log('')
   console.log('Run:')
-  console.log(`TEST_STRATEGY=${strategy.address} READER=${reader.address} npx hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyW3FReduceDebtTest.ts --network localhost`)
+  console.log(`TEST_STRATEGY=${strategy.address} READER=${reader.address} npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost`)
   console.log('')
 
   // start localhost hardhat node

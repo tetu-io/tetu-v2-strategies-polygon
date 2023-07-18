@@ -6,14 +6,18 @@ import hre, {ethers} from "hardhat";
 import {
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-} from "../../../../typechain";
+} from "../../../typechain";
 import {Web3FunctionHardhat} from "@gelatonetwork/web3-functions-sdk/hardhat-plugin";
 import {Web3FunctionResultV2, Web3FunctionUserArgs} from "@gelatonetwork/web3-functions-sdk";
 const { w3f } = hre;
 
 // How to:
+
 // npx hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
-// TEST_STRATEGY=0xb8B814Fd019C00888eb34721f87aa82E3f2E1F28 READER=0xc2837a9Afac387ABe93d49FAE81394892127Cbe5 npx hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyW3FReduceDebtTest.ts --network localhost
+// TEST_STRATEGY=<address> READER=<address> npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost
+
+// npx hardhat run scripts/special/prepareTestEnvForKyberReduceDebtW3F.ts
+// TEST_STRATEGY=<address> READER=<address> npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -26,7 +30,7 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('UniswapV3 strategy reduce debt by Web3 Function tests', function() {
+describe('Strategy reduce debt by Web3 Function tests', function() {
   if (argv.hardhatChainId !== 137) {
     return;
   }
@@ -52,7 +56,7 @@ describe('UniswapV3 strategy reduce debt by Web3 Function tests', function() {
 
     strategy = UniswapV3ConverterStrategy__factory.connect(process.env.TEST_STRATEGY, signer)
 
-    rebalanceW3f = w3f.get("uniswapv3-reduce-debt");
+    rebalanceW3f = w3f.get("reduce-debt");
     userArgs = {
       strategy: strategy.address,
       reader: process.env.READER,

@@ -4,12 +4,11 @@
 import hre, {ethers, run} from "hardhat";
 import {DeployerUtils} from "../utils/DeployerUtils";
 import {
-  AlgebraConverterStrategy,
-  AlgebraConverterStrategy__factory,
-  ControllerV2__factory, IERC20__factory, IStrategyV2,
+  ControllerV2__factory,
+  IERC20__factory,
+  IStrategyV2, KyberConverterStrategy, KyberConverterStrategy__factory, KyberLib,
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
-import {UniswapV3StrategyUtils} from "../../test/UniswapV3StrategyUtils";
 import {MaticAddresses} from "../addresses/MaticAddresses";
 import {parseUnits} from "ethers/lib/utils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
@@ -18,6 +17,9 @@ import {getConverterAddress, Misc} from "../utils/Misc";
 import {ConverterUtils} from "../../test/baseUT/utils/ConverterUtils";
 import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {TokenUtils} from "../utils/TokenUtils";
+import {UniversalUtils} from "../../test/UniversalUtils";
+import {MockHelper} from "../../test/baseUT/helpers/MockHelper";
+import {KyberLiquidityUtils} from "../../test/strategies/polygon/kyber/utils/KyberLiquidityUtils";
 
 async function main() {
   const chainId = (await ethers.provider.getNetwork()).chainId
@@ -47,12 +49,15 @@ async function main() {
   const asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
   const converterAddress = getConverterAddress();
 
+  const reader = await MockHelper.createPairBasedStrategyReader(signer);
+  const lib = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib
+
   const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
     asset.address,
-    'TetuV2_Algebra_USDC_USDT',
+    'TetuV2_Kyber_USDC_USDT',
     async(_splitterAddress: string) => {
-      const _strategy = AlgebraConverterStrategy__factory.connect(
-        await DeployerUtils.deployProxy(signer, 'AlgebraConverterStrategy'),
+      const _strategy = KyberConverterStrategy__factory.connect(
+        await DeployerUtils.deployProxy(signer, 'KyberConverterStrategy'),
         gov,
       );
 
@@ -60,17 +65,11 @@ async function main() {
         core.controller,
         _splitterAddress,
         converterAddress,
-        MaticAddresses.ALGEBRA_USDC_USDT,
+        MaticAddresses.KYBER_USDC_USDT,
         0,
         0,
         true,
-        {
-          rewardToken: MaticAddresses.dQUICK_TOKEN,
-          bonusRewardToken: MaticAddresses.WMATIC_TOKEN,
-          pool: MaticAddresses.ALGEBRA_USDC_USDT,
-          startTime: 1663631794,
-          endTime: 4104559500
-        }
+        21
       );
 
       return _strategy as unknown as IStrategyV2;
@@ -82,7 +81,7 @@ async function main() {
     300,
     false,
   );
-  const strategy = data.strategy as AlgebraConverterStrategy
+  const strategy = data.strategy as KyberConverterStrategy
   const vault = data.vault.connect(signer)
 
   await ConverterUtils.whitelist([strategy.address]);
@@ -93,7 +92,7 @@ async function main() {
   const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
   await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
 
-  const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+  const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.KNC_TOKEN,])
   await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
 
   console.log('deposit...');
@@ -101,14 +100,22 @@ async function main() {
   await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
   await vault.deposit(parseUnits('1000', 6), signer.address);
 
-  // prepare to rebalance
-  console.log('Swap..')
-  await UniswapV3StrategyUtils.movePriceUp(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1200000', 6));
+  const state = await strategy.getState()
+  for (let i = 0; i < 3; i++) {
+    console.log(`Swap and rebalance. Step ${i}`)
+    const amounts = await KyberLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.KYBER_USDC_USDT)
+    const priceB = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
+    let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6))
+    swapAmount = swapAmount.add(swapAmount.div(100))
 
-  const needRebalance = await strategy.needRebalance()
-  if (!needRebalance) {
-    console.log('Not need rebalance. Increase swap amount.')
-    process.exit(-1)
+    await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount);
+
+    if (!(await strategy.needRebalance())) {
+      console.log('Not need rebalance. Something wrong')
+      process.exit(-1)
+    }
+
+    await strategy.connect(operator).rebalanceNoSwaps(true)
   }
 
   // signer must be operator for rebalancing
@@ -118,7 +125,7 @@ async function main() {
 
   console.log('')
   console.log('Run:')
-  console.log(`TEST_STRATEGY=${strategy.address} npx hardhat test test/strategies/polygon/algebra/AlgebraConverterStrategyAggRebalanceW3FTest.ts --network localhost`)
+  console.log(`TEST_STRATEGY=${strategy.address} READER=${reader.address} npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost`)
   console.log('')
 
   // start localhost hardhat node
