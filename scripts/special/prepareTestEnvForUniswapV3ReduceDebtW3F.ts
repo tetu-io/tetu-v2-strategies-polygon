@@ -8,7 +8,8 @@ import {
   IERC20__factory,
   IStrategyV2,
   UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory, UniswapV3Lib,
+  UniswapV3ConverterStrategy__factory,
+  UniswapV3Lib,
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../addresses/MaticAddresses";
@@ -51,7 +52,7 @@ async function main() {
   const asset = IERC20__factory.connect(PolygonAddresses.USDC_TOKEN, signer);
   const converterAddress = getConverterAddress();
 
-  const reader = await MockHelper.createUniswapV3Reader(signer)
+  const reader = await MockHelper.createPairBasedStrategyReader(signer);
   const lib = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib
 
   const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(

@@ -1,24 +1,22 @@
-import { Web3Function, Web3FunctionContext } from '@gelatonetwork/web3-functions-sdk';
-import { BigNumber, Contract } from 'ethers';
-import {defaultAbiCoder, formatUnits} from 'ethers/lib/utils';
-import {ERC20_ABI, quoteOneInch, quoteOpenOcean, READER_ABI, STRATEGY_ABI} from '../w3f-utils';
-
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+import { Web3Function, Web3FunctionContext } from '@gelatonetwork/web3-functions-sdk'
+import { BigNumber, Contract } from 'ethers'
+import {defaultAbiCoder, formatUnits} from 'ethers/lib/utils'
+import {ERC20_ABI, quoteOneInch, quoteOpenOcean, READER_ABI, STRATEGY_ABI, ZERO_ADDRESS} from '../w3f-utils'
 
 // npx hardhat w3f-deploy uniswapv3-reduce-debt
 
 Web3Function.onRun(async(context: Web3FunctionContext) => {
-  const { userArgs, multiChainProvider } = context;
-  const strategyAddress = userArgs.strategy as string;
-  const readerAddress = userArgs.reader as string;
-  const allowedLockedPercent = userArgs.allowedLockedPercent as number || 25;
-  const agg = (userArgs.agg as string ?? '').trim();
-  const oneInchProtocols = (userArgs.oneInchProtocols as string ?? '').trim();
-  const provider = multiChainProvider.default();
-  const chainId = (await provider.getNetwork()).chainId;
-  const strategy = new Contract(strategyAddress, STRATEGY_ABI, provider);
-  const reader = new Contract(readerAddress, READER_ABI, provider);
-  const isNeedRebalance = await strategy.needRebalance();
+  const { userArgs, multiChainProvider } = context
+  const strategyAddress = userArgs.strategy as string
+  const readerAddress = userArgs.reader as string
+  const allowedLockedPercent = userArgs.allowedLockedPercent as number || 25
+  const agg = (userArgs.agg as string ?? '').trim()
+  const oneInchProtocols = (userArgs.oneInchProtocols as string ?? '').trim()
+  const provider = multiChainProvider.default()
+  const chainId = (await provider.getNetwork()).chainId
+  const strategy = new Contract(strategyAddress, STRATEGY_ABI, provider)
+  const reader = new Contract(readerAddress, READER_ABI, provider)
+  const isNeedRebalance = await strategy.needRebalance()
   const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber]
   if (r[1].eq(0)) {
     return {
@@ -27,54 +25,51 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
     }
   }
 
-  const percent = r[0].mul(100).div(r[1]).toNumber();
-  console.log("Locked percent", percent);
+  const percent = r[0].mul(100).div(r[1]).toNumber()
+  console.log("Locked percent", percent)
   if (percent <= allowedLockedPercent) {
     return {
       canExec: false,
       message: `Not need to reduce debt. Current locked: ${percent}%. Max allowed locked: ${allowedLockedPercent}%`,
-    };
+    }
   }
 
   if (isNeedRebalance) {
     return {
       canExec: false,
       message: 'Need rebalance. Cant reduce debt now.',
-    };
+    }
   }
 
-  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_REPAY_SWAP_REPAY = 1
 
   const planEntryData = defaultAbiCoder.encode(
     ["uint256"],
     [PLAN_REPAY_SWAP_REPAY]
-  );
+  )
 
-  console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
-  const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-  console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
+  const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData)
 
   if (quote[0] === ZERO_ADDRESS) {
     return {
       canExec: false,
       message: 'Zero tokenToSwap.',
-    };
+    }
   }
 
-  const state = await strategy.getState();
+  const tokens = await strategy.getPoolTokens()
 
-  const aToB = quote[0] === state[0]
-  console.log('aToB', aToB)
+  const aToB = quote[0] === tokens[0]
 
   if (agg === '1inch') {
     const aggQuote = await quoteOneInch(
-      aToB ? state[0] : state[1],
-      aToB ? state[1] : state[0],
+      aToB ? tokens[0] : tokens[1],
+      aToB ? tokens[1] : tokens[0],
       quote[1].toString(),
       strategyAddress,
       chainId,
       oneInchProtocols !== '' ? oneInchProtocols : undefined,
-    );
+    )
     if (aggQuote) {
       return {
         canExec: true,
@@ -87,18 +82,18 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
             ),
           },
         ],
-      };
+      }
     }
   } else if (agg === 'openocean') {
-    const tokenIn = new Contract(quote[0] ? state[0] : state[1], ERC20_ABI, provider);
-    const decimals = await tokenIn.decimals();
+    const tokenIn = new Contract(quote[0] ? tokens[0] : tokens[1], ERC20_ABI, provider)
+    const decimals = await tokenIn.decimals()
     const aggQuote = await quoteOpenOcean(
-      aToB ? state[0] : state[1],
-      aToB ? state[1] : state[0],
+      aToB ? tokens[0] : tokens[1],
+      aToB ? tokens[1] : tokens[0],
       formatUnits(quote[1], decimals),
       strategyAddress,
       chainId,
-    );
+    )
     if (aggQuote) {
       return {
         canExec: true,
@@ -111,36 +106,36 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
             ),
           },
         ],
-      };
+      }
     }
   } else {
-    const tokenIn = new Contract(quote[0] ? state[0] : state[1], ERC20_ABI, provider);
-    const decimals = await tokenIn.decimals();
+    const tokenIn = new Contract(quote[0] ? tokens[0] : tokens[1], ERC20_ABI, provider)
+    const decimals = await tokenIn.decimals()
 
     const aggQuotes = await Promise.all([
       quoteOneInch(
-        quote[0] ? state[0] : state[1],
-        quote[0] ? state[1] : state[0],
+        quote[0] ? tokens[0] : tokens[1],
+        quote[0] ? tokens[1] : tokens[0],
         quote[1].toString(),
         strategyAddress,
         chainId,
         userArgs.oneInchProtocols as string || undefined,
       ),
       quoteOpenOcean(
-        quote[0] ? state[0] : state[1],
-        quote[0] ? state[1] : state[0],
+        quote[0] ? tokens[0] : tokens[1],
+        quote[0] ? tokens[1] : tokens[0],
         formatUnits(quote[1], decimals),
         strategyAddress,
         chainId,
       ),
-    ]);
+    ])
 
     const sortedAggQuotes = aggQuotes
       .filter(p => p !== undefined)
-      .sort((p1, p2) => BigNumber.from(p1.outAmount).lt(BigNumber.from(p2.outAmount)) ? 1 : -1);
+      .sort((p1, p2) => BigNumber.from(p1.outAmount).lt(BigNumber.from(p2.outAmount)) ? 1 : -1)
     if (sortedAggQuotes.length > 0) {
-      const to = sortedAggQuotes[0].to;
-      const data = sortedAggQuotes[0].data;
+      const to = sortedAggQuotes[0].to
+      const data = sortedAggQuotes[0].data
       return {
         canExec: true,
         callData: [
@@ -152,17 +147,17 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
               ),
           },
         ],
-      };
+      }
     } else {
       return {
         canExec: false,
         message: 'All aggregators returned errors.',
-      };
+      }
     }
   }
 
   return {
     canExec: false,
     message: 'Cant get agg swap quote.',
-  };
-});
+  }
+})

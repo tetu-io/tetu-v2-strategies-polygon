@@ -1,15 +1,17 @@
-import ky from 'ky';
+import ky from 'ky'
+
+export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 export const STRATEGY_ABI = [
   'function needRebalance() external view returns (bool)',
   'function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap)',
   'function withdrawByAggStep(address[2] calldata tokenToSwapAndAggregator, uint amountToSwap_, bytes memory swapData, bytes memory planEntryData, uint entryToPool)  external returns (bool completed)',
-  'function getState() external view returns (address, address, address, address, int24, int24, int24, int24, uint128, bool, uint, uint[] memory)',
-];
+  'function getPoolTokens() external view returns (address tokenA, address tokenB)',
+]
 
 export const ERC20_ABI = [
   'function decimals() external view returns (uint)',
-];
+]
 
 export const READER_ABI = [
   'function getLockedUnderlyingAmount(address strategy_) external view returns (uint estimatedUnderlyingAmount, uint totalAssets)',
@@ -27,7 +29,7 @@ const openOceanChains = {
   '56': 'bsc',
   '42161': 'arbitrum',
   '10': 'optimism',
-};
+}
 
 export async function quoteOneInch(
   fromTokenAddress: string,
@@ -46,26 +48,26 @@ export async function quoteOneInch(
     disableEstimate: true,
     allowPartialFill: false,
     protocols,
-  };
-  const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`;
+  }
+  const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`
   console.log(url)
   try {
     const quote: { tx?: { to?: string, data?: string }, toTokenAmount?: string } = await ky
       .get(url, { timeout: 5_000, retry: 3 })
-      .json();
+      .json()
     if (quote && quote.tx && quote.tx.data && quote.tx.to && quote.toTokenAmount) {
       return {
         to: quote.tx.to,
         data: quote.tx.data,
         outAmount: quote.toTokenAmount,
-      };
+      }
     } else {
-      console.error('1inch can not fetch', url, quote, '\n');
-      return undefined;
+      console.error('1inch can not fetch', url, quote, '\n')
+      return undefined
     }
   } catch (e) {
-    console.error('1inch error', url, e, '\n');
-    return undefined;
+    console.error('1inch error', url, e, '\n')
+    return undefined
   }
 }
 
@@ -85,26 +87,26 @@ export async function quoteOpenOcean(
     account,
     slippage: '0.5',
     gasPrice: 30,
-  };
+  }
 
   const url = `https://open-api.openocean.finance/v3/${openOceanChains[chainId.toString()]}/swap_quote?${(new URLSearchParams(
-    JSON.parse(JSON.stringify(params)))).toString()}`;
+    JSON.parse(JSON.stringify(params)))).toString()}`
   try {
     const quote: { data: { to?: string, data?: string, outAmount?: string } } = await ky
       .get(url, { timeout: 5_000, retry: 3 })
-      .json();
+      .json()
     if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
       return {
         to: quote.data.to,
         data: quote.data.data,
         outAmount: quote.data.outAmount,
-      };
+      }
     } else {
-      console.error('open ocean can not fetch', url, quote, '\n');
-      return undefined;
+      console.error('open ocean can not fetch', url, quote, '\n')
+      return undefined
     }
   } catch (e) {
-    console.error('open ocean error', url, e, '\n');
-    return undefined;
+    console.error('open ocean error', url, e, '\n')
+    return undefined
   }
 }
