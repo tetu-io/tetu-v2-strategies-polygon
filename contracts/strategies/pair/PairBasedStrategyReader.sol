@@ -58,7 +58,9 @@ contract PairBasedStrategyReader {
     v.reverseCollateralCost = v.reverseCollateral * v.prices[1] * v.decs[0] / v.decs[1] / v.prices[0];
 
     return (
-      v.directCollateral + v.reverseCollateralCost - v.directDebtCost - v.reverseDebt,
+      v.directCollateral + v.reverseCollateralCost > (v.directDebtCost + v.reverseDebt)
+        ? v.directCollateral + v.reverseCollateralCost - v.directDebtCost - v.reverseDebt
+        : 0,
       strategy.totalAssets()
     );
   }
