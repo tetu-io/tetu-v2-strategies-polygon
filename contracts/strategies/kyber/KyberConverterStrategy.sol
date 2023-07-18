@@ -56,8 +56,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     state.pId = pId;
 
     // setup specific name for UI
-    baseState.strategySpecificName = KyberConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib2.StrategySpecificNameChanged(baseState.strategySpecificName);
+    StrategyLib2._changeStrategySpecificName(baseState, KyberConverterStrategyLogicLib.createSpecificName(state));
   }
 
   /////////////////////////////////////////////////////////////////////
