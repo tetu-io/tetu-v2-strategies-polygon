@@ -7,6 +7,7 @@ import "./KyberLib.sol";
 import "./KyberStrategyErrors.sol";
 import "./KyberConverterStrategyLogicLib.sol";
 import "../../libs/BorrowLib.sol";
+import "../pair/PairBasedStrategyLib.sol";
 
 library KyberDebtLib {
   using SafeERC20 for IERC20;
@@ -324,7 +325,7 @@ library KyberDebtLib {
     uint liquidatorSwapSlippage,
     KyberConverterStrategyLogicLib.RebalanceSwapByAggParams memory aggParams
   ) internal {
-    _checkSwapRouter(aggParams.agg);
+    PairBasedStrategyLib._checkSwapRouter(aggParams.agg);
 
     uint debtAmount = getDebtTotalDebtAmountOut(tetuConverter, tokenA, tokenB);
 
@@ -362,9 +363,5 @@ library KyberDebtLib {
 
       availableBalanceTokenB = AppLib.balance(tokenB);
     }
-  }
-
-  function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH || router == OPENOCEAN, KyberStrategyErrors.UNKNOWN_SWAP_ROUTER);
   }
 }

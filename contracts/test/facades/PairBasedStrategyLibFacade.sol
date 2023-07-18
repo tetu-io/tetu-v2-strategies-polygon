@@ -3,11 +3,11 @@ pragma solidity 0.8.17;
 
 import "../../strategies/uniswap/UniswapV3Lib.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
-import "../../strategies/uniswap/UniswapV3AggLib.sol";
+import "../../strategies/pair/PairBasedStrategyLib.sol";
 import "hardhat/console.sol";
 
 /// @notice Provide direct access to UniswapV3Lib functions for unit tests
-contract UniswapV3AggLibFacade is IPoolProportionsProvider {
+contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
   function quoteWithdrawStep(
     ITetuConverter converter_,
     address[] memory tokens,
@@ -19,7 +19,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
     address tokenToSwap,
     uint amountToSwap
   ) {
-    return UniswapV3AggLib.quoteWithdrawStep(converter_, tokens, liquidationThresholds, amountsFromPool, planKind, propNotUnderlying18);
+    return PairBasedStrategyLib.quoteWithdrawStep(converter_, tokens, liquidationThresholds, amountsFromPool, planKind, propNotUnderlying18);
   }
 
   function withdrawStep(
@@ -36,7 +36,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
   ) external returns (
     bool completed
   ) {
-    return UniswapV3AggLib.withdrawStep(
+    return PairBasedStrategyLib.withdrawStep(
       converter_,
       tokens,
       liquidationThresholds,
@@ -52,7 +52,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
 
   function _swap(
     IterationPlanLib.SwapRepayPlanParams memory p,
-    UniswapV3AggLib.SwapByAggParams memory aggParams,
+    PairBasedStrategyLib.SwapByAggParams memory aggParams,
     uint indexIn,
     uint indexOut,
     uint amountIn
@@ -60,7 +60,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
     uint spentAmountIn,
     uint updatedPropNotUnderlying18
   ) {
-    return UniswapV3AggLib._swap(p, aggParams, indexIn, indexOut, amountIn);
+    return PairBasedStrategyLib._swap(p, aggParams, indexIn, indexOut, amountIn);
   }
 
   function _getAmountToRepay2(
@@ -71,7 +71,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
     uint amountToRepay,
     bool borrowInsteadRepay
   ) {
-    return UniswapV3AggLib._getAmountToRepay2(p, indexCollateral, indexBorrow);
+    return PairBasedStrategyLib._getAmountToRepay2(p, indexCollateral, indexBorrow);
   }
 
   function borrowToProportions(
@@ -79,7 +79,7 @@ contract UniswapV3AggLibFacade is IPoolProportionsProvider {
     uint indexCollateral,
     uint indexBorrow
   ) external {
-    return UniswapV3AggLib.borrowToProportions(p, indexCollateral, indexBorrow);
+    return PairBasedStrategyLib.borrowToProportions(p, indexCollateral, indexBorrow);
   }
 
 

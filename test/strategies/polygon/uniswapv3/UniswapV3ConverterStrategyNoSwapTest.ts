@@ -6,7 +6,7 @@ import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {ControllerV2__factory, IController__factory, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IStrategyV2, StrategyBaseV2, StrategyBaseV2__factory, StrategySplitterV2, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, UniswapV3Reader,} from "../../../../typechain";
+import {ControllerV2__factory, IController__factory, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IStrategyV2, StrategyBaseV2, StrategyBaseV2__factory, StrategySplitterV2, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, PairBasedStrategyReader,} from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
@@ -68,7 +68,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
   let assetCtr: IERC20Metadata;
   let decimals: number;
   let stateParams: IStateParams;
-  let reader: UniswapV3Reader;
+  let reader: PairBasedStrategyReader;
 
   let strategyAsSigner: StrategyBaseV2;
   let strategyAsOperator: UniswapV3ConverterStrategy;
@@ -89,7 +89,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
     asset = MaticAddresses.USDC_TOKEN;
     assetCtr = IERC20Metadata__factory.connect(asset, signer);
     decimals = await IERC20Metadata__factory.connect(asset, gov).decimals();
-    reader = await MockHelper.createUniswapV3Reader(signer);
+    reader = await MockHelper.createPairBasedStrategyReader(signer);
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,
@@ -305,193 +305,292 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
 
 //region Unit tests
   describe('unfold debts using single iteration', function() {
-    describe("Move prices up", () => {
-      describe("Liquidator, entry to pool at the end", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        interface IMakeWithdrawSingleIterationResults {
-          states: IStateNum[];
-        }
-
-        async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
-          const pathOut = "./tmp/single-iteration-entry-up.csv";
-          const {states} = await prepareOverCollateral({
-            countLoops: 3,
-            pathOut,
-            movePricesUp: true
+    describe("Use liquidator", () => {
+      describe("Move prices up", () => {
+        describe("Liquidator, entry to pool at the end", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
           });
-          await makeFullWithdraw({
-            singleIteration: true,
-            aggregator: Misc.ZERO_ADDRESS,
-            entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-            planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
-            saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
-              await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-            }
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
-          return {states};
-        }
 
-        it("should reduce locked amount at least twice", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
-          expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
-          expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-6);
+          interface IMakeWithdrawSingleIterationResults {
+            states: IStateNum[];
+          }
+
+          async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
+            const pathOut = "./tmp/single-iteration-entry-up.csv";
+            const {states} = await prepareOverCollateral({
+              countLoops: 3,
+              pathOut,
+              movePricesUp: true
+            });
+            await makeFullWithdraw({
+              singleIteration: true,
+              aggregator: Misc.ZERO_ADDRESS,
+              entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
+              planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
+              saveState: async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            });
+            return {states};
+          }
+
+          it("should reduce locked amount at least twice", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
+            expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
+            expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-6);
+          });
+          it("should enter to the pool at the end", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, ...rest] = [...ret.states].reverse();
+            expect(stateLast.strategy.liquidity > 0).eq(true);
+          });
         });
-        it("should enter to the pool at the end", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, ...rest] = [...ret.states].reverse();
-          expect(stateLast.strategy.liquidity > 0).eq(true);
+        describe("Liquidator, don't enter to the pool", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          interface IMakeWithdrawSingleIterationResults {
+            states: IStateNum[];
+          }
+
+          async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
+            const pathOut = "./tmp/single-iteration-exit-up.csv";
+            const {states} = await prepareOverCollateral({
+              countLoops: 3,
+              pathOut,
+              movePricesUp: true
+            });
+            await makeFullWithdraw({
+              singleIteration: true,
+              aggregator: Misc.ZERO_ADDRESS,
+              entryToPool: 0, // (!) don't enter to the pool at the end
+              planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
+              saveState: async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            });
+            return {states};
+          }
+
+          it("should reduce locked amount at least twice", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
+            console.log("statePrev", statePrev);
+            console.log("stateLast", stateLast);
+            expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
+            expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-6);
+          });
+          it("should not enter to the pool at the end", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, ...rest] = [...ret.states].reverse();
+            console.log("stateLast", stateLast);
+            expect(stateLast.strategy.liquidity).eq(0);
+          });
         });
       });
-      describe("Liquidator, don't enter to the pool", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        interface IMakeWithdrawSingleIterationResults {
-          states: IStateNum[];
-        }
-
-        async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
-          const pathOut = "./tmp/single-iteration-exit-up.csv";
-          const {states} = await prepareOverCollateral({
-            countLoops: 3,
-            pathOut,
-            movePricesUp: true
+      describe("Move prices down", () => {
+        describe("Liquidator, entry to pool at the end", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
           });
-          await makeFullWithdraw({
-            singleIteration: true,
-            aggregator: Misc.ZERO_ADDRESS,
-            entryToPool: 0, // (!) don't enter to the pool at the end
-            planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
-            saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
-              await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-            }
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
-          return {states};
-        }
 
-        it("should reduce locked amount at least twice", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
-          console.log("statePrev", statePrev);
-          console.log("stateLast", stateLast);
-          expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
-          expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-6);
+          interface IMakeWithdrawSingleIterationResults {
+            states: IStateNum[];
+          }
+
+          async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
+            const pathOut = "./tmp/single-iteration-entry-down.csv";
+            const {states} = await prepareOverCollateral({
+              countLoops: 2,
+              pathOut,
+              movePricesUp: false
+            });
+            await makeFullWithdraw({
+              singleIteration: true,
+              aggregator: Misc.ZERO_ADDRESS,
+              entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
+              planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
+              saveState: async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            });
+            return {states};
+          }
+
+          it("should reduce locked amount at least twice", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
+            expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
+            expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-5);
+          });
+          it("should enter to the pool at the end", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, ...rest] = [...ret.states].reverse();
+            expect(stateLast.strategy.liquidity > 0).eq(true);
+          });
         });
-        it("should not enter to the pool at the end", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, ...rest] = [...ret.states].reverse();
-          console.log("stateLast", stateLast);
-          expect(stateLast.strategy.liquidity).eq(0);
+        describe("Liquidator, don't enter to the pool", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          interface IMakeWithdrawSingleIterationResults {
+            states: IStateNum[];
+          }
+
+          async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
+            const pathOut = "./tmp/single-iteration-exit-down.csv";
+            const {states} = await prepareOverCollateral({
+              countLoops: 2,
+              pathOut,
+              movePricesUp: false
+            });
+            await makeFullWithdraw({
+              singleIteration: true,
+              aggregator: Misc.ZERO_ADDRESS,
+              entryToPool: 0, // (!) don't enter to the pool at the end
+              planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
+              saveState: async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            });
+            return {states};
+          }
+
+          it("should reduce locked amount at least twice", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
+            console.log("statePrev", statePrev);
+            console.log("stateLast", stateLast);
+            expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
+            expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 2e-6);
+          });
+          it("should not enter to the pool at the end", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, ...rest] = [...ret.states].reverse();
+            console.log("stateLast", stateLast);
+            expect(stateLast.strategy.liquidity).eq(0);
+          });
         });
       });
     });
-    describe("Move prices down", () => {
-      describe("Liquidator, entry to pool at the end", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        interface IMakeWithdrawSingleIterationResults {
-          states: IStateNum[];
-        }
-
-        async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
-          const pathOut = "./tmp/single-iteration-entry-down.csv";
-          const {states} = await prepareOverCollateral({
-            countLoops: 2,
-            pathOut,
-            movePricesUp: false
+    describe("Use 1inch", () => {
+      describe("Move prices up", () => {
+        describe("Liquidator, entry to pool at the end", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
           });
-          await makeFullWithdraw({
-            singleIteration: true,
-            aggregator: Misc.ZERO_ADDRESS,
-            entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-            planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
-            saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
-              await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-            }
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
-          return {states};
-        }
 
-        it("should reduce locked amount at least twice", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
-          expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
-          expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-5);
-        });
-        it("should enter to the pool at the end", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, ...rest] = [...ret.states].reverse();
-          expect(stateLast.strategy.liquidity > 0).eq(true);
-        });
-      });
-      describe("Liquidator, don't enter to the pool", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
+          interface IMakeWithdrawSingleIterationResults {
+            states: IStateNum[];
+          }
 
-        interface IMakeWithdrawSingleIterationResults {
-          states: IStateNum[];
-        }
+          async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
+            const pathOut = "./tmp/single-iteration-entry-up.csv";
+            const {states} = await prepareOverCollateral({
+              countLoops: 3,
+              pathOut,
+              movePricesUp: true
+            });
+            await makeFullWithdraw({
+              singleIteration: true,
+              aggregator: MaticAddresses.AGG_ONEINCH_V5,
+              entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
+              planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
+              saveState: async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            });
+            return {states};
+          }
 
-        async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
-          const pathOut = "./tmp/single-iteration-exit-down.csv";
-          const {states} = await prepareOverCollateral({
-            countLoops: 2,
-            pathOut,
-            movePricesUp: false
+          it("should reduce locked amount at least twice", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
+            expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
+            expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-6);
           });
-          await makeFullWithdraw({
-            singleIteration: true,
-            aggregator: Misc.ZERO_ADDRESS,
-            entryToPool: 0, // (!) don't enter to the pool at the end
-            planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
-            saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
-              await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-            }
+          it("should enter to the pool at the end", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, ...rest] = [...ret.states].reverse();
+            expect(stateLast.strategy.liquidity > 0).eq(true);
           });
-          return {states};
-        }
-
-        it("should reduce locked amount at least twice", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
-          console.log("statePrev", statePrev);
-          console.log("stateLast", stateLast);
-          expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
-          expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 2e-6);
         });
-        it("should not enter to the pool at the end", async () => {
-          const ret = await loadFixture(makeWithdrawSingleIteration);
-          const [stateLast, ...rest] = [...ret.states].reverse();
-          console.log("stateLast", stateLast);
-          expect(stateLast.strategy.liquidity).eq(0);
+        describe("Liquidator, don't enter to the pool", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          interface IMakeWithdrawSingleIterationResults {
+            states: IStateNum[];
+          }
+
+          async function makeWithdrawSingleIteration(): Promise<IMakeWithdrawSingleIterationResults> {
+            const pathOut = "./tmp/single-iteration-exit-up.csv";
+            const {states} = await prepareOverCollateral({
+              countLoops: 3,
+              pathOut,
+              movePricesUp: true
+            });
+            await makeFullWithdraw({
+              singleIteration: true,
+              aggregator: MaticAddresses.AGG_ONEINCH_V5,
+              entryToPool: 0, // (!) don't enter to the pool at the end
+              planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
+              saveState: async stateTitle => {
+                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+              }
+            });
+            return {states};
+          }
+
+          it("should reduce locked amount at least twice", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, statePrev, ...rest] = [...ret.states].reverse();
+            console.log("statePrev", statePrev);
+            console.log("stateLast", stateLast);
+            expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(2);
+            expect(statePrev.vault.sharePrice).approximately(stateLast.vault.sharePrice, 1e-6);
+          });
+          it("should not enter to the pool at the end", async () => {
+            const ret = await loadFixture(makeWithdrawSingleIteration);
+            const [stateLast, ...rest] = [...ret.states].reverse();
+            console.log("stateLast", stateLast);
+            expect(stateLast.strategy.liquidity).eq(0);
+          });
         });
       });
     });

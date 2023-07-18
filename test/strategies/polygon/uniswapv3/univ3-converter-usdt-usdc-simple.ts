@@ -28,8 +28,7 @@ import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
 import {
   depositToVault,
   doHardWorkForStrategy,
-  printVaultState,
-  rebalanceUniv3Strategy,
+  printVaultState, rebalanceUniv3StrategyNoSwaps,
   redeemFromVault,
 } from '../../../StrategyTestUtils';
 import { BigNumber } from 'ethers';
@@ -336,7 +335,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
-        await rebalanceUniv3Strategy(strategy, signer, decimals);
+        await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals);
         await printVaultState(
           vault,
           splitter,

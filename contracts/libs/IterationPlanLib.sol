@@ -85,9 +85,6 @@ library IterationPlanLib {
     uint y;
     uint bA1;
     uint bB1;
-    uint bA2;
-    uint bB2;
-    uint gamma;
     uint alpha;
     uint s;
     uint aB3;
@@ -309,6 +306,7 @@ library IterationPlanLib {
   ///         The iteration should give us amounts of assets in required proportions.
   ///         There are two cases here: full swap and partial swap. Second repay is not required if the swap is partial.
   /// @param collateralA Estimated value of collateral A received after repay balanceB
+  /// @return amount of token A to be swapped
   function estimateSwapAmountForRepaySwapRepay(
     SwapRepayPlanParams memory p,
     uint balanceA,
@@ -321,7 +319,6 @@ library IterationPlanLib {
     uint collateralA,
     uint amountToRepayB
   ) internal pure returns(uint) {
-    // todo This function should be optimized (reduce amount of vars and params)
     // N - number of the state
     // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
     // alpha ~ cAN/cBN - estimated ratio of collateral/borrow
@@ -355,16 +352,19 @@ library IterationPlanLib {
 // 2. full swap
     v.aA2 = v.bA1;
     v.s = 1e18 * p.prices[indexB] / p.prices[indexA]; // no decimals because we use costs: costA = s * costB
-    v.bA2 = v.bA1 - v.aA2;
-    v.bB2 = v.bB1 + v.aA2 * v.s / 1e18;
 
 // 3. repay 2
-    v.aB3 = (v.x * v.bB2 - v.y * v.bA2) / (v.alpha * v.y / 1e18 + v.x);
+    // aB3 = (x * bB2 - Y * bA2) / (alpha * y + x)
+    v.aB3 = (
+      v.x * (v.bB1 + v.aA2 * v.s / 1e18)    // bB2 = v.bB1 + v.aA2 * v.s / 1e18
+      - v.y * (v.bA1 - v.aA2)               // bA2 = v.bA1 - v.aA2;
+    ) / (v.y * v.alpha / 1e18 + v.x);
+
     if (v.aB3 > v.cB1) {
       // there is not enough debt to make second repay
       // we need to make partial swap and receive assets in right proportions in result
-      v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
-      v.aA2 = v.bA1 * v.gamma / 1e18;
+      // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
+      v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
     }
 
     return v.aA2 * p.decs[indexA] / p.prices[indexA];

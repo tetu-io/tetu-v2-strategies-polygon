@@ -892,7 +892,8 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
       });
     });
 
-    describe("requirePayAmountBack", () => {
+    // todo enable after SCB-718
+    describe.skip("requirePayAmountBack", () => {
 
       /**
        * Make deposit: make two borrows

@@ -32,7 +32,12 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('UniswapV3ConverterStrategyUpgradeTests', function() {
+/**
+ * todo
+ * We are going to move from rebalance()-strategy to rebalanceNoSwap()-strategies
+ * This test should be enabled back when first rebalanceNoSwap()-strategies will be deployed
+ */
+describe.skip('UniswapV3ConverterStrategyUpgradeTests', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }

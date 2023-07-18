@@ -12,7 +12,7 @@ import {
   IERC20__factory,
   IPriceOracle__factory,
   IStrategyV2,
-  ITetuConverter__factory, IUniswapV3ConverterStrategyReaderAccess__factory,
+  ITetuConverter__factory, IPairBasedStrategyReaderAccess__factory,
   KyberConverterStrategy,
   KyberConverterStrategy__factory, KyberLib,
   TetuVaultV2,
@@ -264,7 +264,7 @@ async function getBorrowInfo(
     signer
   );
 
-  const strategyReaderReaderAccess = IUniswapV3ConverterStrategyReaderAccess__factory.connect(strategy.address, signer)
+  const strategyReaderReaderAccess = IPairBasedStrategyReaderAccess__factory.connect(strategy.address, signer)
   const [tokenA, tokenB] = await strategyReaderReaderAccess.getPoolTokens()
   // console.log('tokenA', tokenA)
   // console.log('tokenB', tokenB)

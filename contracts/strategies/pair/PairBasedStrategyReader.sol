@@ -6,12 +6,12 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
-import "../../interfaces/IUniswapV3ConverterStrategyReaderAccess.sol";
+import "../../interfaces/IPairBasedStrategyReaderAccess.sol";
 import "../../libs/AppLib.sol";
 import "../ConverterStrategyBaseLib.sol";
 
 /// @notice Read raw values and calculate complex values related to UniswapV3ConverterStrategy
-contract UniswapV3Reader {
+contract PairBasedStrategyReader {
 
   struct GetLockedUnderlyingAmountLocal {
     ITetuConverter converter;
@@ -36,7 +36,7 @@ contract UniswapV3Reader {
     uint totalAssets
   ) {
     GetLockedUnderlyingAmountLocal memory v;
-    IUniswapV3ConverterStrategyReaderAccess strategy = IUniswapV3ConverterStrategyReaderAccess(strategy_);
+    IPairBasedStrategyReaderAccess strategy = IPairBasedStrategyReaderAccess(strategy_);
 
     (address tokenA, address tokenB) = strategy.getPoolTokens();
     v.converter = ITetuConverter(strategy.converter());
@@ -58,7 +58,9 @@ contract UniswapV3Reader {
     v.reverseCollateralCost = v.reverseCollateral * v.prices[1] * v.decs[0] / v.decs[1] / v.prices[0];
 
     return (
-      v.directCollateral + v.reverseCollateralCost - v.directDebtCost - v.reverseDebt,
+      v.directCollateral + v.reverseCollateralCost > (v.directDebtCost + v.reverseDebt)
+        ? v.directCollateral + v.reverseCollateralCost - v.directDebtCost - v.reverseDebt
+        : 0,
       strategy.totalAssets()
     );
   }
