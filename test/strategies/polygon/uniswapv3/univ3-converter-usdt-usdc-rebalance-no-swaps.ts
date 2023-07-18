@@ -177,11 +177,15 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
 //region Utils
   async function unfoldBorrows(
+    useAggregatorToSwap: boolean,
     strategyAsOperator: UniswapV3ConverterStrategy,
     saveState?: (title: string) => Promise<void>
   ) {
     const state = await strategy.getState();
-    const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
+    const AGGREGATOR = useAggregatorToSwap
+      ? MaticAddresses.AGG_ONEINCH_V5
+      : Misc.ZERO_ADDRESS; // use liquidator for swaps
+
     const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
     const USE_SINGLE_ITERATION = true;
     const planEntryData = defaultAbiCoder.encode(
@@ -219,6 +223,12 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         }
       }
       console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
+      console.log("tokenToSwap", tokenToSwap);
+      console.log("AGGREGATOR", AGGREGATOR);
+      console.log("amountToSwap", amountToSwap);
+      console.log("swapData", swapData);
+      console.log("planEntryData", planEntryData);
+      console.log("ENTRY_TO_POOL_IS_ALLOWED", ENTRY_TO_POOL_IS_ALLOWED);
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
         [tokenToSwap, AGGREGATOR],
         amountToSwap,
@@ -249,6 +259,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     filePath: string;
     /** up OR down */
     movePricesUp: boolean;
+    useAggregatorToSwap: boolean;
   }
   async function makeTest(p: ITestParams) {
     const cycles = 5;
@@ -321,6 +332,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         console.log("Locked percent", percent);
         if (percent > MAX_ALLLOWED_LOCKED_PERCENT) {
           await unfoldBorrows(
+            p.useAggregatorToSwap,
             strategyAsOperator,
             async stateTitle => {
               states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
@@ -363,7 +375,11 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
-      expect(sharePriceAfter).approximately(sharePriceBefore, 10);
+      if (! p.useAggregatorToSwap) {
+        expect(sharePriceAfter).approximately(sharePriceBefore, 10);
+      } else {
+        // the aggregator (not liquidator) uses real price, different from our test...
+      }
 
       // decrease swap amount slowly
       swapAmount = swapAmount.mul(10).div(11);
@@ -380,16 +396,29 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 //endregion Utils
 
 //region Unit tests
-  it('Move price up in loop - no swap', async function() {
-    await makeTest({
-      filePath: `./tmp/move_price_up_no_swap.csv`,
-      movePricesUp: true,
+  describe("Use liquidator", () => {
+    it('Move price up in loop - no swap', async function () {
+      await makeTest({
+        filePath: `./tmp/move_price_up_no_swap.csv`,
+        movePricesUp: true,
+        useAggregatorToSwap: false
+      });
+    });
+    it('Move price down in loop - no swap', async function () {
+      await makeTest({
+        filePath: `./tmp/move_price_down_no_swap.csv`,
+        movePricesUp: true,
+        useAggregatorToSwap: false
+      });
     });
   });
-  it('Move price down in loop - no swap', async function() {
-    await makeTest({
-      filePath: `./tmp/move_price_down_no_swap.csv`,
-      movePricesUp: true,
+  describe("Use aggregator", () => {
+    it('Move price up in loop - no swap', async function () {
+      await makeTest({
+        filePath: `./tmp/move_price_up_no_swap_agg.csv`,
+        movePricesUp: true,
+        useAggregatorToSwap: true
+      });
     });
   });
 //endregion Unit tests

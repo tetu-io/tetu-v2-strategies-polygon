@@ -90,6 +90,8 @@ describe('PairBasedStrategyLibIntTest', () => {
         const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
         console.log('Transaction for swap: ', swapTransaction);
         swapData = swapTransaction.data;
+        console.log("swapData", swapData);
+        console.log("swapData.length", swapData.length);
       }
 
       const planInputParams = {
@@ -198,6 +200,40 @@ describe('PairBasedStrategyLibIntTest', () => {
             it("should return amountIn", async () => {
               const r = await loadFixture(makeSwapTest);
               expect(r.spentAmountIn).eq(100);
+            })
+            it("should set zero balanceIn", async () => {
+              const r = await loadFixture(makeSwapTest);
+              expect(r.balances[0]).eq(0);
+            })
+            it("should set not-zero balanceOut", async () => {
+              const r = await loadFixture(makeSwapTest);
+              expect(r.balances[1]).gt(80); // we assume that 1USDC gives us at least 80 DAI or more
+            })
+          });
+          describe("Use 1inch, 8358413440", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeSwapTest(): Promise<ISwapResults> {
+              return makeSwap({
+                tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
+                amountIn: "8358.413440",
+                holderIn: MaticHolders.HOLDER_USDC,
+                indexIn: 0,
+                indexOut: 1,
+                liquidationThresholds: ["0", "0"],
+                useLiquidator: false
+              });
+            }
+
+            it("should return amountIn", async () => {
+              const r = await loadFixture(makeSwapTest);
+              expect(r.spentAmountIn).eq(8358.413440);
             })
             it("should set zero balanceIn", async () => {
               const r = await loadFixture(makeSwapTest);

@@ -1,6 +1,25 @@
-import hre from "hardhat";
+import hre, {ethers} from "hardhat";
+import {BigNumber, BytesLike} from "ethers";
+import {defaultAbiCoder} from "ethers/lib/utils";
+import {ITetuLiquidator} from "../../../typechain";
+
+/**
+ *   function liquidate(
+ *     address tokenIn,
+ *     address tokenOut,
+ *     uint amount,
+ *     uint slippage
+ *   ) external;
+ */
+export interface ILiquidatorInputData {
+  tokenIn: string;
+  tokenOut: string;
+  amount: BigNumber;
+  slippage: BigNumber;
+}
 
 export class AggregatorUtils {
+
   static apiRequestUrl(methodName: string, queryParams: string) {
     const chainId = hre.network.config.chainId;
     const apiBaseUrl = 'https://api.1inch.io/v5.0/' + chainId;
@@ -21,5 +40,18 @@ export class AggregatorUtils {
         console.error('Err', e)
       }
     }
+  }
+
+  /**
+   * Build tx.data for the call of ITetuLiquidator.liquidate()
+   * For simplicity we use liquidate, but it's possible to prepare liquidateWithRoute call
+   * @param p
+   */
+  static buildTxForSwapUsingLiquidatorAsAggregator(p: ILiquidatorInputData): BytesLike {
+    const abi = [
+      "function liquidate(address tokenIn, address tokenOut, uint amount, uint slippage)"
+    ];
+    const iface = new ethers.utils.Interface(abi);
+    return iface.encodeFunctionData('liquidate', [p.tokenIn, p.tokenOut, p.amount, p.slippage]);
   }
 }
