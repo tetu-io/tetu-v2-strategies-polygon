@@ -177,14 +177,11 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
 //region Utils
   async function unfoldBorrows(
-    useAggregatorToSwap: boolean,
     strategyAsOperator: UniswapV3ConverterStrategy,
-    saveState?: (title: string) => Promise<void>
+    aggregator: string,
+    saveState?: (title: string) => Promise<void>,
   ) {
     const state = await strategy.getState();
-    const AGGREGATOR = useAggregatorToSwap
-      ? MaticAddresses.AGG_ONEINCH_V5
-      : Misc.ZERO_ADDRESS; // use liquidator for swaps
 
     const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
     const USE_SINGLE_ITERATION = true;
@@ -203,8 +200,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
       const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
 
-      if (AGGREGATOR === MaticAddresses.AGG_ONEINCH_V5) {
-        if (tokenToSwap !== Misc.ZERO_ADDRESS) {
+      if (tokenToSwap !== Misc.ZERO_ADDRESS) {
+        if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
           const params = {
             fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
@@ -220,17 +217,26 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
           const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
           console.log('Transaction for swap: ', swapTransaction);
           swapData = swapTransaction.data;
+        } else if (aggregator === MaticAddresses.TETU_LIQUIDATOR) {
+          swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
+            tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            amount: quote.amountToSwap,
+            slippage: BigNumber.from(5_000)
+          });
+          console.log("swapData for tetu liquidator", swapData);
         }
       }
       console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
       console.log("tokenToSwap", tokenToSwap);
-      console.log("AGGREGATOR", AGGREGATOR);
+      console.log("AGGREGATOR", aggregator) ;
       console.log("amountToSwap", amountToSwap);
       console.log("swapData", swapData);
       console.log("planEntryData", planEntryData);
       console.log("ENTRY_TO_POOL_IS_ALLOWED", ENTRY_TO_POOL_IS_ALLOWED);
+
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
-        [tokenToSwap, AGGREGATOR],
+        [tokenToSwap, aggregator],
         amountToSwap,
         swapData,
         planEntryData,
@@ -239,7 +245,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
       await strategyAsOperator.withdrawByAggStep(
-        [tokenToSwap, AGGREGATOR],
+        [tokenToSwap, aggregator],
         amountToSwap,
         swapData,
         planEntryData,
@@ -259,8 +265,10 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     filePath: string;
     /** up OR down */
     movePricesUp: boolean;
-    useAggregatorToSwap: boolean;
+    // Use Misc.ZERO_ADDRESS to use liquidator without gap
+    aggregator: string;
   }
+
   async function makeTest(p: ITestParams) {
     const cycles = 5;
     const MAX_ALLLOWED_LOCKED_PERCENT = 25;
@@ -332,12 +340,12 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
         console.log("Locked percent", percent);
         if (percent > MAX_ALLLOWED_LOCKED_PERCENT) {
           await unfoldBorrows(
-            p.useAggregatorToSwap,
             strategyAsOperator,
+            p.aggregator,
             async stateTitle => {
               states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-            }
+            },
           );
 
           if (await strategy.needRebalance()) {
@@ -375,7 +383,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
-      if (! p.useAggregatorToSwap) {
+      if (p.aggregator === Misc.ZERO_ADDRESS || p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
         expect(sharePriceAfter).approximately(sharePriceBefore, 10);
       } else {
         // the aggregator (not liquidator) uses real price, different from our test...
@@ -401,23 +409,30 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       await makeTest({
         filePath: `./tmp/move_price_up_no_swap.csv`,
         movePricesUp: true,
-        useAggregatorToSwap: false
+        aggregator: Misc.ZERO_ADDRESS
       });
     });
     it('Move price down in loop - no swap', async function () {
       await makeTest({
         filePath: `./tmp/move_price_down_no_swap.csv`,
         movePricesUp: true,
-        useAggregatorToSwap: false
+        aggregator: Misc.ZERO_ADDRESS
       });
     });
   });
   describe("Use aggregator", () => {
-    it('Move price up in loop - no swap', async function () {
+    it('Move price up in loop - no swap, 1inch', async function () {
       await makeTest({
-        filePath: `./tmp/move_price_up_no_swap_agg.csv`,
+        filePath: `./tmp/move_price_up_no_swap_1inch.csv`,
         movePricesUp: true,
-        useAggregatorToSwap: true
+        aggregator: MaticAddresses.AGG_ONEINCH_V5
+      });
+    });
+    it('Move price up in loop - no swap, liquidator as aggregator', async function () {
+      await makeTest({
+        filePath: `./tmp/move_price_up_no_swap_liquidator_as_agg.csv`,
+        movePricesUp: true,
+        aggregator: MaticAddresses.TETU_LIQUIDATOR
       });
     });
   });

@@ -707,12 +707,26 @@ contract MockTetuConverter is ITetuConverter {
         revert(AppErrors.ZERO_PRICE);
       }
     } else {
-      console.log("isConversionValid assetIn", _tokenName(assetIn_), amountIn_);
-      console.log("isConversionValid assetOut", _tokenName(assetOut_), amountOut_);
-      revert("isConversionValid is missed");
+      // we also support variant with arbitrary (unknown before hand) amount-out
+      key = keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_));
+      p = isConversionValidParams[key];
+      if (p.assetIn == assetIn_) {
+        if (p.result == SetIsConversionValidResult.FAILED_0) {
+          return false;
+        } else if (p.result == SetIsConversionValidResult.SUCCESS_1) {
+          return true;
+        } else {
+          revert(AppErrors.ZERO_PRICE);
+        }
+      } else {
+        console.log("isConversionValid assetIn", _tokenName(assetIn_), amountIn_);
+        console.log("isConversionValid assetOut", _tokenName(assetOut_), amountOut_);
+        revert("isConversionValid is missed");
+      }
     }
   }
 
+  /// @param amountOut_ 0 - to set up isConversionValid for arbitrary (unknown before hand) amount-out
   function setIsConversionValid(
     address assetIn_,
     uint amountIn_,
@@ -722,7 +736,9 @@ contract MockTetuConverter is ITetuConverter {
   ) external {
     console.log("setIsConversionValid assetIn", assetIn_, amountIn_);
     console.log("setIsConversionValid assetOut", assetOut_, amountOut_);
-    bytes32 key = keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_, amountOut_));
+    bytes32 key = amountOut_ == 0
+      ? keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_))
+      : keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_, amountOut_));
     isConversionValidParams[key] = IsConversionValidParams({
       assetIn: assetIn_,
       amountIn: amountIn_,

@@ -560,6 +560,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param amount_ Required amount of the {theAsset_}
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
+    theAsset_; // hide warning until the code below is not fixed
+    amount_; // hide warning until the code below is not fixed
+    amountOut; // hide warning until the code below is not fixed
 
     ///////////////////////////////////////////////////////////////////////////////
     // todo Current implementation doesn't take into account over-collateralization

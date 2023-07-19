@@ -11,7 +11,7 @@ import {expect} from "chai";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {BytesLike} from "ethers";
+import {BigNumber, BytesLike} from "ethers";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
@@ -55,11 +55,11 @@ describe('PairBasedStrategyLibIntTest', () => {
       indexOut: number;
       amountIn: string;
       holderIn: string;
-      useLiquidator: boolean;
+      aggregator: string;
 
-      // bad paths params
-      aggregator?: string;
       tokenToSwap?: string;
+      amountToSwap?: string;
+      mockConverter?: string;
     }
 
     interface ISwapResults {
@@ -70,15 +70,18 @@ describe('PairBasedStrategyLibIntTest', () => {
     async function makeSwap(p: ISwapParams): Promise<ISwapResults> {
       const decimalsTokenIn = await IERC20Metadata__factory.connect(p.tokens[p.indexIn], signer).decimals();
       const amountIn = parseUnits(p.amountIn, decimalsTokenIn);
+      const amountToSwap = p.amountToSwap
+        ? parseUnits(p.amountToSwap, decimalsTokenIn)
+        : amountIn;
 
       await BalanceUtils.getAmountFromHolder(p.tokens[p.indexIn], p.holderIn, facade.address, Number(p.amountIn));
 
       let swapData: BytesLike = "0x";
-      if (! p.useLiquidator) {
+      if (p.aggregator === MaticAddresses.AGG_ONEINCH_V5) {
         const params = {
           fromTokenAddress: p.tokens[p.indexIn],
           toTokenAddress: p.tokens[p.indexOut],
-          amount: amountIn.toString(),
+          amount: amountToSwap.toString(),
           fromAddress: facade.address,
           slippage: 1,
           disableEstimate: true,
@@ -92,10 +95,18 @@ describe('PairBasedStrategyLibIntTest', () => {
         swapData = swapTransaction.data;
         console.log("swapData", swapData);
         console.log("swapData.length", swapData.length);
+      } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
+        swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
+          tokenIn: p.tokens[p.indexIn],
+          tokenOut: p.tokens[p.indexOut],
+          amount: amountToSwap,
+          slippage: BigNumber.from(5_000)
+        });
+        console.log("swapData for tetu liquidator", swapData);
       }
 
       const planInputParams = {
-          converter: MaticAddresses.TETU_CONVERTER,
+          converter: p.mockConverter || MaticAddresses.TETU_CONVERTER,
           tokens: p.tokens,
           liquidationThresholds: await Promise.all(p.tokens.map(
             async (token: string, index: number) => parseUnits(
@@ -114,14 +125,12 @@ describe('PairBasedStrategyLibIntTest', () => {
           planKind: 0
         };
       const aggParams = {
-        useLiquidator: p.useLiquidator,
-        amountToSwap: amountIn,
+        useLiquidator: p.aggregator === Misc.ZERO_ADDRESS,
+        amountToSwap,
         tokenToSwap: p.tokenToSwap ??  p.tokens[p.indexIn],
-        aggregator: p.aggregator ??
-          (p.useLiquidator
-            ? MaticAddresses.TETU_LIQUIDATOR
-            : MaticAddresses.AGG_ONEINCH_V5
-          ),
+        aggregator: p.aggregator === Misc.ZERO_ADDRESS
+          ? MaticAddresses.TETU_LIQUIDATOR
+          : p.aggregator,
         swapData
       };
 
@@ -159,7 +168,7 @@ describe('PairBasedStrategyLibIntTest', () => {
                 indexIn: 0,
                 indexOut: 1,
                 liquidationThresholds: ["0", "0"],
-                useLiquidator: true
+                aggregator: Misc.ZERO_ADDRESS
               });
             }
 
@@ -193,7 +202,7 @@ describe('PairBasedStrategyLibIntTest', () => {
                 indexIn: 0,
                 indexOut: 1,
                 liquidationThresholds: ["0", "0"],
-                useLiquidator: false
+                aggregator: MaticAddresses.AGG_ONEINCH_V5
               });
             }
 
@@ -227,7 +236,7 @@ describe('PairBasedStrategyLibIntTest', () => {
                 indexIn: 0,
                 indexOut: 1,
                 liquidationThresholds: ["0", "0"],
-                useLiquidator: false
+                aggregator: MaticAddresses.AGG_ONEINCH_V5
               });
             }
 
@@ -263,7 +272,7 @@ describe('PairBasedStrategyLibIntTest', () => {
                 indexIn: 1,
                 indexOut: 0,
                 liquidationThresholds: ["0", "0"],
-                useLiquidator: true
+                aggregator: Misc.ZERO_ADDRESS
               });
             }
 
@@ -297,7 +306,7 @@ describe('PairBasedStrategyLibIntTest', () => {
                 indexIn: 1,
                 indexOut: 0,
                 liquidationThresholds: ["0", "0"],
-                useLiquidator: false
+                aggregator: MaticAddresses.AGG_ONEINCH_V5
               });
             }
 
@@ -316,7 +325,39 @@ describe('PairBasedStrategyLibIntTest', () => {
           });
         });
       });
+      describe("amountIn > amountToSwap, use liquidator as aggregator", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function makeSwapTest(): Promise<ISwapResults> {
+          return makeSwap({
+            tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
+            amountIn: "100",
+            amountToSwap: "90",
+            holderIn: MaticHolders.HOLDER_USDC,
+            indexIn: 0,
+            indexOut: 1,
+            liquidationThresholds: ["0", "0"],
+            aggregator: MaticAddresses.TETU_LIQUIDATOR
+          });
+        }
+
+        it("should return amountIn", async () => {
+          const r = await loadFixture(makeSwapTest);
+          expect(r.spentAmountIn).eq(90);
+        })
+        it("should set zero balanceIn", async () => {
+          const r = await loadFixture(makeSwapTest);
+          expect(r.balances[0]).eq(10); // 100 - 90
+        })
+      });
     });
+
     describe("Bad paths", () => {
       describe("amountIn <= liquidation threshold", () => {
         let snapshot: string;
@@ -335,7 +376,7 @@ describe('PairBasedStrategyLibIntTest', () => {
             indexIn: 0,
             indexOut: 1,
             liquidationThresholds: ["100", "0"],
-            useLiquidator: true
+            aggregator: Misc.ZERO_ADDRESS
           });
         }
 
@@ -348,63 +389,101 @@ describe('PairBasedStrategyLibIntTest', () => {
           expect(r.balances.join()).eq([100, 0].join());
         })
       });
-      describe("incorrect token to swap", () => {
+      describe("reverts", () => {
         let snapshot: string;
-        before(async function () {
+        beforeEach(async function () {
           snapshot = await TimeUtils.snapshot();
         });
-        after(async function () {
+        afterEach(async function () {
           await TimeUtils.rollback(snapshot);
         });
 
-        async function makeSwapTest(): Promise<ISwapResults> {
-          return makeSwap({
-            tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
-            amountIn: "100",
-            holderIn: MaticHolders.HOLDER_USDC,
-            indexIn: 1, // (!) wrong
-            indexOut: 0, // (!) wrong
-            liquidationThresholds: ["0", "0"],
-            useLiquidator: false,
-
-            tokenToSwap: MaticAddresses.USDC_TOKEN,
-          });
-        }
-
-        it("should revert", async () => {
+        it("should revert if token to swap is incorrect, liquidator as aggregator", async () => {
           await expect(
-            loadFixture(makeSwapTest)
+            makeSwap({
+              tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
+              amountIn: "100",
+              holderIn: MaticHolders.HOLDER_USDC,
+              indexIn: 1, // (!) wrong
+              indexOut: 0, // (!) wrong
+              liquidationThresholds: ["0", "0"],
+              aggregator: MaticAddresses.TETU_LIQUIDATOR,
+
+              tokenToSwap: MaticAddresses.USDC_TOKEN,
+            })
           ).revertedWith("TS-25 swap by agg"); // INCORRECT_SWAP_BY_AGG_PARAM
-        })
-      });
-      describe("incorrect aggregator", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
         });
 
-        async function makeSwapTest(): Promise<ISwapResults> {
-          return makeSwap({
-            tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
-            amountIn: "100",
-            holderIn: MaticHolders.HOLDER_USDC,
-            indexIn: 0,
-            indexOut: 1,
-            liquidationThresholds: ["0", "0"],
-            useLiquidator: false,
-
-            aggregator: MaticAddresses.TETU_CONVERTER // (!) incorrect
-          });
-        }
-
-        it("should revert", async () => {
+        it("should revert if token to swap is incorrect, liquidator", async () => {
           await expect(
-            loadFixture(makeSwapTest)
+            makeSwap({
+              tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
+              amountIn: "100",
+              holderIn: MaticHolders.HOLDER_USDC,
+              indexIn: 1, // (!) wrong
+              indexOut: 0, // (!) wrong
+              liquidationThresholds: ["0", "0"],
+              aggregator: MaticAddresses.ZERO_ADDRESS,
+
+              tokenToSwap: MaticAddresses.USDC_TOKEN,
+            })
+          ).revertedWith("TS-25 swap by agg"); // INCORRECT_SWAP_BY_AGG_PARAM
+        });
+
+        it("should revert if aggregator is incorrect", async () => {
+          await expect(
+            makeSwap({
+              tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
+              amountIn: "100",
+              holderIn: MaticHolders.HOLDER_USDC,
+              indexIn: 0,
+              indexOut: 1,
+              liquidationThresholds: ["0", "0"],
+              aggregator: MaticAddresses.TETU_CONVERTER // (!) incorrect
+            })
           ).revertedWith("PBS-1 Unknown router"); // UNKNOWN_SWAP_ROUTER
         })
+
+        it("should revert if amountToSwap exceeds balance", async () => {
+          await expect(
+            makeSwap({
+              amountIn: "100", // (!) balance is equal to amountIn
+              amountToSwap: "101", // (!) but we are going to swap bigger amount
+
+              tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
+              holderIn: MaticHolders.HOLDER_USDC,
+              indexIn: 0,
+              indexOut: 1,
+              liquidationThresholds: ["0", "0"],
+              aggregator: MaticAddresses.TETU_LIQUIDATOR,
+            })
+          ).revertedWith("TS-7 not enough balance"); // NOT_ENOUGH_BALANCE
+        })
+
+        it("should revert if price impact is too high", async () => {
+          const mockConverter = await MockHelper.createMockTetuConverter(signer);
+          (await mockConverter).setIsConversionValid(
+            MaticAddresses.USDC_TOKEN,
+            parseUnits("100", 6),
+            MaticAddresses.DAI_TOKEN,
+            0, // arbitrary (unknown before-hand) amount-out
+            0 // FAILED_0
+          );
+
+          await expect(
+            makeSwap({
+              mockConverter: mockConverter.address,
+
+              tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.DAI_TOKEN],
+              amountIn: "100", // (!) balance is equal to amountIn
+              holderIn: MaticHolders.HOLDER_USDC,
+              indexIn: 0,
+              indexOut: 1,
+              liquidationThresholds: ["0", "0"],
+              aggregator: MaticAddresses.TETU_LIQUIDATOR,
+            })
+          ).revertedWith("TS-16 price impact"); // PRICE_IMPACT
+        });
       });
     });
   });

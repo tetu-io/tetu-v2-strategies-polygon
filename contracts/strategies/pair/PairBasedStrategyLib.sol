@@ -6,10 +6,10 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 library PairBasedStrategyLib {
+  //region ------------------------------------------------ Constants
   uint internal constant _ASSET_LIQUIDATION_SLIPPAGE = 300;
   /// @notice In all functions below array {token} contains underlying at the first position
   uint internal constant IDX_ASSET = 0;
@@ -21,10 +21,14 @@ library PairBasedStrategyLib {
   uint internal constant IDX_SWAP_2 = 2;
   uint internal constant IDX_REPAY_2 = 3;
 
+  /// @notice 1inch router V5
+  address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582;
+  /// @notice OpenOceanExchangeProxy
+  address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64;
+  address internal constant TETU_LIQUIDATOR = 0xC737eaB847Ae6A92028862fE38b828db41314772;
+
   string public constant UNKNOWN_SWAP_ROUTER = "PBS-1 Unknown router";
-  address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582; // 1inch router V5
-  address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOceanExchangeProxy
-  address internal constant TETU_LIQUIDATOR = 0xC737eaB847Ae6A92028862fE38b828db41314772; // Tetu Liquidator
+  //endregion ------------------------------------------------ Constants
 
   //region ------------------------------------------------ Data types
   struct SwapByAggParams {
@@ -354,16 +358,6 @@ library PairBasedStrategyLib {
     // - Aggregator uses amountToSwap for which a route was built off-chain before the call of the swap()
     // It's allowed to use aggregator == liquidator, so in this way liquidator will use aggregator's logic (for tests)
 
-    console.log("_swap");
-    console.log("_swap.amountIn", amountIn);
-    console.log("_swap.amountToSwap", aggParams.amountToSwap);
-    console.log("_swap.balance", IERC20(p.tokens[indexIn]).balanceOf(address(this)));
-    console.log("_swap.aggParams.aggregator", aggParams.aggregator);
-    console.log("_swap.aggParams.tokenToSwap", aggParams.tokenToSwap);
-    console.log("_swap.aggParams.swapData", aggParams.swapData.length);
-    console.log("_swap.prices[0]", p.prices[0]);
-    console.log("_swap.prices[1]", p.prices[1]);
-
     if (!aggParams.useLiquidator) {
       // aggregator requires exact input amount - aggParams.amountToSwap
       // actual amount can be a bit different because the quote function was called in different block
@@ -371,6 +365,8 @@ library PairBasedStrategyLib {
     }
 
     require(amountIn <= IERC20(p.tokens[indexIn]).balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
+    // let's ensure that "next swap" is made using correct token
+    require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
     if (amountIn > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
       AppLib.approveIfNeeded(p.tokens[indexIn], amountIn, aggParams.aggregator);
@@ -391,18 +387,12 @@ library PairBasedStrategyLib {
       } else {
         _checkSwapRouter(aggParams.aggregator);
 
-        // let's ensure that "next swap" is made using correct token
-        require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
-
         (bool success, bytes memory result) = aggParams.aggregator.call(aggParams.swapData);
-        console.log("_swap.success", success);
-        console.log("_swap.result", result.length);
         require(success, string(result));
 
         spentAmountIn = amountIn;
       }
 
-      console.log("Received amount", AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore);
       require(
         p.converter.isConversionValid(
           p.tokens[indexIn],
