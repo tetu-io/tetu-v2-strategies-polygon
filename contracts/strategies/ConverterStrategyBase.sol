@@ -265,6 +265,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     return _withdrawFromPool(type(uint).max);
   }
 
+  /// @dev The function is virtual to simplify unit testing
   /// @param amount Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
   /// @param earnedByPrices_ Additional amount that should be withdrawn and send to the insurance
   /// @param investedAssets_ Value of invested assets recalculated using current prices
@@ -272,7 +273,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return __assetPrice Price of the {asset} taken from the price oracle
   /// @return strategyLoss Loss before withdrawing: [new-investedAssets - old-investedAssets]
   /// @return amountSentToInsurance Actual amount of underlying sent to the insurance
-  function _withdrawUniversal(uint amount, uint earnedByPrices_, uint investedAssets_) internal returns (
+  function _withdrawUniversal(uint amount, uint earnedByPrices_, uint investedAssets_) virtual internal returns (
     uint expectedWithdrewUSD,
     uint __assetPrice,
     uint strategyLoss,

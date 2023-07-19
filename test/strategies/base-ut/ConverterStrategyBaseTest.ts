@@ -2848,7 +2848,7 @@ describe('ConverterStrategyBaseTest', () => {
     });
   });
 
-  describe("_depositToPoolUni", () => {
+  describe("_depositToPoolUniversal", () => {
     interface IDepositToPoolUniParams {
       amount: string;
       earnedByPrices: string;
@@ -3072,10 +3072,8 @@ describe('ConverterStrategyBaseTest', () => {
           expect(ret.strategyLoss).eq(0);
         });
       });
-      /**
-       * TODO: implement mocks for withdraw
-       */
-      describe.skip("earnedByPrices != 0, balance < earnedByPrices_ (withdraw => insurance)", () => {
+
+      describe("earnedByPrices != 0, balance < earnedByPrices_ (withdraw => insurance)", () => {
         let snapshotLocal: string;
         before(async function() {
           snapshotLocal = await TimeUtils.snapshot();
