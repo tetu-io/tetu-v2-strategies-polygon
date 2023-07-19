@@ -183,11 +183,13 @@ library KyberDebtLib {
 
     BorrowLib.rebalanceAssets(
       tetuConverter,
+      ITetuLiquidator(PairBasedStrategyLib.TETU_LIQUIDATOR), // todo where to take liquidator address?
       p.tokenA,
       p.tokenB,
       p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
       0, // todo threshold for tokenA
-      0 // todo threshold for tokenB
+      0, // todo threshold for tokenB
+      profitToCover
     );
 
     // we assume here, that profitToCover has low value

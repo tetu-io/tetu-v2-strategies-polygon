@@ -8,6 +8,7 @@ import "./AlgebraStrategyErrors.sol";
 import "./AlgebraConverterStrategyLogicLib.sol";
 import "../../libs/BorrowLib.sol";
 import "../pair/PairBasedStrategyLib.sol";
+import "hardhat/console.sol";
 
 library AlgebraDebtLib {
   using SafeERC20 for IERC20;
@@ -182,20 +183,28 @@ library AlgebraDebtLib {
 
     BorrowLib.rebalanceAssets(
       tetuConverter,
+      ITetuLiquidator(PairBasedStrategyLib.TETU_LIQUIDATOR), // todo where to take liquidator address?
       p.tokenA,
       p.tokenB,
       p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
       0, // todo threshold for tokenA
-      0 // todo threshold for tokenB
+      0, // todo threshold for tokenB
+      profitToCover
     );
 
+    console.log("rebalanceNoSwaps");
+    console.log("rebalanceNoSwaps.profitToCover", profitToCover);
+    console.log("rebalanceNoSwaps.p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1)", p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1));
+    console.log("rebalanceNoSwaps.balance.tokenA", IERC20(p.tokenA).balanceOf(address(this)));
     // we assume here, that profitToCover has low value
     // so we can send it without changing proportions of the assets to much
     // todo if it's not correct we should use more complex implementation of rebalanceAssets with "addition"
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(p.tokenA).balanceOf(address(this)));
+      console.log("rebalanceNoSwaps.profitToSend", profitToSend);
       ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);
     }
+    console.log("rebalanceNoSwaps.balance.tokenA.2", IERC20(p.tokenA).balanceOf(address(this)));
 
     state.lowerTick = p.newLowerTick;
     state.upperTick = p.newUpperTick;

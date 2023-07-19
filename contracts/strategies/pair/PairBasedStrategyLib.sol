@@ -269,14 +269,18 @@ library PairBasedStrategyLib {
     uint indexBorrow
   ) internal {
     BorrowLib.RebalanceAssetsCore memory cac = BorrowLib.RebalanceAssetsCore({
-      converter: p.converter,
+      converterLiquidator: BorrowLib.ConverterLiquidator(p.converter, ITetuLiquidator(TETU_LIQUIDATOR)),
       assetA: p.tokens[indexCollateral],
       assetB: p.tokens[indexBorrow],
       propA: indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18,
       propB: indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18,
       // {assetA} to {assetB} ratio; {amountB} * {alpha} => {amountA}, decimals 18
       alpha18: 1e18 * p.prices[indexBorrow] * p.decs[indexCollateral] / p.prices[indexCollateral] / p.decs[indexBorrow],
-      thresholdA: p.liquidationThresholds[indexCollateral]
+      thresholdA: p.liquidationThresholds[indexCollateral],
+      addonA: 0,
+      addonB: 0,
+      indexA: indexCollateral,
+      indexB: indexBorrow
     });
 
     // we are going to change direction of the borrow
@@ -286,6 +290,10 @@ library PairBasedStrategyLib {
 
     BorrowLib.openPosition(
       cac,
+      BorrowLib.PricesDecs({
+        prices: p.prices,
+        decs: p.decs
+      }),
       IERC20(p.tokens[indexCollateral]).balanceOf(address(this)),
       IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
     );
