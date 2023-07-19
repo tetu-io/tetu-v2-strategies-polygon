@@ -76,6 +76,8 @@ describe('ConverterStrategyBaseTest', () => {
 
     liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
     forwarder = await MockHelper.createMockForwarder(signer);
+
+    console.log("usdc", usdc.address);
   });
 
   after(async function () {
@@ -2875,11 +2877,27 @@ describe('ConverterStrategyBaseTest', () => {
         liquidityAmount: string;
         amountsOut: string[];
       }
+
+      withdrawUniversal?: {
+        amountToPutOnBalance: string,
+        input: {
+          amount: string,
+          earnedByPrices: string,
+          investedAssets: string
+        },
+        output: {
+          expectedWithdrewUSD: string,
+          assetPrice: string,
+          strategyLoss: string,
+          amountSentToInsurance: string
+        }
+      }
     }
     interface IDepositToPoolUniResults {
       insuranceBalance: number;
       strategyLoss: number;
       amountSentToInsurance: number;
+      strategyBalance: number;
     }
 
     async function makeDepositToPool(p: IDepositToPoolUniParams) : Promise<IDepositToPoolUniResults> {
@@ -2932,6 +2950,26 @@ describe('ConverterStrategyBaseTest', () => {
         );
       }
 
+      // set up withdraw
+      if (p.withdrawUniversal) {
+        const amountToPutOnBalance = parseUnits(p.withdrawUniversal.amountToPutOnBalance, 6);
+        const assetProvider = ethers.Wallet.createRandom().address;
+        await usdc.mint(assetProvider, amountToPutOnBalance);
+        await usdc.connect(await Misc.impersonate(assetProvider)).approve(ms.strategy.address, amountToPutOnBalance);
+        await ms.strategy.setUpMockedWithdrawUniversal(
+          assetProvider,
+          amountToPutOnBalance,
+          parseUnits(p.withdrawUniversal.input.amount, 6),
+          parseUnits(p.withdrawUniversal.input.earnedByPrices, 6),
+          parseUnits(p.withdrawUniversal.input.investedAssets, 6),
+
+          parseUnits(p.withdrawUniversal.output.expectedWithdrewUSD, 6),
+          parseUnits(p.withdrawUniversal.output.assetPrice, 18),
+          parseUnits(p.withdrawUniversal.output.strategyLoss, 6),
+          parseUnits(p.withdrawUniversal.output.amountSentToInsurance, 6)
+        );
+      }
+
       // make action
       const ret = await ms.strategy.callStatic.depositToPoolUniAccess(
         parseUnits(p.amount, 6),
@@ -2949,6 +2987,7 @@ describe('ConverterStrategyBaseTest', () => {
         amountSentToInsurance: +formatUnits(ret.amountSentToInsurance, 6),
         strategyLoss: +formatUnits(ret.strategyLoss, 6),
         insuranceBalance: +formatUnits(await usdc.balanceOf(await ms.vault.insurance()), 6),
+        strategyBalance: +formatUnits(await usdc.balanceOf(ms.strategy.address), 6),
       }
     }
 
@@ -3086,25 +3125,44 @@ describe('ConverterStrategyBaseTest', () => {
           return makeDepositToPool({
             amount: "500",
             earnedByPrices: "700",
-            initialBalances: ["0", "0", "0"], // dai, usdc, usdt
+            initialBalances: ["0", "651", "0"], // dai, usdc, usdt
 
             investedAssets: "1000000000",
 
-            reinvestThresholdPercent: 1
+            reinvestThresholdPercent: 1,
+
+            withdrawUniversal: {
+              amountToPutOnBalance: "50",
+              input: {
+                amount: "0",
+                earnedByPrices: "700",
+                investedAssets: "1000000000",  // investedAssets + initial balance
+              },
+              output: {
+                expectedWithdrewUSD: "51",
+                amountSentToInsurance: "699",
+                strategyLoss: "13",
+                assetPrice: "0.9",
+              },
+            }
           });
         }
 
         it("should send expected amount to insurance", async () => {
           const ret = await loadFixture(makeDepositToPoolTest);
-          expect(ret.insuranceBalance).eq(700);
+          expect(ret.insuranceBalance).eq(699);
         });
         it("should return expected amountSentToInsurance", async () => {
           const ret = await loadFixture(makeDepositToPoolTest);
-          expect(ret.amountSentToInsurance).eq(700);
+          expect(ret.amountSentToInsurance).eq(699);
         });
-        it("should return zero strategy loss", async () => {
+        it("should return expected strategy loss", async () => {
           const ret = await loadFixture(makeDepositToPoolTest);
-          expect(ret.strategyLoss).eq(0);
+          expect(ret.strategyLoss).eq(13);
+        });
+        it("should set expected balance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.strategyBalance).eq(651 + 50 - 699);
         });
       });
     });

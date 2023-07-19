@@ -2,8 +2,10 @@
 
 pragma solidity 0.8.17;
 
-import "../strategies/ConverterStrategyBase.sol";
-import "./mocks/MockDepositor.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuVaultV2.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
+import "../../strategies/ConverterStrategyBase.sol";
+import "./MockDepositor.sol";
 
 /// @title Mock Converter Strategy with MockDepositor
 /// @author bogdoslav
@@ -56,6 +58,65 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     _updateInvestedAssets();
   }
 
+  function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
+    return _doHardWork(reInvest);
+  }
+
+  //region ------------------------------------------------------- Withdraw universal
+  struct MockedWithdrawUniversalParams {
+    // auxiliary params
+    bool initialized;
+    address assetProvider;
+    uint assetAmountToGetFromProvider;
+
+    // input params
+    uint amount;
+    uint earnedByPrices;
+    uint investedAssets;
+
+    // output params
+    uint expectedWithdrewUSD;
+    uint assetPrice;
+    uint strategyLoss;
+    uint amountSentToInsurance;
+  }
+  mapping(bytes32 => MockedWithdrawUniversalParams) internal _mockedWithdrawParams;
+
+  function setUpMockedWithdrawUniversal(
+  // auxiliary params
+    address assetProvider_,
+    uint assetAmountToGetFromProvider_,
+  // input params
+    uint amount,
+    uint earnedByPrices_,
+    uint investedAssets_,
+  // output params
+    uint expectedWithdrewUSD,
+    uint assetPrice,
+    uint strategyLoss,
+    uint amountSentToInsurance
+  ) external {
+    bytes32 key = keccak256(abi.encodePacked(amount, earnedByPrices_, investedAssets_));
+    console.log("setUpMockedWithdrawUniversal.amount", amount);
+    console.log("setUpMockedWithdrawUniversal.earnedByPrices_", earnedByPrices_);
+    console.log("setUpMockedWithdrawUniversal.investedAssets_", investedAssets_);
+    _mockedWithdrawParams[key] = MockedWithdrawUniversalParams({
+      initialized: true,
+      assetProvider: assetProvider_,
+      assetAmountToGetFromProvider: assetAmountToGetFromProvider_,
+
+      amount: amount,
+      earnedByPrices: earnedByPrices_,
+      investedAssets: investedAssets_,
+
+      expectedWithdrewUSD: expectedWithdrewUSD,
+      assetPrice: assetPrice,
+      strategyLoss: strategyLoss,
+      amountSentToInsurance: amountSentToInsurance
+    });
+  }
+
+  /// @notice Direct access to internal _withdrawUniversal
   function withdrawUniversalTestAccess(uint amount, bool all, uint earnedByPrices_, uint investedAssets_) external returns (
     uint expectedWithdrewUSD,
     uint assetPrice,
@@ -65,13 +126,47 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return _withdrawUniversal(all ? type(uint).max : amount, earnedByPrices_, investedAssets_);
   }
 
-  function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
-    return _doHardWork(reInvest);
-  }
+  /// @notice Call original OR mocked version of _withdrawUniversal
+  function _withdrawUniversal(uint amount, uint earnedByPrices_, uint investedAssets_) override internal returns (
+    uint expectedWithdrewUSD,
+    uint __assetPrice,
+    uint strategyLoss,
+    uint amountSentToInsurance
+  ) {
+    bytes32 key = keccak256(abi.encodePacked(amount, earnedByPrices_, investedAssets_));
+    MockedWithdrawUniversalParams memory data = _mockedWithdrawParams[key];
+    console.log("_withdrawUniversal.amount", amount);
+    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
+    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  /// _handleRewards, mocked version + accessor
-  /////////////////////////////////////////////////////////////////////////////////////
+    if (data.initialized) {
+      console.log("Mocked _withdrawUniversal is used");
+      if (data.assetProvider != address(0)) {
+        // get asset from the asset provider to balance
+        IERC20(baseState.asset).transferFrom(
+          data.assetProvider,
+          address(this),
+          data.assetAmountToGetFromProvider
+        );
+      }
+      if (data.amountSentToInsurance != 0) {
+        address insurance = address(ITetuVaultV2(ISplitter(baseState.splitter).vault()).insurance());
+        IERC20(baseState.asset).transfer(insurance, data.amountSentToInsurance);
+      }
+
+      return (
+        data.expectedWithdrewUSD,
+        data.assetPrice,
+        data.strategyLoss,
+        data.amountSentToInsurance
+      );
+    } else {
+      return super._withdrawUniversal(amount, earnedByPrices_, investedAssets_);
+    }
+  }
+  //endregion ------------------------------------------------------- Withdraw universal
+
+  //region--------------------------------------- _handleRewards, mocked version + accessor
   function _handleRewards() internal override returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     address asset = baseState.asset;
     if (handleRewardsParams.initialized) {
@@ -128,6 +223,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       providerBalanceChange: providerBalanceChange
     });
   }
+  //endregion--------------------------------------- _handleRewards, mocked version + accessor
 
   //region -------------------------------------------- _depositToPoolUni mock
   struct MockedDepositToPoolUniParams {
@@ -244,9 +340,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
   //endregion ---------------------------------------- _beforeDeposit
 
-  /////////////////////////////////////////////////////////////////////////////////////
-  /// Others
-  /////////////////////////////////////////////////////////////////////////////////////
+  //region ----------------------------------------------------- Others
 
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
@@ -300,4 +394,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       liquidationThresholds
     );
   }
+  //endregion ----------------------------------------------------- Others
+
+
 }

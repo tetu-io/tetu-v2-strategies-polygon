@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "../strategies/balancer/BalancerBoostedStrategy.sol";
+import "../../strategies/balancer/BalancerBoostedStrategy.sol";
 
 /// @notice Provide direct access to BalancerBoostedStrategy internal functions
 contract BalancerBoostedStrategyAccess is BalancerBoostedStrategy {

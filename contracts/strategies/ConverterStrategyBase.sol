@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -165,6 +166,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // send earned-by-prices to the insurance
     if (earnedByPrices_ != 0) {
+
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
         amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
       } else {
