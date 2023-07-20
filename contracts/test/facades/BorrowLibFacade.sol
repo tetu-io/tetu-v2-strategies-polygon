@@ -18,4 +18,35 @@ contract BorrowLibFacade {
   ) external {
     BorrowLib.rebalanceAssets(tetuConverter_, tetuLiquidator_, asset0, asset1, prop0, threshold0, threshold1, addition0);
   }
+
+  function _makeLittleSwap(
+    BorrowLib.RebalanceAssetsCore memory c,
+    BorrowLib.PricesDecs memory pd,
+    uint balanceA_,
+    uint requiredAmountB
+  ) external returns (
+    uint spentAmountIn,
+    uint receivedAmountOut
+  ) {
+    return BorrowLib._makeLittleSwap(c, pd, balanceA_, requiredAmountB);
+  }
+
+  function openPosition(
+    BorrowLib.RebalanceAssetsCore memory c,
+    BorrowLib.PricesDecs memory pd,
+    uint balanceA_,
+    uint balanceB_
+  ) external returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    return BorrowLib.openPosition(c, pd, balanceA_, balanceB_);
+  }
+
+  function _openPosition(BorrowLib.RebalanceAssetsCore memory c, uint balanceA_, uint balanceB_) external returns (
+    uint collateralAmountOut,
+    uint borrowedAmountOut
+  ) {
+    return BorrowLib._openPosition(c, balanceA_, balanceB_);
+  }
 }

@@ -171,7 +171,8 @@ library UniswapV3DebtLib {
     UniswapV3ConverterStrategyLogicLib.State storage state,
     uint profitToCover,
     uint totalAssets,
-    address splitter
+    address splitter,
+    mapping(address => uint) storage liquidityThresholds_
   ) external {
     RebalanceNoSwapsLocal memory p;
     IUniswapV3Pool pool = state.pool;
@@ -188,8 +189,8 @@ library UniswapV3DebtLib {
       p.tokenA,
       p.tokenB,
       p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
-      0, // todo threshold for tokenA
-      0, // todo threshold for tokenB
+      liquidityThresholds_[p.tokenA],
+      liquidityThresholds_[p.tokenB],
       profitToCover
     );
 

@@ -176,7 +176,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
-      checkNeedRebalance
+      checkNeedRebalance,
+      liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
     return fuseEnabledOut;
@@ -266,7 +267,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
         v.oldTotalAssets,
         v.profitToCover,
         baseState.splitter,
-        false
+        false,
+        liquidationThresholds
       );
       _rebalanceAfter(v.tokenAmounts);
     } else {

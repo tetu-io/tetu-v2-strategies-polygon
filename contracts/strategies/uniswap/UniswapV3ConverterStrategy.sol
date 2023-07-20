@@ -154,7 +154,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
-      checkNeedRebalance
+      checkNeedRebalance,
+      liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
     return fuseEnabledOut;
@@ -264,7 +265,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
         v.oldTotalAssets,
         v.profitToCover,
         baseState.splitter,
-        false
+        false,
+        liquidationThresholds
       );
       _rebalanceAfter(v.tokenAmounts);
     } else {

@@ -171,7 +171,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
-      checkNeedRebalance
+      checkNeedRebalance,
+      liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
     return fuseEnabledOut;
@@ -261,7 +262,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
         v.oldTotalAssets,
         v.profitToCover,
         baseState.splitter,
-        false
+        false,
+        liquidationThresholds
       );
       _rebalanceAfter(v.tokenAmounts);
     } else {

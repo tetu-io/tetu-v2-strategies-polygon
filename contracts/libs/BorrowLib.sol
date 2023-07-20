@@ -295,7 +295,7 @@ library BorrowLib {
         // but we can assume here, that amount (c.addonB - balanceB_) is pretty small (it's profitToCover)
         // so, we can swap this required amount through liquidator at first
         // then use _openPosition to re-allocated rest amounts to proper proportions
-        (uint decA, uint incB) = _makeLittleSwap(c, pd, balanceA_, balanceB_, c.addonB - balanceB_);
+        (uint decA, uint incB) = _makeLittleSwap(c, pd, balanceA_, c.addonB - balanceB_);
         console.log("openPosition.decA", decA);
         console.log("openPosition.incB", incB);
         return _openPosition(c, balanceA_ - decA, balanceB_);
@@ -360,7 +360,6 @@ library BorrowLib {
     RebalanceAssetsCore memory c,
     PricesDecs memory pd,
     uint balanceA_,
-    uint balanceB_,
     uint requiredAmountB
   ) internal returns (
     uint spentAmountIn,

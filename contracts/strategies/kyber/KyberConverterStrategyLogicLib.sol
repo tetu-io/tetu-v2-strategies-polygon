@@ -613,7 +613,8 @@ library KyberConverterStrategyLogicLib {
     uint oldTotalAssets,
     uint profitToCover,
     address splitter,
-    bool checkNeedRebalance_
+    bool checkNeedRebalance_,
+    mapping(address => uint) storage liquidityThresholds_
   ) external returns (
     uint[] memory tokenAmounts, // _depositorEnter(tokenAmounts) if length == 2
     bool fuseEnabledOut
@@ -629,7 +630,7 @@ library KyberConverterStrategyLogicLib {
         fuseEnabledOut = true;
       } else {
         // rebalancing debt, setting new tick range
-        KyberDebtLib.rebalanceNoSwaps(converterLiquidator, state, profitToCover, oldTotalAssets, splitter);
+        KyberDebtLib.rebalanceNoSwaps(converterLiquidator, state, profitToCover, oldTotalAssets, splitter, liquidityThresholds_);
 
         // need to update last price only for stables coz only stables have fuse mechanic
         if (v.isStablePool) {
