@@ -166,7 +166,7 @@ library AlgebraDebtLib {
   }
 
   function rebalanceNoSwaps(
-    ITetuConverter tetuConverter,
+    address[2] calldata converterLiquidator,
     AlgebraConverterStrategyLogicLib.State storage state,
     uint profitToCover,
     uint totalAssets,
@@ -182,8 +182,8 @@ library AlgebraDebtLib {
     (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
 
     BorrowLib.rebalanceAssets(
-      tetuConverter,
-      ITetuLiquidator(PairBasedStrategyLib.TETU_LIQUIDATOR), // todo where to take liquidator address?
+      ITetuConverter(converterLiquidator[0]),
+      ITetuLiquidator(converterLiquidator[1]),
       p.tokenA,
       p.tokenB,
       p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
@@ -196,9 +196,8 @@ library AlgebraDebtLib {
     console.log("rebalanceNoSwaps.profitToCover", profitToCover);
     console.log("rebalanceNoSwaps.p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1)", p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1));
     console.log("rebalanceNoSwaps.balance.tokenA", IERC20(p.tokenA).balanceOf(address(this)));
-    // we assume here, that profitToCover has low value
-    // so we can send it without changing proportions of the assets to much
-    // todo if it's not correct we should use more complex implementation of rebalanceAssets with "addition"
+
+    // we assume here, that rebalanceAssets provides profitToCover on balance and set leftovers to right proportions
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(p.tokenA).balanceOf(address(this)));
       console.log("rebalanceNoSwaps.profitToSend", profitToSend);

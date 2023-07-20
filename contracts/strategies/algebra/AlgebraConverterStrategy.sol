@@ -33,6 +33,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   struct WithdrawByAggStepLocal {
     address controller;
     ITetuConverter converter;
+    address liquidator;
     address[] tokens;
     uint[] liquidationThresholds;
     uint oldTotalAssets;
@@ -171,7 +172,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
-      converter,
+      [address(converter), address(AppLib._getLiquidator(controller()))],
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
@@ -228,13 +229,14 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     WithdrawByAggStepLocal memory v;
     (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
     v.converter = converter;
+    v.liquidator = address(AppLib._getLiquidator(v.controller));
 
     // decode tokenToSwapAndAggregator
     v.tokenToSwap = tokenToSwapAndAggregator[0];
     v.aggregator = tokenToSwapAndAggregator[1];
     if (v.aggregator == address(0)) {
       v.useLiquidator = true;
-      v.aggregator = address(AppLib._getLiquidator(v.controller));
+      v.aggregator = v.liquidator;
     }
 
     // get tokens as following: [underlying, not-underlying]
@@ -260,7 +262,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       // make rebalance and enter back to the pool. We won't have any swaps here
       (v.tokenAmounts,) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
         state,
-        converter,
+        [address(converter), v.liquidator],
         v.oldTotalAssets,
         v.profitToCover,
         baseState.splitter,

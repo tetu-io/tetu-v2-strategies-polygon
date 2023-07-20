@@ -582,13 +582,14 @@ library AlgebraConverterStrategyLogicLib {
   }
 
   /// @notice Make rebalance without swaps (using borrowing only).
+  /// @param converterLiquidator [TetuConverter, TetuLiquidator]
   /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @param oldTotalAssets Current value of totalAssets()
   /// @return tokenAmounts Token amounts for deposit
   /// @return fuseEnabledOut true if fuse is detected - we need to close all debts asap
   function rebalanceNoSwaps(
     State storage state,
-    ITetuConverter converter,
+    address[2] calldata converterLiquidator,
     uint oldTotalAssets,
     uint profitToCover,
     address splitter,
@@ -598,7 +599,7 @@ library AlgebraConverterStrategyLogicLib {
     bool fuseEnabledOut
   ) {
     RebalanceLocalVariables memory v;
-    _initLocalVars(v, converter, state, checkNeedRebalance_);
+    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), state, checkNeedRebalance_);
 
     if (v.isStablePool && isEnableFuse(v.lastPrice, v.newPrice, v.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -607,7 +608,7 @@ library AlgebraConverterStrategyLogicLib {
       fuseEnabledOut = true;
     } else {
       // rebalancing debt, setting new tick range
-      AlgebraDebtLib.rebalanceNoSwaps(converter, state, profitToCover, oldTotalAssets, splitter);
+      AlgebraDebtLib.rebalanceNoSwaps(converterLiquidator, state, profitToCover, oldTotalAssets, splitter);
 
       // need to update last price only for stables coz only stables have fuse mechanic
       if (v.isStablePool) {
@@ -615,7 +616,12 @@ library AlgebraConverterStrategyLogicLib {
       }
 
       uint loss;
-      (loss, tokenAmounts) = _getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
+      (loss, tokenAmounts) = _getTokenAmounts(
+        ITetuConverter(converterLiquidator[0]),
+        oldTotalAssets,
+        v.tokenA,
+        v.tokenB
+      );
       if (loss != 0) {
         _coverLoss(splitter, loss, state.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }

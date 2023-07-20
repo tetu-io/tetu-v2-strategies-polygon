@@ -166,7 +166,7 @@ library KyberDebtLib {
   }
 
   function rebalanceNoSwaps(
-    ITetuConverter tetuConverter,
+    address[2] calldata converterLiquidator,
     KyberConverterStrategyLogicLib.State storage state,
     uint profitToCover,
     uint totalAssets,
@@ -182,8 +182,8 @@ library KyberDebtLib {
     (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
 
     BorrowLib.rebalanceAssets(
-      tetuConverter,
-      ITetuLiquidator(PairBasedStrategyLib.TETU_LIQUIDATOR), // todo where to take liquidator address?
+      ITetuConverter(converterLiquidator[0]),
+      ITetuLiquidator(converterLiquidator[1]),
       p.tokenA,
       p.tokenB,
       p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
@@ -192,9 +192,7 @@ library KyberDebtLib {
       profitToCover
     );
 
-    // we assume here, that profitToCover has low value
-    // so we can send it without changing proportions of the assets to much
-    // todo if it's not correct we should use more complex implementation of rebalanceAssets with "addition"
+    // we assume here, that rebalanceAssets provides profitToCover on balance and set leftovers to right proportions
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(p.tokenA).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);

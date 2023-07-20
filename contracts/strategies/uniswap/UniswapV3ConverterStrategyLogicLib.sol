@@ -630,13 +630,14 @@ library UniswapV3ConverterStrategyLogicLib {
   }
 
   /// @notice Make rebalance without swaps (using borrowing only).
+  /// @param converterLiquidator [TetuConverter, TetuLiquidator]
   /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @param oldTotalAssets Current value of totalAssets()
   /// @return tokenAmounts Token amounts for deposit
   /// @return fuseEnabledOut true if fuse is detected - we need to close all debts asap
   function rebalanceNoSwaps(
     State storage state,
-    ITetuConverter converter,
+    address[2] calldata converterLiquidator,
     uint oldTotalAssets,
     uint profitToCover,
     address splitter,
@@ -646,7 +647,7 @@ library UniswapV3ConverterStrategyLogicLib {
     bool fuseEnabledOut
   ) {
     RebalanceLocalVariables memory v;
-    _initLocalVars(v, converter, state, true, checkNeedRebalance_);
+    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), state, true, checkNeedRebalance_);
 
     if (v.isStablePool && isEnableFuse(v.lastPrice, v.newPrice, v.fuseThreshold)) {
       /// enabling fuse: close debt and stop providing liquidity
@@ -655,7 +656,7 @@ library UniswapV3ConverterStrategyLogicLib {
       fuseEnabledOut = true;
     } else {
       // rebalancing debt, setting new tick range
-      UniswapV3DebtLib.rebalanceNoSwaps(converter, state, profitToCover, oldTotalAssets, splitter);
+      UniswapV3DebtLib.rebalanceNoSwaps(converterLiquidator, state, profitToCover, oldTotalAssets, splitter);
 
       // need to update last price only for stables coz only stables have fuse mechanic
       if (v.isStablePool) {
@@ -663,7 +664,12 @@ library UniswapV3ConverterStrategyLogicLib {
       }
 
       uint loss;
-      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, v.tokenA, v.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(
+        ITetuConverter(converterLiquidator[0]),
+        oldTotalAssets,
+        v.tokenA,
+        v.tokenB
+      );
       if (loss != 0) {
         _coverLoss(splitter, loss, state.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
@@ -715,7 +721,7 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @notice Initialize {v} by state values
   function _initLocalVars(
     RebalanceLocalVariables memory v,
-    ITetuConverter converter,
+    ITetuConverter converter_,
     State storage state,
     bool checkFillUp,
     bool checkNeedRebalance_
@@ -742,7 +748,7 @@ library UniswapV3ConverterStrategyLogicLib {
     v.lastPrice = state.lastPrice;
     v.fuseThreshold = state.fuseThreshold;
     v.isStablePool = state.isStablePool;
-    v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, v.tokenA, v.tokenB);
+    v.newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter_, v.tokenA, v.tokenB);
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]

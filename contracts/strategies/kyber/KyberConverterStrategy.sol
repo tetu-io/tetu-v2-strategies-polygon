@@ -33,6 +33,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   struct WithdrawByAggStepLocal {
     address controller;
     ITetuConverter converter;
+    address liquidator;
     address[] tokens;
     uint[] liquidationThresholds;
     uint oldTotalAssets;
@@ -166,7 +167,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore(checkNeedRebalance);
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
-      converter,
+      [address(converter), address(AppLib._getLiquidator(controller()))],
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
@@ -223,13 +224,14 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     WithdrawByAggStepLocal memory v;
     (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore(false);
     v.converter = converter;
+    v.liquidator = address(AppLib._getLiquidator(v.controller));
 
     // decode tokenToSwapAndAggregator
     v.tokenToSwap = tokenToSwapAndAggregator[0];
     v.aggregator = tokenToSwapAndAggregator[1];
     if (v.aggregator == address(0)) {
       v.useLiquidator = true;
-      v.aggregator = address(AppLib._getLiquidator(v.controller));
+      v.aggregator = v.liquidator;
     }
 
     // get tokens as following: [underlying, not-underlying]
@@ -255,7 +257,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       // make rebalance and enter back to the pool. We won't have any swaps here
       (v.tokenAmounts,) = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
         state,
-        converter,
+        [address(converter), v.liquidator],
         v.oldTotalAssets,
         v.profitToCover,
         baseState.splitter,
