@@ -149,6 +149,10 @@ library BorrowLib {
   }
 
   /// @param repayAllowed Protection against recursion
+  ///                     Assets can be rebalanced in two ways:
+  ///                     1) openPosition
+  ///                     2) repay + openPosition
+  ///                     Only one repay is allowed.
   function _rebalanceAssets(
     RebalanceAssetsLocal memory v,
     ConverterLiquidator memory converterLiquidator,
@@ -157,12 +161,19 @@ library BorrowLib {
     uint cost0 = v.amount0 * v.pd.prices[0] / v.pd.decs[0];
     uint cost1 = v.amount1 * v.pd.prices[1] / v.pd.decs[1];
     uint costAddition0 = v.addition0 * v.pd.prices[0] / v.pd.decs[0];
+    console.log("cost0", cost0);
+    console.log("cost1", cost1);
+    console.log("costAddition0", costAddition0);
 
     uint totalCost = cost0 + cost1 - costAddition0;
     uint requiredCost0 = totalCost * v.prop0 / SUM_PROPORTIONS + costAddition0;
     uint requiredCost1 = totalCost * (SUM_PROPORTIONS - v.prop0) / SUM_PROPORTIONS;
+    console.log("totalCost", totalCost);
+    console.log("requiredCost0", requiredCost0);
+    console.log("requiredCost1", requiredCost1);
 
     if (requiredCost0 > cost0) {
+      console.log("_rebalanceAssets.1");
       // we need to increase amount of asset 0 and decrease amount of asset 1, so we need to borrow asset 0 (reverse)
       RebalanceAssetsCore memory c10 = RebalanceAssetsCore({
         converterLiquidator: converterLiquidator,
@@ -179,15 +190,19 @@ library BorrowLib {
       });
 
       if (v.directDebt > 0) {
+        console.log("_rebalanceAssets.2");
         require(repayAllowed, AppErrors.NOT_ALLOWED);
         // repay of v.asset1 is required
         uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
+        console.log("_rebalanceAssets.requiredAmount0", requiredAmount0);
         rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt);
       } else {
+        console.log("_rebalanceAssets.3");
         // new (or additional) borrow of asset 0 under asset 1 is required
         openPosition(c10, v.pd, v.amount1, v.amount0);
       }
     } else if (requiredCost0 < cost0) {
+      console.log("_rebalanceAssets.4");
       RebalanceAssetsCore memory c01 = RebalanceAssetsCore({
         converterLiquidator: converterLiquidator,
         assetA: v.asset0,
@@ -203,12 +218,15 @@ library BorrowLib {
       });
       // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
       if (v.reverseDebt > 0) {
+        console.log("_rebalanceAssets.5");
         require(repayAllowed, AppErrors.NOT_ALLOWED);
         // repay of v.asset0 is required
         // requiredCost0 < cost0 => requiredCost1 > cost1
         uint requiredAmount1 = (requiredCost1 - cost1) * v.pd.decs[1] / v.pd.prices[1];
+        console.log("_rebalanceAssets.requiredAmount1", requiredAmount1);
         rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt);
       } else {
+        console.log("_rebalanceAssets.6");
         // new or additional borrow of asset 1 under asset 0 is required
         openPosition(c01, v.pd, v.amount0, v.amount1);
       }
@@ -230,6 +248,7 @@ library BorrowLib {
     // but we are sure that amount {requiredAmountB ===> requiredAmountA} would be more than required
     uint capRequiredAmountA = requiredAmountB * c.alpha18 / 1e18;
     ConverterStrategyBaseLib._repayDebt(c.converterLiquidator.converter, c.assetB, c.assetA, Math.min(capRequiredAmountA, amountDebtA));
+    console.log("rebalanceRepayBorrow.capRequiredAmountA", capRequiredAmountA);
     console.log("rebalanceRepayBorrow.Math.min(capRequiredAmountA, amountDebtA)", Math.min(capRequiredAmountA, amountDebtA));
     console.log("rebalanceRepayBorrow.capRequiredAmountA", capRequiredAmountA);
     console.log("rebalanceRepayBorrow.amountDebtA", amountDebtA);
@@ -310,7 +329,11 @@ library BorrowLib {
       // we are going to use {balanceA_} as collateral
       // but there is some amount on {balanceB_}, so we need to keep corresponded part of {balanceA_} untouched
       untouchedAmountA = balanceB_ * c.alpha18 * c.propA / c.propB / 1e18;
+
+      // we are going to borrow B under A, so balance A must be greater then balance B
+      // otherwise the function is called incorrectly - probably we need to borrow A under B
       require(untouchedAmountA <= balanceA_, AppErrors.WRONG_VALUE);
+
       console.log("_openPosition.untouchedAmountA", untouchedAmountA);
     }
 
@@ -352,8 +375,8 @@ library BorrowLib {
     console.log("_makeLittleSwap.amountInA", amountInA);
 
     // in practice the addition is required to pay ProfitToCover
-    // we assume, that total addition amount is small enough, much smaller then total balance
-    // otherwise something is wrong: we need to pay ProfitToCover, but we don't have enough amount on the balances.
+    // we assume, that total addition amount is small enough, much smaller then the total balance
+    // otherwise something is wrong: we are going to pay ProfitToCover, but we don't have enough amount on the balances.
     require(balanceA_ > amountInA, AppErrors.TOO_HIGH_ADDITION);
 
     (spentAmountIn, receivedAmountOut) = ConverterStrategyBaseLib.liquidate(

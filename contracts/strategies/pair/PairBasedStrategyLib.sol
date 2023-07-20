@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 library PairBasedStrategyLib {
@@ -182,6 +183,8 @@ library PairBasedStrategyLib {
     if (indexTokenToSwapPlus1 != 0) {
       tokenToSwap = p.tokens[indexTokenToSwapPlus1 - 1];
     }
+    console.log("_quoteWithdrawStep.tokenToSwap", tokenToSwap);
+    console.log("_quoteWithdrawStep.amountToSwap", amountToSwap);
     return (tokenToSwap, amountToSwap);
   }
 
@@ -207,6 +210,11 @@ library PairBasedStrategyLib {
         IDX_TOKEN
       ]
     );
+    console.log("_withdrawStep.tokens.0", p.tokens[0]);
+    console.log("_withdrawStep.tokens.1", p.tokens[1]);
+    console.log("_withdrawStep.idxToSwap1", idxToSwap1);
+    console.log("_withdrawStep.amountToSwap", amountToSwap);
+    console.log("_withdrawStep.idxToRepay1", idxToRepay1);
 
     bool[4] memory actions = [
       p.planKind == IterationPlanLib.PLAN_SWAP_ONLY || p.planKind == IterationPlanLib.PLAN_SWAP_REPAY, // swap 1
@@ -216,10 +224,12 @@ library PairBasedStrategyLib {
     ];
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
+      console.log("_withdrawStep.swap.1");
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
+      console.log("_withdrawStep.repay.1");
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
         p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
@@ -229,9 +239,11 @@ library PairBasedStrategyLib {
     }
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_2]) {
+      console.log("_withdrawStep.swap.2");
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
 
       if (actions[IDX_REPAY_2]) {
+        console.log("_withdrawStep.repay.2");
         // see calculations inside estimateSwapAmountForRepaySwapRepay
         // There are two possibilities here:
         // 1) All collateral asset available on balance was swapped. We need additional repay to get assets in right proportions
@@ -243,8 +255,10 @@ library PairBasedStrategyLib {
         );
 
         if (borrowInsteadRepay) {
+          console.log("_withdrawStep.borrow.1");
           borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
         } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
+          console.log("_withdrawStep.repay.3");
           (, uint repaidAmount) = ConverterStrategyBaseLib._repayDebt(
             p.converter,
             p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
@@ -252,6 +266,7 @@ library PairBasedStrategyLib {
             amountToRepay2
           );
           if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
+            console.log("_withdrawStep.borrow.3");
             borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
           }
         }
@@ -361,6 +376,15 @@ library PairBasedStrategyLib {
     uint spentAmountIn,
     uint updatedPropNotUnderlying18
   ) {
+    console.log("_swap.p.tokens[indexIn]",  p.tokens[indexIn]);
+    console.log("_swap.p.tokens[indexOut]",  p.tokens[indexOut]);
+    console.log("_swap.indexIn", indexIn);
+    console.log("_swap.indexOut", indexOut);
+    console.log("_swap.amountIn", amountIn);
+    console.log("_swap.aggParams.amountToSwap", aggParams.amountToSwap);
+    console.log("_swap.aggParams.useLiquidator", aggParams.useLiquidator);
+    console.log("_swap.aggParams.aggregator", aggParams.aggregator);
+    console.log("_swap.aggParams.tokenToSwap", aggParams.tokenToSwap);
     // liquidator and aggregator have different logic here:
     // - liquidator uses amountIn to swap
     // - Aggregator uses amountToSwap for which a route was built off-chain before the call of the swap()

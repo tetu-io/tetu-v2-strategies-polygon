@@ -113,6 +113,7 @@ describe('BorrowLibIntTest', () => {
       proportion: number;
       thresholdX?: number;
       thresholdY?: number;
+      additionX?: string;
       init: {
         addBeforeBorrow: IBalancesXY;
         /** empty string == all balance */
@@ -230,12 +231,14 @@ describe('BorrowLibIntTest', () => {
       // make rebalancing
       const tx = await facade.rebalanceAssets(
         converter.address,
+        MaticAddresses.TETU_LIQUIDATOR,
         p.tokenX.address,
         p.tokenY.address,
         // 100_000 was replaced by 1e18
         parseUnits(Number(p.proportion / SUM_PROPORTIONS).toString(), 18),
         parseUnits((p.thresholdX || 0).toString(), await p.tokenX.decimals()),
         parseUnits((p.thresholdY || 0).toString(), await p.tokenY.decimals()),
+        parseUnits((p.additionX || 0).toString(), await p.tokenX.decimals()),
       );
       const gasUsed = (await tx.wait()).gasUsed;
 

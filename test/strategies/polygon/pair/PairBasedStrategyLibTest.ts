@@ -2077,7 +2077,7 @@ describe('PairBasedStrategyLibTest', () => {
                 tokenY: usdt,
 
                 amountToSwap: "1501",
-                tokenToSwap: usdc,
+                tokenToSwap: usdt,
                 planKind: PLAN_REPAY_SWAP_REPAY,
 
                 liquidationThresholds: ["0", "0"],

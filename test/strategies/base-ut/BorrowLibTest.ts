@@ -3267,268 +3267,6 @@ describe('BorrowLibTest', () => {
 
         describe("Current state - direct debt - USDT is borrowed under USDC", () => {
           describe("Need to increase USDC, reduce USDT", () => {
-            describe.skip("Partial repay and direct borrow are required", () => {
-              let snapshot: string;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
-                /**
-                 * Let's take 30 USDC and put aside
-                 * then swap 10 USDT to 10 USDC and put aside too (so we have put aside 40 USDC === additionX)
-                 * after that we have 0 USDC, 60 USDT
-                 *
-                 *
-                 *          balances (borrow state)
-                 *          initial              after repay      after direct borrow
-                 *                               35 => 52.5       17.5 => 7.0 + 10.5, 10.5c => 7b (10.5/7 = 1.5)
-                 * usdc     0    (+54.0c)        52.5 (+1.5c)     42.0 (+12)
-                 * usdt     70.0 (-36.0b)        35 (-1.0b)       42.0 (-8)
-                 *          sum = 88             sum = 88         sum = 88
-                 */
-                return makeRebalanceAssets({
-                  tokenX: usdc,
-                  tokenY: usdt,
-                  proportion: 50_000,
-                  additionX: "40",
-                  strategyBalances: {
-                    balanceX: "30.0",
-                    balanceY: "80.0"
-                  },
-                  repays: [{
-                    collateralAsset: usdc,
-                    borrowAsset: usdt,
-                    collateralAmountOut: "52.5",
-                    amountRepay: "35",
-                    totalCollateralAmountOut: "54.0",
-                    totalDebtAmountOut: "36.0",
-                  }],
-                  borrows: [{
-                    collateralAsset: usdc,
-                    borrowAsset: usdt,
-
-                    collateralAmount: "17.5",
-                    maxTargetAmount: "11.666666",
-
-                    collateralAmountOut: "10.5",
-                    borrowAmountOut: "7",
-
-                    converter: ethers.Wallet.createRandom().address,
-                  }],
-                  quoteRepays: [{
-                    collateralAsset: usdc,
-                    borrowAsset: usdt,
-                    amountRepay: "36",
-                    collateralAmountOut: "54",
-                  }],
-                  liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "10", amountOut: "10" }]
-                })
-              }
-
-              it("should set expected balances", async () => {
-                const r = await loadFixture(makeRebalanceAssetsTest);
-                expect(r.balanceX).eq(490);
-                expect(r.balanceY).eq(480);
-              });
-            });
-            describe("Full repay and reverse borrow are required", () => {
-              let snapshot: string;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
-                /**
-                 * 3010 - 10 = 3000, so:
-                 *
-                 *          balances (borrow state)
-                 *          initial       after repay      after reverse borrow
-                 *                        360 => 540       2100 => 840 + 1260, 1260c => 840b (1260/840 = 1.5), 2100/2.5==840
-                 * usdc     3000 (+540c)   3540 (+0c)      3540+840=4380 (-840b)
-                 * usdt     6000 (-360b)   5640 (-0b)      5640-1260=4380 (+1260)
-                 *          sum = 9180    sum = 9180       sum = 9180
-                 */
-                return makeRebalanceAssets({
-                  tokenX: usdc,
-                  tokenY: usdt,
-                  proportion: 50_000,
-                  additionX: "10",
-                  strategyBalances: {
-                    balanceX: "3010",
-                    balanceY: "6000"
-                  },
-                  repays: [{
-                    collateralAsset: usdc,
-                    borrowAsset: usdt,
-                    collateralAmountOut: "540",
-                    amountRepay: "360",
-                    totalCollateralAmountOut: "540",
-                    totalDebtAmountOut: "360",
-                  }],
-                  borrows: [{
-                    collateralAsset: usdt,
-                    borrowAsset: usdc,
-
-                    collateralAmount: "2100", // 2100 / 1400 = 1.5
-                    maxTargetAmount: "1400",
-
-                    collateralAmountOut: "1260",
-                    borrowAmountOut: "840",
-
-                    converter: ethers.Wallet.createRandom().address,
-                  }],
-                  quoteRepays: [{
-                    collateralAsset: usdc,
-                    borrowAsset: usdt,
-                    amountRepay: "360",
-                    collateralAmountOut: "540",
-                  }]
-                })
-              }
-
-              it("should set expected balances", async () => {
-                const r = await loadFixture(makeRebalanceAssetsTest);
-                expect(r.balanceX).eq(4390);
-                expect(r.balanceY).eq(4380);
-              });
-            });
-          });
-          describe.skip("Need to reduce USDC, increase USDT", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
-              /**
-               * 610 - 10 = 600, so:
-               *
-               *          balances (borrow state)
-               *          initial       after borrow
-               *                        300 => 120 + 180, 180c => 120b
-               * usdc     600 (+540c)   600-180=420 (+540+180=720c)
-               * usdt     300 (-360b)   300+120=420 (-480b)
-               *          sum = 1080    sum = 1080
-               */
-              return makeRebalanceAssets({
-                tokenX: usdc,
-                tokenY: usdt,
-                proportion: 50_000,
-                additionX: "10",
-                strategyBalances: {
-                  balanceX: "610",
-                  balanceY: "300"
-                },
-                borrows: [{
-                  collateralAsset: usdc,
-                  borrowAsset: usdt,
-
-                  collateralAmount: "300",
-                  maxTargetAmount: "200", // 300 / 1.5 = 200
-
-                  collateralAmountOut: "180",
-                  borrowAmountOut: "120",
-
-                  converter: ethers.Wallet.createRandom().address,
-                }],
-                repays: [{
-                  collateralAsset: usdc,
-                  borrowAsset: usdt,
-                  collateralAmountOut: "540",
-                  amountRepay: "360",
-                  totalCollateralAmountOut: "540",
-                  totalDebtAmountOut: "360",
-                }],
-                quoteRepays: [{
-                  collateralAsset: usdc,
-                  borrowAsset: usdt,
-                  amountRepay: "360",
-                  collateralAmountOut: "540",
-                }]
-              })
-            }
-
-            it("should set expected balances", async () => {
-              const r = await loadFixture(makeRebalanceAssetsTest);
-              expect(r.balanceX).eq(430);
-              expect(r.balanceY).eq(420);
-            });
-          });
-        });
-
-        describe.skip("Current state - reverse debt - USDC is borrowed under USDT", () => {
-          describe("Need to increase USDC, reduce USDT", () => {
-            let snapshot: string;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
-
-            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
-              /**
-               *          balances (borrow state)
-               *          initial       after borrow
-               *                        300 => 120 + 180, 180c => 120b
-               * usdc     300 (-360c)   300+120=420 (-480b)
-               * usdt     600 (+540b)   600-180=420 (+540+180=720c)
-               *          sum = 1080    sum = 1080
-               */
-              return makeRebalanceAssets({
-                tokenX: usdc,
-                tokenY: usdt,
-                proportion: 50_000,
-                strategyBalances: {
-                  balanceX: "300",
-                  balanceY: "600"
-                },
-                borrows: [{
-                  collateralAsset: usdt,
-                  borrowAsset: usdc,
-
-                  collateralAmount: "300",
-                  maxTargetAmount: "200", // 300 / 1.5 = 200
-
-                  collateralAmountOut: "180",
-                  borrowAmountOut: "120",
-
-                  converter: ethers.Wallet.createRandom().address,
-                }],
-                repays: [{
-                  collateralAsset: usdt,
-                  borrowAsset: usdc,
-                  collateralAmountOut: "540",
-                  amountRepay: "360",
-                  totalCollateralAmountOut: "540",
-                  totalDebtAmountOut: "360",
-                }],
-                quoteRepays: [{
-                  collateralAsset: usdt,
-                  borrowAsset: usdc,
-                  amountRepay: "360",
-                  collateralAmountOut: "540",
-                }]
-              })
-            }
-
-            it("should set expected balances", async () => {
-              const r = await loadFixture(makeRebalanceAssetsTest);
-              expect(r.balanceX).eq(420);
-              expect(r.balanceY).eq(420);
-            });
-          });
-          describe("Need to reduce USDC, increase USDT", () => {
             describe("Partial repay and direct borrow are required", () => {
               let snapshot: string;
               before(async function () {
@@ -3540,54 +3278,64 @@ describe('BorrowLibTest', () => {
 
               async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
                 /**
-                 *          balances (borrow state)
-                 *          initial       after repay      after direct borrow
-                 *                        150 => 225       75 => 30 + 45, 45c => 30b (45/30 = 1.5)
-                 * usdc     600 (-360b)   450 (-210b)      480 (-240)
-                 * usdt     300 (+540c)   525 (+315c)      480 (+360)
-                 *          sum = 1080    sum = 1080       sum = 1080
+                 * We have balances: 30 USDC, 80 USDT
+                 * Required costs are: (40 + 35) and 35
+                 * To get 45 USDC, we should repay at least 45 USDT
+                 *
+                 * Repay 45 USDT and receive 67.5 USDC of collateral
+                 * Balances: USDC = 67.5 + 30, USDT = 35
+                 * USDC = 40 + 57.5. 40 USDC is addition, we put aside it.
+                 * Now we need to reallocate 57.5 USDC + 35 USDT to right proportions.
+                 * Borrow 22.5 USDC using entry kind 1
+                 * 22,5 => 9 USDC + 13.5 USDC
+                 *      13.5 USDC => 9 USDT
+                 * As results, we have balance
+                 *  84 USDC = 57.5-22.5 + 9 + 40
+                 *  44 USDT = 35 + 9
                  */
                 return makeRebalanceAssets({
                   tokenX: usdc,
                   tokenY: usdt,
                   proportion: 50_000,
+                  additionX: "40",
                   strategyBalances: {
-                    balanceX: "600",
-                    balanceY: "300"
+                    balanceX: "30",
+                    balanceY: "80"
                   },
                   repays: [{
-                    collateralAsset: usdt,
-                    borrowAsset: usdc,
-                    collateralAmountOut: "225",
-                    amountRepay: "150",
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    collateralAmountOut: "67.5",
+                    amountRepay: "45",
                     totalCollateralAmountOut: "540",
                     totalDebtAmountOut: "360",
                   }],
                   borrows: [{
-                    collateralAsset: usdt,
-                    borrowAsset: usdc,
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
 
-                    collateralAmount: "75",
-                    maxTargetAmount: "50",
+                    collateralAmount: "22.5",
+                    maxTargetAmount: "15",
 
-                    collateralAmountOut: "45",
-                    borrowAmountOut: "30",
+                    collateralAmountOut: "13.5",
+                    borrowAmountOut: "9",
 
                     converter: ethers.Wallet.createRandom().address,
                   }],
                   quoteRepays: [{
-                    collateralAsset: usdt,
-                    borrowAsset: usdc,
-                    amountRepay: "150",
-                    collateralAmountOut: "225",
-                  }]
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    amountRepay: "360",
+                    collateralAmountOut: "540",
+                  }],
+                  liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "10", amountOut: "10" }]
                 })
               }
 
               it("should set expected balances", async () => {
                 const r = await loadFixture(makeRebalanceAssetsTest);
-                expect(r.balanceX).eq(480);
-                expect(r.balanceY).eq(480);
+                expect(r.balanceX).eq(84); // 57.5-22.5+9 + 40
+                expect(r.balanceY).eq(44);
               });
             });
             describe("Full repay and reverse borrow are required", () => {
@@ -3601,59 +3349,424 @@ describe('BorrowLibTest', () => {
 
               async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
                 /**
-                 *          balances (borrow state)
-                 *          initial       after repay      after reverse borrow
-                 *                        360 => 540       2100 => 840 + 1260, 1260c => 840b (1260/840 = 1.5), 2100/2.5==840
-                 * usdc     6000 (-360b)   5640 (-0b)      5640-1260=4380 (+1260)
-                 * usdt     3000 (+540c)   3540 (+0c)      3540+840=4380 (-840b)
-                 *          sum = 9180    sum = 9180       sum = 9180
+                 * We have balances: 30 USDC, 80 USDT
+                 * Required costs are: (40 + 35) and 35
+                 * To get 45 USDC, we should repay at least 45 USDT
+                 * But the debt is only 15
+                 * *
+                 * Repay 15 USDT and receive 22.5 USDC of collateral
+                 * Balances: USDC = 22.5 + 30 = 52.5, USDT = 80-15=65
+                 * USDC = 40 + 12.5, 40 USDC is addition, we put aside it.
+                 * Now we need to reallocate 12.5 USDC + 65 USDT to right proportions.
+                 * Borrow 52.5 USDT using entry kind 1
+                 * 52,5 => 21 USDT + 31.5 USDT
+                 *         31.5 USDT => 21 USDC
+                 * As results, we have balance
+                 *  73.5 USDC = 12.5 + 21 + 40
+                 *  33.5 USDT = 65 - 31.5
                  */
                 return makeRebalanceAssets({
                   tokenX: usdc,
                   tokenY: usdt,
                   proportion: 50_000,
+                  additionX: "40",
                   strategyBalances: {
-                    balanceX: "6000",
-                    balanceY: "3000"
+                    balanceX: "30",
+                    balanceY: "80"
+                  },
+                  repays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    collateralAmountOut: "22.5",
+                    amountRepay: "15",
+                    totalCollateralAmountOut: "22.5",
+                    totalDebtAmountOut: "15",
+                  }],
+                  borrows: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+
+                    collateralAmount: "52.5",
+                    maxTargetAmount: "35", // 52.5 / 1.5
+
+                    collateralAmountOut: "31.5",
+                    borrowAmountOut: "21",
+
+                    converter: ethers.Wallet.createRandom().address,
+                  }],
+                  quoteRepays: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    amountRepay: "15",
+                    collateralAmountOut: "22.5",
+                  }],
+                  liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "10", amountOut: "10" }]
+                })
+              }
+
+              it("should set expected balances", async () => {
+                const r = await loadFixture(makeRebalanceAssetsTest);
+                expect(r.balanceX).eq(73.5);
+                expect(r.balanceY).eq(33.5);
+              });
+            });
+          });
+          describe("Need to reduce USDC, increase USDT", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+              /**
+               * We have balances: 80 USDC, 30 USDT
+               * Required costs are: (40 + 35) and 35
+               * We can put aside 40 USDC. Without 40 USDC we have the following balances:
+               * 40 USDC, 30 USDT
+               *
+               * Now we need to reallocate 40 USDC + 30 USDT to right proportions.
+               * Borrow 10 USDC using entry kind 1
+               * 10 => 4 USDC + 6 USDC
+               *       6 USDC => 4 USDT
+               * As results, we have balance
+               *  34 USDC = 40 - 6
+               *  34 USDT = 30 + 4
+               */
+              return makeRebalanceAssets({
+                tokenX: usdc,
+                tokenY: usdt,
+                proportion: 50_000,
+                additionX: "40",
+                strategyBalances: {
+                  balanceX: "80",
+                  balanceY: "30"
+                },
+                borrows: [{
+                  collateralAsset: usdc,
+                  borrowAsset: usdt,
+
+                  collateralAmount: "10",
+                  maxTargetAmount: "6.666666",
+
+                  collateralAmountOut: "6",
+                  borrowAmountOut: "3.999999",
+
+                  converter: ethers.Wallet.createRandom().address,
+                }],
+              })
+            }
+
+            it("should set expected balances", async () => {
+              const r = await loadFixture(makeRebalanceAssetsTest);
+              expect(r.balanceX).eq(34 + 40);
+              expect(r.balanceY).eq(33.999999);
+            });
+          });
+        });
+
+        describe("Current state - reverse debt - USDC is borrowed under USDT", () => {
+          describe("Need to reduce USDC, increase USDT", () => {
+            describe("Partial repay and reverse borrow are required", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+                /**
+                 * We have balances: 80 USDC, 30 USDT
+                 * Required costs are: (40 + 35) and 35
+                 * Now we need to reallocate 40 USDC + 30 USDT to right proportions.
+                 * Repay 5 USDC to get 7.5 USDT
+                 * Balances: 35 USDC, 37.5 USDT
+                 * Borrow 2.5 USDT using entry kind 1
+                 * 2,5 => 1 USDT + 1.5 USDT
+                 *        1.5 USDT => 1 USDC
+                 * As results, we have balance
+                 *  76 USDC = 80 - 5 + 1
+                 *  36 USDT = 30 + 7.5 - 1.5
+                 */
+                return makeRebalanceAssets({
+                  tokenX: usdc,
+                  tokenY: usdt,
+                  proportion: 50_000,
+                  additionX: "40",
+                  strategyBalances: {
+                    balanceX: "80",
+                    balanceY: "30"
                   },
                   repays: [{
                     collateralAsset: usdt,
                     borrowAsset: usdc,
-                    collateralAmountOut: "540",
-                    amountRepay: "360",
+                    collateralAmountOut: "7.5",
+                    amountRepay: "5",
                     totalCollateralAmountOut: "540",
                     totalDebtAmountOut: "360",
                   }],
                   borrows: [{
-                    collateralAsset: usdc,
-                    borrowAsset: usdt,
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
 
-                    collateralAmount: "2100", // 2100 / 1400 = 1.5
-                    maxTargetAmount: "1400",
+                    collateralAmount: "2.5",
+                    maxTargetAmount: "1.666666",
 
-                    collateralAmountOut: "1260",
-                    borrowAmountOut: "840",
+                    collateralAmountOut: "1.5",
+                    borrowAmountOut: "0.999999",
 
                     converter: ethers.Wallet.createRandom().address,
                   }],
                   quoteRepays: [{
                     collateralAsset: usdt,
                     borrowAsset: usdc,
-                    amountRepay: "360",
-                    collateralAmountOut: "540",
+                    amountRepay: "5",
+                    collateralAmountOut: "7.5",
+                  }],
+                  liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "10", amountOut: "10" }]
+                })
+              }
+
+              it("should set expected balances", async () => {
+                const r = await loadFixture(makeRebalanceAssetsTest);
+                expect(r.balanceX).eq(75.999999);
+                expect(r.balanceY).eq(36);
+              });
+            });
+            describe("Full repay and direct borrow are required", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+                /**
+                 * We have balances: 80 USDC, 30 USDT
+                 * Required costs are: (40 + 35) and 35
+                 * Now we need to reallocate 40 USDC + 30 USDT to right proportions.
+                 * We need to repay 5 USDC to get 7.5 USDT, but we have debt only 1 USDC
+                 * Repay 1 USDC, get 1.5 USDT
+                 * Balances: 39 USDC, 31.5 USDT
+                 * Borrow 7.5 USDC using entry kind 1
+                 * 7,5 => 3 USDC + 4.5 USDC
+                 *        4.5 USDC => 3 USDT
+                 * As results, we have balance
+                 *  74.5 USDC = 80 - 1 - 4.5
+                 *  34.5 USDT = 30 + 1.5 + 3
+                 */
+                return makeRebalanceAssets({
+                  tokenX: usdc,
+                  tokenY: usdt,
+                  proportion: 50_000,
+                  additionX: "40",
+                  strategyBalances: {
+                    balanceX: "80",
+                    balanceY: "30"
+                  },
+                  repays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    collateralAmountOut: "1.5",
+                    amountRepay: "1",
+                    totalCollateralAmountOut: "1.5",
+                    totalDebtAmountOut: "1",
+                  }],
+                  borrows: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+
+                    collateralAmount: "7.5",
+                    maxTargetAmount: "5",
+
+                    collateralAmountOut: "4.5",
+                    borrowAmountOut: "3",
+
+                    converter: ethers.Wallet.createRandom().address,
+                  }],
+                  quoteRepays: [{
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+                    amountRepay: "1",
+                    collateralAmountOut: "1.5",
+                  }],
+                  liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "10", amountOut: "10" }]
+                })
+              }
+
+              it("should set expected balances", async () => {
+                const r = await loadFixture(makeRebalanceAssetsTest);
+                expect(r.balanceX).eq(74.5);
+                expect(r.balanceY).eq(34.5);
+              });
+            });
+          });
+        });
+
+      });
+      describe("different prices, different decimals", () => {
+        describe("Current state - no debts", () => {
+          describe("Need to increase USDC, reduce USDT", () => {
+            describe("Current balance > addition0", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+                return makeRebalanceAssets({
+                  tokenX: usdc,
+                  tokenY: tetu,
+                  proportion: 50_000,
+                  additionX: "25",
+                  strategyBalances: {
+                    balanceX: "75",
+                    balanceY: "380"
+                  },
+                  prices:{
+                    priceX: "2",
+                    priceY: "0.5"
+                  },
+                  borrows: [{
+                    // collateral = 90
+                    // We can borrow 60 usdc for 90 tetu, 90/60 = 1.5
+                    // We need proportions 1:1
+                    // so, 90 => 36 + 54, 54 tetu => 36 usdc
+                    // as result we will have 36 tetu and 36 borrowed usdc (with collateral 54 tetu)
+                    collateralAsset: tetu,
+                    borrowAsset: usdc,
+
+                    collateralAmount: "180",
+                    maxTargetAmount: "30",
+
+                    collateralAmountOut: "108",
+                    borrowAmountOut: "18",
+
+                    converter: ethers.Wallet.createRandom().address,
                   }]
                 })
               }
 
               it("should set expected balances", async () => {
                 const r = await loadFixture(makeRebalanceAssetsTest);
-                expect(r.balanceX).eq(4380);
-                expect(r.balanceY).eq(4380);
+                expect(r.balanceX).eq((150+36) / 2);
+                expect(r.balanceY).eq((190-54) * 2);
+              });
+            });
+            describe("Current balance < addition0", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+                return makeRebalanceAssets({
+                  tokenX: usdc,
+                  tokenY: tetu,
+                  proportion: 50_000,
+                  additionX: "5",
+                  prices:{
+                    priceX: "2",
+                    priceY: "0.5"
+                  },
+                  strategyBalances: {
+                    balanceX: "0",
+                    balanceY: "240"
+                  },
+                  // 10*(100000+300)/100000 = 10.03
+                  // Swap 10.03 USDT to 10.03 USDC. This is a ProfitToCover amount.
+                  // After swap, we will have 109.97 USDT
+                  // 109.97 USDT = C => gamma*C [USDC] + (1-gamma)*C*alpha [USDT]
+                  // where alpha = 1.5 (we can borrow 60 usdc for 90 usdt, 90/60 = 1.5)
+                  // proportions x:y = 1:1
+                  // (1*1/1.5*109.97) / (109.97*(1+1/1.5)) = 0.4
+                  // => gamma = 0.4
+                  // 43.988 USDT is left on balance, 65.982 USDT is used as collateral
+                  borrows: [{
+                    collateralAsset: tetu,
+                    borrowAsset: usdc,
+
+                    collateralAmount: "219.94",
+                    maxTargetAmount: "36.656666", // 109.97 / 1.5
+
+                    collateralAmountOut: "131.964000960000006983",
+                    borrowAmountOut: "21.993999",
+
+                    converter: ethers.Wallet.createRandom().address,
+                  }],
+                  liquidations: [{tokenIn: tetu, tokenOut: usdc, amountIn: "20.06", amountOut: "5.015"}]
+                })
+              }
+
+              it("should set expected balances", async () => {
+                const r = await loadFixture(makeRebalanceAssetsTest);
+                expect(r.balanceX).eq(27.008999); // == (10.03 + 43.987999) / 2
+                expect(r.balanceY).approximately(87.975999, 1e-6); // === 43.988 * 2
               });
             });
           });
-        });
+          describe("Need to reduce USDC, increase USDT", () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
+            async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+              return makeRebalanceAssets({
+                tokenX: usdc,
+                tokenY: tetu,
+                proportion: 50_000,
+                prices:{
+                  priceX: "2",
+                  priceY: "0.5"
+                },
+                additionX: "5",
+                strategyBalances: {
+                  balanceX: "100",
+                  balanceY: "200"
+                },
+                borrows: [{
+                  // collateral = 90
+                  // We can borrow 60 usdt for 90 usdc, 90/60 = 1.5
+                  // We need proportions 1:1
+                  // so, 90 => 36 + 54, 54 usdc => 36 usdt
+                  // as result we will have 36 usdc and 36 borrowed usdt (with collateral 54 usdc)
+                  collateralAsset: usdc,
+                  borrowAsset: tetu,
+
+                  collateralAmount: "45",
+                  maxTargetAmount: "120",
+
+                  collateralAmountOut: "27",
+                  borrowAmountOut: "72",
+
+                  converter: ethers.Wallet.createRandom().address,
+                }]
+              })
+            }
+
+            it("should set expected balances", async () => {
+              const r = await loadFixture(makeRebalanceAssetsTest);
+              expect(r.balanceX).eq(146/2);
+              expect(r.balanceY).eq(136*2);
+            });
+          });
+        });
       });
     });
 
