@@ -70,9 +70,9 @@ library AppErrors {
   /// @notice You are not allowed to make direct debt if a reverse debt exists and visa verse.
   string public constant OPPOSITE_DEBT_EXISTS = "TS-29 opposite debt exists";
 
-  string public constant INVALID_VALUES = "TS-30 invalid value";
+  string public constant INVALID_VALUE = "TS-30 invalid value";
 
-  string public constant WRONG_BALANCE = "TS-31 wrong balance";
 
-  string public constant TOO_HIGH_ADDITION = "TS-32 addon too high";
+
+  string public constant TOO_HIGH = "TS-32 too high value";
 }

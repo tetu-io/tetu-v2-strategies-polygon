@@ -108,6 +108,7 @@ library BorrowLib {
   ) external {
     console.log("rebalanceAssets");
     require(prop0 != 0, AppErrors.ZERO_VALUE);
+    require(prop0 < 1e18, AppErrors.TOO_HIGH);
 
     RebalanceAssetsLocal memory v;
     v.asset0 = asset0;
@@ -189,7 +190,7 @@ library BorrowLib {
         indexB: 0
       });
 
-      if (v.directDebt > 0) {
+      if (v.directDebt != 0) {
         console.log("_rebalanceAssets.2");
         require(repayAllowed, AppErrors.NOT_ALLOWED);
         // repay of v.asset1 is required
@@ -217,9 +218,10 @@ library BorrowLib {
         indexB: 1
       });
       // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
-      if (v.reverseDebt > 0) {
+      if (v.reverseDebt != 0) {
         console.log("_rebalanceAssets.5");
         require(repayAllowed, AppErrors.NOT_ALLOWED);
+
         // repay of v.asset0 is required
         // requiredCost0 < cost0 => requiredCost1 > cost1
         uint requiredAmount1 = (requiredCost1 - cost1) * v.pd.decs[1] / v.pd.prices[1];
@@ -273,7 +275,8 @@ library BorrowLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
-    require(c.addonA == 0 || c.addonB == 0, AppErrors.INVALID_VALUES);
+    // if there are two not-zero addons, the caller should reduce balances before the call
+    require(c.addonA == 0 || c.addonB == 0, AppErrors.INVALID_VALUE);
     console.log("openPosition.balanceA_", balanceA_);
     console.log("openPosition.balanceB_", balanceB_);
     console.log("openPosition.c.addonA", c.addonA);
@@ -302,9 +305,9 @@ library BorrowLib {
       }
     } else if (c.addonA != 0) {
       console.log("openPosition.4");
-      // A is underlying, we need to keep c.addonA unused
+      // A is underlying, we need to put aside c.addonA and allocate leftovers in right proportions.
       // we are going to borrow B under asset A, so the case (balanceA_ < c.addonA) is not valid here
-      require(balanceA_ >= c.addonA, AppErrors.WRONG_BALANCE);
+      require(balanceA_ >= c.addonA, AppErrors.NOT_ENOUGH_BALANCE);
       return _openPosition(c, balanceA_ - c.addonA, balanceB_);
     } else {
       console.log("openPosition.5");
@@ -376,7 +379,7 @@ library BorrowLib {
     // in practice the addition is required to pay ProfitToCover
     // we assume, that total addition amount is small enough, much smaller then the total balance
     // otherwise something is wrong: we are going to pay ProfitToCover, but we don't have enough amount on the balances.
-    require(balanceA_ > amountInA, AppErrors.TOO_HIGH_ADDITION);
+    require(balanceA_ > amountInA, AppErrors.NOT_ENOUGH_BALANCE);
 
     (spentAmountIn, receivedAmountOut) = ConverterStrategyBaseLib.liquidate(
       c.converterLiquidator.converter,

@@ -259,12 +259,22 @@ library PairBasedStrategyLib {
           borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
         } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
           console.log("_withdrawStep.repay.3");
-          (, uint repaidAmount) = ConverterStrategyBaseLib._repayDebt(
+          // we need to know repaidAmount
+          // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
+          // temporary save current balance to repaidAmount
+          uint repaidAmount = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
+
+          ConverterStrategyBaseLib._repayDebt(
             p.converter,
             p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
             p.tokens[idxToRepay1 - 1],
             amountToRepay2
           );
+          uint balanceAfter = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
+          repaidAmount = repaidAmount > balanceAfter
+            ? repaidAmount - balanceAfter
+            : 0;
+
           if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
             console.log("_withdrawStep.borrow.3");
             borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);

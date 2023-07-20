@@ -17,7 +17,7 @@ const libraries = new Map<string, string[]>([
   ['ConverterStrategyBaseLib', ['IterationPlanLib']],
   ['ConverterStrategyBaseLib2', ['StrategyLib']],
   ['BorrowLib', ['ConverterStrategyBaseLib']],
-  ['BorrowLibFacade', ['BorrowLib']],
+  ['BorrowLibFacade', ['BorrowLib', 'ConverterStrategyBaseLib']],
   ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib']],
   ['ConverterStrategyBaseLibFacade2', ['ConverterStrategyBaseLib2']],
   // Balancer
