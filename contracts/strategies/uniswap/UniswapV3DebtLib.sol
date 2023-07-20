@@ -76,6 +76,7 @@ library UniswapV3DebtLib {
   /// @param pool The IUniswapV3Pool instance.
   /// @param tokenA The address of tokenA.
   /// @param tokenB The address of tokenB.
+  /// todo not used anymore?
   function closeDebt(
     ITetuConverter tetuConverter,
     address controller,
@@ -93,6 +94,7 @@ library UniswapV3DebtLib {
     }
   }
 
+  /// todo not used anymore?
   function closeDebtByAgg(
     ITetuConverter tetuConverter,
     address tokenA,
@@ -110,6 +112,7 @@ library UniswapV3DebtLib {
   }
 
   /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
+  /// todo not used anymore?
   function rebalanceDebt(
     ITetuConverter tetuConverter,
     address controller,
@@ -142,6 +145,7 @@ library UniswapV3DebtLib {
     }
   }
 
+  /// todo not used anymore?
   function rebalanceDebtSwapByAgg(
     ITetuConverter tetuConverter,
     UniswapV3ConverterStrategyLogicLib.State storage state,
@@ -388,6 +392,7 @@ library UniswapV3DebtLib {
   /// @param tokenA The address of token A.
   /// @param tokenB The address of token B.
   /// @param entryData The data required to open a position.
+  /// todo not used anymore?
   function _openDebt(
     ITetuConverter tetuConverter,
     address tokenA,
@@ -406,6 +411,7 @@ library UniswapV3DebtLib {
   }
 
   /// @dev Rebalances the debt to reach the optimal ratio between token A and token B.
+  /// todo not used anymore?
   function _rebalanceDebtFillup(
     ITetuConverter tetuConverter,
     address controller,

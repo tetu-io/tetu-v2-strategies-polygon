@@ -117,6 +117,7 @@ library AlgebraDebtLib {
   }
 
   /// @dev Rebalances the debt by either filling up or closing and reopening debt positions. Sets new tick range.
+  /// todo not used anymore?
   function rebalanceDebt(
     ITetuConverter tetuConverter,
     address controller,
@@ -141,6 +142,7 @@ library AlgebraDebtLib {
     state.upperTick = newUpperTick;
   }
 
+  /// todo not used anymore?
   function rebalanceDebtSwapByAgg(
     ITetuConverter tetuConverter,
     AlgebraConverterStrategyLogicLib.State storage state,
@@ -270,6 +272,7 @@ library AlgebraDebtLib {
   /// @param tokenA The address of token A.
   /// @param tokenB The address of token B.
   /// @param entryData The data required to open a position.
+  /// todo not used anymore?
   function _openDebt(
     ITetuConverter tetuConverter,
     address tokenA,

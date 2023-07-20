@@ -357,7 +357,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       state.tokenA,
       state.tokenB,
       amount_,
-      0
+      liquidationThresholds[state.tokenA] // amount_ is set in terms of collateral asset
     );
 
     tokenAmounts[0] = amount_ - spentCollateral;

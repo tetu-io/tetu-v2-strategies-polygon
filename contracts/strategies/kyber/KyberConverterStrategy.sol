@@ -356,7 +356,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       state.tokenA,
       state.tokenB,
       amount_,
-      0
+      liquidationThresholds[state.tokenA] // amount_ is set in terms of collateral asset
     );
 
     tokenAmounts[0] = amount_ - spentCollateral;

@@ -339,7 +339,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       state.tokenA,
       state.tokenB,
       amount_,
-      0
+      liquidationThresholds[state.tokenA] // amount_ is set in terms of collateral asset
     );
 
     tokenAmounts[0] = amount_ - spentCollateral;

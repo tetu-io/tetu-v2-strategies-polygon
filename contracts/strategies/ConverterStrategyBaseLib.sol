@@ -587,7 +587,7 @@ library ConverterStrategyBaseLib {
   ) {
     // we check amountIn by threshold, not amountOut
     // because {_closePositionsToGetAmount} is implemented in {get plan, make action}-way
-    // {_closePositionsToGetAmount} can be used with swap by aggregators, where amountOut cannot be calculcate
+    // {_closePositionsToGetAmount} can be used with swap by aggregators, where amountOut cannot be calculate
     // at the moment of plan building. So, for uniformity, only amountIn is checked everywhere
 
     // todo use Math.min(DEFAULT_LIQUIDATION_THRESHOLD, liquidationThresholdForTokenIn_), fix tests
