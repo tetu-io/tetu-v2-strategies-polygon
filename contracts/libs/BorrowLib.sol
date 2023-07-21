@@ -3,7 +3,6 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../strategies/ConverterStrategyBaseLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Library to make new borrow, extend/reduce exist borrows and repay to keep proper assets proportions
 /// @dev Swap through liquidator is still allowed to be able to get required profitToCover, but this amount is small
@@ -106,7 +105,6 @@ library BorrowLib {
     uint threshold1,
     uint addition0
   ) external {
-    console.log("rebalanceAssets");
     // pool always have TWO assets, it's not allowed ot have only one asset
     // so, we assume that the proportions are in the range (0...1e18)
     require(prop0 != 0, AppErrors.ZERO_VALUE);
@@ -140,13 +138,9 @@ library BorrowLib {
   ) internal {
     v.amount0 = IERC20(v.asset0).balanceOf(address(this));
     v.amount1 = IERC20(v.asset1).balanceOf(address(this));
-    console.log("_refreshRebalance.v.amount0", v.amount0);
-    console.log("_refreshRebalance.v.amount1", v.amount1);
 
     (v.directDebt, ) = converterLiquidator.converter.getDebtAmountCurrent(address(this), v.asset0, v.asset1, true);
     (v.reverseDebt, ) = converterLiquidator.converter.getDebtAmountCurrent(address(this), v.asset1, v.asset0, true);
-    console.log("_refreshRebalance.v.directDebt", v.directDebt);
-    console.log("_refreshRebalance.v.reverseDebt", v.reverseDebt);
 
     _rebalanceAssets(v, converterLiquidator, repayAllowed);
   }
@@ -164,19 +158,12 @@ library BorrowLib {
     uint cost0 = v.amount0 * v.pd.prices[0] / v.pd.decs[0];
     uint cost1 = v.amount1 * v.pd.prices[1] / v.pd.decs[1];
     uint costAddition0 = v.addition0 * v.pd.prices[0] / v.pd.decs[0];
-    console.log("cost0", cost0);
-    console.log("cost1", cost1);
-    console.log("costAddition0", costAddition0);
 
     uint totalCost = cost0 + cost1 - costAddition0;
     uint requiredCost0 = totalCost * v.prop0 / SUM_PROPORTIONS + costAddition0;
     uint requiredCost1 = totalCost * (SUM_PROPORTIONS - v.prop0) / SUM_PROPORTIONS;
-    console.log("totalCost", totalCost);
-    console.log("requiredCost0", requiredCost0);
-    console.log("requiredCost1", requiredCost1);
 
     if (requiredCost0 > cost0) {
-      console.log("_rebalanceAssets.1");
       // we need to increase amount of asset 0 and decrease amount of asset 1, so we need to borrow asset 0 (reverse)
       RebalanceAssetsCore memory c10 = RebalanceAssetsCore({
         converterLiquidator: converterLiquidator,
@@ -193,8 +180,6 @@ library BorrowLib {
       });
 
       if (v.directDebt != 0) {
-        console.log("_rebalanceAssets.2");
-
         // This branch of code cannot be called recursively.
         // Firstly repay(requiredAmount0) is called below. There are two possible results:
         // 1) requiredCost0 <= cost0
@@ -204,15 +189,12 @@ library BorrowLib {
 
         // repay of v.asset1 is required
         uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
-        console.log("_rebalanceAssets.requiredAmount0", requiredAmount0);
         rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt);
       } else {
-        console.log("_rebalanceAssets.3");
         // new (or additional) borrow of asset 0 under asset 1 is required
         openPosition(c10, v.pd, v.amount1, v.amount0);
       }
     } else if (requiredCost0 < cost0) {
-      console.log("_rebalanceAssets.4");
       RebalanceAssetsCore memory c01 = RebalanceAssetsCore({
         converterLiquidator: converterLiquidator,
         assetA: v.asset0,
@@ -228,16 +210,13 @@ library BorrowLib {
       });
       // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
       if (v.reverseDebt != 0) {
-        console.log("_rebalanceAssets.5");
         require(repayAllowed, AppErrors.NOT_ALLOWED);
 
         // repay of v.asset0 is required
         // requiredCost0 < cost0 => requiredCost1 > cost1
         uint requiredAmount1 = (requiredCost1 - cost1) * v.pd.decs[1] / v.pd.prices[1];
-        console.log("_rebalanceAssets.requiredAmount1", requiredAmount1);
         rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt);
       } else {
-        console.log("_rebalanceAssets.6");
         // new or additional borrow of asset 1 under asset 0 is required
         openPosition(c01, v.pd, v.amount0, v.amount1);
       }
@@ -259,11 +238,6 @@ library BorrowLib {
     // but we are sure that amount {requiredAmountB ===> requiredAmountA} would be more than required
     uint capRequiredAmountA = requiredAmountB * c.alpha18 / 1e18;
     ConverterStrategyBaseLib._repayDebt(c.converterLiquidator.converter, c.assetB, c.assetA, Math.min(capRequiredAmountA, amountDebtA));
-    console.log("rebalanceRepayBorrow.capRequiredAmountA", capRequiredAmountA);
-    console.log("rebalanceRepayBorrow.Math.min(capRequiredAmountA, amountDebtA)", Math.min(capRequiredAmountA, amountDebtA));
-    console.log("rebalanceRepayBorrow.capRequiredAmountA", capRequiredAmountA);
-    console.log("rebalanceRepayBorrow.amountDebtA", amountDebtA);
-    console.log("rebalanceRepayBorrow.c.alpha18", c.alpha18);
 
     _refreshRebalance(v, c.converterLiquidator, false);
   }
@@ -286,40 +260,29 @@ library BorrowLib {
   ) {
     // if there are two not-zero addons, the caller should reduce balances before the call
     require(c.addonA == 0 || c.addonB == 0, AppErrors.INVALID_VALUE);
-    console.log("openPosition.balanceA_", balanceA_);
-    console.log("openPosition.balanceB_", balanceB_);
-    console.log("openPosition.c.addonA", c.addonA);
-    console.log("openPosition.c.addonB", c.addonB);
 
     // we are going to borrow B under A
     if (c.addonB != 0) {
-      console.log("openPosition.1");
       // B is underlying, so we are going to borrow underlying
       if (balanceB_ >= c.addonB) {
-        console.log("openPosition.2");
         // simple case - we already have required addon on the balance. Just keep it unused
         return _openPosition(c, balanceA_, balanceB_ - c.addonB);
       } else {
-        console.log("openPosition.3");
         // we need to get 1) (c.addonB + balanceB_) amount, so we will have required c.addonB
         //                2) leftovers of A and B should be allocated in required proportions
         // it's too hard to calculate correctly required to borrow amount in this case without changing TetuConverter
         // but we can assume here, that amount (c.addonB - balanceB_) is pretty small (it's profitToCover)
         // so, we can swap this required amount through liquidator at first
         // then use _openPosition to re-allocated rest amounts to proper proportions
-        (uint decA, uint incB) = _makeLittleSwap(c, pd, balanceA_, c.addonB - balanceB_);
-        console.log("openPosition.decA", decA);
-        console.log("openPosition.incB", incB);
+        (uint decA,) = _makeLittleSwap(c, pd, balanceA_, c.addonB - balanceB_);
         return _openPosition(c, balanceA_ - decA, balanceB_);
       }
     } else if (c.addonA != 0) {
-      console.log("openPosition.4");
       // A is underlying, we need to put aside c.addonA and allocate leftovers in right proportions.
       // we are going to borrow B under asset A, so the case (balanceA_ < c.addonA) is not valid here
       require(balanceA_ >= c.addonA, AppErrors.NOT_ENOUGH_BALANCE);
       return _openPosition(c, balanceA_ - c.addonA, balanceB_);
     } else {
-      console.log("openPosition.5");
       // simple logic, no addons
       return _openPosition(c, balanceA_, balanceB_);
     }
@@ -330,10 +293,6 @@ library BorrowLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
-    console.log("_openPosition.balanceA_", balanceA_);
-    console.log("_openPosition.balanceB_", balanceB_);
-    console.log("_openPosition.c.propA", c.propA);
-    console.log("_openPosition.c.propB", c.propB);
     uint untouchedAmountA;
     bytes memory entryData = abi.encode(1, c.propA, c.propB);
 
@@ -345,12 +304,9 @@ library BorrowLib {
       // we are going to borrow B under A, so balance A must be greater then balance B
       // otherwise the function is called incorrectly - probably we need to borrow A under B
       require(untouchedAmountA <= balanceA_, AppErrors.WRONG_VALUE);
-
-      console.log("_openPosition.untouchedAmountA", untouchedAmountA);
     }
 
     AppLib.approveIfNeeded(c.assetA, balanceA_ - untouchedAmountA, address(c.converterLiquidator.converter));
-    console.log("_openPosition.balanceA_ - untouchedAmountA", balanceA_ - untouchedAmountA);
 
     return ConverterStrategyBaseLib.openPosition(
       c.converterLiquidator.converter,
@@ -377,13 +333,10 @@ library BorrowLib {
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
-    console.log("_makeLittleSwap");
     uint amountInA = requiredAmountB * pd.prices[c.indexB] * pd.decs[c.indexA] / pd.prices[c.indexA] / pd.decs[c.indexB];
-    console.log("_makeLittleSwap.amountInA", amountInA);
     // we can have some loss because of slippage
     // so, let's increase input amount a bit
     amountInA = amountInA * (100_000 + ConverterStrategyBaseLib._ASSET_LIQUIDATION_SLIPPAGE) / 100_000;
-    console.log("_makeLittleSwap.amountInA", amountInA);
 
     // in practice the addition is required to pay ProfitToCover
     // we assume, that total addition amount is small enough, much smaller then the total balance
@@ -400,8 +353,6 @@ library BorrowLib {
       c.thresholdA,
       false
     );
-    console.log("_makeLittleSwap.spentAmountIn", spentAmountIn);
-    console.log("_makeLittleSwap.receivedAmountOut", receivedAmountOut);
   }
 
   //endregion -------------------------------------------------- Little swap
