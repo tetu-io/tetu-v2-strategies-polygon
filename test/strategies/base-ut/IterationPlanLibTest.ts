@@ -13,10 +13,14 @@ import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
-import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {expect} from "chai";
 
 describe('IterationPlanLibTest', () => {
+  const PLAN_SWAP_REPAY = 0;
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_SWAP_ONLY = 2;
+
   //region Variables
   let snapshotBefore: string;
   let snapshot: string;
@@ -159,6 +163,51 @@ describe('IterationPlanLibTest', () => {
           collateralA: "300"
         });
         expect(ret.resultSwapAmount).approximately(1040, 1e-5);
+      });
+    });
+  });
+
+  describe("getEntryKind", () => {
+    it("should return default value", async () => {
+      expect((await facade.getEntryKind("0x")).toNumber()).eq(PLAN_SWAP_REPAY)
+    });
+    it("should return PLAN_SWAP_REPAY", async () => {
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, 1]);
+      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_REPAY)
+    });
+    it("should return PLAN_REPAY_SWAP_REPAY", async () => {
+      const entryData = defaultAbiCoder.encode(['uint256'], [PLAN_REPAY_SWAP_REPAY]);
+      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_REPAY_SWAP_REPAY)
+    });
+    it("should return PLAN_SWAP_ONLY", async () => {
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY, 1]);
+      expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_ONLY)
+    });
+  });
+
+  describe("_buildPlanRepaySwapRepay", () => {
+    describe("Bad paths", () => {
+      it("should revert if balance B is zero", async () => {
+        await expect(
+          facade._buildPlanRepaySwapRepay(
+            { // following values are not used in this test
+              tokens: [usdc.address, usdt.address],
+              converter: converter.address,
+              prices: [],
+              decs: [],
+              planKind: 0,
+              usePoolProportions: false,
+              balanceAdditions: [],
+              propNotUnderlying18: 0,
+              liquidationThresholds: []
+            },
+            [1000, 0],
+            [0, 1], // any values
+            1, // any value
+            1, // any value
+            1 // any value
+          )
+        ).revertedWith("TS-26 need 2 iterations of unfolding"); // UNFOLDING_2_ITERATIONS_REQUIRED
       });
     });
   });

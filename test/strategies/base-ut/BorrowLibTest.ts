@@ -3826,7 +3826,7 @@ describe('BorrowLibTest', () => {
           makeRebalanceAssets({
             tokenX: usdc,
             tokenY: usdt,
-            proportion: 1, // (!)
+            proportion: SUM_PROPORTIONS, // (!)
             prices: {priceX: "1", priceY: "1"},
             strategyBalances: {balanceX: "1", balanceY: "1"},
           })
@@ -3838,7 +3838,7 @@ describe('BorrowLibTest', () => {
           makeRebalanceAssets({
             tokenX: usdc,
             tokenY: usdt,
-            proportion: 2, // (!)
+            proportion: SUM_PROPORTIONS + 1, // (!)
             prices: {priceX: "1", priceY: "1"},
             strategyBalances: {balanceX: "1", balanceY: "1"},
           })

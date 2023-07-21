@@ -107,6 +107,8 @@ library BorrowLib {
     uint addition0
   ) external {
     console.log("rebalanceAssets");
+    // pool always have TWO assets, it's not allowed ot have only one asset
+    // so, we assume that the proportions are in the range (0...1e18)
     require(prop0 != 0, AppErrors.ZERO_VALUE);
     require(prop0 < 1e18, AppErrors.TOO_HIGH);
 
@@ -192,7 +194,14 @@ library BorrowLib {
 
       if (v.directDebt != 0) {
         console.log("_rebalanceAssets.2");
+
+        // This branch of code cannot be called recursively.
+        // Firstly repay(requiredAmount0) is called below. There are two possible results:
+        // 1) requiredCost0 <= cost0
+        // 2) v.directDebt == 0
+        // so, this code cannot be called second time
         require(repayAllowed, AppErrors.NOT_ALLOWED);
+
         // repay of v.asset1 is required
         uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
         console.log("_rebalanceAssets.requiredAmount0", requiredAmount0);
