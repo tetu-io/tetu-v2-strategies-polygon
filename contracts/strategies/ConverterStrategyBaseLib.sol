@@ -1320,7 +1320,7 @@ library ConverterStrategyBaseLib {
         do {
           // generate iteration plan: [swap], [repay]
           (v.idxToSwap1, v.amountToSwap, v.idxToRepay1) = IterationPlanLib.buildIterationPlan(
-            d_.converter,
+            [address(d_.converter), address(d_.liquidator)],
             d_.tokens,
             liquidationThresholds_,
             v.prices,

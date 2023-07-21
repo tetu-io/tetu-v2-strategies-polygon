@@ -1,6 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
-  BorrowLibFacade,
   IterationPlanLibFacade,
   MockForwarder,
   MockTetuConverter,

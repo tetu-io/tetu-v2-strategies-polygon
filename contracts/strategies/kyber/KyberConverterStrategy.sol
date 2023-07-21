@@ -17,15 +17,6 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
   string public constant override STRATEGY_VERSION = "2.0.0";
-
-  /// @notice Enter to the pool at the end of withdrawByAggStep
-  uint internal constant ENTRY_TO_POOL_IS_ALLOWED = 1;
-  /// @notice Enter to the pool at the end of withdrawByAggStep only if full withdrawing has been completed
-  uint internal constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-  /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
-  uint internal constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
-  /// @notice A gap to reduce AmountToSwap calculated inside quoteWithdrawByAgg, [0...100_000]
-  uint public constant GAP_AMOUNT_TO_SWAP = 100;
   //endregion ------------------------------------------------- Constants
 
   //region ------------------------------------------------- Data types
@@ -54,6 +45,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     uint[] liquidationThresholds;
     uint planKind;
     uint totalLiquidity;
+    address controller;
   }
   //endregion ------------------------------------------------- Data types
 
@@ -182,8 +174,9 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   //region --------------------------------------------- Withdraw by iterations
 
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
-    StrategyLib2.onlyOperators(controller());
     QuoteWithdrawByAggLocal memory v;
+    v.controller = controller();
+    StrategyLib2.onlyOperators(v.controller);
 
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
@@ -197,7 +190,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       : _depositorQuoteExit(v.totalLiquidity);
 
     (tokenToSwap, amountToSwap) = PairBasedStrategyLib.quoteWithdrawStep(
-      converter,
+      [address(converter), address(AppLib._getLiquidator(v.controller))],
       v.tokens,
       v.liquidationThresholds,
       amountsOut,
@@ -210,7 +203,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       // so, REPAY1 can return less collateral than quoteWithdrawByAgg expected
       // As result, we can have less amount on balance than required amountToSwap
       // So, we need to reduce amountToSwap on small gap amount
-      amountToSwap -= amountToSwap * GAP_AMOUNT_TO_SWAP / 100_000;
+      amountToSwap -= amountToSwap * PairBasedStrategyLib.GAP_AMOUNT_TO_SWAP / 100_000;
     }
   }
 
@@ -230,10 +223,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     // decode tokenToSwapAndAggregator
     v.tokenToSwap = tokenToSwapAndAggregator[0];
     v.aggregator = tokenToSwapAndAggregator[1];
-    if (v.aggregator == address(0)) {
-      v.useLiquidator = true;
-      v.aggregator = v.liquidator;
-    }
+    v.useLiquidator = v.aggregator == address(0);
 
     // get tokens as following: [underlying, not-underlying]
     (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
@@ -242,7 +232,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
     // make withdraw iteration according to the selected plan
     completed = PairBasedStrategyLib.withdrawStep(
-      v.converter,
+      [address(converter), v.liquidator],
       v.tokens,
       v.liquidationThresholds,
       v.tokenToSwap,
@@ -254,7 +244,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       v.propNotUnderlying18
     );
 
-    if (entryToPool == ENTRY_TO_POOL_WITH_REBALANCE) {
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_WITH_REBALANCE) {
       // make rebalance and enter back to the pool. We won't have any swaps here
       (v.tokenAmounts,) = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
         state,
@@ -279,8 +269,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
         baseState.splitter
       );
 
-      if (entryToPool == ENTRY_TO_POOL_IS_ALLOWED
-        || (entryToPool == ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+      if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+        || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
       ) {
         // Make actions after rebalance: depositor enter, update invested assets
         (v.newLowerTick, v.newUpperTick) = KyberDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);

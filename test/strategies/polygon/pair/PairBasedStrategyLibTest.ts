@@ -134,7 +134,7 @@ describe('PairBasedStrategyLibTest', () => {
 
       // call quote
       const ret = await facade.callStatic.quoteWithdrawStep(
-        converter.address,
+        [converter.address, liquidator.address],
         [p.tokenX.address, p.tokenY.address],
         [
           parseUnits(p.liquidationThresholds[0], await p.tokenX.decimals()),
@@ -1627,7 +1627,7 @@ describe('PairBasedStrategyLibTest', () => {
 
       // make withdraw
       const completed = await facade.callStatic.withdrawStep(
-        converter.address,
+        [converter.address, liquidator.address],
         [p.tokenX.address, p.tokenY.address],
         [
           parseUnits(p.liquidationThresholds[0], await p.tokenX.decimals()),
@@ -1637,7 +1637,7 @@ describe('PairBasedStrategyLibTest', () => {
         p.tokenToSwap === undefined
           ? BigNumber.from(0)
           : parseUnits(p.amountToSwap, await IERC20Metadata__factory.connect(p.tokenToSwap.address, signer).decimals()),
-        liquidator.address,
+        Misc.ZERO_ADDRESS,
         "0x",
         true,
         p.planKind,
@@ -1647,7 +1647,7 @@ describe('PairBasedStrategyLibTest', () => {
       );
 
       await facade.withdrawStep(
-        converter.address,
+        [converter.address, liquidator.address],
         [p.tokenX.address, p.tokenY.address],
         [
           parseUnits(p.liquidationThresholds[0], await p.tokenX.decimals()),
@@ -1657,7 +1657,7 @@ describe('PairBasedStrategyLibTest', () => {
         p.tokenToSwap === undefined
           ? BigNumber.from(0)
           : parseUnits(p.amountToSwap, await IERC20Metadata__factory.connect(p.tokenToSwap.address, signer).decimals()),
-        liquidator.address,
+        Misc.ZERO_ADDRESS,
         "0x",
         true,
         p.planKind,
@@ -2356,6 +2356,7 @@ describe('PairBasedStrategyLibTest', () => {
             ? p.liquidationThresholds.map((x, index) => parseUnits(x, decimals[index]))
             : p.tokens.map(x => 0),
           converter: converter.address,
+          liquidator: liquidator.address,
           planKind: 0, // not used here
           usePoolProportions: false, // not used here
           propNotUnderlying18: parseUnits(p.propNotUnderlying18, 18),
@@ -2757,6 +2758,7 @@ describe('PairBasedStrategyLibTest', () => {
             : p.tokens.map(x => parseUnits("1", 18)),
           propNotUnderlying18: parseUnits((+p.propNotUnderlying18).toString(), 18),
           converter: converter.address,
+          liquidator: liquidator.address,
           liquidationThresholds: p.liquidationThresholds.map(
             (threshold, index) => parseUnits(threshold, decimals[index])
           ),

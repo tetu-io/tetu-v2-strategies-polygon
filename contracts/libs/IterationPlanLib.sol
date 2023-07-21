@@ -36,6 +36,7 @@ library IterationPlanLib {
   /// @notice Set of parameters required to liquidation through aggregators
   struct SwapRepayPlanParams {
     ITetuConverter converter;
+    ITetuLiquidator liquidator;
 
     /// @notice Assets used by depositor stored as following way: [underlying, not-underlying]
     address[] tokens;
@@ -107,6 +108,7 @@ library IterationPlanLib {
 //region ------------------------------------------------ Build plan
   /// @notice Build plan to make single iteration of withdraw according to the selected plan
   ///         The goal is to withdraw {requestedAmount} and receive {asset}:{token} in proper proportions on the balance
+  /// @param converterLiquidator [TetuConverter, TetuLiquidator]
   /// @param tokens List of the pool tokens. One of them is underlying and one of then is not-underlying
   ///               that we are going to withdraw
   /// @param liquidationThresholds Liquidation thresholds for the {tokens}. If amount is less then the threshold,
@@ -123,7 +125,7 @@ library IterationPlanLib {
   ///    4: indexAsset: index of the underlying in {tokens} array
   ///    5: indexToken: index of the token in {tokens} array. We are going to withdraw the token and convert it to the asset
   function buildIterationPlan(
-    ITetuConverter converter,
+    address[2] memory converterLiquidator,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
     uint[] memory prices,
@@ -137,7 +139,8 @@ library IterationPlanLib {
   ) {
     return _buildIterationPlan(
       SwapRepayPlanParams({
-        converter: converter,
+        converter: ITetuConverter(converterLiquidator[0]),
+        liquidator: ITetuLiquidator(converterLiquidator[1]),
         tokens: tokens,
         liquidationThresholds: liquidationThresholds,
         prices: prices,

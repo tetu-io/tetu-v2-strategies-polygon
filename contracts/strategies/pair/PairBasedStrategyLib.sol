@@ -22,11 +22,20 @@ library PairBasedStrategyLib {
   uint internal constant IDX_SWAP_2 = 2;
   uint internal constant IDX_REPAY_2 = 3;
 
+  /// @notice A gap to reduce AmountToSwap calculated inside quoteWithdrawByAgg, [0...100_000]
+  uint public constant GAP_AMOUNT_TO_SWAP = 100;
+
+  /// @notice Enter to the pool at the end of withdrawByAggStep
+  uint public constant ENTRY_TO_POOL_IS_ALLOWED = 1;
+  /// @notice Enter to the pool at the end of withdrawByAggStep only if full withdrawing has been completed
+  uint public constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+  /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
+  uint public constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
+
   /// @notice 1inch router V5
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582;
   /// @notice OpenOceanExchangeProxy
   address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64;
-  address internal constant TETU_LIQUIDATOR = 0xC737eaB847Ae6A92028862fE38b828db41314772;
 
   string public constant UNKNOWN_SWAP_ROUTER = "PBS-1 Unknown router";
   //endregion ------------------------------------------------ Constants
@@ -36,6 +45,8 @@ library PairBasedStrategyLib {
     bool useLiquidator;
     address tokenToSwap;
     /// @notice Aggregator to make swap
+    ///         It is 0 if useLiquidator is true
+    ///         It can be equal to address of liquidator if we use liquidator as aggregator (in tests)
     address aggregator;
     uint amountToSwap;
     /// @notice Swap-data prepared off-chain (route, amounts, etc). 0 - use liquidator to make swap
@@ -55,6 +66,7 @@ library PairBasedStrategyLib {
   //region ------------------------------------------------ External functions
 
   /// @notice Get info for the swap that will be made on the next call of {withdrawStep}
+  /// @param converterLiquidator_ [TetuConverter, TetuLiquidator]
   /// @param tokens Tokens used by depositor (length == 2: underlying and not-underlying)
   /// @param liquidationThresholds Liquidation thresholds for the {tokens}
   /// @param propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
@@ -66,7 +78,7 @@ library PairBasedStrategyLib {
   /// @return amountToSwap Amount that will be swapped on the next swap. 0 - no swap
   ///                      This amount is NOT reduced on {GAP_AMOUNT_TO_SWAP}, it should be reduced after the call if necessary.
   function quoteWithdrawStep(
-    ITetuConverter converter_,
+    address[2] memory converterLiquidator_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
     uint[] memory amountsFromPool,
@@ -76,9 +88,12 @@ library PairBasedStrategyLib {
     address tokenToSwap,
     uint amountToSwap
   ){
-    (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
+    (uint[] memory prices,
+     uint[] memory decs
+    ) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(ITetuConverter(converterLiquidator_[0])), tokens, 2);
     IterationPlanLib.SwapRepayPlanParams memory p = IterationPlanLib.SwapRepayPlanParams({
-      converter: converter_,
+      converter: ITetuConverter(converterLiquidator_[0]),
+      liquidator: ITetuLiquidator(converterLiquidator_[1]),
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
       propNotUnderlying18: propNotUnderlying18 == type(uint).max
@@ -95,6 +110,7 @@ library PairBasedStrategyLib {
 
   /// @notice Make withdraw step with 0 or 1 swap only. The step can make one of the following actions:
   ///         1) repay direct debt 2) repay reverse debt 3) final swap leftovers of not-underlying asset
+  /// @param converterLiquidator_ [TetuConverter, TetuLiquidator]
   /// @param tokens Tokens used by depositor (length == 2: underlying and not-underlying)
   /// @param liquidationThresholds Liquidation thresholds for the {tokens}
   /// @param tokenToSwap_ Address of the token that will be swapped on the next swap. 0 - no swap
@@ -114,7 +130,7 @@ library PairBasedStrategyLib {
   ///                           not-underlying : underlying === propNotUnderlying18 : 1e18 - propNotUnderlying18
   /// @return completed All debts were closed, leftovers were swapped to the required proportions
   function withdrawStep(
-    ITetuConverter converter_,
+    address[2] memory converterLiquidator_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
     address tokenToSwap_,
@@ -127,10 +143,13 @@ library PairBasedStrategyLib {
   ) external returns (
     bool completed
   ){
-    (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, 2);
+    (uint[] memory prices,
+     uint[] memory decs
+    ) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(ITetuConverter(converterLiquidator_[0])), tokens, 2);
 
     IterationPlanLib.SwapRepayPlanParams memory p = IterationPlanLib.SwapRepayPlanParams({
-      converter: converter_,
+      converter: ITetuConverter(converterLiquidator_[0]),
+      liquidator: ITetuLiquidator(converterLiquidator_[1]),
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
       propNotUnderlying18: propNotUnderlying18 == type(uint).max
@@ -165,7 +184,7 @@ library PairBasedStrategyLib {
   ) {
     uint indexTokenToSwapPlus1;
     (indexTokenToSwapPlus1, amountToSwap,) = IterationPlanLib.buildIterationPlan(
-      p.converter,
+      [address(p.converter), address(p.liquidator)],
       p.tokens,
       p.liquidationThresholds,
       p.prices,
@@ -195,7 +214,7 @@ library PairBasedStrategyLib {
     bool completed
   ) {
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = IterationPlanLib.buildIterationPlan(
-      p.converter,
+      [address(p.converter), address(p.liquidator)],
       p.tokens,
       p.liquidationThresholds,
       p.prices,
@@ -294,7 +313,7 @@ library PairBasedStrategyLib {
     uint indexBorrow
   ) internal {
     BorrowLib.RebalanceAssetsCore memory cac = BorrowLib.RebalanceAssetsCore({
-      converterLiquidator: BorrowLib.ConverterLiquidator(p.converter, ITetuLiquidator(TETU_LIQUIDATOR)),
+      converterLiquidator: BorrowLib.ConverterLiquidator(p.converter, p.liquidator),
       assetA: p.tokens[indexCollateral],
       assetB: p.tokens[indexBorrow],
       propA: indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18,
@@ -405,20 +424,23 @@ library PairBasedStrategyLib {
       // actual amount can be a bit different because the quote function was called in different block
       amountIn = aggParams.amountToSwap;
     }
+    address aggregator = aggParams.useLiquidator
+      ? address(p.liquidator)
+      : aggParams.aggregator;
 
     require(amountIn <= IERC20(p.tokens[indexIn]).balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
     // let's ensure that "next swap" is made using correct token
     require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
     if (amountIn > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
-      AppLib.approveIfNeeded(p.tokens[indexIn], amountIn, aggParams.aggregator);
+      AppLib.approveIfNeeded(p.tokens[indexIn], amountIn, aggregator);
 
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
 
       if (aggParams.useLiquidator) {
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
           p.converter,
-          ITetuLiquidator(aggParams.aggregator),
+          ITetuLiquidator(aggregator),
           p.tokens[indexIn],
           p.tokens[indexOut],
           amountIn,
@@ -427,9 +449,11 @@ library PairBasedStrategyLib {
           true
         );
       } else {
-        _checkSwapRouter(aggParams.aggregator);
+        if (aggregator != address(p.liquidator)) {
+          _checkSwapRouter(aggregator);
+        }
 
-        (bool success, bytes memory result) = aggParams.aggregator.call(aggParams.swapData);
+        (bool success, bytes memory result) = aggregator.call(aggParams.swapData);
         require(success, string(result));
 
         spentAmountIn = amountIn;
@@ -458,8 +482,7 @@ library PairBasedStrategyLib {
 
   //region ----------------------------------------- Utils
   function _checkSwapRouter(address router) internal pure {
-    // TETU_LIQUIDATOR is added for tests to use liquidator with aggregator's logic
-    require(router == ONEINCH || router == OPENOCEAN || router == TETU_LIQUIDATOR, UNKNOWN_SWAP_ROUTER);
+    require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
   }
   //endregion ------------------------------------------ Utils
 }

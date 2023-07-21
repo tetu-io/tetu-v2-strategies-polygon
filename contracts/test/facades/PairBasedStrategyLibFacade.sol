@@ -9,7 +9,7 @@ import "hardhat/console.sol";
 /// @notice Provide direct access to UniswapV3Lib functions for unit tests
 contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
   function quoteWithdrawStep(
-    ITetuConverter converter_,
+    address[2] memory converterLiquidator_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
     uint[] memory amountsFromPool,
@@ -19,11 +19,11 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     address tokenToSwap,
     uint amountToSwap
   ) {
-    return PairBasedStrategyLib.quoteWithdrawStep(converter_, tokens, liquidationThresholds, amountsFromPool, planKind, propNotUnderlying18);
+    return PairBasedStrategyLib.quoteWithdrawStep(converterLiquidator_, tokens, liquidationThresholds, amountsFromPool, planKind, propNotUnderlying18);
   }
 
   function withdrawStep(
-    ITetuConverter converter_,
+    address[2] memory converterLiquidator_,
     address[] memory tokens,
     uint[] memory liquidationThresholds,
     address tokenToSwap_,
@@ -37,7 +37,7 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     bool completed
   ) {
     return PairBasedStrategyLib.withdrawStep(
-      converter_,
+      converterLiquidator_,
       tokens,
       liquidationThresholds,
       tokenToSwap_,

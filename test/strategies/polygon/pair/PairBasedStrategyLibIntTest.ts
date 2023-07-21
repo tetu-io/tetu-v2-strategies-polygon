@@ -16,6 +16,7 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
+import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
 
 describe('PairBasedStrategyLibIntTest', () => {
   /** prop0 + prop1 */
@@ -105,8 +106,9 @@ describe('PairBasedStrategyLibIntTest', () => {
         console.log("swapData for tetu liquidator", swapData);
       }
 
-      const planInputParams = {
+      const planInputParams: IterationPlanLib.SwapRepayPlanParamsStruct = {
           converter: p.mockConverter || MaticAddresses.TETU_CONVERTER,
+          liquidator: MaticAddresses.TETU_LIQUIDATOR,
           tokens: p.tokens,
           liquidationThresholds: await Promise.all(p.tokens.map(
             async (token: string, index: number) => parseUnits(
