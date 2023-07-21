@@ -2177,7 +2177,7 @@ describe('PairBasedStrategyLibTest', () => {
       });
 
       describe("Read propNotUnderlying18 from pool", () => {
-        describe("Direct repay", () => {
+        describe("Direct repay, borrowInsteadRepay", () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -2239,6 +2239,66 @@ describe('PairBasedStrategyLibTest', () => {
           it("should set expected balances", async () => {
             const ret = await loadFixture(makeWithdrawStepTest);
             expect([ret.balanceX, ret.balanceY].join()).eq([1345, 0].join());
+          });
+        });
+        describe("Direct repay, !borrowInsteadRepay", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+            return makeWithdrawStep({
+              tokenX: usdc,
+              tokenY: usdt,
+
+              amountToSwap: "1501",
+              tokenToSwap: usdc,
+
+              planKind: PLAN_REPAY_SWAP_REPAY,
+              propNotUnderlying18: "0",
+
+              liquidationThresholds: ["0", "0"],
+              balanceX: "500",
+              balanceY: "500",
+
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                totalCollateralAmountOut: "4000",
+                totalDebtAmountOut: "2000",
+                collateralAmountOut: "1001",
+                amountRepay: "500",
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                totalCollateralAmountOut: "4000",
+                totalDebtAmountOut: "2000",
+                collateralAmountOut: "3004",
+                amountRepay: "1502",
+                addToQueue: true
+              }],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "500",
+                collateralAmountOut: "1001"
+              }],
+              liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "1501", amountOut: "1502"}]
+            });
+          }
+
+          it("should not complete the withdraw", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect(ret.completed).eq(false);
+          });
+
+          it("should set expected balances", async () => {
+            const ret = await loadFixture(makeWithdrawStepTest);
+            expect([ret.balanceX, ret.balanceY].join()).eq([3004, 0].join());
           });
         });
       });

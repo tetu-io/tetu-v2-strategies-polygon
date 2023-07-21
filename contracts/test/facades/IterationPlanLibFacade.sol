@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import "../../libs/IterationPlanLib.sol";
+import "hardhat/console.sol";
 
 contract IterationPlanLibFacade {
   function estimateSwapAmountForRepaySwapRepay(
@@ -15,7 +16,8 @@ contract IterationPlanLibFacade {
     uint totalBorrowB,
     uint collateralA,
     uint amountToRepayB
-  ) external pure returns(uint) {
+  ) external view returns(uint) {
+    console.log("estimateSwapAmountForRepaySwapRepay"); // hide pure/view warning
     return IterationPlanLib.estimateSwapAmountForRepaySwapRepay(
       p,
       balanceA,

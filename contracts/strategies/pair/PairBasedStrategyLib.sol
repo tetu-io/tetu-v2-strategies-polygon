@@ -272,6 +272,8 @@ library PairBasedStrategyLib {
           idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
           idxToRepay1 - 1
         );
+        console.log("amountToRepay2", amountToRepay2);
+        console.log("borrowInsteadRepay", borrowInsteadRepay);
 
         if (borrowInsteadRepay) {
           console.log("_withdrawStep.borrow.1");
@@ -282,6 +284,8 @@ library PairBasedStrategyLib {
           // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
           // temporary save current balance to repaidAmount
           uint repaidAmount = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
+          console.log("repaidAmount", repaidAmount);
+          console.log("amountToRepay2", amountToRepay2);
 
           ConverterStrategyBaseLib._repayDebt(
             p.converter,
@@ -290,9 +294,11 @@ library PairBasedStrategyLib {
             amountToRepay2
           );
           uint balanceAfter = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
+          console.log("balanceAfter", balanceAfter);
           repaidAmount = repaidAmount > balanceAfter
             ? repaidAmount - balanceAfter
             : 0;
+          console.log("repaidAmount.2", repaidAmount);
 
           if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
             console.log("_withdrawStep.borrow.3");
@@ -356,13 +362,19 @@ library PairBasedStrategyLib {
     uint amountToRepay,
     bool borrowInsteadRepay
   ) {
+    console.log("_getAmountToRepay2");
     GetAmountToRepay2Local memory v;
     v.c0 = IERC20(p.tokens[indexCollateral]).balanceOf(address(this)) * p.prices[indexCollateral] / p.decs[indexCollateral];
     v.b0 = IERC20(p.tokens[indexBorrow]).balanceOf(address(this)) * p.prices[indexBorrow] / p.decs[indexBorrow];
+    console.log("_getAmountToRepay2.v.c0", v.c0);
+    console.log("_getAmountToRepay2.v.b0", v.b0);
 
     v.x = indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18;
     v.y = indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18;
     v.alpha = p.prices[indexCollateral] * p.decs[indexBorrow] * 1e18 / p.prices[indexBorrow] / p.decs[indexCollateral];
+    console.log("_getAmountToRepay2.v.x", v.x);
+    console.log("_getAmountToRepay2.v.y", v.y);
+    console.log("_getAmountToRepay2.v.alpha", v.alpha);
 
     (uint needToRepay, uint collateralAmountOut) = p.converter.getDebtAmountStored(
       address(this),
@@ -370,23 +382,35 @@ library PairBasedStrategyLib {
       p.tokens[indexBorrow],
       true
     );
+    console.log("_getAmountToRepay2.needToRepay", needToRepay);
+    console.log("_getAmountToRepay2.collateralAmountOut", collateralAmountOut);
 
     if (needToRepay == 0) {
       // check if we need to make reverse borrow to fit to proportions: borrow collateral-asset under borrow-asset
       uint targetCollateral = (v.c0 + v.b0) * v.x / (v.x + v.y);
+      console.log("targetCollateral", targetCollateral);
       borrowInsteadRepay = targetCollateral > v.c0
         && targetCollateral - v.c0
         > (p.liquidationThresholds[indexCollateral] * p.prices[indexCollateral] / p.decs[indexCollateral]);
+      console.log("targetCollateral", targetCollateral);
+      console.log("v.c0", v.c0);
+      console.log("(p.liquidationThresholds[indexCollateral] * p.prices[indexCollateral] / p.decs[indexCollateral])", (p.liquidationThresholds[indexCollateral] * p.prices[indexCollateral] / p.decs[indexCollateral]));
+      console.log("borrowInsteadRepay", borrowInsteadRepay);
     } else {
       // initial balances: c0, b0
       // we are going to repay amount b and receive (betta * b, b), where betta ~ alpha * totalCollateral / totalBorrow
       // we should have x/y = (c0 + betta * b) / (b0 - b)
       // so b = (x * b0 - y * c0) / (betta * y + x)
       v.b = (int(v.x * v.b0) - int(v.y * v.c0)) / (int(v.y * v.alpha * collateralAmountOut / needToRepay / 1e18) + int(v.x));
+      console.log("_getAmountToRepay2.v.b");
+      console.logInt(v.b);
       if (v.b > 0) {
         amountToRepay = uint(v.b);
+        console.log("_getAmountToRepay2.amountToRepay", amountToRepay);
       }
     }
+    console.log("_getAmountToRepay2.results.amountToRepay", amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow]);
+    console.log("_getAmountToRepay2.results.borrowInsteadRepay", borrowInsteadRepay);
 
     return (amountToRepay * p.decs[indexBorrow] / p.prices[indexBorrow], borrowInsteadRepay);
   }

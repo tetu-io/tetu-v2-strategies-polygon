@@ -332,30 +332,4 @@ contract ConverterStrategyBaseLibFacade {
   ) {
     return ConverterStrategyBaseLib._closePosition(converter_, collateralAsset, borrowAsset, amountToRepay);
   }
-
-  function estimateSwapAmountForRepaySwapRepay(
-    IterationPlanLib.SwapRepayPlanParams memory p,
-    uint balanceA,
-    uint balanceB,
-    uint indexA,
-    uint indexB,
-    uint propB,
-    uint amountToRepayB,
-    uint collateralA,
-    uint totalCollateralA,
-    uint totalBorrowB
-  ) external pure returns(uint) {
-    return IterationPlanLib.estimateSwapAmountForRepaySwapRepay(
-      p,
-      balanceA,
-      balanceB,
-      indexA,
-      indexB,
-      propB,
-      amountToRepayB,
-      collateralA,
-      totalCollateralA,
-      totalBorrowB
-    );
-  }
 }

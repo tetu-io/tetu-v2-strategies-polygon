@@ -14,6 +14,8 @@ import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {expect} from "chai";
+import {Misc} from "../../../scripts/utils/Misc";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 describe('IterationPlanLibTest', () => {
   const PLAN_SWAP_REPAY = 0;
@@ -84,84 +86,228 @@ describe('IterationPlanLibTest', () => {
    */
   describe("estimateSwapAmountForRepaySwapRepay", () => {
     interface IEstimateSwapAmountParams {
-      tokens: MockToken[];
-      prices: string[];
-      balanceA: string;
-      balanceB: string;
-      indexA: number;
-      indexB: number;
+      balancesAB: string[];
+      indicesAB: number[];
       propB: string;
+      amountToRepayB: string;
+      collateralA: string;
       totalCollateralA: string;
       totalBorrowB: string;
-      collateralA: string;
-      amountToRepayB: string;
+      prices: string[];
+      decimals: number[];
     }
     interface IEstimateSwapAmountResults {
-      resultSwapAmount: number;
+      amountToSwapA: number;
     }
-
-    async function callEstimateSwapAmount(p: IEstimateSwapAmountParams): Promise<IEstimateSwapAmountResults> {
-      const resultSwapAmount = await facade.estimateSwapAmountForRepaySwapRepay(
+    async function makeEstimateSwapAmount(p: IEstimateSwapAmountParams): Promise<IEstimateSwapAmountResults> {
+      const decimalsA = p.decimals[p.indicesAB[0]];
+      const decimalsB = p.decimals[p.indicesAB[1]];
+      const amountToSwapA = await facade.estimateSwapAmountForRepaySwapRepay(
         {
-          converter: converter.address,
-          tokens: p.tokens.map(x => x.address),
+          prices: [
+            parseUnits(p.prices[0], 18),
+            parseUnits(p.prices[1], 18),
+          ],
+          decs: [
+            parseUnits("1", decimalsA),
+            parseUnits("1", decimalsB),
+          ],
+          converter: Misc.ZERO_ADDRESS, // not used here
+          liquidator: MaticAddresses.TETU_LIQUIDATOR,
+          tokens: [], // not used here
           liquidationThresholds: [], // not used here
-          prices: p.prices.map(x => parseUnits(x, 18)),
-          decs: await Promise.all(p.tokens.map(async x => x.decimals())),
           balanceAdditions: [], // not used here
           planKind: 0, // not used here
           propNotUnderlying18: 0, // not used here
-          usePoolProportions: false // not used here
+          usePoolProportions: false
         },
-        parseUnits(p.balanceA, await p.tokens[p.indexA].decimals()),
-        parseUnits(p.balanceB, await p.tokens[p.indexB].decimals()),
-        p.indexA,
-        p.indexB,
+        parseUnits(p.balancesAB[0], decimalsA),
+        parseUnits(p.balancesAB[1], decimalsB),
+        p.indicesAB[0],
+        p.indicesAB[1],
         parseUnits(p.propB, 18),
-        parseUnits(p.totalCollateralA, await p.tokens[p.indexA].decimals()),
-        parseUnits(p.totalBorrowB, await p.tokens[p.indexB].decimals()),
-        parseUnits(p.collateralA, await p.tokens[p.indexA].decimals()),
-        parseUnits(p.amountToRepayB, await p.tokens[p.indexB].decimals()),
+        parseUnits(p.totalCollateralA, decimalsA),
+        parseUnits(p.totalBorrowB, decimalsB),
+        parseUnits(p.collateralA, decimalsA),
+        parseUnits(p.amountToRepayB, decimalsB),
       );
       return {
-        resultSwapAmount: +formatUnits(resultSwapAmount, await p.tokens[p.indexA].decimals())
+        amountToSwapA: +formatUnits(amountToSwapA, decimalsA)
       }
     }
 
-    describe("full swap", () => {
-      it("should return expected amount", async () => {
-        const ret = await callEstimateSwapAmount({
-          tokens: [usdc, usdt],
-          balanceA: "1000",
-          balanceB: "200",
-          indexA: 0,
-          indexB: 1,
-          prices: ["1", "1"],
-          propB: "0.5",
-          totalCollateralA: "10000",
-          totalBorrowB: "5000",
-          amountToRepayB: "200",
-          collateralA: "380"
+    describe("Same prices, same decimals, equal proportions", () => {
+      describe("Full swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["1000", "200"],
+            indicesAB: [0, 1],
+            propB: "0.5",
+
+            amountToRepayB: "200",
+            totalBorrowB: "5000",
+            totalCollateralA: "10000",
+            collateralA: "380",
+
+            decimals: [6, 6],
+            prices: ["1", "1"],
+          });
+
+          // 20230706.2.calc.xlsx
+          expect(r.amountToSwapA).eq(1380);
         });
-        expect(ret.resultSwapAmount).eq(1380);
+      });
+      describe("Partial swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["1000", "200"],
+            indicesAB: [0, 1],
+            propB: "0.5",
+
+            totalCollateralA: "600",
+            totalBorrowB: "300",
+
+            collateralA: "400",
+            amountToRepayB: "200",
+
+            decimals: [6, 6],
+            prices: ["1", "1"],
+          });
+
+          // 20230706.2.calc.xlsx
+          expect(r.amountToSwapA).eq(700);
+        });
       });
     });
-    describe("partial swap", () => {
-      it("should return expected amount", async () => {
-        const ret = await callEstimateSwapAmount({
-          tokens: [usdc, usdt],
-          balanceA: "1000",
-          balanceB: "200",
-          indexA: 0,
-          indexB: 1,
-          prices: ["1", "1"],
-          propB: "0.8",
-          totalCollateralA: "450",
-          totalBorrowB: "300",
-          amountToRepayB: "200",
-          collateralA: "300"
+    describe("Same prices, different decimals, equal proportions", () => {
+      describe("Full swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["1000", "200"],
+            indicesAB: [0, 1],
+            propB: "0.5",
+
+            amountToRepayB: "200",
+            totalBorrowB: "5000",
+            totalCollateralA: "10000",
+            collateralA: "380",
+
+            decimals: [18, 6],
+            prices: ["1", "1"],
+          });
+
+          // 20230706.2.calc.xlsx
+          expect(r.amountToSwapA).eq(1380);
         });
-        expect(ret.resultSwapAmount).approximately(1040, 1e-5);
+      });
+      describe("Partial swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["1000", "200"],
+            indicesAB: [0, 1],
+            propB: "0.5",
+
+            totalCollateralA: "600",
+            totalBorrowB: "300",
+
+            collateralA: "400",
+            amountToRepayB: "200",
+
+            decimals: [6, 18],
+            prices: ["1", "1"],
+          });
+
+          // 20230706.2.calc.xlsx
+          expect(r.amountToSwapA).eq(700);
+        });
+      });
+    });
+    describe("Different prices, same decimals, equal proportions", () => {
+      describe("Full swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["500", "400"],
+            indicesAB: [0, 1],
+            propB: "0.5",
+
+            totalCollateralA: "5000",
+            totalBorrowB: "10000",
+
+            collateralA: "190",
+            amountToRepayB: "400",
+
+            decimals: [6, 6],
+            prices: ["2", "0.5"],
+          });
+
+          // 20230706.2.calc.xlsx, balanceA + collateralA = 690
+          expect(r.amountToSwapA).eq(690);
+        });
+      });
+      describe("Partial swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["500", "400"],
+            indicesAB: [0, 1],
+            propB: "0.5",
+
+            totalCollateralA: "300",
+            totalBorrowB: "600",
+
+            collateralA: "200",
+            amountToRepayB: "400",
+
+            decimals: [6, 6],
+            prices: ["2", "0.5"],
+          });
+
+          // 20230706.2.calc.xlsx, s = 0.25, aB3 = 116.6667, aB2 = 1120 * 0.5 = 560
+          expect(r.amountToSwapA).eq(560);
+        });
+      });
+    });
+    describe("Same prices, same decimals, different proportions", () => {
+      describe("Full swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["1000", "200"],
+            indicesAB: [0, 1],
+            propB: "0.25",
+
+            totalCollateralA: "10000",
+            totalBorrowB: "5000",
+
+            collateralA: "400",
+            amountToRepayB: "200",
+
+            decimals: [6, 6],
+            prices: ["1", "1"],
+          });
+
+          // 20230706.2.calc.xlsx
+          expect(r.amountToSwapA).eq(1400);
+        });
+      });
+      describe("Partial swap", () => {
+        it("should return expected amount-to-swap", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["1000", "200"],
+            indicesAB: [0, 1],
+            propB: "0.25",
+
+            totalCollateralA: "600",
+            totalBorrowB: "300",
+
+            collateralA: "400",
+            amountToRepayB: "200",
+
+            decimals: [6, 6],
+            prices: ["1", "1"],
+          });
+
+          // 20230706.2.calc.xlsx
+          expect(r.amountToSwapA).eq(350);
+        });
       });
     });
   });
@@ -192,6 +338,7 @@ describe('IterationPlanLibTest', () => {
             { // following values are not used in this test
               tokens: [usdc.address, usdt.address],
               converter: converter.address,
+              liquidator: MaticAddresses.TETU_LIQUIDATOR,
               prices: [],
               decs: [],
               planKind: 0,
