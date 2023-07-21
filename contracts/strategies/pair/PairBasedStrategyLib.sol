@@ -8,6 +8,7 @@ import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
+/// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
 library PairBasedStrategyLib {
   //region ------------------------------------------------ Constants
   uint internal constant _ASSET_LIQUIDATION_SLIPPAGE = 300;

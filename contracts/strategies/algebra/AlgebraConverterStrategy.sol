@@ -8,6 +8,7 @@ import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "./AlgebraStrategyErrors.sol";
+import "../pair/PairBasedStrategyLogicLib.sol";
 
 
 contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
@@ -23,30 +24,17 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   //region ------------------------------------------------- Data types
 
   struct WithdrawByAggStepLocal {
-    address controller;
     ITetuConverter converter;
     address liquidator;
-    address[] tokens;
-    uint[] liquidationThresholds;
     uint oldTotalAssets;
     uint profitToCover;
     uint[] tokenAmounts;
-    uint planKind;
-    uint propNotUnderlying18;
     address tokenToSwap;
     address aggregator;
     bool useLiquidator;
     int24 newLowerTick;
     int24 newUpperTick;
     IAlgebraPool pool;
-  }
-
-  struct QuoteWithdrawByAggLocal {
-    address[] tokens;
-    uint[] liquidationThresholds;
-    uint planKind;
-    uint totalLiquidity;
-    address controller;
   }
 
   //endregion ------------------------------------------------- Data types
@@ -162,10 +150,13 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @return True if the fuse was triggered
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
+    address _controller = controller();
+    StrategyLib2.onlyOperators(_controller);
+
+    (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
-      [address(converter), address(AppLib._getLiquidator(controller()))],
+      [address(converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
@@ -180,28 +171,31 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   //region --------------------------------------------- Withdraw by iterations
 
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
-    QuoteWithdrawByAggLocal memory v;
-    v.controller = controller();
-    StrategyLib2.onlyOperators(v.controller);
+    PairBasedStrategyLogicLib.WithdrawLocal memory w;
 
-    // get tokens as following: [underlying, not-underlying]
-    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
-
-    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
+    // check operator-only, initialize v
+    PairBasedStrategyLogicLib.initWithdrawLocal(
+      w,
+      _depositorPoolAssets(),
+      baseState.asset,
+      liquidationThresholds,
+      planEntryData,
+      controller()
+    );
 
     // estimate amounts to be withdrawn from the pool
-    v.totalLiquidity = state.totalLiquidity;
-    uint[] memory amountsOut = (v.totalLiquidity == 0)
+    uint totalLiquidity = state.totalLiquidity;
+    uint[] memory amountsOut = (totalLiquidity == 0)
       ? new uint[](2)
-      : _depositorQuoteExit(v.totalLiquidity);
+      : _depositorQuoteExit(totalLiquidity);
 
     (tokenToSwap, amountToSwap) = PairBasedStrategyLib.quoteWithdrawStep(
-      [address(converter), address(AppLib._getLiquidator(v.controller))],
-      v.tokens,
-      v.liquidationThresholds,
+      [address(converter), address(AppLib._getLiquidator(w.controller))],
+      w.tokens,
+      w.liquidationThresholds,
       amountsOut,
-      v.planKind,
-      PairBasedStrategyLib._extractProp(v.planKind, planEntryData)
+      w.planKind,
+      w.propNotUnderlying18
     );
     if (amountToSwap != 0) {
       // withdrawByAggStep will execute REPAY1 - SWAP - REPAY2
@@ -220,41 +214,48 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     bytes memory planEntryData,
     uint entryToPool
   ) external returns (bool completed) {
-    // Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
+    PairBasedStrategyLogicLib.WithdrawLocal memory w;
+
+    // check operator-only, initialize v
+    PairBasedStrategyLogicLib.initWithdrawLocal(
+      w,
+      _depositorPoolAssets(),
+      baseState.asset,
+      liquidationThresholds,
+      planEntryData,
+      controller()
+    );
+
+    // Prepare to rebalance: fix price changes, call depositor exit if totalLiquidity != 0
     WithdrawByAggStepLocal memory v;
-    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
+    (v.profitToCover, v.oldTotalAssets) = _rebalanceBefore();
     v.converter = converter;
-    v.liquidator = address(AppLib._getLiquidator(v.controller));
+    v.liquidator = address(AppLib._getLiquidator(w.controller));
 
     // decode tokenToSwapAndAggregator
     v.tokenToSwap = tokenToSwapAndAggregator[0];
     v.aggregator = tokenToSwapAndAggregator[1];
     v.useLiquidator = v.aggregator == address(0);
 
-    // get tokens as following: [underlying, not-underlying]
-    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
-    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
-    v.propNotUnderlying18 = PairBasedStrategyLib._extractProp(v.planKind, planEntryData);
-
     // make withdraw iteration according to the selected plan
     completed = PairBasedStrategyLib.withdrawStep(
-      [address(converter), v.liquidator],
-      v.tokens,
-      v.liquidationThresholds,
+      [address(v.converter), v.liquidator],
+      w.tokens,
+      w.liquidationThresholds,
       v.tokenToSwap,
       amountToSwap_,
       v.aggregator,
       swapData,
       v.useLiquidator,
-      v.planKind,
-      v.propNotUnderlying18
+      w.planKind,
+      w.propNotUnderlying18
     );
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_WITH_REBALANCE) {
       // make rebalance and enter back to the pool. We won't have any swaps here
       (v.tokenAmounts,) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
         state,
-        [address(converter), v.liquidator],
+        [address(v.converter), v.liquidator],
         v.oldTotalAssets,
         v.profitToCover,
         baseState.splitter,
@@ -266,9 +267,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       v.pool = state.pool;
       // fix loss / profitToCover
       v.tokenAmounts = AlgebraConverterStrategyLogicLib.afterWithdrawStep(
-        converter,
+        v.converter,
         v.pool,
-        v.tokens,
+        w.tokens,
         v.oldTotalAssets,
         v.profitToCover,
         state.strategyProfitHolder,
@@ -298,10 +299,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   //region--------------------------------------------- INTERNAL LOGIC
 
   /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
-  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
-    controllerOut = controller();
-    StrategyLib2.onlyOperators(controllerOut);
-
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
     (, profitToCover) = _fixPriceChanges(true);
     oldTotalAssets = totalAssets() - profitToCover;
 
@@ -330,28 +328,20 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     uint[] memory tokenAmounts
   ) {
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
-
-    tokenAmounts = new uint[](2);
-    uint spentCollateral;
-
     bytes memory entryData = AlgebraConverterStrategyLogicLib.getEntryData(
       state.pool,
       state.lowerTick,
       state.upperTick,
       state.depositorSwapTokens
     );
-
-    AppLib.approveIfNeeded(state.tokenA, amount_, address(tetuConverter_));
-    (spentCollateral, tokenAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+    return PairBasedStrategyLogicLib._beforeDeposit(
       tetuConverter_,
-      entryData,
+      amount_,
       state.tokenA,
       state.tokenB,
-      amount_,
-      liquidationThresholds[state.tokenA] // amount_ is set in terms of collateral asset
+      entryData,
+      liquidationThresholds
     );
-
-    tokenAmounts[0] = amount_ - spentCollateral;
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
@@ -386,17 +376,5 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
   }
 
-  /// @return tokens [underlying, not-underlying]
-  /// @return thresholds liquidationThresholds for the {tokens}
-  function _getTokensAndThresholds() internal view returns (address[] memory tokens, uint[] memory thresholds) {
-    tokens = _depositorPoolAssets();
-    if (tokens[1] == baseState.asset) {
-      (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
-    }
-
-    thresholds = new uint[](2);
-    thresholds[0] = liquidationThresholds[tokens[0]];
-    thresholds[1] = liquidationThresholds[tokens[1]];
-  }
   //endregion--------------------------------------- INTERNAL LOGIC
 }

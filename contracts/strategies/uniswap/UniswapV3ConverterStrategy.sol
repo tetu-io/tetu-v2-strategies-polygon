@@ -9,6 +9,7 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "hardhat/console.sol";
+import "../pair/PairBasedStrategyLogicLib.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -27,31 +28,19 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   //region ------------------------------------------------- Data types
 
   struct WithdrawByAggStepLocal {
-    address controller;
     ITetuConverter converter;
     address liquidator;
-    address[] tokens;
-    uint[] liquidationThresholds;
+    address tokenToSwap;
+    address aggregator;
+    IUniswapV3Pool pool;
+    bool useLiquidator;
     uint oldTotalAssets;
     uint profitToCover;
     uint[] tokenAmounts;
-    uint planKind;
-    uint propNotUnderlying18;
-    address tokenToSwap;
-    address aggregator;
-    bool useLiquidator;
     int24 newLowerTick;
     int24 newUpperTick;
-    IUniswapV3Pool pool;
   }
 
-  struct QuoteWithdrawByAggLocal {
-    address[] tokens;
-    uint[] liquidationThresholds;
-    uint planKind;
-    uint totalLiquidity;
-    address controller;
-  }
   //endregion ------------------------------------------------- Data types
 
   //region ------------------------------------------------- INIT
@@ -139,10 +128,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function _rebalanceNoSwaps(bool checkNeedRebalance) internal returns (bool) {
-    (uint profitToCover, uint oldTotalAssets,) = _rebalanceBefore();
+    address _controller = controller();
+    StrategyLib2.onlyOperators(_controller);
+
+    (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     (uint[] memory tokenAmounts, bool fuseEnabledOut) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
-      [address(converter), address(AppLib._getLiquidator(controller()))],
+      [address(converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
@@ -158,28 +150,31 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
-    QuoteWithdrawByAggLocal memory v;
-    v.controller = controller();
-    StrategyLib2.onlyOperators(v.controller);
+    PairBasedStrategyLogicLib.WithdrawLocal memory w;
 
-    // get tokens as following: [underlying, not-underlying]
-    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
-
-    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
+    // check operator-only, initialize v
+    PairBasedStrategyLogicLib.initWithdrawLocal(
+      w,
+      _depositorPoolAssets(),
+      baseState.asset,
+      liquidationThresholds,
+      planEntryData,
+      controller()
+    );
 
     // estimate amounts to be withdrawn from the pool
-    v.totalLiquidity = state.totalLiquidity;
-    uint[] memory amountsOut = (v.totalLiquidity == 0)
+    uint totalLiquidity = state.totalLiquidity;
+    uint[] memory amountsOut = (totalLiquidity == 0)
       ? new uint[](2)
-      : _depositorQuoteExit(v.totalLiquidity);
+      : _depositorQuoteExit(totalLiquidity);
 
     (tokenToSwap, amountToSwap) = PairBasedStrategyLib.quoteWithdrawStep(
-      [address(converter), address(AppLib._getLiquidator(v.controller))],
-      v.tokens,
-      v.liquidationThresholds,
+      [address(converter), address(AppLib._getLiquidator(w.controller))],
+      w.tokens,
+      w.liquidationThresholds,
       amountsOut,
-      v.planKind,
-      PairBasedStrategyLib._extractProp(v.planKind, planEntryData)
+      w.planKind,
+      w.propNotUnderlying18
     );
     if (amountToSwap != 0) {
       // withdrawByAggStep will execute REPAY1 - SWAP - REPAY2
@@ -212,11 +207,23 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     bytes memory planEntryData,
     uint entryToPool
   ) external returns (bool completed) {
-    // Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
+    PairBasedStrategyLogicLib.WithdrawLocal memory w;
+
+    // check operator-only, initialize v
+    PairBasedStrategyLogicLib.initWithdrawLocal(
+      w,
+      _depositorPoolAssets(),
+      baseState.asset,
+      liquidationThresholds,
+      planEntryData,
+      controller()
+    );
+
+    // Prepare to rebalance: fix price changes, call depositor exit if totalLiquidity != 0
     WithdrawByAggStepLocal memory v;
-    (v.profitToCover, v.oldTotalAssets, v.controller) = _rebalanceBefore();
+    (v.profitToCover, v.oldTotalAssets) = _rebalanceBefore();
     v.converter = converter;
-    v.liquidator = address(AppLib._getLiquidator(v.controller));
+    v.liquidator = address(AppLib._getLiquidator(w.controller));
 
     // decode tokenToSwapAndAggregator
     v.tokenToSwap = tokenToSwapAndAggregator[0];
@@ -229,44 +236,39 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     console.log("withdrawByAggStep.useLiquidator", v.useLiquidator);
     console.log("withdrawByAggStep.swapData", swapData.length);
 
-    // get tokens as following: [underlying, not-underlying]
-    (v.tokens, v.liquidationThresholds) = _getTokensAndThresholds();
-    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
-    v.propNotUnderlying18 = PairBasedStrategyLib._extractProp(v.planKind, planEntryData);
-
     // make withdraw iteration according to the selected plan
     completed = PairBasedStrategyLib.withdrawStep(
-      [address(converter), v.liquidator],
-      v.tokens,
-      v.liquidationThresholds,
+      [address(v.converter), v.liquidator],
+      w.tokens,
+      w.liquidationThresholds,
       v.tokenToSwap,
       amountToSwap_,
       v.aggregator,
       swapData,
       v.useLiquidator,
-      v.planKind,
-      v.propNotUnderlying18
+      w.planKind,
+      w.propNotUnderlying18
     );
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_WITH_REBALANCE) {
       // make rebalance and enter back to the pool. We won't have any swaps here
       (v.tokenAmounts,) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
         state,
-        [address(converter), v.liquidator],
+        [address(v.converter), v.liquidator],
         v.oldTotalAssets,
         v.profitToCover,
         baseState.splitter,
         false,
-        liquidationThresholds
+        liquidationThresholds // todo pass array, not mapping
       );
       _rebalanceAfter(v.tokenAmounts);
     } else {
       v.pool = state.pool;
       // fix loss / profitToCover
       v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
-        converter,
+        v.converter,
         v.pool,
-        v.tokens,
+        w.tokens,
         v.oldTotalAssets,
         v.profitToCover,
         state.strategyProfitHolder,
@@ -312,28 +314,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint[] memory tokenAmounts
   ) {
     require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
-
-    tokenAmounts = new uint[](2);
-    uint spentCollateral;
-
     bytes memory entryData = UniswapV3ConverterStrategyLogicLib.getEntryData(
       state.pool,
       state.lowerTick,
       state.upperTick,
       state.depositorSwapTokens
     );
-
-    AppLib.approveIfNeeded(state.tokenA, amount_, address(tetuConverter_));
-    (spentCollateral, tokenAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+    return PairBasedStrategyLogicLib._beforeDeposit(
       tetuConverter_,
-      entryData,
+      amount_,
       state.tokenA,
       state.tokenB,
-      amount_,
-      liquidationThresholds[state.tokenA] // amount_ is set in terms of collateral asset
+      entryData,
+      liquidationThresholds
     );
-
-    tokenAmounts[0] = amount_ - spentCollateral;
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
@@ -370,24 +364,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
   }
 
-  /// @return tokens [underlying, not-underlying]
-  /// @return thresholds liquidationThresholds for the {tokens}
-  function _getTokensAndThresholds() internal view returns (address[] memory tokens, uint[] memory thresholds) {
-    tokens = _depositorPoolAssets();
-    if (tokens[1] == baseState.asset) {
-      (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
-    }
-
-    thresholds = new uint[](2);
-    thresholds[0] = liquidationThresholds[tokens[0]];
-    thresholds[1] = liquidationThresholds[tokens[1]];
-  }
-
-  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit if totalLiquidity != 0
-  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets, address controllerOut) {
-    controllerOut = controller();
-    StrategyLib2.onlyOperators(controllerOut);
-
+  /// @notice Prepare to rebalance: fix price changes, call depositor exit if totalLiquidity != 0
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
     (, profitToCover) = _fixPriceChanges(true);
     oldTotalAssets = totalAssets() - profitToCover;
 
