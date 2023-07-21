@@ -484,5 +484,20 @@ library PairBasedStrategyLib {
   function _checkSwapRouter(address router) internal pure {
     require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
   }
+
+  /// @notice Extract propNotUnderlying18 from {planEntryData} of the given {planKind}
+  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns(uint propNotUnderlying18) {
+    if (planKind == IterationPlanLib.PLAN_SWAP_REPAY || planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
+      // custom proportions
+      (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
+      require(propNotUnderlying18 <= 1e18, AppErrors.WRONG_VALUE); // 0 is allowed
+    } else if (planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
+      // the proportions should be taken from the pool
+      // new value of the proportions should also be read from the pool after each swap
+      propNotUnderlying18 = type(uint).max;
+    }
+
+    return propNotUnderlying18;
+  }
   //endregion ------------------------------------------ Utils
 }

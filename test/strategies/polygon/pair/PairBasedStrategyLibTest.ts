@@ -1,6 +1,6 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
-import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {IBorrowParamsNum, ILiquidationParams, IQuoteRepayParams, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
 import {
   setupMockedQuoteRepay,
@@ -3128,6 +3128,25 @@ describe('PairBasedStrategyLibTest', () => {
           })).revertedWith("TS-29 opposite debt exists"); // OPPOSITE_DEBT_EXISTS
         });
       });
+    });
+  });
+
+  describe("_extractProp", () => {
+    it("should return custom propNotUnderlying18 for PLAN_SWAP_REPAY", async () => {
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, 777]);
+      expect((await facade._extractProp(PLAN_SWAP_REPAY, entryData)).toNumber()).eq(777);
+    });
+    it("should return custom propNotUnderlying18 for PLAN_SWAP_ONLY", async () => {
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY, 777]);
+      expect((await facade._extractProp(PLAN_SWAP_ONLY, entryData)).toNumber()).eq(777);
+    });
+    it("should return max uint for PLAN_REPAY_SWAP_REPAY", async () => {
+      const entryData = defaultAbiCoder.encode(['uint256'], [PLAN_REPAY_SWAP_REPAY]);
+      expect(await facade._extractProp(PLAN_REPAY_SWAP_REPAY, entryData)).eq(Misc.MAX_UINT);
+    });
+    it("should return zero for unknown PLAN_XXX", async () => {
+      const entryData = defaultAbiCoder.encode(['uint256'], [555]);
+      expect(await facade._extractProp(555, entryData)).eq(0);
     });
   });
 //endregion Unit tests

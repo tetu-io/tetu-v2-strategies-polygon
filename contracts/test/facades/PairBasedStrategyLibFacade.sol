@@ -107,4 +107,8 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     return ret;
   }
   //endregion ---------------------------------------------- IPoolProportionsProvider implementation
+
+  function _extractProp(uint planKind, bytes memory planEntryData) external pure returns(uint propNotUnderlying18) {
+    return PairBasedStrategyLib._extractProp(planKind, planEntryData);
+  }
 }
