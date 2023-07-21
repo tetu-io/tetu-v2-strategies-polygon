@@ -338,6 +338,8 @@ library PairBasedStrategyLib {
     (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
     require(needToRepay == 0, AppErrors.OPPOSITE_DEBT_EXISTS);
 
+    console.log("borrowToProportions.balance.collateral", IERC20(p.tokens[indexCollateral]).balanceOf(address(this)));
+    console.log("borrowToProportions.balance.borrow", IERC20(p.tokens[indexBorrow]).balanceOf(address(this)));
     BorrowLib.openPosition(
       cac,
       BorrowLib.PricesDecs({

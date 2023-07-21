@@ -2251,6 +2251,17 @@ describe('PairBasedStrategyLibTest', () => {
           });
 
           async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+            /**
+             * Initial balances: 500 USDC, 500 USDT
+             * repay 1: pay 500 USDT, receive 1001 USDC
+             * balances: 1001 USDC, 0 USDT
+             * swap: 1501 USDC = > 1502 USDT
+             * balances: 0 USDC, 1502 USDT
+             * repay 2 (partial): pay 400 USDT, receive 800 USDC
+             * balances: 800 USDC, 1102 USDT
+             * borrow using entryKind 1: 302 USDT => 120.8 USDT + 181.2 USDT, 181.2 USDT => 120.8 USDC
+             * balances: 920.8 USDC, 920.8 USDT
+             */
             return makeWithdrawStep({
               tokenX: usdc,
               tokenY: usdt,
@@ -2259,7 +2270,7 @@ describe('PairBasedStrategyLibTest', () => {
               tokenToSwap: usdc,
 
               planKind: PLAN_REPAY_SWAP_REPAY,
-              propNotUnderlying18: "0",
+              propNotUnderlying18: ["0.5", "0.5"],
 
               liquidationThresholds: ["0", "0"],
               balanceX: "500",
@@ -2275,10 +2286,11 @@ describe('PairBasedStrategyLibTest', () => {
               }, {
                 collateralAsset: usdc,
                 borrowAsset: usdt,
-                totalCollateralAmountOut: "4000",
-                totalDebtAmountOut: "2000",
-                collateralAmountOut: "3004",
-                amountRepay: "1502",
+                totalCollateralAmountOut: "800",
+                totalDebtAmountOut: "400",
+                collateralAmountOut: "800",
+                amountRepay: "400",
+
                 addToQueue: true
               }],
               quoteRepays: [{
@@ -2286,6 +2298,20 @@ describe('PairBasedStrategyLibTest', () => {
                 borrowAsset: usdt,
                 amountRepay: "500",
                 collateralAmountOut: "1001"
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "400",
+                collateralAmountOut: "800",
+              }],
+              borrows: [{
+                converter: converter.address,
+                collateralAsset: usdt,
+                borrowAsset: usdc,
+                collateralAmount: "302",
+                maxTargetAmount: "201.333333",
+                collateralAmountOut: "181.2",
+                borrowAmountOut: "120.799999",
               }],
               liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "1501", amountOut: "1502"}]
             });
@@ -2298,7 +2324,7 @@ describe('PairBasedStrategyLibTest', () => {
 
           it("should set expected balances", async () => {
             const ret = await loadFixture(makeWithdrawStepTest);
-            expect([ret.balanceX, ret.balanceY].join()).eq([3004, 0].join());
+            expect([ret.balanceX, ret.balanceY].join()).eq(["920.799999", "920.8"].join());
           });
         });
       });

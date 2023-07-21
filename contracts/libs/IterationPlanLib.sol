@@ -409,6 +409,9 @@ library IterationPlanLib {
       // we need to make partial swap and receive assets in right proportions in result
       // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
       v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
+      console.log("(v.y * v.bA1 - v.x * v.bB1)", v.bA1 * (v.y * v.bA1 - v.x * v.bB1) );
+      console.log("v.bA1 * (v.y * v.bA1 - v.x * v.bB1)", (v.y * v.bA1 - v.x * v.bB1));
+      console.log("(v.bA1 * (v.x * v.s / 1e18 + v.y))", (v.bA1 * (v.x * v.s / 1e18 + v.y)));
       console.log("v.aA2", v.aA2);
     }
     console.log("result", v.aA2 * p.decs[indexA] / p.prices[indexA]);

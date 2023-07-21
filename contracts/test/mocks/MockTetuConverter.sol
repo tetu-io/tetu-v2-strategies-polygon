@@ -364,11 +364,15 @@ contract MockTetuConverter is ITetuConverter {
       // clear debt info
       key = keccak256(abi.encodePacked(receiver_, collateralAsset_, borrowAsset_, true));
       getDebtAmountCurrentParams[key] = getDebtAmountCurrentParamsQueue[key];
+      delete getDebtAmountCurrentParamsQueue[key];
       getDebtAmountStoredParams[key] = getDebtAmountStoredParamsQueue[key];
+      delete getDebtAmountStoredParamsQueue[key];
 
       key = keccak256(abi.encodePacked(receiver_, collateralAsset_, borrowAsset_, false));
       getDebtAmountCurrentParams[key] = getDebtAmountCurrentParamsQueue[key];
+      delete getDebtAmountCurrentParamsQueue[key];
       getDebtAmountStoredParams[key] = getDebtAmountStoredParamsQueue[key];
+      delete getDebtAmountStoredParamsQueue[key];
 
       return (
         p.collateralAmountOut,
