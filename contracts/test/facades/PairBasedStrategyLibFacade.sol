@@ -111,4 +111,30 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
   function _extractProp(uint planKind, bytes memory planEntryData) external pure returns(uint propNotUnderlying18) {
     return PairBasedStrategyLib._extractProp(planKind, planEntryData);
   }
+
+  //region ------------------------------------------------ Fuse functions
+  PairBasedStrategyLib.FuseStateParams internal _fuse;
+  function setUpFuse(uint status, uint[4] memory thresholds) external {
+    _fuse.status = PairBasedStrategyLib.FuseStatus(status);
+    _fuse.thresholds = thresholds;
+  }
+  function getFuseData() external view returns (uint status, uint[4] memory thresholds) {
+    return (uint(_fuse.status), _fuse.thresholds);
+  }
+
+  function setFuseStatus(uint status) external {
+    PairBasedStrategyLib.setFuseStatus(_fuse, PairBasedStrategyLib.FuseStatus(status));
+  }
+
+  function setFuseThresholds(uint[4] memory values) external {
+    PairBasedStrategyLib.setFuseThresholds(_fuse, values);
+  }
+
+  function needChangeFuseStatus(PairBasedStrategyLib.FuseStateParams memory fuse_, uint price) external view returns (
+    bool needToChange,
+    PairBasedStrategyLib.FuseStatus status
+  ) {
+    return PairBasedStrategyLib.needChangeFuseStatus(fuse_, price);
+  }
+  //endregion ------------------------------------------------ Fuse functions
 }

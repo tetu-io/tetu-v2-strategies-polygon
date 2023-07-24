@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -43,8 +44,8 @@ library PairBasedStrategyLib {
   ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
   uint public constant FUSE_IDX_LOWER_LIMIT_ON = 0;
   uint public constant FUSE_IDX_LOWER_LIMIT_OFF = 1;
-  uint public constant FUSE_IDX_UPPER_LIMIT_ON = 0;
-  uint public constant FUSE_IDX_UPPER_LIMIT_OFF = 1;
+  uint public constant FUSE_IDX_UPPER_LIMIT_ON = 2;
+  uint public constant FUSE_IDX_UPPER_LIMIT_OFF = 3;
 
 
   /// @notice 1inch router V5
@@ -99,7 +100,7 @@ library PairBasedStrategyLib {
 
   struct FuseStateParams {
     FuseStatus status;
-    /// @notice see PairBasedStrategyLib.FUSE_IDX_XXX
+    /// @notice Price thresholds, see PairBasedStrategyLib.FUSE_IDX_XXX
     uint[4] thresholds;
   }
   //endregion ------------------------------------------------ Data types
@@ -225,6 +226,22 @@ library PairBasedStrategyLib {
   }
 
   function setFuseThresholds(FuseStateParams storage state, uint[4] memory values) external {
+    require(
+      (values[FUSE_IDX_LOWER_LIMIT_ON] == 0 && values[FUSE_IDX_LOWER_LIMIT_OFF] == 0)
+      || (values[FUSE_IDX_LOWER_LIMIT_ON] <= values[FUSE_IDX_LOWER_LIMIT_OFF]),
+      AppErrors.INVALID_VALUE
+    );
+    require(
+      (values[FUSE_IDX_UPPER_LIMIT_ON] == 0 && values[FUSE_IDX_UPPER_LIMIT_OFF] == 0)
+      || (values[FUSE_IDX_UPPER_LIMIT_ON] >= values[FUSE_IDX_UPPER_LIMIT_OFF]),
+      AppErrors.INVALID_VALUE
+    );
+    if (values[FUSE_IDX_LOWER_LIMIT_ON] != 0 && values[FUSE_IDX_UPPER_LIMIT_ON] != 0) {
+      require(
+        values[FUSE_IDX_UPPER_LIMIT_ON] > values[FUSE_IDX_LOWER_LIMIT_ON],
+        AppErrors.INVALID_VALUE
+      );
+    }
     state.thresholds = values;
     emit NewFuseThresholds(values);
   }
@@ -241,38 +258,56 @@ library PairBasedStrategyLib {
     bool needToChange,
     FuseStatus status
   ) {
-    if (fuse.status == FuseStatus.FUSE_OFF_1) {
-      // currently fuse is OFF
-      if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
-        needToChange = true;
-        status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
-      } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
-        needToChange = true;
-        status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
-      }
-    } else {
-      if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2 || fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_UNDERLYING_4) {
-        // currently fuse is triggered ON by lower limit
-        if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+    console.log("needChangeFuseStatus.1", uint(fuse.status));
+    if (fuse.status != FuseStatus.FUSE_DISABLED_0) {
+      console.log("needChangeFuseStatus.2");
+      if (fuse.status == FuseStatus.FUSE_OFF_1) {
+        console.log("needChangeFuseStatus.3");
+        // currently fuse is OFF
+        if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
+          console.log("needChangeFuseStatus.4");
           needToChange = true;
-          if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
-            status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
-          } else {
-            status = FuseStatus.FUSE_OFF_1;
-          }
+          status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
+        } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+          console.log("needChangeFuseStatus.5");
+          needToChange = true;
+          status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
         }
       } else {
-        // currently fuse is triggered ON by upper limit
-        if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
-          needToChange = true;
-          if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
-            status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
-          } else {
-            status = FuseStatus.FUSE_OFF_1;
+        console.log("needChangeFuseStatus.6");
+        if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2 || fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_UNDERLYING_4) {
+          console.log("needChangeFuseStatus.7");
+          // currently fuse is triggered ON by lower limit
+          if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+            console.log("needChangeFuseStatus.8");
+            needToChange = true;
+            if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+              console.log("needChangeFuseStatus.9");
+              status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
+            } else {
+              console.log("needChangeFuseStatus.10");
+              status = FuseStatus.FUSE_OFF_1;
+            }
+          }
+        } else {
+          console.log("needChangeFuseStatus.11");
+          // currently fuse is triggered ON by upper limit
+          if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
+            console.log("needChangeFuseStatus.12");
+            needToChange = true;
+            if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+              console.log("needChangeFuseStatus.13");
+              status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
+            } else {
+              console.log("needChangeFuseStatus.14");
+              status = FuseStatus.FUSE_OFF_1;
+            }
           }
         }
       }
     }
+    console.log("needChangeFuseStatus.15.needToChange", needToChange);
+    console.log("needChangeFuseStatus.15.status", uint(needToChange ? status : fuse.status));
 
     return (needToChange, needToChange ? status : fuse.status);
   }
