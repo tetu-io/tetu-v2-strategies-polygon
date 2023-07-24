@@ -78,17 +78,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   //region --------------------------------------------- OPERATOR ACTIONS
 
-  /// @notice Disable fuse for the strategy.
-  function disableFuse() external {
+  /// @notice Manually set status of the fuse
+  /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
+  function setFuseStatus(uint status) external {
     StrategyLib2.onlyOperators(controller());
-    UniswapV3ConverterStrategyLogicLib.disableFuse(state, converter);
+    PairBasedStrategyLib.setFuseStatus(state.fuse, PairBasedStrategyLib.FuseStatus(status));
   }
 
-  /// @notice Set the fuse threshold for the strategy.
-  /// @param newFuseThreshold The new fuse threshold value.
-  function setFuseThreshold(uint newFuseThreshold) external {
+  /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  ///         Example: [0.9, 0.92, 1.08, 1.1]
+  ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.
+  ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
+  function setFuseThresholds(uint[4] memory values) external {
     StrategyLib2.onlyOperators(controller());
-    UniswapV3ConverterStrategyLogicLib.newFuseThreshold(state, newFuseThreshold);
+    PairBasedStrategyLib.setFuseThresholds(state.fuse, values);
   }
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
@@ -109,7 +112,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
     return UniswapV3ConverterStrategyLogicLib.needRebalance(
-      state.isFuseTriggered,
+      state.fuse.status,
       state.pool,
       state.lowerTick,
       state.upperTick,
@@ -121,18 +124,17 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   //region--------------------------------------------- REBALANCE
   /// @notice Rebalance using borrow/repay only, no swaps
-  /// @return True if the fuse was triggered
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
-  function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
-    return _rebalanceNoSwaps(checkNeedRebalance);
+  function rebalanceNoSwaps(bool checkNeedRebalance) external {
+    _rebalanceNoSwaps(checkNeedRebalance);
   }
 
-  function _rebalanceNoSwaps(bool checkNeedRebalance) internal returns (bool) {
+  function _rebalanceNoSwaps(bool checkNeedRebalance) internal {
     address _controller = controller();
     StrategyLib2.onlyOperators(_controller);
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
-    (uint[] memory tokenAmounts, bool fuseEnabledOut) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
+    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
       [address(converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
@@ -142,7 +144,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
-    return fuseEnabledOut;
   }
   //endregion--------------------------------------------- REBALANCE
 
@@ -252,7 +253,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_WITH_REBALANCE) {
       // make rebalance and enter back to the pool. We won't have any swaps here
-      (v.tokenAmounts,) = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
+      v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
         state,
         [address(v.converter), v.liquidator],
         v.oldTotalAssets,
@@ -350,7 +351,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    if (state.isFuseTriggered) {
+    if (PairBasedStrategyLib.isFuseTriggeredOn(state.fuse.status)) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
       emit OnDepositorEnter(tokenAmounts, tokenAmounts);

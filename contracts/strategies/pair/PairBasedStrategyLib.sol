@@ -32,6 +32,21 @@ library PairBasedStrategyLib {
   /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
   uint public constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
 
+  /// @notice Fuse thresholds are set as array: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  ///         If the price falls below LOWER_LIMIT_ON the fuse is turned ON
+  ///         When the prices raises back and reaches LOWER_LIMIT_OFF, the fuse is turned OFF
+  ///         In the same way, if the price raises above UPPER_LIMIT_ON the fuse is turned ON
+  ///         When the prices falls back and reaches UPPER_LIMIT_OFF, the fuse is turned OFF
+  ///
+  ///         Example: [0.9, 0.92, 1.08, 1.1]
+  ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.
+  ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
+  uint public constant FUSE_IDX_LOWER_LIMIT_ON = 0;
+  uint public constant FUSE_IDX_LOWER_LIMIT_OFF = 1;
+  uint public constant FUSE_IDX_UPPER_LIMIT_ON = 0;
+  uint public constant FUSE_IDX_UPPER_LIMIT_OFF = 1;
+
+
   /// @notice 1inch router V5
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582;
   /// @notice OpenOceanExchangeProxy
@@ -41,6 +56,26 @@ library PairBasedStrategyLib {
   //endregion ------------------------------------------------ Constants
 
   //region ------------------------------------------------ Data types
+  /// @notice The fuse is triggered when the price rises above or falls below the limit 1.
+  ///         If the fuse was triggered, all assets are withdrawn from the pool on the strategy balance.
+  ///         Then all debts should be closed and all assets should be converted to underlying.
+  ///         The fuse is turned off automatically when the price falls below or rises above the limit 2
+  ///         and all assets are deposited back to the pool.
+  enum FuseStatus {
+    /// @notice Fuse is not used at all
+    FUSE_DISABLED_0,
+    /// @notice Fuse is not triggered, assets are deposited to the pool
+    FUSE_OFF_1,
+    /// @notice Fuse was triggered by lower limit, assets was withdrawn from the pool, but active debts can exist
+    FUSE_ON_LOWER_LIMIT_2,
+    /// @notice Fuse was triggered by upper limit, assets was withdrawn from the pool, but active debts can exist
+    FUSE_ON_UPPER_LIMIT_3,
+    /// @notice Fuse was triggered by lower limit, all debts were closed and assets are converted to underlying
+    FUSE_ON_LOWER_LIMIT_UNDERLYING_4,
+    /// @notice Fuse was triggered by upper limit, all debts were closed and assets are converted to underlying
+    FUSE_ON_UPPER_LIMIT_UNDERLYING_5
+  }
+
   struct SwapByAggParams {
     bool useLiquidator;
     address tokenToSwap;
@@ -61,9 +96,20 @@ library PairBasedStrategyLib {
     uint alpha;
     int b;
   }
+
+  struct FuseStateParams {
+    FuseStatus status;
+    /// @notice see PairBasedStrategyLib.FUSE_IDX_XXX
+    uint[4] thresholds;
+  }
   //endregion ------------------------------------------------ Data types
 
-  //region ------------------------------------------------ External functions
+  //region ------------------------------------------------ Events
+  event FuseStatusChanged(uint fuseStatus);
+  event NewFuseThresholds(uint[4] newFuseThresholds);
+  //endregion ------------------------------------------------ Events
+
+  //region ------------------------------------------------ External withdraw functions
 
   /// @notice Get info for the swap that will be made on the next call of {withdrawStep}
   /// @param converterLiquidator_ [TetuConverter, TetuLiquidator]
@@ -170,7 +216,67 @@ library PairBasedStrategyLib {
     });
     return _withdrawStep(p, aggParams);
   }
-  //endregion ------------------------------------------------ External functions
+  //endregion ------------------------------------------------ External withdraw functions
+
+  //region ------------------------------------------------ Fuse functions
+  function setFuseStatus(FuseStateParams storage fuse, FuseStatus status) external {
+    fuse.status = status;
+    emit FuseStatusChanged(uint(status));
+  }
+
+  function setFuseThresholds(FuseStateParams storage state, uint[4] memory values) external {
+    state.thresholds = values;
+    emit NewFuseThresholds(values);
+  }
+
+  function isFuseTriggeredOn(PairBasedStrategyLib.FuseStatus fuseStatus) internal pure returns (bool) {
+    return uint(fuseStatus) > uint(PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
+  }
+
+  /// @notice Check if the fuse should be turned ON/OFF
+  /// @param price Current price
+  /// @return needToChange A boolean indicating if the fuse status should be changed
+  /// @return status Exist fuse status or new fuse status (if needToChange is true)
+  function needChangeFuseStatus(FuseStateParams memory fuse, uint price) internal view returns (
+    bool needToChange,
+    FuseStatus status
+  ) {
+    if (fuse.status == FuseStatus.FUSE_OFF_1) {
+      // currently fuse is OFF
+      if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
+        needToChange = true;
+        status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
+      } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+        needToChange = true;
+        status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
+      }
+    } else {
+      if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2 || fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_UNDERLYING_4) {
+        // currently fuse is triggered ON by lower limit
+        if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+          needToChange = true;
+          if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+            status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
+          } else {
+            status = FuseStatus.FUSE_OFF_1;
+          }
+        }
+      } else {
+        // currently fuse is triggered ON by upper limit
+        if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
+          needToChange = true;
+          if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+            status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
+          } else {
+            status = FuseStatus.FUSE_OFF_1;
+          }
+        }
+      }
+    }
+
+    return (needToChange, needToChange ? status : fuse.status);
+  }
+  //endregion ------------------------------------------------ Fuse functions
 
   //region ------------------------------------------------ Internal helper functions
   /// @notice Quote amount of the next swap if any.

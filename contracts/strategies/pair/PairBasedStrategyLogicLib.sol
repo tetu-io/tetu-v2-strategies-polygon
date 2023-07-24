@@ -51,27 +51,27 @@ library PairBasedStrategyLogicLib {
   /// @param tokens Result of _depositorPoolAssets(). This array is changed in place and returned as {tokensOut}
   /// @param asset underlying
   function initWithdrawLocal(
-    WithdrawLocal memory v,
+    WithdrawLocal memory dest,
     address[] memory tokens,
     address asset,
     mapping(address => uint) storage liquidationThresholds,
     bytes memory planEntryData,
     address controller
-  ) internal {
-    v.controller = controller;
-    StrategyLib2.onlyOperators(v.controller);
+  ) internal view {
+    dest.controller = controller;
+    StrategyLib2.onlyOperators(dest.controller);
 
-    v.planKind = IterationPlanLib.getEntryKind(planEntryData);
-    v.propNotUnderlying18 = PairBasedStrategyLib._extractProp(v.planKind, planEntryData);
+    dest.planKind = IterationPlanLib.getEntryKind(planEntryData);
+    dest.propNotUnderlying18 = PairBasedStrategyLib._extractProp(dest.planKind, planEntryData);
 
     if (tokens[1] == asset) {
       (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
     }
 
-    v.tokens = tokens;
+    dest.tokens = tokens;
 
-    v.liquidationThresholds = new uint[](2);
-    v.liquidationThresholds[0] = liquidationThresholds[tokens[0]];
-    v.liquidationThresholds[1] = liquidationThresholds[tokens[1]];
+    dest.liquidationThresholds = new uint[](2);
+    dest.liquidationThresholds[0] = liquidationThresholds[tokens[0]];
+    dest.liquidationThresholds[1] = liquidationThresholds[tokens[1]];
   }
 }

@@ -142,9 +142,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   //region--------------------------------------------- REBALANCE
 
   /// @notice Rebalance using borrow/repay only, no swaps
-  /// @return True if the fuse was triggered
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
-  function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool) {
+  function rebalanceNoSwaps(bool checkNeedRebalance) external {
     address _controller = controller();
     StrategyLib2.onlyOperators(_controller);
 
@@ -159,7 +158,6 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
-    return fuseEnabledOut;
   }
   //endregion--------------------------------------------- REBALANCE
 

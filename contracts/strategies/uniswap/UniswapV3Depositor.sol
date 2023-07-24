@@ -55,8 +55,8 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
     upperTick = state.upperTick;
     rebalanceTickRange = state.rebalanceTickRange;
     totalLiquidity = state.totalLiquidity;
-    isFuseTriggered = state.isFuseTriggered;
-    fuseThreshold = state.fuseThreshold;
+    isFuseTriggered = false; // todo remove state.isFuseTriggered;
+    fuseThreshold = 0; // todo remove state.fuseThreshold;
 
     rebalanceResults = new uint[](3);
     rebalanceResults[0] = IERC20(tokenA).balanceOf(state.strategyProfitHolder);

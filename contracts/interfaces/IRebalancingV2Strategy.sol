@@ -6,8 +6,7 @@ interface IRebalancingV2Strategy {
 
     /// @notice Rebalance using borrow/repay only, no swaps
     /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
-    /// @return True if the fuse was triggered
-    function rebalanceNoSwaps(bool checkNeedRebalance) external returns (bool);
+    function rebalanceNoSwaps(bool checkNeedRebalance) external;
 
     /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
     function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap);
