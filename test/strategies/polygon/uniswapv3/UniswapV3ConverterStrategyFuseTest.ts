@@ -12,11 +12,18 @@ import {
   TetuVaultV2,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-  UniswapV3Lib, ISwapper, IERC20, ISwapper__factory,
+  UniswapV3Lib,
+  ISwapper,
+  IERC20,
+  ISwapper__factory,
+  BalancerBoostedStrategy,
+  ControllerV2,
+  ControllerV2__factory,
+  BalancerBoostedStrategy__factory,
 } from "../../../../typechain";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {parseUnits} from "ethers/lib/utils";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -27,6 +34,7 @@ import {UniversalUtils} from "../../../UniversalUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
+import {expect} from "chai";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -48,7 +56,7 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
     return;
   }
 //region Constants
-  const DEFAULT_FUSE_THRESHOLDS = ["0.9995", "0.9997", "1.0005", "1.0003"];
+  const DEFAULT_FUSE_THRESHOLDS = ["0.9996", "0.9998", "1.0003", "1.0001"];
 
   const FUSE_DISABLED_0 = 0;
   const FUSE_OFF_1 = 1;
@@ -114,6 +122,12 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
             parseUnits(DEFAULT_FUSE_THRESHOLDS[1], 18),
             parseUnits(DEFAULT_FUSE_THRESHOLDS[2], 18),
             parseUnits(DEFAULT_FUSE_THRESHOLDS[3], 18)
+          ],
+          [
+            parseUnits(DEFAULT_FUSE_THRESHOLDS[0], 18),
+            parseUnits(DEFAULT_FUSE_THRESHOLDS[1], 18),
+            parseUnits(DEFAULT_FUSE_THRESHOLDS[2], 18),
+            parseUnits(DEFAULT_FUSE_THRESHOLDS[3], 18)
           ]
         );
 
@@ -132,7 +146,8 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
     await ConverterUtils.whitelist([strategy.address]);
     await vault.connect(gov).setWithdrawRequestBlocks(0)
 
-    await ConverterUtils.disableAaveV2(signer)
+    await ConverterUtils.disableAaveV2(signer);
+    await ConverterUtils.disableDForce(signer); // todo
 
     const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
     await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
@@ -191,19 +206,29 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
 
 
 //region Utils
-  interface ICycleParams {
+  interface IPriceFuseStatus {
+    price: number;
+    fuseStatus: number;
+  }
+
+  interface IMovePriceParams {
     pathOut: string;
-    countRebalances: number;
-    movePricesUp: boolean;
+    maxCountRebalances: number;
+    /** up-down OR down-up */
+    movePricesUpDown: boolean;
   }
 
-  interface IPrepareOverCollateralResults {
+  interface IMovePriceResults {
     states: IStateNum[];
+    rebalanceFuseOn?: IPriceFuseStatus;
+    rebalanceFuseOff?: IPriceFuseStatus;
   }
 
-  async function movePriceUpDown(p: ICycleParams): Promise<IPrepareOverCollateralResults> {
+  async function movePriceUpDown(p: IMovePriceParams): Promise<IMovePriceResults> {
     const states: IStateNum[] = [];
     const pathOut = p.pathOut;
+    let rebalanceFuseOn: IPriceFuseStatus | undefined;
+    let rebalanceFuseOff: IPriceFuseStatus | undefined;
 
     console.log('deposit...');
     await asset.approve(vault.address, Misc.MAX_UINT);
@@ -213,7 +238,7 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
     const swapAmounts: BigNumber[] = [];
 
     const state = await strategy.getState();
-    for (let i = 0; i < p.countRebalances; ++i) {
+    for (let i = 0; i < p.maxCountRebalances; ++i) {
       console.log(`Swap and rebalance. Step ${i}`);
       const amounts = await UniswapV3LiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.UNISWAPV3_USDC_USDT_100);
       const priceB = await lib.getPrice(MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDT_TOKEN);
@@ -221,23 +246,32 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
       swapAmount = swapAmount.add(swapAmount.div(100));
       swapAmounts.push(swapAmount);
 
-      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
-      states.push(await StateUtilsNum.getState(signer, signer, strategy, vault, `p${i}`));
+      if (p.movePricesUpDown) {
+        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+      } else {
+        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+      }
+      states.push(await StateUtilsNum.getState(signer, signer, strategy, vault, `fw${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
-      if (!(await strategy.needRebalance())) {
-        console.log('Not need rebalance... continue');
-      } else {
-        await strategy.rebalanceNoSwaps(true);
+      if ((await strategy.needRebalance())) {
+        await strategy.rebalanceNoSwaps(true, { gasLimit: 9_000_000 });
         const stateAfterRebalance = await StateUtilsNum.getState(signer, signer, strategy, vault, `r${i}`);
         states.push(stateAfterRebalance);
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-        if (stateAfterRebalance.fuseStatus === FUSE_ON_UPPER_LIMIT_3) break;
+
+        if (stateAfterRebalance.fuseStatusB !== FUSE_OFF_1) {
+          rebalanceFuseOn = {
+            fuseStatus: stateAfterRebalance.fuseStatusB || 0,
+            price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
+          };
+          break;
+        }
       }
     }
 
     console.log("===========================");
-    for (let i = 0; i < 2 * p.countRebalances; ++i) {
+    for (let i = 0; i < p.maxCountRebalances; ++i) {
       console.log(`Swap and rebalance. Step ${i}`);
       const amounts = await UniswapV3LiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.UNISWAPV3_USDC_USDT_100);
       const priceB = await lib.getPrice(MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDT_TOKEN);
@@ -245,46 +279,88 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
       swapAmount = swapAmount.add(swapAmount.div(100));
       swapAmounts.push(swapAmount);
 
-      await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
-      states.push(await StateUtilsNum.getState(signer, signer, strategy, vault, `pd${i}`));
+      if (p.movePricesUpDown) {
+        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+      } else {
+        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+      }
+      states.push(await StateUtilsNum.getState(signer, signer, strategy, vault, `back${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
-      if (!(await strategy.needRebalance())) {
-        console.log('Not need rebalance... continue');
-      } else {
-        await strategy.rebalanceNoSwaps(true);
+      if ((await strategy.needRebalance())) {
+        await strategy.rebalanceNoSwaps(true, { gasLimit: 9_000_000 });
         const stateAfterRebalance = await StateUtilsNum.getState(signer, signer, strategy, vault, `r${i}`);
         states.push(stateAfterRebalance);
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-        if (stateAfterRebalance.fuseStatus === FUSE_ON_UPPER_LIMIT_3) break;
+
+        if (stateAfterRebalance.fuseStatusB === FUSE_OFF_1) {
+          rebalanceFuseOff = {
+            fuseStatus: stateAfterRebalance.fuseStatusB || 0,
+            price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
+          };
+          break;
+        }
       }
     }
 
-    return {states};
+    return {states, rebalanceFuseOn, rebalanceFuseOff};
   }
 
+  /**
+   * Deploy TetuConverter-contract and upgrade proxy
+   */
+  async function injectTetuConverter() {
+    const core = await DeployerUtilsLocal.getCoreAddresses();
+    const tetuConverter = getConverterAddress();
+
+    const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
+    const controller = ControllerV2__factory.connect(core.controller, signer);
+    const governance = await controller.governance();
+    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
+
+    await controllerAsGov.announceProxyUpgrade([tetuConverter], [converterLogic.address]);
+    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
+    await controllerAsGov.upgradeProxy([tetuConverter]);
+  }
 //endregion Utils
 
 //region Unit tests
   describe('Increase price N steps, decrease price N steps', function () {
     describe("Use liquidator", () => {
-      describe('Move prices up, down', function () {
-        interface IMovePricesInLoop {
-          states: IStateNum[];
-        }
-
-        async function movePricesInLoop(): Promise<IMovePricesInLoop> {
-          const pathOut = "./tmp/move-prices-in-loop.csv";
-          const {states} = await movePriceUpDown({
-            countRebalances: 7,
-            pathOut,
-            movePricesUp: true
-          });
-          return {states};
-        }
-
+      describe('Move tokenB prices up, down', function () {
         it("should reduce locked amount to zero", async () => {
-          const ret = await movePricesInLoop();
+          const pathOut = "./tmp/fuse-move-prices-up-down-b.csv";
+          const ret = await movePriceUpDown({
+            maxCountRebalances: 7,
+            pathOut,
+            movePricesUpDown: true
+          });
+          console.log("ret.rebalanceFuseOff", ret.rebalanceFuseOff);
+          console.log("ret.rebalanceFuseOn", ret.rebalanceFuseOn);
+
+          expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
+          expect(ret.rebalanceFuseOn?.price || 0).gte(1.0003);
+
+          expect(ret.rebalanceFuseOff?.fuseStatus || 0).eq(FUSE_OFF_1);
+          expect(ret.rebalanceFuseOff?.price || 0).lte(1.0001);
+        });
+      });
+      describe('Move tokenB prices down, up', function () {
+        it("should reduce locked amount to zero", async () => {
+          const pathOut = "./tmp/fuse-move-prices-down-up-b.csv";
+          const ret = await movePriceUpDown({
+            maxCountRebalances: 15,
+            pathOut,
+            movePricesUpDown: false
+          });
+          console.log("ret.rebalanceFuseOff", ret.rebalanceFuseOff);
+          console.log("ret.rebalanceFuseOn", ret.rebalanceFuseOn);
+
+          expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
+          expect(ret.rebalanceFuseOn?.price || 0).lte(0.9996);
+
+          expect(ret.rebalanceFuseOff?.fuseStatus || 0).eq(FUSE_OFF_1);
+          expect(ret.rebalanceFuseOff?.price || 0).gte(0.9998);
         });
       });
     });

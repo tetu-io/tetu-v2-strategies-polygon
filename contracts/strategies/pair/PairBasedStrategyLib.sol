@@ -70,7 +70,7 @@ library PairBasedStrategyLib {
     /// @notice Fuse was triggered by lower limit, assets was withdrawn from the pool, but active debts can exist
     FUSE_ON_LOWER_LIMIT_2,
     /// @notice Fuse was triggered by upper limit, assets was withdrawn from the pool, but active debts can exist
-    FUSE_ON_UPPER_LIMIT_3,
+    FUSE_ON_UPPER_LIMIT_3
   }
 
   struct SwapByAggParams {
@@ -256,6 +256,7 @@ library PairBasedStrategyLib {
     FuseStatus status
   ) {
     console.log("needChangeFuseStatus.1", uint(fuse.status));
+    console.log("needChangeFuseStatus.price", price);
     console.log("needChangeFuseStatus.fuse.thresholds[0]", fuse.thresholds[0]);
     console.log("needChangeFuseStatus.fuse.thresholds[1]", fuse.thresholds[1]);
     console.log("needChangeFuseStatus.fuse.thresholds[2]", fuse.thresholds[2]);

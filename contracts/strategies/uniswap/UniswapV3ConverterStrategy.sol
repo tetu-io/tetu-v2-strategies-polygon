@@ -124,8 +124,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
-  function getFuseStatus() external override view returns (uint) {
-    return 0; // todo uint(state.fuse.status);
+  /// @return statusA Fuse status of token A
+  /// @return statusB Fuse status of token B
+  /// @return fullWithdrawDone 1 means that full withdraw to underling was made
+  function getFuseStatus() external override view returns (uint statusA, uint statusB, uint fullWithdrawDone) {
+    return (uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), 0); // todo fullWithdrawDone
   }
 
   //endregion ---------------------------------------------- METRIC VIEWS

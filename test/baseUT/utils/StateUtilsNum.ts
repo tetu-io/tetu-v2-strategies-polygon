@@ -113,7 +113,11 @@ export interface IStateNum {
     borrowAssets: string[];
     borrowAssetsNames: string[];
   };
-  fuseStatus?: number;
+
+  fuseStatusA?: number;
+  fuseStatusB?: number;
+  fullWithdrawDone?: number;
+
   /**
    * Amount of underlying locked inside converter.
    * It's calculated as sum(amount-of-collateral - amount-to-repay)_by all borrows (both direct and reverse)
@@ -197,7 +201,9 @@ export class StateUtilsNum {
     let gaugeStrategyBalance: number = 0;
     let gaugeDecimals: number = 0;
 
-    let fuseStatus: number | undefined;
+    let fuseStatusA: number | undefined;
+    let fuseStatusB: number | undefined;
+    let fullWithdrawDone: number | undefined;
 
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
     const priceOracle = IPriceOracle__factory.connect(
@@ -256,7 +262,10 @@ export class StateUtilsNum {
         depositorState.upperTick,
         depositorState.totalLiquidity
       );
-      fuseStatus = (await IRebalancingV2Strategy__factory.connect(strategy.address, signer).getFuseStatus()).toNumber();
+      const status = (await IRebalancingV2Strategy__factory.connect(strategy.address, signer).getFuseStatus());
+      fuseStatusA = status.statusA.toNumber();
+      fuseStatusB = status.statusB.toNumber();
+      fullWithdrawDone = status.fullWithdrawDone.toNumber();
 
       univ3Depositor = {
         tokenA: depositorState.tokenA,
@@ -345,7 +354,9 @@ export class StateUtilsNum {
         borrowAssetsNames
       },
 
-      fuseStatus,
+      fuseStatusA,
+      fuseStatusB,
+      fullWithdrawDone,
 
       lockedInConverter: Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying),
       lockedPercent: totalAssets === 0
@@ -546,7 +557,9 @@ export class StateUtilsNum {
       "pool.amount0",
       "pool.amount1",
 
-      'fuseStatus',
+      'fuseStatusA',
+      'fuseStatusB',
+      'fullWithdrawDone',
 
       'rebalanced.loss',
       'rebalanced.covered',
@@ -631,7 +644,9 @@ export class StateUtilsNum {
       item.univ3Pool?.amount0,
       item.univ3Pool?.amount1,
 
-      item.fuseStatus,
+      item.fuseStatusA,
+      item.fuseStatusB,
+      item.fullWithdrawDone,
 
       item.rebalanced?.loss,
       item.rebalanced?.covered,

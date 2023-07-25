@@ -131,10 +131,12 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   }
 
   /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
-  function getFuseStatus() external override view returns (uint) {
-    return 0; // todo
+  /// @return statusA Fuse status of token A
+  /// @return statusB Fuse status of token B
+  /// @return fullWithdrawDone 1 means that full withdraw to underling was made
+  function getFuseStatus() external view returns (uint statusA, uint statusB, uint fullWithdrawDone) {
+    return (0, 0, 0); // todo
   }
-
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region --------------------------------------------- CALLBACKS
