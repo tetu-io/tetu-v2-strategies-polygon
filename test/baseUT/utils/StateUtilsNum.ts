@@ -12,7 +12,7 @@ import {
   IERC20__factory,
   IERC20Metadata__factory,
   IPoolAdapter__factory, IPriceOracle,
-  IPriceOracle__factory,
+  IPriceOracle__factory, IRebalancingStrategy__factory, IRebalancingV2Strategy__factory,
   ISplitter__factory, ITetuConverter,
   ITetuConverter__factory, IUniswapV3Pool__factory,
   TetuVaultV2,
@@ -24,6 +24,7 @@ import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 
 export interface IRebalanceResults {
+  fuseStatus?: number;
   loss: BigNumber;
   covered: BigNumber;
 }
@@ -36,8 +37,6 @@ export interface IUniv3Depositor {
   upperTick: number;
   rebalanceTickRange: number;
   totalLiquidity: BigNumber;
-  isFuseTriggered: boolean;
-  fuseThreshold: BigNumber;
   rebalanceEarned0: BigNumber; // rebalanceResults[0]
   rebalanceEarned1: BigNumber; // rebalanceResults[1]
   rebalanceLost: BigNumber; // rebalanceResults[2]
@@ -114,6 +113,7 @@ export interface IStateNum {
     borrowAssets: string[];
     borrowAssetsNames: string[];
   };
+  fuseStatus?: number;
   /**
    * Amount of underlying locked inside converter.
    * It's calculated as sum(amount-of-collateral - amount-to-repay)_by all borrows (both direct and reverse)
@@ -197,6 +197,8 @@ export class StateUtilsNum {
     let gaugeStrategyBalance: number = 0;
     let gaugeDecimals: number = 0;
 
+    let fuseStatus: number | undefined;
+
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
     const priceOracle = IPriceOracle__factory.connect(
       await IConverterController__factory.connect(await converter.controller(), signer).priceOracle(),
@@ -254,6 +256,7 @@ export class StateUtilsNum {
         depositorState.upperTick,
         depositorState.totalLiquidity
       );
+      fuseStatus = (await IRebalancingV2Strategy__factory.connect(strategy.address, signer).getFuseStatus()).toNumber();
 
       univ3Depositor = {
         tokenA: depositorState.tokenA,
@@ -263,8 +266,6 @@ export class StateUtilsNum {
         upperTick: depositorState.upperTick,
         rebalanceTickRange: depositorState.rebalanceTickRange,
         totalLiquidity: depositorState.totalLiquidity,
-        isFuseTriggered: depositorState.isFuseTriggered,
-        fuseThreshold: depositorState.fuseThreshold,
         rebalanceEarned0: depositorState.rebalanceResults[0],
         rebalanceEarned1: depositorState.rebalanceResults[1],
         rebalanceLost: depositorState.rebalanceResults[2],
@@ -343,6 +344,9 @@ export class StateUtilsNum {
         borrowAssets: borrowAssetsAddresses,
         borrowAssetsNames
       },
+
+      fuseStatus,
+
       lockedInConverter: Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying),
       lockedPercent: totalAssets === 0
         ? 0
@@ -533,8 +537,6 @@ export class StateUtilsNum {
       'depositor.upperTick',
       'depositor.rebalanceTickRange',
       'depositor.totalLiquidity',
-      'depositor.isFuseTriggered',
-      'depositor.fuseThreshold',
       'depositor.rebalanceEarned0',
       'depositor.rebalanceEarned1',
       'depositor.rebalanceLost',
@@ -543,6 +545,8 @@ export class StateUtilsNum {
       "pool.token1",
       "pool.amount0",
       "pool.amount1",
+
+      'fuseStatus',
 
       'rebalanced.loss',
       'rebalanced.covered',
@@ -618,8 +622,6 @@ export class StateUtilsNum {
       item.univ3Depositor?.upperTick,
       item.univ3Depositor?.rebalanceTickRange,
       item.univ3Depositor?.totalLiquidity,
-      item.univ3Depositor?.isFuseTriggered,
-      item.univ3Depositor?.fuseThreshold,
       item.univ3Depositor?.rebalanceEarned0,
       item.univ3Depositor?.rebalanceEarned1,
       item.univ3Depositor?.rebalanceLost,
@@ -628,6 +630,8 @@ export class StateUtilsNum {
       item.univ3Pool?.token1,
       item.univ3Pool?.amount0,
       item.univ3Pool?.amount1,
+
+      item.fuseStatus,
 
       item.rebalanced?.loss,
       item.rebalanced?.covered,

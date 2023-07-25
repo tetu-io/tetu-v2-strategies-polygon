@@ -18,6 +18,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
+import "../pair/PairBasedStrategyLogicLib.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -40,7 +41,6 @@ library UniswapV3ConverterStrategyLogicLib {
     address tokenB;
     IUniswapV3Pool pool;
     int24 tickSpacing;
-    bool fillUp; // todo can we remove it?
     bool isStablePool;
     int24 lowerTick;
     int24 upperTick;
@@ -50,26 +50,17 @@ library UniswapV3ConverterStrategyLogicLib {
     bool depositorSwapTokens;
     uint128 totalLiquidity;
     uint128 totalLiquidityFillup;
-
-    uint deprecated0; // todo can we remove it?
-    uint deprecated1; // todo can we remove it?
-    uint deprecated2; // todo can we remove it?
-    bool deprecated3; // todo can we remove it?
-    uint deprecated4; // todo can we remove it?
-    uint deprecated5;  // todo can we remove it?
-
     address strategyProfitHolder;
     PairBasedStrategyLib.FuseStateParams fuse;
   }
 
-  struct RebalanceLocalVariables {
+  struct RebalanceLocal {
+    PairBasedStrategyLib.FuseStateParams fuse;
     ITetuConverter converter;
     IUniswapV3Pool pool;
     address tokenA;
     address tokenB;
-    bool fillUp;
     bool isStablePool;
-    PairBasedStrategyLib.FuseStateParams fuse;
   }
 
   struct RebalanceSwapByAggParams {
@@ -112,33 +103,24 @@ library UniswapV3ConverterStrategyLogicLib {
     address pool,
     int24 tickRange,
     int24 rebalanceTickRange,
-    address asset_
+    address asset_,
+    uint[4] memory fuseThresholds
   ) external {
     require(pool != address(0), AppErrors.ZERO_ADDRESS);
     state.pool = IUniswapV3Pool(pool);
-
     state.rebalanceTickRange = rebalanceTickRange;
 
-    _setInitialDepositorValues(
-      state,
-      IUniswapV3Pool(pool),
-      tickRange,
-      rebalanceTickRange,
-      asset_
-    );
+    _setInitialDepositorValues(state, IUniswapV3Pool(pool), tickRange, rebalanceTickRange, asset_);
 
     address liquidator = IController(controller_).liquidator();
     IERC20(state.tokenA).approve(liquidator, type(uint).max);
     IERC20(state.tokenB).approve(liquidator, type(uint).max);
 
-    /// for ultra-wide ranges we use Swap rebalancing strategy and Fill-up for other
-    /// upperTick always greater then lowerTick
-    state.fillUp = state.upperTick - state.lowerTick >= 4 * state.tickSpacing;
-
     if (isStablePool(state.pool)) {
       /// for stable pools fuse can be enabled
       state.isStablePool = true;
-      state.fuse.status = PairBasedStrategyLib.FuseStatus.FUSE_OFF_1;
+      PairBasedStrategyLib.setFuseStatus(state.fuse, PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
+      PairBasedStrategyLib.setFuseThresholds(state.fuse, fuseThresholds);
     }
   }
 
@@ -262,32 +244,6 @@ library UniswapV3ConverterStrategyLogicLib {
     }
   }
 
-  /// @notice Determine if the pool needs to be rebalanced.
-  /// @return A boolean indicating if the pool needs to be rebalanced.
-  function needRebalance(
-    PairBasedStrategyLib.FuseStatus fuseStatus,
-    IUniswapV3Pool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 tickSpacing,
-    int24 rebalanceTickRange
-  ) public view returns (bool) {
-    if (PairBasedStrategyLib.isFuseTriggeredOn(fuseStatus)) {
-      return false;
-    }
-    (, int24 tick, , , , ,) = pool.slot0();
-    if (upperTick - lowerTick == tickSpacing) {
-      return tick < lowerTick || tick >= upperTick;
-    } else {
-      int24 halfRange = (upperTick - lowerTick) / 2;
-      int24 oldMedianTick = lowerTick + halfRange;
-      if (tick > oldMedianTick) {
-        return tick - oldMedianTick >= rebalanceTickRange;
-      }
-      return oldMedianTick - tick > rebalanceTickRange;
-    }
-  }
-
   /// @notice Get entry data for a Uniswap V3 pool.
   /// @param pool The Uniswap V3 pool instance.
   /// @param lowerTick The lower tick of the pool's main range.
@@ -302,41 +258,62 @@ library UniswapV3ConverterStrategyLogicLib {
   ) public view returns (bytes memory entryData) {
     return UniswapV3DebtLib.getEntryData(pool, lowerTick, upperTick, depositorSwapTokens);
   }
+  //endregion ------------------------------------------------ Pool info
 
-  function quoteRebalanceSwap(State storage state, ITetuConverter converter) external returns (bool, uint) {
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    IUniswapV3Pool pool = state.pool;
-    uint debtAmount = UniswapV3DebtLib.getDebtTotalDebtAmountOut(converter, tokenA, tokenB);
-
-    if (
-      state.fillUp
-      || !needRebalance(state.fuse.status, pool, state.lowerTick, state.upperTick, state.tickSpacing, state.rebalanceTickRange)
-      || !UniswapV3DebtLib.needCloseDebt(debtAmount, converter, tokenB)
-    ) {
-      return (false, 0);
-    }
-
-    uint[] memory amountsOut = quoteExit(state, state.totalLiquidity);
-    amountsOut[0] += AppLib.balance(tokenA);
-    amountsOut[1] += AppLib.balance(tokenB);
-
-    if (amountsOut[1] < debtAmount) {
-      uint tokenBprice = UniswapV3Lib.getPrice(address(pool), tokenB);
-      uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
-      // add 1% gap for price impact
-      needToSellTokenA += needToSellTokenA / UniswapV3DebtLib.SELL_GAP;
-      if (amountsOut[0] > 0) {
-        needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] - 1);
-      } else {
-        needToSellTokenA = 0;
-      }
-      return (true, needToSellTokenA);
+  //region ------------------------------------------------ Need rebalance
+  /// @notice Determine if the strategy needs to be rebalanced.
+  /// @return needRebalance A boolean indicating if {rebalanceNoSwaps} should be called
+  function needStrategyRebalance(State storage state, ITetuConverter converter_) external view returns (bool needRebalance) {
+    if (state.isStablePool) {
+      (needRebalance,,) = _needStrategyRebalance(state, converter_, state.pool, state.fuse, state.tokenA, state.tokenB);
     } else {
-      return (false, amountsOut[1] - debtAmount);
+      needRebalance = _needPoolRebalance(state.pool, state);
     }
   }
-  //endregion ------------------------------------------------ Pool info
+
+  /// @notice Determine if the strategy needs to be rebalanced.
+  /// @return strategyRebalanceRequired A boolean indicating if {rebalanceNoSwaps} should be called
+  /// @return fuseStatusChanged A boolean indicating if fuse status was changed and should be updated in {state}
+  /// @return fuseStatus Current (updated) status of the fuse.
+  function _needStrategyRebalance(
+    State storage state,
+    ITetuConverter converter_,
+    IUniswapV3Pool pool_,
+    PairBasedStrategyLib.FuseStateParams memory fuse_,
+    address tokenA,
+    address tokenB
+  ) internal view returns (
+    bool strategyRebalanceRequired,
+    bool fuseStatusChanged,
+    PairBasedStrategyLib.FuseStatus fuseStatus
+  ) {
+    (fuseStatusChanged, fuseStatus) = PairBasedStrategyLib.needChangeFuseStatus(
+      fuse_,
+      ConverterStrategyBaseLib2.getOracleAssetsPrice(converter_, tokenA, tokenB)
+    );
+
+    // rebalanceNoSwaps should be called in two cases:
+    // 1) fuse status is changed and should be updated
+    // 2) fuse is not triggered AND pool requires rebalancing
+    strategyRebalanceRequired = fuseStatusChanged
+      || (!PairBasedStrategyLib.isFuseTriggeredOn(fuseStatus) && _needPoolRebalance(pool_, state));
+
+    return (strategyRebalanceRequired, fuseStatusChanged, fuseStatus);
+  }
+
+  /// @notice Determine if the pool needs to be rebalanced.
+  /// @return A boolean indicating if the pool needs to be rebalanced.
+  function _needPoolRebalance(IUniswapV3Pool pool, State storage state) internal view returns (bool) {
+    (, int24 tick, , , , ,) = pool.slot0();
+    return PairBasedStrategyLogicLib._needPoolRebalance(
+      tick,
+      state.lowerTick,
+      state.upperTick,
+      state.tickSpacing,
+      state.rebalanceTickRange
+    );
+  }
+  //endregion ------------------------------------------------ Need rebalance
 
   //region ------------------------------------------------ Join the pool
   /// @notice Enter the pool and provide liquidity with desired token amounts.
@@ -587,9 +564,9 @@ library UniswapV3ConverterStrategyLogicLib {
 
   /// @notice Make rebalance without swaps (using borrowing only).
   /// @param converterLiquidator [TetuConverter, TetuLiquidator]
-  /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @param oldTotalAssets Current value of totalAssets()
-  /// @return tokenAmounts Token amounts for deposit
+  /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
+  /// @return tokenAmounts Token amounts for deposit. If length == 0 no deposit is required.
   function rebalanceNoSwaps(
     State storage state,
     address[2] calldata converterLiquidator,
@@ -599,23 +576,38 @@ library UniswapV3ConverterStrategyLogicLib {
     bool checkNeedRebalance_,
     mapping(address => uint) storage liquidityThresholds_
   ) external returns (
-    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
+    uint[] memory tokenAmounts
   ) {
-    RebalanceLocalVariables memory v;
-    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), state, true, checkNeedRebalance_);
+    RebalanceLocal memory v;
+    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), state);
 
-    bool skipRebalance;
+    bool needRebalance;
     if (v.isStablePool) {
-      uint newPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(v.converter, v.tokenA, v.tokenB);
-      (bool needToChange, PairBasedStrategyLib.FuseStatus status) = PairBasedStrategyLib.needChangeFuseStatus(v.fuse, newPrice);
-      if (needToChange) {
-        PairBasedStrategyLib.setFuseStatus(state.fuse, status);
+      bool fuseStatusChanged;
+      PairBasedStrategyLib.FuseStatus fuseStatus;
+
+      // check if rebalance required and/or fuse-status is changed
+      (needRebalance, fuseStatusChanged, fuseStatus) = _needStrategyRebalance(
+        state,
+        v.converter,
+        v.pool,
+        v.fuse,
+        v.tokenA,
+        v.tokenB
+      );
+
+      // update fuse status if necessary
+      if (fuseStatusChanged) {
+        PairBasedStrategyLib.setFuseStatus(state.fuse, fuseStatus);
       }
-      skipRebalance = PairBasedStrategyLib.isFuseTriggeredOn(status);
+    } else {
+      needRebalance = _needPoolRebalance(v.pool, state);
     }
 
-    if (!skipRebalance) {
-      // rebalancing debt, setting new tick range
+    require(checkNeedRebalance_ || needRebalance, Uni3StrategyErrors.NO_REBALANCE_NEEDED);
+
+    // rebalancing debt, setting new tick range
+    if (needRebalance) {
       UniswapV3DebtLib.rebalanceNoSwaps(converterLiquidator, state, profitToCover, oldTotalAssets, splitter, liquidityThresholds_);
 
       uint loss;
@@ -668,32 +660,13 @@ library UniswapV3ConverterStrategyLogicLib {
 
   /// @notice Initialize {v} by state values
   function _initLocalVars(
-    RebalanceLocalVariables memory v,
+    RebalanceLocal memory v,
     ITetuConverter converter_,
-    State storage state,
-    bool checkFillUp, // todo remove?
-    bool checkNeedRebalance_
+    State storage state
   ) internal view {
     v.pool = state.pool;
     v.fuse = state.fuse;
     v.converter = converter_;
-
-    if (checkNeedRebalance_) {
-      require(needRebalance(
-        v.fuse.status,
-        v.pool,
-        state.lowerTick,
-        state.upperTick,
-        state.tickSpacing,
-        state.rebalanceTickRange
-      ), Uni3StrategyErrors.NO_REBALANCE_NEEDED);
-    }
-
-    v.fillUp = state.fillUp; // todo remove?
-    if (checkFillUp && v.fillUp) { // todo remove?
-      revert('Only for swap strategy.');
-    }
-
     v.tokenA = state.tokenA;
     v.tokenB = state.tokenB;
     v.isStablePool = state.isStablePool;

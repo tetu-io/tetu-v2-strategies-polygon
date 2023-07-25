@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 import "../../integrations/aave/AggregatorInterface.sol";
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
-//import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 /// @notice A source of asset's price for AAVE3 price oracle
 ///         See price oracle 0xb023e699F5a33916Ea823A16485e259257cA8Bd1
@@ -43,34 +43,47 @@ contract Aave3PriceSourceUniswapV3 is AggregatorInterface {
 
   /// @notice Calculates price in pool
   function _getPrice() internal view returns (uint) {
+    console.log("_getPrice.1");
     address token0 = pool.token0();
     address token1 = pool.token1();
 
     uint tokenInDecimals = token == token0 ? IERC20Metadata(token0).decimals() : IERC20Metadata(token1).decimals();
     uint tokenOutDecimals = token == token1 ? IERC20Metadata(token0).decimals() : IERC20Metadata(token1).decimals();
     (uint160 sqrtPriceX96,,,,,,) = pool.slot0();
+    console.log("_getPrice.2.sqrtPriceX96", sqrtPriceX96);
 
     uint divider = tokenOutDecimals < 18 ? _max(10 ** tokenOutDecimals / 10 ** tokenInDecimals, 1) : 1;
+    console.log("_getPrice.3", divider);
 
     uint priceDigits = _countDigits(uint(sqrtPriceX96));
+    console.log("_getPrice.4", priceDigits);
     uint purePrice;
     uint precision;
     if (token == token0) {
+      console.log("_getPrice.5");
       precision = 10 ** ((priceDigits < 29 ? 29 - priceDigits : 0) + tokenInDecimals);
       uint part = uint(sqrtPriceX96) * precision / TWO_96;
       purePrice = part * part;
+      console.log("_getPrice.6.purePrice", purePrice);
     } else {
+      console.log("_getPrice.7");
       precision = 10 ** ((priceDigits > 29 ? priceDigits - 29 : 0) + tokenInDecimals);
       uint part = TWO_96 * precision / uint(sqrtPriceX96);
       purePrice = part * part;
+      console.log("_getPrice.8.purePrice", purePrice);
     }
 
     uint price = purePrice / divider / precision / (precision > 1e18 ? (precision / 1e18) : 1);
+    console.log("_getPrice.9.price", price);
 
     if (tokenOutDecimals > 8) {
+      console.log("_getPrice.10");
       price = price / 10 ** (tokenOutDecimals - 8);
+      console.log("_getPrice.11.price", price);
     } else if (tokenOutDecimals < 8) {
+      console.log("_getPrice.12");
       price = price * 10 ** (8 - tokenOutDecimals);
+      console.log("_getPrice.13.price", price);
     }
 
     // console.log('Aave3PriceSourceUniswapV3 price', price);

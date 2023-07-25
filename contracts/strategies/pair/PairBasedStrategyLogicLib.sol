@@ -74,4 +74,24 @@ library PairBasedStrategyLogicLib {
     dest.liquidationThresholds[0] = liquidationThresholds[tokens[0]];
     dest.liquidationThresholds[1] = liquidationThresholds[tokens[1]];
   }
+
+  /// @notice Determine if the pool needs to be rebalanced.
+  /// @return A boolean indicating if the pool needs to be rebalanced.
+  function _needPoolRebalance(
+    int24 tick,
+    int24 lowerTick,
+    int24 upperTick,
+    int24 tickSpacing,
+    int24 rebalanceTickRange
+  ) internal pure returns (bool) {
+    if (upperTick - lowerTick == tickSpacing) {
+      return tick < lowerTick || tick >= upperTick;
+    } else {
+      int24 halfRange = (upperTick - lowerTick) / 2;
+      int24 oldMedianTick = lowerTick + halfRange;
+      return (tick > oldMedianTick)
+        ? tick - oldMedianTick >= rebalanceTickRange
+        : oldMedianTick - tick > rebalanceTickRange;
+    }
+  }
 }

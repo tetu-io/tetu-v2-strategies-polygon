@@ -52,13 +52,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @param pool_ The address of the pool.
   /// @param tickRange_ The tick range for the liquidity position.
   /// @param rebalanceTickRange_ The tick range for rebalancing.
+  /// @param fuseThresholds Price thresholds [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
   function init(
     address controller_,
     address splitter_,
     address converter_,
     address pool_,
     int24 tickRange_,
-    int24 rebalanceTickRange_
+    int24 rebalanceTickRange_,
+    uint[4] memory fuseThresholds
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     UniswapV3ConverterStrategyLogicLib.initStrategyState(
@@ -68,7 +70,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       pool_,
       tickRange_,
       rebalanceTickRange_,
-      ISplitter(splitter_).asset()
+      ISplitter(splitter_).asset(),
+      fuseThresholds
     );
 
     // setup specific name for UI
@@ -109,17 +112,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /// @notice Check if the strategy needs rebalancing.
-  /// @return A boolean indicating if the strategy needs rebalancing.
+  /// @return A boolean indicating if {rebalanceNoSwaps} should be called.
   function needRebalance() public view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.needRebalance(
-      state.fuse.status,
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.tickSpacing,
-      state.rebalanceTickRange
-    );
+    return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state, converter);
   }
+
+  /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
+  function getFuseStatus() external override view returns (uint) {
+    return uint(state.fuse.status);
+  }
+
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region--------------------------------------------- REBALANCE

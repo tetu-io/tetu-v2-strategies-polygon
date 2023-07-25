@@ -36,4 +36,7 @@ interface IRebalancingV2Strategy {
     /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
     /// @return Proportion of the not-underlying [0...1e18]
     function getPropNotUnderlying18() external view returns (uint);
+
+    /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
+    function getFuseStatus() external view returns (uint);
 }

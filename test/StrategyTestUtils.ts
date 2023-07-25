@@ -2,7 +2,7 @@ import {
   ControllerV2__factory,
   ForwarderV3__factory,
   IERC20__factory,
-  IERC20Metadata,
+  IERC20Metadata, PairBasedStrategyLib__factory,
   StrategyBaseV2, StrategyLib__factory,
   StrategySplitterV2,
   StrategySplitterV2__factory,
@@ -44,6 +44,7 @@ import {
   IUniV3FeesClaimedInfo
 } from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
 import {IRebalanceResults} from "./baseUT/utils/StateUtilsNum";
+import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -131,8 +132,8 @@ export async function rebalanceUniv3StrategyNoSwaps(
 
 export async function printStateDifference(
   decimals: number,
-  stateBefore: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; isFuseTriggered: boolean; fuseThreshold: BigNumber; rebalanceResults: BigNumber[] },
-  stateAfter: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; isFuseTriggered: boolean; fuseThreshold: BigNumber; rebalanceResults: BigNumber[] },
+  stateBefore: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; rebalanceResults: BigNumber[] },
+  stateAfter: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; rebalanceResults: BigNumber[] },
 ) {
   const rebalanceEarned0Before = stateBefore.rebalanceResults[0];
   const rebalanceEarned1Before = stateBefore.rebalanceResults[1];
@@ -313,10 +314,21 @@ export async function handleReceiptRedeem(receipt: ContractReceipt, decimals: nu
 
 export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number): Promise<IRebalanceResults> {
   console.log('*** REBALANCE LOGS ***');
+  const pairLibI = PairBasedStrategyLib__factory.createInterface();
   const univ3LogicLibI = UniswapV3ConverterStrategyLogicLib__factory.createInterface();
+  let fuseStatus: number | undefined;
+  let loss: BigNumber | undefined;
+  let covered: BigNumber | undefined;
+
   for (const event of (receipt.events ?? [])) {
-    if (event.topics[0].toLowerCase() === univ3LogicLibI.getEventTopic('FuseTriggered').toLowerCase()) {
+    if (event.topics[0].toLowerCase() === pairLibI.getEventTopic('FuseStatusChanged').toLowerCase()) {
       console.log('>>> !!!!!!!!!!!!!!!!!!!!!!!!! FuseTriggered !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+      const log = (pairLibI.decodeEventLog(
+        pairLibI.getEvent('FuseStatusChanged'),
+        event.data,
+        event.topics,
+      ) as unknown) as FuseStatusChangedEventObject;
+      fuseStatus = log.fuseStatus.toNumber();
     }
     if (event.topics[0].toLowerCase() === univ3LogicLibI.getEventTopic('Rebalanced').toLowerCase()) {
       console.log('/// Strategy rebalanced');
@@ -325,16 +337,15 @@ export async function handleReceiptRebalance(receipt: ContractReceipt, decimals:
         event.data,
         event.topics,
       ) as unknown) as RebalancedEventObject;
-      return {
-        loss: log.loss,
-        covered: log.coveredByRewards
-      }
+      loss = log.loss;
+      covered = log.coveredByRewards;
     }
   }
   console.log('*************');
   return {
-    loss: BigNumber.from(0),
-    covered: BigNumber.from(0)
+    fuseStatus,
+    loss: loss || BigNumber.from(0),
+    covered: covered || BigNumber.from(0)
   }
 }
 

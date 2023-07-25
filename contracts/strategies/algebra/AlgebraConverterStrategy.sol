@@ -129,6 +129,12 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function getPoolTokens() external view returns (address tokenA, address tokenB) {
     return (state.tokenA, state.tokenB);
   }
+
+  /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
+  function getFuseStatus() external override view returns (uint) {
+    return 0; // todo
+  }
+
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region --------------------------------------------- CALLBACKS

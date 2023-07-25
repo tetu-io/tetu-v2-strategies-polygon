@@ -26,16 +26,18 @@ const libraries = new Map<string, string[]>([
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib2'],
   ],
   ['BalancerBoostedDepositorFacade', ['BalancerLogicLib']],
+  // Pair
+  ['PairBasedStrategyLib', ['ConverterStrategyBaseLib', 'IterationPlanLib']],
+  ['PairBasedStrategyLibFacade', ['PairBasedStrategyLib', 'ConverterStrategyBaseLib']],
+  ['PairBasedStrategyLogicLib', ['ConverterStrategyBaseLib']],
   // Uniswap V3
   [
     'UniswapV3ConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'UniswapV3ConverterStrategyLogicLib', 'PairBasedStrategyLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'UniswapV3ConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
-  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2']],
+  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLib']],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
-  ['PairBasedStrategyLib', ['ConverterStrategyBaseLib', 'IterationPlanLib']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
-  ['PairBasedStrategyLibFacade', ['PairBasedStrategyLib', 'ConverterStrategyBaseLib']],
   // Algebra
   [
     'AlgebraConverterStrategy',

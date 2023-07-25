@@ -100,7 +100,8 @@ library PairBasedStrategyLib {
 
   struct FuseStateParams {
     FuseStatus status;
-    /// @notice Price thresholds, see PairBasedStrategyLib.FUSE_IDX_XXX
+    /// @notice Price thresholds [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+    /// @dev see PairBasedStrategyLib.FUSE_IDX_XXX
     uint[4] thresholds;
   }
   //endregion ------------------------------------------------ Data types
@@ -259,6 +260,11 @@ library PairBasedStrategyLib {
     FuseStatus status
   ) {
     console.log("needChangeFuseStatus.1", uint(fuse.status));
+    console.log("needChangeFuseStatus.fuse.thresholds[0]", fuse.thresholds[0]);
+    console.log("needChangeFuseStatus.fuse.thresholds[1]", fuse.thresholds[1]);
+    console.log("needChangeFuseStatus.fuse.thresholds[2]", fuse.thresholds[2]);
+    console.log("needChangeFuseStatus.fuse.thresholds[3]", fuse.thresholds[3]);
+
     if (fuse.status != FuseStatus.FUSE_DISABLED_0) {
       console.log("needChangeFuseStatus.2");
       if (fuse.status == FuseStatus.FUSE_OFF_1) {
