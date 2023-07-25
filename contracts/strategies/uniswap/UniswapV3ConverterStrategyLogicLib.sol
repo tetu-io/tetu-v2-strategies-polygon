@@ -44,12 +44,9 @@ library UniswapV3ConverterStrategyLogicLib {
     bool isStablePool;
     int24 lowerTick;
     int24 upperTick;
-    int24 lowerTickFillup;
-    int24 upperTickFillup;
     int24 rebalanceTickRange;
     bool depositorSwapTokens;
     uint128 totalLiquidity;
-    uint128 totalLiquidityFillup;
     address strategyProfitHolder;
     PairBasedStrategyLib.FuseStateParams fuse;
   }
@@ -179,16 +176,6 @@ library UniswapV3ConverterStrategyLogicLib {
       state.totalLiquidity
     );
 
-    (uint amount0CurrentFillup, uint amount1CurrentFillup) = UniswapV3Lib.getAmountsForLiquidity(
-      sqrtRatioX96,
-      state.lowerTickFillup,
-      state.upperTickFillup,
-      state.totalLiquidityFillup
-    );
-
-    reserves[0] += amount0CurrentFillup;
-    reserves[1] += amount1CurrentFillup;
-
     if (state.depositorSwapTokens) {
       (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
     }
@@ -201,10 +188,6 @@ library UniswapV3ConverterStrategyLogicLib {
   function getFees(State storage state) public view returns (uint fee0, uint fee1) {
     UniswapV3Lib.PoolPosition memory position = UniswapV3Lib.PoolPosition(address(state.pool), state.lowerTick, state.upperTick, state.totalLiquidity, address(this));
     (fee0, fee1) = UniswapV3Lib.getFees(position);
-    UniswapV3Lib.PoolPosition memory positionFillup = UniswapV3Lib.PoolPosition(address(state.pool), state.lowerTickFillup, state.upperTickFillup, state.totalLiquidityFillup, address(this));
-    (uint fee0Fillup, uint fee1Fillup) = UniswapV3Lib.getFees(positionFillup);
-    fee0 += fee0Fillup;
-    fee1 += fee1Fillup;
   }
 
   /// @notice Estimate the exit amounts for a given liquidity amount in a Uniswap V3 pool.
@@ -215,7 +198,6 @@ library UniswapV3ConverterStrategyLogicLib {
     uint128 liquidityAmountToExit
   ) public view returns (uint[] memory amountsOut) {
     uint128 liquidity = state.totalLiquidity;
-    uint128 liquidityFillup = state.totalLiquidityFillup;
 
     amountsOut = new uint[](2);
     (uint160 sqrtRatioX96, , , , , ,) = state.pool.slot0();
@@ -226,18 +208,6 @@ library UniswapV3ConverterStrategyLogicLib {
       state.upperTick,
       liquidityAmountToExit
     );
-
-    if (liquidity > 0 && liquidityFillup > 0) {
-      (uint amountOut0Fillup, uint amountOut1Fillup) = UniswapV3Lib.getAmountsForLiquidity(
-        sqrtRatioX96,
-        state.lowerTickFillup,
-        state.upperTickFillup,
-        uint128(uint(liquidityFillup) * uint(liquidityAmountToExit) / uint(liquidity))
-      );
-
-      amountsOut[0] += amountOut0Fillup;
-      amountsOut[1] += amountOut1Fillup;
-    }
 
     if (state.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
@@ -353,38 +323,6 @@ library UniswapV3ConverterStrategyLogicLib {
     return (amountsConsumed, liquidityOut, totalLiquidityNew);
   }
 
-  /// @notice Add liquidity to a Uniswap V3 pool in a specified tick range according fill up rules.
-  /// todo remove - not used anymore?
-  function addFillup(State storage state) external {
-    int24 lowerTickFillup;
-    int24 upperTickFillup;
-    uint128 liquidityOutFillup;
-    IUniswapV3Pool pool = state.pool;
-    int24 lowerTick = state.lowerTick;
-    int24 upperTick = state.upperTick;
-    int24 tickSpacing = state.tickSpacing;
-    uint balance0 = AppLib.balance(pool.token0());
-    uint balance1 = AppLib.balance(pool.token1());
-
-    if (balance0 > 0 || balance1 > 0) {
-      (, int24 tick, , , , ,) = pool.slot0();
-      if (balance0 > balance1 * UniswapV3Lib.getPrice(address(pool), pool.token1()) / 10 ** IERC20Metadata(pool.token1()).decimals()) {
-        // add token0 to half range
-        lowerTickFillup = tick / tickSpacing * tickSpacing + tickSpacing;
-        upperTickFillup = upperTick;
-        (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, balance0, 0);
-        pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
-      } else {
-        lowerTickFillup = lowerTick;
-        upperTickFillup = tick / tickSpacing * tickSpacing - tickSpacing;
-        (,, liquidityOutFillup) = UniswapV3Lib.addLiquidityPreview(address(pool), lowerTickFillup, upperTickFillup, 0, balance1);
-        pool.mint(address(this), lowerTickFillup, upperTickFillup, liquidityOutFillup, "");
-      }
-      state.lowerTickFillup = lowerTickFillup;
-      state.upperTickFillup = upperTickFillup;
-      state.totalLiquidityFillup = liquidityOutFillup;
-    }
-  }
   //endregion ------------------------------------------------ Join the pool
 
   //region ------------------------------------------------ Exit from the pool
@@ -396,14 +334,10 @@ library UniswapV3ConverterStrategyLogicLib {
     State storage state,
     uint128 liquidityAmountToExit
   ) external returns (uint[] memory amountsOut) {
-    uint128 totalLiquidityFillup = 0;
     IUniswapV3Pool pool = state.pool;
     int24 lowerTick = state.lowerTick;
     int24 upperTick = state.upperTick;
-    int24 lowerTickFillup = state.lowerTickFillup;
-    int24 upperTickFillup = state.upperTickFillup;
     uint128 liquidity = state.totalLiquidity;
-    uint128 liquidityFillup = state.totalLiquidityFillup;
     bool _depositorSwapTokens = state.depositorSwapTokens;
 
     require(liquidity >= liquidityAmountToExit, Uni3StrategyErrors.WRONG_LIQUIDITY);
@@ -411,34 +345,9 @@ library UniswapV3ConverterStrategyLogicLib {
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, liquidityAmountToExit);
     // all fees will be collected but not returned in amountsOut
-    pool.collect(
-      address(this),
-      lowerTick,
-      upperTick,
-      type(uint128).max,
-      type(uint128).max
-    );
-
-    // remove proportional part of fillup liquidity
-    if (liquidityFillup != 0) {
-      uint128 toRemoveFillUpAmount = uint128(uint(liquidityFillup) * uint(liquidityAmountToExit) / uint(liquidity));
-      (uint amountsOutFillup0, uint amountsOutFillup1) = pool.burn(lowerTickFillup, upperTickFillup, toRemoveFillUpAmount);
-      pool.collect(
-        address(this),
-        lowerTickFillup,
-        upperTickFillup,
-        type(uint128).max,
-        type(uint128).max
-      );
-      amountsOut[0] += amountsOutFillup0;
-      amountsOut[1] += amountsOutFillup1;
-
-      require(liquidityFillup >= toRemoveFillUpAmount, Uni3StrategyErrors.WRONG_FILLUP);
-      totalLiquidityFillup = liquidityFillup - toRemoveFillUpAmount;
-    }
+    pool.collect(address(this), lowerTick, upperTick, type(uint128).max, type(uint128).max);
 
     state.totalLiquidity = liquidity - liquidityAmountToExit;
-    state.totalLiquidityFillup = totalLiquidityFillup;
 
     if (_depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
@@ -455,8 +364,6 @@ library UniswapV3ConverterStrategyLogicLib {
     IUniswapV3Pool pool = state.pool;
     int24 lowerTick = state.lowerTick;
     int24 upperTick = state.upperTick;
-    int24 lowerTickFillup = state.lowerTickFillup;
-    int24 upperTickFillup = state.upperTickFillup;
     tokensOut = new address[](2);
     tokensOut[0] = state.tokenA;
     tokensOut[1] = state.tokenB;
@@ -476,18 +383,6 @@ library UniswapV3ConverterStrategyLogicLib {
         type(uint128).max,
         type(uint128).max
       );
-    }
-    if (state.totalLiquidityFillup > 0) {
-      pool.burn(lowerTickFillup, upperTickFillup, 0);
-      (uint fillup0, uint fillup1) = pool.collect(
-        address(this),
-        lowerTickFillup,
-        upperTickFillup,
-        type(uint128).max,
-        type(uint128).max
-      );
-      amountsOut[0] += fillup0;
-      amountsOut[1] += fillup1;
     }
 
     emit UniV3FeesClaimed(amountsOut[0], amountsOut[1]);
