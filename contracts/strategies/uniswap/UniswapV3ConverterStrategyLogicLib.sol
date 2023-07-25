@@ -48,16 +48,21 @@ library UniswapV3ConverterStrategyLogicLib {
     bool depositorSwapTokens;
     uint128 totalLiquidity;
     address strategyProfitHolder;
-    PairBasedStrategyLib.FuseStateParams fuse;
+    /// @notice Fuse for token A and token B
+    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
   }
 
   struct RebalanceLocal {
-    PairBasedStrategyLib.FuseStateParams fuse;
     ITetuConverter converter;
     IUniswapV3Pool pool;
     address tokenA;
     address tokenB;
     bool isStablePool;
+
+    /// @notice Fuse for token A and token B
+    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
+    bool[2] fuseStatusChangedAB;
+    PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
   }
 
   struct RebalanceSwapByAggParams {
@@ -93,6 +98,8 @@ library UniswapV3ConverterStrategyLogicLib {
     amountB = AppLib.balance(state.tokenB);
   }
 
+  /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
+  /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
   function initStrategyState(
     State storage state,
     address controller_,
@@ -101,7 +108,8 @@ library UniswapV3ConverterStrategyLogicLib {
     int24 tickRange,
     int24 rebalanceTickRange,
     address asset_,
-    uint[4] memory fuseThresholds
+    uint[4] memory fuseThresholdsA,
+    uint[4] memory fuseThresholdsB
   ) external {
     require(pool != address(0), AppErrors.ZERO_ADDRESS);
     state.pool = IUniswapV3Pool(pool);
@@ -116,8 +124,10 @@ library UniswapV3ConverterStrategyLogicLib {
     if (isStablePool(state.pool)) {
       /// for stable pools fuse can be enabled
       state.isStablePool = true;
-      PairBasedStrategyLib.setFuseStatus(state.fuse, PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
-      PairBasedStrategyLib.setFuseThresholds(state.fuse, fuseThresholds);
+      PairBasedStrategyLib.setFuseStatus(state.fuseAB[0], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
+      PairBasedStrategyLib.setFuseThresholds(state.fuseAB[0], fuseThresholdsA);
+      PairBasedStrategyLib.setFuseStatus(state.fuseAB[1], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
+      PairBasedStrategyLib.setFuseThresholds(state.fuseAB[1], fuseThresholdsB);
     }
   }
 
@@ -235,40 +245,26 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @return needRebalance A boolean indicating if {rebalanceNoSwaps} should be called
   function needStrategyRebalance(State storage state, ITetuConverter converter_) external view returns (bool needRebalance) {
     if (state.isStablePool) {
-      (needRebalance,,) = _needStrategyRebalance(state, converter_, state.pool, state.fuse, state.tokenA, state.tokenB);
+      address tokenA = state.tokenA;
+      address tokenB = state.tokenB;
+      (uint priceA, uint priceB) = ConverterStrategyBaseLib2.getOracleAssetsPrices(converter_, tokenA, tokenB);
+      (bool fuseStatusChangedA, PairBasedStrategyLib.FuseStatus fuseStatusA) = PairBasedStrategyLib.needChangeFuseStatus(state.fuseAB[0], priceA);
+      if (fuseStatusChangedA) {
+        needRebalance = true;
+      } else {
+        (bool fuseStatusChangedB, PairBasedStrategyLib.FuseStatus fuseStatusB) = PairBasedStrategyLib.needChangeFuseStatus(state.fuseAB[1], priceB);
+        if (fuseStatusChangedB) {
+          needRebalance = true;
+        } else {
+          needRebalance =
+              !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusA)
+              && !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusB)
+              && _needPoolRebalance(state.pool, state);
+        }
+      }
     } else {
       needRebalance = _needPoolRebalance(state.pool, state);
     }
-  }
-
-  /// @notice Determine if the strategy needs to be rebalanced.
-  /// @return strategyRebalanceRequired A boolean indicating if {rebalanceNoSwaps} should be called
-  /// @return fuseStatusChanged A boolean indicating if fuse status was changed and should be updated in {state}
-  /// @return fuseStatus Current (updated) status of the fuse.
-  function _needStrategyRebalance(
-    State storage state,
-    ITetuConverter converter_,
-    IUniswapV3Pool pool_,
-    PairBasedStrategyLib.FuseStateParams memory fuse_,
-    address tokenA,
-    address tokenB
-  ) internal view returns (
-    bool strategyRebalanceRequired,
-    bool fuseStatusChanged,
-    PairBasedStrategyLib.FuseStatus fuseStatus
-  ) {
-    (fuseStatusChanged, fuseStatus) = PairBasedStrategyLib.needChangeFuseStatus(
-      fuse_,
-      ConverterStrategyBaseLib2.getOracleAssetsPrice(converter_, tokenA, tokenB)
-    );
-
-    // rebalanceNoSwaps should be called in two cases:
-    // 1) fuse status is changed and should be updated
-    // 2) fuse is not triggered AND pool requires rebalancing
-    strategyRebalanceRequired = fuseStatusChanged
-      || (!PairBasedStrategyLib.isFuseTriggeredOn(fuseStatus) && _needPoolRebalance(pool_, state));
-
-    return (strategyRebalanceRequired, fuseStatusChanged, fuseStatus);
   }
 
   /// @notice Determine if the pool needs to be rebalanced.
@@ -437,9 +433,6 @@ library UniswapV3ConverterStrategyLogicLib {
     }
     emit UniV3FeesClaimed(fee0, fee1);
   }
-  //endregion ------------------------------------------------ Claims
-
-  //region ------------------------------------------------ Rebalance
 
   function calcEarned(address asset, address controller, address[] memory rewardTokens, uint[] memory amounts) external view returns (uint) {
     ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
@@ -456,6 +449,9 @@ library UniswapV3ConverterStrategyLogicLib {
 
     return earned;
   }
+  //endregion ------------------------------------------------ Claims
+
+  //region ------------------------------------------------ Rebalance
 
   /// @notice Make rebalance without swaps (using borrowing only).
   /// @param converterLiquidator [TetuConverter, TetuLiquidator]
@@ -478,22 +474,27 @@ library UniswapV3ConverterStrategyLogicLib {
 
     bool needRebalance;
     if (v.isStablePool) {
-      bool fuseStatusChanged;
-      PairBasedStrategyLib.FuseStatus fuseStatus;
+      uint[2] memory prices;
+      (prices[0], prices[1]) = ConverterStrategyBaseLib2.getOracleAssetsPrices(v.converter, v.tokenA, v.tokenB);
+      for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
+        (v.fuseStatusChangedAB[i], v.fuseStatusAB[i]) = PairBasedStrategyLib.needChangeFuseStatus(state.fuseAB[i], prices[i]);
+      }
 
       // check if rebalance required and/or fuse-status is changed
-      (needRebalance, fuseStatusChanged, fuseStatus) = _needStrategyRebalance(
-        state,
-        v.converter,
-        v.pool,
-        v.fuse,
-        v.tokenA,
-        v.tokenB
-      );
+      needRebalance =
+          v.fuseStatusChangedAB[0]
+          || v.fuseStatusChangedAB[1]
+          || (
+            !PairBasedStrategyLib.isFuseTriggeredOn(v.fuseStatusAB[0])
+            && !PairBasedStrategyLib.isFuseTriggeredOn(v.fuseStatusAB[1])
+            && _needPoolRebalance(v.pool, state)
+          );
 
       // update fuse status if necessary
-      if (fuseStatusChanged) {
-        PairBasedStrategyLib.setFuseStatus(state.fuse, fuseStatus);
+      for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
+        if (v.fuseStatusChangedAB[i]) {
+          PairBasedStrategyLib.setFuseStatus(state.fuseAB[i], v.fuseStatusAB[i]);
+        }
       }
     } else {
       needRebalance = _needPoolRebalance(v.pool, state);
@@ -560,7 +561,7 @@ library UniswapV3ConverterStrategyLogicLib {
     State storage state
   ) internal view {
     v.pool = state.pool;
-    v.fuse = state.fuse;
+    v.fuseAB = state.fuseAB;
     v.converter = converter_;
     v.tokenA = state.tokenA;
     v.tokenB = state.tokenB;

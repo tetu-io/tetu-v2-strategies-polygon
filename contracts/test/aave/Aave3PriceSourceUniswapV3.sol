@@ -49,6 +49,8 @@ contract Aave3PriceSourceUniswapV3 is AggregatorInterface {
 
     uint tokenInDecimals = token == token0 ? IERC20Metadata(token0).decimals() : IERC20Metadata(token1).decimals();
     uint tokenOutDecimals = token == token1 ? IERC20Metadata(token0).decimals() : IERC20Metadata(token1).decimals();
+    console.log("_getPrice.tokenInDecimals", tokenInDecimals);
+    console.log("_getPrice.tokenOutDecimals", tokenOutDecimals);
     (uint160 sqrtPriceX96,,,,,,) = pool.slot0();
     console.log("_getPrice.2.sqrtPriceX96", sqrtPriceX96);
 
@@ -81,7 +83,8 @@ contract Aave3PriceSourceUniswapV3 is AggregatorInterface {
       price = price / 10 ** (tokenOutDecimals - 8);
       console.log("_getPrice.11.price", price);
     } else if (tokenOutDecimals < 8) {
-      console.log("_getPrice.12");
+      console.log("_getPrice.12.tokenOutDecimals", tokenOutDecimals);
+      console.log("_getPrice.12.price", price);
       price = price * 10 ** (8 - tokenOutDecimals);
       console.log("_getPrice.13.price", price);
     }

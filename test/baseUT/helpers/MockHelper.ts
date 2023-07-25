@@ -18,6 +18,8 @@ import {
   PairBasedStrategyReaderAccessMock,
   UniswapV3LibFacade,
   PairBasedStrategyReader,
+  UniswapV3ConverterStrategyLogicLibFacade,
+  MockUniswapV3Pool,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -154,5 +156,13 @@ export class MockHelper {
 
   public static async createPairBasedStrategyLibFacade(signer: SignerWithAddress): Promise<PairBasedStrategyLibFacade> {
     return (await DeployerUtils.deployContract(signer, 'PairBasedStrategyLibFacade')) as PairBasedStrategyLibFacade;
+  }
+
+  public static async createUniswapV3ConverterStrategyLogicLibFacade(signer: SignerWithAddress): Promise<UniswapV3ConverterStrategyLogicLibFacade> {
+    return (await DeployerUtils.deployContract(signer, 'UniswapV3ConverterStrategyLogicLibFacade')) as UniswapV3ConverterStrategyLogicLibFacade;
+  }
+
+  public static async createMockUniswapV3Pool(signer: SignerWithAddress): Promise<MockUniswapV3Pool> {
+    return (await DeployerUtils.deployContract(signer, 'MockUniswapV3Pool')) as MockUniswapV3Pool;
   }
 }
