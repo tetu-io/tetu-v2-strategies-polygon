@@ -54,8 +54,6 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
   const FUSE_OFF_1 = 1;
   const FUSE_ON_LOWER_LIMIT_2 = 2;
   const FUSE_ON_UPPER_LIMIT_3 = 3;
-  const FUSE_ON_LOWER_LIMIT_UNDERLYING_4 = 4;
-  const FUSE_ON_UPPER_LIMIT_UNDERLYING_5 = 5;
 //endregion Constants
 
 //region Variables

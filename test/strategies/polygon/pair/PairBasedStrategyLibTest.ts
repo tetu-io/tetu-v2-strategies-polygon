@@ -27,8 +27,6 @@ describe('PairBasedStrategyLibTest', () => {
   const FUSE_OFF_1 = 1;
   const FUSE_ON_LOWER_LIMIT_2 = 2;
   const FUSE_ON_UPPER_LIMIT_3 = 3;
-  const FUSE_ON_LOWER_LIMIT_UNDERLYING_4 = 4;
-  const FUSE_ON_UPPER_LIMIT_UNDERLYING_5 = 5;
 
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
@@ -3284,7 +3282,7 @@ describe('PairBasedStrategyLibTest', () => {
       expect((await callSetFuseStatus({status: FUSE_OFF_1})).status).eq(FUSE_OFF_1);
     });
     it("should assign arbitrary value to fuse status", async () => {
-      expect((await callSetFuseStatus({status: FUSE_ON_UPPER_LIMIT_UNDERLYING_5})).status).eq(FUSE_ON_UPPER_LIMIT_UNDERLYING_5);
+      expect((await callSetFuseStatus({status: FUSE_ON_UPPER_LIMIT_3})).status).eq(FUSE_ON_UPPER_LIMIT_3);
     });
     it("should not change thresholds", async () => {
       expect((await callSetFuseStatus({status: FUSE_OFF_1, thresholds: ["1", "2", "4", "3"]})).thresholds.join()).eq([1, 2, 4, 3].join());
@@ -3476,33 +3474,6 @@ describe('PairBasedStrategyLibTest', () => {
       });
     });
 
-    describe("Fuse is FUSE_ON_LOWER_LIMIT_UNDERLYING_4", () => {
-      it("should return false if new price < low-limit-on", async () => {
-        expect((await callNeedChange({status: FUSE_ON_LOWER_LIMIT_UNDERLYING_4, newPrice: "0.990"})).needToChange).eq(false);
-      });
-      it("should return false if new price == low-limit-on", async () => {
-        expect((await callNeedChange({status: FUSE_ON_LOWER_LIMIT_UNDERLYING_4, newPrice: "0.995"})).needToChange).eq(false);
-      });
-      it("should return false if (low-limit-on < new price < low-limit-off)", async () => {
-        expect((await callNeedChange({status: FUSE_ON_LOWER_LIMIT_UNDERLYING_4, newPrice: "0.996"})).needToChange).eq(false);
-      });
-      it("should return true if new price == low-limit-off", async () => {
-        const ret = await callNeedChange({status: FUSE_ON_LOWER_LIMIT_UNDERLYING_4, newPrice: "0.997"});
-        expect(ret.needToChange).eq(true);
-        expect(ret.status).eq(FUSE_OFF_1);
-      });
-      it("should return true if new price > low-limit-off", async () => {
-        const ret = await callNeedChange({status: FUSE_ON_LOWER_LIMIT_UNDERLYING_4, newPrice: "0.998"});
-        expect(ret.needToChange).eq(true);
-        expect(ret.status).eq(FUSE_OFF_1);
-      });
-      it("should return true if new price == upper-limit-on", async () => {
-        const ret = await callNeedChange({status: FUSE_ON_LOWER_LIMIT_UNDERLYING_4, newPrice: "1.005"});
-        expect(ret.needToChange).eq(true);
-        expect(ret.status).eq(FUSE_ON_UPPER_LIMIT_3);
-      });
-    });
-
     describe("Fuse is FUSE_ON_UPPER_LIMIT_3", () => {
       it("should return false if new price > upper-limit-on", async () => {
         expect((await callNeedChange({status: FUSE_ON_UPPER_LIMIT_3, newPrice: "1.010"})).needToChange).eq(false);
@@ -3525,33 +3496,6 @@ describe('PairBasedStrategyLibTest', () => {
       });
       it("should return true if new price == lower-limit-on", async () => {
         const ret = await callNeedChange({status: FUSE_ON_UPPER_LIMIT_3, newPrice: "0.995"});
-        expect(ret.needToChange).eq(true);
-        expect(ret.status).eq(FUSE_ON_LOWER_LIMIT_2);
-      });
-    });
-
-    describe("Fuse is FUSE_ON_UPPER_LIMIT_UNDERLYING_5", () => {
-      it("should return false if new price > upper-limit-on", async () => {
-        expect((await callNeedChange({status: FUSE_ON_UPPER_LIMIT_UNDERLYING_5, newPrice: "1.010"})).needToChange).eq(false);
-      });
-      it("should return false if new price == upper-limit-on", async () => {
-        expect((await callNeedChange({status: FUSE_ON_UPPER_LIMIT_UNDERLYING_5, newPrice: "1.005"})).needToChange).eq(false);
-      });
-      it("should return false if (upper-limit-off < new price < upper-limit-on)", async () => {
-        expect((await callNeedChange({status: FUSE_ON_UPPER_LIMIT_UNDERLYING_5, newPrice: "1.004"})).needToChange).eq(false);
-      });
-      it("should return true if new price == upper-limit-off", async () => {
-        const ret = await callNeedChange({status: FUSE_ON_UPPER_LIMIT_UNDERLYING_5, newPrice: "1.003"});
-        expect(ret.needToChange).eq(true);
-        expect(ret.status).eq(FUSE_OFF_1);
-      });
-      it("should return true if new price < upper-limit-off", async () => {
-        const ret = await callNeedChange({status: FUSE_ON_UPPER_LIMIT_UNDERLYING_5, newPrice: "1.001"});
-        expect(ret.needToChange).eq(true);
-        expect(ret.status).eq(FUSE_OFF_1);
-      });
-      it("should return true if new price == lower-limit-on", async () => {
-        const ret = await callNeedChange({status: FUSE_ON_UPPER_LIMIT_UNDERLYING_5, newPrice: "0.995"});
         expect(ret.needToChange).eq(true);
         expect(ret.status).eq(FUSE_ON_LOWER_LIMIT_2);
       });

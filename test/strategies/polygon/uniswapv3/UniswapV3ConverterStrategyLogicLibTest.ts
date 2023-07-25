@@ -14,7 +14,7 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
+import {expect} from "chai";
 
 describe('PairBasedStrategyLibTest', () => {
   const PLAN_SWAP_REPAY = 0;
@@ -25,8 +25,6 @@ describe('PairBasedStrategyLibTest', () => {
   const FUSE_OFF_1 = 1;
   const FUSE_ON_LOWER_LIMIT_2 = 2;
   const FUSE_ON_UPPER_LIMIT_3 = 3;
-  const FUSE_ON_LOWER_LIMIT_UNDERLYING_4 = 4;
-  const FUSE_ON_UPPER_LIMIT_UNDERLYING_5 = 5;
 
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
@@ -82,15 +80,15 @@ describe('PairBasedStrategyLibTest', () => {
 //endregion before, after
 
 //region Unit tests
-  describe("_needStrategyRebalance", () => {
+  describe("needStrategyRebalance", () => {
     interface IUniv3State {
       tokenA: MockToken;
       tokenB: MockToken;
       pool: string;
-      fuse: {
+      fuseAB: {
         status: number;
         thresholds: string[];
-      };
+      }[];
 
       isStablePool?: boolean;
       depositorSwapTokens?: boolean;
@@ -103,9 +101,7 @@ describe('PairBasedStrategyLibTest', () => {
       poolNeedsRebalance: boolean;
     }
     interface INeedStrategyRebalanceResults {
-      strategyRebalanceRequired: boolean;
-      fuseStatusChanged: boolean;
-      fuseStatus: number;
+      needRebalance: boolean;
     }
     async function callNeedStrategyRebalance(p: INeedStrategyRebalanceParams): Promise<INeedStrategyRebalanceResults> {
       const tick = p.poolNeedsRebalance ? 9 : 11;
@@ -128,62 +124,341 @@ describe('PairBasedStrategyLibTest', () => {
         p.state.depositorSwapTokens || false,
         p.state.totalLiquidity || 0,
         p.state.strategyProfitHolder || ethers.Wallet.createRandom().address,
-        {
-         status: p.state.fuse.status,
-         thresholds: [
-           parseUnits(p.state.fuse.thresholds[0], 18),
-           parseUnits(p.state.fuse.thresholds[1], 18),
-           parseUnits(p.state.fuse.thresholds[2], 18),
-           parseUnits(p.state.fuse.thresholds[3], 18),
-         ]
-        }
+        [
+          {
+            status: p.state.fuseAB[0].status,
+            thresholds: [
+              parseUnits(p.state.fuseAB[0].thresholds[0], 18),
+              parseUnits(p.state.fuseAB[0].thresholds[1], 18),
+              parseUnits(p.state.fuseAB[0].thresholds[2], 18),
+              parseUnits(p.state.fuseAB[0].thresholds[3], 18),
+            ]
+          },
+          {
+            status: p.state.fuseAB[1].status,
+            thresholds: [
+              parseUnits(p.state.fuseAB[1].thresholds[0], 18),
+              parseUnits(p.state.fuseAB[1].thresholds[1], 18),
+              parseUnits(p.state.fuseAB[1].thresholds[2], 18),
+              parseUnits(p.state.fuseAB[1].thresholds[3], 18),
+            ]
+          },
+        ]
       );
-      const ret = await facade._needStrategyRebalance(
-        converter.address,
-        p.state.pool,
-        p.state.fuse,
-        p.state.tokenA.address,
-        p.state.tokenB.address
-      );
+      const needRebalance = await facade.needStrategyRebalance(converter.address);
       return {
-        strategyRebalanceRequired: ret.strategyRebalanceRequired,
-        fuseStatusChanged: ret.fuseStatusChanged,
-        fuseStatus: ret.fuseStatus
+        needRebalance,
       }
     }
 
     describe("pool requires rebalance", () => {
-      describe("fuse is triggered", () => {
+      describe("fuse is triggered ON", () => {
         describe("fuse changes its status", () => {
-          it("", async () => {
+          it("should return true, fuse A", async () => {
             const ret = await callNeedStrategyRebalance({
               poolNeedsRebalance: true,
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
                 pool: mockedPool.address,
-                fuse: {
-                  status: FUSE_ON_LOWER_LIMIT_2,
-                  thresholds: ["10", "20", "40", "30"]
-                }
+                fuseAB: [
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
               },
-              pricesAB: ["21"]
+              pricesAB: [
+                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
+                "1.0" // price is ok
+              ]
             });
+
+            expect(ret.needRebalance).eq(true);
+          });
+          it("should return true, fuse B", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: true,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                ]
+              },
+              pricesAB: [
+                "1.0", // price is ok
+                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
+              ]
+            });
+
+            expect(ret.needRebalance).eq(true);
           });
         });
-        describe("fuse doesn't change its status", () => {
+        describe("fuse doesn't change its status, it's still triggered ON", () => {
+          it("should return false, fuse A", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: true,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
+              },
+              pricesAB: [
+                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
+                "1.0" // price is ok
+              ]
+            });
 
+            expect(ret.needRebalance).eq(false);
+          });
+          it("should return false, fuse B", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: true,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                ]
+              },
+              pricesAB: [
+                "1.0", // price is ok
+                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
+              ]
+            });
+
+            expect(ret.needRebalance).eq(false);
+          });
         });
       });
       describe("fuse is not triggered", () => {
         describe("fuse changes its status", () => {
+          it("should return true, fuse A", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: true,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
+              },
+              pricesAB: [
+                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
+                "1.0" // price is ok
+              ]
+            });
 
+            expect(ret.needRebalance).eq(true);
+          });
+          it("should return true, fuse B", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: true,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                ]
+              },
+              pricesAB: [
+                "1.0", // price is ok
+                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
+              ]
+            });
+
+            expect(ret.needRebalance).eq(true);
+          });
         });
-        describe("fuse doesn't change its status", () => {
+        describe("fuse doesn't change its status, it's still triggered OFF", () => {
+          it("should return true (pool required a rebalance)", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: true,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
+              },
+              pricesAB: [
+                "0.51", // price is still ok
+                "0.51" // price is ok
+              ]
+            });
 
+            expect(ret.needRebalance).eq(true);
+          });
         });
       });
     });
-  });.
+    describe("pool doesn't require rebalance", () => {
+      describe("fuse is triggered ON", () => {
+        describe("fuse changes its status", () => {
+          it("should return true, fuse A", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: false,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
+              },
+              pricesAB: [
+                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
+                "1.0" // price is ok
+              ]
+            });
+
+            expect(ret.needRebalance).eq(true);
+          });
+          it("should return true, fuse B", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: false,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                ]
+              },
+              pricesAB: [
+                "1.0", // price is ok
+                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
+              ]
+            });
+
+            expect(ret.needRebalance).eq(true);
+          });
+        });
+        describe("fuse doesn't change its status, it's still triggered ON", () => {
+          it("should return false, fuse A", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: false,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
+              },
+              pricesAB: [
+                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
+                "1.0" // price is ok
+              ]
+            });
+
+            expect(ret.needRebalance).eq(false);
+          });
+          it("should return false, fuse B", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: false,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                ]
+              },
+              pricesAB: [
+                "1.0", // price is ok
+                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
+              ]
+            });
+
+            expect(ret.needRebalance).eq(false);
+          });
+        });
+      });
+      describe("fuse is not triggered", () => {
+        describe("fuse changes its status", () => {
+          it("should return true, fuse A", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: false,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
+              },
+              pricesAB: [
+                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
+                "1.0" // price is ok
+              ]
+            });
+
+            expect(ret.needRebalance).eq(true);
+          });
+          it("should return true, fuse B", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: false,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                ]
+              },
+              pricesAB: [
+                "1.0", // price is ok
+                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
+              ]
+            });
+
+            expect(ret.needRebalance).eq(true);
+          });
+        });
+        describe("fuse doesn't change its status, it's still triggered OFF", () => {
+          it("should return false", async () => {
+            const ret = await callNeedStrategyRebalance({
+              poolNeedsRebalance: false,
+              state: {
+                tokenA: usdc,
+                tokenB: usdt,
+                pool: mockedPool.address,
+                fuseAB: [
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                ]
+              },
+              pricesAB: [
+                "0.51", // price is still ok
+                "0.51" // price is ok
+              ]
+            });
+
+            expect(ret.needRebalance).eq(false);
+          });
+        });
+      });
+    });
+  });
 //endregion Unit tests
 });

@@ -39,28 +39,28 @@ library UniswapV3ConverterStrategyLogicLib {
   struct State {
     address tokenA;
     address tokenB;
+    address strategyProfitHolder;
     IUniswapV3Pool pool;
-    int24 tickSpacing;
     bool isStablePool;
+    bool depositorSwapTokens;
+    int24 tickSpacing;
     int24 lowerTick;
     int24 upperTick;
     int24 rebalanceTickRange;
-    bool depositorSwapTokens;
     uint128 totalLiquidity;
-    address strategyProfitHolder;
     /// @notice Fuse for token A and token B
     PairBasedStrategyLib.FuseStateParams[2] fuseAB;
   }
 
   struct RebalanceLocal {
+    /// @notice Fuse for token A and token B
+    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
     ITetuConverter converter;
     IUniswapV3Pool pool;
     address tokenA;
     address tokenB;
     bool isStablePool;
 
-    /// @notice Fuse for token A and token B
-    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
     bool[2] fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
   }

@@ -71,10 +71,6 @@ library PairBasedStrategyLib {
     FUSE_ON_LOWER_LIMIT_2,
     /// @notice Fuse was triggered by upper limit, assets was withdrawn from the pool, but active debts can exist
     FUSE_ON_UPPER_LIMIT_3,
-    /// @notice Fuse was triggered by lower limit, all debts were closed and assets are converted to underlying
-    FUSE_ON_LOWER_LIMIT_UNDERLYING_4,
-    /// @notice Fuse was triggered by upper limit, all debts were closed and assets are converted to underlying
-    FUSE_ON_UPPER_LIMIT_UNDERLYING_5
   }
 
   struct SwapByAggParams {
@@ -281,7 +277,7 @@ library PairBasedStrategyLib {
         }
       } else {
         console.log("needChangeFuseStatus.6");
-        if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2 || fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_UNDERLYING_4) {
+        if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2) {
           console.log("needChangeFuseStatus.7");
           // currently fuse is triggered ON by lower limit
           if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
