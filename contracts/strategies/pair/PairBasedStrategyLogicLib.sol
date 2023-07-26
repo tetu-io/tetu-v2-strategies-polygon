@@ -52,7 +52,7 @@ library PairBasedStrategyLogicLib {
   /// @param asset underlying
   function initWithdrawLocal(
     WithdrawLocal memory dest,
-    address[] memory tokens,
+    address[2] memory tokens,
     address asset,
     mapping(address => uint) storage liquidationThresholds,
     bytes memory planEntryData,
@@ -68,7 +68,12 @@ library PairBasedStrategyLogicLib {
       (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
     }
 
-    dest.tokens = tokens;
+    dest.tokens = new address[](2);
+    if (tokens[1] == asset) {
+      (dest.tokens[0], dest.tokens[1]) = (tokens[1], tokens[0]);
+    } else {
+      (dest.tokens[0], dest.tokens[1]) = (tokens[0], tokens[1]);
+    }
 
     dest.liquidationThresholds = new uint[](2);
     dest.liquidationThresholds[0] = liquidationThresholds[tokens[0]];

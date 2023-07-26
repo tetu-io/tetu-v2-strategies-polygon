@@ -8,7 +8,6 @@ import "../../libs/AppPlatforms.sol";
 import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
-import "hardhat/console.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
@@ -137,10 +136,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external {
-    _rebalanceNoSwaps(checkNeedRebalance);
-  }
-
-  function _rebalanceNoSwaps(bool checkNeedRebalance) internal {
     address _controller = controller();
     StrategyLib2.onlyOperators(_controller);
 
@@ -167,7 +162,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      _depositorPoolAssets(),
+      [state.tokenA, state.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -224,7 +219,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      _depositorPoolAssets(),
+      [state.tokenA, state.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -242,12 +237,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     v.aggregator = tokenToSwapAndAggregator[1];
     v.useLiquidator = v.aggregator == address(0);
 
-    console.log("withdrawByAggStep.tokenToSwap", v.tokenToSwap);
-    console.log("withdrawByAggStep.aggregator", v.aggregator);
-    console.log("withdrawByAggStep.tokenToSwapAndAggregator[1]", tokenToSwapAndAggregator[1]);
-    console.log("withdrawByAggStep.useLiquidator", v.useLiquidator);
-    console.log("withdrawByAggStep.swapData", swapData.length);
-
     // make withdraw iteration according to the selected plan
     completed = PairBasedStrategyLib.withdrawStep(
       [address(v.converter), v.liquidator],
@@ -262,44 +251,29 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       w.propNotUnderlying18
     );
 
-    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_WITH_REBALANCE) {
-      // make rebalance and enter back to the pool. We won't have any swaps here
-      v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
-        state,
-        [address(v.converter), v.liquidator],
-        v.oldTotalAssets,
-        v.profitToCover,
-        baseState.splitter,
-        false,
-        liquidationThresholds // todo pass array, not mapping
-      );
-      _rebalanceAfter(v.tokenAmounts);
-    } else {
-      v.pool = state.pool;
-      // fix loss / profitToCover
-      v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
-        v.converter,
-        v.pool,
-        w.tokens,
-        v.oldTotalAssets,
-        v.profitToCover,
-        state.strategyProfitHolder,
-        baseState.splitter
-      );
+    v.pool = state.pool;
+    // fix loss / profitToCover
+    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
+      v.converter,
+      v.pool,
+      w.tokens,
+      v.oldTotalAssets,
+      v.profitToCover,
+      state.strategyProfitHolder,
+      baseState.splitter
+    );
 
-      if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-        || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
-      ) {
-        // Make actions after rebalance: depositor enter, update invested assets
-        (v.newLowerTick, v.newUpperTick) = UniswapV3DebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
-        state.lowerTick = v.newLowerTick;
-        state.upperTick = v.newUpperTick;
-
-        _rebalanceAfter(v.tokenAmounts);
-      }
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    ) {
+      // we are going to enter to the pool
+      (v.newLowerTick, v.newUpperTick) = UniswapV3DebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
+      state.lowerTick = v.newLowerTick;
+      state.upperTick = v.newUpperTick;
+      v.tokenAmounts = tokenAmounts;
     }
 
-    _updateInvestedAssets();
+    _rebalanceAfter(v.tokenAmounts);
   }
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly
@@ -310,7 +284,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view returns (uint) {
-    console.log("getPropNotUnderlying18", UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state));
     return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
   }
 
@@ -400,14 +373,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     }
   }
 
-  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  /// @notice Make actions after rebalance: depositor enter, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
     if (tokenAmounts.length == 2) {
-      console.log("_rebalanceAfter.tokenAmounts[0]", tokenAmounts[0]);
-      console.log("_rebalanceAfter.tokenAmounts[1]", tokenAmounts[1]);
       _depositorEnter(tokenAmounts);
     }
-
     _updateInvestedAssets();
   }
 

@@ -22,7 +22,7 @@ contract PairBasedStrategyLogicLibFacade {
 
   function initWithdrawLocal(
     PairBasedStrategyLogicLib.WithdrawLocal memory dest,
-    address[] memory tokens,
+    address[2] memory tokens,
     address asset,
     bytes memory planEntryData,
     address controller

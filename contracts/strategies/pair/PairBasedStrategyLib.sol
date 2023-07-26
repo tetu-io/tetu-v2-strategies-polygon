@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -30,8 +29,6 @@ library PairBasedStrategyLib {
   uint public constant ENTRY_TO_POOL_IS_ALLOWED = 1;
   /// @notice Enter to the pool at the end of withdrawByAggStep only if full withdrawing has been completed
   uint public constant ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-  /// @notice Make rebalance-without-swaps at the end of withdrawByAggStep and enter to the pool after the rebalancing
-  uint public constant ENTRY_TO_POOL_WITH_REBALANCE = 3;
 
   /// @notice Fuse thresholds are set as array: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
   ///         If the price falls below LOWER_LIMIT_ON the fuse is turned ON
@@ -255,62 +252,40 @@ library PairBasedStrategyLib {
     bool needToChange,
     FuseStatus status
   ) {
-    console.log("needChangeFuseStatus.1", uint(fuse.status));
-    console.log("needChangeFuseStatus.price", price);
-    console.log("needChangeFuseStatus.fuse.thresholds[0]", fuse.thresholds[0]);
-    console.log("needChangeFuseStatus.fuse.thresholds[1]", fuse.thresholds[1]);
-    console.log("needChangeFuseStatus.fuse.thresholds[2]", fuse.thresholds[2]);
-    console.log("needChangeFuseStatus.fuse.thresholds[3]", fuse.thresholds[3]);
-
     if (fuse.status != FuseStatus.FUSE_DISABLED_0) {
-      console.log("needChangeFuseStatus.2");
       if (fuse.status == FuseStatus.FUSE_OFF_1) {
-        console.log("needChangeFuseStatus.3");
         // currently fuse is OFF
         if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
-          console.log("needChangeFuseStatus.4");
           needToChange = true;
           status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
         } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
-          console.log("needChangeFuseStatus.5");
           needToChange = true;
           status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
         }
       } else {
-        console.log("needChangeFuseStatus.6");
         if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2) {
-          console.log("needChangeFuseStatus.7");
           // currently fuse is triggered ON by lower limit
           if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
-            console.log("needChangeFuseStatus.8");
             needToChange = true;
             if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
-              console.log("needChangeFuseStatus.9");
               status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
             } else {
-              console.log("needChangeFuseStatus.10");
               status = FuseStatus.FUSE_OFF_1;
             }
           }
         } else {
-          console.log("needChangeFuseStatus.11");
           // currently fuse is triggered ON by upper limit
           if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
-            console.log("needChangeFuseStatus.12");
             needToChange = true;
             if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
-              console.log("needChangeFuseStatus.13");
               status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
             } else {
-              console.log("needChangeFuseStatus.14");
               status = FuseStatus.FUSE_OFF_1;
             }
           }
         }
       }
     }
-    console.log("needChangeFuseStatus.15.needToChange", needToChange);
-    console.log("needChangeFuseStatus.15.status", uint(needToChange ? status : fuse.status));
 
     return (needToChange, needToChange ? status : fuse.status);
   }

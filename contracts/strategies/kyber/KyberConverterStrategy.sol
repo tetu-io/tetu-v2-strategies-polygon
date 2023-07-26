@@ -178,7 +178,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      _depositorPoolAssets(),
+      [state.tokenA, state.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -221,7 +221,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      _depositorPoolAssets(),
+      [state.tokenA, state.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -252,41 +252,27 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       w.propNotUnderlying18
     );
 
-    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_WITH_REBALANCE) {
-      // make rebalance and enter back to the pool. We won't have any swaps here
-      (v.tokenAmounts,) = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
-        state,
-        [address(v.converter), v.liquidator],
-        v.oldTotalAssets,
-        v.profitToCover,
-        baseState.splitter,
-        false,
-        liquidationThresholds
-      );
+    v.pool = state.pool;
+    // fix loss / profitToCover
+    v.tokenAmounts = KyberConverterStrategyLogicLib.afterWithdrawStep(
+      v.converter,
+      v.pool,
+      w.tokens,
+      v.oldTotalAssets,
+      v.profitToCover,
+      state.strategyProfitHolder,
+      baseState.splitter
+    );
+
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    ) {
+      // Make actions after rebalance: depositor enter, update invested assets
+      (v.newLowerTick, v.newUpperTick) = KyberDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
+      state.lowerTick = v.newLowerTick;
+      state.upperTick = v.newUpperTick;
+
       _rebalanceAfter(v.tokenAmounts);
-    } else {
-      v.pool = state.pool;
-      // fix loss / profitToCover
-      v.tokenAmounts = KyberConverterStrategyLogicLib.afterWithdrawStep(
-        v.converter,
-        v.pool,
-        w.tokens,
-        v.oldTotalAssets,
-        v.profitToCover,
-        state.strategyProfitHolder,
-        baseState.splitter
-      );
-
-      if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-        || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
-      ) {
-        // Make actions after rebalance: depositor enter, update invested assets
-        (v.newLowerTick, v.newUpperTick) = KyberDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
-        state.lowerTick = v.newLowerTick;
-        state.upperTick = v.newUpperTick;
-
-        _rebalanceAfter(v.tokenAmounts);
-      }
     }
 
     _updateInvestedAssets();

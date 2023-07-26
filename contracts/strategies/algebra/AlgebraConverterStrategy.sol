@@ -26,15 +26,15 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   struct WithdrawByAggStepLocal {
     ITetuConverter converter;
     address liquidator;
+    address tokenToSwap;
+    address aggregator;
+    IAlgebraPool pool;
+    bool useLiquidator;
     uint oldTotalAssets;
     uint profitToCover;
     uint[] tokenAmounts;
-    address tokenToSwap;
-    address aggregator;
-    bool useLiquidator;
     int24 newLowerTick;
     int24 newUpperTick;
-    IAlgebraPool pool;
   }
 
   //endregion ------------------------------------------------- Data types
@@ -56,24 +56,23 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     int24 tickRange_,
     int24 rebalanceTickRange_,
     bool isStablePool,
-    IncentiveKey memory key
+    IncentiveKey memory key,
+    uint[4] memory fuseThresholdsA,
+    uint[4] memory fuseThresholdsB
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     AlgebraConverterStrategyLogicLib.initStrategyState(
       state,
-      controller_,
-      converter_,
-      pool_,
+      [controller_, pool_],
       tickRange_,
       rebalanceTickRange_,
       ISplitter(splitter_).asset(),
-      isStablePool
+      isStablePool,
+      fuseThresholdsA,
+      fuseThresholdsB
     );
 
-    AlgebraConverterStrategyLogicLib.initFarmingState(
-      state,
-      key
-    );
+    AlgebraConverterStrategyLogicLib.initFarmingState(state, key);
 
     // setup specific name for UI
     StrategyLib2._changeStrategySpecificName(baseState, AlgebraConverterStrategyLogicLib.createSpecificName(state));
@@ -82,23 +81,25 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   //region --------------------------------------------- OPERATOR ACTIONS
 
-  /// @notice Disable fuse for the strategy.
-  function disableFuse() external {
+  /// @notice Manually set status of the fuse
+  /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
+  /// @param index01 0 - token A, 1 - token B
+  function setFuseStatus(uint index01, uint status) external {
     StrategyLib2.onlyOperators(controller());
-    state.isFuseTriggered = false;
-    state.lastPrice = ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
-
-    AlgebraConverterStrategyLogicLib.emitDisableFuse();
+    PairBasedStrategyLib.setFuseStatus(state.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
   }
 
-  /// @notice Set the fuse threshold for the strategy.
-  /// @param newFuseThreshold The new fuse threshold value.
-  function setFuseThreshold(uint newFuseThreshold) external {
+  /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  ///         Example: [0.9, 0.92, 1.08, 1.1]
+  ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.
+  ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
+  /// @param values Price thresholds: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  /// @param index01 0 - token A, 1 - token B
+  function setFuseThresholds(uint index01, uint[4] memory values) external {
     StrategyLib2.onlyOperators(controller());
-    state.fuseThreshold = newFuseThreshold;
-
-    AlgebraConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
+    PairBasedStrategyLib.setFuseThresholds(state.fuseAB[index01], values);
   }
+
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
     StrategyLib2.onlyOperators(controller());
@@ -117,12 +118,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
-    return AlgebraConverterStrategyLogicLib.needRebalance(state);
-  }
-
-  /// @return swapAtoB, swapAmount
-  function quoteRebalanceSwap() external returns (bool, uint) {
-    return AlgebraConverterStrategyLogicLib.quoteRebalanceSwap(state, converter);
+    return AlgebraConverterStrategyLogicLib.needStrategyRebalance(state, converter);
   }
 
   /// @notice View function required by reader
@@ -134,8 +130,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @return statusA Fuse status of token A
   /// @return statusB Fuse status of token B
   /// @return withdrawDone 1 means that full withdraw to underling was made
-  function getFuseStatus() external view returns (uint statusA, uint statusB, uint withdrawDone) {
-    return (0, 0, 0); // todo
+  function getFuseStatus() external override view returns (uint statusA, uint statusB, uint withdrawDone) {
+    return (uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), state.withdrawDone);
   }
   //endregion ---------------------------------------------- METRIC VIEWS
 
@@ -161,7 +157,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     StrategyLib2.onlyOperators(_controller);
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
-    (uint[] memory tokenAmounts, bool fuseEnabledOut) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
+    uint[] memory tokenAmounts = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
       state,
       [address(converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
@@ -182,7 +178,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      _depositorPoolAssets(),
+      [state.tokenA, state.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -225,7 +221,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      _depositorPoolAssets(),
+      [state.tokenA, state.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -257,41 +253,27 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       w.propNotUnderlying18
     );
 
-    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_WITH_REBALANCE) {
-      // make rebalance and enter back to the pool. We won't have any swaps here
-      (v.tokenAmounts,) = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
-        state,
-        [address(v.converter), v.liquidator],
-        v.oldTotalAssets,
-        v.profitToCover,
-        baseState.splitter,
-        false,
-        liquidationThresholds
-      );
+    v.pool = state.pool;
+    // fix loss / profitToCover
+    v.tokenAmounts = AlgebraConverterStrategyLogicLib.afterWithdrawStep(
+      v.converter,
+      v.pool,
+      w.tokens,
+      v.oldTotalAssets,
+      v.profitToCover,
+      state.strategyProfitHolder,
+      baseState.splitter
+    );
+
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    ) {
+      // Make actions after rebalance: depositor enter, update invested assets
+      (v.newLowerTick, v.newUpperTick) = AlgebraDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
+      state.lowerTick = v.newLowerTick;
+      state.upperTick = v.newUpperTick;
+
       _rebalanceAfter(v.tokenAmounts);
-    } else {
-      v.pool = state.pool;
-      // fix loss / profitToCover
-      v.tokenAmounts = AlgebraConverterStrategyLogicLib.afterWithdrawStep(
-        v.converter,
-        v.pool,
-        w.tokens,
-        v.oldTotalAssets,
-        v.profitToCover,
-        state.strategyProfitHolder,
-        baseState.splitter
-      );
-
-      if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-        || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
-      ) {
-        // Make actions after rebalance: depositor enter, update invested assets
-        (v.newLowerTick, v.newUpperTick) = AlgebraDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
-        state.lowerTick = v.newLowerTick;
-        state.upperTick = v.newUpperTick;
-
-        _rebalanceAfter(v.tokenAmounts);
-      }
     }
 
     _updateInvestedAssets();
@@ -307,35 +289,12 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
   /// @param done 0 - full withdraw required, 1 - full withdraw was done
   function setWithdrawDone(uint done) external override {
-    done;
-    //todo state.withdrawDone = done;
+    state.withdrawDone = done;
   }
 
   //endregion ------------------------------------ Withdraw by iterations
 
   //region--------------------------------------------- INTERNAL LOGIC
-
-  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
-  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
-    (, profitToCover) = _fixPriceChanges(true);
-    oldTotalAssets = totalAssets() - profitToCover;
-
-    // withdraw all liquidity from pool
-    // after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
-  }
-
-  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
-  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    _updateInvestedAssets();
-  }
-
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
     uint amount_,
@@ -379,7 +338,10 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    if (state.isFuseTriggered) {
+    if (
+      PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[0].status)
+      || PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[1].status)
+    ) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
       emit OnDepositorEnter(tokenAmounts, tokenAmounts);
@@ -393,5 +355,23 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
   }
 
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
+    (, profitToCover) = _fixPriceChanges(true);
+    oldTotalAssets = totalAssets() - profitToCover;
+
+    // withdraw all liquidity from pool
+    // after disableFuse() liquidity is zero
+    if (state.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+  }
+
+  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
+    if (tokenAmounts.length == 2) {
+      _depositorEnter(tokenAmounts);
+    }
+  }
   //endregion--------------------------------------- INTERNAL LOGIC
 }

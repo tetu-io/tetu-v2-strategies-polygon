@@ -39,17 +39,21 @@ library KyberConverterStrategyLogicLib {
   //////////////////////////////////////////
 
   struct State {
-    address strategyProfitHolder;
+    IPool pool;
+
     address tokenA;
     address tokenB;
-    IPool pool;
-    int24 tickSpacing;
+    address strategyProfitHolder;
+
     bool isStablePool;
+    bool depositorSwapTokens;
+
+    int24 tickSpacing;
     int24 lowerTick;
     int24 upperTick;
     int24 rebalanceTickRange;
-    bool depositorSwapTokens;
     uint128 totalLiquidity;
+
     bool isFuseTriggered;
     uint fuseThreshold;
     uint lastPrice;

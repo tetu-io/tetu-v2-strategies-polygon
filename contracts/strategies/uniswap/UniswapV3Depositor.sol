@@ -32,31 +32,25 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Returns the current state of the contract.
-  function getState() external view returns (
-    address tokenA,
-    address tokenB,
+  /// @param tokensAB [tokenA, tokenB]
+  /// @param tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
+  function getState() external view returns ( // todo getDefaultState
+    address[2] memory tokensAB,
     address pool,
     address profitHolder,
-    int24 tickSpacing,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 rebalanceTickRange,
+    int24[4] memory tickData,
     uint128 totalLiquidity,
     uint[] memory rebalanceResults
   ) {
-    tokenA = state.tokenA;
-    tokenB = state.tokenB;
+    tokensAB = [state.tokenA, state.tokenB];
     pool = address(state.pool);
     profitHolder = state.strategyProfitHolder;
-    tickSpacing = state.tickSpacing;
-    lowerTick = state.lowerTick;
-    upperTick = state.upperTick;
-    rebalanceTickRange = state.rebalanceTickRange;
+    tickData = [state.tickSpacing, state.lowerTick, state.upperTick, state.rebalanceTickRange];
     totalLiquidity = state.totalLiquidity;
 
     rebalanceResults = new uint[](3);
-    rebalanceResults[0] = IERC20(tokenA).balanceOf(state.strategyProfitHolder);
-    rebalanceResults[1] = IERC20(tokenB).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[0] = IERC20(tokensAB[0]).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[1] = IERC20(tokensAB[1]).balanceOf(state.strategyProfitHolder);
     rebalanceResults[2] = 0;
   }
 
