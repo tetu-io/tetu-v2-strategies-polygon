@@ -105,6 +105,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
           pool,
           0,
           0,
+          [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;

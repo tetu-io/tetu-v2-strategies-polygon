@@ -116,7 +116,7 @@ export interface IStateNum {
 
   fuseStatusA?: number;
   fuseStatusB?: number;
-  fullWithdrawDone?: number;
+  withdrawDone?: number;
 
   /**
    * Amount of underlying locked inside converter.
@@ -203,7 +203,7 @@ export class StateUtilsNum {
 
     let fuseStatusA: number | undefined;
     let fuseStatusB: number | undefined;
-    let fullWithdrawDone: number | undefined;
+    let withdrawDone: number | undefined;
 
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
     const priceOracle = IPriceOracle__factory.connect(
@@ -265,7 +265,7 @@ export class StateUtilsNum {
       const status = (await IRebalancingV2Strategy__factory.connect(strategy.address, signer).getFuseStatus());
       fuseStatusA = status.statusA.toNumber();
       fuseStatusB = status.statusB.toNumber();
-      fullWithdrawDone = status.fullWithdrawDone.toNumber();
+      withdrawDone = status.withdrawDone.toNumber();
 
       univ3Depositor = {
         tokenA: depositorState.tokenA,
@@ -356,7 +356,7 @@ export class StateUtilsNum {
 
       fuseStatusA,
       fuseStatusB,
-      fullWithdrawDone,
+      withdrawDone,
 
       lockedInConverter: Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying),
       lockedPercent: totalAssets === 0
@@ -559,7 +559,7 @@ export class StateUtilsNum {
 
       'fuseStatusA',
       'fuseStatusB',
-      'fullWithdrawDone',
+      'withdrawDone',
 
       'rebalanced.loss',
       'rebalanced.covered',
@@ -646,7 +646,7 @@ export class StateUtilsNum {
 
       item.fuseStatusA,
       item.fuseStatusB,
-      item.fullWithdrawDone,
+      item.withdrawDone,
 
       item.rebalanced?.loss,
       item.rebalanced?.covered,

@@ -42,14 +42,14 @@ const libraries = new Map<string, string[]>([
   // Algebra
   [
     'AlgebraConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'AlgebraConverterStrategyLogicLib', 'PairBasedStrategyLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'AlgebraConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
   ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2']],
   ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
   // Kyber
   [
     'KyberConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
   ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2']],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],

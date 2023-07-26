@@ -5,7 +5,7 @@ import chaiAsPromised from "chai-as-promised";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {getConverterAddress, getDForcePlatformAdapter} from "../../../../scripts/utils/Misc";
+import {getConverterAddress, getDForcePlatformAdapter, Misc} from "../../../../scripts/utils/Misc";
 import {IState, IStateParams, StateUtils} from "../../../StateUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {ethers} from "hardhat";
@@ -176,7 +176,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       strategyName,
       async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
         const strategy = UniswapV3ConverterStrategy__factory.connect(strategyProxy, signer);
-        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1], t[2], t[3]);
+        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1], t[2], t[3], [0, 0, Misc.MAX_UINT, 0], [0, 0, Misc.MAX_UINT, 0]);
         const mainAssetSymbol = await IERC20Metadata__factory.connect(asset, signer).symbol()
         statesParams[t[1]] = {
           mainAssetSymbol,

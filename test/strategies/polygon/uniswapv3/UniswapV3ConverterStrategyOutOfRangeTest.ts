@@ -80,6 +80,8 @@ describe.skip('UniswapV3ConverterStrategyOutOfRangeTest', function() {
           MaticAddresses.UNISWAPV3_WMATIC_MaticX_100,
           0,
           0,
+          [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
