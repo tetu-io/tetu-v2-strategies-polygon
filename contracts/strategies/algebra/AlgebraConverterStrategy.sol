@@ -133,8 +133,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
   /// @return statusA Fuse status of token A
   /// @return statusB Fuse status of token B
-  /// @return fullWithdrawDone 1 means that full withdraw to underling was made
-  function getFuseStatus() external view returns (uint statusA, uint statusB, uint fullWithdrawDone) {
+  /// @return withdrawDone 1 means that full withdraw to underling was made
+  function getFuseStatus() external view returns (uint statusA, uint statusB, uint withdrawDone) {
     return (0, 0, 0); // todo
   }
   //endregion ---------------------------------------------- METRIC VIEWS
@@ -300,6 +300,17 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   function getPropNotUnderlying18() external view returns (uint) {
     return AlgebraConverterStrategyLogicLib.getPropNotUnderlying18(state);
   }
+
+  /// @notice Set withdrawDone value.
+  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
+  ///         After completion of the conversion withdrawDone can be set to 1.
+  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
+  /// @param done 0 - full withdraw required, 1 - full withdraw was done
+  function setWithdrawDone(uint done) external override {
+    done;
+    //todo state.withdrawDone = done;
+  }
+
   //endregion ------------------------------------ Withdraw by iterations
 
   //region--------------------------------------------- INTERNAL LOGIC

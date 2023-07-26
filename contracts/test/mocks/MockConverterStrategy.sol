@@ -97,9 +97,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint amountSentToInsurance
   ) external {
     bytes32 key = keccak256(abi.encodePacked(amount, earnedByPrices_, investedAssets_));
-    console.log("setUpMockedWithdrawUniversal.amount", amount);
-    console.log("setUpMockedWithdrawUniversal.earnedByPrices_", earnedByPrices_);
-    console.log("setUpMockedWithdrawUniversal.investedAssets_", investedAssets_);
     _mockedWithdrawParams[key] = MockedWithdrawUniversalParams({
       initialized: true,
       assetProvider: assetProvider_,
@@ -135,12 +132,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ) {
     bytes32 key = keccak256(abi.encodePacked(amount, earnedByPrices_, investedAssets_));
     MockedWithdrawUniversalParams memory data = _mockedWithdrawParams[key];
-    console.log("_withdrawUniversal.amount", amount);
-    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
-    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
 
     if (data.initialized) {
-      console.log("Mocked _withdrawUniversal is used");
       if (data.assetProvider != address(0)) {
         // get asset from the asset provider to balance
         IERC20(baseState.asset).transferFrom(

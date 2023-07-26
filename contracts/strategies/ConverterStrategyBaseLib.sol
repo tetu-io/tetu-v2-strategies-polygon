@@ -15,7 +15,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -1312,8 +1311,6 @@ library ConverterStrategyBaseLib {
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-        console.log("_closePositionsToGetAmount.balanceAsset", v.balanceAsset);
-        console.log("_closePositionsToGetAmount.balanceToken", v.balanceToken);
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
@@ -1335,10 +1332,6 @@ library ConverterStrategyBaseLib {
           if (v.idxToSwap1 != 0) {
             uint indexIn = v.idxToSwap1 - 1;
             uint indexOut = indexIn == d_.indexAsset ? i : d_.indexAsset;
-            console.log("_liquidate.indexIn", indexIn);
-            console.log("_liquidate.indexOut", indexOut);
-            console.log("_liquidate.v.amountToSwap", v.amountToSwap);
-            console.log("_liquidate.liquidationThresholds_[indexIn]", AppLib._getLiquidationThreshold(liquidationThresholds_[indexIn]));
             (spentAmountIn,) = _liquidate(
               d_.converter,
               d_.liquidator,
@@ -1349,7 +1342,6 @@ library ConverterStrategyBaseLib {
               AppLib._getLiquidationThreshold(liquidationThresholds_[indexIn]),
               false
             );
-            console.log("_liquidate.spentAmountIn", spentAmountIn);
             if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
               // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
@@ -1378,15 +1370,11 @@ library ConverterStrategyBaseLib {
           // update balances and requestedAmount
           v.newBalanceAsset = IERC20(v.asset).balanceOf(address(this));
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-          console.log("_closePositionsToGetAmount.newBalanceAsset", v.newBalanceAsset);
-          console.log("_closePositionsToGetAmount.newBalanceToken", v.newBalanceToken);
-          console.log("_closePositionsToGetAmount.requestedAmount", requestedAmount);
 
           if (v.newBalanceAsset > v.balanceAsset) {
             requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
               ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
               : 0;
-            console.log("_closePositionsToGetAmount.requestedAmount.2", requestedAmount);
           }
 
           v.exitLoop = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
@@ -1394,9 +1382,7 @@ library ConverterStrategyBaseLib {
           v.balanceToken = v.newBalanceToken;
         } while (!v.exitLoop);
 
-        console.log("_closePositionsToGetAmount.AppLib._getLiquidationThreshold(liquidationThresholds_[d_.indexAsset])", AppLib._getLiquidationThreshold(liquidationThresholds_[d_.indexAsset]));
         if (requestedAmount < AppLib._getLiquidationThreshold(liquidationThresholds_[d_.indexAsset])) break;
-        console.log("_closePositionsToGetAmount.3");
       }
     }
 

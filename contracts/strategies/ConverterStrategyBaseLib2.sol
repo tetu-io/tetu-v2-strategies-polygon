@@ -15,7 +15,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV3.sol";
-import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -431,68 +430,52 @@ library ConverterStrategyBaseLib2 {
   ) internal returns (
     uint amountOut
   ) {
-    console.log("_calcInvestedAssets.1");
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
     v.asset = tokens[indexAsset];
 
     // calculate prices, decimals
     (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
-    console.log("v.prices", v.prices[0], v.prices[1]);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
     for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      console.log("_calcInvestedAssets.2.i", i);
       if (i == indexAsset) {
-        console.log("_calcInvestedAssets.3");
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
       } else {
-        console.log("_calcInvestedAssets.4");
         v.token = tokens[i];
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), v.token, v.asset, false);
-        console.log("_calcInvestedAssets.5");
         if (amountOut < toPay) {
-          console.log("_calcInvestedAssets.6");
           setDebt(v, indexAsset, toPay);
         } else {
-          console.log("_calcInvestedAssets.7");
           amountOut -= toPay;
         }
 
         // available amount to repay
-        console.log("_calcInvestedAssets.8");
         uint toRepay = collateral + IERC20(v.token).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
 
         // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
-        console.log("_calcInvestedAssets.9");
         (toPay, collateral) = converter_.getDebtAmountCurrent(address(this), v.asset, v.token, false);
         amountOut += collateral;
 
-        console.log("_calcInvestedAssets.10");
         if (toRepay >= toPay) {
-          console.log("_calcInvestedAssets.11");
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         } else {
-          console.log("_calcInvestedAssets.12");
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           setDebt(v, i, toPay - toRepay);
         }
       }
     }
-    console.log("_calcInvestedAssets.13");
     if (v.debts.length == v.len) {
-      console.log("_calcInvestedAssets.14");
       // we assume here, that it would be always profitable to save collateral
       // f.e. if there is not enough amount of USDT on our balance and we have a debt in USDT,
       // it's profitable to change any available asset to USDT, pay the debt and return the collateral back
       for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-        console.log("_calcInvestedAssets.15", i);
         if (v.debts[i] == 0) continue;
 
         // estimatedAssets should be reduced on the debt-value
@@ -500,17 +483,14 @@ library ConverterStrategyBaseLib2 {
         // we will able to count the real output only after withdraw process
         uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         if (debtInAsset > amountOut) {
-          console.log("_calcInvestedAssets.16");
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
         } else {
-          console.log("_calcInvestedAssets.17");
           amountOut -= debtInAsset;
         }
       }
     }
 
-    console.log("_calcInvestedAssets.2", amountOut);
     return amountOut;
   }
 

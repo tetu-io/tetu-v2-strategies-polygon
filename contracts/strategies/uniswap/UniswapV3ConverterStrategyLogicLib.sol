@@ -50,6 +50,10 @@ library UniswapV3ConverterStrategyLogicLib {
     uint128 totalLiquidity;
     /// @notice Fuse for token A and token B
     PairBasedStrategyLib.FuseStateParams[2] fuseAB;
+    /// @notice 1 means that the fuse was triggered ON and then all debts were closed
+    ///         and assets were converter to underlying using withdrawStepByAgg.
+    ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
+    uint withdrawDone;
   }
 
   struct RebalanceLocal {
@@ -494,6 +498,10 @@ library UniswapV3ConverterStrategyLogicLib {
       for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
         if (v.fuseStatusChangedAB[i]) {
           PairBasedStrategyLib.setFuseStatus(state.fuseAB[i], v.fuseStatusAB[i]);
+          // if fuse is triggered ON, full-withdraw is required
+          // if fuse is triggered OFF, the assets will be deposited back to pool
+          // in both cases withdrawDone should be reset
+          state.withdrawDone = 0;
         }
       }
     } else {

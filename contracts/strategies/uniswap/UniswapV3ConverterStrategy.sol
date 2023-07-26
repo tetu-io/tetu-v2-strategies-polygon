@@ -126,9 +126,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
   /// @return statusA Fuse status of token A
   /// @return statusB Fuse status of token B
-  /// @return fullWithdrawDone 1 means that full withdraw to underling was made
-  function getFuseStatus() external override view returns (uint statusA, uint statusB, uint fullWithdrawDone) {
-    return (uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), 0); // todo fullWithdrawDone
+  /// @return withdrawDone 1 means that full withdraw to underling was made
+  function getFuseStatus() external override view returns (uint statusA, uint statusB, uint withdrawDone) {
+    return (uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), state.withdrawDone);
   }
 
   //endregion ---------------------------------------------- METRIC VIEWS
@@ -312,6 +312,15 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function getPropNotUnderlying18() external view returns (uint) {
     console.log("getPropNotUnderlying18", UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state));
     return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
+  }
+
+  /// @notice Set withdrawDone value.
+  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
+  ///         After completion of the conversion withdrawDone can be set to 1.
+  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
+  /// @param done 0 - full withdraw required, 1 - full withdraw was done
+  function setWithdrawDone(uint done) external override {
+    state.withdrawDone = done;
   }
   //endregion ------------------------------------ Withdraw by iterations
 
