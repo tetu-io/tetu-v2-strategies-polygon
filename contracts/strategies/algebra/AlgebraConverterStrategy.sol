@@ -57,8 +57,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     int24 rebalanceTickRange_,
     bool isStablePool,
     IncentiveKey memory key,
-    uint[4] memory fuseThresholdsA,
-    uint[4] memory fuseThresholdsB
+    uint[4] calldata fuseThresholdsA,
+    uint[4] calldata fuseThresholdsB
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     AlgebraConverterStrategyLogicLib.initStrategyState(
@@ -131,13 +131,28 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
   /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone]
   function getDefaultState() external override view returns (
-    address[4] memory addr,
-    int24[4] memory tickData,
-    uint[4] memory nums
+    address[] memory addr,
+    int24[] memory tickData,
+    uint[] memory nums
   ) {
-    addr = [state.tokenA, state.tokenB, address(state.pool), state.strategyProfitHolder];
-    tickData = [state.tickSpacing, state.lowerTick, state.upperTick, state.rebalanceTickRange];
-    nums = [uint(state.totalLiquidity), uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), state.withdrawDone];
+    addr = new address[](4);
+    tickData = new int24[](4);
+    nums = new uint[](4);
+
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = state.tokenA;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = state.tokenB;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = address(state.pool);
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = state.strategyProfitHolder;
+
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = state.tickSpacing;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = state.lowerTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = state.upperTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = state.rebalanceTickRange;
+
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(state.totalLiquidity);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(state.fuseAB[0].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(state.fuseAB[1].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = state.withdrawDone;
   }
   //endregion ---------------------------------------------- METRIC VIEWS
 
@@ -215,6 +230,19 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     }
   }
 
+  /// @notice Make withdraw iteration: [exit from the pool], [make 1 swap], [repay a debt], [enter to the pool]
+  ///         Typical sequence of the actions is: exit from the pool, make 1 swap, repay 1 debt.
+  ///         You can enter to the pool if you are sure that you won't have borrow + repay on AAVE3 in the same block.
+  /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
+  /// @param tokenToSwap_ What token should be swapped to other
+  /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
+  /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
+  /// @param swapData Swap rote that was prepared off-chain.
+  /// @param planEntryData PLAN_XXX + additional data, see IterationPlanKinds
+  /// @param entryToPool Allow to enter to the pool at the end. Use false if you are going to make several iterations.
+  ///                    It's possible to enter back to the pool by calling {rebalanceNoSwaps} at any moment
+  ///                    0 - not allowed, 1 - allowed, 2 - allowed only if completed
+  /// @return completed All debts were closed, leftovers were swapped to the required proportions.
   function withdrawByAggStep(
     address tokenToSwap_,
     address aggregator_,
@@ -223,67 +251,24 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     bytes memory planEntryData,
     uint entryToPool
   ) external returns (bool completed) {
-    PairBasedStrategyLogicLib.WithdrawLocal memory w;
+    // restriction "operator only" is checked inside UniswapV3ConverterStrategyLogicLib.withdrawByAggStep
 
-    // check operator-only, initialize v
-    PairBasedStrategyLogicLib.initWithdrawLocal(
-      w,
-      [state.tokenA, state.tokenB],
-      baseState.asset,
-      liquidationThresholds,
-      planEntryData,
-      controller()
-    );
+    // fix price changes, exit from the pool
+    (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
 
-    // Prepare to rebalance: fix price changes, call depositor exit if totalLiquidity != 0
-    WithdrawByAggStepLocal memory v;
-    (v.profitToCover, v.oldTotalAssets) = _rebalanceBefore();
-    v.converter = converter;
-    v.liquidator = address(AppLib._getLiquidator(w.controller));
-
-    // decode tokenToSwapAndAggregator
-    v.tokenToSwap = tokenToSwap_;
-    v.aggregator = aggregator_;
-    v.useLiquidator = v.aggregator == address(0);
-
-    // make withdraw iteration according to the selected plan
-    completed = PairBasedStrategyLib.withdrawStep(
-      [address(v.converter), v.liquidator],
-      w.tokens,
-      w.liquidationThresholds,
-      v.tokenToSwap,
-      amountToSwap_,
-      v.aggregator,
+    // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
+    uint[] memory tokenAmounts;
+    (completed, tokenAmounts) = AlgebraConverterStrategyLogicLib.withdrawByAggStep(
+      [tokenToSwap_, aggregator_, controller(), address(converter), baseState.asset, baseState.splitter],
+      [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
-      v.useLiquidator,
-      w.planKind,
-      w.propNotUnderlying18
+      planEntryData,
+      state,
+      liquidationThresholds
     );
 
-    v.pool = state.pool;
-    // fix loss / profitToCover
-    v.tokenAmounts = AlgebraConverterStrategyLogicLib.afterWithdrawStep(
-      v.converter,
-      v.pool,
-      w.tokens,
-      v.oldTotalAssets,
-      v.profitToCover,
-      state.strategyProfitHolder,
-      baseState.splitter
-    );
-
-    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
-    ) {
-      // Make actions after rebalance: depositor enter, update invested assets
-      (v.newLowerTick, v.newUpperTick) = AlgebraDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
-      state.lowerTick = v.newLowerTick;
-      state.upperTick = v.newUpperTick;
-
-      _rebalanceAfter(v.tokenAmounts);
-    }
-
-    _updateInvestedAssets();
+    // enter to the pool
+    _rebalanceAfter(tokenAmounts);
   }
 
   function getPropNotUnderlying18() external view returns (uint) {

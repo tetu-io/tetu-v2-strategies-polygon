@@ -167,9 +167,9 @@ describe('KyberConverterStrategyTest', function() {
 
       let state = await PackedData.getDefaultState(s);
       let stateSpecific = await PackedData.getSpecificStateKyber(s);
-      expect(stateSpecific.flags[1]).eq(false)
-      expect(stateSpecific.flags[2]).eq(false)
-      expect(stateSpecific.flags[3]).eq(false)
+      expect(stateSpecific.flags.staked).eq(false)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
@@ -178,9 +178,9 @@ describe('KyberConverterStrategyTest', function() {
 
       state = await PackedData.getDefaultState(s);
       stateSpecific = await PackedData.getSpecificStateKyber(s);
-      expect(stateSpecific.flags[1]).eq(true)
-      expect(stateSpecific.flags[2]).eq(false)
-      expect(stateSpecific.flags[3]).eq(false)
+      expect(stateSpecific.flags.staked).eq(true)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
 
       console.log('Make pool volume')
       await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
@@ -198,18 +198,18 @@ describe('KyberConverterStrategyTest', function() {
 
       state = await PackedData.getDefaultState(s);
       stateSpecific = await PackedData.getSpecificStateKyber(s);
-      expect(stateSpecific.flags[1]).eq(true)
-      expect(stateSpecific.flags[2]).eq(false)
-      expect(stateSpecific.flags[3]).eq(true)
+      expect(stateSpecific.flags.staked).eq(true)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(true)
 
       await s.rebalanceNoSwaps(true)
       expect(await s.needRebalance()).eq(false)
 
       state = await PackedData.getDefaultState(s);
       stateSpecific = await PackedData.getSpecificStateKyber(s);
-      expect(stateSpecific.flags[1]).eq(false)
-      expect(stateSpecific.flags[2]).eq(false)
-      expect(stateSpecific.flags[3]).eq(false)
+      expect(stateSpecific.flags.staked).eq(false)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
       expect(state.totalLiquidity).gt(0)
 
       await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
@@ -221,9 +221,9 @@ describe('KyberConverterStrategyTest', function() {
 
       state = await PackedData.getDefaultState(s);
       stateSpecific = await PackedData.getSpecificStateKyber(s);
-      expect(stateSpecific.flags[1]).eq(false)
-      expect(stateSpecific.flags[2]).eq(false)
-      expect(stateSpecific.flags[3]).eq(false)
+      expect(stateSpecific.flags.staked).eq(false)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
       expect(state.totalLiquidity).gt(0)
 
       const admin = await Misc.impersonate(await farmingContract.admin())
@@ -237,9 +237,9 @@ describe('KyberConverterStrategyTest', function() {
       state = await PackedData.getDefaultState(s);
       stateSpecific = await PackedData.getSpecificStateKyber(s);
 
-      expect(stateSpecific.flags[1]).eq(false)
-      expect(stateSpecific.flags[2]).eq(true)
-      expect(stateSpecific.flags[3]).eq(false)
+      expect(stateSpecific.flags.staked).eq(false);
+      expect(stateSpecific.flags.needStake).eq(true);
+      expect(stateSpecific.flags.needUnstake).eq(false);
 
       await TimeUtils.advanceBlocksOnTs(10)
 
@@ -250,9 +250,10 @@ describe('KyberConverterStrategyTest', function() {
 
       state = await PackedData.getDefaultState(s);
       stateSpecific = await PackedData.getSpecificStateKyber(s);
-      expect(stateSpecific.flags[1]).eq(true)
-      expect(stateSpecific.flags[2]).eq(false)
-      expect(stateSpecific.flags[3]).eq(false)
+      expect(stateSpecific.flags.staked).eq(true);
+      expect(stateSpecific.flags.needStake).eq(false);
+      expect(stateSpecific.flags.needUnstake).eq(false);
+
       expect(state.totalLiquidity).gt(0)
     })
 

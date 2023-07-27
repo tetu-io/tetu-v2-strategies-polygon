@@ -48,10 +48,12 @@ library PairBasedStrategyLib {
   uint public constant IDX_ADDR_DEFAULT_STATE_TOKEN_B = 1;
   uint public constant IDX_ADDR_DEFAULT_STATE_POOL = 2;
   uint public constant IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER = 3;
+
   uint public constant IDX_TICK_DEFAULT_STATE_TICK_SPACING = 0;
   uint public constant IDX_TICK_DEFAULT_STATE_LOWER_TICK = 1;
   uint public constant IDX_TICK_DEFAULT_STATE_UPPER_TICK = 2;
   uint public constant IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE = 3;
+
   uint public constant IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
   uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
   uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B = 2;
@@ -63,6 +65,10 @@ library PairBasedStrategyLib {
   address internal constant OPENOCEAN = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64;
 
   string public constant UNKNOWN_SWAP_ROUTER = "PBS-1 Unknown router";
+  string public constant INCORRECT_TICK_RANGE = "PBS-3 Incorrect tickRange";
+  string public constant INCORRECT_REBALANCE_TICK_RANGE = "PBS-4 Incorrect rebalanceTickRange";
+  string public constant INCORRECT_ASSET = "PBS-5 Incorrect asset";
+
   //endregion ------------------------------------------------ Constants
 
   //region ------------------------------------------------ Data types
@@ -260,7 +266,7 @@ library PairBasedStrategyLib {
   /// @param price Current price
   /// @return needToChange A boolean indicating if the fuse status should be changed
   /// @return status Exist fuse status or new fuse status (if needToChange is true)
-  function needChangeFuseStatus(FuseStateParams memory fuse, uint price) internal view returns (
+  function needChangeFuseStatus(FuseStateParams memory fuse, uint price) internal pure returns (
     bool needToChange,
     FuseStatus status
   ) {

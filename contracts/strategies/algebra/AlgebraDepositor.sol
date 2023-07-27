@@ -28,6 +28,7 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
+  /// @param profitHolderBalances Balances of [tokenA, tokenB, rewardToken, bonusRewardToken]
   function getSpecificState() external view returns (
     uint[] memory profitHolderBalances
   ) {

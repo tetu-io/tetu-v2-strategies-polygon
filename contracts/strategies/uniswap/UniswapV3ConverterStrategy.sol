@@ -60,14 +60,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address pool_,
     int24 tickRange_,
     int24 rebalanceTickRange_,
-    uint[4] memory fuseThresholdsA,
-    uint[4] memory fuseThresholdsB
+    uint[4] calldata fuseThresholdsA,
+    uint[4] calldata fuseThresholdsB
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     UniswapV3ConverterStrategyLogicLib.initStrategyState(
       state,
       controller_,
-      converter_,
       pool_,
       tickRange_,
       rebalanceTickRange_,
@@ -88,7 +87,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @param index01 0 - token A, 1 - token B
   function setFuseStatus(uint index01, uint status) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseStatus(state.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
+    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
   }
 
   /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
@@ -99,12 +98,12 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @param index01 0 - token A, 1 - token B
   function setFuseThresholds(uint index01, uint[4] memory values) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseThresholds(state.fuseAB[index01], values);
+    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB[index01], values);
   }
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
     StrategyLib2.onlyOperators(controller());
-    state.strategyProfitHolder = strategyProfitHolder;
+    state.pair.strategyProfitHolder = strategyProfitHolder;
   }
   //endregion --------------------------------------------- OPERATOR ACTIONS
 
@@ -113,13 +112,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state, converter);
+    return UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state.pair, converter);
   }
 
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if {rebalanceNoSwaps} should be called.
   function needRebalance() public view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state, converter);
+    return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter);
   }
 
   /// @notice Returns the current state of the contract
@@ -127,13 +126,30 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
   /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone]
   function getDefaultState() external override view returns (
-    address[4] memory addr,
-    int24[4] memory tickData,
-    uint[4] memory nums
+    address[] memory addr,
+    int24[] memory tickData,
+    uint[] memory nums
   ) {
-    addr = [state.tokenA, state.tokenB, address(state.pool), state.strategyProfitHolder];
-    tickData = [state.tickSpacing, state.lowerTick, state.upperTick, state.rebalanceTickRange];
-    nums = [uint(state.totalLiquidity), uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), state.withdrawDone];
+    addr = new address[](4);
+    tickData = new int24[](4);
+    nums = new uint[](4);
+
+    PairBasedStrategyLogicLib.PairState storage pair = state.pair;
+
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = pair.tokenA;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = pair.tokenB;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = pair.pool;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = pair.strategyProfitHolder;
+
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = pair.tickSpacing;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = pair.lowerTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = pair.upperTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = pair.rebalanceTickRange;
+
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(pair.totalLiquidity);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(pair.fuseAB[0].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(pair.fuseAB[1].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = pair.withdrawDone;
   }
   //endregion ---------------------------------------------- METRIC VIEWS
 
@@ -146,7 +162,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
-      state,
+      state.pair,
       [address(converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
@@ -167,7 +183,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      [state.tokenA, state.tokenB],
+      [state.pair.tokenA, state.pair.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -175,7 +191,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     // estimate amounts to be withdrawn from the pool
-    uint totalLiquidity = state.totalLiquidity;
+    uint totalLiquidity = state.pair.totalLiquidity;
     uint[] memory amountsOut = (totalLiquidity == 0)
       ? new uint[](2)
       : _depositorQuoteExit(totalLiquidity);
@@ -231,7 +247,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
       planEntryData,
-      state,
+      state.pair,
       liquidationThresholds
     );
 
@@ -241,13 +257,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly
   function getPoolTokens() external view returns (address tokenA, address tokenB) {
-    return (state.tokenA, state.tokenB);
+    return (state.pair.tokenA, state.pair.tokenB);
   }
 
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view returns (uint) {
-    return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state);
+    return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
   }
 
   /// @notice Set withdrawDone value.
@@ -256,7 +272,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
   /// @param done 0 - full withdraw required, 1 - full withdraw was done
   function setWithdrawDone(uint done) external override {
-    state.withdrawDone = done;
+    state.pair.withdrawDone = done;
   }
   //endregion ------------------------------------ Withdraw by iterations
 
@@ -272,16 +288,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ) {
     require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
     bytes memory entryData = UniswapV3ConverterStrategyLogicLib.getEntryData(
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.depositorSwapTokens
+      IUniswapV3Pool(state.pair.pool),
+      state.pair.lowerTick,
+      state.pair.upperTick,
+      state.pair.depositorSwapTokens
     );
     return PairBasedStrategyLogicLib._beforeDeposit(
       tetuConverter_,
       amount_,
-      state.tokenA,
-      state.tokenB,
+      state.pair.tokenA,
+      state.pair.tokenB,
       entryData,
       liquidationThresholds
     );
@@ -308,8 +324,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     uint strategyLoss
   ) {
     if (
-      PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[0].status)
-      || PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[1].status)
+      PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
+      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status)
     ) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
@@ -331,7 +347,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (state.totalLiquidity != 0) {
+    if (state.pair.totalLiquidity != 0) {
       _depositorEmergencyExit();
     }
   }

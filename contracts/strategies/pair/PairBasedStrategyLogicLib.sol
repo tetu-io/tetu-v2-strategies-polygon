@@ -19,8 +19,33 @@ library PairBasedStrategyLogicLib {
     uint propNotUnderlying18;
   }
 
+  /// @notice Common part of all XXXXConverterStrategyLogicLib.State
+  struct PairState {
+    address pool;
+    address strategyProfitHolder;
+    address tokenA;
+    address tokenB;
+
+    bool isStablePool;
+    bool depositorSwapTokens;
+
+    int24 tickSpacing;
+    int24 lowerTick;
+    int24 upperTick;
+    int24 rebalanceTickRange;
+    uint128 totalLiquidity;
+
+    /// @notice Fuse for token A and token B
+    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
+    /// @notice 1 means that the fuse was triggered ON and then all debts were closed
+    ///         and assets were converter to underlying using withdrawStepByAgg.
+    ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
+    uint withdrawDone;
+  }
+
   //endregion ------------------------------------------------------- Data types
 
+  //region ------------------------------------------------------- Helpers
   /// @notice Prepare array of amounts ready to deposit, borrow missed amounts
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
@@ -99,4 +124,68 @@ library PairBasedStrategyLogicLib {
         : oldMedianTick - tick > rebalanceTickRange;
     }
   }
+
+  function calcTickRange(int24 tick, int24 tickRange, int24 tickSpacing) public pure returns (
+    int24 lowerTick,
+    int24 upperTick
+  ) {
+    if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
+      lowerTick = ((tick - tickRange) / tickSpacing - 1) * tickSpacing;
+    } else {
+      lowerTick = (tick - tickRange) / tickSpacing * tickSpacing;
+    }
+    upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
+  }
+  //endregion ------------------------------------------------------- Helpers
+
+  //region ------------------------------------------------------- PairState-helpers
+  /// @notice Set the initial values to PairState instance
+  /// @param addr [pool, asset, pool.token0(), pool.token1()]
+  ///        asset: Underlying asset of the depositor.
+  /// @param state_ Depositor storage state struct
+  /// @param tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
+  /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
+  /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
+  function _setInitialDepositorValues(
+    PairState storage state_,
+    address[4] calldata addr,
+    int24[4] calldata tickData,
+    bool isStablePool_,
+    uint[4] calldata fuseThresholdsA,
+    uint[4] calldata fuseThresholdsB
+  ) external {
+    state_.pool = addr[0];
+    address asset = addr[1];
+    address token0 = addr[2];
+    address token1 = addr[3];
+
+    state_.tickSpacing = tickData[0];
+    state_.lowerTick = tickData[1];
+    state_.upperTick = tickData[2];
+    state_.rebalanceTickRange = tickData[3];
+
+    require(asset == token0 || asset == token1, PairBasedStrategyLib.INCORRECT_ASSET);
+    if (asset == token0) {
+      state_.tokenA = token0;
+      state_.tokenB = token1;
+      state_.depositorSwapTokens = false;
+    } else {
+      state_.tokenA = token1;
+      state_.tokenB = token0;
+      state_.depositorSwapTokens = true;
+    }
+
+    if (isStablePool_) {
+      /// for stable pools fuse can be enabled
+      state_.isStablePool = true;
+      PairBasedStrategyLib.setFuseStatus(state_.fuseAB[0], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
+      PairBasedStrategyLib.setFuseThresholds(state_.fuseAB[0], fuseThresholdsA);
+      PairBasedStrategyLib.setFuseStatus(state_.fuseAB[1], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
+      PairBasedStrategyLib.setFuseThresholds(state_.fuseAB[1], fuseThresholdsB);
+    }
+
+    // totalLiquidity is 0, no need to initialize
+    // withdrawDone is 0, no need to initialize
+  }
+  //endregion ------------------------------------------------------- PairState-helpers
 }

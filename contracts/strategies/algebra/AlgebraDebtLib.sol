@@ -8,6 +8,8 @@ import "./AlgebraStrategyErrors.sol";
 import "./AlgebraConverterStrategyLogicLib.sol";
 import "../../libs/BorrowLib.sol";
 import "../pair/PairBasedStrategyLib.sol";
+import "../pair/PairBasedStrategyLogicLib.sol";
+
 
 library AlgebraDebtLib {
   using SafeERC20 for IERC20;
@@ -93,12 +95,7 @@ library AlgebraDebtLib {
 //region  -------------------------------------------- Calc tick range
   function calcTickRange(IAlgebraPool pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
     (, int24 tick, , , , ,) = pool.globalState();
-    if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
-      lowerTick = ((tick - tickRange) / tickSpacing - 1) * tickSpacing;
-    } else {
-      lowerTick = (tick - tickRange) / tickSpacing * tickSpacing;
-    }
-    upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
+    return PairBasedStrategyLogicLib.calcTickRange(tick, tickRange, tickSpacing);
   }
 
   /// @notice Calculate the new tick range for a Algebra pool.

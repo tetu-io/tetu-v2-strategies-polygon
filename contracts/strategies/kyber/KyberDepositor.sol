@@ -29,6 +29,8 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Returns the current state of the contract.
+  /// @return profitHolderBalances Balances of the profit holder for [tokenA, tokenB, KNC]
+  /// @return flags [staked, needStake, needUnstake]
   function getSpecificState() external view returns (
     uint[] memory profitHolderBalances,
     bool[] memory flags
@@ -38,10 +40,9 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
     profitHolderBalances[0] = IERC20(state.tokenA).balanceOf(profitHolder);
     profitHolderBalances[1] = IERC20(state.tokenB).balanceOf(profitHolder);
     profitHolderBalances[2] = IERC20(KyberConverterStrategyLogicLib.KNC).balanceOf(profitHolder);
-    flags = new bool[](4);
-    flags[0] = state.isFuseTriggered;
-    flags[1] = state.staked;
-    (flags[2], flags[3]) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
+    flags = new bool[](3);
+    flags[0] = state.staked;
+    (flags[1], flags[2]) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
   }
 
   /// @notice Returns the pool assets.

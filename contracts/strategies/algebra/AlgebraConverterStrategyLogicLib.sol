@@ -91,13 +91,13 @@ library AlgebraConverterStrategyLogicLib {
   /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
   function initStrategyState(
     State storage state,
-    address[2] memory controllerPool,
+    address[2] calldata controllerPool,
     int24 tickRange,
     int24 rebalanceTickRange,
     address asset_,
     bool isStablePool,
-    uint[4] memory fuseThresholdsA,
-    uint[4] memory fuseThresholdsB
+    uint[4] calldata fuseThresholdsA,
+    uint[4] calldata fuseThresholdsB
   ) external {
     require(controllerPool[1] != address(0), AppErrors.ZERO_ADDRESS);
     state.pool = IAlgebraPool(controllerPool[1]);
@@ -555,8 +555,8 @@ library AlgebraConverterStrategyLogicLib {
 
   /// @notice Determine if the pool needs to be rebalanced.
   /// @return A boolean indicating if the pool needs to be rebalanced.
-  function _needPoolRebalance(IAlgebraPool pool, State storage state) internal view returns (bool) {
-    (, int24 tick, , , , ,) = state.pool.globalState();
+  function _needPoolRebalance(IAlgebraPool pool_, State storage state) internal view returns (bool) {
+    (, int24 tick, , , , ,) = pool_.globalState();
     return PairBasedStrategyLogicLib._needPoolRebalance(
       tick,
       state.lowerTick,
@@ -643,7 +643,7 @@ library AlgebraConverterStrategyLogicLib {
     uint profitToCover,
     address strategyProfitHolder,
     address splitter
-  ) external returns (uint[] memory tokenAmounts) {
+  ) internal returns (uint[] memory tokenAmounts) {
     if (profitToCover > 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
@@ -698,4 +698,103 @@ library AlgebraConverterStrategyLogicLib {
     return consumed1 * 1e18 / (consumed0 + consumed1);
   }
   //endregion ------------------------------------------------ Rebalance
+
+  //region ------------------------------------------------ WithdrawByAgg
+  struct WithdrawByAggStepLocal {
+    PairBasedStrategyLogicLib.WithdrawLocal w;
+    address tokenToSwap;
+    address aggregator;
+    address controller;
+    address converter;
+    address asset;
+    address splitter;
+    IAlgebraPool pool;
+    uint amountToSwap;
+    uint profitToCover;
+    uint oldTotalAssets;
+    uint entryToPool;
+    int24 newLowerTick;
+    int24 newUpperTick;
+    uint[] tokenAmounts;
+  }
+  /// @param addr_ [tokenToSwap, aggregator, controller, converter, asset, splitter]
+  /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, entryToPool]
+  /// @return completed All debts were closed, leftovers were swapped to proper proportions
+  /// @return tokenAmounts Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
+  function withdrawByAggStep(
+    address[6] calldata addr_,
+    uint[4] calldata values_,
+    bytes memory swapData,
+    bytes memory planEntryData,
+    State storage state,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (
+    bool completed,
+    uint[] memory tokenAmounts
+  ) {
+    WithdrawByAggStepLocal memory v;
+
+    v.tokenToSwap = addr_[0];
+    v.aggregator = addr_[1];
+    v.controller = addr_[2];
+    v.converter = addr_[3];
+    v.asset = addr_[4];
+    v.splitter = addr_[5];
+
+    v.amountToSwap = values_[0];
+    v.profitToCover = values_[1];
+    v.oldTotalAssets = values_[2];
+    v.entryToPool = values_[3];
+
+    v.pool = state.pool;
+
+    // check operator-only, initialize v
+    PairBasedStrategyLogicLib.initWithdrawLocal(
+      v.w,
+      [state.tokenA, state.tokenB],
+      v.asset,
+      liquidationThresholds,
+      planEntryData,
+      v.controller
+    );
+
+    // make withdraw iteration according to the selected plan
+    completed = PairBasedStrategyLib.withdrawStep(
+      [v.converter, address(AppLib._getLiquidator(v.w.controller))],
+      v.w.tokens,
+      v.w.liquidationThresholds,
+      v.tokenToSwap,
+      v.amountToSwap,
+      v.aggregator,
+      swapData,
+      v.aggregator == address(0),
+      v.w.planKind,
+      v.w.propNotUnderlying18
+    );
+
+    // fix loss / profitToCover
+    v.tokenAmounts = AlgebraConverterStrategyLogicLib.afterWithdrawStep(
+      ITetuConverter(v.converter),
+      v.pool,
+      v.w.tokens,
+      v.oldTotalAssets,
+      v.profitToCover,
+      state.strategyProfitHolder,
+      v.splitter
+    );
+
+    if (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    ) {
+      (v.newLowerTick, v.newUpperTick) = AlgebraDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
+      state.lowerTick = v.newLowerTick;
+      state.upperTick = v.newUpperTick;
+      tokenAmounts = v.tokenAmounts;
+    }
+
+    return (completed, tokenAmounts);
+  }
+  //endregion ------------------------------------------------ WithdrawByAgg
+
 }
+

@@ -17,29 +17,29 @@ contract UniswapV3ConverterStrategyLogicLibFacade {
     address strategyProfitHolder,
     PairBasedStrategyLib.FuseStateParams[2] memory fuseAB
   ) external {
-    state.tokenA = tokensAB[0];
-    state.tokenB = tokensAB[1];
+    state.pair.tokenA = tokensAB[0];
+    state.pair.tokenB = tokensAB[1];
 
-    state.pool = pool;
-    state.isStablePool = isStablePool;
+    state.pair.pool = address(pool);
+    state.pair.isStablePool = isStablePool;
 
-    state.tickSpacing = tickParams[0];
-    state.lowerTick = tickParams[1];
-    state.upperTick = tickParams[2];
-    state.rebalanceTickRange = tickParams[3];
+    state.pair.tickSpacing = tickParams[0];
+    state.pair.lowerTick = tickParams[1];
+    state.pair.upperTick = tickParams[2];
+    state.pair.rebalanceTickRange = tickParams[3];
 
-    state.depositorSwapTokens = depositorSwapTokens;
-    state.totalLiquidity = totalLiquidity;
-    state.strategyProfitHolder = strategyProfitHolder;
-    state.fuseAB[0] = fuseAB[0];
-    state.fuseAB[1] = fuseAB[1];
+    state.pair.depositorSwapTokens = depositorSwapTokens;
+    state.pair.totalLiquidity = totalLiquidity;
+    state.pair.strategyProfitHolder = strategyProfitHolder;
+    state.pair.fuseAB[0] = fuseAB[0];
+    state.pair.fuseAB[1] = fuseAB[1];
   }
 
   function needStrategyRebalance(ITetuConverter converter_) external view returns (bool needRebalance) {
-    return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state, converter_);
+    return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter_);
   }
 
   function _needPoolRebalance(IUniswapV3Pool pool) internal view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib._needPoolRebalance(pool, state);
+    return UniswapV3ConverterStrategyLogicLib._needPoolRebalance(pool, state.pair);
   }
 }

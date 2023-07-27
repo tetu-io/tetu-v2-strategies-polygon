@@ -12,6 +12,7 @@ import "../ConverterStrategyBaseLib2.sol";
 import "../../libs/BorrowLib.sol";
 import "../../interfaces/IPairBasedStrategyReaderAccess.sol";
 import "../pair/PairBasedStrategyLib.sol";
+import "../pair/PairBasedStrategyLogicLib.sol";
 
 library UniswapV3DebtLib {
   using SafeERC20 for IERC20;
@@ -99,14 +100,9 @@ library UniswapV3DebtLib {
 //endregion  -------------------------------------------- Entry data
 
 //region  -------------------------------------------- Calc tick range
-  function calcTickRange(IUniswapV3Pool pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
-    (, int24 tick, , , , ,) = pool.slot0();
-    if (tick < 0 && tick / tickSpacing * tickSpacing != tick) {
-      lowerTick = ((tick - tickRange) / tickSpacing - 1) * tickSpacing;
-    } else {
-      lowerTick = (tick - tickRange) / tickSpacing * tickSpacing;
-    }
-    upperTick = tickRange == 0 ? lowerTick + tickSpacing : lowerTick + tickRange * 2;
+  function calcTickRange(address pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
+    (, int24 tick, , , , ,) = IUniswapV3Pool(pool).slot0();
+    return PairBasedStrategyLogicLib.calcTickRange(tick, tickRange, tickSpacing);
   }
 
   /// @notice Calculate the new tick range for a Uniswap V3 pool.
@@ -123,26 +119,26 @@ library UniswapV3DebtLib {
     int24 tickSpacing
   ) internal view returns (int24 lowerTickNew, int24 upperTickNew) {
     int24 fullTickRange = upperTick - lowerTick;
-    (lowerTickNew, upperTickNew) = calcTickRange(pool, fullTickRange == tickSpacing ? int24(0) : fullTickRange / 2, tickSpacing);
+    (lowerTickNew, upperTickNew) = calcTickRange(address(pool), fullTickRange == tickSpacing ? int24(0) : fullTickRange / 2, tickSpacing);
   }
 //endregion  -------------------------------------------- Calc tick range
 
 //region  -------------------------------------------- Rebalance
   function rebalanceNoSwaps(
     address[2] calldata converterLiquidator,
-    UniswapV3ConverterStrategyLogicLib.State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     uint profitToCover,
     uint totalAssets,
     address splitter,
     mapping(address => uint) storage liquidityThresholds_
   ) external {
     RebalanceNoSwapsLocal memory p;
-    IUniswapV3Pool pool = state.pool;
-    p.tokenA = state.tokenA;
-    p.tokenB = state.tokenB;
-    p.depositorSwapTokens = state.depositorSwapTokens;
+    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
+    p.tokenA = pairState.tokenA;
+    p.tokenB = pairState.tokenB;
+    p.depositorSwapTokens = pairState.depositorSwapTokens;
 
-    (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
     (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
 
     BorrowLib.rebalanceAssets(
@@ -162,8 +158,8 @@ library UniswapV3DebtLib {
       ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);
     }
 
-    state.lowerTick = p.newLowerTick;
-    state.upperTick = p.newUpperTick;
+    pairState.lowerTick = p.newLowerTick;
+    pairState.upperTick = p.newUpperTick;
   }
 //endregion  -------------------------------------------- Rebalance
 

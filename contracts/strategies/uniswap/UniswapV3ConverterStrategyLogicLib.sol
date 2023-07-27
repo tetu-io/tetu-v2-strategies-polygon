@@ -37,27 +37,9 @@ library UniswapV3ConverterStrategyLogicLib {
   //region ------------------------------------------------ Data types
 
   struct State {
-    IUniswapV3Pool pool;
+    PairBasedStrategyLogicLib.PairState pair;
 
-    address tokenA;
-    address tokenB;
-    address strategyProfitHolder;
-
-    bool isStablePool;
-    bool depositorSwapTokens;
-
-    int24 tickSpacing;
-    int24 lowerTick;
-    int24 upperTick;
-    int24 rebalanceTickRange;
-    uint128 totalLiquidity;
-
-    /// @notice Fuse for token A and token B
-    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
-    /// @notice 1 means that the fuse was triggered ON and then all debts were closed
-    ///         and assets were converter to underlying using withdrawStepByAgg.
-    ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
-    uint withdrawDone;
+    // place for additional (specific) state
   }
 
   struct RebalanceLocal {
@@ -96,8 +78,8 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @return amountA The balance of tokenA.
   /// @return amountB The balance of tokenB.
   function getTokenAmounts(State storage state) external view returns (uint amountA, uint amountB) {
-    amountA = AppLib.balance(state.tokenA);
-    amountB = AppLib.balance(state.tokenB);
+    amountA = AppLib.balance(state.pair.tokenA);
+    amountB = AppLib.balance(state.pair.tokenB);
   }
 
   /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
@@ -105,100 +87,82 @@ library UniswapV3ConverterStrategyLogicLib {
   function initStrategyState(
     State storage state,
     address controller_,
-    address converter,
     address pool,
     int24 tickRange,
     int24 rebalanceTickRange,
     address asset_,
-    uint[4] memory fuseThresholdsA,
-    uint[4] memory fuseThresholdsB
+    uint[4] calldata fuseThresholdsA,
+    uint[4] calldata fuseThresholdsB
   ) external {
     require(pool != address(0), AppErrors.ZERO_ADDRESS);
-    state.pool = IUniswapV3Pool(pool);
-    state.rebalanceTickRange = rebalanceTickRange;
 
-    _setInitialDepositorValues(state, IUniswapV3Pool(pool), tickRange, rebalanceTickRange, asset_);
+    int24[4] memory tickData;
+    {
+      int24 tickSpacing = UniswapV3Lib.getTickSpacing(IUniswapV3Pool(pool).fee());
+      if (tickRange != 0) {
+        require(tickRange == tickRange / tickSpacing * tickSpacing, PairBasedStrategyLib.INCORRECT_TICK_RANGE);
+        require(rebalanceTickRange == rebalanceTickRange / tickSpacing * tickSpacing, PairBasedStrategyLib.INCORRECT_REBALANCE_TICK_RANGE);
+      }
+      tickData[0] = tickSpacing;
+      (tickData[1], tickData[2]) = UniswapV3DebtLib.calcTickRange(pool, tickRange, tickSpacing);
+      tickData[3] = tickRange;
+    }
+
+    address[4] memory addr = [pool, asset_, IUniswapV3Pool(pool).token0(), IUniswapV3Pool(pool).token1()];
+    PairBasedStrategyLogicLib._setInitialDepositorValues(
+      state.pair,
+      addr,
+      tickData,
+      isStablePool(IUniswapV3Pool(pool)),
+      fuseThresholdsA,
+      fuseThresholdsB
+    );
 
     address liquidator = IController(controller_).liquidator();
-    IERC20(state.tokenA).approve(liquidator, type(uint).max);
-    IERC20(state.tokenB).approve(liquidator, type(uint).max);
-
-    if (isStablePool(state.pool)) {
-      /// for stable pools fuse can be enabled
-      state.isStablePool = true;
-      PairBasedStrategyLib.setFuseStatus(state.fuseAB[0], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
-      PairBasedStrategyLib.setFuseThresholds(state.fuseAB[0], fuseThresholdsA);
-      PairBasedStrategyLib.setFuseStatus(state.fuseAB[1], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
-      PairBasedStrategyLib.setFuseThresholds(state.fuseAB[1], fuseThresholdsB);
-    }
+    IERC20(addr[2]).approve(liquidator, type(uint).max); // token0
+    IERC20(addr[3]).approve(liquidator, type(uint).max); // token1
   }
 
   function createSpecificName(State storage state) external view returns (string memory) {
-    return string(abi.encodePacked("UniV3 ", IERC20Metadata(state.tokenA).symbol(), "/", IERC20Metadata(state.tokenB).symbol(), "-", StringLib._toString(state.pool.fee())));
+    return string(abi.encodePacked(
+      "UniV3 ",
+      IERC20Metadata(state.pair.tokenA).symbol(),
+      "/",
+      IERC20Metadata(state.pair.tokenB).symbol(),
+      "-",
+      StringLib._toString(IUniswapV3Pool(state.pair.pool).fee()))
+    );
   }
   //endregion ------------------------------------------------ Helpers
 
-  //region ------------------------------------------------ Calculations
-
-  /// @notice Calculate and set the initial values for a Uniswap V3 pool Depositor.
-  /// @param state Depositor storage state struct
-  /// @param pool The Uniswap V3 pool to get the initial values from.
-  /// @param tickRange_ The tick range for the pool.
-  /// @param rebalanceTickRange_ The rebalance tick range for the pool.
-  /// @param asset_ Underlying asset of the depositor.
-  function _setInitialDepositorValues(
-    State storage state,
-    IUniswapV3Pool pool,
-    int24 tickRange_,
-    int24 rebalanceTickRange_,
-    address asset_
-  ) internal {
-    int24 tickSpacing = UniswapV3Lib.getTickSpacing(pool.fee());
-    if (tickRange_ != 0) {
-      require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_TICK_RANGE);
-      require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, Uni3StrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
-    }
-    state.tickSpacing = tickSpacing;
-    (state.lowerTick, state.upperTick) = UniswapV3DebtLib.calcTickRange(pool, tickRange_, tickSpacing);
-    require(asset_ == pool.token0() || asset_ == pool.token1(), Uni3StrategyErrors.INCORRECT_ASSET);
-    if (asset_ == pool.token0()) {
-      state.tokenA = pool.token0();
-      state.tokenB = pool.token1();
-      state.depositorSwapTokens = false;
-    } else {
-      state.tokenA = pool.token1();
-      state.tokenB = pool.token0();
-      state.depositorSwapTokens = true;
-    }
-  }
-  //endregion ------------------------------------------------ Calculations
-
   //region ------------------------------------------------ Pool info
   /// @notice Retrieve the reserves of a Uniswap V3 pool managed by this contract.
-  /// @param state The State storage containing the pool's information.
+  /// @param pairState The State storage containing the pool's information.
   /// @return reserves An array containing the reserve amounts of the contract owned liquidity.
-  function getPoolReserves(State storage state) external view returns (uint[] memory reserves) {
+  function getPoolReserves(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (
+    uint[] memory reserves
+  ) {
     reserves = new uint[](2);
-    (uint160 sqrtRatioX96, , , , , ,) = state.pool.slot0();
+    (uint160 sqrtRatioX96, , , , , ,) = IUniswapV3Pool(pairState.pool).slot0();
 
     (reserves[0], reserves[1]) = UniswapV3Lib.getAmountsForLiquidity(
       sqrtRatioX96,
-      state.lowerTick,
-      state.upperTick,
-      state.totalLiquidity
+      pairState.lowerTick,
+      pairState.upperTick,
+      pairState.totalLiquidity
     );
 
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
     }
   }
 
   /// @notice Retrieve the fees generated by a Uniswap V3 pool managed by this contract.
-  /// @param state The State storage containing the pool's information.
+  /// @param pairState The State storage containing the pool's information.
   /// @return fee0 The fees generated for the first token in the pool.
   /// @return fee1 The fees generated for the second token in the pool.
-  function getFees(State storage state) public view returns (uint fee0, uint fee1) {
-    UniswapV3Lib.PoolPosition memory position = UniswapV3Lib.PoolPosition(address(state.pool), state.lowerTick, state.upperTick, state.totalLiquidity, address(this));
+  function getFees(PairBasedStrategyLogicLib.PairState storage pairState) public view returns (uint fee0, uint fee1) {
+    UniswapV3Lib.PoolPosition memory position = UniswapV3Lib.PoolPosition(pairState.pool, pairState.lowerTick, pairState.upperTick, pairState.totalLiquidity, address(this));
     (fee0, fee1) = UniswapV3Lib.getFees(position);
   }
 
@@ -206,22 +170,20 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param liquidityAmountToExit The amount of liquidity to exit.
   /// @return amountsOut An array containing the estimated exit amounts for each token in the pool.
   function quoteExit(
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     uint128 liquidityAmountToExit
   ) public view returns (uint[] memory amountsOut) {
-    uint128 liquidity = state.totalLiquidity;
-
     amountsOut = new uint[](2);
-    (uint160 sqrtRatioX96, , , , , ,) = state.pool.slot0();
+    (uint160 sqrtRatioX96, , , , , ,) = IUniswapV3Pool(pairState.pool).slot0();
 
     (amountsOut[0], amountsOut[1]) = UniswapV3Lib.getAmountsForLiquidity(
       sqrtRatioX96,
-      state.lowerTick,
-      state.upperTick,
+      pairState.lowerTick,
+      pairState.upperTick,
       liquidityAmountToExit
     );
 
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
   }
@@ -284,18 +246,18 @@ library UniswapV3ConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Exit from the pool
   /// @notice Exit the pool and collect tokens proportional to the liquidity amount to exit.
-  /// @param state The State storage object.
+  /// @param pairState The State storage object.
   /// @param liquidityAmountToExit The amount of liquidity to exit.
   /// @return amountsOut An array containing the collected amounts for each token in the pool.
   function exit(
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     uint128 liquidityAmountToExit
   ) external returns (uint[] memory amountsOut) {
-    IUniswapV3Pool pool = state.pool;
-    int24 lowerTick = state.lowerTick;
-    int24 upperTick = state.upperTick;
-    uint128 liquidity = state.totalLiquidity;
-    bool _depositorSwapTokens = state.depositorSwapTokens;
+    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
+    int24 lowerTick = pairState.lowerTick;
+    int24 upperTick = pairState.upperTick;
+    uint128 liquidity = pairState.totalLiquidity;
+    bool _depositorSwapTokens = pairState.depositorSwapTokens;
 
     require(liquidity >= liquidityAmountToExit, Uni3StrategyErrors.WRONG_LIQUIDITY);
 
@@ -304,7 +266,7 @@ library UniswapV3ConverterStrategyLogicLib {
     // all fees will be collected but not returned in amountsOut
     pool.collect(address(this), lowerTick, upperTick, type(uint128).max, type(uint128).max);
 
-    state.totalLiquidity = liquidity - liquidityAmountToExit;
+    pairState.totalLiquidity = liquidity - liquidityAmountToExit;
 
     if (_depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
@@ -316,14 +278,18 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @notice Claim rewards from the Uniswap V3 pool.
   /// @return tokensOut An array containing tokenA and tokenB.
   /// @return amountsOut An array containing the amounts of token0 and token1 claimed as rewards.
-  function claimRewards(State storage state) external returns (address[] memory tokensOut, uint[] memory amountsOut, uint[] memory balancesBefore) {
-    address strategyProfitHolder = state.strategyProfitHolder;
-    IUniswapV3Pool pool = state.pool;
-    int24 lowerTick = state.lowerTick;
-    int24 upperTick = state.upperTick;
+  function claimRewards(PairBasedStrategyLogicLib.PairState storage pairState) external returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut,
+    uint[] memory balancesBefore
+  ) {
+    address strategyProfitHolder = pairState.strategyProfitHolder;
+    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
+    int24 lowerTick = pairState.lowerTick;
+    int24 upperTick = pairState.upperTick;
     tokensOut = new address[](2);
-    tokensOut[0] = state.tokenA;
-    tokensOut[1] = state.tokenB;
+    tokensOut[0] = pairState.tokenA;
+    tokensOut[1] = pairState.tokenB;
 
     balancesBefore = new uint[](2);
     for (uint i; i < tokensOut.length; i++) {
@@ -331,7 +297,7 @@ library UniswapV3ConverterStrategyLogicLib {
     }
 
     amountsOut = new uint[](2);
-    if (state.totalLiquidity > 0) {
+    if (pairState.totalLiquidity > 0) {
       pool.burn(lowerTick, upperTick, 0);
       (amountsOut[0], amountsOut[1]) = pool.collect(
         address(this),
@@ -344,7 +310,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
     emit UniV3FeesClaimed(amountsOut[0], amountsOut[1]);
 
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
 
@@ -357,17 +323,19 @@ library UniswapV3ConverterStrategyLogicLib {
     }
   }
 
-  function isReadyToHardWork(State storage state, ITetuConverter converter) external view returns (bool isReady) {
+  function isReadyToHardWork(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter) external view returns (
+    bool isReady
+  ) {
     // check claimable amounts and compare with thresholds
-    (uint fee0, uint fee1) = getFees(state);
+    (uint fee0, uint fee1) = getFees(pairState);
 
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (fee0, fee1) = (fee1, fee0);
     }
 
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    address h = state.strategyProfitHolder;
+    address tokenA = pairState.tokenA;
+    address tokenB = pairState.tokenB;
+    address h = pairState.strategyProfitHolder;
 
     fee0 += IERC20(tokenA).balanceOf(h);
     fee1 += IERC20(tokenB).balanceOf(h);
@@ -382,15 +350,15 @@ library UniswapV3ConverterStrategyLogicLib {
     return fee0USD > HARD_WORK_USD_FEE_THRESHOLD || fee1USD > HARD_WORK_USD_FEE_THRESHOLD;
   }
 
-  function sendFeeToProfitHolder(State storage state, uint fee0, uint fee1) external {
-    address strategyProfitHolder = state.strategyProfitHolder;
+  function sendFeeToProfitHolder(PairBasedStrategyLogicLib.PairState storage pairState, uint fee0, uint fee1) external {
+    address strategyProfitHolder = pairState.strategyProfitHolder;
     require(strategyProfitHolder != address (0), Uni3StrategyErrors.ZERO_PROFIT_HOLDER);
-    if (state.depositorSwapTokens) {
-      IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee1);
-      IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee0);
+    if (pairState.depositorSwapTokens) {
+      IERC20(pairState.tokenA).safeTransfer(strategyProfitHolder, fee1);
+      IERC20(pairState.tokenB).safeTransfer(strategyProfitHolder, fee0);
     } else {
-      IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee0);
-      IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee1);
+      IERC20(pairState.tokenA).safeTransfer(strategyProfitHolder, fee0);
+      IERC20(pairState.tokenB).safeTransfer(strategyProfitHolder, fee1);
     }
     emit UniV3FeesClaimed(fee0, fee1);
   }
@@ -415,7 +383,9 @@ library UniswapV3ConverterStrategyLogicLib {
   //region ------------------------------------------------ Rebalance
   /// @notice Determine if the strategy needs to be rebalanced.
   /// @return needRebalance A boolean indicating if {rebalanceNoSwaps} should be called
-  function needStrategyRebalance(State storage state, ITetuConverter converter_) external view returns (bool needRebalance) {
+  function needStrategyRebalance(PairBasedStrategyLogicLib.PairState storage state, ITetuConverter converter_) external view returns (
+    bool needRebalance
+  ) {
     if (state.isStablePool) {
       address tokenA = state.tokenA;
       address tokenB = state.tokenB;
@@ -431,24 +401,24 @@ library UniswapV3ConverterStrategyLogicLib {
           needRebalance =
               !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusA)
               && !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusB)
-                && _needPoolRebalance(state.pool, state);
+                && _needPoolRebalance(IUniswapV3Pool(state.pool), state);
         }
       }
     } else {
-      needRebalance = _needPoolRebalance(state.pool, state);
+      needRebalance = _needPoolRebalance(IUniswapV3Pool(state.pool), state);
     }
   }
 
   /// @notice Determine if the pool needs to be rebalanced.
   /// @return A boolean indicating if the pool needs to be rebalanced.
-  function _needPoolRebalance(IUniswapV3Pool pool, State storage state) internal view returns (bool) {
-    (, int24 tick, , , , ,) = pool.slot0();
+  function _needPoolRebalance(IUniswapV3Pool pool_, PairBasedStrategyLogicLib.PairState storage pairState) internal view returns (bool) {
+    (, int24 tick, , , , ,) = pool_.slot0();
     return PairBasedStrategyLogicLib._needPoolRebalance(
       tick,
-      state.lowerTick,
-      state.upperTick,
-      state.tickSpacing,
-      state.rebalanceTickRange
+      pairState.lowerTick,
+      pairState.upperTick,
+      pairState.tickSpacing,
+      pairState.rebalanceTickRange
     );
   }
 
@@ -458,7 +428,7 @@ library UniswapV3ConverterStrategyLogicLib {
   /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
   /// @return tokenAmounts Token amounts for deposit. If length == 0 no deposit is required.
   function rebalanceNoSwaps(
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage state,
     address[2] calldata converterLiquidator,
     uint oldTotalAssets,
     uint profitToCover,
@@ -561,29 +531,31 @@ library UniswapV3ConverterStrategyLogicLib {
   function _initLocalVars(
     RebalanceLocal memory v,
     ITetuConverter converter_,
-    State storage state
+    PairBasedStrategyLogicLib.PairState storage pairState
   ) internal view {
-    v.pool = state.pool;
-    v.fuseAB = state.fuseAB;
+    v.pool = IUniswapV3Pool(pairState.pool);
+    v.fuseAB = pairState.fuseAB;
     v.converter = converter_;
-    v.tokenA = state.tokenA;
-    v.tokenB = state.tokenB;
-    v.isStablePool = state.isStablePool;
+    v.tokenA = pairState.tokenA;
+    v.tokenB = pairState.tokenB;
+    v.isStablePool = pairState.isStablePool;
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]
   ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
-  function getPropNotUnderlying18(State storage state) view external returns (uint) {
+  function getPropNotUnderlying18(PairBasedStrategyLogicLib.PairState storage pairState) view external returns (uint) {
     // get pool proportions
-    IUniswapV3Pool pool = state.pool;
-    bool depositorSwapTokens = state.depositorSwapTokens;
-    (int24 newLowerTick, int24 newUpperTick) = UniswapV3DebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
+    bool depositorSwapTokens = pairState.depositorSwapTokens;
+    (int24 newLowerTick, int24 newUpperTick) = UniswapV3DebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
     (uint consumed0, uint consumed1) = UniswapV3DebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
 
     require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
     return consumed1 * 1e18 / (consumed0 + consumed1);
   }
   //endregion ------------------------------------------------ Rebalance
+
+  //region ------------------------------------------------ WithdrawByAgg
   struct WithdrawByAggStepLocal {
     PairBasedStrategyLogicLib.WithdrawLocal w;
     address tokenToSwap;
@@ -611,7 +583,7 @@ library UniswapV3ConverterStrategyLogicLib {
     uint[4] calldata values_,
     bytes memory swapData,
     bytes memory planEntryData,
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     mapping(address => uint) storage liquidationThresholds
   ) external returns (
     bool completed,
@@ -631,12 +603,12 @@ library UniswapV3ConverterStrategyLogicLib {
     v.oldTotalAssets = values_[2];
     v.entryToPool = values_[3];
 
-    v.pool = state.pool;
+    v.pool = IUniswapV3Pool(pairState.pool);
 
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       v.w,
-      [state.tokenA, state.tokenB],
+      [pairState.tokenA, pairState.tokenB],
       v.asset,
       liquidationThresholds,
       planEntryData,
@@ -664,20 +636,21 @@ library UniswapV3ConverterStrategyLogicLib {
       v.w.tokens,
       v.oldTotalAssets,
       v.profitToCover,
-      state.strategyProfitHolder,
+      pairState.strategyProfitHolder,
       v.splitter
     );
 
     if (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
-      (v.newLowerTick, v.newUpperTick) = UniswapV3DebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
-      state.lowerTick = v.newLowerTick;
-      state.upperTick = v.newUpperTick;
+      (v.newLowerTick, v.newUpperTick) = UniswapV3DebtLib._calcNewTickRange(v.pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      pairState.lowerTick = v.newLowerTick;
+      pairState.upperTick = v.newUpperTick;
       tokenAmounts = v.tokenAmounts;
     }
 
     return (completed, tokenAmounts);
   }
+  //endregion ------------------------------------------------ WithdrawByAgg
 
 }

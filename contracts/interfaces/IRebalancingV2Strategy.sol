@@ -49,8 +49,8 @@ interface IRebalancingV2Strategy {
     /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
     /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone]
     function getDefaultState() external view returns (
-        address[4] memory addr,
-        int24[4] memory tickData,
-        uint[4] memory nums
+        address[] memory addr,
+        int24[] memory tickData,
+        uint[] memory nums
     );
 }
