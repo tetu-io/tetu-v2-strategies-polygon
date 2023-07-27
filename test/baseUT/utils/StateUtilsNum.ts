@@ -22,6 +22,7 @@ import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
+import {PackedData} from "./DefaultState";
 
 export interface IRebalanceResults {
   fuseStatus?: number;
@@ -238,7 +239,7 @@ export class StateUtilsNum {
       gaugeStrategyBalance = +formatUnits(await gauge.balanceOf(strategy.address), gaugeDecimals);
     } else if (await strategy.PLATFORM() === 'UniswapV3')  {
       const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
-      const state = await uniswapV3Strategy.getState();
+      const state = await PackedData.getDefaultState(uniswapV3Strategy);
       liquidity = +formatUnits(
         state.totalLiquidity,
         assetDecimals // todo
@@ -252,15 +253,16 @@ export class StateUtilsNum {
       directBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [asset.address], [state.tokenB], priceOracle, true);
       reverseBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [state.tokenB], [asset.address], priceOracle, false);
 
-      const depositorState = await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer).getState();
-      const pool = await IUniswapV3Pool__factory.connect(depositorState.pool, signer);
+      const defaultState = await PackedData.getDefaultState(UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
+      const specificState = await PackedData.getSpecificStateUniv3(UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
+      const pool = await IUniswapV3Pool__factory.connect(defaultState.pool, signer);
       const slot0 = await pool.slot0();
       const facade = await MockHelper.createUniswapV3LibFacade(signer);
       const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
         slot0.sqrtPriceX96,
-        depositorState.lowerTick,
-        depositorState.upperTick,
-        depositorState.totalLiquidity
+        defaultState.lowerTick,
+        defaultState.upperTick,
+        defaultState.totalLiquidity
       );
       const status = (await IRebalancingV2Strategy__factory.connect(strategy.address, signer).getFuseStatus());
       fuseStatusA = status.statusA.toNumber();
@@ -268,16 +270,16 @@ export class StateUtilsNum {
       withdrawDone = status.withdrawDone.toNumber();
 
       univ3Depositor = {
-        tokenA: depositorState.tokenA,
-        tokenB: depositorState.tokenB,
-        tickSpacing: depositorState.tickSpacing,
-        lowerTick: depositorState.lowerTick,
-        upperTick: depositorState.upperTick,
-        rebalanceTickRange: depositorState.rebalanceTickRange,
-        totalLiquidity: depositorState.totalLiquidity,
-        rebalanceEarned0: depositorState.rebalanceResults[0],
-        rebalanceEarned1: depositorState.rebalanceResults[1],
-        rebalanceLost: depositorState.rebalanceResults[2],
+        tokenA: defaultState.tokenA,
+        tokenB: defaultState.tokenB,
+        tickSpacing: defaultState.tickSpacing,
+        lowerTick: defaultState.lowerTick,
+        upperTick: defaultState.upperTick,
+        rebalanceTickRange: defaultState.rebalanceTickRange,
+        totalLiquidity: defaultState.totalLiquidity,
+        rebalanceEarned0: specificState.rebalanceEarned0,
+        rebalanceEarned1: specificState.rebalanceEarned1,
+        rebalanceLost: specificState.rebalanceLost,
       }
       univ3Pool = {
         token0: await pool.token0(),

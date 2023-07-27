@@ -29,31 +29,14 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Returns the current state of the contract.
-  function getState() external view returns (
-    address tokenA,
-    address tokenB,
-    address profitHolder,
-    IPool pool,
-    uint128 totalLiquidity,
-    uint fuseThreshold,
-    int24[] memory ticks,
+  function getSpecificState() external view returns (
     uint[] memory profitHolderBalances,
     bool[] memory flags
   ) {
-    tokenA = state.tokenA;
-    tokenB = state.tokenB;
-    pool = state.pool;
-    ticks = new int24[](4);
-    ticks[0] = state.lowerTick;
-    ticks[1] = state.upperTick;
-    ticks[2] = state.tickSpacing;
-    ticks[3] = state.rebalanceTickRange;
-    totalLiquidity = state.totalLiquidity;
-    fuseThreshold = state.fuseThreshold;
-    profitHolder = state.strategyProfitHolder;
+    address profitHolder = state.strategyProfitHolder;
     profitHolderBalances = new uint[](3);
-    profitHolderBalances[0] = IERC20(tokenA).balanceOf(profitHolder);
-    profitHolderBalances[1] = IERC20(tokenB).balanceOf(profitHolder);
+    profitHolderBalances[0] = IERC20(state.tokenA).balanceOf(profitHolder);
+    profitHolderBalances[1] = IERC20(state.tokenB).balanceOf(profitHolder);
     profitHolderBalances[2] = IERC20(KyberConverterStrategyLogicLib.KNC).balanceOf(profitHolder);
     flags = new bool[](4);
     flags[0] = state.isFuseTriggered;

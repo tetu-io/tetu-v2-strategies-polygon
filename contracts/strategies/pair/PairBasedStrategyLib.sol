@@ -44,6 +44,18 @@ library PairBasedStrategyLib {
   uint public constant FUSE_IDX_UPPER_LIMIT_ON = 2;
   uint public constant FUSE_IDX_UPPER_LIMIT_OFF = 3;
 
+  uint public constant IDX_ADDR_DEFAULT_STATE_TOKEN_A = 0;
+  uint public constant IDX_ADDR_DEFAULT_STATE_TOKEN_B = 1;
+  uint public constant IDX_ADDR_DEFAULT_STATE_POOL = 2;
+  uint public constant IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER = 3;
+  uint public constant IDX_TICK_DEFAULT_STATE_TICK_SPACING = 0;
+  uint public constant IDX_TICK_DEFAULT_STATE_LOWER_TICK = 1;
+  uint public constant IDX_TICK_DEFAULT_STATE_UPPER_TICK = 2;
+  uint public constant IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE = 3;
+  uint public constant IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
+  uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
+  uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B = 2;
+  uint public constant IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE = 3;
 
   /// @notice 1inch router V5
   address internal constant ONEINCH = 0x1111111254EEB25477B68fb85Ed929f73A960582;

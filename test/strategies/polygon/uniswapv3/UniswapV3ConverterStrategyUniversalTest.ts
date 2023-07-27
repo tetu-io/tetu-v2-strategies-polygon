@@ -28,6 +28,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 
 dotEnvConfig();
@@ -128,7 +129,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
-        const state = await univ3Strategy.getState()
+        const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
@@ -141,7 +142,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
-        const state = await univ3Strategy.getState()
+        const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
@@ -155,7 +156,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
-        const state = await univ3Strategy.getState()
+        const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
@@ -181,7 +182,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
-        const state = await strategy.getState()
+        const state = await PackedData.getDefaultState(strategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB])
         await strategy.setStrategyProfitHolder(profitHolder.address)
         return strategy as unknown as IStrategyV2;

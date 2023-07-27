@@ -15,9 +15,8 @@ interface IRebalancingV2Strategy {
     ///         Typical sequence of the actions is: exit from the pool, make 1 swap, repay 1 debt.
     ///         You can enter to the pool if you are sure that you won't have borrow + repay on AAVE3 in the same block.
     /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
-    /// @param tokenToSwapAndAggregator Array with two params (workaround for stack too deep):
-    ///             [0] tokenToSwap_ What token should be swapped to other
-    ///             [1] aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
+    /// @param tokenToSwap_ What token should be swapped to other
+    /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
     /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
     /// @param swapData Swap rote that was prepared off-chain.
     /// @param planEntryData PLAN_XXX + additional data, see IterationPlanKinds
@@ -26,7 +25,8 @@ interface IRebalancingV2Strategy {
     ///                    0 - not allowed, 1 - allowed, 2 - allowed only if completed
     /// @return completed All debts were closed, leftovers were swapped to the required proportions.
     function withdrawByAggStep(
-        address[2] calldata tokenToSwapAndAggregator,
+        address tokenToSwap_,
+        address aggregator_,
         uint amountToSwap_,
         bytes memory swapData,
         bytes memory planEntryData,
@@ -37,16 +37,20 @@ interface IRebalancingV2Strategy {
     /// @return Proportion of the not-underlying [0...1e18]
     function getPropNotUnderlying18() external view returns (uint);
 
-    /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
-    /// @return statusA Fuse status of token A
-    /// @return statusB Fuse status of token B
-    /// @return withdrawDone 1 means that full withdraw to underling was made
-    function getFuseStatus() external view returns (uint statusA, uint statusB, uint withdrawDone);
-
     /// @notice Set withdrawDone value.
     ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
     ///         After completion of the conversion withdrawDone can be set to 1.
     ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
     /// @param done 0 - full withdraw required, 1 - full withdraw was done
     function setWithdrawDone(uint done) external;
+
+    /// @notice Returns the current state of the contract
+    /// @return addr [tokenA, tokenB, pool, profitHolder]
+    /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
+    /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone]
+    function getDefaultState() external view returns (
+        address[4] memory addr,
+        int24[4] memory tickData,
+        uint[4] memory nums
+    );
 }

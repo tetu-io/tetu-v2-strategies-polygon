@@ -32,6 +32,7 @@ import {StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {KyberLiquidityUtils} from "./utils/KyberLiquidityUtils";
 import {writeFileSyncRestoreFolder} from "../../../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -180,7 +181,7 @@ describe('KyberConverterStrategyDepegTest', function() {
     const rowsCaption = ['Step', 'USDT Price', 'Total assets', 'USDT Collateral', 'USDC Amount to repay', 'Locked underlying', 'Health Factor']
     const rows: [string, number, number, number, number, number, number][] = []
     const s = strategy
-    const state = await s.getState()
+    const state = await PackedData.getDefaultState(s);
 
     console.log('deposit...');
     await asset.approve(vault.address, Misc.MAX_UINT);

@@ -27,6 +27,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 
 dotEnvConfig();
@@ -199,7 +200,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
-        const state = await algebraStrategy.getState()
+        const state = await PackedData.getDefaultState(algebraStrategy);
         const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
@@ -212,7 +213,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
-        const state = await algebraStrategy.getState()
+        const state = await PackedData.getDefaultState(algebraStrategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
@@ -226,7 +227,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
-        const state = await algebraStrategy.getState()
+        const state = await PackedData.getDefaultState(algebraStrategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
@@ -261,7 +262,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
-        const state = await strategy.getState()
+        const state = await PackedData.getDefaultState(algebraStrategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB, t[4].rewardToken, t[4].bonusRewardToken])
         await strategy.setStrategyProfitHolder(profitHolder.address)
         await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%

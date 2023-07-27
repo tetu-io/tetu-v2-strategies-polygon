@@ -23,6 +23,7 @@ import {depositToVault, printVaultState, rebalanceUniv3StrategyNoSwaps} from "..
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -133,7 +134,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
 
     // prices should be the same in the pool and in the oracle
     await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
@@ -254,7 +255,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
     singleIteration: boolean;
   }
   async function makeFullWithdraw(p: IWithdrawParams) {
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
     let step = 0;
     while (true) {
       const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(p.planEntryData);
@@ -1027,8 +1028,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
 
   describe('rebalanceNoSwaps', function() {
     it('should change needRebalance() result to false', async() => {
-      const s = strategy
-      const state = await s.getState()
+      const s = strategy;
 
       console.log('deposit...');
       await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);

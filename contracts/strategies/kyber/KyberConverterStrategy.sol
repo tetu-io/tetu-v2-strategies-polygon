@@ -126,14 +126,18 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     return (state.tokenA, state.tokenB);
   }
 
-  /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
-  /// @return statusA Fuse status of token A
-  /// @return statusB Fuse status of token B
-  /// @return withdrawDone 1 means that full withdraw to underling was made
-  function getFuseStatus() external view returns (uint statusA, uint statusB, uint withdrawDone) {
-    return (0, 0, 0); // todo
+  /// @notice Returns the current state of the contract
+  /// @return addr [tokenA, tokenB, pool, profitHolder]
+  /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
+  function getDefaultState() external override view returns (
+    address[4] memory addr,
+    int24[4] memory tickData,
+    uint[4] memory nums
+  ) {
+    addr = [state.tokenA, state.tokenB, address(state.pool), state.strategyProfitHolder];
+    tickData = [state.tickSpacing, state.lowerTick, state.upperTick, state.rebalanceTickRange];
+    nums = [uint(state.totalLiquidity), 0, 0, 0]; // todo uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), state.withdrawDone];
   }
-
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region --------------------------------------------- CALLBACKS
@@ -210,7 +214,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   }
 
   function withdrawByAggStep(
-    address[2] calldata tokenToSwapAndAggregator,
+    address tokenToSwap_,
+    address aggregator_,
     uint amountToSwap_,
     bytes memory swapData,
     bytes memory planEntryData,
@@ -234,8 +239,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     v.liquidator = address(AppLib._getLiquidator(w.controller));
 
     // decode tokenToSwapAndAggregator
-    v.tokenToSwap = tokenToSwapAndAggregator[0];
-    v.aggregator = tokenToSwapAndAggregator[1];
+    v.tokenToSwap = tokenToSwap_;
+    v.aggregator = aggregator_;
     v.useLiquidator = v.aggregator == address(0);
 
     // make withdraw iteration according to the selected plan

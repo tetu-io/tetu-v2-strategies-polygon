@@ -23,6 +23,7 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniswapV3LiquidityUtils} from "./utils/UniswapV3LiquidityUtils";
 import {UniversalUtils} from "../../../UniversalUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -154,7 +155,7 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
     await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
     await vault.deposit(parseUnits('1000', 6), signer.address);
 
-    const state = await strategy.getState()
+    const state = await PackedData.getDefaultState(strategy);
     for (let i = 0; i < 3; i++) {
       console.log(`Swap and rebalance. Step ${i}`)
       const amounts = await UniswapV3LiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.UNISWAPV3_USDC_USDT_100)

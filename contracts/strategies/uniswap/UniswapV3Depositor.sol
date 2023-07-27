@@ -31,26 +31,12 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Returns the current state of the contract.
-  /// @param tokensAB [tokenA, tokenB]
-  /// @param tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
-  function getState() external view returns ( // todo getDefaultState
-    address[2] memory tokensAB,
-    address pool,
-    address profitHolder,
-    int24[4] memory tickData,
-    uint128 totalLiquidity,
+  function getSpecificState() external view returns (
     uint[] memory rebalanceResults
   ) {
-    tokensAB = [state.tokenA, state.tokenB];
-    pool = address(state.pool);
-    profitHolder = state.strategyProfitHolder;
-    tickData = [state.tickSpacing, state.lowerTick, state.upperTick, state.rebalanceTickRange];
-    totalLiquidity = state.totalLiquidity;
-
     rebalanceResults = new uint[](3);
-    rebalanceResults[0] = IERC20(tokensAB[0]).balanceOf(state.strategyProfitHolder);
-    rebalanceResults[1] = IERC20(tokensAB[1]).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[0] = IERC20(state.tokenA).balanceOf(state.strategyProfitHolder);
+    rebalanceResults[1] = IERC20(state.tokenB).balanceOf(state.strategyProfitHolder);
     rebalanceResults[2] = 0;
   }
 

@@ -21,6 +21,7 @@ import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {parseUnits} from "ethers/lib/utils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 const COMPOUND_RATIO = 50_000;
 const REINVEST_THRESHOLD_PERCENT = 1_000;
@@ -107,7 +108,7 @@ export class ConverterStrategyBaseContracts {
     // setup converter
     const strategy = UniswapV3ConverterStrategy__factory.connect(data.strategy.address, gov);
     await ConverterUtils.whitelist([strategy.address], p?.converter || MaticAddresses.TETU_CONVERTER);
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
     await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
 
     await IERC20__factory.connect(asset, signer).approve(data.vault.address, Misc.MAX_UINT);

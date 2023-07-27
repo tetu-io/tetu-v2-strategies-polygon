@@ -27,6 +27,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {BigNumber, BytesLike} from "ethers";
 import {tetuConverter} from "../../../../typechain/@tetu_io";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -126,7 +127,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
     vault = data.vault.connect(signer)
 
     await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
     await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
 
     await vault.connect(gov).setWithdrawRequestBlocks(0);
@@ -173,7 +174,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
   describe('study: UniswapV3 strategy rebalance by noSwaps tests', function() {
     it('Reduce price N steps, increase price N steps, rebalance-no-swaps each time', async() => {
       const COUNT = 4;
-      const state = await strategy.getState();
+      const state = await PackedData.getDefaultState(strategy);
       const listStates: IStateNum[] = [];
 
       console.log('deposit...');
@@ -188,7 +189,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
       for (let i = 0; i < COUNT * 2; ++i) {
-        const state0 = await strategy.getState();
+        const state0 = await PackedData.getDefaultState(strategy);
         console.log("state0", state0);
 
         console.log("Step", i);
@@ -243,7 +244,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
   describe('study: make over-collateral, withdraw all', function() {
     it('Reduce price N steps, withdraw by iterations', async() => {
       const COUNT = 2;
-      const state = await strategy.getState();
+      const state = await PackedData.getDefaultState(strategy);
       const listStates: IStateNum[] = [];
 
       // const AGGREGATOR = MaticAddresses.AGG_ONEINCH_V5; // use real aggregator for swaps
@@ -271,7 +272,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
       // move price and get over-collateral
       for (let i = 0; i < COUNT; ++i) {
-        const state0 = await strategy.getState();
+        const state0 = await PackedData.getDefaultState(strategy);
         console.log("state0", state0);
 
         console.log("Step", i);

@@ -13,6 +13,7 @@ import hre from 'hardhat';
 import { writeFileSync } from 'fs';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import { writeFileSyncRestoreFolder } from '../../../../baseUT/utils/FileUtils';
+import {PackedData} from "../../../../baseUT/utils/DefaultState";
 
 /**
  * All balances
@@ -136,18 +137,19 @@ export class Uniswapv3StateUtils {
       )
     );
 
-    const depositorState = await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer).getState();
+    const state = PackedData.getDefaultState(await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
+    const specificState = PackedData.getSpecificStateUniv3(await UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
 
-    const pool = await IUniswapV3Pool__factory.connect(depositorState.pool, signer);
+    const pool = await IUniswapV3Pool__factory.connect(state.pool, signer);
     const slot0 = await pool.slot0();
 
     // console.log("slot0", slot0);
     // console.log("state", depositorState);
     const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
       slot0.sqrtPriceX96,
-      depositorState.lowerTick,
-      depositorState.upperTick,
-      depositorState.totalLiquidity
+      state.lowerTick,
+      state.upperTick,
+      state.totalLiquidity
     );
 
     const converterController = IConverterController__factory.connect(await converter.controller(), signer);
@@ -181,18 +183,18 @@ export class Uniswapv3StateUtils {
         investedAssets: await StrategyBaseV2__factory.connect(strategy.address, user).investedAssets(),
       },
       depositor: {
-        tokenA: depositorState.tokenA,
-        tokenB: depositorState.tokenB,
-        tickSpacing: depositorState.tickSpacing,
-        lowerTick: depositorState.lowerTick,
-        upperTick: depositorState.upperTick,
-        rebalanceTickRange: depositorState.rebalanceTickRange,
-        totalLiquidity: depositorState.totalLiquidity,
-        isFuseTriggered: depositorState.isFuseTriggered,
-        fuseThreshold: depositorState.fuseThreshold,
-        rebalanceEarned0: depositorState.rebalanceResults[0],
-        rebalanceEarned1: depositorState.rebalanceResults[1],
-        rebalanceLost: depositorState.rebalanceResults[2],
+        tokenA: state.tokenA,
+        tokenB: state.tokenB,
+        tickSpacing: state.tickSpacing,
+        lowerTick: state.lowerTick,
+        upperTick: state.upperTick,
+        rebalanceTickRange: state.rebalanceTickRange,
+        totalLiquidity: state.totalLiquidity,
+        isFuseTriggered: state.isFuseTriggered,
+        fuseThreshold: state.fuseThreshold,
+        rebalanceEarned0: (await specificState).rebalanceEarned0,
+        rebalanceEarned1: (await specificState).rebalanceEarned1,
+        rebalanceLost: (await specificState).rebalanceLost,
       },
       pool: {
         token0: await pool.token0(),

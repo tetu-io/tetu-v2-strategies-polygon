@@ -22,6 +22,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -145,7 +146,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
   describe('UniswapV3 strategy rebalance by agg tests', function() {
     it('Rebalance', async() => {
       const s = strategy
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
@@ -213,9 +214,9 @@ describe('UniswapV3ConverterStrategyAggRebalanceTest', function() {
 
       await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValue);
 
-      const state = await s.getState()
-      expect(state.rebalanceResults[0]).gt(0)
-      expect(state.rebalanceResults[1]).gt(0)
+      const specificState = await PackedData.getSpecificStateUniv3(s);
+      expect(specificState.rebalanceEarned0).gt(0);
+      expect(specificState.rebalanceEarned1).gt(0);
 
       expect(await s.needRebalance()).eq(true)
 

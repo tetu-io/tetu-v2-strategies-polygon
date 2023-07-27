@@ -45,6 +45,7 @@ import {
 } from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
 import {IRebalanceResults} from "./baseUT/utils/StateUtilsNum";
 import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
+import {PackedData} from "./baseUT/utils/DefaultState";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -115,13 +116,13 @@ export async function rebalanceUniv3StrategyNoSwaps(
   checkNeedRebalance: boolean = true
 ) : Promise<IRebalanceResults> {
   console.log('### REBALANCE CALL ###');
-  const stateBefore = await strategy.getState();
+  const stateBefore = await PackedData.getSpecificStateUniv3(strategy);
 
   const tx = await strategy.connect(signer).rebalanceNoSwaps(checkNeedRebalance,{ gasLimit: 10_000_000 });
   const receipt = await tx.wait();
   const ret = await handleReceiptRebalance(receipt, decimals);
 
-  const stateAfter = await strategy.getState();
+  const stateAfter = await PackedData.getSpecificStateUniv3(strategy);
 
   await printStateDifference(decimals, stateBefore, stateAfter);
 
@@ -132,20 +133,12 @@ export async function rebalanceUniv3StrategyNoSwaps(
 
 export async function printStateDifference(
   decimals: number,
-  stateBefore: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; rebalanceResults: BigNumber[] },
-  stateAfter: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; rebalanceResults: BigNumber[] },
+  stateBefore: IUniswapV3ConverterStrategySpecificState,
+  stateAfter: IUniswapV3ConverterStrategySpecificState,
 ) {
-  const rebalanceEarned0Before = stateBefore.rebalanceResults[0];
-  const rebalanceEarned1Before = stateBefore.rebalanceResults[1];
-  const rebalanceLostBefore = stateBefore.rebalanceResults[2];
-
-  const rebalanceEarned0After = stateAfter.rebalanceResults[0];
-  const rebalanceEarned1After = stateAfter.rebalanceResults[1];
-  const rebalanceLostAfter = stateAfter.rebalanceResults[2];
-
-  console.log('rebalanceEarned0', formatUnits(rebalanceEarned0After.sub(rebalanceEarned0Before), decimals));
-  console.log('rebalanceEarned1', formatUnits(rebalanceEarned1After.sub(rebalanceEarned1Before), decimals));
-  console.log('rebalanceLost', formatUnits(rebalanceLostAfter.sub(rebalanceLostBefore), decimals));
+  console.log('rebalanceEarned0', formatUnits(stateAfter.rebalanceEarned0.sub(stateBefore.rebalanceEarned0), decimals));
+  console.log('rebalanceEarned1', formatUnits(stateAfter.rebalanceEarned1.sub(stateBefore.rebalanceEarned1), decimals));
+  console.log('rebalanceLost', formatUnits(stateAfter.rebalanceLost.sub(stateBefore.rebalanceLost), decimals));
 }
 
 export async function depositToVault(

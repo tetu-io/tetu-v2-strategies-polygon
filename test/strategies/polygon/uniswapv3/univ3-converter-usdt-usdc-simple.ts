@@ -36,6 +36,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 
 const { expect } = chai;
@@ -115,7 +116,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState()
+    const state = await PackedData.getDefaultState(strategy);
     await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
     // ---
 

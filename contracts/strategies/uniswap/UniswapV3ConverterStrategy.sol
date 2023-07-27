@@ -122,14 +122,19 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state, converter);
   }
 
-  /// @notice Get current fuse status, see PairBasedStrategyLib.FuseStatus for possible values
-  /// @return statusA Fuse status of token A
-  /// @return statusB Fuse status of token B
-  /// @return withdrawDone 1 means that full withdraw to underling was made
-  function getFuseStatus() external override view returns (uint statusA, uint statusB, uint withdrawDone) {
-    return (uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), state.withdrawDone);
+  /// @notice Returns the current state of the contract
+  /// @return addr [tokenA, tokenB, pool, profitHolder]
+  /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
+  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone]
+  function getDefaultState() external override view returns (
+    address[4] memory addr,
+    int24[4] memory tickData,
+    uint[4] memory nums
+  ) {
+    addr = [state.tokenA, state.tokenB, address(state.pool), state.strategyProfitHolder];
+    tickData = [state.tickSpacing, state.lowerTick, state.upperTick, state.rebalanceTickRange];
+    nums = [uint(state.totalLiquidity), uint(state.fuseAB[0].status), uint(state.fuseAB[1].status), state.withdrawDone];
   }
-
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region--------------------------------------------- REBALANCE
@@ -197,9 +202,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///         Typical sequence of the actions is: exit from the pool, make 1 swap, repay 1 debt.
   ///         You can enter to the pool if you are sure that you won't have borrow + repay on AAVE3 in the same block.
   /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
-  /// @param tokenToSwapAndAggregator Array with two params (workaround for stack too deep):
-  ///             [0] tokenToSwap_ What token should be swapped to other
-  ///             [1] aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
+  /// @param tokenToSwap_ What token should be swapped to other
+  /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
   /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
   /// @param swapData Swap rote that was prepared off-chain.
   /// @param planEntryData PLAN_XXX + additional data, see IterationPlanKinds
@@ -208,72 +212,31 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///                    0 - not allowed, 1 - allowed, 2 - allowed only if completed
   /// @return completed All debts were closed, leftovers were swapped to the required proportions.
   function withdrawByAggStep(
-    address[2] calldata tokenToSwapAndAggregator,
+    address tokenToSwap_,
+    address aggregator_,
     uint amountToSwap_,
     bytes memory swapData,
     bytes memory planEntryData,
     uint entryToPool
   ) external returns (bool completed) {
-    PairBasedStrategyLogicLib.WithdrawLocal memory w;
+    // restriction "operator only" is checked inside UniswapV3ConverterStrategyLogicLib.withdrawByAggStep
 
-    // check operator-only, initialize v
-    PairBasedStrategyLogicLib.initWithdrawLocal(
-      w,
-      [state.tokenA, state.tokenB],
-      baseState.asset,
-      liquidationThresholds,
-      planEntryData,
-      controller()
-    );
+    // fix price changes, exit from the pool
+    (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
 
-    // Prepare to rebalance: fix price changes, call depositor exit if totalLiquidity != 0
-    WithdrawByAggStepLocal memory v;
-    (v.profitToCover, v.oldTotalAssets) = _rebalanceBefore();
-    v.converter = converter;
-    v.liquidator = address(AppLib._getLiquidator(w.controller));
-
-    // decode tokenToSwapAndAggregator
-    v.tokenToSwap = tokenToSwapAndAggregator[0];
-    v.aggregator = tokenToSwapAndAggregator[1];
-    v.useLiquidator = v.aggregator == address(0);
-
-    // make withdraw iteration according to the selected plan
-    completed = PairBasedStrategyLib.withdrawStep(
-      [address(v.converter), v.liquidator],
-      w.tokens,
-      w.liquidationThresholds,
-      v.tokenToSwap,
-      amountToSwap_,
-      v.aggregator,
+    // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
+    uint[] memory tokenAmounts;
+    (completed, tokenAmounts) = UniswapV3ConverterStrategyLogicLib.withdrawByAggStep(
+      [tokenToSwap_, aggregator_, controller(), address(converter), baseState.asset, baseState.splitter],
+      [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
-      v.useLiquidator,
-      w.planKind,
-      w.propNotUnderlying18
+      planEntryData,
+      state,
+      liquidationThresholds
     );
 
-    v.pool = state.pool;
-    // fix loss / profitToCover
-    uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
-      v.converter,
-      v.pool,
-      w.tokens,
-      v.oldTotalAssets,
-      v.profitToCover,
-      state.strategyProfitHolder,
-      baseState.splitter
-    );
-
-    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
-    ) {
-      // we are going to enter to the pool
-      (v.newLowerTick, v.newUpperTick) = UniswapV3DebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
-      state.lowerTick = v.newLowerTick;
-      state.upperTick = v.newUpperTick;
-      v.tokenAmounts = tokenAmounts;
-    }
-
-    _rebalanceAfter(v.tokenAmounts);
+    // enter to the pool
+    _rebalanceAfter(tokenAmounts);
   }
 
   /// @notice View function required by reader. TODO replace by more general function that reads slot directly

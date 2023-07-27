@@ -26,6 +26,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {UniversalUtils} from "../../../UniversalUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 
 dotEnvConfig();
@@ -166,7 +167,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const kyberStrategy = strategy as unknown as KyberConverterStrategy
-        const state = await kyberStrategy.getState()
+        const state = await PackedData.getDefaultState(kyberStrategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
@@ -181,7 +182,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const kyberStrategy = strategy as unknown as KyberConverterStrategy
-        const state = await kyberStrategy.getState()
+        const state = await PackedData.getDefaultState(kyberStrategy);
         const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
@@ -197,7 +198,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const kyberStrategy = strategy as unknown as KyberConverterStrategy
-        const state = await kyberStrategy.getState()
+        const state = await PackedData.getDefaultState(kyberStrategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
@@ -234,7 +235,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
-        const state = await strategy.getState()
+        const state = await PackedData.getDefaultState(kyberStrategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB, MaticAddresses.KNC_TOKEN])
         await strategy.setStrategyProfitHolder(profitHolder.address)
         await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%

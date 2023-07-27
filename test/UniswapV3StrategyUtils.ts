@@ -9,6 +9,7 @@ import {
 import { TokenUtils } from '../scripts/utils/TokenUtils';
 import { MaticAddresses } from '../scripts/addresses/MaticAddresses';
 import { formatUnits } from 'ethers/lib/utils';
+import {PackedData} from "./baseUT/utils/DefaultState";
 
 
 export class UniswapV3StrategyUtils {
@@ -62,7 +63,7 @@ export class UniswapV3StrategyUtils {
     priceImpactTolerance = 99000 // 99% slippage
   ) {
     const strategy = UniswapV3ConverterStrategy__factory.connect(strategyAddress, signer) as UniswapV3ConverterStrategy;
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenA = state.tokenA;
     const tokenB = state.tokenB;
@@ -107,7 +108,7 @@ export class UniswapV3StrategyUtils {
     priceImpactTolerance = 40000 // 40%
   ) {
     const strategy = UniswapV3ConverterStrategy__factory.connect(strategyAddress, signer) as UniswapV3ConverterStrategy;
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenA = state.tokenA;
     const tokenB = state.tokenB;
@@ -149,7 +150,7 @@ export class UniswapV3StrategyUtils {
     amount: BigNumber,
   ) {
     const strategy = UniswapV3ConverterStrategy__factory.connect(strategyAddress, signer) as UniswapV3ConverterStrategy;
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenA = state.tokenA;
     const tokenB = state.tokenB;

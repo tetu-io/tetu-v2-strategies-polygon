@@ -1,6 +1,6 @@
 import {ContractReceipt} from "ethers";
 import {IFixPricesChangesEventInfo, IGetStateParams} from "./StateUtilsNum";
-import {ConverterStrategyBase__factory, ConverterStrategyBaseLib__factory} from "../../../typechain";
+import {ConverterStrategyBaseLib__factory} from "../../../typechain";
 import {FixPriceChangesEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
 import {formatUnits} from "ethers/lib/utils";
 

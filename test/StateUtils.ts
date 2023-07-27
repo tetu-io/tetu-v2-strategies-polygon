@@ -13,6 +13,7 @@ import {MockHelper} from "./baseUT/helpers/MockHelper";
 import {formatUnits} from "ethers/lib/utils";
 import {writeFileSyncRestoreFolder} from "./baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
+import {PackedData} from "./baseUT/utils/DefaultState";
 
 
 export interface IState {
@@ -114,7 +115,7 @@ export class StateUtils {
 
     } else if (await strategy.PLATFORM() === 'UniswapV3')  {
       const uniswapV3Stratety = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer)
-      const state = await uniswapV3Stratety.getState()
+      const state = await PackedData.getDefaultState(uniswapV3Stratety);
       liquidity = state.totalLiquidity
       borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
       const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
@@ -127,7 +128,7 @@ export class StateUtils {
       amountsToRepay.push(debtStored[0])
     } else if (await strategy.PLATFORM() === 'Algebra')  {
       const algebraStrategy = AlgebraConverterStrategy__factory.connect(strategy.address, signer)
-      const state = await algebraStrategy.getState()
+      const state = await PackedData.getDefaultState(algebraStrategy);
       liquidity = state.totalLiquidity
       borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
       const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(
@@ -140,7 +141,7 @@ export class StateUtils {
       amountsToRepay.push(debtStored[0])
     } else if (await strategy.PLATFORM() === 'Kyber')  {
       const kyberStrategy = KyberConverterStrategy__factory.connect(strategy.address, signer)
-      const state = await kyberStrategy.getState()
+      const state = await PackedData.getDefaultState(kyberStrategy);
       liquidity = state.totalLiquidity
       borrowAssetsBalances.push(await IERC20__factory.connect(state.tokenB, signer).balanceOf(strategy.address))
       const debtStored = await ITetuConverter__factory.connect(await strategy.converter(), signer).callStatic.getDebtAmountStored(

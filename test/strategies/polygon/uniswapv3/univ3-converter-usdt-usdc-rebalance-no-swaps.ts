@@ -38,6 +38,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 
 const { expect } = chai;
@@ -125,7 +126,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
     // setup converter
     await ConverterUtils.whitelist([strategy.address]);
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
 
     // prices should be the same in the pool and in the oracle
     await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
@@ -182,7 +183,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     aggregator: string,
     saveState?: (title: string) => Promise<void>,
   ) {
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
 
     const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
     const USE_SINGLE_ITERATION = true;

@@ -20,6 +20,7 @@ import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresse
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
 import {expect} from "chai";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -147,7 +148,7 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
     }
 
     // prices should be the same in the pool and in the oracle
-    const state = await strategy.getState();
+    const state = await PackedData.getDefaultState(strategy);
     await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
 
     // prices should be the same in the pool and in the liquidator
@@ -223,7 +224,7 @@ describe('UniswapV3ConverterStrategyFuseTest', function () {
 
     const swapAmounts: BigNumber[] = [];
 
-    const state = await strategy.getState();
+    const state = await await PackedData.getDefaultState(strategy);
     for (let i = 0; i < p.maxCountRebalances; ++i) {
       console.log(`Swap and rebalance. Step ${i}`);
       const amounts = await UniswapV3LiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.UNISWAPV3_USDC_USDT_100);

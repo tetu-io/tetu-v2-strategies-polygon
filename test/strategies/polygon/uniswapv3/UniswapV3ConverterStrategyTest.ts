@@ -30,6 +30,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 const { expect } = chai;
 
@@ -304,7 +305,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
       const investAmount = _1_000;
 
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       expect(await s.isReadyToHardWork()).eq(false);
       expect(await s.needRebalance()).eq(false);
@@ -347,7 +348,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
       const investAmount = _1_000;
 
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       expect(await s.isReadyToHardWork()).eq(false);
       expect(await s.needRebalance()).eq(false);
@@ -402,9 +403,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
 
-      const state = await s.getState()
-      expect(state.rebalanceResults[0]).gt(0)
-      expect(state.rebalanceResults[1]).gt(0)
+      const state = await PackedData.getSpecificStateUniv3(s);
+      expect(state.rebalanceEarned0).gt(0)
+      expect(state.rebalanceEarned1).gt(0)
 
       console.log('rebalance empty strategy after emergencyExit');
       expect(await s.needRebalance()).eq(true);
@@ -428,9 +429,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
 
-      const state = await s.getState()
-      expect(state.rebalanceResults[0]).gt(0)
-      expect(state.rebalanceResults[1]).gt(0)
+      const state = await PackedData.getSpecificStateUniv3(strategy);
+      expect(state.rebalanceEarned0).gt(0)
+      expect(state.rebalanceEarned1).gt(0)
 
       console.log('rebalance empty strategy after emergencyExit');
       expect(await s.needRebalance()).eq(true);
@@ -438,45 +439,46 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await s.needRebalance()).eq(false);
     });
 
-    it('Fuse test', async() => {
-      const s = strategy3
-      const v = vault3
-      const investAmount = _1;
-      const swapAssetValueForPriceMove = parseUnits('100000', 6);
-
-      const state = await s.getState()
-      await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
-
-      const newFuseThreshold = parseUnits('5', 14) // 0.05%
-      await s.setFuseThreshold(newFuseThreshold);
-
-      console.log('deposit...');
-      await v.deposit(investAmount, signer.address);
-
-      for (let i = 0; i < 100; i++) {
-        const priceChange = await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
-        if (priceChange.priceBChange.gt(newFuseThreshold)) {
-          break
-        }
-      }
-
-      expect((await s.getState()).isFuseTriggered).eq(false)
-      expect(await s.needRebalance()).eq(true)
-      await s.rebalanceNoSwaps(true)
-      expect((await s.getState()).isFuseTriggered).eq(true)
-      expect(await s.needRebalance()).eq(false)
-
-      await s.connect(operator).disableFuse()
-      expect((await s.getState()).isFuseTriggered).eq(false)
-      expect(await s.needRebalance()).eq(true)
-      await s.rebalanceNoSwaps(true)
-      // expect((await s.getState()).isFuseTriggered).eq(false)
-    })
+    // todo Change to new fuse
+    // it('Fuse test', async() => {
+    //   const s = strategy3
+    //   const v = vault3
+    //   const investAmount = _1;
+    //   const swapAssetValueForPriceMove = parseUnits('100000', 6);
+    //
+    //   const state = await PackedData.getDefaultState(s);
+    //   await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
+    //
+    //   const newFuseThreshold = parseUnits('5', 14) // 0.05%
+    //   await s.setFuseThreshold(newFuseThreshold);
+    //
+    //   console.log('deposit...');
+    //   await v.deposit(investAmount, signer.address);
+    //
+    //   for (let i = 0; i < 100; i++) {
+    //     const priceChange = await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
+    //     if (priceChange.priceBChange.gt(newFuseThreshold)) {
+    //       break
+    //     }
+    //   }
+    //
+    //   expect((await s.getState()).isFuseTriggered).eq(false)
+    //   expect(await s.needRebalance()).eq(true)
+    //   await s.rebalanceNoSwaps(true)
+    //   expect((await s.getState()).isFuseTriggered).eq(true)
+    //   expect(await s.needRebalance()).eq(false)
+    //
+    //   await s.connect(operator).disableFuse()
+    //   expect((await s.getState()).isFuseTriggered).eq(false)
+    //   expect(await s.needRebalance()).eq(true)
+    //   await s.rebalanceNoSwaps(true)
+    //   // expect((await s.getState()).isFuseTriggered).eq(false)
+    // })
 
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
-      const state = await strategy.getState();
+      const state = await PackedData.getDefaultState(strategy);
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
       let price;
@@ -513,7 +515,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
     it('Loop with rebalance, hardwork, deposit and withdraw', async() => {
       const investAmount = _1_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
-      const state = await strategy3.getState();
+      const state = await PackedData.getDefaultState(strategy3);
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault3.splitter());
       let price;
       price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
@@ -574,7 +576,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
     it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
-      let state = await strategy3.getState();
+      let state = await PackedData.getDefaultState(strategy3);
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await vault3.splitter());
       let price;
@@ -593,13 +595,14 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       await UniswapV3StrategyUtils.makeVolume(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
 
-      state = await strategy3.getState()
+      state = await PackedData.getDefaultState(strategy3);
+      const specificState = await PackedData.getSpecificStateUniv3(strategy3);
 
       price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
 
       let earnedTotal = BigNumber.from(0)
 
-      earnedTotal = state.rebalanceResults[0].add(state.rebalanceResults[1].mul(price).div(parseUnits('1', 6)))
+      earnedTotal = specificState.rebalanceEarned0.add(specificState.rebalanceEarned1.mul(price).div(parseUnits('1', 6)))
 
       const fees = await strategy3.getFees()
 
@@ -610,7 +613,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const hwReturns = await strategy3.connect(splitterSigner).callStatic.doHardWork()
 
       expect(hwReturns[0].div(100)).eq(earnedTotal.div(100))
-      expect(hwReturns[1].div(1000)).eq(state.rebalanceResults[2].div(1000))
+      expect(hwReturns[1].div(1000)).eq(specificState.rebalanceLost.div(1000))
 
       await strategy3.connect(splitterSigner).doHardWork();
 
@@ -662,7 +665,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       it('should make emergency exit without any reverts (even if a rebalance is required)', async() => {
         const investAmount = _10_000;
         const swapAssetValueForPriceMove = parseUnits('5000000', 6);
-        const state = await strategy.getState();
+        const state = await PackedData.getDefaultState(strategy);
 
         let price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
         console.log('tokenB price', formatUnits(price, 6));

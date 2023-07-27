@@ -28,25 +28,13 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Returns the current state of the contract.
-  /// @param tokensAB [tokenA, tokenB]
-  /// @param tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
-  function getState() external view returns (
-    address[2] memory tokensAB,
-    IAlgebraPool pool,
-    address profitHolder,
-    int24[4] memory tickData,
-    uint128 totalLiquidity,
+  function getSpecificState() external view returns (
     uint[] memory profitHolderBalances
   ) {
-    tokensAB = [state.tokenA, state.tokenB];
-    pool = state.pool;
-    tickData = [state.tickSpacing, state.lowerTick, state.upperTick, state.rebalanceTickRange];
-    totalLiquidity = state.totalLiquidity;
-    profitHolder = state.strategyProfitHolder;
+    address profitHolder = state.strategyProfitHolder;
     profitHolderBalances = new uint[](4);
-    profitHolderBalances[0] = IERC20(tokensAB[0]).balanceOf(profitHolder);
-    profitHolderBalances[1] = IERC20(tokensAB[1]).balanceOf(profitHolder);
+    profitHolderBalances[0] = IERC20(state.tokenA).balanceOf(profitHolder);
+    profitHolderBalances[1] = IERC20(state.tokenB).balanceOf(profitHolder);
     profitHolderBalances[2] = IERC20(state.rewardToken).balanceOf(profitHolder);
     profitHolderBalances[3] = IERC20(state.bonusRewardToken).balanceOf(profitHolder);
   }

@@ -20,6 +20,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniversalUtils} from "../../../UniversalUtils";
+import {PackedData} from "../../../baseUT/utils/DefaultState";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -141,7 +142,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
   describe('Kyber strategy rebalance by agg tests', function() {
     it('Rebalance', async() => {
       const s = strategy
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
@@ -183,7 +184,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
 
     it('Rebalance empty strategy', async() => {
       const s = strategy
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       await UniversalUtils.movePoolPriceDown(
         signer,
@@ -208,7 +209,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
 
     it('Rebalance empty strategy after emergencyExit()', async() => {
       const s = strategy
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       const swapAssetValue = parseUnits('200000', 6);
 
