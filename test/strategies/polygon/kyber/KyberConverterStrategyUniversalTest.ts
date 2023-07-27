@@ -26,7 +26,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {UniversalUtils} from "../../../UniversalUtils";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 
 dotEnvConfig();

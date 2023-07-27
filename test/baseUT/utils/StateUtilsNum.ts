@@ -22,7 +22,7 @@ import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
-import {PackedData} from "./DefaultState";
+import {PackedData} from "./PackedData";
 
 export interface IRebalanceResults {
   fuseStatus?: number;

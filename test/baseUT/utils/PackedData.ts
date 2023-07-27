@@ -3,7 +3,7 @@
 import {BigNumber} from "ethers";
 import {
   AlgebraConverterStrategy,
-  IRebalancingStrategy,
+  IRebalancingStrategy, IRebalancingV2Strategy,
   KyberConverterStrategy,
   UniswapV3ConverterStrategy
 } from "../../../typechain";
@@ -53,11 +53,20 @@ const IDX_KYBER_FLAG_NEED_UNSTAKE = 2;
  *  IRebalancingV2Strategy.getDefaultState
  */
 interface IDefaultState {
-  tokenA, tokenB, pool, profitHolder: string;
-  tickSpacing, lowerTick, upperTick, rebalanceTickRange: number;
+  tokenA: string;
+  tokenB: string;
+  pool: string;
+  profitHolder: string;
+
+  tickSpacing: number;
+  lowerTick: number;
+  upperTick: number;
+  rebalanceTickRange: number;
 
   totalLiquidity: BigNumber;
-  fuseStatusTokenA, fuseStatusTokenB, withdrawDone: number;
+  fuseStatusTokenA: number;
+  fuseStatusTokenB: number;
+  withdrawDone: number;
 }
 
 interface IUniv3SpecificState {
@@ -89,8 +98,8 @@ interface IAlgebraSpecificState {
 }
 
 export class PackedData {
-  static async getDefaultState(strategy: IRebalancingStrategy): Promise<IDefaultState> {
-    const ret = strategy.getDefaultState();
+  static async getDefaultState(strategy: IRebalancingV2Strategy): Promise<IDefaultState> {
+    const ret = await strategy.getDefaultState();
     return {
       tokenA: ret.addr[IDX_ADDR_DEFAULT_STATE_TOKEN_A],
       tokenB: ret.addr[IDX_ADDR_DEFAULT_STATE_TOKEN_B],
@@ -123,9 +132,9 @@ export class PackedData {
     const ret = await strategy.getSpecificState();
     return {
       profitHolderBalances: {
-        rebalanceEarned0: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_TOKEN_A],
-        rebalanceEarned1: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_TOKEN_B],
-        rebalanceLost: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_KNC],
+        balanceTokenA: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_TOKEN_A],
+        balanceTokenB: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_TOKEN_B],
+        balanceKNC: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_KNC],
       },
       flags: {
         staked: ret.flags[IDX_KYBER_FLAG_STAKED],

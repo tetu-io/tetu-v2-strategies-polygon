@@ -36,7 +36,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 
 const { expect } = chai;

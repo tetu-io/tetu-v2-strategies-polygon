@@ -21,7 +21,7 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../UniversalUtils";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires

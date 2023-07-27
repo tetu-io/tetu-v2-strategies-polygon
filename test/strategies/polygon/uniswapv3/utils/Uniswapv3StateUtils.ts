@@ -13,7 +13,7 @@ import hre from 'hardhat';
 import { writeFileSync } from 'fs';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import { writeFileSyncRestoreFolder } from '../../../../baseUT/utils/FileUtils';
-import {PackedData} from "../../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../../baseUT/utils/PackedData";
 
 /**
  * All balances

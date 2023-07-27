@@ -30,27 +30,8 @@ library KyberConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Data types
   struct State {
-    IPool pool;
-
-    address tokenA;
-    address tokenB;
-    address strategyProfitHolder;
-
-    bool isStablePool;
-    bool depositorSwapTokens;
-
-    int24 tickSpacing;
-    int24 lowerTick;
-    int24 upperTick;
-    int24 rebalanceTickRange;
-    uint128 totalLiquidity;
-
-    /// @notice Fuse for token A and token B
-    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
-    /// @notice 1 means that the fuse was triggered ON and then all debts were closed
-    ///         and assets were converter to underlying using withdrawStepByAgg.
-    ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
-    uint withdrawDone;
+    PairBasedStrategyLogicLib.PairState pair;
+    // additional (specific) state
 
     uint tokenId;
     // farming
@@ -85,6 +66,24 @@ library KyberConverterStrategyLogicLib {
     address tokenA;
     address tokenB;
   }
+
+  struct WithdrawByAggStepLocal {
+    PairBasedStrategyLogicLib.WithdrawLocal w;
+    address tokenToSwap;
+    address aggregator;
+    address controller;
+    address converter;
+    address asset;
+    address splitter;
+    IPool pool;
+    uint amountToSwap;
+    uint profitToCover;
+    uint oldTotalAssets;
+    uint entryToPool;
+    int24 newLowerTick;
+    int24 newUpperTick;
+    uint[] tokenAmounts;
+  }
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Helpers
@@ -103,54 +102,63 @@ library KyberConverterStrategyLogicLib {
     uint[4] calldata fuseThresholdsB
   ) external {
     require(controllerPool[1] != address(0), AppErrors.ZERO_ADDRESS);
-    state.pool = IPool(controllerPool[1]);
 
-    state.isStablePool = isStablePool;
+    int24[4] memory tickData;
+    {
+      int24 tickSpacing = KyberLib.getTickSpacing(IPool(controllerPool[1]));
+      if (tickRange != 0) {
+        require(tickRange == tickRange / tickSpacing * tickSpacing, KyberStrategyErrors.INCORRECT_TICK_RANGE);
+        require(rebalanceTickRange == rebalanceTickRange / tickSpacing * tickSpacing, KyberStrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
+      }
+      tickData[0] = tickSpacing;
+      (tickData[1], tickData[2]) = KyberDebtLib.calcTickRange(IPool(controllerPool[1]), tickRange, tickSpacing);
+      tickData[3] = tickRange;
+    }
 
-    state.rebalanceTickRange = rebalanceTickRange;
-
-    _setInitialDepositorValues(
-      state,
-      IPool(controllerPool[1]),
-      tickRange,
-      rebalanceTickRange,
-      asset_
+    address[4] memory addr = [
+      controllerPool[1],
+      asset_,
+      address(IPool(controllerPool[1]).token0()),
+      address(IPool(controllerPool[1]).token1())
+    ];
+    PairBasedStrategyLogicLib.setInitialDepositorValues(
+      state.pair,
+      addr,
+      tickData,
+      isStablePool,
+      fuseThresholdsA,
+      fuseThresholdsB
     );
 
     address liquidator = IController(controllerPool[0]).liquidator();
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    IERC20(tokenA).approve(liquidator, type(uint).max);
-    IERC20(tokenB).approve(liquidator, type(uint).max);
-    IERC20(tokenA).approve(address(KYBER_NFT), type(uint).max);
-    IERC20(tokenB).approve(address(KYBER_NFT), type(uint).max);
+    IERC20(addr[2]).approve(liquidator, type(uint).max); // token0
+    IERC20(addr[3]).approve(liquidator, type(uint).max); // token1
+    IERC20(addr[2]).approve(address(KYBER_NFT), type(uint).max); // token0
+    IERC20(addr[3]).approve(address(KYBER_NFT), type(uint).max); // token1
     IERC721(address(KYBER_NFT)).setApprovalForAll(address(FARMING_CENTER), true);
-
-    if (isStablePool) {
-      /// for stable pools fuse can be enabled
-      PairBasedStrategyLib.setFuseStatus(state.fuseAB[0], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
-      PairBasedStrategyLib.setFuseThresholds(state.fuseAB[0], fuseThresholdsA);
-      PairBasedStrategyLib.setFuseStatus(state.fuseAB[1], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
-      PairBasedStrategyLib.setFuseThresholds(state.fuseAB[1], fuseThresholdsB);
-    }
   }
 
-  function createSpecificName(State storage state) external view returns (string memory) {
-    return string(abi.encodePacked("Kyber ", IERC20Metadata(state.tokenA).symbol(), "/", IERC20Metadata(state.tokenB).symbol()));
+  function createSpecificName(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (string memory) {
+    return string(abi.encodePacked(
+      "Kyber ",
+      IERC20Metadata(pairState.tokenA).symbol(),
+      "/",
+      IERC20Metadata(pairState.tokenB).symbol())
+    );
   }
 
-  function getPoolReserves(State storage state) external view returns (uint[] memory reserves) {
+  function getPoolReserves(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (uint[] memory reserves) {
     reserves = new uint[](2);
-    (uint160 sqrtRatioX96, , ,) = state.pool.getPoolState();
+    (uint160 sqrtRatioX96, , ,) = IPool(pairState.pool).getPoolState();
 
     (reserves[0], reserves[1]) = KyberLib.getAmountsForLiquidity(
       sqrtRatioX96,
-      state.lowerTick,
-      state.upperTick,
-      state.totalLiquidity
+      pairState.lowerTick,
+      pairState.upperTick,
+      pairState.totalLiquidity
     );
 
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
     }
   }
@@ -174,57 +182,20 @@ library KyberConverterStrategyLogicLib {
   }
   //endregion ------------------------------------------------ Pool info
 
-  //region ------------------------------------------------ Calculations
-
-  /// @notice Calculate and set the initial values for a QuickSwap V3 pool Depositor.
-  /// @param state Depositor storage state struct
-  /// @param pool The QuickSwap V3 pool to get the initial values from.
-  /// @param tickRange_ The tick range for the pool.
-  /// @param rebalanceTickRange_ The rebalance tick range for the pool.
-  /// @param asset_ Underlying asset of the depositor.
-  function _setInitialDepositorValues(
-    State storage state,
-    IPool pool,
-    int24 tickRange_,
-    int24 rebalanceTickRange_,
-    address asset_
-  ) internal {
-    int24 tickSpacing = KyberLib.getTickSpacing(pool);
-    if (tickRange_ != 0) {
-      require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, KyberStrategyErrors.INCORRECT_TICK_RANGE);
-      require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, KyberStrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
-    }
-    state.tickSpacing = tickSpacing;
-    (state.lowerTick, state.upperTick) = KyberDebtLib.calcTickRange(pool, tickRange_, tickSpacing);
-    address token0 = address(pool.token0());
-    address token1 = address(pool.token1());
-    require(asset_ == token0 || asset_ == token1, KyberStrategyErrors.INCORRECT_ASSET);
-    if (asset_ == token0) {
-      state.tokenA = token0;
-      state.tokenB = token1;
-      state.depositorSwapTokens = false;
-    } else {
-      state.tokenA = token1;
-      state.tokenB = token0;
-      state.depositorSwapTokens = true;
-    }
-  }
-  //endregion ------------------------------------------------ Calculations
-
   //region ------------------------------------------------ Join the pool
   function enter(
     State storage state,
     uint[] memory amountsDesired_
   ) external returns (uint[] memory amountsConsumed, uint liquidityOut) {
     EnterLocalVariables memory vars = EnterLocalVariables({
-      pool: state.pool,
-      lowerTick : state.lowerTick,
-      upperTick : state.upperTick,
+      pool: IPool(state.pair.pool),
+      lowerTick : state.pair.lowerTick,
+      upperTick : state.pair.upperTick,
       tokenId : state.tokenId,
       pId : state.pId
     });
-    bool depositorSwapTokens = state.depositorSwapTokens;
-    (address token0, address token1) = depositorSwapTokens ? (state.tokenB, state.tokenA) : (state.tokenA, state.tokenB);
+    bool depositorSwapTokens = state.pair.depositorSwapTokens;
+    (address token0, address token1) = depositorSwapTokens ? (state.pair.tokenB, state.pair.tokenA) : (state.pair.tokenA, state.pair.tokenB);
     if (depositorSwapTokens) {
       (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
     }
@@ -243,7 +214,7 @@ library KyberConverterStrategyLogicLib {
       (vars.tokenId, liquidity, amountsConsumed[0], amountsConsumed[1]) = KYBER_NFT.mint(IBasePositionManager.MintParams(
         token0,
         token1,
-        state.pool.swapFeeUnits(),
+        IPool(state.pair.pool).swapFeeUnits(),
         vars.lowerTick,
         vars.upperTick,
         KyberLib.getPreviousTicks(vars.pool, vars.lowerTick, vars.upperTick),
@@ -282,7 +253,7 @@ library KyberConverterStrategyLogicLib {
       if (!isFarmEnded(vars.pId)) {
         uint[] memory nftIds = new uint[](1);
         nftIds[0] = vars.tokenId;
-        if (state.totalLiquidity == 0) {
+        if (state.pair.totalLiquidity == 0) {
           FARMING_CENTER.deposit(nftIds);
           state.staked = true;
         }
@@ -293,7 +264,7 @@ library KyberConverterStrategyLogicLib {
       }
     }
 
-    state.totalLiquidity += liquidity;
+    state.pair.totalLiquidity += liquidity;
     liquidityOut = uint(liquidity);
   }
   //endregion ------------------------------------------------ Join the pool
@@ -307,13 +278,13 @@ library KyberConverterStrategyLogicLib {
     amountsOut = new uint[](2);
 
     ExitLocalVariables memory vars = ExitLocalVariables({
-      strategyProfitHolder : state.strategyProfitHolder,
+      strategyProfitHolder : state.pair.strategyProfitHolder,
       pId : state.pId,
-      tokenA : state.tokenA,
-      tokenB : state.tokenB
+      tokenA : state.pair.tokenA,
+      tokenB : state.pair.tokenB
     });
 
-    uint128 liquidity = state.totalLiquidity;
+    uint128 liquidity = state.pair.totalLiquidity;
 
     require(liquidity >= liquidityAmountToExit, KyberStrategyErrors.WRONG_LIQUIDITY);
 
@@ -353,7 +324,7 @@ library KyberConverterStrategyLogicLib {
     if (rTokensOwed > 0) {
 //      KYBER_NFT.syncFeeGrowth(nftIds[0]);
       (,uint amount0, uint amount1) = KYBER_NFT.burnRTokens(IBasePositionManager.BurnRTokenParams(nftIds[0], 0, 0, block.timestamp));
-      if (state.depositorSwapTokens) {
+      if (state.pair.depositorSwapTokens) {
         feeA += amount1;
         feeB += amount0;
         emit KyberFeesClaimed(amount1, amount0);
@@ -377,7 +348,7 @@ library KyberConverterStrategyLogicLib {
     }
 
     liquidity -= liquidityAmountToExit;
-    state.totalLiquidity = liquidity;
+    state.pair.totalLiquidity = liquidity;
 
     if (liquidity > 0 && !isFarmEnded(vars.pId)) {
       liqs[0] = uint(liquidity);
@@ -388,18 +359,18 @@ library KyberConverterStrategyLogicLib {
   }
 
   function quoteExit(
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     uint128 liquidityAmountToExit
   ) public view returns (uint[] memory amountsOut) {
-    (uint160 sqrtRatioX96, , ,) = state.pool.getPoolState();
+    (uint160 sqrtRatioX96, , ,) = IPool(pairState.pool).getPoolState();
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = KyberLib.getAmountsForLiquidity(
       sqrtRatioX96,
-      state.lowerTick,
-      state.upperTick,
+      pairState.lowerTick,
+      pairState.upperTick,
       liquidityAmountToExit
     );
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
   }
@@ -419,11 +390,11 @@ library KyberConverterStrategyLogicLib {
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    address strategyProfitHolder = state.strategyProfitHolder;
+    address strategyProfitHolder = state.pair.strategyProfitHolder;
     uint tokenId = state.tokenId;
     tokensOut = new address[](3);
-    tokensOut[0] = state.tokenA;
-    tokensOut[1] = state.tokenB;
+    tokensOut[0] = state.pair.tokenA;
+    tokensOut[1] = state.pair.tokenB;
     tokensOut[2] = KNC;
 
     balancesBefore = new uint[](3);
@@ -432,7 +403,7 @@ library KyberConverterStrategyLogicLib {
     }
 
     amountsOut = new uint[](3);
-    if (tokenId > 0 && state.totalLiquidity > 0) {
+    if (tokenId > 0 && state.pair.totalLiquidity > 0) {
       (amountsOut[0], amountsOut[1]) = _claimFees(state);
       amountsOut[2] = _harvest(tokenId, state.pId);
     }
@@ -449,14 +420,14 @@ library KyberConverterStrategyLogicLib {
   function _claimFees(State storage state) internal returns (uint amountA, uint amountB) {
     uint[] memory nftIds = new uint[](1);
     nftIds[0] = state.tokenId;
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
+    address tokenA = state.pair.tokenA;
+    address tokenB = state.pair.tokenB;
     uint bABefore = AppLib.balance(tokenA);
     uint bBBefore = AppLib.balance(tokenB);
 
-    (uint token0Owed, uint token1Owed) = TICKS_FEES_READER.getTotalFeesOwedToPosition(address(KYBER_NFT), address(state.pool), nftIds[0]);
+    (uint token0Owed, uint token1Owed) = TICKS_FEES_READER.getTotalFeesOwedToPosition(address(KYBER_NFT), state.pair.pool, nftIds[0]);
     if (token0Owed > 0 || token1Owed > 0) {
-      FARMING_CENTER.claimFee(nftIds, 0, 0, address(state.pool), false, block.timestamp);
+      FARMING_CENTER.claimFee(nftIds, 0, 0, state.pair.pool, false, block.timestamp);
 
       amountA = AppLib.balance(tokenA) - bABefore;
       amountB = AppLib.balance(tokenB) - bBBefore;
@@ -502,46 +473,19 @@ library KyberConverterStrategyLogicLib {
   //region ------------------------------------------------ Rebalance
   /// @notice Determine if the strategy needs to be rebalanced.
   /// @return needRebalance A boolean indicating if {rebalanceNoSwaps} should be called
-  function needStrategyRebalance(State storage state, ITetuConverter converter_) external view returns (bool needRebalance) {
-    if (state.isStablePool) {
-      address tokenA = state.tokenA;
-      address tokenB = state.tokenB;
-      (uint priceA, uint priceB) = ConverterStrategyBaseLib2.getOracleAssetsPrices(converter_, tokenA, tokenB);
-      (bool fuseStatusChangedA, PairBasedStrategyLib.FuseStatus fuseStatusA) = PairBasedStrategyLib.needChangeFuseStatus(state.fuseAB[0], priceA);
-      if (fuseStatusChangedA) {
-        needRebalance = true;
-      } else {
-        (bool fuseStatusChangedB, PairBasedStrategyLib.FuseStatus fuseStatusB) = PairBasedStrategyLib.needChangeFuseStatus(state.fuseAB[1], priceB);
-        if (fuseStatusChangedB) {
-          needRebalance = true;
-        } else {
-          needRebalance =
-              !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusA)
-              && !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusB)
-                && _needPoolRebalance(state.pool, state);
-        }
-      }
-    } else {
-      needRebalance = _needPoolRebalance(state.pool, state);
-    }
-  }
-
-  /// @notice Determine if the pool needs to be rebalanced.
-  /// @return A boolean indicating if the pool needs to be rebalanced.
-  function _needPoolRebalance(IPool pool_, State storage state) internal view returns (bool) {
-    (, int24 tick, ,) = pool_.getPoolState();
-    return PairBasedStrategyLogicLib._needPoolRebalance(
-      tick,
-      state.lowerTick,
-      state.upperTick,
-      state.tickSpacing,
-      state.rebalanceTickRange
+  function needStrategyRebalance(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter_) external view returns (
+    bool needRebalance
+  ) {
+    (needRebalance, , ) = PairBasedStrategyLogicLib.needStrategyRebalance(
+      pairState,
+      converter_,
+      KyberDebtLib.getCurrentTick(IPool(pairState.pool))
     );
   }
 
   function needRebalanceStaking(State storage state) public view returns (bool needStake, bool needUnstake) {
     bool farmEnded = isFarmEnded(state.pId);
-    bool haveLiquidity = state.totalLiquidity > 0;
+    bool haveLiquidity = state.pair.totalLiquidity > 0;
     bool staked = state.staked;
     needStake = haveLiquidity && !farmEnded && !staked;
     needUnstake = haveLiquidity && farmEnded && staked;
@@ -558,7 +502,7 @@ library KyberConverterStrategyLogicLib {
   /// @param oldTotalAssets Current value of totalAssets()
   /// @return tokenAmounts Token amounts for deposit. If length == 0 no deposit is required.
   function rebalanceNoSwaps(
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     address[2] calldata converterLiquidator,
     uint oldTotalAssets,
     uint profitToCover,
@@ -569,50 +513,31 @@ library KyberConverterStrategyLogicLib {
     uint[] memory tokenAmounts
   ) {
     RebalanceLocal memory v;
-    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), state);
+    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState);
 
     bool needRebalance;
-    if (v.isStablePool) {
-      uint[2] memory prices;
-      (prices[0], prices[1]) = ConverterStrategyBaseLib2.getOracleAssetsPrices(v.converter, v.tokenA, v.tokenB);
-      for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
-        (v.fuseStatusChangedAB[i], v.fuseStatusAB[i]) = PairBasedStrategyLib.needChangeFuseStatus(state.fuseAB[i], prices[i]);
-      }
+    (needRebalance, v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(
+      pairState,
+      v.converter,
+      KyberDebtLib.getCurrentTick(IPool(pairState.pool))
+    );
 
-      // check if rebalance required and/or fuse-status is changed
-      needRebalance =
-        v.fuseStatusChangedAB[0]
-        || v.fuseStatusChangedAB[1]
-        || (
-          !PairBasedStrategyLib.isFuseTriggeredOn(v.fuseStatusAB[0])
-        && !PairBasedStrategyLib.isFuseTriggeredOn(v.fuseStatusAB[1])
-        && _needPoolRebalance(v.pool, state)
-        );
-
-      // update fuse status if necessary
-      for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
-        if (v.fuseStatusChangedAB[i]) {
-          PairBasedStrategyLib.setFuseStatus(state.fuseAB[i], v.fuseStatusAB[i]);
-          // if fuse is triggered ON, full-withdraw is required
-          // if fuse is triggered OFF, the assets will be deposited back to pool
-          // in both cases withdrawDone should be reset
-          state.withdrawDone = 0;
-        }
-      }
-    } else {
-      needRebalance = _needPoolRebalance(v.pool, state);
+    // update fuse status if necessary
+    if (needRebalance) {
+      // we assume here, that needRebalance is true if any fuse has changed state, see needStrategyRebalance impl
+      PairBasedStrategyLogicLib.updateFuseStatus(pairState, v.fuseStatusChangedAB, v.fuseStatusAB);
     }
 
     require(checkNeedRebalance_ || needRebalance, KyberStrategyErrors.NO_REBALANCE_NEEDED);
 
     // rebalancing debt, setting new tick range
     if (needRebalance) {
-      KyberDebtLib.rebalanceNoSwaps(converterLiquidator, state, profitToCover, oldTotalAssets, splitter, liquidityThresholds_);
+      KyberDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, oldTotalAssets, splitter, liquidityThresholds_);
 
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(v.converter, oldTotalAssets, v.tokenA, v.tokenB);
       if (loss != 0) {
-        _coverLoss(splitter, loss, state.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
     }
 
@@ -662,23 +587,23 @@ library KyberConverterStrategyLogicLib {
   function _initLocalVars(
     RebalanceLocal memory v,
     ITetuConverter converter_,
-    State storage state
+    PairBasedStrategyLogicLib.PairState storage pairState
   ) internal view {
-    v.pool = state.pool;
-    v.fuseAB = state.fuseAB;
+    v.pool = IPool(pairState.pool);
+    v.fuseAB = pairState.fuseAB;
     v.converter = converter_;
-    v.tokenA = state.tokenA;
-    v.tokenB = state.tokenB;
-    v.isStablePool = state.isStablePool;
+    v.tokenA = pairState.tokenA;
+    v.tokenB = pairState.tokenB;
+    v.isStablePool = pairState.isStablePool;
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]
   ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
-  function getPropNotUnderlying18(State storage state) view external returns (uint) {
+  function getPropNotUnderlying18(PairBasedStrategyLogicLib.PairState storage pairState) view external returns (uint) {
     // get pool proportions
-    IPool pool = state.pool;
-    bool depositorSwapTokens = state.depositorSwapTokens;
-    (int24 newLowerTick, int24 newUpperTick) = KyberDebtLib._calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    IPool pool = IPool(pairState.pool);
+    bool depositorSwapTokens = pairState.depositorSwapTokens;
+    (int24 newLowerTick, int24 newUpperTick) = KyberDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
     (uint consumed0, uint consumed1) = KyberDebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
 
     require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
@@ -687,23 +612,6 @@ library KyberConverterStrategyLogicLib {
   //endregion ------------------------------------------------ Rebalance
 
   //region ------------------------------------------------ WithdrawByAgg
-  struct WithdrawByAggStepLocal {
-    PairBasedStrategyLogicLib.WithdrawLocal w;
-    address tokenToSwap;
-    address aggregator;
-    address controller;
-    address converter;
-    address asset;
-    address splitter;
-    IPool pool;
-    uint amountToSwap;
-    uint profitToCover;
-    uint oldTotalAssets;
-    uint entryToPool;
-    int24 newLowerTick;
-    int24 newUpperTick;
-    uint[] tokenAmounts;
-  }
   /// @param addr_ [tokenToSwap, aggregator, controller, converter, asset, splitter]
   /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, entryToPool]
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
@@ -713,7 +621,7 @@ library KyberConverterStrategyLogicLib {
     uint[4] calldata values_,
     bytes memory swapData,
     bytes memory planEntryData,
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     mapping(address => uint) storage liquidationThresholds
   ) external returns (
     bool completed,
@@ -733,12 +641,12 @@ library KyberConverterStrategyLogicLib {
     v.oldTotalAssets = values_[2];
     v.entryToPool = values_[3];
 
-    v.pool = state.pool;
+    v.pool = IPool(pairState.pool);
 
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       v.w,
-      [state.tokenA, state.tokenB],
+      [pairState.tokenA, pairState.tokenB],
       v.asset,
       liquidationThresholds,
       planEntryData,
@@ -766,16 +674,16 @@ library KyberConverterStrategyLogicLib {
       v.w.tokens,
       v.oldTotalAssets,
       v.profitToCover,
-      state.strategyProfitHolder,
+      pairState.strategyProfitHolder,
       v.splitter
     );
 
     if (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
-      (v.newLowerTick, v.newUpperTick) = KyberDebtLib._calcNewTickRange(v.pool, state.lowerTick, state.upperTick, state.tickSpacing);
-      state.lowerTick = v.newLowerTick;
-      state.upperTick = v.newUpperTick;
+      (v.newLowerTick, v.newUpperTick) = KyberDebtLib._calcNewTickRange(v.pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      pairState.lowerTick = v.newLowerTick;
+      pairState.upperTick = v.newUpperTick;
       tokenAmounts = v.tokenAmounts;
     }
 

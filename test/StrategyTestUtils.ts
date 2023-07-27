@@ -45,7 +45,7 @@ import {
 } from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
 import {IRebalanceResults} from "./baseUT/utils/StateUtilsNum";
 import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
-import {PackedData} from "./baseUT/utils/DefaultState";
+import {PackedData} from "./baseUT/utils/PackedData";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,

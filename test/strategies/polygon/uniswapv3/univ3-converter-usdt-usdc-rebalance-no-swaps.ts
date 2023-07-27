@@ -38,7 +38,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 
 const { expect } = chai;

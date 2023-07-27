@@ -23,7 +23,7 @@ import {depositToVault, printVaultState, rebalanceUniv3StrategyNoSwaps} from "..
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -205,7 +205,6 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
     const states: IStateNum[] = [];
     const pathOut = p.pathOut;
 
-    await strategy.setFuseThreshold(parseUnits('1'));
     await vault.setDoHardWorkOnInvest(false);
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
@@ -301,7 +300,8 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
       console.log("planEntryData", p.planEntryData);
       console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
-        [tokenToSwap, p.aggregator],
+        tokenToSwap,
+        p.aggregator,
         amountToSwap,
         swapData,
         p.planEntryData,
@@ -310,7 +310,8 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
 
       console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
       await strategyAsOperator.withdrawByAggStep(
-        [tokenToSwap, p.aggregator],
+        tokenToSwap,
+        p.aggregator,
         amountToSwap,
         swapData,
         p.planEntryData,

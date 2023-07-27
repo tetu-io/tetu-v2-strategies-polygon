@@ -13,7 +13,7 @@ import {MockHelper} from "./baseUT/helpers/MockHelper";
 import {formatUnits} from "ethers/lib/utils";
 import {writeFileSyncRestoreFolder} from "./baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
-import {PackedData} from "./baseUT/utils/DefaultState";
+import {PackedData} from "./baseUT/utils/PackedData";
 
 
 export interface IState {

@@ -20,7 +20,7 @@ import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresse
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
 import {expect} from "chai";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires

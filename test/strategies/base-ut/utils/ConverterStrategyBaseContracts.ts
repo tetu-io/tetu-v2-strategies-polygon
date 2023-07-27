@@ -21,7 +21,7 @@ import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {parseUnits} from "ethers/lib/utils";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 const COMPOUND_RATIO = 50_000;
 const REINVEST_THRESHOLD_PERCENT = 1_000;

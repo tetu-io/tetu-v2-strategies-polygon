@@ -32,10 +32,10 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   function getSpecificState() external view returns (
     uint[] memory profitHolderBalances
   ) {
-    address profitHolder = state.strategyProfitHolder;
+    address profitHolder = state.pair.strategyProfitHolder;
     profitHolderBalances = new uint[](4);
-    profitHolderBalances[0] = IERC20(state.tokenA).balanceOf(profitHolder);
-    profitHolderBalances[1] = IERC20(state.tokenB).balanceOf(profitHolder);
+    profitHolderBalances[0] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
+    profitHolderBalances[1] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
     profitHolderBalances[2] = IERC20(state.rewardToken).balanceOf(profitHolder);
     profitHolderBalances[3] = IERC20(state.bonusRewardToken).balanceOf(profitHolder);
   }
@@ -50,8 +50,8 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @return poolAssets An array containing the addresses of the pool assets.
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
-    poolAssets[0] = state.tokenA;
-    poolAssets[1] = state.tokenB;
+    poolAssets[0] = state.pair.tokenA;
+    poolAssets[1] = state.pair.tokenB;
   }
 
   /// @notice Returns the pool weights and the total weight.
@@ -66,19 +66,19 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @notice Returns the pool reserves.
   /// @return reserves An array containing the reserves of the pool assets.
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    return AlgebraConverterStrategyLogicLib.getPoolReserves(state);
+    return AlgebraConverterStrategyLogicLib.getPoolReserves(state.pair);
   }
 
   /// @notice Returns the current liquidity of the depositor.
   /// @return The current liquidity of the depositor.
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return uint(state.totalLiquidity);
+    return uint(state.pair.totalLiquidity);
   }
 
   /// @notice Returns the total supply of the depositor.
   /// @return In UniV3 we can not calculate the total supply of the wgole pool. Return only ourself value.
   function _depositorTotalSupply() override internal view virtual returns (uint) {
-    return uint(state.totalLiquidity);
+    return uint(state.pair.totalLiquidity);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -101,7 +101,7 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @param liquidityAmount The amount of liquidity to quote the withdrawal for.
   /// @return amountsOut The amounts of the tokens that would be withdrawn.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = AlgebraConverterStrategyLogicLib.quoteExit(state, uint128(liquidityAmount));
+    amountsOut = AlgebraConverterStrategyLogicLib.quoteExit(state.pair, uint128(liquidityAmount));
   }
 
   /////////////////////////////////////////////////////////////////////

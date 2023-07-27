@@ -35,10 +35,10 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
     uint[] memory profitHolderBalances,
     bool[] memory flags
   ) {
-    address profitHolder = state.strategyProfitHolder;
+    address profitHolder = state.pair.strategyProfitHolder;
     profitHolderBalances = new uint[](3);
-    profitHolderBalances[0] = IERC20(state.tokenA).balanceOf(profitHolder);
-    profitHolderBalances[1] = IERC20(state.tokenB).balanceOf(profitHolder);
+    profitHolderBalances[0] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
+    profitHolderBalances[1] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
     profitHolderBalances[2] = IERC20(KyberConverterStrategyLogicLib.KNC).balanceOf(profitHolder);
     flags = new bool[](3);
     flags[0] = state.staked;
@@ -49,8 +49,8 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   /// @return poolAssets An array containing the addresses of the pool assets.
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
-    poolAssets[0] = state.tokenA;
-    poolAssets[1] = state.tokenB;
+    poolAssets[0] = state.pair.tokenA;
+    poolAssets[1] = state.pair.tokenB;
   }
 
   /// @notice Returns the pool weights and the total weight.
@@ -65,19 +65,19 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   /// @notice Returns the pool reserves.
   /// @return reserves An array containing the reserves of the pool assets.
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    return KyberConverterStrategyLogicLib.getPoolReserves(state);
+    return KyberConverterStrategyLogicLib.getPoolReserves(state.pair);
   }
 
   /// @notice Returns the current liquidity of the depositor.
   /// @return The current liquidity of the depositor.
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return uint(state.totalLiquidity);
+    return uint(state.pair.totalLiquidity);
   }
 
   /// @notice Returns the total supply of the depositor.
   /// @return In UniV3 we can not calculate the total supply of the wgole pool. Return only ourself value.
   function _depositorTotalSupply() override internal view virtual returns (uint) {
-    return uint(state.totalLiquidity);
+    return uint(state.pair.totalLiquidity);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -100,7 +100,7 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   /// @param liquidityAmount The amount of liquidity to quote the withdrawal for.
   /// @return amountsOut The amounts of the tokens that would be withdrawn.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = KyberConverterStrategyLogicLib.quoteExit(state, uint128(liquidityAmount));
+    amountsOut = KyberConverterStrategyLogicLib.quoteExit(state.pair, uint128(liquidityAmount));
   }
 
   /////////////////////////////////////////////////////////////////////

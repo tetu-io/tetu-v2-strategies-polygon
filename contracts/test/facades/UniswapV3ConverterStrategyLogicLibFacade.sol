@@ -38,8 +38,4 @@ contract UniswapV3ConverterStrategyLogicLibFacade {
   function needStrategyRebalance(ITetuConverter converter_) external view returns (bool needRebalance) {
     return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter_);
   }
-
-  function _needPoolRebalance(IUniswapV3Pool pool) internal view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib._needPoolRebalance(pool, state.pair);
-  }
 }

@@ -23,7 +23,7 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniversalUtils} from "../../../UniversalUtils";
 import {AlgebraLiquidityUtils} from "./utils/AlgebraLiquidityUtils";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires

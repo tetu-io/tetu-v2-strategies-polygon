@@ -27,7 +27,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {BigNumber, BytesLike} from "ethers";
 import {tetuConverter} from "../../../../typechain/@tetu_io";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires

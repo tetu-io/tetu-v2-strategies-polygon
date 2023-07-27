@@ -29,7 +29,8 @@ const libraries = new Map<string, string[]>([
   // Pair
   ['PairBasedStrategyLib', ['ConverterStrategyBaseLib', 'IterationPlanLib']],
   ['PairBasedStrategyLibFacade', ['PairBasedStrategyLib', 'ConverterStrategyBaseLib']],
-  ['PairBasedStrategyLogicLib', ['ConverterStrategyBaseLib']],
+  ['PairBasedStrategyLogicLib', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLib']],
+  ['PairBasedStrategyLogicLibFacade', ['StrategyLib2', 'PairBasedStrategyLogicLib']],
   // Uniswap V3
   [
     'UniswapV3ConverterStrategy',

@@ -75,7 +75,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     AlgebraConverterStrategyLogicLib.initFarmingState(state, key);
 
     // setup specific name for UI
-    StrategyLib2._changeStrategySpecificName(baseState, AlgebraConverterStrategyLogicLib.createSpecificName(state));
+    StrategyLib2._changeStrategySpecificName(baseState, AlgebraConverterStrategyLogicLib.createSpecificName(state.pair));
   }
   //endregion ------------------------------------------------- INIT
 
@@ -86,7 +86,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @param index01 0 - token A, 1 - token B
   function setFuseStatus(uint index01, uint status) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseStatus(state.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
+    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
   }
 
   /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
@@ -97,13 +97,13 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @param index01 0 - token A, 1 - token B
   function setFuseThresholds(uint index01, uint[4] memory values) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseThresholds(state.fuseAB[index01], values);
+    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB[index01], values);
   }
 
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
     StrategyLib2.onlyOperators(controller());
-    state.strategyProfitHolder = strategyProfitHolder;
+    state.pair.strategyProfitHolder = strategyProfitHolder;
   }
   //endregion --------------------------------------------- OPERATOR ACTIONS
 
@@ -118,12 +118,12 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
-    return AlgebraConverterStrategyLogicLib.needStrategyRebalance(state, converter);
+    return AlgebraConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter);
   }
 
   /// @notice View function required by reader
   function getPoolTokens() external view returns (address tokenA, address tokenB) {
-    return (state.tokenA, state.tokenB);
+    return (state.pair.tokenA, state.pair.tokenB);
   }
 
   /// @notice Returns the current state of the contract
@@ -139,20 +139,21 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     tickData = new int24[](4);
     nums = new uint[](4);
 
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = state.tokenA;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = state.tokenB;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = address(state.pool);
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = state.strategyProfitHolder;
+    PairBasedStrategyLogicLib.PairState storage pair = state.pair;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = pair.tokenA;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = pair.tokenB;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = pair.pool;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = pair.strategyProfitHolder;
 
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = state.tickSpacing;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = state.lowerTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = state.upperTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = state.rebalanceTickRange;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = pair.tickSpacing;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = pair.lowerTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = pair.upperTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = pair.rebalanceTickRange;
 
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(state.totalLiquidity);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(state.fuseAB[0].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(state.fuseAB[1].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = state.withdrawDone;
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(pair.totalLiquidity);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(pair.fuseAB[0].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(pair.fuseAB[1].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = pair.withdrawDone;
   }
   //endregion ---------------------------------------------- METRIC VIEWS
 
@@ -179,7 +180,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
-      state,
+      state.pair,
       [address(converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
@@ -199,7 +200,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      [state.tokenA, state.tokenB],
+      [state.pair.tokenA, state.pair.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -207,7 +208,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     );
 
     // estimate amounts to be withdrawn from the pool
-    uint totalLiquidity = state.totalLiquidity;
+    uint totalLiquidity = state.pair.totalLiquidity;
     uint[] memory amountsOut = (totalLiquidity == 0)
       ? new uint[](2)
       : _depositorQuoteExit(totalLiquidity);
@@ -263,7 +264,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
       planEntryData,
-      state,
+      state.pair,
       liquidationThresholds
     );
 
@@ -272,7 +273,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   }
 
   function getPropNotUnderlying18() external view returns (uint) {
-    return AlgebraConverterStrategyLogicLib.getPropNotUnderlying18(state);
+    return AlgebraConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
   }
 
   /// @notice Set withdrawDone value.
@@ -281,7 +282,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
   /// @param done 0 - full withdraw required, 1 - full withdraw was done
   function setWithdrawDone(uint done) external override {
-    state.withdrawDone = done;
+    state.pair.withdrawDone = done;
   }
 
   //endregion ------------------------------------ Withdraw by iterations
@@ -297,16 +298,16 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   ) {
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
     bytes memory entryData = AlgebraConverterStrategyLogicLib.getEntryData(
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.depositorSwapTokens
+      IAlgebraPool(state.pair.pool),
+      state.pair.lowerTick,
+      state.pair.upperTick,
+      state.pair.depositorSwapTokens
     );
     return PairBasedStrategyLogicLib._beforeDeposit(
       tetuConverter_,
       amount_,
-      state.tokenA,
-      state.tokenB,
+      state.pair.tokenA,
+      state.pair.tokenB,
       entryData,
       liquidationThresholds
     );
@@ -318,7 +319,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    earned = AlgebraConverterStrategyLogicLib.calcEarned(state.tokenA, controller(), rewardTokens, amounts);
+    earned = AlgebraConverterStrategyLogicLib.calcEarned(state.pair.tokenA, controller(), rewardTokens, amounts);
     _rewardsLiquidation(rewardTokens, amounts);
     return (earned, lost, AppLib.balance(baseState.asset));
   }
@@ -331,8 +332,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     uint strategyLoss
   ) {
     if (
-      PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[0].status)
-      || PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[1].status)
+      PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
+      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status)
     ) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
@@ -354,7 +355,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
+    if (state.pair.totalLiquidity > 0) {
       _depositorEmergencyExit();
     }
   }

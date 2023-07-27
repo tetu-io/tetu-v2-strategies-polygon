@@ -76,7 +76,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     );
 
     // setup specific name for UI
-    StrategyLib2._changeStrategySpecificName(baseState, UniswapV3ConverterStrategyLogicLib.createSpecificName(state));
+    StrategyLib2._changeStrategySpecificName(baseState, UniswapV3ConverterStrategyLogicLib.createSpecificName(state.pair));
   }
   //endregion ------------------------------------------------- INIT
 

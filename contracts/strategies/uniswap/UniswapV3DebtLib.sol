@@ -101,8 +101,11 @@ library UniswapV3DebtLib {
 
 //region  -------------------------------------------- Calc tick range
   function calcTickRange(address pool, int24 tickRange, int24 tickSpacing) public view returns (int24 lowerTick, int24 upperTick) {
-    (, int24 tick, , , , ,) = IUniswapV3Pool(pool).slot0();
-    return PairBasedStrategyLogicLib.calcTickRange(tick, tickRange, tickSpacing);
+    return PairBasedStrategyLogicLib.calcTickRange(getCurrentTick(IUniswapV3Pool(pool)), tickRange, tickSpacing);
+  }
+
+  function getCurrentTick(IUniswapV3Pool pool) public view returns(int24 tick) {
+    (, tick, , , , ,) = IUniswapV3Pool(pool).slot0();
   }
 
   /// @notice Calculate the new tick range for a Uniswap V3 pool.

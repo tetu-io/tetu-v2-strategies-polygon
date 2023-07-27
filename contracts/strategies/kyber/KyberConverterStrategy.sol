@@ -76,7 +76,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     state.pId = pId;
 
     // setup specific name for UI
-    StrategyLib2._changeStrategySpecificName(baseState, KyberConverterStrategyLogicLib.createSpecificName(state));
+    StrategyLib2._changeStrategySpecificName(baseState, KyberConverterStrategyLogicLib.createSpecificName(state.pair));
   }
   //endregion ------------------------------------------------- INIT
 
@@ -87,7 +87,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @param index01 0 - token A, 1 - token B
   function setFuseStatus(uint index01, uint status) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseStatus(state.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
+    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
   }
 
   /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
@@ -98,7 +98,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @param index01 0 - token A, 1 - token B
   function setFuseThresholds(uint index01, uint[4] memory values) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseThresholds(state.fuseAB[index01], values);
+    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB[index01], values);
   }
 
   function changePId(uint pId) external {
@@ -109,7 +109,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   function setStrategyProfitHolder(address strategyProfitHolder) external {
     StrategyLib2.onlyOperators(controller());
-    state.strategyProfitHolder = strategyProfitHolder;
+    state.pair.strategyProfitHolder = strategyProfitHolder;
   }
   //endregion --------------------------------------------- OPERATOR ACTIONS
 
@@ -119,7 +119,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
     (bool needStake, bool needUnstake) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
-    return KyberConverterStrategyLogicLib.needStrategyRebalance(state, converter) || needStake || needUnstake;
+    return KyberConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter) || needStake || needUnstake;
   }
 
   function canFarm() external view returns (bool) {
@@ -128,7 +128,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   /// @notice View function required by reader
   function getPoolTokens() external view returns (address tokenA, address tokenB) {
-    return (state.tokenA, state.tokenB);
+    return (state.pair.tokenA, state.pair.tokenB);
   }
 
   /// @notice Returns the current state of the contract
@@ -143,20 +143,22 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     tickData = new int24[](4);
     nums = new uint[](4);
 
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = state.tokenA;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = state.tokenB;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = address(state.pool);
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = state.strategyProfitHolder;
+    PairBasedStrategyLogicLib.PairState storage pair = state.pair;
 
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = state.tickSpacing;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = state.lowerTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = state.upperTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = state.rebalanceTickRange;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = pair.tokenA;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = pair.tokenB;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = address(pair.pool);
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = pair.strategyProfitHolder;
 
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(state.totalLiquidity);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(state.fuseAB[0].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(state.fuseAB[1].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = state.withdrawDone;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = pair.tickSpacing;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = pair.lowerTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = pair.upperTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = pair.rebalanceTickRange;
+
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(pair.totalLiquidity);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(pair.fuseAB[0].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(pair.fuseAB[1].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = pair.withdrawDone;
   }
   //endregion ---------------------------------------------- METRIC VIEWS
 
@@ -182,7 +184,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
-      state,
+      state.pair,
       [address(converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
@@ -202,7 +204,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     // check operator-only, initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       w,
-      [state.tokenA, state.tokenB],
+      [state.pair.tokenA, state.pair.tokenB],
       baseState.asset,
       liquidationThresholds,
       planEntryData,
@@ -210,7 +212,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     );
 
     // estimate amounts to be withdrawn from the pool
-    uint totalLiquidity = state.totalLiquidity;
+    uint totalLiquidity = state.pair.totalLiquidity;
     uint[] memory amountsOut = (totalLiquidity == 0)
       ? new uint[](2)
       : _depositorQuoteExit(totalLiquidity);
@@ -266,7 +268,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
       planEntryData,
-      state,
+      state.pair,
       liquidationThresholds
     );
 
@@ -275,7 +277,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   }
 
   function getPropNotUnderlying18() external view returns (uint) {
-    return KyberConverterStrategyLogicLib.getPropNotUnderlying18(state);
+    return KyberConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
   }
 
   /// @notice Set withdrawDone value.
@@ -284,7 +286,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
   /// @param done 0 - full withdraw required, 1 - full withdraw was done
   function setWithdrawDone(uint done) external override {
-    state.withdrawDone = done;
+    state.pair.withdrawDone = done;
   }
   //endregion ------------------------------------ Withdraw by iterations
 
@@ -299,7 +301,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
     // withdraw all liquidity from pool
     // after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
+    if (state.pair.totalLiquidity > 0) {
       _depositorEmergencyExit();
     }
   }
@@ -323,16 +325,16 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   ) {
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
     bytes memory entryData = KyberConverterStrategyLogicLib.getEntryData(
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.depositorSwapTokens
+      IPool(state.pair.pool),
+      state.pair.lowerTick,
+      state.pair.upperTick,
+      state.pair.depositorSwapTokens
     );
     return PairBasedStrategyLogicLib._beforeDeposit(
       tetuConverter_,
       amount_,
-      state.tokenA,
-      state.tokenB,
+      state.pair.tokenA,
+      state.pair.tokenB,
       entryData,
       liquidationThresholds
     );
@@ -358,8 +360,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     uint strategyLoss
   ) {
     if (
-      PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[0].status)
-      || PairBasedStrategyLib.isFuseTriggeredOn(state.fuseAB[1].status)
+      PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
+      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status)
     ) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;

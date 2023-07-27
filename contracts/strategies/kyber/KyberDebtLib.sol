@@ -99,6 +99,10 @@ library KyberDebtLib {
     return PairBasedStrategyLogicLib.calcTickRange(tick, tickRange, tickSpacing);
   }
 
+  function getCurrentTick(IPool pool) public view returns(int24 tick) {
+    (, tick, ,) = pool.getPoolState();
+  }
+
   /// @notice Calculate the new tick range for a Kyber pool.
   /// @param pool The Kyber pool to calculate the new tick range for.
   /// @param lowerTick The current lower tick value for the pool.
@@ -120,19 +124,19 @@ library KyberDebtLib {
   //region  -------------------------------------------- Rebalance
   function rebalanceNoSwaps(
     address[2] calldata converterLiquidator,
-    KyberConverterStrategyLogicLib.State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     uint profitToCover,
     uint totalAssets,
     address splitter,
     mapping(address => uint) storage liquidityThresholds_
   ) external {
     RebalanceNoSwapsLocal memory p;
-    IPool pool = state.pool;
-    p.tokenA = state.tokenA;
-    p.tokenB = state.tokenB;
-    p.depositorSwapTokens = state.depositorSwapTokens;
+    IPool pool = IPool(pairState.pool);
+    p.tokenA = pairState.tokenA;
+    p.tokenB = pairState.tokenB;
+    p.depositorSwapTokens = pairState.depositorSwapTokens;
 
-    (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, state.lowerTick, state.upperTick, state.tickSpacing);
+    (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
     (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
 
     BorrowLib.rebalanceAssets(
@@ -152,8 +156,8 @@ library KyberDebtLib {
       ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);
     }
 
-    state.lowerTick = p.newLowerTick;
-    state.upperTick = p.newUpperTick;
+    pairState.lowerTick = p.newLowerTick;
+    pairState.upperTick = p.newUpperTick;
   }
   //endregion  -------------------------------------------- Rebalance
 }

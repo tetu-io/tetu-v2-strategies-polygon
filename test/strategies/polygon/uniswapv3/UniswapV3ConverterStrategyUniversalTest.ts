@@ -28,7 +28,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {PackedData} from "../../../baseUT/utils/DefaultState";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 
 dotEnvConfig();
