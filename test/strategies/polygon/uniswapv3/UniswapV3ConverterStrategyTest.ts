@@ -314,7 +314,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance empty strategy');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
 
       console.log('deposit...');
@@ -325,7 +325,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance not empty strategy');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
 
       console.log('withdraw all');
@@ -338,7 +338,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance empty strategy');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
     });
 
@@ -357,7 +357,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance empty strategy');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
 
       console.log('deposit...');
@@ -368,7 +368,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance not empty strategy');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
 
       console.log('withdraw all');
@@ -381,7 +381,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance empty strategy');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
     });
 
@@ -409,7 +409,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance empty strategy after emergencyExit');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
     });
 
@@ -435,7 +435,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('rebalance empty strategy after emergencyExit');
       expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
     });
 
@@ -502,7 +502,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
       expect(rebalanceGasUsed.toNumber()).lessThan(5_000_000);
 
-      await strategy.rebalanceNoSwaps(true);
+      await strategy.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await strategy.needRebalance()).eq(false);
 
       await UniswapV3StrategyUtils.movePriceDown(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price).mul(2));
@@ -587,11 +587,11 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await vault3.deposit(investAmount, signer.address);
 
       await UniswapV3StrategyUtils.movePriceUp(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-      await strategy3.rebalanceNoSwaps(true);
+      await strategy3.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
 
       await UniswapV3StrategyUtils.movePriceDown(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
-      await strategy3.rebalanceNoSwaps(true);
+      await strategy3.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
 
       await UniswapV3StrategyUtils.makeVolume(signer2, strategy3.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
 

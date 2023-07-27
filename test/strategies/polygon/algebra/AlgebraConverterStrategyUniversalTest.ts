@@ -265,7 +265,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         const state = await PackedData.getDefaultState(algebraStrategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB, t[4].rewardToken, t[4].bonusRewardToken])
         await strategy.setStrategyProfitHolder(profitHolder.address)
-        await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
+        // await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
         return strategy as unknown as IStrategyV2;
       },
       {

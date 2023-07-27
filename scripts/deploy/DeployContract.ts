@@ -46,14 +46,14 @@ const libraries = new Map<string, string[]>([
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'AlgebraConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
   ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2']],
-  ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
+  ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
   // Kyber
   [
     'KyberConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
   ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2']],
-  ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
+  ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib2', 'BorrowLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(

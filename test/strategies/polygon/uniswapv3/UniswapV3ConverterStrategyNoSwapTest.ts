@@ -1039,7 +1039,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
       await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
 
       const needRebalanceBefore = await s.needRebalance();
-      await s.rebalanceNoSwaps(true);
+      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       const needRebalanceAfter = await s.needRebalance();
 
       expect(needRebalanceBefore).eq(true);

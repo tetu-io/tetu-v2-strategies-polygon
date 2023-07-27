@@ -238,7 +238,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         const state = await PackedData.getDefaultState(kyberStrategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB, MaticAddresses.KNC_TOKEN])
         await strategy.setStrategyProfitHolder(profitHolder.address)
-        await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
+        // await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
         return strategy as unknown as IStrategyV2;
       },
       {

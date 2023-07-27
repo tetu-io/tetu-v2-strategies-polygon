@@ -170,7 +170,7 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
         process.exit(-1)
       }
 
-      await strategy.rebalanceNoSwaps(true)
+      await strategy.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
     }
 
     expect(await s.needRebalance()).eq(false)
@@ -198,7 +198,8 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
     console.log('Transaction for swap: ', swapTransaction);
 
     await strategy.withdrawByAggStep(
-      [quote.tokenToSwap, MaticAddresses.AGG_ONEINCH_V5],
+      quote.tokenToSwap,
+      MaticAddresses.AGG_ONEINCH_V5,
       quote.amountToSwap,
       swapTransaction.data,
       planEntryData,

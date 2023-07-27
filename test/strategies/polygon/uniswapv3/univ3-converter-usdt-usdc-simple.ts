@@ -259,7 +259,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
     const states = [];
 
-    await strategy.setFuseThreshold(parseUnits('1'));
+    // await strategy.setFuseThreshold(parseUnits('1'));
 
     await vault.setDoHardWorkOnInvest(false);
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));

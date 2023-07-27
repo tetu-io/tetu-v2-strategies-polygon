@@ -247,7 +247,8 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
       console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
       await strategyAsOperator.withdrawByAggStep(
-        [tokenToSwap, aggregator],
+        tokenToSwap,
+        aggregator,
         amountToSwap,
         swapData,
         planEntryData,
@@ -277,7 +278,6 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
     const pathOut = p.filePath;
     const states: IStateNum[] = [];
 
-    await strategy.setFuseThreshold(parseUnits('1'));
     const strategyAsSigner = StrategyBaseV2__factory.connect(strategy.address, signer);
     const strategyAsOperator = await strategy.connect(await UniversalTestUtils.getAnOperator(strategy.address, signer));
 
