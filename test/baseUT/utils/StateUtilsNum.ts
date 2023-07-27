@@ -12,11 +12,11 @@ import {
   IERC20__factory,
   IERC20Metadata__factory,
   IPoolAdapter__factory, IPriceOracle,
-  IPriceOracle__factory, IRebalancingStrategy__factory, IRebalancingV2Strategy__factory,
+  IPriceOracle__factory, IRebalancingV2Strategy__factory,
   ISplitter__factory, ITetuConverter,
   ITetuConverter__factory, IUniswapV3Pool__factory,
   TetuVaultV2,
-  UniswapV3ConverterStrategy__factory, UniswapV3LibFacade
+  UniswapV3ConverterStrategy__factory
 } from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
@@ -30,7 +30,7 @@ export interface IRebalanceResults {
   covered: BigNumber;
 }
 
-export interface IUniv3Depositor {
+export interface IPairState {
   tokenA: string;
   tokenB: string
   tickSpacing: number;
@@ -38,6 +38,9 @@ export interface IUniv3Depositor {
   upperTick: number;
   rebalanceTickRange: number;
   totalLiquidity: BigNumber;
+}
+
+export interface IUniv3SpecificState {
   rebalanceEarned0: BigNumber; // rebalanceResults[0]
   rebalanceEarned1: BigNumber; // rebalanceResults[1]
   rebalanceLost: BigNumber; // rebalanceResults[2]
@@ -130,7 +133,8 @@ export interface IStateNum {
    */
   lockedPercent: number;
 
-  univ3Depositor?: IUniv3Depositor;
+  pairState?: IPairState;
+  univ3?: IUniv3SpecificState
   univ3Pool?: IUniv3Pool;
   rebalanced?: {
     loss: number;
@@ -190,7 +194,8 @@ export class StateUtilsNum {
     const borrowAssetsPrices: number[] = [];
     let borrowAssetsAddresses: string[] = [];
 
-    let univ3Depositor: IUniv3Depositor | undefined;
+    let pairState: IPairState | undefined;
+    let univ3SpecificState: IUniv3SpecificState | undefined;
     let univ3Pool: IUniv3Pool | undefined;
 
     // Direct borrow: borrow an asset using the underlying as collateral
@@ -237,58 +242,73 @@ export class StateUtilsNum {
       const gauge = await IBalancerGauge__factory.connect(await boostedStrategy.gauge(), user);
       gaugeDecimals = (await gauge.decimals()).toNumber();
       gaugeStrategyBalance = +formatUnits(await gauge.balanceOf(strategy.address), gaugeDecimals);
-    } else if (await strategy.PLATFORM() === 'UniswapV3')  {
-      const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
-      const state = await PackedData.getDefaultState(uniswapV3Strategy);
-      liquidity = +formatUnits(
-        state.totalLiquidity,
-        assetDecimals // todo
-      );
-      const tokenB = await IERC20Metadata__factory.connect(state.tokenB, signer);
-
-      borrowAssetsAddresses = [state.tokenA, state.tokenB];
-      borrowAssetsBalances.push(+formatUnits(await tokenB.balanceOf(strategy.address), await tokenB.decimals()));
-      borrowAssetsNames.push(await tokenB.symbol());
-
-      directBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [asset.address], [state.tokenB], priceOracle, true);
-      reverseBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [state.tokenB], [asset.address], priceOracle, false);
-
-      const defaultState = await PackedData.getDefaultState(UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
-      const specificState = await PackedData.getSpecificStateUniv3(UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
-      const pool = await IUniswapV3Pool__factory.connect(defaultState.pool, signer);
-      const slot0 = await pool.slot0();
-      const facade = await MockHelper.createUniswapV3LibFacade(signer);
-      const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
-        slot0.sqrtPriceX96,
-        defaultState.lowerTick,
-        defaultState.upperTick,
-        defaultState.totalLiquidity
-      );
-      const status = (await IRebalancingV2Strategy__factory.connect(strategy.address, signer).getFuseStatus());
-      fuseStatusA = status.statusA.toNumber();
-      fuseStatusB = status.statusB.toNumber();
-      withdrawDone = status.withdrawDone.toNumber();
-
-      univ3Depositor = {
-        tokenA: defaultState.tokenA,
-        tokenB: defaultState.tokenB,
-        tickSpacing: defaultState.tickSpacing,
-        lowerTick: defaultState.lowerTick,
-        upperTick: defaultState.upperTick,
-        rebalanceTickRange: defaultState.rebalanceTickRange,
-        totalLiquidity: defaultState.totalLiquidity,
-        rebalanceEarned0: specificState.rebalanceEarned0,
-        rebalanceEarned1: specificState.rebalanceEarned1,
-        rebalanceLost: specificState.rebalanceLost,
-      }
-      univ3Pool = {
-        token0: await pool.token0(),
-        token1: await pool.token1(),
-        amount0: poolAmountsForLiquidity.amount0,
-        amount1: poolAmountsForLiquidity.amount1
-      };
     } else {
-      throw new Error('Not supported')
+      const isUniv3 = await strategy.PLATFORM() === 'UniswapV3';
+      const isAlgebra = await strategy.PLATFORM() === 'Algebra';
+      const isKyber = await strategy.PLATFORM() === 'Kyber';
+
+      if (isUniv3 || isAlgebra || isKyber)  {
+        const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
+        const state = await PackedData.getDefaultState(uniswapV3Strategy);
+        liquidity = +formatUnits(state.totalLiquidity, assetDecimals); // todo correct decimals?
+        const tokenB = await IERC20Metadata__factory.connect(state.tokenB, signer);
+
+        borrowAssetsAddresses = [state.tokenA, state.tokenB];
+        borrowAssetsBalances.push(+formatUnits(await tokenB.balanceOf(strategy.address), await tokenB.decimals()));
+        borrowAssetsNames.push(await tokenB.symbol());
+
+        directBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [asset.address], [state.tokenB], priceOracle, true);
+        reverseBorrows = await this.getBorrowInfo(signer, converter, borrowManager, strategy, [state.tokenB], [asset.address], priceOracle, false);
+
+        fuseStatusA = state.fuseStatusTokenA;
+        fuseStatusB = state.fuseStatusTokenB;
+        withdrawDone = state.withdrawDone;
+
+        pairState = {
+          tokenA: state.tokenA,
+          tokenB: state.tokenB,
+          tickSpacing: state.tickSpacing,
+          lowerTick: state.lowerTick,
+          upperTick: state.upperTick,
+          rebalanceTickRange: state.rebalanceTickRange,
+          totalLiquidity: state.totalLiquidity,
+        }
+
+        if (isUniv3) {
+          const specificState = await PackedData.getSpecificStateUniv3(UniswapV3ConverterStrategy__factory.connect(strategy.address, signer));
+          univ3SpecificState = {
+            rebalanceEarned0: specificState.rebalanceEarned0,
+            rebalanceEarned1: specificState.rebalanceEarned1,
+            rebalanceLost: specificState.rebalanceLost,
+          }
+          const pool = await IUniswapV3Pool__factory.connect(state.pool, signer);
+          const slot0 = await pool.slot0();
+          const facade = await MockHelper.createUniswapV3LibFacade(signer);
+          const poolAmountsForLiquidity = await facade.getAmountsForLiquidity(
+            slot0.sqrtPriceX96,
+            state.lowerTick,
+            state.upperTick,
+            state.totalLiquidity
+          );
+          univ3Pool = {
+            token0: await pool.token0(),
+            token1: await pool.token1(),
+            amount0: poolAmountsForLiquidity.amount0,
+            amount1: poolAmountsForLiquidity.amount1
+          };
+        }
+
+        if (isAlgebra) {
+          // todo
+        }
+
+        if (isKyber) {
+          // todo
+        }
+
+      } else {
+        throw new Error('Not supported')
+      }
     }
 
     for (const borrowAssetAddress of borrowAssetsAddresses) {
@@ -365,7 +385,8 @@ export class StateUtilsNum {
         ? 0
         : (Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying)) / totalAssets,
 
-      univ3Depositor,
+      pairState,
+      univ3: univ3SpecificState,
       univ3Pool,
 
       rebalanced: p?.rebalanced
@@ -543,16 +564,17 @@ export class StateUtilsNum {
       'converter.u.locked',
       'converter.%.locked',
 
-      'depositor.tokenA',
-      'depositor.tokenB',
-      'depositor.tickSpacing',
-      'depositor.lowerTick',
-      'depositor.upperTick',
-      'depositor.rebalanceTickRange',
-      'depositor.totalLiquidity',
-      'depositor.rebalanceEarned0',
-      'depositor.rebalanceEarned1',
-      'depositor.rebalanceLost',
+      'pair.tokenA',
+      'pair.tokenB',
+      'pair.tickSpacing',
+      'pair.lowerTick',
+      'pair.upperTick',
+      'pair.rebalanceTickRange',
+      'pair.totalLiquidity',
+
+      'univ3.rebalanceEarned0',
+      'univ3.rebalanceEarned1',
+      'univ3.rebalanceLost',
 
       "pool.token0",
       "pool.token1",
@@ -630,16 +652,17 @@ export class StateUtilsNum {
       item.lockedInConverter,
       item.lockedPercent,
 
-      item.univ3Depositor?.tokenA,
-      item.univ3Depositor?.tokenB,
-      item.univ3Depositor?.tickSpacing,
-      item.univ3Depositor?.lowerTick,
-      item.univ3Depositor?.upperTick,
-      item.univ3Depositor?.rebalanceTickRange,
-      item.univ3Depositor?.totalLiquidity,
-      item.univ3Depositor?.rebalanceEarned0,
-      item.univ3Depositor?.rebalanceEarned1,
-      item.univ3Depositor?.rebalanceLost,
+      item.pairState?.tokenA,
+      item.pairState?.tokenB,
+      item.pairState?.tickSpacing,
+      item.pairState?.lowerTick,
+      item.pairState?.upperTick,
+      item.pairState?.rebalanceTickRange,
+      item.pairState?.totalLiquidity,
+
+      item.univ3?.rebalanceEarned0,
+      item.univ3?.rebalanceEarned1,
+      item.univ3?.rebalanceLost,
 
       item.univ3Pool?.token0,
       item.univ3Pool?.token1,

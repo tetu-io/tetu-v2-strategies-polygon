@@ -43,7 +43,7 @@ import {
   IStateHardworkEvents,
   IUniV3FeesClaimedInfo
 } from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
-import {IRebalanceResults} from "./baseUT/utils/StateUtilsNum";
+import {IRebalanceResults, IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
 import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
 import {PackedData} from "./baseUT/utils/PackedData";
 
@@ -131,11 +131,7 @@ export async function rebalanceUniv3StrategyNoSwaps(
 }
 
 
-export async function printStateDifference(
-  decimals: number,
-  stateBefore: IUniswapV3ConverterStrategySpecificState,
-  stateAfter: IUniswapV3ConverterStrategySpecificState,
-) {
+export async function printStateDifference(decimals: number, stateBefore: IUniv3SpecificState, stateAfter: IUniv3SpecificState) {
   console.log('rebalanceEarned0', formatUnits(stateAfter.rebalanceEarned0.sub(stateBefore.rebalanceEarned0), decimals));
   console.log('rebalanceEarned1', formatUnits(stateAfter.rebalanceEarned1.sub(stateBefore.rebalanceEarned1), decimals));
   console.log('rebalanceLost', formatUnits(stateAfter.rebalanceLost.sub(stateBefore.rebalanceLost), decimals));
