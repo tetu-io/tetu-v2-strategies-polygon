@@ -48,15 +48,17 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
   function getDefaultState() external view returns (
     address[] memory addr,
     int24[] memory tickData,
-    uint[] memory nums
+    uint[] memory nums,
+    bool[] memory boolValues
   ) {
     addr = new address[](4);
     addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = _tokenA;
     addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = _tokenB;
 
     tickData = new int24[](4);
-    nums = new uint[](4);
+    nums = new uint[](12);
+    boolValues = new bool[](2);
 
-    return (addr, tickData, nums);
+    return (addr, tickData, nums, boolValues);
   }
 }

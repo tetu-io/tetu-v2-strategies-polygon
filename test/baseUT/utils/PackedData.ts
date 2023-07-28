@@ -3,10 +3,10 @@
 import {BigNumber} from "ethers";
 import {
   AlgebraConverterStrategy, IPairBasedDefaultStateProvider,
-  IRebalancingStrategy, IRebalancingV2Strategy,
   KyberConverterStrategy,
   UniswapV3ConverterStrategy
 } from "../../../typechain";
+import {formatUnits} from "ethers/lib/utils";
 
 //region IDefaultState indices
 const IDX_ADDR_DEFAULT_STATE_TOKEN_A = 0;
@@ -23,6 +23,17 @@ const IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
 const IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
 const IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B = 2;
 const IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE = 3;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 = 4;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_1 = 5;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_2 = 6;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_3 = 7;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 = 8;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
+const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
+
+const IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL = 0;
+const IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS = 1;
 //endregion IDefaultState indices
 
 //region IUniv3SpecificState indices
@@ -52,7 +63,7 @@ const IDX_KYBER_FLAG_NEED_UNSTAKE = 2;
  * Unpacked data from
  *  IRebalancingV2Strategy.getDefaultState
  */
-interface IDefaultState {
+export interface IDefaultState {
   tokenA: string;
   tokenB: string;
   pool: string;
@@ -67,15 +78,21 @@ interface IDefaultState {
   fuseStatusTokenA: number;
   fuseStatusTokenB: number;
   withdrawDone: number;
+
+  fuseThresholdsA: number[];
+  fuseThresholdsB: number[];
+
+  isStablePool: boolean;
+  depositorSwapTokens: boolean;
 }
 
-interface IUniv3SpecificState {
+export interface IUniv3SpecificState {
   rebalanceEarned0: BigNumber;
   rebalanceEarned1: BigNumber;
   rebalanceLost: BigNumber;
 }
 
-interface IKyberSpecificState {
+export interface IKyberSpecificState {
   profitHolderBalances: {
     balanceTokenA: BigNumber;
     balanceTokenB: BigNumber;
@@ -88,7 +105,7 @@ interface IKyberSpecificState {
   }
 }
 
-interface IAlgebraSpecificState {
+export interface IAlgebraSpecificState {
   profitHolderBalances: {
     balanceTokenA: BigNumber;
     balanceTokenB: BigNumber;
@@ -116,6 +133,21 @@ export class PackedData {
       fuseStatusTokenA: ret.nums[IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A].toNumber(),
       fuseStatusTokenB: ret.nums[IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B].toNumber(),
       withdrawDone: ret.nums[IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE].toNumber(),
+      fuseThresholdsA: [
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0], 18),
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_1], 18),
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_2], 18),
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_3], 18),
+      ],
+      fuseThresholdsB: [
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0], 18),
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1], 18),
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2], 18),
+        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3], 18),
+      ],
+
+      isStablePool: ret.boolValues[IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL],
+      depositorSwapTokens: ret.boolValues[IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS]
     }
   }
 

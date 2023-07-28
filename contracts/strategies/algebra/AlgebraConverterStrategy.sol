@@ -124,32 +124,17 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Returns the current state of the contract
   /// @return addr [tokenA, tokenB, pool, profitHolder]
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
-  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone]
+  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]
+  /// @return boolValues [isStablePool, depositorSwapTokens]
   function getDefaultState() external override view returns (
     address[] memory addr,
     int24[] memory tickData,
-    uint[] memory nums
+    uint[] memory nums,
+    bool[] memory boolValues
   ) {
-    addr = new address[](4);
-    tickData = new int24[](4);
-    nums = new uint[](4);
-
-    PairBasedStrategyLogicLib.PairState storage pair = state.pair;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = pair.tokenA;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = pair.tokenB;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = pair.pool;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = pair.strategyProfitHolder;
-
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = pair.tickSpacing;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = pair.lowerTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = pair.upperTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = pair.rebalanceTickRange;
-
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(pair.totalLiquidity);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(pair.fuseAB[0].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(pair.fuseAB[1].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = pair.withdrawDone;
+    return PairBasedStrategyLogicLib.getDefaultState(state.pair);
   }
+
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region --------------------------------------------- CALLBACKS

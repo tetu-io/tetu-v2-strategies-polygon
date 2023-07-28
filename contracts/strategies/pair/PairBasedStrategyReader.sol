@@ -39,7 +39,7 @@ contract PairBasedStrategyReader {
     GetLockedUnderlyingAmountLocal memory v;
     IPairBasedStrategyReaderAccess strategy = IPairBasedStrategyReaderAccess(strategy_);
 
-    (address[] memory addr, , ) = strategy.getDefaultState();
+    (address[] memory addr, , , ) = strategy.getDefaultState();
     address tokenA = addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A];
     address tokenB = addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B];
 

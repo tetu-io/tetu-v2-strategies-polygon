@@ -7,7 +7,7 @@ import {
   MockTetuLiquidatorSingleCall,
   MockToken,
   PriceOracleMock,
-  PairBasedStrategyLogicLibFacade, MockController, IERC20Metadata__factory
+  PairBasedStrategyLogicLibFacade, MockController, IERC20Metadata__factory, IPairBasedDefaultStateProvider
 } from "../../../../typechain";
 import {expect} from "chai";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
@@ -20,6 +20,7 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {IBorrowParamsNum} from "../../../baseUT/mocks/TestDataTypes";
 import {setupMockedBorrowEntryKind1} from "../../../baseUT/mocks/MockRepayUtils";
+import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
 
 describe('PairBasedStrategyLogicLibTest', () => {
 //region Constants and variables
@@ -623,7 +624,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
       withdrawDone: number;
     }
     async function callSetInitialDepositorValues(p: ISetValuesParams): Promise<ISetValuesResults> {
-      console.log("isStablePool", p.isStablePool);
       await facade.setInitialDepositorValues(
         [p.pool, p.asset, p.token0, p.token1],
         [p.tickSpacing, p.lowerTick, p.upperTick, p.rebalanceTickRange],
@@ -1189,5 +1189,171 @@ describe('PairBasedStrategyLogicLibTest', () => {
       });
     });
   });
+
+  describe("getDefaultState", () => {
+    interface IGetDefaultState {
+      state: IDefaultState;
+    }
+    interface IGetDefaultStateResults {
+      init: IDefaultState;
+      state: IDefaultState;
+    }
+    async function callGetDefaultState(p: IGetDefaultState): Promise<IGetDefaultStateResults> {
+      await facade.setPairState(
+        [p.state.tokenA, p.state.tokenB],
+        p.state.pool,
+        p.state.isStablePool,
+        [p.state.tickSpacing, p.state.lowerTick, p.state.upperTick, p.state.rebalanceTickRange],
+        p.state.depositorSwapTokens,
+        p.state.totalLiquidity,
+        p.state.profitHolder,
+        [
+          {
+            status: p.state.fuseStatusTokenA,
+            thresholds: [
+              parseUnits(p.state.fuseThresholdsA[0].toString(), 18),
+              parseUnits(p.state.fuseThresholdsA[1].toString(), 18),
+              parseUnits(p.state.fuseThresholdsA[2].toString(), 18),
+              parseUnits(p.state.fuseThresholdsA[3].toString(), 18)
+            ]
+          },
+          {
+            status: p.state.fuseStatusTokenB,
+            thresholds: [
+              parseUnits(p.state.fuseThresholdsB[0].toString(), 18),
+              parseUnits(p.state.fuseThresholdsB[1].toString(), 18),
+              parseUnits(p.state.fuseThresholdsB[2].toString(), 18),
+              parseUnits(p.state.fuseThresholdsB[3].toString(), 18)
+            ]
+          },
+        ],
+        p.state.withdrawDone
+      );
+
+      const state = await PackedData.getDefaultState(facade as unknown as IPairBasedDefaultStateProvider);
+      console.log(state);
+      return {init: p.state, state};
+    }
+
+    describe("isStablePool true, depositorSwapTokens false", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function getDefaultStateTest(): Promise<IGetDefaultStateResults> {
+        const asset = ethers.Wallet.createRandom().address;
+        return callGetDefaultState({
+          state: {
+            tokenA: usdc.address,
+            tokenB: usdt.address,
+            pool: weth.address,
+            profitHolder: tetu.address,
+
+            tickSpacing: 1,
+            lowerTick: 2,
+            upperTick: 3,
+            rebalanceTickRange: 4,
+
+            totalLiquidity: Misc.ONE18,
+            fuseStatusTokenA: 2,
+            fuseStatusTokenB: 3,
+            withdrawDone: 1000,
+
+            fuseThresholdsA: [11, 12, 14, 13],
+            fuseThresholdsB: [21, 22, 24, 23],
+
+            isStablePool: true,
+            depositorSwapTokens: false
+          }
+        });
+      }
+
+      it("should return expected pool params", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect([ret.state.pool, ret.state.isStablePool].join()).eq([weth.address, true].join());
+      });
+      it("should return expected tokens", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect([ret.state.tokenA, ret.state.tokenB].join()).eq([usdc.address, usdt.address].join());
+        expect(ret.state.depositorSwapTokens).eq(false);
+      });
+      it("should return expected ticks", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect([ret.state.tickSpacing, ret.state.lowerTick, ret.state.upperTick, ret.state.rebalanceTickRange].join()).eq([1, 2, 3, 4].join());
+      });
+      it("should return expected zero params", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect([
+          ret.state.totalLiquidity.toString(), ret.state.profitHolder.toString(), ret.state.withdrawDone.toString()
+        ].join()).eq([
+          Misc.ONE18, tetu.address, 1000
+        ].join());
+      });
+      it("should return fuse status", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect([ret.state.fuseStatusTokenA, ret.state.fuseStatusTokenB].join()).eq([2, 3].join());
+      });
+      it("should return fuse A thresholds", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect(ret.state.fuseThresholdsA.join()).eq([11, 12, 14, 13].join());
+      });
+      it("should return fuse B thresholds", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect(ret.state.fuseThresholdsB.join()).eq([21, 22, 24, 23].join());
+      });
+    });
+    describe("isStablePool false, depositorSwapTokens true", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function getDefaultStateTest(): Promise<IGetDefaultStateResults> {
+        const asset = ethers.Wallet.createRandom().address;
+        return callGetDefaultState({
+          state: {
+            tokenA: usdc.address,
+            tokenB: usdt.address,
+            pool: weth.address,
+            profitHolder: tetu.address,
+
+            tickSpacing: 1,
+            lowerTick: 2,
+            upperTick: 3,
+            rebalanceTickRange: 4,
+
+            totalLiquidity: Misc.ONE18,
+            fuseStatusTokenA: 2,
+            fuseStatusTokenB: 3,
+            withdrawDone: 1000,
+
+            fuseThresholdsA: [11, 12, 14, 13],
+            fuseThresholdsB: [21, 22, 24, 23],
+
+            isStablePool: false,
+            depositorSwapTokens: true
+          }
+        });
+      }
+
+      it("should return expected pool params", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect([ret.state.pool, ret.state.isStablePool].join()).eq([weth.address, false].join());
+      });
+      it("should return expected tokens", async () => {
+        const ret = await loadFixture(getDefaultStateTest);
+        expect([ret.state.tokenA, ret.state.tokenB].join()).eq([usdc.address, usdt.address].join());
+        expect(ret.state.depositorSwapTokens).eq(true);
+      });
+    });
+  });
+
 //endregion Unit tests
 });

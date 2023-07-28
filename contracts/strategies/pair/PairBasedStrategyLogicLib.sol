@@ -197,6 +197,45 @@ library PairBasedStrategyLogicLib {
       pairState.withdrawDone = 0;
     }
   }
+
+  /// @notice Returns the current state of the contract
+  /// @return addr [tokenA, tokenB, pool, profitHolder]
+  /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
+  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]
+  /// @return boolValues [isStablePool, depositorSwapTokens]
+  function getDefaultState(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (
+    address[] memory addr,
+    int24[] memory tickData,
+    uint[] memory nums,
+    bool[] memory boolValues
+  ) {
+    addr = new address[](4);
+    tickData = new int24[](4);
+    nums = new uint[](12);
+    boolValues = new bool[](2);
+
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = pairState.tokenA;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = pairState.tokenB;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = pairState.pool;
+    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = pairState.strategyProfitHolder;
+
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = pairState.tickSpacing;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = pairState.lowerTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = pairState.upperTick;
+    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = pairState.rebalanceTickRange;
+
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(pairState.totalLiquidity);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(pairState.fuseAB[0].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(pairState.fuseAB[1].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = pairState.withdrawDone;
+    for (uint i = 0; i < 4; ++i) {
+      nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 + i] = pairState.fuseAB[0].thresholds[i];
+      nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 + i] = pairState.fuseAB[1].thresholds[i];
+    }
+
+    boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL] = pairState.isStablePool;
+    boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS] = pairState.depositorSwapTokens;
+  }
   //endregion ------------------------------------------------------- PairState-helpers
 
   //region ------------------------------------------------------- needStrategyRebalance

@@ -139,5 +139,14 @@ contract PairBasedStrategyLogicLibFacade {
   ) external {
     PairBasedStrategyLogicLib.updateFuseStatus(pairState, fuseStatusChangedAB, fuseStatusAB);
   }
+
+  function getDefaultState() external view returns (
+    address[] memory addr,
+    int24[] memory tickData,
+    uint[] memory nums,
+    bool[] memory boolValues
+  ) {
+    return PairBasedStrategyLogicLib.getDefaultState(pairState);
+  }
 }
 

@@ -117,46 +117,29 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if {rebalanceNoSwaps} should be called.
-  function needRebalance() public view returns (bool) {
+  function needRebalance() public view override returns (bool) {
     return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter);
   }
 
   /// @notice Returns the current state of the contract
   /// @return addr [tokenA, tokenB, pool, profitHolder]
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
-  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone]
+  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]
+  /// @return boolValues [isStablePool, depositorSwapTokens]
   function getDefaultState() external override view returns (
     address[] memory addr,
     int24[] memory tickData,
-    uint[] memory nums
+    uint[] memory nums,
+    bool[] memory boolValues
   ) {
-    addr = new address[](4);
-    tickData = new int24[](4);
-    nums = new uint[](4);
-
-    PairBasedStrategyLogicLib.PairState storage pair = state.pair;
-
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = pair.tokenA;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = pair.tokenB;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_POOL] = pair.pool;
-    addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_PROFIT_HOLDER] = pair.strategyProfitHolder;
-
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_TICK_SPACING] = pair.tickSpacing;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_LOWER_TICK] = pair.lowerTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_UPPER_TICK] = pair.upperTick;
-    tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = pair.rebalanceTickRange;
-
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(pair.totalLiquidity);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(pair.fuseAB[0].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(pair.fuseAB[1].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = pair.withdrawDone;
+    return PairBasedStrategyLogicLib.getDefaultState(state.pair);
   }
   //endregion ---------------------------------------------- METRIC VIEWS
 
   //region--------------------------------------------- REBALANCE
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
-  function rebalanceNoSwaps(bool checkNeedRebalance) external {
+  function rebalanceNoSwaps(bool checkNeedRebalance) external override {
     address _controller = controller();
     StrategyLib2.onlyOperators(_controller);
 
@@ -257,7 +240,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
-  function getPropNotUnderlying18() external view returns (uint) {
+  function getPropNotUnderlying18() external view override returns (uint) {
     return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
   }
 
