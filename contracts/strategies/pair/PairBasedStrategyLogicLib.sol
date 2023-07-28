@@ -81,7 +81,9 @@ library PairBasedStrategyLogicLib {
       liquidationThresholds[tokenA] // amount_ is set in terms of collateral asset
     );
 
-    tokenAmounts[0] = amount_ - spentCollateral;
+    tokenAmounts[0] = amount_ > spentCollateral
+      ? amount_ - spentCollateral
+      : 0;
   }
 
   /// @param tokens Result of _depositorPoolAssets(). This array is changed in place and returned as {tokensOut}

@@ -18,6 +18,8 @@ import {BigNumber} from "ethers";
 import {PairBasedStrategyLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLogicLibFacade";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {Misc} from "../../../../scripts/utils/Misc";
+import {IBorrowParamsNum} from "../../../baseUT/mocks/TestDataTypes";
+import {setupMockedBorrowEntryKind1} from "../../../baseUT/mocks/MockRepayUtils";
 
 describe('PairBasedStrategyLogicLibTest', () => {
 //region Constants and variables
@@ -72,8 +74,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
     converter = await MockHelper.createMockTetuConverter(signer);
     priceOracleMock = await MockHelper.createPriceOracle(
       signer,
-      [usdc.address, usdt.address, tetu.address],
-      [parseUnits("1", 18), parseUnits("1", 18), parseUnits("1", 18)]
+      [usdc.address, usdt.address, tetu.address, weth.address],
+      [parseUnits("1", 18), parseUnits("1", 18), parseUnits("1", 18), parseUnits("1", 18)]
     );
     const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracleMock.address);
     await converter.setController(tetuConverterController.address);
@@ -1070,6 +1072,122 @@ describe('PairBasedStrategyLogicLibTest', () => {
         })).revertedWith("SB: Denied"); // DENIED
       });
     })
+  });
+
+  describe("_beforeDeposit", () => {
+    interface IBeforeDepositParams {
+      tokenA: MockToken;
+      tokenB: MockToken;
+      amountA: string;
+      propNotUnderlying18: string;
+      liquidationThresholdA: string;
+
+      borrows?: IBorrowParamsNum[];
+    }
+
+    interface IBeforeDepositResults {
+      tokenAmounts: number[];
+    }
+
+    async function callBeforeDeposit(p: IBeforeDepositParams): Promise<IBeforeDepositResults> {
+      // prepare collateral on balance
+      const decimalsA = await p.tokenA.decimals();
+      await p.tokenA.mint(facade.address, parseUnits(p.amountA, decimalsA));
+
+      // setup liquidation thresholds
+      await facade.setLiquidationThreshold(p.tokenA.address, parseUnits(p.liquidationThresholdA, decimalsA));
+
+      // setup borrows
+      const prop0 = parseUnits((1 - +p.propNotUnderlying18).toString(), 18);
+      const prop1 = parseUnits((+p.propNotUnderlying18).toString(), 18);
+      const entryData1 = defaultAbiCoder.encode(
+        ['uint256', 'uint256', 'uint256'],
+        [1, prop0, prop1]
+      );
+
+      if (p.borrows) {
+        for (const b of p.borrows) {
+          await setupMockedBorrowEntryKind1(converter, facade.address, b, prop0, prop1);
+          await b.collateralAsset.connect(await Misc.impersonate(facade.address)).approve(converter.address, Misc.MAX_UINT);
+        }
+      }
+
+      const tokenAmounts = await facade.callStatic._beforeDeposit(
+        converter.address,
+        parseUnits(p.amountA, decimalsA),
+        p.tokenA.address,
+        p.tokenB.address,
+        entryData1
+      );
+
+      return {
+        tokenAmounts: [
+          +formatUnits(tokenAmounts[0], decimalsA),
+          +formatUnits(tokenAmounts[1], await p.tokenB.decimals())
+        ]
+      }
+    }
+
+    describe("Good paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      it("should return expected token amounts", async () => {
+        const ret = await callBeforeDeposit({
+          tokenA: weth,
+          tokenB: tetu,
+          amountA: "3000",
+          borrows: [{
+            collateralAsset: weth,
+            borrowAsset: tetu,
+            converter: converter.address,
+            collateralAmount: "3000",
+            maxTargetAmount: "2000",
+            collateralAmountOut: "1800",
+            borrowAmountOut: "1200",
+          }],
+          propNotUnderlying18: "0.5",
+          liquidationThresholdA: "1"
+        });
+
+        expect(ret.tokenAmounts.join()).eq([1200, 1200].join());
+      });
+    });
+    describe("Bad paths", () => {
+      let snapshot: string;
+      beforeEach(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      afterEach(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      it("should return expected token amounts if amount is less than the threshold ", async () => {
+        const ret = await callBeforeDeposit({
+          tokenA: weth,
+          tokenB: tetu,
+          amountA: "3000",
+          borrows: [{
+            collateralAsset: weth,
+            borrowAsset: tetu,
+            converter: converter.address,
+            collateralAmount: "3000",
+            maxTargetAmount: "2000",
+            collateralAmountOut: "1800",
+            borrowAmountOut: "1200",
+          }],
+          propNotUnderlying18: "0.5",
+          liquidationThresholdA: "3001"
+        });
+
+        expect(ret.tokenAmounts.join()).eq([3000, 0].join());
+      });
+    });
   });
 //endregion Unit tests
 });
