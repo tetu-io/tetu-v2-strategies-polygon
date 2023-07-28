@@ -38,11 +38,4 @@ interface IRebalancingV2Strategy is IPairBasedDefaultStateProvider {
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view returns (uint);
-
-  /// @notice Set withdrawDone value.
-  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
-  ///         After completion of the conversion withdrawDone can be set to 1.
-  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
-  /// @param done 0 - full withdraw required, 1 - full withdraw was done
-  function setWithdrawDone(uint done) external;
 }

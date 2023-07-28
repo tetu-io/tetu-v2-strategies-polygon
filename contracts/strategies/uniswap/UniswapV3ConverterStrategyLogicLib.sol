@@ -89,15 +89,6 @@ library UniswapV3ConverterStrategyLogicLib {
     return pool.fee() == 100;
   }
 
-  /// @notice Get the token amounts held by the contract
-  /// @param state The state of the pool.
-  /// @return amountA The balance of tokenA.
-  /// @return amountB The balance of tokenB.
-  function getTokenAmounts(State storage state) external view returns (uint amountA, uint amountB) {
-    amountA = AppLib.balance(state.pair.tokenA);
-    amountB = AppLib.balance(state.pair.tokenB);
-  }
-
   /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
   /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
   function initStrategyState(
@@ -555,7 +546,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
     v.pool = IUniswapV3Pool(pairState.pool);
 
-    // check operator-only, initialize v
+    // initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(
       v.w,
       [pairState.tokenA, pairState.tokenB],

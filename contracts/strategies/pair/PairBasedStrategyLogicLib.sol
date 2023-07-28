@@ -86,7 +86,8 @@ library PairBasedStrategyLogicLib {
       : 0;
   }
 
-  /// @param tokens Result of _depositorPoolAssets(). This array is changed in place and returned as {tokensOut}
+  /// @notice Initialize {dest} in place. Underlying is always first in {dest.tokens}.
+  /// @param tokens Result of _depositorPoolAssets()
   /// @param asset underlying
   function initWithdrawLocal(
     WithdrawLocal memory dest,

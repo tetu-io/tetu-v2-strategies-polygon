@@ -17,4 +17,11 @@ interface ISetupPairBasedStrategy {
   /// @param index01 0 - token A, 1 - token B
   function setFuseThresholds(uint index01, uint[4] memory values) external;
   function setStrategyProfitHolder(address strategyProfitHolder) external;
+
+  /// @notice Set withdrawDone value.
+  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
+  ///         After completion of the conversion withdrawDone can be set to 1.
+  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
+  /// @param done 0 - full withdraw required, 1 - full withdraw was done
+  function setWithdrawDone(uint done) external;
 }

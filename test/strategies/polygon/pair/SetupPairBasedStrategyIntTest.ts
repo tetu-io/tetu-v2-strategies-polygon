@@ -416,5 +416,76 @@ describe('SetupPairBasedStrategyIntTest', () => {
       });
     });
   });
+
+  describe("setWithdrawDone", () => {
+    let snapshot: string;
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    interface ISetWithdrawDoneParams {
+      done: number;
+      notAsOperator?: boolean;
+    }
+
+    interface IWithdrawDoneResults {
+      done: number;
+    }
+
+    async function callSetProfitHolder(strategy: ISetupPairBasedStrategy, p: ISetWithdrawDoneParams): Promise<IWithdrawDoneResults> {
+      const s = p.notAsOperator
+        ? strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address))
+        : strategy.connect(operator);
+      await s.setWithdrawDone(p.done);
+      const state = await PackedData.getDefaultState(strategy as unknown as IPairBasedDefaultStateProvider);
+      return { done: state.withdrawDone };
+    }
+
+    describe("Univ3", () => {
+      it("should set expected values", async () => {
+        const ret = await callSetProfitHolder(strategyUniv3, {done: 1});
+        expect(ret.done).eq(1);
+      });
+      it("should revert if not operator", async () => {
+        const profitHolder = ethers.Wallet.createRandom().address;
+        await expect(callSetProfitHolder(strategyUniv3, {
+          done: 1,
+          notAsOperator: true
+        })).revertedWith("SB: Denied"); // DENIED
+      });
+    });
+
+    describe("Algebra", () => {
+      it("should set expected values", async () => {
+        const ret = await callSetProfitHolder(strategyAlgebra, {done: 1});
+        expect(ret.done).eq(1);
+      });
+      it("should revert if not operator", async () => {
+        const profitHolder = ethers.Wallet.createRandom().address;
+        await expect(callSetProfitHolder(strategyAlgebra, {
+          done: 1,
+          notAsOperator: true
+        })).revertedWith("SB: Denied"); // DENIED
+      });
+    });
+
+    describe("Kyber", () => {
+      it("should set expected values", async () => {
+        const profitHolder = ethers.Wallet.createRandom().address;
+        const ret = await callSetProfitHolder(strategyKyber, {done: 1});
+        expect(ret.done).eq(1);
+      });
+      it("should revert if not operator", async () => {
+        const profitHolder = ethers.Wallet.createRandom().address;
+        await expect(callSetProfitHolder(strategyKyber, {
+          done: 1,
+          notAsOperator: true
+        })).revertedWith("SB: Denied"); // DENIED
+      });
+    });
+  });
 //endregion Unit tests
 });

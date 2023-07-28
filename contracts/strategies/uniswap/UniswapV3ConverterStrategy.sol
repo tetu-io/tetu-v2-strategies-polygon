@@ -87,6 +87,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     StrategyLib2.onlyOperators(controller());
     state.pair.strategyProfitHolder = strategyProfitHolder;
   }
+
+  /// @notice Set withdrawDone value.
+  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
+  ///         After completion of the conversion withdrawDone can be set to 1.
+  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
+  /// @param done 0 - full withdraw required, 1 - full withdraw was done
+  function setWithdrawDone(uint done) external {
+    StrategyLib2.onlyOperators(controller());
+    state.pair.withdrawDone = done;
+  }
   //endregion --------------------------------------------- OPERATOR ACTIONS
 
   //region --------------------------------------------- METRIC VIEWS
@@ -143,6 +153,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
+    // todo restriction "operator only" is checked inside {initWithdrawLocal} in {quoteWithdrawStep}
     PairBasedStrategyLogicLib.WithdrawLocal memory w;
 
     // check operator-only, initialize v
@@ -224,15 +235,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view override returns (uint) {
     return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
-  }
-
-  /// @notice Set withdrawDone value.
-  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
-  ///         After completion of the conversion withdrawDone can be set to 1.
-  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
-  /// @param done 0 - full withdraw required, 1 - full withdraw was done
-  function setWithdrawDone(uint done) external override {
-    state.pair.withdrawDone = done;
   }
   //endregion ------------------------------------ Withdraw by iterations
 
