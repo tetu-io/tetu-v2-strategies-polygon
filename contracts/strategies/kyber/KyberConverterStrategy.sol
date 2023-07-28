@@ -10,7 +10,6 @@ import "../../interfaces/IFarmingStrategy.sol";
 import "./KyberStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
-
 contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebalancingV2Strategy, IFarmingStrategy {
 
   //region ------------------------------------------------- Constants
@@ -19,24 +18,6 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   string public constant override PLATFORM = AppPlatforms.KYBER;
   string public constant override STRATEGY_VERSION = "2.0.0";
   //endregion ------------------------------------------------- Constants
-
-  //region ------------------------------------------------- Data types
-
-  struct WithdrawByAggStepLocal {
-    ITetuConverter converter;
-    address liquidator;
-    address tokenToSwap;
-    address aggregator;
-    IPool pool;
-    bool useLiquidator;
-    uint oldTotalAssets;
-    uint profitToCover;
-    uint[] tokenAmounts;
-    int24 newLowerTick;
-    int24 newUpperTick;
-  }
-
-  //endregion ------------------------------------------------- Data types
 
   //region ------------------------------------------------- INIT
 

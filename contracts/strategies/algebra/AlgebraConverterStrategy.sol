@@ -10,7 +10,6 @@ import "../pair/PairBasedStrategyLib.sol";
 import "./AlgebraStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
 
-
 contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
   //region ------------------------------------------------- Constants
@@ -20,24 +19,6 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   string public constant override STRATEGY_VERSION = "2.0.0";
 
   //endregion ------------------------------------------------- Constants
-
-  //region ------------------------------------------------- Data types
-
-  struct WithdrawByAggStepLocal {
-    ITetuConverter converter;
-    address liquidator;
-    address tokenToSwap;
-    address aggregator;
-    IAlgebraPool pool;
-    bool useLiquidator;
-    uint oldTotalAssets;
-    uint profitToCover;
-    uint[] tokenAmounts;
-    int24 newLowerTick;
-    int24 newUpperTick;
-  }
-
-  //endregion ------------------------------------------------- Data types
 
   //region ------------------------------------------------- INIT
 

@@ -74,7 +74,6 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
   let assetCtr: IERC20Metadata;
   let decimals: number;
   let stateParams: IStateParams;
-  let reader: PairBasedStrategyReader;
 
   let strategyAsSigner: StrategyBaseV2;
   let strategyAsOperator: UniswapV3ConverterStrategy;
@@ -95,7 +94,6 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
     asset = MaticAddresses.USDC_TOKEN;
     assetCtr = IERC20Metadata__factory.connect(asset, signer);
     decimals = await IERC20Metadata__factory.connect(asset, gov).decimals();
-    reader = await MockHelper.createPairBasedStrategyReader(signer);
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       asset,

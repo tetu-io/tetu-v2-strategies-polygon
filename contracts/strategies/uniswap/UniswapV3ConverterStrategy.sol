@@ -24,24 +24,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   //endregion ------------------------------------------------- Constants
 
-  //region ------------------------------------------------- Data types
-
-  struct WithdrawByAggStepLocal {
-    ITetuConverter converter;
-    address liquidator;
-    address tokenToSwap;
-    address aggregator;
-    IUniswapV3Pool pool;
-    bool useLiquidator;
-    uint oldTotalAssets;
-    uint profitToCover;
-    uint[] tokenAmounts;
-    int24 newLowerTick;
-    int24 newUpperTick;
-  }
-
-  //endregion ------------------------------------------------- Data types
-
   //region ------------------------------------------------- INIT
 
   /// @notice Initialize the strategy with the given parameters.
@@ -126,7 +108,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
   /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]
   /// @return boolValues [isStablePool, depositorSwapTokens]
-  function getDefaultState() external override view returns (
+  function getDefaultState() external view override returns (
     address[] memory addr,
     int24[] memory tickData,
     uint[] memory nums,
