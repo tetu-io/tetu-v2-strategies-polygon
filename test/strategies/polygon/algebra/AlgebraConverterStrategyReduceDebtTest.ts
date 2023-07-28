@@ -101,7 +101,9 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
             pool: MaticAddresses.ALGEBRA_USDC_USDT,
             startTime: 1663631794,
             endTime: 4104559500
-          }
+          },
+          [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -205,7 +207,8 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
     console.log('Transaction for swap: ', swapTransaction);
 
     await strategy.withdrawByAggStep(
-      [quote.tokenToSwap, MaticAddresses.AGG_ONEINCH_V5],
+      quote.tokenToSwap,
+      MaticAddresses.AGG_ONEINCH_V5,
       quote.amountToSwap,
       swapTransaction.data,
       planEntryData,

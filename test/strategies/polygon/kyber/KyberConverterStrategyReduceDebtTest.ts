@@ -94,7 +94,9 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
           0,
           0,
           true,
-          21
+          21,
+            [0, 0, Misc.MAX_UINT, 0],
+            [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -198,7 +200,8 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
     console.log('Transaction for swap: ', swapTransaction);
 
     await strategy.withdrawByAggStep(
-      [quote.tokenToSwap, MaticAddresses.AGG_ONEINCH_V5],
+      quote.tokenToSwap,
+        MaticAddresses.AGG_ONEINCH_V5,
       quote.amountToSwap,
       swapTransaction.data,
       planEntryData,

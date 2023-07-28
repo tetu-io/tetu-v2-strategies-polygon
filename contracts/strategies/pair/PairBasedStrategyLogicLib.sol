@@ -93,16 +93,12 @@ library PairBasedStrategyLogicLib {
     mapping(address => uint) storage liquidationThresholds,
     bytes memory planEntryData,
     address controller
-  ) internal view {
+  ) internal view { // it's internal because it initializes {dest}
     dest.controller = controller;
     StrategyLib2.onlyOperators(dest.controller);
 
     dest.planKind = IterationPlanLib.getEntryKind(planEntryData);
     dest.propNotUnderlying18 = PairBasedStrategyLib._extractProp(dest.planKind, planEntryData);
-
-    if (tokens[1] == asset) {
-      (tokens[0], tokens[1]) = (tokens[1], tokens[0]);
-    }
 
     dest.tokens = new address[](2);
     if (tokens[1] == asset) {
@@ -112,8 +108,8 @@ library PairBasedStrategyLogicLib {
     }
 
     dest.liquidationThresholds = new uint[](2);
-    dest.liquidationThresholds[0] = liquidationThresholds[tokens[0]];
-    dest.liquidationThresholds[1] = liquidationThresholds[tokens[1]];
+    dest.liquidationThresholds[0] = liquidationThresholds[dest.tokens[0]];
+    dest.liquidationThresholds[1] = liquidationThresholds[dest.tokens[1]];
   }
 
   function calcTickRange(int24 tick, int24 tickRange, int24 tickSpacing) public pure returns (
@@ -131,9 +127,9 @@ library PairBasedStrategyLogicLib {
 
   //region ------------------------------------------------------- PairState-helpers
   /// @notice Set the initial values to PairState instance
+  /// @param pairState Depositor storage state struct to be initialized
   /// @param addr [pool, asset, pool.token0(), pool.token1()]
   ///        asset: Underlying asset of the depositor.
-  /// @param pairState Depositor storage state struct
   /// @param tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
   /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
   /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)

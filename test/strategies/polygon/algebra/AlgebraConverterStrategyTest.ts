@@ -107,7 +107,9 @@ describe('AlgebraConverterStrategyTest', function() {
             pool: MaticAddresses.ALGEBRA_USDC_USDT,
             startTime: 1663631794,
             endTime: 4104559500
-          }
+          },
+            [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;

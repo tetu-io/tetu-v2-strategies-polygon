@@ -229,13 +229,15 @@ describe('KyberConverterStrategyUniversalTest', async () => {
           t[2],
           t[3],
           true,
-          t[4]
+          t[4],
+            [0, 0, Misc.MAX_UINT, 0],
+            [0, 0, Misc.MAX_UINT, 0],
         );
         const mainAssetSymbol = await IERC20Metadata__factory.connect(asset, signer).symbol()
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
-        const state = await PackedData.getDefaultState(kyberStrategy);
+        const state = await PackedData.getDefaultState(strategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB, MaticAddresses.KNC_TOKEN])
         await strategy.setStrategyProfitHolder(profitHolder.address)
         // await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%

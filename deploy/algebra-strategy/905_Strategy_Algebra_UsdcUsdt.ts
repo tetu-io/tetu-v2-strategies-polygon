@@ -6,6 +6,7 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
 import { RunHelper } from '../../scripts/utils/RunHelper';
+import {Misc} from "../../scripts/utils/Misc";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
@@ -56,6 +57,8 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
       startTime: 1663631794,
       endTime: 4104559500
     },
+    [0, 0, Misc.MAX_UINT, 0],
+    [0, 0, Misc.MAX_UINT, 0],
     {
       ...params,
     },
