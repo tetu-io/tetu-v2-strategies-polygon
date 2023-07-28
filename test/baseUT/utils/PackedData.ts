@@ -2,7 +2,7 @@
 
 import {BigNumber} from "ethers";
 import {
-  AlgebraConverterStrategy,
+  AlgebraConverterStrategy, IPairBasedDefaultStateProvider,
   IRebalancingStrategy, IRebalancingV2Strategy,
   KyberConverterStrategy,
   UniswapV3ConverterStrategy
@@ -98,7 +98,7 @@ interface IAlgebraSpecificState {
 }
 
 export class PackedData {
-  static async getDefaultState(strategy: IRebalancingV2Strategy): Promise<IDefaultState> {
+  static async getDefaultState(strategy: IPairBasedDefaultStateProvider): Promise<IDefaultState> {
     const ret = await strategy.getDefaultState();
     return {
       tokenA: ret.addr[IDX_ADDR_DEFAULT_STATE_TOKEN_A],

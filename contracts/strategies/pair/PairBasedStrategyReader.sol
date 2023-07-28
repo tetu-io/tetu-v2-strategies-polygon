@@ -9,6 +9,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20Metadata.sol";
 import "../../interfaces/IPairBasedStrategyReaderAccess.sol";
 import "../../libs/AppLib.sol";
 import "../ConverterStrategyBaseLib.sol";
+import "./PairBasedStrategyLib.sol";
 
 /// @notice Read raw values and calculate complex values related to UniswapV3ConverterStrategy
 contract PairBasedStrategyReader {
@@ -38,7 +39,10 @@ contract PairBasedStrategyReader {
     GetLockedUnderlyingAmountLocal memory v;
     IPairBasedStrategyReaderAccess strategy = IPairBasedStrategyReaderAccess(strategy_);
 
-    (address tokenA, address tokenB) = strategy.getPoolTokens();
+    (address[] memory addr, , ) = strategy.getDefaultState();
+    address tokenA = addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A];
+    address tokenB = addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B];
+
     v.converter = ITetuConverter(strategy.converter());
 
     v.tokens = new address[](2);

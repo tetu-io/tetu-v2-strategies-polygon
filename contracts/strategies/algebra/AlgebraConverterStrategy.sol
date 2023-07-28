@@ -121,11 +121,6 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     return AlgebraConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter);
   }
 
-  /// @notice View function required by reader
-  function getPoolTokens() external view returns (address tokenA, address tokenB) {
-    return (state.pair.tokenA, state.pair.tokenB);
-  }
-
   /// @notice Returns the current state of the contract
   /// @return addr [tokenA, tokenB, pool, profitHolder]
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]

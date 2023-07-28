@@ -255,11 +255,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _rebalanceAfter(tokenAmounts);
   }
 
-  /// @notice View function required by reader. TODO replace by more general function that reads slot directly
-  function getPoolTokens() external view returns (address tokenA, address tokenB) {
-    return (state.pair.tokenA, state.pair.tokenB);
-  }
-
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view returns (uint) {

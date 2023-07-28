@@ -268,7 +268,9 @@ async function getBorrowInfo(
   );
 
   const strategyReaderReaderAccess = IPairBasedStrategyReaderAccess__factory.connect(strategy.address, signer)
-  const [tokenA, tokenB] = await strategyReaderReaderAccess.getPoolTokens()
+  const state  = await PackedData.getDefaultState(strategyReaderReaderAccess);
+  const tokenA = state.tokenA;
+  const tokenB = state.tokenB;
   // console.log('tokenA', tokenA)
   // console.log('tokenB', tokenB)
 
