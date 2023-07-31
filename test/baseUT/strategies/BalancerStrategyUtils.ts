@@ -6,11 +6,11 @@ import {
   IComposableStablePool__factory,
   ILinearPool,
   ILinearPool__factory
-} from "../typechain";
-import {TokenUtils} from "../scripts/utils/TokenUtils";
+} from "../../../typechain";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {BigNumber} from "ethers";
-import {TimeUtils} from "../scripts/utils/TimeUtils";
-import {Misc} from "../scripts/utils/Misc";
+import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {Misc} from "../../../scripts/utils/Misc";
 import {parseUnits} from "ethers/lib/utils";
 
 export class BalancerStrategyUtils {

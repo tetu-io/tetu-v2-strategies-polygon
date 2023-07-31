@@ -1,5 +1,5 @@
 import {DoHardWorkLoopBase} from "../../../../baseUT/utils/DoHardWorkLoopBase";
-import {BalancerStrategyUtils} from "../../../../BalancerStrategyUtils";
+import {BalancerStrategyUtils} from "../../../../baseUT/strategies/BalancerStrategyUtils";
 import {MaticAddresses} from "../../../../../scripts/addresses/MaticAddresses";
 import {parseUnits} from "ethers/lib/utils";
 import {BalancerBoostedStrategy} from "../../../../../typechain";

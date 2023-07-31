@@ -11,7 +11,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {parseUnits} from "ethers/lib/utils";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 

@@ -14,7 +14,7 @@ import {Misc} from "../utils/Misc";
 import {expect} from "chai";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {IBacktestResult} from "./types";
-import {UniswapV3StrategyUtils} from "../../test/UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../test/baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 
 export async function strategyBacktest(

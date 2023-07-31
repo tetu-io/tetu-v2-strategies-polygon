@@ -21,7 +21,7 @@ import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {ConverterUtils} from "../baseUT/utils/ConverterUtils";
-import {UniswapV3StrategyUtils} from "../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 
 const {expect} = chai;

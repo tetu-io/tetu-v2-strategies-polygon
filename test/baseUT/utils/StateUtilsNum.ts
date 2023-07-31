@@ -5,14 +5,14 @@ import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
 import {
   BalancerBoostedStrategy__factory, BorrowManager,
-  ConverterStrategyBase,
+  ConverterStrategyBase, ConverterStrategyBase__factory,
   IBalancerGauge__factory, IBorrowManager,
   IBorrowManager__factory,
   IConverterController__factory,
   IERC20__factory,
   IERC20Metadata__factory,
   IPoolAdapter__factory, IPriceOracle,
-  IPriceOracle__factory, IRebalancingV2Strategy__factory,
+  IPriceOracle__factory, IRebalancingV2Strategy, IRebalancingV2Strategy__factory,
   ISplitter__factory, ITetuConverter,
   ITetuConverter__factory, IUniswapV3Pool__factory,
   TetuVaultV2,
@@ -173,6 +173,24 @@ export interface IBorrowInfo {
  * Version of StateUtils without decimals
  */
 export class StateUtilsNum {
+  public static async getStatePair(
+    signer: SignerWithAddress,
+    user: SignerWithAddress,
+    strategy: IRebalancingV2Strategy,
+    vault: TetuVaultV2,
+    title?: string,
+    p?: IGetStateParams
+  ): Promise<IStateNum> {
+    return this.getState(
+      signer,
+      user,
+      ConverterStrategyBase__factory.connect(strategy.address, strategy.signer),
+      vault,
+      title,
+      p
+    );
+  }
+
   public static async getState(
     signer: SignerWithAddress,
     user: SignerWithAddress,

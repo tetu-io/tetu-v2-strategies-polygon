@@ -24,7 +24,7 @@ library AlgebraConverterStrategyLogicLib {
   //endregion ------------------------------------------------ Constants
 
   //region ------------------------------------------------ Events
-  event Rebalanced(uint loss, uint coveredByRewards);
+  event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
   event AlgebraRewardsClaimed(uint reward, uint bonusReward);
   //endregion ------------------------------------------------ Data types
@@ -525,21 +525,24 @@ library AlgebraConverterStrategyLogicLib {
 
     // rebalancing debt, setting new tick range
     if (needRebalance) {
+      uint coveredByRewards;
       AlgebraDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, oldTotalAssets, splitter, liquidityThresholds_);
 
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(v.converter, oldTotalAssets, v.tokenA, v.tokenB);
       if (loss != 0) {
-        _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
+      emit Rebalanced(loss, profitToCover, coveredByRewards);
     }
 
     return tokenAmounts;
   }
 
   /// @notice Try to cover loss from rewards then cover remain loss from insurance.
-  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal {
-    uint coveredByRewards;
+  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
+    uint coveredByRewards
+  ) {
     if (loss != 0) {
       coveredByRewards = AlgebraDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
       uint notCovered = loss - coveredByRewards;
@@ -548,7 +551,7 @@ library AlgebraConverterStrategyLogicLib {
       }
     }
 
-    emit Rebalanced(loss, coveredByRewards);
+    return coveredByRewards;
   }
 
   /// @notice Initialize {v} by state values

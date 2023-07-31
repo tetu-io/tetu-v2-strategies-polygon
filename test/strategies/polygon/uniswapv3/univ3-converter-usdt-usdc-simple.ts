@@ -24,11 +24,11 @@ import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
-import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
+import { UniswapV3StrategyUtils } from '../../../baseUT/strategies/UniswapV3StrategyUtils';
 import {
   depositToVault,
   doHardWorkForStrategy,
-  printVaultState, rebalanceUniv3StrategyNoSwaps,
+  printVaultState, rebalancePairBasedStrategyNoSwaps,
   redeemFromVault,
 } from '../../../StrategyTestUtils';
 import { BigNumber } from 'ethers';
@@ -338,7 +338,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
-        await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals);
+        await rebalancePairBasedStrategyNoSwaps(strategy, signer, decimals);
         await printVaultState(
           vault,
           splitter,

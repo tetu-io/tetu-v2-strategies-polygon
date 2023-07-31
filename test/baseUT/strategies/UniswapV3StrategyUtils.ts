@@ -5,11 +5,11 @@ import {
   ISwapper__factory,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory
-} from '../typechain';
-import { TokenUtils } from '../scripts/utils/TokenUtils';
-import { MaticAddresses } from '../scripts/addresses/MaticAddresses';
+} from '../../../typechain';
+import { TokenUtils } from '../../../scripts/utils/TokenUtils';
+import { MaticAddresses } from '../../../scripts/addresses/MaticAddresses';
 import { formatUnits } from 'ethers/lib/utils';
-import {PackedData} from "./baseUT/utils/PackedData";
+import {PackedData} from "../utils/PackedData";
 
 
 export class UniswapV3StrategyUtils {

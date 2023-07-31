@@ -3,27 +3,29 @@ import {expect} from 'chai';
 import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {ControllerV2__factory, IController__factory, IERC20__factory, IERC20Metadata, IERC20Metadata__factory, IStrategyV2, StrategyBaseV2, StrategyBaseV2__factory, StrategySplitterV2, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, PairBasedStrategyReader,} from "../../../../typechain";
+import {
+  IERC20__factory,
+  IERC20Metadata,
+  StrategyBaseV2,
+  StrategyBaseV2__factory,
+  StrategySplitterV2,
+  TetuVaultV2,
+  IRebalancingV2Strategy,
+} from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {depositToVault, printVaultState, rebalanceUniv3StrategyNoSwaps} from "../../../StrategyTestUtils";
+import {depositToVault, printVaultState, rebalancePairBasedStrategyNoSwaps} from "../../../StrategyTestUtils";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {PairBasedStrategyUtils} from "../../../baseUT/strategies/PairBasedStrategyUtils";
+import {UniswapV3Builder} from "../../../baseUT/strategies/UniswapV3Builder";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -46,7 +48,7 @@ const argv = require('yargs/yargs')()
  * 2) test uses aggregator
  * Liquidator has modified price, but aggregator has unchanged current price different from the price in our test.
  */
-describe('UniswapV3ConverterStrategyNoSwapTest', function() {
+describe('PairBasedNoSwapIntTest', function() {
   const ENTRY_TO_POOL_IS_ALLOWED = 1;
   const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
   const PLAN_SWAP_REPAY = 0;
@@ -65,7 +67,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
   let signer2: SignerWithAddress;
 
   let core: CoreAddresses;
-  let strategy: UniswapV3ConverterStrategy;
+  let strategy: IRebalancingV2Strategy;
   let vault: TetuVaultV2;
   let insurance: string;
   let splitter: StrategySplitterV2;
@@ -76,7 +78,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
   let stateParams: IStateParams;
 
   let strategyAsSigner: StrategyBaseV2;
-  let strategyAsOperator: UniswapV3ConverterStrategy;
+  let strategyAsOperator: IRebalancingV2Strategy;
 //endregion Variables
 
 //region before, after
@@ -84,93 +86,34 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;
-
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
-    gov = await Misc.impersonate(MaticAddresses.GOV_ADDRESS);
 
-    core = Addresses.getCore() as CoreAddresses;
-    pool = MaticAddresses.UNISWAPV3_USDC_USDT_100;
-    asset = MaticAddresses.USDC_TOKEN;
-    assetCtr = IERC20Metadata__factory.connect(asset, signer);
-    decimals = await IERC20Metadata__factory.connect(asset, gov).decimals();
+    const r = await UniswapV3Builder.build({
+      signer,
+      signer2,
+      gov: MaticAddresses.GOV_ADDRESS,
+      pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
+      asset: MaticAddresses.USDC_TOKEN,
+      vaultName: 'TetuV2_UniswapV3_USDC-USDT-0.01%',
+      converter: MaticAddresses.TETU_CONVERTER,
+      secondAsset: MaticAddresses.USDT_TOKEN
+    });
 
-    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
-      asset,
-      'TetuV2_UniswapV3_USDC-USDT-0.01%',
-      async(_splitterAddress: string) => {
-        const _strategy = UniswapV3ConverterStrategy__factory.connect(
-          await DeployerUtils.deployProxy(signer, 'UniswapV3ConverterStrategy'),
-          gov,
-        );
+    gov = r.gov;
 
-        await _strategy.init(
-          core.controller,
-          _splitterAddress,
-          MaticAddresses.TETU_CONVERTER,
-          pool,
-          0,
-          0,
-          [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
-        );
-
-        return _strategy as unknown as IStrategyV2;
-      },
-      IController__factory.connect(core.controller, gov),
-      gov,
-      0,
-      300,
-      300,
-      false,
-    );
-
-    vault = data.vault;
-    strategy = UniswapV3ConverterStrategy__factory.connect(data.strategy.address, gov);
-    splitter = data.splitter;
-    insurance = await vault.insurance();
-
-    // setup converter
-    await ConverterUtils.whitelist([strategy.address]);
-    const state = await PackedData.getDefaultState(strategy);
-
-    // prices should be the same in the pool and in the oracle
-    await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
-
-    // prices should be the same in the pool and in the liquidator
-    const pools = [
-      {
-        pool: state.pool,
-        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
-        tokenIn: MaticAddresses.USDC_TOKEN,
-        tokenOut: MaticAddresses.USDT_TOKEN,
-      },
-    ]
-    const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
-    const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
-    await tools.liquidator.connect(liquidatorOperator).addLargestPools(pools, true);
-    await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(pools, true);
-
-    // ---
-
-    await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
-    await IERC20__factory.connect(asset, signer2).approve(vault.address, Misc.MAX_UINT);
-
-    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
-
-    await vault.setWithdrawRequestBlocks(0);
-
-    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
-    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
-    await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address);
-
-    stateParams = {
-      mainAssetSymbol: await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer).symbol()
-    }
-
+    core = r.core;
+    pool = r.pool;
+    asset = r.asset;
+    assetCtr = r.assetCtr;
+    decimals = r.assetDecimals;
+    vault = r.vault;
+    strategy = r.strategy;
+    splitter = r.splitter;
+    insurance = r.insurance;
+    stateParams = r.stateParams;
     strategyAsSigner = StrategyBaseV2__factory.connect(strategy.address, signer);
-    strategyAsOperator = await strategy.connect(await UniversalTestUtils.getAnOperator(strategy.address, signer));
-
+    strategyAsOperator = await strategy.connect(r.operator);
   })
 
   after(async function() {
@@ -220,20 +163,21 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
       await TimeUtils.advanceNBlocks(300);
 
       if (p.movePricesUp) {
-        await UniswapV3StrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await PairBasedStrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       } else {
-        await UniswapV3StrategyUtils.movePriceDown(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await PairBasedStrategyUtils.movePriceDown(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       }
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `p${i}`));
+      states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, `p${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
         console.log('------------------ REBALANCE' , i, '------------------');
-        const rebalanced = await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals);
+
+        const rebalanced = await rebalancePairBasedStrategyNoSwaps(strategy, signer, decimals);
         await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
 
-        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
+        states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
       }
 
@@ -355,7 +299,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -400,7 +344,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: 0, // (!) don't enter to the pool at the end
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -450,7 +394,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -495,7 +439,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: 0, // (!) don't enter to the pool at the end
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -547,7 +491,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -594,7 +538,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: 0, // (!) don't enter to the pool at the end
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -647,7 +591,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -692,7 +636,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
               entryToPool: 0, // (!) don't enter to the pool at the end
               planEntryData: defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]),
               saveState: async stateTitle => {
-                states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+                states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
                 await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
               }
             });
@@ -746,7 +690,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
             entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
             planEntryData: defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
             saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+              states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
             }
           });
@@ -820,7 +764,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
             entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
             planEntryData: defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
             saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+              states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
             }
           });
@@ -896,7 +840,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
             entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
             planEntryData: defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
             saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+              states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
             }
           });
@@ -970,7 +914,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
             entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
             planEntryData: defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
             saveState: async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, stateTitle));
+              states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, stateTitle));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
             }
           });
@@ -1034,7 +978,7 @@ describe('UniswapV3ConverterStrategyNoSwapTest', function() {
       await TokenUtils.getToken(asset, signer.address, parseUnits('1000', 6));
       await vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
 
-      await UniswapV3StrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
+      await PairBasedStrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
 
       const needRebalanceBefore = await s.needRebalance();
       await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });

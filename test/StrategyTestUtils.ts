@@ -109,7 +109,7 @@ const { expect } = chai;
 /**
  * Make rebalance using rebalanceNoSwaps
  */
-export async function rebalanceUniv3StrategyNoSwaps(
+export async function rebalancePairBasedStrategyNoSwaps(
   strategy: UniswapV3ConverterStrategy,
   signer: SignerWithAddress,
   decimals: number,

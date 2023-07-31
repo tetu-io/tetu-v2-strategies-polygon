@@ -45,7 +45,7 @@ import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} from "../../../StateUtils";
 import {Provider} from "@ethersproject/providers";
-import {BalancerStrategyUtils} from "../../../BalancerStrategyUtils";
+import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 
 chai.use(chaiAsPromised);

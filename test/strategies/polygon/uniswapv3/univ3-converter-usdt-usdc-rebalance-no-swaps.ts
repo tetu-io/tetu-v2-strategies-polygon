@@ -24,12 +24,12 @@ import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
-import { UniswapV3StrategyUtils } from '../../../UniswapV3StrategyUtils';
+import { UniswapV3StrategyUtils } from '../../../baseUT/strategies/UniswapV3StrategyUtils';
 import {
   depositToVault,
   doHardWorkForStrategy,
   printVaultState,
-  rebalanceUniv3StrategyNoSwaps,
+  rebalancePairBasedStrategyNoSwaps,
   redeemFromVault,
 } from '../../../StrategyTestUtils';
 import {BigNumber, BytesLike} from 'ethers';
@@ -328,7 +328,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
         console.log('------------------ REBALANCE' , i, '------------------');
-        const rebalanced = await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals);
+        const rebalanced = await rebalancePairBasedStrategyNoSwaps(strategy, signer, decimals);
 
         await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
         states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
@@ -352,7 +352,7 @@ describe('univ3-converter-usdt-usdc-rebalance-no-swaps', function() {
 
           if (await strategy.needRebalance()) {
             console.log('------------------ REBALANCE-AFTER-UNFOLDING' , i, '------------------');
-            const rebalanced = await rebalanceUniv3StrategyNoSwaps(strategy, signer, decimals);
+            const rebalanced = await rebalancePairBasedStrategyNoSwaps(strategy, signer, decimals);
 
             await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
             states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
