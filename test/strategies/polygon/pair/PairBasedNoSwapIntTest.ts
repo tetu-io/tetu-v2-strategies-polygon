@@ -24,7 +24,7 @@ import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {UniswapV3Builder} from "../../../baseUT/strategies/UniswapV3Builder";
+import {PairBasedStrategyBuilder} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 
 dotEnvConfig();
@@ -89,7 +89,7 @@ describe('PairBasedNoSwapIntTest', function() {
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
 
-    const r = await UniswapV3Builder.build({
+    const r = await PairBasedStrategyBuilder.buildUniv3({
       signer,
       signer2,
       gov: MaticAddresses.GOV_ADDRESS,
@@ -97,7 +97,8 @@ describe('PairBasedNoSwapIntTest', function() {
       asset: MaticAddresses.USDC_TOKEN,
       vaultName: 'TetuV2_UniswapV3_USDC-USDT-0.01%',
       converter: MaticAddresses.TETU_CONVERTER,
-      secondAsset: MaticAddresses.USDT_TOKEN
+      secondAsset: MaticAddresses.USDT_TOKEN,
+      swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER
     });
 
     gov = r.gov;

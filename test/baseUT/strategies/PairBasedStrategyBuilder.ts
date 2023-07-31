@@ -1,0 +1,281 @@
+import {Misc} from "../../../scripts/utils/Misc";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
+import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
+import {
+  AlgebraConverterStrategy,
+  AlgebraConverterStrategy__factory,
+  ControllerV2__factory, ConverterStrategyBase__factory,
+  IController__factory,
+  IERC20__factory,
+  IERC20Metadata,
+  IERC20Metadata__factory,
+  IRebalancingV2Strategy,
+  IRebalancingV2Strategy__factory,
+  ISetupPairBasedStrategy__factory,
+  IStrategyV2, KyberConverterStrategy, KyberConverterStrategy__factory,
+  StrategySplitterV2,
+  TetuVaultV2,
+  UniswapV3ConverterStrategy,
+  UniswapV3ConverterStrategy__factory, VaultFactory__factory
+} from "../../../typechain";
+import {DeployerUtilsLocal, IVaultStrategyInfo} from "../../../scripts/utils/DeployerUtilsLocal";
+import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {ConverterUtils} from "../utils/ConverterUtils";
+import {IDefaultState, PackedData} from "../utils/PackedData";
+import {PriceOracleImitatorUtils} from "../converter/PriceOracleImitatorUtils";
+import {UniversalTestUtils} from "../utils/UniversalTestUtils";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {IStateParams} from "../utils/StateUtilsNum";
+import {parseUnits} from "ethers/lib/utils";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
+
+export interface IBuilderParams {
+  gov: string;
+  pool: string;
+  /** underlying in the pool */
+  asset: string;
+  /** not-underlying in the pool */
+  secondAsset: string;
+  vaultName: string;
+  converter: string;
+  signer: SignerWithAddress;
+  signer2: SignerWithAddress;
+  swapper: string;
+
+  compoundRatio?: number;
+}
+
+export interface IBuilderResults {
+  gov: SignerWithAddress;
+
+  core: CoreAddresses;
+  strategy: IRebalancingV2Strategy;
+  vault: TetuVaultV2;
+  insurance: string;
+  splitter: StrategySplitterV2;
+  pool: string;
+  asset: string;
+  assetCtr: IERC20Metadata;
+  assetDecimals: number;
+  stateParams: IStateParams;
+  operator: SignerWithAddress;
+}
+
+export class PairBasedStrategyBuilder {
+  private static async setPriceImitator(
+      signer: SignerWithAddress,
+      state: IDefaultState,
+      strategy: IRebalancingV2Strategy
+  ){
+    const platform = await ConverterStrategyBase__factory.connect(strategy.address, state).PLATFORM();
+    if (platform === PLATFORM_UNIV3) {
+      await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA);
+    } else if (platform === PLATFORM_ALGEBRA) {
+      await PriceOracleImitatorUtils.algebra(signer, this.state.pool, state.tokenA);
+    } else if (platform === PLATFORM_KYBER) {
+      await PriceOracleImitatorUtils.kyber(signer, this.state.pool, state.tokenA);
+    } else throw Error(`setPriceImitator: unknown platform ${platform}`);
+  }
+
+  private static async build(
+      p: IBuilderParams,
+      controller: ControllerV2,
+      core: IBuilderParams,
+      data: IVaultStrategyInfo
+  ): Promise<IBuilderResults> {
+    const signer = p.signer;
+    const gov = await Misc.impersonate(p.gov);
+
+    const vault = data.vault;
+    const strategy = IRebalancingV2Strategy__factory.connect(data.strategy.address, gov);
+
+    // whitlist the strategy in the converter
+    await ConverterUtils.whitelist([strategy.address]);
+    const state = await PackedData.getDefaultState(strategy);
+
+    // prices should be the same in the pool and in the oracle
+    await this.setPriceImitator(signer, state, strategy);
+
+    // prices should be the same in the pool and in the liquidator
+    const pools = [{
+      pool: state.pool,
+      swapper: p.swapper,
+      tokenIn: MaticAddresses.USDC_TOKEN,
+      tokenOut: MaticAddresses.USDT_TOKEN,
+    },]
+    const tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);
+    const liquidatorOperator = await Misc.impersonate('0xbbbbb8C4364eC2ce52c59D2Ed3E56F307E529a94')
+    await tools.liquidator.connect(liquidatorOperator).addLargestPools(pools, true);
+    await tools.liquidator.connect(liquidatorOperator).addBlueChipsPools(pools, true);
+
+    // approve asset to vault for both signers
+    await IERC20__factory.connect(p.asset, signer).approve(vault.address, Misc.MAX_UINT);
+    await IERC20__factory.connect(p.asset, p.signer2).approve(vault.address, Misc.MAX_UINT);
+
+    await vault.setWithdrawRequestBlocks(0);
+
+    await ControllerV2__factory.connect(core.controller, gov).registerOperator(signer.address);
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer)
+
+    // set profit holder
+    const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [p.asset, p.secondAsset])
+    await ISetupPairBasedStrategy__factory.connect(strategy.address, operator).setStrategyProfitHolder(profitHolder.address);
+
+    // set liquidation thresholds
+    await ConverterStrategyBase__factory.connect(strategy.address, operator).setLiquidationThreshold(p.asset, parseUnits('0.001', 6));
+
+    if (p.compoundRatio) {
+      const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
+      await strategy.connect(platformVoter).setCompoundRatio(p.compoundRatio);
+    }
+
+    return {
+      gov,
+      asset: p.asset,
+      assetCtr: IERC20Metadata__factory.connect(p.asset, signer),
+      core,
+      insurance: await vault.insurance(),
+      operator,
+      pool: p.pool,
+      splitter: data.splitter,
+      vault,
+      strategy,
+      assetDecimals: await IERC20Metadata__factory.connect(p.asset, gov).decimals(),
+      stateParams: {
+        mainAssetSymbol: await IERC20Metadata__factory.connect(p.asset, signer).symbol()
+      },
+    }
+  }
+  static async buildUniv3(p: IBuilderParams): Promise<IBuilderResults> {
+    const signer = p.signer;
+    const gov = await Misc.impersonate(p.gov);
+    const core = Addresses.getCore() as CoreAddresses;
+    const controller = IController__factory.connect(core.controller, gov);
+
+    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+      p.asset,
+      p.vaultName,
+      async(_splitterAddress: string) => {
+        const _strategy = UniswapV3ConverterStrategy__factory.connect(
+          await DeployerUtils.deployProxy(signer, 'UniswapV3ConverterStrategy'),
+          gov,
+        );
+
+        await _strategy.init(
+          core.controller,
+          _splitterAddress,
+          p.converter,
+          pool,
+          0,
+          0,
+          [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
+        );
+
+        return _strategy as unknown as IStrategyV2;
+      },
+      controller,
+      gov,
+      0,
+      300,
+      300,
+      false,
+    );
+
+    return this.build(p, controller, core, data);
+  }
+
+  static async buildAlgebra(p: IBuilderParams): Promise<IBuilderResults> {
+    const signer = p.signer;
+    const gov = await Misc.impersonate(p.gov);
+    const core = Addresses.getCore() as CoreAddresses;
+    const controller = IController__factory.connect(core.controller, gov);
+
+    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+        p.asset,
+        p.vaultName,
+        async(_splitterAddress: string) => {
+          const _strategy = AlgebraConverterStrategy__factory.connect(
+              await DeployerUtils.deployProxy(signer, 'AlgebraConverterStrategy'),
+              gov,
+          );
+
+          await _strategy.init(
+              core.controller,
+              _splitterAddress,
+              p.converter,
+              pool,
+              0,
+              0,
+              true,
+              {
+                rewardToken: MaticAddresses.dQUICK_TOKEN,
+                bonusRewardToken: MaticAddresses.WMATIC_TOKEN,
+                pool: MaticAddresses.ALGEBRA_USDC_USDT,
+                startTime: 1663631794,
+                endTime: 4104559500
+              },
+              [0, 0, Misc.MAX_UINT, 0],
+              [0, 0, Misc.MAX_UINT, 0],
+          );
+
+          return _strategy as unknown as IStrategyV2;
+        },
+        controller,
+        gov,
+        1_000,
+        300,
+        300,
+        false,
+    );
+    return this.build(p, controller, core, data);
+  }
+
+  static async buildKyber(p: IBuilderParams): Promise<IBuilderResults> {
+    const signer = p.signer;
+    const gov = await Misc.impersonate(p.gov);
+    const core = Addresses.getCore() as CoreAddresses;
+    const controller = DeployerUtilsLocal.getController(signer)
+
+    // use the latest implementations
+    const vaultLogic = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
+    const splitterLogic = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
+    const vaultFactory = VaultFactory__factory.connect(core.vaultFactory, signer);
+    await vaultFactory.connect(gov).setVaultImpl(vaultLogic.address);
+    await vaultFactory.connect(gov).setSplitterImpl(splitterLogic.address);
+
+    const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
+        asset.address,
+        p.vaultName,
+        async(_splitterAddress: string) => {
+          const _strategy = KyberConverterStrategy__factory.connect(
+              await DeployerUtils.deployProxy(signer, 'KyberConverterStrategy'),
+              gov,
+          );
+
+          await _strategy.init(
+              core.controller,
+              _splitterAddress,
+              converterAddress,
+              p.pool,
+              0,
+              0,
+              true,
+              pId,
+              [0, 0, Misc.MAX_UINT, 0],
+              [0, 0, Misc.MAX_UINT, 0],
+          );
+
+          return _strategy as unknown as IStrategyV2;
+        },
+        controller,
+        gov,
+        0,
+        0,
+        300,
+        false,
+    );
+    return this.build(p, core, data);
+  }
+}
