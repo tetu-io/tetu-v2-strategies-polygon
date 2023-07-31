@@ -22,7 +22,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniswapV3LiquidityUtils} from "./utils/UniswapV3LiquidityUtils";
-import {UniversalUtils} from "../../../UniversalUtils";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();

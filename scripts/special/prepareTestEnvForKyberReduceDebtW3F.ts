@@ -17,7 +17,7 @@ import {getConverterAddress, Misc} from "../utils/Misc";
 import {ConverterUtils} from "../../test/baseUT/utils/ConverterUtils";
 import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {TokenUtils} from "../utils/TokenUtils";
-import {UniversalUtils} from "../../test/UniversalUtils";
+import {UniversalUtils} from "../../test/baseUT/strategies/UniversalUtils";
 import {MockHelper} from "../../test/baseUT/helpers/MockHelper";
 import {KyberLiquidityUtils} from "../../test/strategies/polygon/kyber/utils/KyberLiquidityUtils";
 

@@ -21,7 +21,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {UniversalUtils} from "../../../UniversalUtils";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {AlgebraLiquidityUtils} from "./utils/AlgebraLiquidityUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 

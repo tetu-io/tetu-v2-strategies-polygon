@@ -23,18 +23,6 @@ library UniswapV3DebtLib {
   uint internal constant BORROW_PERIOD_ESTIMATION = 30 days / 2;
 //endregion  -------------------------------------------- Constants
 
-//region  -------------------------------------------- Data types
-  struct RebalanceNoSwapsLocal {
-    address tokenA;
-    address tokenB;
-    bool depositorSwapTokens;
-    int24 newLowerTick;
-    int24 newUpperTick;
-    uint prop0;
-    uint prop1;
-  }
-//endregion  -------------------------------------------- Data types
-
 //region  -------------------------------------------- Rewards
   function coverLossFromRewards(uint loss, address strategyProfitHolder, address tokenA, address tokenB, address pool) external returns (uint covered) {
     uint bA = IERC20Metadata(tokenA).balanceOf(strategyProfitHolder);
@@ -108,7 +96,7 @@ library UniswapV3DebtLib {
     (, tick, , , , ,) = IUniswapV3Pool(pool).slot0();
   }
 
-  /// @notice Calculate the new tick range for a Uniswap V3 pool.
+  /// @notice Calculate the new tick range for a Uniswap V3 pool, the tick is read from the pool.
   /// @param pool The Uniswap V3 pool to calculate the new tick range for.
   /// @param lowerTick The current lower tick value for the pool.
   /// @param upperTick The current upper tick value for the pool.
@@ -121,48 +109,49 @@ library UniswapV3DebtLib {
     int24 upperTick,
     int24 tickSpacing
   ) internal view returns (int24 lowerTickNew, int24 upperTickNew) {
+    int24 currentTick = getCurrentTick(pool);
+    return _calcNewTickRangeForTick(currentTick, lowerTick, upperTick, tickSpacing);
+  }
+
+  /// @notice Calculate the new tick range for a Uniswap V3 pool, the tick is known
+  function _calcNewTickRangeForTick(
+    int24 currentTick,
+    int24 lowerTick,
+    int24 upperTick,
+    int24 tickSpacing
+  ) internal pure returns (int24 lowerTickNew, int24 upperTickNew) {
     int24 fullTickRange = upperTick - lowerTick;
-    (lowerTickNew, upperTickNew) = calcTickRange(address(pool), fullTickRange == tickSpacing ? int24(0) : fullTickRange / 2, tickSpacing);
+    int24 tickRange = fullTickRange == tickSpacing
+      ? int24(0)
+      : fullTickRange / 2;
+    return PairBasedStrategyLogicLib.calcTickRange(currentTick, tickRange, tickSpacing);
   }
 //endregion  -------------------------------------------- Calc tick range
 
 //region  -------------------------------------------- Rebalance
+  /// @notice Calculate right asset proportions, make rebalance, update lower/upper ticks in {pairState}
+  /// @param tick Current tick in the pool
   function rebalanceNoSwaps(
     address[2] calldata converterLiquidator,
     PairBasedStrategyLogicLib.PairState storage pairState,
     uint profitToCover,
     uint totalAssets,
     address splitter,
-    mapping(address => uint) storage liquidityThresholds_
+    mapping(address => uint) storage liquidityThresholds_,
+    int24 tick
   ) external {
-    RebalanceNoSwapsLocal memory p;
-    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
-    p.tokenA = pairState.tokenA;
-    p.tokenB = pairState.tokenB;
-    p.depositorSwapTokens = pairState.depositorSwapTokens;
-
-    (p.newLowerTick, p.newUpperTick) = _calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
-    (p.prop0, p.prop1) = getEntryDataProportions(pool, p.newLowerTick, p.newUpperTick, p.depositorSwapTokens);
-
-    BorrowLib.rebalanceAssets(
-      ITetuConverter(converterLiquidator[0]),
-      ITetuLiquidator(converterLiquidator[1]),
-      p.tokenA,
-      p.tokenB,
-      p.prop0 * BorrowLib.SUM_PROPORTIONS / (p.prop0 + p.prop1),
-      liquidityThresholds_[p.tokenA],
-      liquidityThresholds_[p.tokenB],
-      profitToCover
+    (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRangeForTick(tick, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+    (uint prop0, uint prop1) = getEntryDataProportions(IUniswapV3Pool(pairState.pool), newLowerTick, newUpperTick, pairState.depositorSwapTokens);
+    PairBasedStrategyLogicLib.rebalanceNoSwaps(
+      converterLiquidator,
+      pairState,
+      profitToCover,
+      totalAssets,
+      splitter,
+      liquidityThresholds_,
+      prop0 * BorrowLib.SUM_PROPORTIONS / (prop0 + prop1)
     );
-
-    // we assume here, that rebalanceAssets provides profitToCover on balance and set leftovers to right proportions
-    if (profitToCover != 0) {
-      uint profitToSend = Math.min(profitToCover, IERC20(p.tokenA).balanceOf(address(this)));
-      ConverterStrategyBaseLib2.sendToInsurance(p.tokenA, profitToSend, splitter, totalAssets);
-    }
-
-    pairState.lowerTick = p.newLowerTick;
-    pairState.upperTick = p.newUpperTick;
+    (pairState.lowerTick, pairState.upperTick) = (newLowerTick, newUpperTick);
   }
 //endregion  -------------------------------------------- Rebalance
 

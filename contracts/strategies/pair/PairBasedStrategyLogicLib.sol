@@ -351,6 +351,37 @@ library PairBasedStrategyLogicLib {
     );
   }
 
+  /// @notice Rebalance asset to proportions {propTokenA}:{1e18-propTokenA}, fix profitToCover
+  /// @param propTokenA Proportion of {tokenA}, > 0. Proportion of {tokenB} is calculates as 1e18 - prop0
+  function rebalanceNoSwaps(
+    address[2] calldata converterLiquidator,
+    PairBasedStrategyLogicLib.PairState storage pairState,
+    uint profitToCover,
+    uint totalAssets,
+    address splitter,
+    mapping(address => uint) storage liquidityThresholds_,
+    uint propTokenA
+  ) internal {
+    address tokenA = pairState.tokenA;
+    address tokenB = pairState.tokenB;
+
+    BorrowLib.rebalanceAssets(
+      ITetuConverter(converterLiquidator[0]),
+      ITetuLiquidator(converterLiquidator[1]),
+      tokenA,
+      tokenB,
+      propTokenA,
+      liquidityThresholds_[tokenA],
+      liquidityThresholds_[tokenB],
+      profitToCover
+    );
+
+    // we assume here, that rebalanceAssets provides profitToCover on balance and set leftovers to right proportions
+    if (profitToCover != 0) {
+      uint profitToSend = Math.min(profitToCover, IERC20(tokenA).balanceOf(address(this)));
+      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToSend, splitter, totalAssets);
+    }
+  }
   //endregion ------------------------------------------------------- PairState-helpers
 
   //region ------------------------------------------------------- needStrategyRebalance

@@ -478,12 +478,12 @@ library KyberConverterStrategyLogicLib {
   /// @notice Make rebalance without swaps (using borrowing only).
   /// @param converterLiquidator [TetuConverter, TetuLiquidator]
   /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
-  /// @param oldTotalAssets Current value of totalAssets()
-  /// @return tokenAmounts Token amounts for deposit. If length == 0 no deposit is required.
+  /// @param totalAssets_ Current value of totalAssets()
+  /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
   function rebalanceNoSwaps(
     PairBasedStrategyLogicLib.PairState storage pairState,
     address[2] calldata converterLiquidator,
-    uint oldTotalAssets,
+    uint totalAssets_,
     uint profitToCover,
     address splitter,
     bool checkNeedRebalance_,
@@ -495,10 +495,11 @@ library KyberConverterStrategyLogicLib {
     _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState);
 
     bool needRebalance;
+    int24 tick = KyberDebtLib.getCurrentTick(IPool(pairState.pool));
     (needRebalance, v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(
       pairState,
       v.converter,
-      KyberDebtLib.getCurrentTick(IPool(pairState.pool))
+      tick
     );
 
     // update fuse status if necessary
@@ -512,10 +513,10 @@ library KyberConverterStrategyLogicLib {
     // rebalancing debt, setting new tick range
     if (needRebalance) {
       uint coveredByRewards;
-      KyberDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, oldTotalAssets, splitter, liquidityThresholds_);
+      KyberDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, liquidityThresholds_, tick);
 
       uint loss;
-      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(v.converter, oldTotalAssets, v.tokenA, v.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(v.converter, totalAssets_, v.tokenA, v.tokenB);
       if (loss != 0) {
         coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }

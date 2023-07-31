@@ -23,6 +23,7 @@ import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 import {PackedData} from "./PackedData";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
 
 export interface IRebalanceResults {
   fuseStatus?: number;
@@ -261,9 +262,9 @@ export class StateUtilsNum {
       gaugeDecimals = (await gauge.decimals()).toNumber();
       gaugeStrategyBalance = +formatUnits(await gauge.balanceOf(strategy.address), gaugeDecimals);
     } else {
-      const isUniv3 = await strategy.PLATFORM() === 'UniswapV3';
-      const isAlgebra = await strategy.PLATFORM() === 'Algebra';
-      const isKyber = await strategy.PLATFORM() === 'Kyber';
+      const isUniv3 = await strategy.PLATFORM() === PLATFORM_UNIV3;
+      const isAlgebra = await strategy.PLATFORM() === PLATFORM_ALGEBRA;
+      const isKyber = await strategy.PLATFORM() === PLATFORM_KYBER;
 
       if (isUniv3 || isAlgebra || isKyber)  {
         const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);

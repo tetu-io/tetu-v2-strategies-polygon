@@ -385,13 +385,13 @@ library UniswapV3ConverterStrategyLogicLib {
 
   /// @notice Make rebalance without swaps (using borrowing only).
   /// @param converterLiquidator [TetuConverter, TetuLiquidator]
-  /// @param oldTotalAssets Current value of totalAssets()
+  /// @param totalAssets_ Current value of totalAssets()
   /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
-  /// @return tokenAmounts Token amounts for deposit. If length == 0 no deposit is required.
+  /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
   function rebalanceNoSwaps(
     PairBasedStrategyLogicLib.PairState storage pairState,
     address[2] calldata converterLiquidator,
-    uint oldTotalAssets,
+    uint totalAssets_,
     uint profitToCover,
     address splitter,
     bool checkNeedRebalance_,
@@ -403,11 +403,8 @@ library UniswapV3ConverterStrategyLogicLib {
     _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState);
 
     bool needRebalance;
-    (needRebalance, v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(
-      pairState,
-      v.converter,
-      UniswapV3DebtLib.getCurrentTick(IUniswapV3Pool(pairState.pool))
-    );
+    int24 tick = UniswapV3DebtLib.getCurrentTick(IUniswapV3Pool(pairState.pool));
+    (needRebalance,v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(pairState, v.converter, tick);
 
     // update fuse status if necessary
     if (needRebalance) {
@@ -419,11 +416,11 @@ library UniswapV3ConverterStrategyLogicLib {
 
     // rebalancing debt, setting new tick range
     if (needRebalance) {
-      uint coveredByRewards;
-      UniswapV3DebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, oldTotalAssets, splitter, liquidityThresholds_);
+      UniswapV3DebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, liquidityThresholds_, tick);
 
+      uint coveredByRewards;
       uint loss;
-      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(v.converter, oldTotalAssets, v.tokenA, v.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(v.converter, totalAssets_, v.tokenA, v.tokenB);
       if (loss != 0) {
         coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }

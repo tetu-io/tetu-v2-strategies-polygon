@@ -55,6 +55,7 @@ export class UniswapV3StrategyUtils {
     }
   }
 
+  /** @deprecated Use UniversalUtils.movePoolPriceUp */
   public static async movePriceUp(
     signer: SignerWithAddress,
     strategyAddress: string,
@@ -100,6 +101,7 @@ export class UniswapV3StrategyUtils {
     };
   }
 
+  /** @deprecated Use UniversalUtils.movePoolPriceDown */
   public static async movePriceDown(
     signer: SignerWithAddress,
     strategyAddress: string,
@@ -143,6 +145,7 @@ export class UniswapV3StrategyUtils {
     };
   }
 
+    /** @deprecated Use UniversalUtils.makePoolVolume */
   public static async makeVolume(
     signer: SignerWithAddress,
     strategyAddress: string,

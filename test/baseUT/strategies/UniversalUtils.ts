@@ -4,9 +4,9 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
   IERC20Metadata__factory,
   ISwapper__factory,
-} from "../typechain";
-import {TokenUtils} from "../scripts/utils/TokenUtils";
-import {MaticAddresses} from "../scripts/addresses/MaticAddresses";
+} from "../../../typechain";
+import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export class UniversalUtils {
   public static getApr(earned: BigNumber, investAmount: BigNumber, startTimestamp: number, endTimestamp: number) {

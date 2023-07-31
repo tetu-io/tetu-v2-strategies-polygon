@@ -1,16 +1,16 @@
 import {
-  ControllerV2__factory,
-  ForwarderV3__factory,
-  IERC20__factory,
-  IERC20Metadata, PairBasedStrategyLib__factory,
-  StrategyBaseV2, StrategyLib__factory,
-  StrategySplitterV2,
-  StrategySplitterV2__factory,
-  TetuVaultV2,
-  TetuVaultV2__factory,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
-  UniswapV3ConverterStrategyLogicLib__factory, VaultFactory__factory,
+    ControllerV2__factory,
+    ForwarderV3__factory,
+    IERC20__factory,
+    IERC20Metadata, IStrategyV2__factory, PairBasedStrategyLib__factory,
+    StrategyBaseV2, StrategyLib__factory,
+    StrategySplitterV2,
+    StrategySplitterV2__factory,
+    TetuVaultV2,
+    TetuVaultV2__factory,
+    UniswapV3ConverterStrategy,
+    UniswapV3ConverterStrategy__factory,
+    UniswapV3ConverterStrategyLogicLib__factory, VaultFactory__factory,
 } from '../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber, ContractReceipt } from 'ethers';
@@ -46,6 +46,7 @@ import {
 import {IRebalanceResults, IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
 import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
 import {PackedData} from "./baseUT/utils/PackedData";
+import {PLATFORM_UNIV3} from "./baseUT/strategies/AppPlatforms";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -118,7 +119,7 @@ export async function rebalancePairBasedStrategyNoSwaps(
   console.log('### REBALANCE CALL ###');
   const stateBefore = await PackedData.getSpecificStateUniv3(strategy);
 
-  const tx = await strategy.connect(signer).rebalanceNoSwaps(checkNeedRebalance,{ gasLimit: 10_000_000 });
+  const tx = await strategy.connect(signer).rebalanceNoSwaps(checkNeedRebalance, {gasLimit: 10_000_000});
   const receipt = await tx.wait();
   const ret = await handleReceiptRebalance(receipt, decimals);
 

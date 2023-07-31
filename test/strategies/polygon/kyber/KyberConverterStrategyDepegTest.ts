@@ -27,7 +27,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {UniversalUtils} from "../../../UniversalUtils";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {KyberLiquidityUtils} from "./utils/KyberLiquidityUtils";
 import {writeFileSyncRestoreFolder} from "../../../baseUT/utils/FileUtils";

@@ -24,8 +24,8 @@ import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {PairBasedStrategyUtils} from "../../../baseUT/strategies/PairBasedStrategyUtils";
 import {UniswapV3Builder} from "../../../baseUT/strategies/UniswapV3Builder";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -146,6 +146,8 @@ describe('PairBasedNoSwapIntTest', function() {
     const states: IStateNum[] = [];
     const pathOut = p.pathOut;
 
+    const defaultState = await PackedData.getDefaultState(strategy);
+
     await vault.setDoHardWorkOnInvest(false);
     await TokenUtils.getToken(asset, signer2.address, parseUnits('1', 6));
     await vault.connect(signer2).deposit(parseUnits('1', 6), signer2.address);
@@ -163,9 +165,9 @@ describe('PairBasedNoSwapIntTest', function() {
       await TimeUtils.advanceNBlocks(300);
 
       if (p.movePricesUp) {
-        await PairBasedStrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceUp(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       } else {
-        await PairBasedStrategyUtils.movePriceDown(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceDown(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       }
       states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, `p${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
@@ -174,10 +176,10 @@ describe('PairBasedNoSwapIntTest', function() {
       if (await strategy.needRebalance()) {
         console.log('------------------ REBALANCE' , i, '------------------');
 
-        const rebalanced = await rebalancePairBasedStrategyNoSwaps(strategy, signer, decimals);
+        await strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
         await printVaultState(vault, splitter, strategyAsSigner, assetCtr, decimals);
 
-        states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
+        states.push(await StateUtilsNum.getStatePair(signer2, signer, strategy, vault, `r${i}`));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
       }
 
@@ -972,13 +974,22 @@ describe('PairBasedNoSwapIntTest', function() {
   describe('rebalanceNoSwaps', function() {
     it('should change needRebalance() result to false', async() => {
       const s = strategy;
+      const defaultState = await PackedData.getDefaultState(s);
 
       console.log('deposit...');
       await IERC20__factory.connect(asset, signer).approve(vault.address, Misc.MAX_UINT);
       await TokenUtils.getToken(asset, signer.address, parseUnits('1000', 6));
       await vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
 
-      await PairBasedStrategyUtils.movePriceDown(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('600000', 6), 100001);
+      await UniversalUtils.movePoolPriceDown(
+          signer,
+          defaultState.pool,
+          defaultState.tokenA,
+          defaultState.tokenB,
+          MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+          parseUnits('600000', 6),
+          100001
+      );
 
       const needRebalanceBefore = await s.needRebalance();
       await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
