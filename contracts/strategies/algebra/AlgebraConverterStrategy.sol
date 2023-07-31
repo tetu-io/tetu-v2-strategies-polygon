@@ -164,19 +164,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   //region --------------------------------------------- Withdraw by iterations
 
+  /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
   function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
-    // todo restriction "operator only" is checked inside {initWithdrawLocal} in {quoteWithdrawStep}
-    PairBasedStrategyLogicLib.WithdrawLocal memory w;
-
-    // check operator-only, initialize v
-    PairBasedStrategyLogicLib.initWithdrawLocal(
-      w,
-      [state.pair.tokenA, state.pair.tokenB],
-      baseState.asset,
-      liquidationThresholds,
-      planEntryData,
-      controller()
-    );
+    // restriction "operator only" is checked inside {initWithdrawLocal} in {quoteWithdrawStep}
 
     // estimate amounts to be withdrawn from the pool
     uint totalLiquidity = state.pair.totalLiquidity;
@@ -184,22 +174,14 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       ? new uint[](2)
       : _depositorQuoteExit(totalLiquidity);
 
-    (tokenToSwap, amountToSwap) = PairBasedStrategyLib.quoteWithdrawStep(
-      [address(converter), address(AppLib._getLiquidator(w.controller))],
-      w.tokens,
-      w.liquidationThresholds,
+    return PairBasedStrategyLogicLib.quoteWithdrawByAgg(
+      state.pair,
+      planEntryData,
       amountsOut,
-      w.planKind,
-      w.propNotUnderlying18
+      controller(),
+      converter,
+      liquidationThresholds
     );
-    if (amountToSwap != 0) {
-      // withdrawByAggStep will execute REPAY1 - SWAP - REPAY2
-      // but quoteWithdrawByAgg and withdrawByAggStep are executed in different blocks
-      // so, REPAY1 can return less collateral than quoteWithdrawByAgg expected
-      // As result, we can have less amount on balance than required amountToSwap
-      // So, we need to reduce amountToSwap on small gap amount
-      amountToSwap -= amountToSwap * PairBasedStrategyLib.GAP_AMOUNT_TO_SWAP / 100_000;
-    }
   }
 
   /// @notice Make withdraw iteration: [exit from the pool], [make 1 swap], [repay a debt], [enter to the pool]
@@ -231,7 +213,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
     (completed, tokenAmounts) = AlgebraConverterStrategyLogicLib.withdrawByAggStep(
-      [tokenToSwap_, aggregator_, controller(), address(converter), baseState.asset, baseState.splitter],
+      [tokenToSwap_, aggregator_, controller(), address(converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
       planEntryData,

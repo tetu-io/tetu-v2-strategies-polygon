@@ -53,24 +53,6 @@ library UniswapV3ConverterStrategyLogicLib {
     bool[2] fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
   }
-
-  struct WithdrawByAggStepLocal {
-    PairBasedStrategyLogicLib.WithdrawLocal w;
-    address tokenToSwap;
-    address aggregator;
-    address controller;
-    address converter;
-    address asset;
-    address splitter;
-    IUniswapV3Pool pool;
-    uint amountToSwap;
-    uint profitToCover;
-    uint oldTotalAssets;
-    uint entryToPool;
-    int24 newLowerTick;
-    int24 newUpperTick;
-    uint[] tokenAmounts;
-  }
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Helpers
@@ -102,6 +84,8 @@ library UniswapV3ConverterStrategyLogicLib {
     uint[4] calldata fuseThresholdsB
   ) external {
     require(pool != address(0), AppErrors.ZERO_ADDRESS);
+    address token0 = IUniswapV3Pool(pool).token0();
+    address token1 = IUniswapV3Pool(pool).token1();
 
     int24[4] memory tickData;
     {
@@ -115,10 +99,9 @@ library UniswapV3ConverterStrategyLogicLib {
       tickData[3] = tickRange;
     }
 
-    address[4] memory addr = [pool, asset_, IUniswapV3Pool(pool).token0(), IUniswapV3Pool(pool).token1()];
     PairBasedStrategyLogicLib.setInitialDepositorValues(
       state.pair,
-      addr,
+      [pool, asset_, token0, token1],
       tickData,
       isStablePool(IUniswapV3Pool(pool)),
       fuseThresholdsA,
@@ -126,8 +109,8 @@ library UniswapV3ConverterStrategyLogicLib {
     );
 
     address liquidator = IController(controller_).liquidator();
-    IERC20(addr[2]).approve(liquidator, type(uint).max); // token0
-    IERC20(addr[3]).approve(liquidator, type(uint).max); // token1
+    IERC20(token0).approve(liquidator, type(uint).max);
+    IERC20(token1).approve(liquidator, type(uint).max);
   }
 
   function createSpecificName(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (string memory) {
@@ -448,30 +431,6 @@ library UniswapV3ConverterStrategyLogicLib {
     return tokenAmounts;
   }
 
-  /// @notice Cover possible loss after call of {withdrawByAggStep}
-  /// @param tokens [underlying, not-underlying]
-  function afterWithdrawStep(
-    ITetuConverter converter,
-    IUniswapV3Pool pool,
-    address[] memory tokens,
-    uint oldTotalAssets,
-    uint profitToCover,
-    address strategyProfitHolder,
-    address splitter
-  ) internal returns (uint[] memory tokenAmounts) {
-    if (profitToCover > 0) {
-      uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
-      ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
-    }
-
-    uint loss;
-    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
-
-    if (loss != 0) {
-      _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
-    }
-  }
-
   /// @notice Try to cover loss from rewards then cover remain loss from insurance.
   function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal {
     uint coveredByRewards;
@@ -515,12 +474,13 @@ library UniswapV3ConverterStrategyLogicLib {
   //endregion ------------------------------------------------ Rebalance
 
   //region ------------------------------------------------ WithdrawByAgg
-  /// @param addr_ [tokenToSwap, aggregator, controller, converter, asset, splitter]
+  /// @notice Calculate amounts to be deposited to pool, update pairState.lower/upperTick, fix loss / profitToCover
+  /// @param addr_ [tokenToSwap, aggregator, controller, converter, splitter]
   /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, entryToPool]
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
-  /// @return tokenAmounts Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
+  /// @return tokenAmountsOut Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
   function withdrawByAggStep(
-    address[6] calldata addr_,
+    address[5] calldata addr_,
     uint[4] calldata values_,
     bytes memory swapData,
     bytes memory planEntryData,
@@ -528,69 +488,31 @@ library UniswapV3ConverterStrategyLogicLib {
     mapping(address => uint) storage liquidationThresholds
   ) external returns (
     bool completed,
-    uint[] memory tokenAmounts
+    uint[] memory tokenAmountsOut
   ) {
-    WithdrawByAggStepLocal memory v;
+    address splitter = addr_[4];
+    uint entryToPool = values_[3];
+    address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
+    IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
 
-    v.tokenToSwap = addr_[0];
-    v.aggregator = addr_[1];
-    v.controller = addr_[2];
-    v.converter = addr_[3];
-    v.asset = addr_[4];
-    v.splitter = addr_[5];
+    // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
+    uint[] memory tokenAmounts;
+    uint loss;
+    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
-    v.amountToSwap = values_[0];
-    v.profitToCover = values_[1];
-    v.oldTotalAssets = values_[2];
-    v.entryToPool = values_[3];
-
-    v.pool = IUniswapV3Pool(pairState.pool);
-
-    // initialize v
-    PairBasedStrategyLogicLib.initWithdrawLocal(
-      v.w,
-      [pairState.tokenA, pairState.tokenB],
-      v.asset,
-      liquidationThresholds,
-      planEntryData,
-      v.controller
-    );
-
-    // make withdraw iteration according to the selected plan
-    completed = PairBasedStrategyLib.withdrawStep(
-      [v.converter, address(AppLib._getLiquidator(v.w.controller))],
-      v.w.tokens,
-      v.w.liquidationThresholds,
-      v.tokenToSwap,
-      v.amountToSwap,
-      v.aggregator,
-      swapData,
-      v.aggregator == address(0),
-      v.w.planKind,
-      v.w.propNotUnderlying18
-    );
-
-    // fix loss / profitToCover
-    v.tokenAmounts = UniswapV3ConverterStrategyLogicLib.afterWithdrawStep(
-      ITetuConverter(v.converter),
-      v.pool,
-      v.w.tokens,
-      v.oldTotalAssets,
-      v.profitToCover,
-      pairState.strategyProfitHolder,
-      v.splitter
-    );
-
-    if (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-      || (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
-    ) {
-      (v.newLowerTick, v.newUpperTick) = UniswapV3DebtLib._calcNewTickRange(v.pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
-      pairState.lowerTick = v.newLowerTick;
-      pairState.upperTick = v.newUpperTick;
-      tokenAmounts = v.tokenAmounts;
+    // cover loss
+    if (loss != 0) {
+      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
 
-    return (completed, tokenAmounts);
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    ) {
+      // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
+      (pairState.lowerTick, pairState.upperTick) = UniswapV3DebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      tokenAmountsOut = tokenAmounts;
+    }
+    return (completed, tokenAmountsOut); // hide warning
   }
   //endregion ------------------------------------------------ WithdrawByAgg
 

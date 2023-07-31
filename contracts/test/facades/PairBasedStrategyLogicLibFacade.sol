@@ -92,13 +92,12 @@ contract PairBasedStrategyLogicLibFacade {
 
   function initWithdrawLocal(
     address[2] calldata tokens,
-    address asset,
     bytes memory planEntryData,
     address controller
   ) external view returns (
     PairBasedStrategyLogicLib.WithdrawLocal memory dest // for tests it's ok to return a struct
   ) {
-    PairBasedStrategyLogicLib.initWithdrawLocal(dest, tokens, asset, liquidationThresholds, planEntryData, controller);
+    PairBasedStrategyLogicLib.initWithdrawLocal(dest, tokens, liquidationThresholds, planEntryData, controller);
     return dest;
   }
 

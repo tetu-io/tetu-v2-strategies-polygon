@@ -887,7 +887,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
   describe("initWithdrawLocal", () => {
     interface IInitWithdrawLocalParams {
       tokens: MockToken[];
-      asset: MockToken;
       liquidationThresholds: string[];
       planEntryData: string;
 
@@ -916,7 +915,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
       const ret = await facade.callStatic.initWithdrawLocal(
         [p.tokens[0].address, p.tokens[1].address],
-        p.asset.address,
         p.planEntryData,
         controller.address
       );
@@ -937,83 +935,41 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
     describe("Good paths", () => {
       describe("PLAN_SWAP_REPAY", () => {
-        describe("Asset is token 0", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
-            const planEntryData = defaultAbiCoder.encode(
-              ['uint256', 'uint256'],
-              [PLAN_SWAP_REPAY, Misc.ONE18.div(10)]
-            );
-            return callInitWithdrawLocal({
-              tokens: [usdc, weth],
-              asset: usdc,
-              liquidationThresholds: ["1", "2"],
-              planEntryData,
-            });
-          }
-
-          it("should return expected tokens", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect(ret.tokens.join()).eq([usdc.address, weth.address].join());
-          });
-          it("should return expected controller", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect(ret.controller).eq(controller.address);
-          });
-          it("should return expected liquidationThresholds", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect(ret.liquidationThresholds.join()).eq([1, 2].join());
-          });
-          it("should return expected plan and prop", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect([ret.planKind, ret.propNotUnderlying18].toString()).eq([PLAN_SWAP_REPAY, Misc.ONE18.div(10)].join());
-          });
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
         });
-        describe("Asset is token 1", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
 
-          function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
-            const planEntryData = defaultAbiCoder.encode(
-              ['uint256', 'uint256'],
-              [PLAN_SWAP_REPAY, Misc.ONE18.div(10)]
-            );
-            return callInitWithdrawLocal({
-              tokens: [usdc, weth],
-              asset: weth,
-              liquidationThresholds: ["1", "2"],
-              planEntryData,
-            });
-          }
+        function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
+          const planEntryData = defaultAbiCoder.encode(
+            ['uint256', 'uint256'],
+            [PLAN_SWAP_REPAY, Misc.ONE18.div(10)]
+          );
+          return callInitWithdrawLocal({
+            tokens: [usdc, weth],
+            liquidationThresholds: ["1", "2"],
+            planEntryData,
+          });
+        }
 
-          it("should return expected tokens", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect(ret.tokens.join()).eq([weth.address, usdc.address].join());
-          });
-          it("should return expected controller", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect(ret.controller).eq(controller.address);
-          });
-          it("should return expected liquidationThresholds", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect(ret.liquidationThresholds.join()).eq([2, 1].join());
-          });
-          it("should return expected plan and prop", async () => {
-            const ret = await loadFixture(initWithdrawLocalTest);
-            expect([ret.planKind, ret.propNotUnderlying18].toString()).eq([PLAN_SWAP_REPAY, Misc.ONE18.div(10)].join());
-          });
+        it("should return expected tokens", async () => {
+          const ret = await loadFixture(initWithdrawLocalTest);
+          expect(ret.tokens.join()).eq([usdc.address, weth.address].join());
+        });
+        it("should return expected controller", async () => {
+          const ret = await loadFixture(initWithdrawLocalTest);
+          expect(ret.controller).eq(controller.address);
+        });
+        it("should return expected liquidationThresholds", async () => {
+          const ret = await loadFixture(initWithdrawLocalTest);
+          expect(ret.liquidationThresholds.join()).eq([1, 2].join());
+        });
+        it("should return expected plan and prop", async () => {
+          const ret = await loadFixture(initWithdrawLocalTest);
+          expect([ret.planKind, ret.propNotUnderlying18].toString()).eq([PLAN_SWAP_REPAY, Misc.ONE18.div(10)].join());
         });
       });
       describe("PLAN_REPAY_SWAP_REPAY", () => {
@@ -1029,7 +985,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
           const planEntryData = defaultAbiCoder.encode(['uint256'], [PLAN_REPAY_SWAP_REPAY]);
           return callInitWithdrawLocal({
             tokens: [usdc, weth],
-            asset: weth,
             liquidationThresholds: ["1", "2"],
             planEntryData,
           });
@@ -1037,7 +992,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
         it("should return expected tokens", async () => {
           const ret = await loadFixture(initWithdrawLocalTest);
-          expect(ret.tokens.join()).eq([weth.address, usdc.address].join());
+          expect(ret.tokens.join()).eq([usdc.address, weth.address].join());
         });
         it("should return expected controller", async () => {
           const ret = await loadFixture(initWithdrawLocalTest);
@@ -1045,7 +1000,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
         it("should return expected liquidationThresholds", async () => {
           const ret = await loadFixture(initWithdrawLocalTest);
-          expect(ret.liquidationThresholds.join()).eq([2, 1].join());
+          expect(ret.liquidationThresholds.join()).eq([1, 2].join());
         });
         it("should return expected plan and prop", async () => {
           const ret = await loadFixture(initWithdrawLocalTest);
@@ -1065,7 +1020,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
       it("should revert if not operator", async () => {
         await expect(callInitWithdrawLocal({
           tokens: [usdc, weth],
-          asset: weth,
           liquidationThresholds: ["1", "2"],
           planEntryData: "0x",
           dontSetSignerAsOperator: true

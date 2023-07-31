@@ -24,10 +24,13 @@ library PairBasedStrategyLogicLib {
   struct PairState {
     address pool;
     address strategyProfitHolder;
+    /// @notice This is underlying
     address tokenA;
+    /// @notice This is not underlying
     address tokenB;
 
     bool isStablePool;
+    /// @notice Tokens are swapped in the pool (pool.tokenB is underlying, pool.tokenA is not-underlying)
     bool depositorSwapTokens;
 
     int24 tickSpacing;
@@ -54,6 +57,18 @@ library PairBasedStrategyLogicLib {
     uint prop1;
   }
 
+  struct WithdrawByAggStepLocal {
+    PairBasedStrategyLogicLib.WithdrawLocal w;
+    address tokenToSwap;
+    address aggregator;
+    address controller;
+    address converter;
+    address splitter;
+    uint amountToSwap;
+    uint profitToCover;
+    uint oldTotalAssets;
+    uint entryToPool;
+  }
   //endregion ------------------------------------------------------- Data types
 
   //region ------------------------------------------------------- Helpers
@@ -87,12 +102,10 @@ library PairBasedStrategyLogicLib {
   }
 
   /// @notice Initialize {dest} in place. Underlying is always first in {dest.tokens}.
-  /// @param tokens Result of _depositorPoolAssets()
-  /// @param asset underlying
+  /// @param tokens_ [underlying, not-underlying]
   function initWithdrawLocal(
     WithdrawLocal memory dest,
-    address[2] memory tokens,
-    address asset,
+    address[2] memory tokens_,
     mapping(address => uint) storage liquidationThresholds,
     bytes memory planEntryData,
     address controller
@@ -104,11 +117,7 @@ library PairBasedStrategyLogicLib {
     dest.propNotUnderlying18 = PairBasedStrategyLib._extractProp(dest.planKind, planEntryData);
 
     dest.tokens = new address[](2);
-    if (tokens[1] == asset) {
-      (dest.tokens[0], dest.tokens[1]) = (tokens[1], tokens[0]);
-    } else {
-      (dest.tokens[0], dest.tokens[1]) = (tokens[0], tokens[1]);
-    }
+    (dest.tokens[0], dest.tokens[1]) = (tokens_[0], tokens_[1]);
 
     dest.liquidationThresholds = new uint[](2);
     dest.liquidationThresholds[0] = liquidationThresholds[dest.tokens[0]];
@@ -236,6 +245,110 @@ library PairBasedStrategyLogicLib {
 
     boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL] = pairState.isStablePool;
     boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS] = pairState.depositorSwapTokens;
+  }
+
+  /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
+  /// @param amounts_ Amounts of [underlying, not-underlying] that will be received from the pool before withdrawing
+  function quoteWithdrawByAgg(
+    PairBasedStrategyLogicLib.PairState storage pairState,
+    bytes memory planEntryData,
+    uint[] memory amounts_,
+    address controller_,
+    ITetuConverter converter_,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (
+    address tokenToSwap,
+    uint amountToSwap
+  ) {
+    // check operator-only, initialize w
+    WithdrawLocal memory w;
+    initWithdrawLocal(
+      w,
+      [pairState.tokenA, pairState.tokenB],
+      liquidationThresholds,
+      planEntryData,
+      controller_
+    );
+
+    (tokenToSwap, amountToSwap) = PairBasedStrategyLib.quoteWithdrawStep(
+      [address(converter_), address(AppLib._getLiquidator(w.controller))],
+      w.tokens,
+      w.liquidationThresholds,
+      amounts_,
+      w.planKind,
+      w.propNotUnderlying18
+    );
+
+    if (amountToSwap != 0) {
+      // withdrawByAggStep will execute REPAY1 - SWAP - REPAY2
+      // but quoteWithdrawByAgg and withdrawByAggStep are executed in different blocks
+      // so, REPAY1 can return less collateral than quoteWithdrawByAgg expected
+      // As result, we can have less amount on balance than required amountToSwap
+      // So, we need to reduce amountToSwap on small gap amount
+      amountToSwap -= amountToSwap * PairBasedStrategyLib.GAP_AMOUNT_TO_SWAP / 100_000;
+    }
+  }
+
+  /// @notice Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
+  /// @param addr_ [tokenToSwap, aggregator, controller, converter, splitter]
+  /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, not used here]
+  /// @param tokens [underlying, not-underlying] (values been read from pairBase)
+  /// @return completed All debts were closed, leftovers were swapped to proper proportions
+  /// @return tokenAmounts Amounts to be deposited to pool.
+  /// @return loss Loss to cover
+  function withdrawByAggStep(
+    address[5] calldata addr_,
+    uint[4] calldata values_,
+    bytes memory swapData,
+    bytes memory planEntryData,
+    address[2] memory tokens,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (
+    bool completed,
+    uint[] memory tokenAmounts,
+    uint loss
+  ) {
+    WithdrawByAggStepLocal memory v;
+
+    v.tokenToSwap = addr_[0];
+    v.aggregator = addr_[1];
+    v.controller = addr_[2];
+    v.converter = addr_[3];
+    v.splitter = addr_[4];
+
+    v.amountToSwap = values_[0];
+    v.profitToCover = values_[1];
+    v.oldTotalAssets = values_[2];
+
+    // initialize v
+    PairBasedStrategyLogicLib.initWithdrawLocal(v.w, tokens, liquidationThresholds, planEntryData, v.controller);
+
+    // make withdraw iteration according to the selected plan
+    completed = PairBasedStrategyLib.withdrawStep(
+      [v.converter, address(AppLib._getLiquidator(v.w.controller))],
+      v.w.tokens,
+      v.w.liquidationThresholds,
+      v.tokenToSwap,
+      v.amountToSwap,
+      v.aggregator,
+      swapData,
+      v.aggregator == address(0),
+      v.w.planKind,
+      v.w.propNotUnderlying18
+    );
+
+    // fix loss / profitToCover
+    if (v.profitToCover > 0) {
+      uint profitToSend = Math.min(v.profitToCover, IERC20(v.w.tokens[0]).balanceOf(address(this)));
+      ConverterStrategyBaseLib2.sendToInsurance(v.w.tokens[0], profitToSend, v.splitter, v.oldTotalAssets);
+    }
+
+    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(
+      ITetuConverter(v.converter),
+      v.oldTotalAssets,
+      v.w.tokens[0],
+      v.w.tokens[1]
+    );
   }
   //endregion ------------------------------------------------------- PairState-helpers
 

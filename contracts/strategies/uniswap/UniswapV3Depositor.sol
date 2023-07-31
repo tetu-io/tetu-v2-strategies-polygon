@@ -129,7 +129,7 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
 
   /// @notice Returns the amount of tokens that would be withdrawn based on the provided liquidity amount.
   /// @param liquidityAmount The amount of liquidity to quote the withdrawal for.
-  /// @return amountsOut The amounts of the tokens that would be withdrawn.
+  /// @return amountsOut The amounts of the tokens that would be withdrawn, underlying is first
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
     amountsOut = UniswapV3ConverterStrategyLogicLib.quoteExit(state.pair, uint128(liquidityAmount));
   }

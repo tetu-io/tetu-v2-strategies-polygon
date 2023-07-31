@@ -67,23 +67,6 @@ library KyberConverterStrategyLogicLib {
     address tokenB;
   }
 
-  struct WithdrawByAggStepLocal {
-    PairBasedStrategyLogicLib.WithdrawLocal w;
-    address tokenToSwap;
-    address aggregator;
-    address controller;
-    address converter;
-    address asset;
-    address splitter;
-    IPool pool;
-    uint amountToSwap;
-    uint profitToCover;
-    uint oldTotalAssets;
-    uint entryToPool;
-    int24 newLowerTick;
-    int24 newUpperTick;
-    uint[] tokenAmounts;
-  }
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Helpers
@@ -102,6 +85,8 @@ library KyberConverterStrategyLogicLib {
     uint[4] calldata fuseThresholdsB
   ) external {
     require(controllerPool[1] != address(0), AppErrors.ZERO_ADDRESS);
+    address token0 = address(IPool(controllerPool[1]).token0());
+    address token1 = address(IPool(controllerPool[1]).token1());
 
     int24[4] memory tickData;
     {
@@ -115,15 +100,9 @@ library KyberConverterStrategyLogicLib {
       tickData[3] = tickRange;
     }
 
-    address[4] memory addr = [
-      controllerPool[1],
-      asset_,
-      address(IPool(controllerPool[1]).token0()),
-      address(IPool(controllerPool[1]).token1())
-    ];
     PairBasedStrategyLogicLib.setInitialDepositorValues(
       state.pair,
-      addr,
+      [controllerPool[1], asset_, token0, token1],
       tickData,
       isStablePool,
       fuseThresholdsA,
@@ -131,10 +110,10 @@ library KyberConverterStrategyLogicLib {
     );
 
     address liquidator = IController(controllerPool[0]).liquidator();
-    IERC20(addr[2]).approve(liquidator, type(uint).max); // token0
-    IERC20(addr[3]).approve(liquidator, type(uint).max); // token1
-    IERC20(addr[2]).approve(address(KYBER_NFT), type(uint).max); // token0
-    IERC20(addr[3]).approve(address(KYBER_NFT), type(uint).max); // token1
+    IERC20(token0).approve(liquidator, type(uint).max);
+    IERC20(token1).approve(liquidator, type(uint).max);
+    IERC20(token0).approve(address(KYBER_NFT), type(uint).max);
+    IERC20(token1).approve(address(KYBER_NFT), type(uint).max);
     IERC721(address(KYBER_NFT)).setApprovalForAll(address(FARMING_CENTER), true);
   }
 
@@ -544,31 +523,6 @@ library KyberConverterStrategyLogicLib {
     return tokenAmounts;
   }
 
-
-  /// @notice Cover possible loss after call of {withdrawByAggStep}
-  /// @param tokens [underlying, not-underlying]
-  function afterWithdrawStep(
-    ITetuConverter converter,
-    IPool pool,
-    address[] memory tokens,
-    uint oldTotalAssets,
-    uint profitToCover,
-    address strategyProfitHolder,
-    address splitter
-  ) internal returns (uint[] memory tokenAmounts) {
-    if (profitToCover > 0) {
-      uint profitToSend = Math.min(profitToCover, IERC20(tokens[0]).balanceOf(address(this)));
-      ConverterStrategyBaseLib2.sendToInsurance(tokens[0], profitToSend, splitter, oldTotalAssets);
-    }
-
-    uint loss;
-    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(converter, oldTotalAssets, tokens[0], tokens[1]);
-
-    if (loss != 0) {
-      _coverLoss(splitter, loss, strategyProfitHolder, tokens[0], tokens[1], address(pool));
-    }
-  }
-
   /// @notice Try to cover loss from rewards then cover remain loss from insurance.
   function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal {
     uint coveredByRewards;
@@ -612,12 +566,12 @@ library KyberConverterStrategyLogicLib {
   //endregion ------------------------------------------------ Rebalance
 
   //region ------------------------------------------------ WithdrawByAgg
-  /// @param addr_ [tokenToSwap, aggregator, controller, converter, asset, splitter]
+  /// @param addr_ [tokenToSwap, aggregator, controller, converter, splitter]
   /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, entryToPool]
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
-  /// @return tokenAmounts Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
+  /// @return tokenAmountsOut Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
   function withdrawByAggStep(
-    address[6] calldata addr_,
+    address[5] calldata addr_,
     uint[4] calldata values_,
     bytes memory swapData,
     bytes memory planEntryData,
@@ -625,69 +579,32 @@ library KyberConverterStrategyLogicLib {
     mapping(address => uint) storage liquidationThresholds
   ) external returns (
     bool completed,
-    uint[] memory tokenAmounts
+    uint[] memory tokenAmountsOut
   ) {
-    WithdrawByAggStepLocal memory v;
+    address splitter = addr_[4];
+    uint entryToPool = values_[3];
+    address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
+    IPool pool = IPool(pairState.pool);
 
-    v.tokenToSwap = addr_[0];
-    v.aggregator = addr_[1];
-    v.controller = addr_[2];
-    v.converter = addr_[3];
-    v.asset = addr_[4];
-    v.splitter = addr_[5];
+    // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
+    uint[] memory tokenAmounts;
+    uint loss;
+    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
-    v.amountToSwap = values_[0];
-    v.profitToCover = values_[1];
-    v.oldTotalAssets = values_[2];
-    v.entryToPool = values_[3];
-
-    v.pool = IPool(pairState.pool);
-
-    // check operator-only, initialize v
-    PairBasedStrategyLogicLib.initWithdrawLocal(
-      v.w,
-      [pairState.tokenA, pairState.tokenB],
-      v.asset,
-      liquidationThresholds,
-      planEntryData,
-      v.controller
-    );
-
-    // make withdraw iteration according to the selected plan
-    completed = PairBasedStrategyLib.withdrawStep(
-      [v.converter, address(AppLib._getLiquidator(v.w.controller))],
-      v.w.tokens,
-      v.w.liquidationThresholds,
-      v.tokenToSwap,
-      v.amountToSwap,
-      v.aggregator,
-      swapData,
-      v.aggregator == address(0),
-      v.w.planKind,
-      v.w.propNotUnderlying18
-    );
-
-    // fix loss / profitToCover
-    v.tokenAmounts = KyberConverterStrategyLogicLib.afterWithdrawStep(
-      ITetuConverter(v.converter),
-      v.pool,
-      v.w.tokens,
-      v.oldTotalAssets,
-      v.profitToCover,
-      pairState.strategyProfitHolder,
-      v.splitter
-    );
-
-    if (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
-      || (v.entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
-    ) {
-      (v.newLowerTick, v.newUpperTick) = KyberDebtLib._calcNewTickRange(v.pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
-      pairState.lowerTick = v.newLowerTick;
-      pairState.upperTick = v.newUpperTick;
-      tokenAmounts = v.tokenAmounts;
+    // cover loss
+    if (loss != 0) {
+      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
 
-    return (completed, tokenAmounts);
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
+    ) {
+      // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
+      (pairState.lowerTick, pairState.upperTick) = KyberDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      tokenAmountsOut = tokenAmounts;
+    }
+
+    return (completed, tokenAmountsOut); // hide warning
   }
   //endregion ------------------------------------------------ WithdrawByAgg
 }
