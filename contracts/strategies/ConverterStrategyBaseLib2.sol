@@ -182,18 +182,6 @@ library ConverterStrategyBaseLib2 {
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
   }
 
-  /// @notice Get the price ratio of the two given tokens from the oracle. todo deprecated, replaced by getOracleAssetsPrices
-  /// @param converter The Tetu converter.
-  /// @param tokenA The first token address.
-  /// @param tokenB The second token address.
-  /// @return The price ratio of the two tokens.
-  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (uint) {
-    IPriceOracle oracle = AppLib._getPriceOracle(converter);
-    uint priceA = oracle.getAssetPrice(tokenA);
-    uint priceB = oracle.getAssetPrice(tokenB);
-    return priceB * 1e18 / priceA;
-  }
-
   /// @notice Get prices of {tokenA} and {tokenB}
   function getOracleAssetsPrices(ITetuConverter converter, address tokenA, address tokenB) external view returns (
     uint priceA,
