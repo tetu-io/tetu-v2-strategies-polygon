@@ -4,6 +4,7 @@ import hre from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
 import {
+  AlgebraConverterStrategy__factory,
   BalancerBoostedStrategy__factory, BorrowManager,
   ConverterStrategyBase, ConverterStrategyBase__factory,
   IBalancerGauge__factory, IBorrowManager,
@@ -14,7 +15,7 @@ import {
   IPoolAdapter__factory, IPriceOracle,
   IPriceOracle__factory, IRebalancingV2Strategy, IRebalancingV2Strategy__factory,
   ISplitter__factory, ITetuConverter,
-  ITetuConverter__factory, IUniswapV3Pool__factory,
+  ITetuConverter__factory, IUniswapV3Pool__factory, KyberConverterStrategy__factory,
   TetuVaultV2,
   UniswapV3ConverterStrategy__factory
 } from "../../../typechain";
@@ -269,6 +270,7 @@ export class StateUtilsNum {
       if (isUniv3 || isAlgebra || isKyber)  {
         const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
         const state = await PackedData.getDefaultState(uniswapV3Strategy);
+        console.log("state", state);
         liquidity = +formatUnits(state.totalLiquidity, assetDecimals); // todo correct decimals?
         const tokenB = await IERC20Metadata__factory.connect(state.tokenB, signer);
 
@@ -318,10 +320,12 @@ export class StateUtilsNum {
         }
 
         if (isAlgebra) {
+          const specificState = await PackedData.getSpecificStateAlgebra(AlgebraConverterStrategy__factory.connect(strategy.address, signer));
           // todo
         }
 
         if (isKyber) {
+          const specificState = await PackedData.getSpecificStateKyber(KyberConverterStrategy__factory.connect(strategy.address, signer));
           // todo
         }
 

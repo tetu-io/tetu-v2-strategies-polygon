@@ -10,11 +10,12 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IConverterController.sol";
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV3.sol";
 import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
-import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV3.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -498,9 +499,12 @@ library ConverterStrategyBaseLib2 {
     uint loss,
     uint[] memory tokenAmounts
   ) {
+    console.log("getTokenAmounts");
     tokenAmounts = new uint[](2);
     tokenAmounts[0] = AppLib.balance(tokenA);
     tokenAmounts[1] = AppLib.balance(tokenB);
+    console.log("getTokenAmounts.tokenAmounts[0]", tokenAmounts[0]);
+    console.log("getTokenAmounts.tokenAmounts[1]", tokenAmounts[1]);
 
     address[] memory tokens = new address[](2);
     tokens[0] = tokenA;
@@ -510,6 +514,8 @@ library ConverterStrategyBaseLib2 {
     amounts[0] = tokenAmounts[0];
 
     uint newTotalAssets = _calcInvestedAssets(tokens, amounts, 0, converter);
+    console.log("getTokenAmounts.oldTotalAssets", totalAssets);
+    console.log("getTokenAmounts.newTotalAssets", newTotalAssets);
     return (
       newTotalAssets < totalAssets
         ? totalAssets - newTotalAssets

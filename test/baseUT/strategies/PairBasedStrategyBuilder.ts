@@ -276,7 +276,7 @@ export class PairBasedStrategyBuilder {
         controllerAsGov,
         gov,
         0,
-        0,
+        300,
         300,
         false,
     );

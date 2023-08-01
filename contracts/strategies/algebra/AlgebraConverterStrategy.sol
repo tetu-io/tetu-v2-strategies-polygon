@@ -9,7 +9,6 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "./AlgebraStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
@@ -241,7 +240,6 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   ) override internal virtual returns (
     uint[] memory tokenAmounts
   ) {
-    console.log("algebra._beforeDeposit.1");
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
     bytes memory entryData = AlgebraConverterStrategyLogicLib.getEntryData(
       IAlgebraPool(state.pair.pool),
@@ -249,7 +247,6 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       state.pair.upperTick,
       state.pair.depositorSwapTokens
     );
-    console.log("algebra._beforeDeposit.2");
     return PairBasedStrategyLogicLib._beforeDeposit(
       tetuConverter_,
       amount_,
@@ -312,6 +309,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     if (tokenAmounts.length == 2) {
       _depositorEnter(tokenAmounts);
     }
+    _updateInvestedAssets();
   }
   //endregion--------------------------------------- INTERNAL LOGIC
 }

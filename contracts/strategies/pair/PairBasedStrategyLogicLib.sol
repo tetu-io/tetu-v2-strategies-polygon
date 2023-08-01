@@ -327,6 +327,9 @@ library PairBasedStrategyLogicLib {
     v.amountToSwap = values_[0];
     v.profitToCover = values_[1];
     v.oldTotalAssets = values_[2];
+    console.log("withdrawByAggStep.v.oldTotalAssets", v.oldTotalAssets);
+    console.log("withdrawByAggStep.profitToCover", v.profitToCover);
+    console.log("withdrawByAggStep.amountToSwap", v.amountToSwap);
 
     // initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(v.w, tokens, liquidationThresholds, planEntryData, v.controller);
@@ -357,6 +360,7 @@ library PairBasedStrategyLogicLib {
       v.w.tokens[0],
       v.w.tokens[1]
     );
+    console.log("withdrawByAggStep.loss", loss);
   }
 
   /// @notice Rebalance asset to proportions {propTokenA}:{1e18-propTokenA}, fix profitToCover
