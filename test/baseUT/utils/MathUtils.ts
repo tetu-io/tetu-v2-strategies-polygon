@@ -27,3 +27,15 @@ export function differenceInPercentsLessThan(b1: BigNumber, b2: BigNumber, perce
   console.log('differenceInPercentsLessThan', a, percents100);
   return a <= percents100;
 }
+
+/**
+ * true if b1 < b2 less than on given number of percents, i.e. 1%
+ */
+export function differenceInPercentsNumLessThan(b1: number, b2: number, percents100: number = 1): boolean {
+  if (b1 === 0) {
+    return b2 === 0;
+  }
+  const a = Math.abs((b1 - b2) * 100 / b1);
+  console.log('differenceInPercentsNumLessThan', a, percents100);
+  return a <= percents100;
+}

@@ -9,7 +9,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-
+import "hardhat/console.sol";
 
 library AlgebraConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -176,6 +176,7 @@ library AlgebraConverterStrategyLogicLib {
     State storage state,
     uint[] memory amountsDesired_
   ) external returns (uint[] memory amountsConsumed, uint liquidityOut) {
+    console.log("AlgebraConverterStrategyLogicLib.enter.1");
     EnterLocalVariables memory vars = EnterLocalVariables({
       depositorSwapTokens : state.pair.depositorSwapTokens,
       liquidity : 0,
@@ -183,13 +184,21 @@ library AlgebraConverterStrategyLogicLib {
       lowerTick : state.pair.lowerTick,
       upperTick : state.pair.upperTick
     });
+    console.log("AlgebraConverterStrategyLogicLib.enter.2.tokenId", uint(state.tokenId));
+    console.log("AlgebraConverterStrategyLogicLib.enter.2.tokenA", state.pair.tokenA);
+    console.log("AlgebraConverterStrategyLogicLib.enter.2.tokenB", state.pair.tokenB);
+    console.log("AlgebraConverterStrategyLogicLib.enter.2.depositorSwapTokens", state.pair.depositorSwapTokens);
 
     (address token0, address token1) = vars.depositorSwapTokens
       ? (state.pair.tokenB, state.pair.tokenA)
       : (state.pair.tokenA, state.pair.tokenB);
+    console.log("AlgebraConverterStrategyLogicLib.enter.3.token0", token0);
+    console.log("AlgebraConverterStrategyLogicLib.enter.3.token1", token1);
     if (vars.depositorSwapTokens) {
       (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
     }
+    console.log("AlgebraConverterStrategyLogicLib.enter.4.amountsDesired_[0]", amountsDesired_[0]);
+    console.log("AlgebraConverterStrategyLogicLib.enter.4.amountsDesired_[1]", amountsDesired_[1]);
 
     amountsConsumed = new uint[](2);
 
@@ -200,10 +209,12 @@ library AlgebraConverterStrategyLogicLib {
         vars.tokenId = 0;
       }
     }
+    console.log("AlgebraConverterStrategyLogicLib.enter.5");
 
     IncentiveKey memory key = getIncentiveKey(state);
 
     if (vars.tokenId == 0) {
+      console.log("AlgebraConverterStrategyLogicLib.enter.6");
       (vars.tokenId, vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.mint(INonfungiblePositionManager.MintParams(
         token0,
         token1,
@@ -219,8 +230,11 @@ library AlgebraConverterStrategyLogicLib {
 
       state.tokenId = vars.tokenId;
 
+      console.log("AlgebraConverterStrategyLogicLib.enter.7");
       ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
+      console.log("AlgebraConverterStrategyLogicLib.enter.8");
     } else {
+      console.log("AlgebraConverterStrategyLogicLib.enter.9");
       (vars.liquidity, amountsConsumed[0], amountsConsumed[1]) = ALGEBRA_NFT.increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams(
         vars.tokenId,
         amountsDesired_[0],
@@ -229,8 +243,10 @@ library AlgebraConverterStrategyLogicLib {
         0,
         block.timestamp
       ));
+      console.log("AlgebraConverterStrategyLogicLib.enter.10");
 
       if (state.pair.totalLiquidity > 0) {
+        console.log("AlgebraConverterStrategyLogicLib.enter.11");
 
         // get reward amounts
         (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, vars.tokenId);
@@ -240,28 +256,37 @@ library AlgebraConverterStrategyLogicLib {
 
         // claim rewards and send to profit holder
         {
+          console.log("AlgebraConverterStrategyLogicLib.enter.12");
           address strategyProfitHolder = state.pair.strategyProfitHolder;
 
           if (reward > 0) {
+            console.log("AlgebraConverterStrategyLogicLib.enter.13");
             address token = state.rewardToken;
             reward = FARMING_CENTER.claimReward(token, address(this), 0, reward);
             IERC20(token).safeTransfer(strategyProfitHolder, reward);
           }
           if (bonusReward > 0) {
+            console.log("AlgebraConverterStrategyLogicLib.enter.14");
             address token = state.bonusRewardToken;
             bonusReward = FARMING_CENTER.claimReward(token, address(this), 0, bonusReward);
             IERC20(token).safeTransfer(strategyProfitHolder, bonusReward);
           }
         }
+        console.log("AlgebraConverterStrategyLogicLib.enter.15");
       } else {
+        console.log("AlgebraConverterStrategyLogicLib.enter.16");
         ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
+        console.log("AlgebraConverterStrategyLogicLib.enter.17");
       }
     }
+    console.log("AlgebraConverterStrategyLogicLib.enter.18");
 
     FARMING_CENTER.enterFarming(key, vars.tokenId, 0, false);
+    console.log("AlgebraConverterStrategyLogicLib.enter.19");
 
     state.pair.totalLiquidity += vars.liquidity;
     liquidityOut = uint(vars.liquidity);
+    console.log("AlgebraConverterStrategyLogicLib.enter.20", liquidityOut);
   }
   //endregion ------------------------------------------------ Join the pool
 

@@ -15,6 +15,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -254,6 +255,7 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    console.log("_openPosition.1");
     if (thresholdAmountIn_ == 0) {
       // zero threshold is not allowed because round-issues are possible, see openPosition.dust test
       // we assume here, that it's useless to borrow amount using collateral/borrow amount
@@ -261,6 +263,7 @@ library ConverterStrategyBaseLib {
       thresholdAmountIn_ = DEFAULT_OPEN_POSITION_AMOUNT_IN_THRESHOLD;
     }
     if (amountIn_ <= thresholdAmountIn_) {
+      console.log("_openPosition.2");
       return (0, 0);
     }
 
@@ -268,6 +271,7 @@ library ConverterStrategyBaseLib {
     // we assume here, that max possible collateral amount is already approved (as it's required by TetuConverter)
     vars.entryKind = ConverterEntryKinds.getEntryKind(entryData_);
     if (vars.entryKind == ConverterEntryKinds.ENTRY_KIND_EXACT_PROPORTION_1) {
+      console.log("_openPosition.3");
       return openPositionEntryKind1(
         tetuConverter_,
         entryData_,
@@ -277,6 +281,7 @@ library ConverterStrategyBaseLib {
         thresholdAmountIn_
       );
     } else {
+      console.log("_openPosition.4");
       (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
         entryData_,
         collateralAsset_,
@@ -363,6 +368,7 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
+    console.log("openPositionEntryKind1.amountIn_", amountIn_);
     OpenPositionEntryKind1Local memory vars;
     (vars.converters, vars.collateralsRequired, vars.amountsToBorrow,) = tetuConverter_.findBorrowStrategies(
       entryData_,
@@ -400,6 +406,9 @@ library ConverterStrategyBaseLib {
           vars.collateral = vars.collateralsRequired[i];
           vars.amountToBorrow = vars.amountsToBorrow[i];
         }
+        console.log("openPositionEntryKind1.2.vars.collateral", vars.collateral);
+        console.log("openPositionEntryKind1.2.vars.amountToBorrow", vars.amountToBorrow);
+        console.log("openPositionEntryKind1.2.collateralThreshold_", collateralThreshold_);
 
         // skip any attempts to borrow zero amount or use too little collateral
         if (vars.collateral < collateralThreshold_ || vars.amountToBorrow == 0) {
@@ -414,6 +423,7 @@ library ConverterStrategyBaseLib {
           }
         }
 
+        console.log("openPositionEntryKind1.3");
         require(
           tetuConverter_.borrow(
             vars.converters[i],
@@ -443,6 +453,7 @@ library ConverterStrategyBaseLib {
         amountIn_ = (amountIn_ > vars.c1 + vars.collateral)
           ? amountIn_ - (vars.c1 + vars.collateral)
           : 0;
+        console.log("openPositionEntryKind1.4.amountIn_", amountIn_);
 
         // protection against dust amounts, see "openPosition.dust", just leave dust amount unused
         // we CAN NOT add it to collateral/borrow amounts - there is a risk to exceed max allowed amounts

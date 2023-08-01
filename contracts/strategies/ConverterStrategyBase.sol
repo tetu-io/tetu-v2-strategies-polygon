@@ -6,7 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -137,6 +137,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ){
+    console.log("ConverterStrategyBase._depositToPool");
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
     (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
   }
@@ -153,6 +154,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ){
+    console.log("ConverterStrategyBase._depositToPoolUniversal.1");
     address _asset = baseState.asset;
 
     uint amountToDeposit = amount_ > earnedByPrices_
@@ -163,6 +165,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     bool needToDeposit = amountToDeposit > reinvestThresholdPercent * investedAssets_ / DENOMINATOR;
     uint balanceBefore = AppLib.balance(_asset);
 
+    console.log("ConverterStrategyBase._depositToPoolUniversal.2.needToDeposit", needToDeposit);
     // send earned-by-prices to the insurance
     if (earnedByPrices_ != 0) {
 
@@ -173,16 +176,20 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
       }
     }
+    console.log("ConverterStrategyBase._depositToPoolUniversal.3");
 
     // make deposit
     if (needToDeposit) {
+      console.log("ConverterStrategyBase._depositToPoolUniversal.4");
       (address[] memory tokens, uint indexAsset) = _getTokens(_asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
       uint[] memory amounts = _beforeDeposit(converter, amountToDeposit, tokens, indexAsset);
 
+      console.log("ConverterStrategyBase._depositToPoolUniversal.5");
       // make deposit, actually consumed amounts can be different from the desired amounts
       (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+      console.log("ConverterStrategyBase._depositToPoolUniversal.6");
       emit OnDepositorEnter(amounts, consumedAmounts);
 
       // update _investedAssets with new deposited amount
@@ -193,8 +200,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         investedAssets_ + balanceBefore,
         investedAssetsAfter + AppLib.balance(_asset) + amountSentToInsurance
       );
+      console.log("ConverterStrategyBase._depositToPoolUniversal.7");
     }
 
+    console.log("ConverterStrategyBase._depositToPoolUniversal.8");
     return (strategyLoss, amountSentToInsurance);
   }
   //endregion Deposit to the pool

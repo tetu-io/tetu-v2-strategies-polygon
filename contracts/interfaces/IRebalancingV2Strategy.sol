@@ -2,8 +2,9 @@
 pragma solidity 0.8.17;
 
 import "./IPairBasedDefaultStateProvider.sol";
+import "./ISetupPairBasedStrategy.sol";
 
-interface IRebalancingV2Strategy is IPairBasedDefaultStateProvider {
+interface IRebalancingV2Strategy is IPairBasedDefaultStateProvider, ISetupPairBasedStrategy {
   function needRebalance() external view returns (bool);
 
   /// @notice Rebalance using borrow/repay only, no swaps
