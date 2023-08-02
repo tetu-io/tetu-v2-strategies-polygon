@@ -196,6 +196,22 @@ library ConverterStrategyBaseLib2 {
   function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {
     return AppLib._getPriceOracle(converter).getAssetPrice(token);
   }
+
+  /// @notice Try to find zero amount or amount less than the threshold in {amounts_} array
+  /// @return True if {amounts_} array contains zero amount or amount less than the given threshold
+  function findZeroAmount(
+    uint[] memory amounts_,
+    address[] memory tokens_,
+    mapping(address => uint) storage liquidationThresholds_
+  ) internal view returns (bool) {
+    uint len = amounts_.length;
+    for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
+      if (amounts_[i] < AppLib._getLiquidationThreshold(liquidationThresholds_[tokens_[i]])) {
+        return true;
+      }
+    }
+    return false;
+  }
 //endregion ----------------------------------------- MAIN LOGIC
 
 //region -------------------------------------------- Cover loss, send profit to insurance

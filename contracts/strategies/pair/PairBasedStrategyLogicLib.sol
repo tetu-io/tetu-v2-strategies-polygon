@@ -302,7 +302,7 @@ library PairBasedStrategyLogicLib {
   /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, not used here]
   /// @param tokens [underlying, not-underlying] (values been read from pairBase)
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
-  /// @return tokenAmounts Amounts to be deposited to pool.
+  /// @return tokenAmounts Amounts to be deposited to pool. If {tokenAmounts} contains zero amount return empty array.
   /// @return loss Loss to cover
   function withdrawByAggStep(
     address[5] calldata addr_,
@@ -361,6 +361,15 @@ library PairBasedStrategyLogicLib {
       v.w.tokens[1]
     );
     console.log("withdrawByAggStep.loss", loss);
+
+    // if {tokenAmounts} contains zero amount we should return empty array
+    // this place is optimal to find zero amounts and prevent attempts to enter to the pool with zero amount
+    if (
+     (tokenAmounts[0] < AppLib._getLiquidationThreshold(v.w.liquidationThresholds[0]))
+     || (tokenAmounts[1] < AppLib._getLiquidationThreshold(v.w.liquidationThresholds[1]))
+    ) {
+      tokenAmounts = new uint[](0);
+    }
   }
 
   /// @notice Rebalance asset to proportions {propTokenA}:{1e18-propTokenA}, fix profitToCover

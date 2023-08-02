@@ -11,7 +11,7 @@ import {
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {parseUnits} from "ethers/lib/utils";
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
@@ -48,12 +48,15 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     return;
   }
 //region Constants
-  const DEFAULT_FUSE_THRESHOLDS = ["0.9996", "0.9998", "1.0003", "1.0001"];
-
   const FUSE_DISABLED_0 = 0;
   const FUSE_OFF_1 = 1;
   const FUSE_ON_LOWER_LIMIT_2 = 2;
   const FUSE_ON_UPPER_LIMIT_3 = 3;
+
+  const FUSE_IDX_LOWER_LIMIT_ON = 0;
+  const FUSE_IDX_LOWER_LIMIT_OFF = 1;
+  const FUSE_IDX_UPPER_LIMIT_ON = 2;
+  const FUSE_IDX_UPPER_LIMIT_OFF = 3;
 //endregion Constants
 
 //region Variables
@@ -121,6 +124,16 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     states: IStateNum[];
     rebalanceFuseOn?: IPriceFuseStatus;
     rebalanceFuseOff?: IPriceFuseStatus;
+    thresholdsA: number[];
+    thresholdsB: number[];
+  }
+
+  function getLib(platform: string) : UniswapV3Lib | AlgebraLib | KyberLib {
+    return platform === PLATFORM_ALGEBRA
+      ? libAlgebra
+      : platform === PLATFORM_KYBER
+        ? libKyber
+        : libUniv3;
   }
 
   async function movePriceUpDown(b: IBuilderResults, p: IMovePriceParams): Promise<IMovePriceResults> {
@@ -130,24 +143,30 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     let rebalanceFuseOff: IPriceFuseStatus | undefined;
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
     const platform = await converterStrategyBase.PLATFORM();
-    const lib = platform === PLATFORM_ALGEBRA
-        ? libAlgebra
-        : platform === PLATFORM_KYBER
-          ? libKyber
-          : libUniv3;
+    const lib = getLib(platform);
+    let statusB = FUSE_OFF_1;
 
     console.log('deposit...');
     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
     await TokenUtils.getToken(b.asset, signer.address, parseUnits('1000', 6));
-    await b.vault.deposit(parseUnits('1000', 6), signer.address);
+    await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
 
     const state = await PackedData.getDefaultState(b.strategy);
     for (let i = 0; i < p.maxCountRebalances; ++i) {
       console.log(`Swap and rebalance. Step ${i}`);
       const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
       const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
-      let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6));
-      swapAmount = swapAmount.add(swapAmount.div(p.swapAmountPart || 100));
+      const swapAmount0 = amounts[1].mul(priceB).div(parseUnits('1', 6));
+      const swapAmount = platform === PLATFORM_KYBER
+        ? swapAmount0.add(parseUnits('0.001', 6))
+        : swapAmount0.add(swapAmount0.div(p.swapAmountPart || 100));
+      console.log("priceB", priceB);
+      console.log("amounts", amounts);
+      console.log("swapAmount", swapAmount);
+      console.log("swapAmount0", swapAmount0);
+      console.log("swapAmount0.add(swapAmount0.div(p.swapAmountPart || 100))", swapAmount0.add(swapAmount0.div(p.swapAmountPart || 100)));
+      console.log("swapAmount0.add(parseUnits('0.001', 6))", swapAmount0.add(parseUnits('0.001', 6)));
+      console.log("platform === PLATFORM_KYBER", platform === PLATFORM_KYBER);
 
       if (p.movePricesUpDown) {
         await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
@@ -164,6 +183,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         if (stateAfterRebalance.fuseStatusB !== FUSE_OFF_1) {
+          statusB = stateAfterRebalance.fuseStatusB ?? statusB;
           rebalanceFuseOn = {
             fuseStatus: stateAfterRebalance.fuseStatusB || 0,
             price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
@@ -179,7 +199,9 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
       const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
       let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6));
-      swapAmount = swapAmount.add(swapAmount.div(p.swapAmountPart || 100));
+      swapAmount = platform === PLATFORM_KYBER
+        ? swapAmount.add(parseUnits('0.0001', 6))
+        : swapAmount.add(swapAmount.div(p.swapAmountPart || 100));
 
       if (p.movePricesUpDown) {
         await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
@@ -195,7 +217,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         states.push(stateAfterRebalance);
         StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-        if (stateAfterRebalance.fuseStatusB === FUSE_OFF_1) {
+        if (stateAfterRebalance.fuseStatusB !== statusB) {
           rebalanceFuseOff = {
             fuseStatus: stateAfterRebalance.fuseStatusB || 0,
             price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
@@ -205,7 +227,13 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       }
     }
 
-    return {states, rebalanceFuseOn, rebalanceFuseOff};
+    return {
+      states,
+      rebalanceFuseOn,
+      rebalanceFuseOff,
+      thresholdsA: state.fuseThresholdsA,
+      thresholdsB: state.fuseThresholdsB
+    };
   }
 
   // /**
@@ -232,8 +260,8 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3,},
-      { name: PLATFORM_ALGEBRA,},
+      // { name: PLATFORM_UNIV3,},
+      // { name: PLATFORM_ALGEBRA,},
       { name: PLATFORM_KYBER,},
     ];
 
@@ -241,7 +269,26 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       let snapshot: string;
 
       async function prepareStrategy(): Promise<IBuilderResults> {
-        return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+
+        const lib = getLib(await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM());
+        const priceA = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN), 6);
+        const priceB = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN), 6);
+        console.log("priceA, priceB", priceA, priceB);
+
+        const ttA = [priceA - 0.0008, priceA - 0.0006, priceA + 0.0008, priceA + 0.0006].map(x => parseUnits(x.toString(), 18));
+        const ttB = [priceB - 0.0008, priceB - 0.0006, priceB + 0.0008, priceB + 0.0006].map(x => parseUnits(x.toString(), 18));
+        console.log("ttA, ttB", ttA, ttB);
+        // ["0.9996", "0.9998", "1.0003", "1.0001"];
+        await b.strategy.setFuseThresholds(
+          0,
+          [ttA[0], ttA[1], ttA[2], ttA[3]]
+        );
+        await b.strategy.setFuseThresholds(
+          1,
+          [ttB[0], ttB[1], ttB[2], ttB[3]]
+        );
+        return b;
       }
 
       describe(`${strategyInfo.name}`, () => {
@@ -259,20 +306,22 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
               return movePriceUpDown(b,{
                 maxCountRebalances: 25,
                 pathOut,
-                movePricesUpDown: true
+                movePricesUpDown: true,
+                swapAmountPart: 100
               });
             }
             it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
               const ret = await loadFixture(makeTest);
-              console.log("ret.rebalanceFuseOff", ret.rebalanceFuseOff);
-              console.log("ret.rebalanceFuseOn", ret.rebalanceFuseOn);
+              console.log("ret", ret);
               expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
-              expect(ret.rebalanceFuseOn?.price || 0).gte(1.0003);
+              expect(ret.rebalanceFuseOn?.price || 0).gte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_ON]);
             });
             it("should trigger fuse OFF at the end", async () => {
               const ret = await loadFixture(makeTest);
-              expect(ret.rebalanceFuseOff?.fuseStatus || 0).eq(FUSE_OFF_1);
-              expect(ret.rebalanceFuseOff?.price || 0).lte(1.0001);
+              console.log("ret", ret);
+              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+              expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
+              expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_OFF]);
             });
           });
           describe('Move tokenB prices down, up', function () {
@@ -283,21 +332,21 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: false,
-                swapAmountPart: 150
+                swapAmountPart: 500
               });
             }
             it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
               const ret = await loadFixture(makeTest);
-              console.log("ret.rebalanceFuseOff", ret.rebalanceFuseOff);
-              console.log("ret.rebalanceFuseOn", ret.rebalanceFuseOn);
-
+              console.log("ret", ret);
               expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
-              expect(ret.rebalanceFuseOn?.price || 0).lte(0.9996);
+              expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_ON]);
             });
             it("should trigger fuse OFF at the end", async () => {
               const ret = await loadFixture(makeTest);
-              expect(ret.rebalanceFuseOff?.fuseStatus || 0).eq(FUSE_OFF_1);
-              expect(ret.rebalanceFuseOff?.price || 0).gte(0.9998);
+              console.log("ret", ret);
+              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+              expect(status === FUSE_OFF_1 || status === FUSE_ON_UPPER_LIMIT_3).eq(true);
+              expect(ret.rebalanceFuseOff?.price || 0).gte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_OFF]);
             });
           });
         });

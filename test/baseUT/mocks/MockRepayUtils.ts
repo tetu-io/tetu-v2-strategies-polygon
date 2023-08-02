@@ -125,8 +125,10 @@ export async function setupMockedBorrowEntryKind1(
 ) {
   console.log("setupMockedBorrowEntryKind1.proportion0", proportion0);
   console.log("setupMockedBorrowEntryKind1.proportion1", proportion1);
-  console.log("setupMockedBorrowEntryKind1.p.collateralAmount", p.collateralAmount);
+  console.log("setupMockedBorrowEntryKind1.p.collateralAmount", p.collateralAmount, await parseUnits(p.collateralAmount, await p.collateralAsset.decimals()));
   console.log("setupMockedBorrowEntryKind1.p.collateralAmountOut", p.collateralAmountOut);
+  console.log("setupMockedBorrowEntryKind1.p.proportion0", proportion0);
+  console.log("setupMockedBorrowEntryKind1.p.proportion1", proportion1);
 
   const collateralAmountIn = await parseUnits(p.collateralAmount, await p.collateralAsset.decimals());
   const collateralAmountToLock = p.collateralAmountOut

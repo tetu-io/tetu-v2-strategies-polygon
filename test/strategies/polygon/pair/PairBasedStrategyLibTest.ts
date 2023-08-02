@@ -1559,6 +1559,14 @@ describe('PairBasedStrategyLibTest', () => {
       repays?: IRepayParams[];
       quoteRepays?: IQuoteRepayParams[];
       borrows?: IBorrowParamsNum[];
+
+      /**
+       * It's used only if propNotUnderlying18 is array.
+       * This value is used to detect what amount should be returned by getPropNotUnderlying18.
+       * If balance of main asset is equal to the given value, it should return SECOND value of the array.
+       * Default value is zero.
+       */
+      assetBalanceToSwitch?: string;
     }
 
     interface IWithdrawStepResults {
@@ -1610,22 +1618,27 @@ describe('PairBasedStrategyLibTest', () => {
       if (Array.isArray(p.propNotUnderlying18)) {
         await facade.setPropNotUnderlying18(
           p.propNotUnderlying18.map(x => parseUnits(x, 18)),
-          usdc.address
+          usdc.address,
+          p.assetBalanceToSwitch
+            ? parseUnits(p.assetBalanceToSwitch, 6)
+            : 0
         );
         // setup borrows
         if (p.borrows) {
           for (const b of p.borrows) {
-            await setupMockedBorrowEntryKind1(
-              converter,
-              facade.address,
-              b,
-              b.collateralAsset.address === p.tokenX.address
-                ? parseUnits((1 - +p.propNotUnderlying18[1]).toString(), 18)
-                : parseUnits((+p.propNotUnderlying18[1]).toString(), 18),
-              b.collateralAsset.address === p.tokenX.address
-                ? parseUnits((+p.propNotUnderlying18[1]).toString(), 18)
-                : parseUnits((1 - +p.propNotUnderlying18[1]).toString(), 18)
-            );
+            const p0 = p.propNotUnderlying18[1] === "0.90"
+              ? "0.1"
+              : p.propNotUnderlying18[1];
+            const p1 = p.propNotUnderlying18[1] === "0.90"
+              ? "0.9"
+              : p.propNotUnderlying18[1];
+            const prop0 = b.collateralAsset.address === p.tokenX.address
+              ? parseUnits(p0, 18)
+              : parseUnits(p1, 18);
+            const prop1 = b.collateralAsset.address === p.tokenX.address
+              ? parseUnits(p1, 18)
+              : parseUnits(p0, 18);
+            await setupMockedBorrowEntryKind1(converter, facade.address, b, prop0, prop1);
           }
         }
       }
@@ -2002,6 +2015,68 @@ describe('PairBasedStrategyLibTest', () => {
           });
         });
       });
+      describe("Read proportions from the pool", () => {
+        describe("No debts", () => {
+          describe("Swap changes proportions significantly", () => {
+            describe("should make borrow after swap", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+                return makeWithdrawStep({
+                  tokenX: usdc,
+                  tokenY: usdt,
+
+                  amountToSwap: "100",
+                  tokenToSwap: usdc,
+                  planKind: PLAN_SWAP_REPAY,
+
+                  liquidationThresholds: ["0", "0"],
+                  balanceX: "1000",
+                  balanceY: "0",
+
+                  repays: [],
+                  propNotUnderlying18: ["0.10", "0.90"],
+
+                  liquidations: [{tokenIn: usdc, tokenOut: usdt, amountIn: "100", amountOut: "100"}],
+
+                  // untouchedAmountA = 100 / 0.9 * 0.1, amountIn = 900 - untouchedAmountA = 888.888889
+                  borrows: [{
+                    collateralAsset: usdc,
+                    borrowAsset: usdt,
+                    converter: converter.address,
+                    collateralAmount: "888.888889",
+                    maxTargetAmount: "444.444445",
+                    // 888888889-842105263 = 46783626
+                    // 46783626 / 421052632 ~ 0.1111111116
+                    collateralAmountOut: "842.105263",
+                    borrowAmountOut: "421.052632",
+                  }],
+
+                  assetBalanceToSwitch: "900"
+                });
+              }
+
+              it("should complete the withdraw", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                console.log("ret", ret);
+                expect(ret.completed).eq(true);
+              });
+
+              it("should set balances to right proportions", async () => {
+                const ret = await loadFixture(makeWithdrawStepTest);
+                console.log("ret", ret);
+                expect(ret.balanceX / ret.balanceY).approximately(10 / 90, 1e-6);
+              });
+            });
+          });
+        });
+      })
     });
 
     describe("PLAN_REPAY_SWAP_REPAY", () => {

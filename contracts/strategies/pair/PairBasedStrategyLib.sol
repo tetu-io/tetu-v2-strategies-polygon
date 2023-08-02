@@ -390,6 +390,7 @@ library PairBasedStrategyLib {
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       console.log("_withdrawStep.1");
+      console.log("_withdrawStep.amountToSwap", amountToSwap);
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
       console.log("_withdrawStep.p.propNotUnderlying18", p.propNotUnderlying18);
     }
@@ -404,49 +405,58 @@ library PairBasedStrategyLib {
       );
     }
 
-    if (idxToSwap1 != 0 && actions[IDX_SWAP_2]) {
-      console.log("_withdrawStep.3");
-      (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+    if (idxToSwap1 != 0) {
+      if (actions[IDX_SWAP_2]) {
+        console.log("_withdrawStep.3");
+        (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
 
-      if (actions[IDX_REPAY_2]) {
-        console.log("_withdrawStep.4");
-        // see calculations inside estimateSwapAmountForRepaySwapRepay
-        // There are two possibilities here:
-        // 1) All collateral asset available on balance was swapped. We need additional repay to get assets in right proportions
-        // 2) Only part of collateral asset was swapped, so assets are already in right proportions. Repay 2 is not needed
-        (uint amountToRepay2, bool borrowInsteadRepay) = _getAmountToRepay2(
-          p,
-          idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
-          idxToRepay1 - 1
-        );
-        console.log("_withdrawStep.amountToRepay2", amountToRepay2);
-        console.log("_withdrawStep.borrowInsteadRepay", borrowInsteadRepay);
-
-        if (borrowInsteadRepay) {
-          console.log("_withdrawStep.5");
-          borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
-        } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
-          console.log("_withdrawStep.6");
-          // we need to know repaidAmount
-          // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
-          // temporary save current balance to repaidAmount
-          uint repaidAmount = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
-
-          ConverterStrategyBaseLib._repayDebt(
-            p.converter,
-            p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
-            p.tokens[idxToRepay1 - 1],
-            amountToRepay2
+        if (actions[IDX_REPAY_2]) {
+          console.log("_withdrawStep.4");
+          // see calculations inside estimateSwapAmountForRepaySwapRepay
+          // There are two possibilities here:
+          // 1) All collateral asset available on balance was swapped. We need additional repay to get assets in right proportions
+          // 2) Only part of collateral asset was swapped, so assets are already in right proportions. Repay 2 is not needed
+          (uint amountToRepay2, bool borrowInsteadRepay) = _getAmountToRepay2(
+            p,
+            idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
+            idxToRepay1 - 1
           );
-          uint balanceAfter = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
-          repaidAmount = repaidAmount > balanceAfter
-            ? repaidAmount - balanceAfter
-            : 0;
+          console.log("_withdrawStep.amountToRepay2", amountToRepay2);
+          console.log("_withdrawStep.borrowInsteadRepay", borrowInsteadRepay);
 
-          if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
-            console.log("_withdrawStep.7");
+          if (borrowInsteadRepay) {
+            console.log("_withdrawStep.5");
             borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
+          } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
+            console.log("_withdrawStep.6");
+            // we need to know repaidAmount
+            // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
+            // temporary save current balance to repaidAmount
+            uint repaidAmount = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
+
+            ConverterStrategyBaseLib._repayDebt(
+              p.converter,
+              p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
+              p.tokens[idxToRepay1 - 1],
+              amountToRepay2
+            );
+            uint balanceAfter = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
+            repaidAmount = repaidAmount > balanceAfter
+              ? repaidAmount - balanceAfter
+              : 0;
+
+            if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
+              console.log("_withdrawStep.7");
+              borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
+            }
           }
+        }
+      } else {
+        // leftovers were swapped, there are no debts anymore
+        // the swap can change pool proportions, so probably it's necessary to make additional borrow here
+        console.log("_withdrawStep.4!!!!!!");
+        if (idxToRepay1 == 0) {
+          _borrowLeftovers(p);
         }
       }
     }
@@ -455,11 +465,50 @@ library PairBasedStrategyLib {
     return idxToRepay1 == 0;
   }
 
+  function _borrowLeftovers(IterationPlanLib.SwapRepayPlanParams memory p) internal {
+    uint balanceAsset = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
+    uint balanceToken = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
+    (uint targetAssets,
+      uint targetTokens
+    ) = IterationPlanLib._getTargetAmounts(p.prices, p.decs, balanceAsset, balanceToken, p.propNotUnderlying18, IDX_ASSET, IDX_TOKEN);
+
+    console.log("_borrowLeftovers.balanceAsset", balanceAsset);
+    console.log("_borrowLeftovers.balanceToken", balanceToken);
+    console.log("_borrowLeftovers.targetAssets", targetAssets);
+    console.log("_borrowLeftovers.targetTokens", targetTokens);
+
+    // todo make borrow ONLY if it's necessary
+    if (balanceAsset > targetAssets) {
+      console.log("_borrowLeftovers borrow token for asset");
+      _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken);
+    } else {
+      console.log("_borrowLeftovers borrow asset for token");
+      _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset);
+    }
+  }
+
   /// @notice borrow borrow-asset under collateral-asset, result balances should match to propNotUnderlying18
   function borrowToProportions(
     IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow
+  ) internal {
+    _borrowToProportions(
+      p,
+      indexCollateral,
+      indexBorrow,
+      IERC20(p.tokens[indexCollateral]).balanceOf(address(this)),
+      IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
+    );
+  }
+
+  /// @notice borrow borrow-asset under collateral-asset, result balances should match to propNotUnderlying18
+  function _borrowToProportions(
+    IterationPlanLib.SwapRepayPlanParams memory p,
+    uint indexCollateral,
+    uint indexBorrow,
+    uint balanceCollateral,
+    uint balanceBorrow
   ) internal {
     BorrowLib.RebalanceAssetsCore memory cac = BorrowLib.RebalanceAssetsCore({
       converterLiquidator: BorrowLib.ConverterLiquidator(p.converter, p.liquidator),
@@ -487,8 +536,8 @@ library PairBasedStrategyLib {
         prices: p.prices,
         decs: p.decs
       }),
-      IERC20(p.tokens[indexCollateral]).balanceOf(address(this)),
-      IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
+      balanceCollateral,
+      balanceBorrow
     );
   }
 
@@ -570,6 +619,8 @@ library PairBasedStrategyLib {
 
     require(amountIn <= IERC20(p.tokens[indexIn]).balanceOf(address(this)), AppErrors.NOT_ENOUGH_BALANCE);
     // let's ensure that "next swap" is made using correct token
+    console.log("_swap.aggParams.tokenToSwap", aggParams.tokenToSwap);
+    console.log("_swap.aggParams.p.tokens[indexIn]", p.tokens[indexIn]);
     require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
     if (amountIn > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
@@ -611,7 +662,7 @@ library PairBasedStrategyLib {
 
     return (
       spentAmountIn,
-    // p.propNotUnderlying18 contains original proportions that were vaild before the swap
+    // p.propNotUnderlying18 contains original proportions that were valid before the swap
     // after swap() we need to re-read new values from the pool
       p.usePoolProportions
         ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()

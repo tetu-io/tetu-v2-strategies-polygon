@@ -88,10 +88,17 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
   uint[] internal valuesPropNotUnderlying18;
   /// @notice getPropNotUnderlying18() uses a value of balance of this token to detect what value should be returned
   address switchToken;
-  function setPropNotUnderlying18(uint[] memory valuesPropNotUnderlying18_, address switchToken_) external {
+  /// @notice getPropNotUnderlying18 should return second value if balance of the switch token is equal to the given value
+  uint switchTokenBalanceToSwitch;
+  function setPropNotUnderlying18(
+    uint[] memory valuesPropNotUnderlying18_,
+    address switchToken_,
+    uint switchTokenBalanceToSwitch_
+  ) external {
     require(valuesPropNotUnderlying18_.length == 2, "Incorrect length array in setPropNotUnderlying18");
     valuesPropNotUnderlying18 = valuesPropNotUnderlying18_;
     switchToken = switchToken_;
+    switchTokenBalanceToSwitch = switchTokenBalanceToSwitch_;
   }
 
   /// @notice Take next proportions of not-underlying from array
@@ -100,7 +107,8 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
   ///         through the value of balance of the {switchToken} of the sender.
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view returns (uint) {
-    uint ret = IERC20(switchToken).balanceOf(msg.sender) == 0
+    console.log("getPropNotUnderlying18.IERC20(switchToken).balanceOf(msg.sender)", IERC20(switchToken).balanceOf(msg.sender));
+    uint ret = IERC20(switchToken).balanceOf(msg.sender) == switchTokenBalanceToSwitch
       ? valuesPropNotUnderlying18[1]
       : valuesPropNotUnderlying18[0];
     console.log("getPropNotUnderlying18.ret", ret);

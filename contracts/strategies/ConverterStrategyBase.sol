@@ -188,9 +188,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       console.log("ConverterStrategyBase._depositToPoolUniversal.5");
       // make deposit, actually consumed amounts can be different from the desired amounts
-      (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
-      console.log("ConverterStrategyBase._depositToPoolUniversal.6");
-      emit OnDepositorEnter(amounts, consumedAmounts);
+      if (!ConverterStrategyBaseLib2.findZeroAmount(amounts, tokens, liquidationThresholds)) {
+        // we cannot enter to pool if at least one of amounts is zero or less then the threshold
+        (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
+        console.log("ConverterStrategyBase._depositToPoolUniversal.6");
+        emit OnDepositorEnter(amounts, consumedAmounts);
+      }
 
       // update _investedAssets with new deposited amount
       uint investedAssetsAfter = _updateInvestedAssets();
