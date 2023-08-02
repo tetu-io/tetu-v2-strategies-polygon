@@ -1628,10 +1628,10 @@ describe('PairBasedStrategyLibTest', () => {
           for (const b of p.borrows) {
             const p0 = p.propNotUnderlying18[1] === "0.90"
               ? "0.1"
-              : p.propNotUnderlying18[1];
+              : (1 - +p.propNotUnderlying18[1]).toString();
             const p1 = p.propNotUnderlying18[1] === "0.90"
               ? "0.9"
-              : p.propNotUnderlying18[1];
+              : (+p.propNotUnderlying18[1]).toString();
             const prop0 = b.collateralAsset.address === p.tokenX.address
               ? parseUnits(p0, 18)
               : parseUnits(p1, 18);
@@ -1917,7 +1917,7 @@ describe('PairBasedStrategyLibTest', () => {
                   tokenToSwap: usdt,
                   planKind: PLAN_SWAP_REPAY,
 
-                  liquidationThresholds: ["0", "0"],
+                  liquidationThresholds: ["10", "10"],
                   balanceX: "500",
                   balanceY: "900",
 

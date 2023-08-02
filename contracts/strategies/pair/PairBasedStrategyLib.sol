@@ -456,7 +456,7 @@ library PairBasedStrategyLib {
         // the swap can change pool proportions, so probably it's necessary to make additional borrow here
         console.log("_withdrawStep.4!!!!!!");
         if (idxToRepay1 == 0) {
-          _borrowLeftovers(p);
+          _fixLeftoversProportions(p);
         }
       }
     }
@@ -465,7 +465,9 @@ library PairBasedStrategyLib {
     return idxToRepay1 == 0;
   }
 
-  function _borrowLeftovers(IterationPlanLib.SwapRepayPlanParams memory p) internal {
+  /// @notice Set balances to right proportions using borrow
+  ///         (it can be necessary if propNotUnderlying18 was changed after swap)
+  function _fixLeftoversProportions(IterationPlanLib.SwapRepayPlanParams memory p) internal {
     uint balanceAsset = IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this));
     uint balanceToken = IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this));
     (uint targetAssets,
@@ -477,13 +479,16 @@ library PairBasedStrategyLib {
     console.log("_borrowLeftovers.targetAssets", targetAssets);
     console.log("_borrowLeftovers.targetTokens", targetTokens);
 
-    // todo make borrow ONLY if it's necessary
     if (balanceAsset > targetAssets) {
-      console.log("_borrowLeftovers borrow token for asset");
-      _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken);
-    } else {
-      console.log("_borrowLeftovers borrow asset for token");
-      _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset);
+      if (balanceAsset - targetAssets > p.liquidationThresholds[IDX_ASSET]) {
+        console.log("_borrowLeftovers borrow token for asset");
+        _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken);
+      }
+    } else if (balanceToken > targetTokens) {
+      if (balanceToken - targetTokens > p.liquidationThresholds[IDX_ASSET]) {
+        console.log("_borrowLeftovers borrow asset for token");
+        _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset);
+      }
     }
   }
 
