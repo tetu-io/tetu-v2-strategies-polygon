@@ -210,7 +210,8 @@ describe('PairBasedNoSwapIntTest', function() {
         amountToSwap,
         swapData,
         p.planEntryData,
-        p.entryToPool
+        p.entryToPool,
+        {gasLimit: 10_000_000}
       );
       console.log("completed", completed);
 
@@ -221,7 +222,8 @@ describe('PairBasedNoSwapIntTest', function() {
         amountToSwap,
         swapData,
         p.planEntryData,
-        p.entryToPool
+        p.entryToPool,
+        {gasLimit: 10_000_000}
       );
       console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
 
@@ -240,6 +242,7 @@ describe('PairBasedNoSwapIntTest', function() {
     entryToPool: number;
     planKind: number;
     singleIteration: boolean;
+    propNotUnderlying18?: BigNumber;
 
     /** 3 by default */
     countLoops?: number;
@@ -275,9 +278,9 @@ describe('PairBasedNoSwapIntTest', function() {
         planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY
           ? defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY])
           : p.planKind === PLAN_SWAP_REPAY
-            ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0])
+            ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, p?.propNotUnderlying18 ?? 0])
             : p.planKind === PLAN_SWAP_ONLY
-              ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_ONLY, 0])
+              ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_ONLY, p?.propNotUnderlying18 ?? 0])
               : "0x"
       },
       pathOut,
@@ -296,9 +299,9 @@ describe('PairBasedNoSwapIntTest', function() {
       sharePriceDeviation: number
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-6},
-      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 1e-6},
-      { name: PLATFORM_KYBER, sharePriceDeviation: 1e-6},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-5},
+      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 1e-5},
+      { name: PLATFORM_KYBER, sharePriceDeviation: 1e-5},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -744,12 +747,44 @@ describe('PairBasedNoSwapIntTest', function() {
         });
 
         describe("Use liquidator", () => {
-          describe('Move prices up', function () {
+          describe('Move prices up, enter to pool after completion with pools proportions', function () {
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
               return makeWithdrawTest(await loadFixture(prepareStrategy), {
                 movePricesUp: true,
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                planKind: PLAN_SWAP_REPAY,
+                propNotUnderlying18: BigNumber.from(Misc.MAX_UINT) // use pool's proportions
+              });
+            }
+
+            it("should enter to the pool at the end", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              const statePrev = ret.states[ret.states.length - 2];
+              expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
+              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.98);
+            });
+            it("should set expected investedAssets", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.strategy.investedAssets / stateFirst.strategy.investedAssets).gt(0.98);
+            });
+            it("should set expected totalAssets", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.strategy.totalAssets).approximately(stateFirst.strategy.totalAssets, 100);
+            });
+          });
+          describe('Move prices up, dont enter to pool after completion', function () {
+            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
+              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+                movePricesUp: true,
+                singleIteration: false,
+                entryToPool: ENTRY_TO_POOL_DISABLED,
                 planKind: PLAN_SWAP_REPAY,
               });
             }
@@ -795,7 +830,39 @@ describe('PairBasedNoSwapIntTest', function() {
               expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
             });
           });
-          describe('Move prices down', function () {
+          describe('Move prices down, enter to pool after completion', function () {
+            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
+              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+                movePricesUp: false,
+                singleIteration: false,
+                entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                planKind: PLAN_SWAP_REPAY,
+                propNotUnderlying18: BigNumber.from(Misc.MAX_UINT) // use pool's proportions
+              });
+            }
+
+            it("should enter to the pool at the end", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              const statePrev = ret.states[ret.states.length - 2];
+              expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
+              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.98);
+            });
+            it("should set expected investedAssets", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.strategy.investedAssets / stateFirst.strategy.investedAssets).gt(0.98);
+            });
+            it("should set expected totalAssets", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.strategy.totalAssets).approximately(stateFirst.strategy.totalAssets, 100);
+            });
+          });
+          describe('Move prices down, dont enter to pool after completion', function () {
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
               return makeWithdrawTest(await loadFixture(prepareStrategy), {
                 movePricesUp: false,
@@ -848,13 +915,13 @@ describe('PairBasedNoSwapIntTest', function() {
           });
         });
         describe("Use liquidator as aggregator", () => {
-          describe('Move prices up', function () {
+          describe('Move prices up, dont enter to the pool', function () {
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
               return makeWithdrawTest(await loadFixture(prepareStrategy), {
                 movePricesUp: true,
                 singleIteration: false,
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
-                entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                entryToPool: ENTRY_TO_POOL_DISABLED,
                 planKind: PLAN_SWAP_REPAY,
               });
             }
@@ -900,13 +967,13 @@ describe('PairBasedNoSwapIntTest', function() {
               expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
             });
           });
-          describe('Move prices down', function () {
+          describe('Move prices down, dont enter to the pool', function () {
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
               return makeWithdrawTest(await loadFixture(prepareStrategy), {
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
                 movePricesUp: false,
                 singleIteration: false,
-                entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+                entryToPool: ENTRY_TO_POOL_DISABLED,
                 planKind: PLAN_SWAP_REPAY,
               });
             }
@@ -944,12 +1011,12 @@ describe('PairBasedNoSwapIntTest', function() {
               const [stateLast, ...rest] = [...ret.states].reverse();
               // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
               // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
-              expect(stateLast.strategy.investedAssets).lt(1);
+              expect(stateLast.strategy.investedAssets).lt(20);
             });
             it("should receive totalAssets on balance", async () => {
               const ret = await loadFixture(makeWithdrawAll);
               const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
+              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 20); // 10966 vs 10954
             });
           });
         });

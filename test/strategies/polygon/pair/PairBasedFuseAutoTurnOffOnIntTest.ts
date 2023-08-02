@@ -257,7 +257,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
               const b = await loadFixture(prepareStrategy);
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
               return movePriceUpDown(b,{
-                maxCountRebalances: 7,
+                maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: true
               });
