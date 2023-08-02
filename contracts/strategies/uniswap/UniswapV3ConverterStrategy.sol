@@ -9,6 +9,7 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -207,6 +208,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       state.pair,
       liquidationThresholds
     );
+    console.log("withdrawByAggStep.completed", completed);
+    console.log("withdrawByAggStep.tokenAmounts[0]", tokenAmounts.length > 0 ? tokenAmounts[0] : 12345);
+    console.log("withdrawByAggStep.tokenAmounts[1]", tokenAmounts.length > 1 ? tokenAmounts[1] : 12345);
 
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
@@ -298,6 +302,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Make actions after rebalance: depositor enter, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
     if (tokenAmounts.length == 2) {
+      console.log("_depositorEnter");
       _depositorEnter(tokenAmounts);
     }
     _updateInvestedAssets();

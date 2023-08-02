@@ -212,6 +212,7 @@ describe('PairBasedNoSwapIntTest', function() {
         p.planEntryData,
         p.entryToPool
       );
+      console.log("completed", completed);
 
       console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
       await strategyAsOperator.withdrawByAggStep(

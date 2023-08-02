@@ -23,6 +23,7 @@ import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuild
 import {PairStrategyLiquidityUtils} from "../../../baseUT/strategies/PairStrategyLiquidityUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
+import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -39,6 +40,9 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
+/**
+ * Check how fuse triggered ON/OFF because of price changing.
+ */
 describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
@@ -137,8 +141,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     await TokenUtils.getToken(b.asset, signer.address, parseUnits('1000', 6));
     await b.vault.deposit(parseUnits('1000', 6), signer.address);
 
-    const swapAmounts: BigNumber[] = [];
-
     const state = await PackedData.getDefaultState(b.strategy);
     for (let i = 0; i < p.maxCountRebalances; ++i) {
       console.log(`Swap and rebalance. Step ${i}`);
@@ -146,7 +148,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
       let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6));
       swapAmount = swapAmount.add(swapAmount.div(p.swapAmountPart || 100));
-      swapAmounts.push(swapAmount);
 
       if (p.movePricesUpDown) {
         await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
@@ -179,7 +180,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
       let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6));
       swapAmount = swapAmount.add(swapAmount.div(p.swapAmountPart || 100));
-      swapAmounts.push(swapAmount);
 
       if (p.movePricesUpDown) {
         await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
@@ -253,38 +253,49 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         });
         describe("Use liquidator", () => {
           describe('Move tokenB prices up, down', function () {
-            it("should trigger fuse ON (FUSE_ON_UPPER_LIMIT_3) then OFF", async () => {
-              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down-b.csv`;
-              const ret = await movePriceUpDown({
+            async function makeTest(): Promise<IMovePriceResults> {
+              const b = await loadFixture(prepareStrategy);
+              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
+              return movePriceUpDown(b,{
                 maxCountRebalances: 7,
                 pathOut,
                 movePricesUpDown: true
               });
+            }
+            it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
+              const ret = await loadFixture(makeTest);
               console.log("ret.rebalanceFuseOff", ret.rebalanceFuseOff);
               console.log("ret.rebalanceFuseOn", ret.rebalanceFuseOn);
-
               expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
               expect(ret.rebalanceFuseOn?.price || 0).gte(1.0003);
-
+            });
+            it("should trigger fuse OFF at the end", async () => {
+              const ret = await loadFixture(makeTest);
               expect(ret.rebalanceFuseOff?.fuseStatus || 0).eq(FUSE_OFF_1);
               expect(ret.rebalanceFuseOff?.price || 0).lte(1.0001);
             });
           });
           describe('Move tokenB prices down, up', function () {
-            it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2) then OFF", async () => {
-              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up-b.csv`;
-              const ret = await movePriceUpDown({
+            async function makeTest(): Promise<IMovePriceResults> {
+              const b = await loadFixture(prepareStrategy);
+              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
+              return movePriceUpDown(b,{
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: false,
                 swapAmountPart: 150
               });
+            }
+            it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
+              const ret = await loadFixture(makeTest);
               console.log("ret.rebalanceFuseOff", ret.rebalanceFuseOff);
               console.log("ret.rebalanceFuseOn", ret.rebalanceFuseOn);
 
               expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
               expect(ret.rebalanceFuseOn?.price || 0).lte(0.9996);
-
+            });
+            it("should trigger fuse OFF at the end", async () => {
+              const ret = await loadFixture(makeTest);
               expect(ret.rebalanceFuseOff?.fuseStatus || 0).eq(FUSE_OFF_1);
               expect(ret.rebalanceFuseOff?.price || 0).gte(0.9998);
             });

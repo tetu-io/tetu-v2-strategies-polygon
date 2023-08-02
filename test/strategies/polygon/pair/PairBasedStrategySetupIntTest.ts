@@ -15,7 +15,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
-describe('SetupPairBasedStrategyIntTest', () => {
+describe('PairBasedStrategySetupIntTest', () => {
   //region Variables
   let snapshotBefore: string;
   let signer: SignerWithAddress;

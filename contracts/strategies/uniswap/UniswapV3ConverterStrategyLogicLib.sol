@@ -498,7 +498,14 @@ library UniswapV3ConverterStrategyLogicLib {
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
     uint loss;
-    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
+    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(
+      addr_,
+      values_,
+      swapData,
+      planEntryData,
+      tokens,
+      liquidationThresholds
+    );
 
     // cover loss
     if (loss != 0) {
@@ -509,7 +516,12 @@ library UniswapV3ConverterStrategyLogicLib {
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
       // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
-      (pairState.lowerTick, pairState.upperTick) = UniswapV3DebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      (pairState.lowerTick, pairState.upperTick) = UniswapV3DebtLib._calcNewTickRange(
+        pool,
+        pairState.lowerTick,
+        pairState.upperTick,
+        pairState.tickSpacing
+      );
       tokenAmountsOut = tokenAmounts;
     }
     return (completed, tokenAmountsOut); // hide warning
