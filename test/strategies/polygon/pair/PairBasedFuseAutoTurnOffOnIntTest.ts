@@ -18,7 +18,7 @@ import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {BigNumber} from "ethers";
 import {expect} from "chai";
-import {PackedData} from "../../../baseUT/utils/PackedData";
+import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
 import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {PairStrategyLiquidityUtils} from "../../../baseUT/strategies/PairStrategyLiquidityUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
@@ -136,42 +136,43 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         : libUniv3;
   }
 
-  async function movePriceUpDown(b: IBuilderResults, p: IMovePriceParams): Promise<IMovePriceResults> {
-    const states: IStateNum[] = [];
-    const pathOut = p.pathOut;
-    let rebalanceFuseOn: IPriceFuseStatus | undefined;
-    let rebalanceFuseOff: IPriceFuseStatus | undefined;
+  async function movePriceToChangeFuseStatus(
+    b: IBuilderResults,
+    movePricesUpDown: boolean,
+    useTokenB: boolean,
+    maxCountRebalances: number,
+    platform: string,
+    lib: UniswapV3Lib | AlgebraLib | KyberLib,
+    state: IDefaultState,
+    states: IStateNum[],
+    pathOut: string,
+    swapAmountPart?: number
+  ): Promise<IPriceFuseStatus | undefined> {
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-    const platform = await converterStrategyBase.PLATFORM();
-    const lib = getLib(platform);
-    let statusB = FUSE_OFF_1;
+    const currentFuseA = states.length === 0
+      ? FUSE_OFF_1
+      : states[states.length - 1].fuseStatusA;
+    const currentFuseB = states.length === 0
+      ? FUSE_OFF_1
+      : states[states.length - 1].fuseStatusB;
 
-    console.log('deposit...');
-    await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-    await TokenUtils.getToken(b.asset, signer.address, parseUnits('1000', 6));
-    await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
-
-    const state = await PackedData.getDefaultState(b.strategy);
-    for (let i = 0; i < p.maxCountRebalances; ++i) {
-      console.log(`Swap and rebalance. Step ${i}`);
+    for (let i = 0; i < maxCountRebalances; ++i) {
       const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
-      const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
-      const swapAmount0 = amounts[1].mul(priceB).div(parseUnits('1', 6));
-      const swapAmount = platform === PLATFORM_KYBER
-        ? swapAmount0.add(parseUnits('0.001', 6))
-        : swapAmount0.add(swapAmount0.div(p.swapAmountPart || 100));
-      console.log("priceB", priceB);
-      console.log("amounts", amounts);
-      console.log("swapAmount", swapAmount);
-      console.log("swapAmount0", swapAmount0);
-      console.log("swapAmount0.add(swapAmount0.div(p.swapAmountPart || 100))", swapAmount0.add(swapAmount0.div(p.swapAmountPart || 100)));
-      console.log("swapAmount0.add(parseUnits('0.001', 6))", swapAmount0.add(parseUnits('0.001', 6)));
-      console.log("platform === PLATFORM_KYBER", platform === PLATFORM_KYBER);
-
-      if (p.movePricesUpDown) {
-        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
+      let swapAmount: BigNumber;
+      if (useTokenB) {
+        const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
+        const swapAmount0 = amounts[1].mul(priceB).div(parseUnits('1', 6));
+        swapAmount = swapAmount0.add(swapAmount0.div(swapAmountPart || 100));
       } else {
-        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
+        const priceA = await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN);
+        const swapAmount0 = amounts[0].mul(priceA).div(parseUnits('1', 6));
+        swapAmount = swapAmount0.add(parseUnits('0.001', 6));
+      }
+
+      if (movePricesUpDown) {
+        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      } else {
+        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000, !useTokenB);
       }
       states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fw${i}`));
       StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
@@ -182,50 +183,67 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         states.push(stateAfterRebalance);
         StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-        if (stateAfterRebalance.fuseStatusB !== FUSE_OFF_1) {
-          statusB = stateAfterRebalance.fuseStatusB ?? statusB;
-          rebalanceFuseOn = {
+        if (stateAfterRebalance.fuseStatusB !== currentFuseB) {
+          return {
             fuseStatus: stateAfterRebalance.fuseStatusB || 0,
             price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
           };
-          break;
         }
-      }
-    }
-
-    console.log("===========================");
-    for (let i = 0; i < p.maxCountRebalances; ++i) {
-      console.log(`Swap and rebalance. Step ${i}`);
-      const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
-      const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
-      let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6));
-      swapAmount = platform === PLATFORM_KYBER
-        ? swapAmount.add(parseUnits('0.0001', 6))
-        : swapAmount.add(swapAmount.div(p.swapAmountPart || 100));
-
-      if (p.movePricesUpDown) {
-        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
-      } else {
-        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
-      }
-      states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `back${i}`));
-      StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-      if ((await b.strategy.needRebalance())) {
-        await b.strategy.rebalanceNoSwaps(true, { gasLimit: 9_000_000 });
-        const stateAfterRebalance = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`);
-        states.push(stateAfterRebalance);
-        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-        if (stateAfterRebalance.fuseStatusB !== statusB) {
-          rebalanceFuseOff = {
-            fuseStatus: stateAfterRebalance.fuseStatusB || 0,
-            price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
+        if (stateAfterRebalance.fuseStatusA !== currentFuseA) {
+          return {
+            fuseStatus: stateAfterRebalance.fuseStatusA || 0,
+            price: stateAfterRebalance.converterDirect.borrowAssetsPrices[0]
           };
-          break;
         }
       }
     }
+  }
+
+  async function movePriceUpDown(b: IBuilderResults, p: IMovePriceParams): Promise<IMovePriceResults> {
+    const states: IStateNum[] = [];
+    const pathOut = p.pathOut;
+    let rebalanceFuseOn: IPriceFuseStatus | undefined;
+    let rebalanceFuseOff: IPriceFuseStatus | undefined;
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+    const platform = await converterStrategyBase.PLATFORM();
+    const lib = getLib(platform);
+
+    console.log('deposit...');
+    await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+    await TokenUtils.getToken(b.asset, signer.address, parseUnits('1000', 6));
+    await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+
+    const state = await PackedData.getDefaultState(b.strategy);
+    console.log("=========================== there");
+    rebalanceFuseOn = await movePriceToChangeFuseStatus(
+      b,
+      p.movePricesUpDown,
+      platform !== PLATFORM_KYBER,
+      p.maxCountRebalances,
+      platform,
+      lib,
+      state,
+      states,
+      pathOut,
+      p.swapAmountPart
+    );
+
+    console.log("=========================== back");
+
+    rebalanceFuseOff = await movePriceToChangeFuseStatus(
+      b,
+      !p.movePricesUpDown,
+      platform !== PLATFORM_KYBER,
+      p.maxCountRebalances,
+      platform,
+      lib,
+      state,
+      states,
+      pathOut,
+      p.swapAmountPart
+    );
+
+    console.log("=========================== done");
 
     return {
       states,
@@ -266,7 +284,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
-      let snapshot: string;
 
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
@@ -292,12 +309,14 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       }
 
       describe(`${strategyInfo.name}`, () => {
+        let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
         });
         after(async function () {
           await TimeUtils.rollback(snapshot);
         });
+
         describe("Use liquidator", () => {
           describe('Move tokenB prices up, down', function () {
             async function makeTest(): Promise<IMovePriceResults> {

@@ -70,6 +70,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ITetuConverter public converter;
 
   /// @notice Minimum token amounts that can be liquidated
+  /// @dev These thresholds are used to workaround dust problems in many other cases, not during liquidation only
   mapping(address => uint) public liquidationThresholds;
 
   /// @notice Percent of asset amount that can be not invested, it's allowed to just keep it on balance

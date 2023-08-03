@@ -454,8 +454,13 @@ library PairBasedStrategyLib {
       } else {
         // leftovers were swapped, there are no debts anymore
         // the swap can change pool proportions, so probably it's necessary to make additional borrow here
-        console.log("_withdrawStep.4!!!!!!");
-        if (idxToRepay1 == 0) {
+        console.log("_withdrawStep.4");
+        if (
+          idxToRepay1 == 0 // there are no debts anymore
+          && p.usePoolProportions  // we use proportions from the pool
+          && p.propNotUnderlying18 != 0 && p.propNotUnderlying18 != 1e18 // BorrowLib doesn't allow prop=0
+        ) {
+          console.log("_withdrawStep.4!!!!!!");
           _fixLeftoversProportions(p);
         }
       }
