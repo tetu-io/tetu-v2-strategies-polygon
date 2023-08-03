@@ -14,4 +14,5 @@ library AlgebraStrategyErrors {
   string public constant BALANCE_LOWER_THAN_FEE = "AS-10 Balance lower than fee";
   string public constant NOT_CALLBACK_CALLER = "AS-11 Not callback caller";
   string public constant ZERO_PROFIT_HOLDER = "AS-13 Zero strategy profit holder";
+  string public constant FUSE_IS_ACTIVE = "AS-14 Fuse is active";
 }

@@ -15,4 +15,5 @@ library KyberStrategyErrors {
   string public constant NOT_CALLBACK_CALLER = "KS-11 Not callback caller";
   string public constant ZERO_PROFIT_HOLDER = "KS-13 Zero strategy profit holder";
   string public constant NOT_UNSTAKED = "KS-14 Liquidity must be unstaked";
+  string public constant FUSE_IS_ACTIVE = "KS-14 Fuse is active";
 }

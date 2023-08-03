@@ -253,6 +253,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = pool.burn(lowerTick, upperTick, liquidityAmountToExit);
+
     // all fees will be collected but not returned in amountsOut
     pool.collect(address(this), lowerTick, upperTick, type(uint128).max, type(uint128).max);
 

@@ -271,10 +271,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    if (
-      PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
-      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status)
-    ) {
+    if (_isFuseTriggeredOn()) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
       emit OnDepositorEnter(tokenAmounts, tokenAmounts);
@@ -286,6 +283,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   function _beforeWithdraw(uint /*amount*/) internal view override {
     require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
+  }
+
+  function _preHardWork(bool reInvest) internal override {
+    require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
+    require(!_isFuseTriggeredOn(), Uni3StrategyErrors.FUSE_IS_ACTIVE);
   }
 
   /// @notice Prepare to rebalance: fix price changes, call depositor exit if totalLiquidity != 0
@@ -302,12 +304,16 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Make actions after rebalance: depositor enter, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
-    if (tokenAmounts.length == 2) {
+    if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
       console.log("_depositorEnter");
       _depositorEnter(tokenAmounts);
     }
     _updateInvestedAssets();
   }
 
+  function _isFuseTriggeredOn() internal returns (bool) {
+    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
+        || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
+  }
   //endregion--------------------------------------- INTERNAL LOGIC
 }

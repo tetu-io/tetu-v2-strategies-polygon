@@ -98,6 +98,12 @@ export class PairStrategyFixtures {
           tokenIn: MaticAddresses.USDC_TOKEN,
           tokenOut: MaticAddresses.USDT_TOKEN,
         },
+        {
+          pool: MaticAddresses.KYBER_KNC_USDC,
+          swapper: MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
+          tokenIn: MaticAddresses.KNC_TOKEN,
+          tokenOut: MaticAddresses.USDC_TOKEN,
+        },
       ]
     });
   }

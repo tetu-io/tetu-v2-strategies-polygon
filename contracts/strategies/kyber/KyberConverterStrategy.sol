@@ -238,29 +238,6 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   //region--------------------------------------------- INTERNAL LOGIC
 
-  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
-  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
-    (, profitToCover) = _fixPriceChanges(true);
-    oldTotalAssets = totalAssets() - profitToCover;
-
-    KyberConverterStrategyLogicLib.claimRewardsBeforeExitIfRequired(state);
-
-    // withdraw all liquidity from pool
-    // after disableFuse() liquidity is zero
-    if (state.pair.totalLiquidity > 0) {
-      _depositorEmergencyExit();
-    }
-  }
-
-  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
-  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    _updateInvestedAssets();
-  }
-
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
     uint amount_,
@@ -305,10 +282,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    if (
-      PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
-      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status)
-    ) {
+    if (_isFuseTriggeredOn()) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
       emit OnDepositorEnter(tokenAmounts, tokenAmounts);
@@ -320,6 +294,39 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   function _beforeWithdraw(uint /*amount*/) internal view override {
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
+  }
+
+  function _preHardWork(bool reInvest) internal override {
+    require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
+    require(!_isFuseTriggeredOn(), KyberStrategyErrors.FUSE_IS_ACTIVE);
+  }
+
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
+    (, profitToCover) = _fixPriceChanges(true);
+    oldTotalAssets = totalAssets() - profitToCover;
+
+    KyberConverterStrategyLogicLib.claimRewardsBeforeExitIfRequired(state);
+
+    // withdraw all liquidity from pool
+    // after disableFuse() liquidity is zero
+    if (state.pair.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+  }
+
+  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
+    if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
+      _depositorEnter(tokenAmounts);
+    }
+
+    _updateInvestedAssets();
+  }
+
+  function _isFuseTriggeredOn() internal returns (bool) {
+    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
+      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
   }
   //endregion--------------------------------------- INTERNAL LOGIC
 }

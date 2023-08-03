@@ -175,6 +175,7 @@ library AlgebraConverterStrategyLogicLib {
     State storage state,
     uint[] memory amountsDesired_
   ) external returns (uint[] memory amountsConsumed, uint liquidityOut) {
+    console.log("Algebra.enter.state.tokenId", state.tokenId);
     EnterLocalVariables memory vars = EnterLocalVariables({
       depositorSwapTokens : state.pair.depositorSwapTokens,
       liquidity : 0,
@@ -217,6 +218,7 @@ library AlgebraConverterStrategyLogicLib {
       ));
 
       state.tokenId = vars.tokenId;
+      console.log("Algebra.enter.2.state.tokenId", state.tokenId);
 
       ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), vars.tokenId);
     } else {
@@ -278,6 +280,8 @@ library AlgebraConverterStrategyLogicLib {
     require(liquidity >= liquidityAmountToExit, AlgebraStrategyErrors.WRONG_LIQUIDITY);
 
     uint tokenId = state.tokenId;
+    console.log("Algebra.exit.1.state.tokenId", state.tokenId);
+    // todo check state.tokenId for 0
 
     // get reward amounts
     (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, tokenId);
@@ -520,7 +524,7 @@ library AlgebraConverterStrategyLogicLib {
       PairBasedStrategyLogicLib.updateFuseStatus(pairState, v.fuseStatusChangedAB, v.fuseStatusAB);
     }
 
-    require(checkNeedRebalance_ || needRebalance, AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
+    require(!checkNeedRebalance_ || needRebalance, AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
 
     // rebalancing debt, setting new tick range
     if (needRebalance) {

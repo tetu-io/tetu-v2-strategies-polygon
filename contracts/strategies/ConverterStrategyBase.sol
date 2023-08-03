@@ -442,6 +442,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Call recycle process and send tokens to forwarder.
   ///      Need to be separated from the claim process - the claim can be called by operator for other purposes.
   function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal {
+    console.log("_rewardsLiquidation");
     if (rewardTokens_.length != 0) {
       ConverterStrategyBaseLib.recycle(
         baseState,
@@ -487,14 +488,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    console.log("ConverterStrategyBase._doHardWork");
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
 
+    console.log("ConverterStrategyBase._doHardWork.1");
     _preHardWork(reInvest);
+    console.log("ConverterStrategyBase._doHardWork.2");
 
     // claim rewards and get current asset balance
     uint assetBalance;
     (earned, lost, assetBalance) = _handleRewards();
+    console.log("ConverterStrategyBase._doHardWork.3");
 
     // re-invest income
     (, uint amountSentToInsurance) = _depositToPoolUniversal(
@@ -506,10 +511,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       earnedByPrices,
       investedAssetsNewPrices
     );
+    console.log("ConverterStrategyBase._doHardWork.4");
     (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(
       investedAssetsNewPrices + assetBalance, // assets in use before deposit
       _investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
     );
+    console.log("ConverterStrategyBase._doHardWork.5");
 
     _postHardWork();
 

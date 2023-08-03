@@ -596,19 +596,22 @@ library ConverterStrategyBaseLib {
     uint spentAmountIn,
     uint receivedAmountOut
   ) {
+    console.log("_liquidate.amountIn_", amountIn_);
     // we check amountIn by threshold, not amountOut
     // because {_closePositionsToGetAmount} is implemented in {get plan, make action}-way
     // {_closePositionsToGetAmount} can be used with swap by aggregators, where amountOut cannot be calculate
     // at the moment of plan building. So, for uniformity, only amountIn is checked everywhere
 
-    // todo use Math.min(DEFAULT_LIQUIDATION_THRESHOLD, liquidationThresholdForTokenIn_), fix tests
     if (amountIn_ <= liquidationThresholdForTokenIn_) {
+      console.log("_liquidate.2");
       return (0, 0);
     }
 
     (ITetuLiquidator.PoolData[] memory route,) = liquidator_.buildRoute(tokenIn_, tokenOut_);
+    console.log("_liquidate.3");
 
     require(route.length != 0, AppErrors.NO_LIQUIDATION_ROUTE);
+    console.log("_liquidate.4");
 
     // if the expected value is higher than threshold distribute to destinations
     return (amountIn_, _liquidateWithRoute(converter_, route, liquidator_, tokenIn_, tokenOut_, amountIn_, slippage_, skipValidation));
@@ -628,14 +631,27 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint receivedAmountOut
   ) {
+    console.log("_liquidateWithRoute.1");
+    console.log("_liquidateWithRoute.amountIn_", amountIn_);
+    console.log("_liquidateWithRoute.slippage_", slippage_);
+    console.log("_liquidateWithRoute.tokenIn_", tokenIn_);
+    console.log("_liquidateWithRoute.tokenOut_", tokenOut_);
+    console.log("_liquidateWithRoute.route.length", route.length);
     // we need to approve each time, liquidator address can be changed in controller
     AppLib.approveIfNeeded(tokenIn_, amountIn_, address(liquidator_));
 
+    console.log("_liquidateWithRoute.2");
     uint balanceBefore = IERC20(tokenOut_).balanceOf(address(this));
+    console.log("_liquidateWithRoute.3");
     liquidator_.liquidateWithRoute(route, amountIn_, slippage_);
+    console.log("_liquidateWithRoute.4");
     uint balanceAfter = IERC20(tokenOut_).balanceOf(address(this));
+    console.log("_liquidateWithRoute.5.tokenOut_", tokenOut_);
+    console.log("_liquidateWithRoute.5.balanceAfter", balanceAfter);
+    console.log("_liquidateWithRoute.5.balanceBefore", balanceBefore);
 
     require(balanceAfter > balanceBefore, AppErrors.BALANCE_DECREASE);
+    console.log("_liquidateWithRoute.6");
     receivedAmountOut = balanceAfter - balanceBefore;
 
     // Oracle in TetuConverter "knows" only limited number of the assets
@@ -853,6 +869,7 @@ library ConverterStrategyBaseLib {
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
   ) external returns (uint[] memory) {
+    console.log("ConverterStrategyBaseLib.recycle.1");
     RecycleLocal memory v;
     v.asset = baseState.asset;
     v.compoundRatio = baseState.compoundRatio;
@@ -868,6 +885,7 @@ library ConverterStrategyBaseLib {
       rewardAmounts_,
       v.performanceFee
     );
+    console.log("ConverterStrategyBaseLib.recycle.2");
 
     address splitter = baseState.splitter;
 
@@ -879,8 +897,10 @@ library ConverterStrategyBaseLib {
       baseState.performanceReceiver,
       baseState.performanceFeeRatio
     );
+    console.log("ConverterStrategyBaseLib.recycle.3");
 
     _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward);
+    console.log("ConverterStrategyBaseLib.recycle.4");
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
     return v.amountsToForward;
@@ -958,6 +978,7 @@ library ConverterStrategyBaseLib {
     uint[] memory amountsToForward,
     uint amountToPerformanceAndInsurance
   ) {
+    console.log("_recycle");
     RecycleLocalParams memory p;
 
     p.len = rewardTokens.length;
@@ -972,13 +993,20 @@ library ConverterStrategyBaseLib {
       p.amountP = rewardAmounts[i] - p.amountFC;
       p.rewardToken = rewardTokens[i];
       p.amountCP = p.amountC + p.amountP;
+      console.log("_recycle.p.amountFC", p.amountFC);
+      console.log("_recycle.p.amountC", p.amountC);
+      console.log("_recycle.p.amountP", p.amountP);
+      console.log("_recycle.p.rewardToken", p.rewardToken);
+      console.log("_recycle.p.amountCP", p.amountCP);
 
       if (p.amountCP > 0) {
         if (AppLib.getAssetIndex(tokens, p.rewardToken) != type(uint).max) {
           if (p.rewardToken == asset) {
+            console.log("_recycle.2");
             // This is underlying, liquidation of compound part is not allowed; just keep on the balance, should be handled later
             amountToPerformanceAndInsurance += p.amountP;
           } else {
+            console.log("_recycle.3");
             // This is secondary asset, Liquidation of compound part is not allowed, we should liquidate performance part only
             // If the performance amount is too small, liquidation will not happen and we will just keep that dust tokens on balance forever
             (, p.receivedAmountOut) = _liquidate(
@@ -994,6 +1022,7 @@ library ConverterStrategyBaseLib {
             amountToPerformanceAndInsurance += p.receivedAmountOut;
           }
         } else {
+          console.log("_recycle.4");
           // If amount is too small, the liquidation won't be allowed and we will just keep that dust tokens on balance forever
           // The asset is not in the list of depositor's assets, its amount is big enough and should be liquidated
           // We assume here, that {token} cannot be equal to {_asset}
@@ -1006,13 +1035,16 @@ library ConverterStrategyBaseLib {
             p.amountCP,
             _REWARD_LIQUIDATION_SLIPPAGE,
             liquidationThresholds[p.rewardToken],
-            true // skip conversion validation for rewards becase we can have arbitrary assets here
+            true // skip conversion validation for rewards because we can have arbitrary assets here
           );
+          console.log("_recycle.5");
           amountToPerformanceAndInsurance += p.receivedAmountOut * (rewardAmounts[i] - p.amountFC) / p.amountCP;
         }
       }
+      console.log("_recycle.6");
       amountsToForward[i] = p.amountFC - p.amountC;
     }
+    console.log("_recycle.7");
     return (amountsToForward, amountToPerformanceAndInsurance);
   }
 //endregion----------------------------------------------- Recycle rewards
@@ -1322,6 +1354,8 @@ library ConverterStrategyBaseLib {
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
+        console.log("v.balanceAsset", v.balanceAsset, i);
+        console.log("v.balanceToken", v.balanceToken, i);
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
@@ -1365,6 +1399,7 @@ library ConverterStrategyBaseLib {
           if (v.idxToRepay1 != 0) {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
+            console.log("_closePositionsToGetAmount.IERC20(d_.tokens[indexBorrow]).balanceOf(address(this)", IERC20(d_.tokens[indexBorrow]).balanceOf(address(this)));
             (uint expectedAmountOut,) = _repayDebt(
               d_.converter,
               d_.tokens[indexCollateral],
@@ -1373,6 +1408,8 @@ library ConverterStrategyBaseLib {
             );
 
             if (indexCollateral == d_.indexAsset) {
+              console.log("_closePositionsToGetAmount.expectedAmountOut", expectedAmountOut);
+              console.log("_closePositionsToGetAmount.spentAmountIn", spentAmountIn);
               require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
               expectedAmount += expectedAmountOut - spentAmountIn;
             }
@@ -1421,6 +1458,8 @@ library ConverterStrategyBaseLib {
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("_repayDebt.needToRepay", needToRepay);
+    console.log("_repayDebt.amountRepay", amountRepay);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;
@@ -1437,9 +1476,15 @@ library ConverterStrategyBaseLib {
       expectedAmountOut -= swappedAmountOut;
     }
 
+    console.log("_repayDebt.swappedAmountOut", swappedAmountOut);
+    console.log("_repayDebt.expectedAmountOut", expectedAmountOut);
+    console.log("_repayDebt.amountRepay", amountRepay);
+    console.log("_repayDebt.balanceBefore", balanceBefore);
+    console.log("_repayDebt.collateralAsset", collateralAsset);
     // close the debt
     (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
 
+    console.log("_repayDebt.repaidAmountOut", repaidAmountOut);
     return (expectedAmountOut, repaidAmountOut);
   }
   //endregion ------------------------------------------------ Repay debts

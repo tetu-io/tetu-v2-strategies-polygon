@@ -508,7 +508,7 @@ library KyberConverterStrategyLogicLib {
       PairBasedStrategyLogicLib.updateFuseStatus(pairState, v.fuseStatusChangedAB, v.fuseStatusAB);
     }
 
-    require(checkNeedRebalance_ || needRebalance, KyberStrategyErrors.NO_REBALANCE_NEEDED);
+    require(!checkNeedRebalance_ || needRebalance, KyberStrategyErrors.NO_REBALANCE_NEEDED);
 
     // rebalancing debt, setting new tick range
     if (needRebalance) {

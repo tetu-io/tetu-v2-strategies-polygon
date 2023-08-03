@@ -9,6 +9,7 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "./AlgebraStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "hardhat/console.sol";
 
 contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
@@ -292,6 +293,11 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
   }
 
+  function _preHardWork(bool reInvest) internal override {
+    require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
+    require(!_isFuseTriggeredOn(), AlgebraStrategyErrors.FUSE_IS_ACTIVE);
+  }
+
   /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
   function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
     (, profitToCover) = _fixPriceChanges(true);
@@ -306,10 +312,15 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
-    if (tokenAmounts.length == 2) {
+    if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
       _depositorEnter(tokenAmounts);
     }
     _updateInvestedAssets();
+  }
+
+  function _isFuseTriggeredOn() internal returns (bool) {
+    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
+      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
   }
   //endregion--------------------------------------- INTERNAL LOGIC
 }
