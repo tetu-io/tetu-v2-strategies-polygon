@@ -46,7 +46,7 @@ const argv = require('yargs/yargs')()
  *  F0, NR0      1         1         0             1           1         1
  *  F1, NR0      1*        1         0             1*          0         1
  *  F0, NR1      0         0         1             1           0         1
- *  F1, NR1      0         0         0             1*          0         1
+ *  F1, NR1      not possible, see needStrategyRebalance impl
  *  Following tests check response in each case.
  */
 describe('PairBasedStrategyActionResponseIntTest', function() {
@@ -121,6 +121,49 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         ? libKyber
         : libUniv3;
   }
+
+  async function prepareNeedRebalanceOn(b: IBuilderResults) {
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+    const platform = await converterStrategyBase.PLATFORM();
+    const state = await PackedData.getDefaultState(b.strategy);
+
+    // move strategy to "need to rebalance" state
+    const lib = getLib(platform);
+    for (let i = 0; i < 3; ++i) {
+      let swapAmount: BigNumber;
+      const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
+      if (platform !== PLATFORM_KYBER) {
+        const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
+        const swapAmount0 = amounts[1].mul(priceB).div(parseUnits('1', 6));
+        swapAmount = swapAmount0.add(swapAmount0.div(100));
+      } else {
+        const priceA = await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN);
+        const swapAmount0 = amounts[0].mul(priceA).div(parseUnits('1', 6));
+        swapAmount = swapAmount0.add(parseUnits('0.001', 6));
+      }
+      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      if ((await b.strategy.needRebalance())) break;
+    }
+  }
+
+  async function prepareFuseToTriggerOn(b: IBuilderResults) {
+    console.log("activate fuse ON");
+    const lib = getLib(await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM());
+    const priceA = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN), 6);
+    const priceB = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN), 6);
+    console.log("priceA, priceB", priceA, priceB);
+
+    const ttA = [priceA - 0.0008, priceA - 0.0006, priceA + 0.0008, priceA + 0.0006].map(x => parseUnits(x.toString(), 18));
+    const ttB = [
+      priceB - 0.0008,
+      priceB - 0.0006,
+      priceB - 0.0001, // (!) fuse ON
+      priceB - 0.0002
+    ].map(x => parseUnits(x.toString(), 18));
+
+    await b.strategy.setFuseThresholds(0, [ttA[0], ttA[1], ttA[2], ttA[3]]);
+    await b.strategy.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
+  }
 //endregion Utils
 
 //region Unit tests
@@ -129,8 +172,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      // { name: PLATFORM_UNIV3,},
-      // { name: PLATFORM_ALGEBRA,},
+      { name: PLATFORM_UNIV3,},
+      { name: PLATFORM_ALGEBRA,},
       { name: PLATFORM_KYBER,},
     ];
 
@@ -275,22 +318,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
         await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
 
-        console.log("activate fuse ON");
-        const lib = getLib(await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM());
-        const priceA = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN), 6);
-        const priceB = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN), 6);
-        console.log("priceA, priceB", priceA, priceB);
-
-        const ttA = [priceA - 0.0008, priceA - 0.0006, priceA + 0.0008, priceA + 0.0006].map(x => parseUnits(x.toString(), 18));
-        const ttB = [
-          priceB - 0.0008,
-          priceB - 0.0006,
-          priceB - 0.0001, // (!) fuse ON
-          priceB - 0.0002
-        ].map(x => parseUnits(x.toString(), 18));
-
-        await b.strategy.setFuseThresholds(0, [ttA[0], ttA[1], ttA[2], ttA[3]]);
-        await b.strategy.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
+        // activate fuse
+        await prepareFuseToTriggerOn(b);
 
         // make rebalance to update fuse status
         expect(await b.strategy.needRebalance()).eq(true);
@@ -428,27 +457,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
         await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
 
-        const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-        const platform = await converterStrategyBase.PLATFORM();
-        const state = await PackedData.getDefaultState(b.strategy);
+        await prepareNeedRebalanceOn(b);
+        await prepareFuseToTriggerOn(b);
 
-        // move strategy to "need to rebalance" state
-        const lib = getLib(platform);
-        for (let i = 0; i < 3; ++i) {
-          let swapAmount: BigNumber;
-          const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
-          if (platform !== PLATFORM_KYBER) {
-            const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
-            const swapAmount0 = amounts[1].mul(priceB).div(parseUnits('1', 6));
-            swapAmount = swapAmount0.add(swapAmount0.div(100));
-          } else {
-            const priceA = await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN);
-            const swapAmount0 = amounts[0].mul(priceA).div(parseUnits('1', 6));
-            swapAmount = swapAmount0.add(parseUnits('0.001', 6));
-          }
-          await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
-          if ((await b.strategy.needRebalance())) break;
-        }
+        // make rebalance to update fuse status
+        expect(await b.strategy.needRebalance()).eq(true);
+        await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+        expect(await b.strategy.needRebalance()).eq(true);
 
         return b;
       }
@@ -555,9 +570,5 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       });
     });
   });
-  describe("Fuse ON, need-rebalance ON", () => {
-
-  });
-
 //endregion Unit tests
 });
