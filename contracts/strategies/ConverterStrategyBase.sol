@@ -450,6 +450,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @notice A virtual handler to make any action before hardwork
   /// @return True if the hardwork should be skipped
   function _preHardWork(bool reInvest) internal virtual returns (bool) {
+    reInvest; // hide warning
     return false;
   }
 
@@ -563,7 +564,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param theAsset_ Required asset (either collateral or borrow)
   /// @param amount_ Required amount of the {theAsset_}
   /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
-  function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
+  function requirePayAmountBack(address theAsset_, uint amount_) external pure override returns (uint amountOut) {
     theAsset_; // hide warning until the code below is not fixed
     amount_; // hide warning until the code below is not fixed
     amountOut; // hide warning until the code below is not fixed

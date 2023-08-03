@@ -294,7 +294,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   /// @notice Check need-rebalance and fuse-ON
   /// @return True if the hardwork should be skipped
-  function _preHardWork(bool reInvest) internal override returns (bool) {
+  function _preHardWork(bool reInvest) internal view override returns (bool) {
+    reInvest; // hide warning
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
     require(!_isFuseTriggeredOn(), AlgebraStrategyErrors.FUSE_IS_ACTIVE);
     return false;
@@ -320,7 +321,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     _updateInvestedAssets();
   }
 
-  function _isFuseTriggeredOn() internal returns (bool) {
+  function _isFuseTriggeredOn() internal view returns (bool) {
     return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
       || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
   }

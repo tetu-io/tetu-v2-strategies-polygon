@@ -282,7 +282,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Check need-rebalance and fuse-ON
   /// @return True if the hardwork should be skipped
-  function _preHardWork(bool reInvest) internal override returns (bool) {
+  function _preHardWork(bool reInvest) internal view override returns (bool) {
+    reInvest; // hide warning
     require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
     require(!_isFuseTriggeredOn(), Uni3StrategyErrors.FUSE_IS_ACTIVE);
     return false;
@@ -308,7 +309,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     _updateInvestedAssets();
   }
 
-  function _isFuseTriggeredOn() internal returns (bool) {
+  function _isFuseTriggeredOn() internal view returns (bool) {
     return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
         || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
   }

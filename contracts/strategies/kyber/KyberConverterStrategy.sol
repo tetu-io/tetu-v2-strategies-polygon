@@ -298,7 +298,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   /// @notice Check need-rebalance and fuse-ON
   /// @return True if the hardwork should be skipped
-  function _preHardWork(bool reInvest) internal override returns (bool) {
+  function _preHardWork(bool reInvest) internal view override returns (bool) {
+    reInvest; // hide warning
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
     require(!_isFuseTriggeredOn(), KyberStrategyErrors.FUSE_IS_ACTIVE);
     return false;
@@ -327,7 +328,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     _updateInvestedAssets();
   }
 
-  function _isFuseTriggeredOn() internal returns (bool) {
+  function _isFuseTriggeredOn() internal view returns (bool) {
     return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
       || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
   }
