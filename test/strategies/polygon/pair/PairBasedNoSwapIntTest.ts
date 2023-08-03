@@ -728,8 +728,8 @@ describe('PairBasedNoSwapIntTest', function() {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      // { name: PLATFORM_UNIV3, },
-      // { name: PLATFORM_ALGEBRA, },
+      { name: PLATFORM_UNIV3, },
+      { name: PLATFORM_ALGEBRA, },
       { name: PLATFORM_KYBER, }
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
