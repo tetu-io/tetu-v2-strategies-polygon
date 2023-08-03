@@ -51,7 +51,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint returnedAssetAmount,
     uint leftover
   ) {
-    return ConverterStrategyBaseLib.closePosition(converter, collateralAsset, borrowAsset, amountToRepay);
+    return ConverterStrategyBaseLib.closePosition(_csbs.converter, collateralAsset, borrowAsset, amountToRepay);
   }
 
   function updateInvestedAssetsTestAccess() external {
@@ -356,7 +356,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   ) {
     return ConverterStrategyBaseLib.recycle(
       baseState,
-      converter,
+      _csbs.converter,
       _depositorPoolAssets(),
       controller(),
       liquidationThresholds,

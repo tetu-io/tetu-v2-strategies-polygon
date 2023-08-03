@@ -9,7 +9,6 @@ import "./AlgebraConverterStrategyLogicLib.sol";
 import "../../libs/BorrowLib.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 library AlgebraDebtLib {
   using SafeERC20 for IERC20;
@@ -75,10 +74,7 @@ library AlgebraDebtLib {
     int24 upperTick,
     bool depositorSwapTokens
   ) public view returns (bytes memory entryData) {
-    console.log("AlgebraDebtLib.getEntryData");
     (uint prop0, uint prop1) = getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
-    console.log("AlgebraDebtLib.getEntryData.prop0", prop0);
-    console.log("AlgebraDebtLib.getEntryData.prop1", prop1);
     entryData = abi.encode(1, prop0, prop1);
   }
 //endregion  -------------------------------------------- Entry data

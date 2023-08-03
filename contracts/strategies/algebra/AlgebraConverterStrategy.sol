@@ -9,7 +9,6 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "./AlgebraStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
@@ -103,13 +102,13 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    return AlgebraConverterStrategyLogicLib.isReadyToHardWork(state, converter, controller());
+    return AlgebraConverterStrategyLogicLib.isReadyToHardWork(state, _csbs.converter, controller());
   }
 
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
-    return AlgebraConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter);
+    return AlgebraConverterStrategyLogicLib.needStrategyRebalance(state.pair, _csbs.converter);
   }
 
   /// @notice Returns the current state of the contract
@@ -152,7 +151,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = AlgebraConverterStrategyLogicLib.rebalanceNoSwaps(
       state.pair,
-      [address(converter), address(AppLib._getLiquidator(_controller))],
+      [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
@@ -180,7 +179,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       planEntryData,
       amountsOut,
       controller(),
-      converter,
+      _csbs.converter,
       liquidationThresholds
     );
   }
@@ -214,7 +213,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
     (completed, tokenAmounts) = AlgebraConverterStrategyLogicLib.withdrawByAggStep(
-      [tokenToSwap_, aggregator_, controller(), address(converter), baseState.splitter],
+      [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
       planEntryData,

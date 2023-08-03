@@ -9,7 +9,6 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -105,13 +104,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state.pair, converter);
+    return UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state.pair, _csbs.converter);
   }
 
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if {rebalanceNoSwaps} should be called.
   function needRebalance() public view override returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter);
+    return UniswapV3ConverterStrategyLogicLib.needStrategyRebalance(state.pair, _csbs.converter);
   }
 
   /// @notice Returns the current state of the contract
@@ -139,7 +138,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state.pair,
-      [address(converter), address(AppLib._getLiquidator(_controller))],
+      [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
@@ -167,7 +166,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       planEntryData,
       amountsOut,
       controller(),
-      converter,
+      _csbs.converter,
       liquidationThresholds
     );
   }
@@ -201,16 +200,13 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
     (completed, tokenAmounts) = UniswapV3ConverterStrategyLogicLib.withdrawByAggStep(
-      [tokenToSwap_, aggregator_, controller(), address(converter), baseState.splitter],
+      [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
       planEntryData,
       state.pair,
       liquidationThresholds
     );
-    console.log("withdrawByAggStep.completed", completed);
-    console.log("withdrawByAggStep.tokenAmounts[0]", tokenAmounts.length > 0 ? tokenAmounts[0] : 12345);
-    console.log("withdrawByAggStep.tokenAmounts[1]", tokenAmounts.length > 1 ? tokenAmounts[1] : 12345);
 
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
@@ -219,7 +215,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view override returns (uint) {
-    console.log("getPropNotUnderlying18", UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state.pair));
     return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
   }
   //endregion ------------------------------------ Withdraw by iterations
@@ -308,7 +303,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Make actions after rebalance: depositor enter, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
     if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
-      console.log("_depositorEnter");
       _depositorEnter(tokenAmounts);
     }
     _updateInvestedAssets();

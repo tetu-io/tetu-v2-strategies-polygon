@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
@@ -181,27 +180,20 @@ library IterationPlanLib {
     uint amountToSwap,
     uint indexToRepayPlus1
   ) {
-    console.log("_buildIterationPlan");
     GetIterationPlanLocal memory v;
     v.asset = p.tokens[indexAsset];
     v.token = p.tokens[indexToken];
 
     v.assetBalance = IERC20(v.asset).balanceOf(address(this)) + p.balanceAdditions[indexAsset];
     v.tokenBalance = IERC20(p.tokens[indexToken]).balanceOf(address(this)) + p.balanceAdditions[indexToken];
-    console.log("_buildIterationPlan.v.assetBalance", v.assetBalance);
-    console.log("_buildIterationPlan.v.tokenBalance", v.tokenBalance);
 
     if (p.planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
-      console.log("_buildIterationPlan.2");
       v.swapLeftoversNeeded = true;
     } else {
-      console.log("_buildIterationPlan.3");
       if (requestedAmount < AppLib._getLiquidationThreshold(p.liquidationThresholds[indexAsset])) {
         // we don't need to repay any debts anymore, but we should swap leftovers
-        console.log("_buildIterationPlan.4");
         v.swapLeftoversNeeded = true;
       } else {
-        console.log("_buildIterationPlan.5");
         // we need to increase balance on the following amount: requestedAmount - v.balance;
         // we can have two possible borrows:
         // 1) direct (p.tokens[INDEX_ASSET] => tokens[i]) and 2) reverse (tokens[i] => p.tokens[INDEX_ASSET])
@@ -210,27 +202,19 @@ library IterationPlanLib {
 
         // reverse debt
         (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
-        console.log("_buildIterationPlan.v.debtReverse", v.debtReverse);
-        console.log("_buildIterationPlan.v.collateralReverse", v.collateralReverse);
 
         if (v.debtReverse == 0) {
-          console.log("_buildIterationPlan.6");
           // direct debt
           (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
-          console.log("_buildIterationPlan.v.totalDebt", v.totalDebt);
-          console.log("_buildIterationPlan.v.totalCollateral", v.totalCollateral);
 
           if (v.totalDebt == 0) {
-            console.log("_buildIterationPlan.7");
             // This is final iteration - we need to swap leftovers and get amounts on balance in proper proportions.
             // The leftovers should be swapped to get following result proportions of the assets:
             //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18
             v.swapLeftoversNeeded = true;
           } else {
-            console.log("_buildIterationPlan.8");
             // repay direct debt
             if (p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
-              console.log("_buildIterationPlan.8.1");
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
                 p,
                 [v.assetBalance, v.tokenBalance],
@@ -239,9 +223,7 @@ library IterationPlanLib {
                 v.totalCollateral,
                 v.totalDebt
               );
-              console.log("_buildIterationPlan.amountToSwap", amountToSwap);
             } else {
-              console.log("_buildIterationPlan.8.2");
               (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
                 requestedAmount,
                 p,
@@ -252,14 +234,11 @@ library IterationPlanLib {
                 v.assetBalance,
                 v.tokenBalance
               );
-              console.log("_buildIterationPlan.amountToSwap", amountToSwap);
             }
           }
         } else {
-          console.log("_buildIterationPlan.9");
           // repay reverse debt
           if (p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY) {
-            console.log("_buildIterationPlan.9.1");
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanRepaySwapRepay(
               p,
               [v.tokenBalance, v.assetBalance],
@@ -268,9 +247,7 @@ library IterationPlanLib {
               v.collateralReverse,
               v.debtReverse
             );
-            console.log("_buildIterationPlan.amountToSwap", amountToSwap);
           } else {
-            console.log("_buildIterationPlan.9.2");
             (indexToSwapPlus1, amountToSwap, indexToRepayPlus1) = _buildPlanForSellAndRepay(
               requestedAmount == type(uint).max
                 ? type(uint).max
@@ -283,18 +260,13 @@ library IterationPlanLib {
               v.tokenBalance,
               v.assetBalance
             );
-            console.log("_buildIterationPlan.amountToSwap", amountToSwap);
           }
         }
       }
     }
 
     if (v.swapLeftoversNeeded) {
-      console.log("_buildIterationPlan.swapLeftoversNeeded.p.propNotUnderlying18", p.propNotUnderlying18);
-      console.log("_buildIterationPlan.swapLeftoversNeeded.p.v.assetBalance", v.assetBalance);
-      console.log("_buildIterationPlan.swapLeftoversNeeded.p.v.tokenBalance", v.tokenBalance);
       (indexToSwapPlus1, amountToSwap) = _buildPlanForLeftovers(p, v.assetBalance, v.tokenBalance, indexAsset, indexToken, p.propNotUnderlying18);
-      console.log("_buildIterationPlan.swapLeftoversNeeded.amountToSwap", amountToSwap);
     }
 
     return (indexToSwapPlus1, amountToSwap, indexToRepayPlus1);

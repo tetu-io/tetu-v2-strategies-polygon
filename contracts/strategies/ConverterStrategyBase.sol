@@ -6,7 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-import "hardhat/console.sol";
+
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -19,9 +19,19 @@ import "hardhat/console.sol";
 abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV3 {
   using SafeERC20 for IERC20;
 
-  /////////////////////////////////////////////////////////////////////
-  //region DATA TYPES
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- DATA TYPES
+  struct ConverterStrategyBaseState {
+    /// @dev Amount of underlying assets invested to the pool.
+    uint investedAssets;
+
+    /// @dev Linked Tetu Converter
+    ITetuConverter converter;
+
+    /// @notice Percent of asset amount that can be not invested, it's allowed to just keep it on balance
+    ///         decimals = {DENOMINATOR}
+    /// @dev We need this threshold to avoid numerous conversions of small amounts
+    uint reinvestThresholdPercent;
+  }
 
   struct WithdrawUniversalLocal {
     bool all;
@@ -42,11 +52,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint[] withdrawnAmounts;
     ITetuConverter converter;
   }
-  //endregion DATA TYPES
+  //endregion -------------------------------------------------------- DATA TYPES
 
-  /////////////////////////////////////////////////////////////////////
-  //region CONSTANTS
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.0";
@@ -55,33 +63,33 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
   uint internal constant GAP_CONVERSION = 1_000;
   uint internal constant DENOMINATOR = 100_000;
-  //endregion CONSTANTS
+  //endregion -------------------------------------------------------- CONSTANTS
 
+  //region -------------------------------------------------------- VARIABLES
   /////////////////////////////////////////////////////////////////////
-  //region VARIABLES
   //                Keep names and ordering!
   // Add only in the bottom and don't forget to decrease gap variable
   /////////////////////////////////////////////////////////////////////
-
-  /// @dev Amount of underlying assets invested to the pool.
-  uint internal _investedAssets;
-
-  /// @dev Linked Tetu Converter
-  ITetuConverter public converter;
 
   /// @notice Minimum token amounts that can be liquidated
   /// @dev These thresholds are used to workaround dust problems in many other cases, not during liquidation only
   mapping(address => uint) public liquidationThresholds;
 
-  /// @notice Percent of asset amount that can be not invested, it's allowed to just keep it on balance
-  ///         decimals = {DENOMINATOR}
-  /// @dev We need this threshold to avoid numerous conversions of small amounts
-  uint public reinvestThresholdPercent;
-  //endregion VARIABLES
+  /// @notice Internal variables of ConverterStrategyBase
+  ConverterStrategyBaseState internal _csbs;
+  //endregion -------------------------------------------------------- VARIABLES
 
-  /////////////////////////////////////////////////////////////////////
-  //region Events
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Getters
+  function converter() external view returns (ITetuConverter) {
+    return _csbs.converter;
+  }
+
+  function reinvestThresholdPercent() external view returns (uint) {
+    return _csbs.reinvestThresholdPercent;
+  }
+  //endregion -------------------------------------------------------- Getters
+
+  //region -------------------------------------------------------- Events
   event OnDepositorEnter(uint[] amounts, uint[] consumedAmounts);
   event OnDepositorExit(uint liquidityAmount, uint[] withdrawnAmounts);
   event OnDepositorEmergencyExit(uint[] withdrawnAmounts);
@@ -93,11 +101,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint earnedDeposit,
     uint lostDeposit
   );
-  //endregion Events
+  //endregion -------------------------------------------------------- Events
 
-  /////////////////////////////////////////////////////////////////////
-  //region Initialization and configuration
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Initialization and configuration
 
   /// @notice Initialize contract after setup it as proxy implementation
   function __ConverterStrategyBase_init(
@@ -106,10 +112,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     address converter_
   ) internal onlyInitializing {
     __StrategyBase_init(controller_, splitter_);
-    converter = ITetuConverter(converter_);
+    _csbs.converter = ITetuConverter(converter_);
 
     // 1% by default
-    reinvestThresholdPercent = DENOMINATOR / 100;
+    _csbs.reinvestThresholdPercent = DENOMINATOR / 100;
     emit ConverterStrategyBaseLib2.ReinvestThresholdPercentChanged(DENOMINATOR / 100);
   }
 
@@ -121,24 +127,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param percent_ New value of the percent, decimals = {REINVEST_THRESHOLD_PERCENT_DENOMINATOR}
   function setReinvestThresholdPercent(uint percent_) external {
     ConverterStrategyBaseLib2.checkReinvestThresholdPercentChanged(controller(), percent_);
-    reinvestThresholdPercent = percent_;
+    _csbs.reinvestThresholdPercent = percent_;
   }
-  //endregion Initialization and configuration
+  //endregion -------------------------------------------------------- Initialization and configuration
 
-  /////////////////////////////////////////////////////////////////////
-  //region Deposit to the pool
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Deposit to the pool
 
   /// @notice Amount of underlying assets converted to pool assets and invested to the pool.
   function investedAssets() override public view virtual returns (uint) {
-    return _investedAssets;
+    return _csbs.investedAssets;
   }
 
   /// @notice Deposit given amount to the pool.
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ){
-    console.log("ConverterStrategyBase._depositToPool");
     (uint updatedInvestedAssets, uint earnedByPrices) = _fixPriceChanges(updateTotalAssetsBeforeInvest_);
     (strategyLoss,) = _depositToPoolUniversal(amount_, earnedByPrices, updatedInvestedAssets);
   }
@@ -155,7 +158,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ){
-    console.log("ConverterStrategyBase._depositToPoolUniversal.1");
     address _asset = baseState.asset;
 
     uint amountToDeposit = amount_ > earnedByPrices_
@@ -163,10 +165,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       : 0;
 
     // skip deposit for small amounts
-    bool needToDeposit = amountToDeposit > reinvestThresholdPercent * investedAssets_ / DENOMINATOR;
+    bool needToDeposit = amountToDeposit > _csbs.reinvestThresholdPercent * investedAssets_ / DENOMINATOR;
     uint balanceBefore = AppLib.balance(_asset);
 
-    console.log("ConverterStrategyBase._depositToPoolUniversal.2.needToDeposit", needToDeposit);
     // send earned-by-prices to the insurance
     if (earnedByPrices_ != 0) {
 
@@ -177,22 +178,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
       }
     }
-    console.log("ConverterStrategyBase._depositToPoolUniversal.3");
 
     // make deposit
     if (needToDeposit) {
-      console.log("ConverterStrategyBase._depositToPoolUniversal.4");
       (address[] memory tokens, uint indexAsset) = _getTokens(_asset);
 
       // prepare array of amounts ready to deposit, borrow missed amounts
-      uint[] memory amounts = _beforeDeposit(converter, amountToDeposit, tokens, indexAsset);
+      uint[] memory amounts = _beforeDeposit(_csbs.converter, amountToDeposit, tokens, indexAsset);
 
-      console.log("ConverterStrategyBase._depositToPoolUniversal.5");
       // make deposit, actually consumed amounts can be different from the desired amounts
       if (!ConverterStrategyBaseLib2.findZeroAmount(amounts, tokens, liquidationThresholds)) {
         // we cannot enter to pool if at least one of amounts is zero or less then the threshold
         (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
-        console.log("ConverterStrategyBase._depositToPoolUniversal.6");
         emit OnDepositorEnter(amounts, consumedAmounts);
       }
 
@@ -204,17 +201,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         investedAssets_ + balanceBefore,
         investedAssetsAfter + AppLib.balance(_asset) + amountSentToInsurance
       );
-      console.log("ConverterStrategyBase._depositToPoolUniversal.7");
     }
 
-    console.log("ConverterStrategyBase._depositToPoolUniversal.8");
     return (strategyLoss, amountSentToInsurance);
   }
-  //endregion Deposit to the pool
+  //endregion -------------------------------------------------------- Deposit to the pool
 
-  /////////////////////////////////////////////////////////////////////
-  //region Convert amounts before deposit
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Convert amounts before deposit
 
   /// @notice Prepare {tokenAmounts} to be passed to depositorEnter
   /// @dev Override this function to customize entry kind
@@ -242,11 +235,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       liquidationThresholds
     );
   }
-  //endregion Convert amounts before deposit
+  //endregion -------------------------------------------------------- Convert amounts before deposit
 
-  /////////////////////////////////////////////////////////////////////
-  //region Withdraw from the pool
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Withdraw from the pool
 
   function _beforeWithdraw(uint /*amount*/) internal virtual {
     // do nothing
@@ -303,7 +294,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // --- init variables ---
       v.tokens = _depositorPoolAssets();
       v.asset = baseState.asset;
-      v.converter = converter;
+      v.converter = _csbs.converter;
       v.indexAsset = AppLib.getAssetIndex(v.tokens, v.asset);
       v.balanceBefore = AppLib.balance(v.asset);
 
@@ -408,7 +399,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // convert amounts to main asset
     (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
     ConverterStrategyBaseLib.closePositionsToGetAmount(
-      converter,
+      _csbs.converter,
       AppLib._getLiquidator(controller()),
       indexAsset,
       liquidationThresholds,
@@ -419,11 +410,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // adjust _investedAssets
     _updateInvestedAssets();
   }
-  //endregion Withdraw from the pool
+  //endregion -------------------------------------------------------- Withdraw from the pool
 
-  /////////////////////////////////////////////////////////////////////
-  //region Claim rewards
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Claim rewards
 
   /// @notice Claim all possible rewards.
   function _claim() override internal virtual returns (address[] memory rewardTokensOut, uint[] memory amountsOut) {
@@ -431,7 +420,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (address[] memory rewardTokens, uint[] memory rewardAmounts, uint[] memory balancesBefore) = _depositorClaimRewards();
 
     (rewardTokensOut, amountsOut) = ConverterStrategyBaseLib2.claimConverterRewards(
-      converter,
+      _csbs.converter,
       _depositorPoolAssets(),
       rewardTokens,
       rewardAmounts,
@@ -442,11 +431,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev Call recycle process and send tokens to forwarder.
   ///      Need to be separated from the claim process - the claim can be called by operator for other purposes.
   function _rewardsLiquidation(address[] memory rewardTokens_, uint[] memory rewardAmounts_) internal {
-    console.log("_rewardsLiquidation");
     if (rewardTokens_.length != 0) {
       ConverterStrategyBaseLib.recycle(
         baseState,
-        converter,
+        _csbs.converter,
         _depositorPoolAssets(),
         controller(),
         liquidationThresholds,
@@ -455,11 +443,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       );
     }
   }
-  //endregion Claim rewards
+  //endregion -------------------------------------------------------- Claim rewards
 
-  /////////////////////////////////////////////////////////////////////
-  //region Hardwork
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Hardwork
 
   /// @notice A virtual handler to make any action before hardwork
   /// @return True if the hardwork should be skipped
@@ -491,35 +477,29 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
-    console.log("ConverterStrategyBase._doHardWork");
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
 
-    console.log("ConverterStrategyBase._doHardWork.1");
     if (!_preHardWork(reInvest)) {
-      console.log("ConverterStrategyBase._doHardWork.2");
 
       // claim rewards and get current asset balance
       uint assetBalance;
       (earned, lost, assetBalance) = _handleRewards();
-      console.log("ConverterStrategyBase._doHardWork.3");
 
       // re-invest income
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
         && investedAssetsNewPrices != 0
-        && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
+        && assetBalance > _csbs.reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
           ? assetBalance
           : 0,
         earnedByPrices,
         investedAssetsNewPrices
       );
-      console.log("ConverterStrategyBase._doHardWork.4");
       (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(
         investedAssetsNewPrices + assetBalance, // assets in use before deposit
-        _investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
+        _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
-      console.log("ConverterStrategyBase._doHardWork.5");
 
       _postHardWork();
 
@@ -529,17 +509,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       return (0, 0);
     }
   }
-  //endregion Hardwork
+  //endregion -------------------------------------------------------- Hardwork
 
-  /////////////////////////////////////////////////////////////////////
-  //region InvestedAssets Calculations
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- InvestedAssets Calculations
 
   /// @notice Updates cached _investedAssets to actual value
   /// @dev Should be called after deposit / withdraw / claim; virtual - for ut
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
     investedAssetsOut = _calcInvestedAssets();
-    _investedAssets = investedAssetsOut;
+    _csbs.investedAssets = investedAssetsOut;
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
@@ -552,7 +530,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // quote exit should check zero liquidity
       _depositorQuoteExit(_depositorLiquidity()),
       indexAsset,
-      converter
+      _csbs.converter
     );
   }
 
@@ -569,19 +547,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                   So, we need to handle it in the caller code.
   function _fixPriceChanges(bool updateInvestedAssetsAmount_) internal returns (uint investedAssetsOut, uint earnedOut) {
     if (updateInvestedAssetsAmount_) {
-      uint investedAssetsBefore = _investedAssets;
+      uint investedAssetsBefore = _csbs.investedAssets;
       investedAssetsOut = _updateInvestedAssets();
       earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsOut, baseState);
     } else {
-      investedAssetsOut = _investedAssets;
+      investedAssetsOut = _csbs.investedAssets;
       earnedOut = 0;
     }
   }
-  //endregion InvestedAssets Calculations
+  //endregion -------------------------------------------------------- InvestedAssets Calculations
 
-  /////////////////////////////////////////////////////////////////////
-  //region ITetuConverterCallback
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- ITetuConverterCallback
 
   /// @notice Converters asks to send some amount back.
   /// @param theAsset_ Required asset (either collateral or borrow)
@@ -642,7 +618,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param assets_ Any asset sent to the balance, i.e. inside repayTheBorrow
   /// @param amounts_ Amount of {asset_} that has been sent to the user's balance
   function onTransferAmounts(address[] memory assets_, uint[] memory amounts_) external override {
-    require(msg.sender == address(converter), StrategyLib2.DENIED);
+    require(msg.sender == address(_csbs.converter), StrategyLib2.DENIED);
     require(assets_.length == amounts_.length, AppErrors.INCORRECT_LENGTHS);
 
     // TetuConverter is able two call this function in two cases:
@@ -652,11 +628,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // and avoid fixing any related losses in hardwork
     _updateInvestedAssets();
   }
-  //endregion ITetuConverterCallback
+  //endregion -------------------------------------------------------- ITetuConverterCallback
 
-  /////////////////////////////////////////////////////////////////////
-  //region Others
-  /////////////////////////////////////////////////////////////////////
+  //region -------------------------------------------------------- Others
 
   /// @notice Unlimited capacity by default
   function capacity() external virtual view returns (uint) {
@@ -669,7 +643,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     indexAsset = AppLib.getAssetIndex(tokens, asset_);
     require(indexAsset != type(uint).max, StrategyLib2.WRONG_VALUE);
   }
-  //endregion Others
+  //endregion -------------------------------------------------------- Others
 
 
   /// @dev This empty reserved space is put in place to allow future versions to add new

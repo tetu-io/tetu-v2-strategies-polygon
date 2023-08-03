@@ -263,14 +263,11 @@ library BorrowLib {
 
     // we are going to borrow B under A
     if (c.addonB != 0) {
-      console.log("BorrowLib.openPosition.1");
       // B is underlying, so we are going to borrow underlying
       if (balanceB_ >= c.addonB) {
-        console.log("BorrowLib.openPosition.2");
         // simple case - we already have required addon on the balance. Just keep it unused
         return _openPosition(c, balanceA_, balanceB_ - c.addonB);
       } else {
-        console.log("BorrowLib.openPosition.3");
         // we need to get 1) (c.addonB + balanceB_) amount, so we will have required c.addonB
         //                2) leftovers of A and B should be allocated in required proportions
         // it's too hard to calculate correctly required to borrow amount in this case without changing TetuConverter
@@ -281,13 +278,11 @@ library BorrowLib {
         return _openPosition(c, balanceA_ - decA, balanceB_);
       }
     } else if (c.addonA != 0) {
-      console.log("BorrowLib.openPosition.4");
       // A is underlying, we need to put aside c.addonA and allocate leftovers in right proportions.
       // we are going to borrow B under asset A, so the case (balanceA_ < c.addonA) is not valid here
       require(balanceA_ >= c.addonA, AppErrors.NOT_ENOUGH_BALANCE);
       return _openPosition(c, balanceA_ - c.addonA, balanceB_);
     } else {
-      console.log("BorrowLib.openPosition.5");
       // simple logic, no addons
       return _openPosition(c, balanceA_, balanceB_);
     }
@@ -301,10 +296,7 @@ library BorrowLib {
     uint untouchedAmountA;
     bytes memory entryData = abi.encode(1, c.propA, c.propB);
 
-    console.log("BorrowLib._openPosition.balanceA_", balanceA_);
-    console.log("BorrowLib._openPosition.balanceB_", balanceB_);
     if (balanceB_ != 0) {
-      console.log("BorrowLib._openPosition.1");
       // we are going to use {balanceA_} as collateral
       // but there is some amount on {balanceB_}, so we need to keep corresponded part of {balanceA_} untouched
       untouchedAmountA = balanceB_ * c.alpha18 * c.propA / c.propB / 1e18;
@@ -312,10 +304,6 @@ library BorrowLib {
       // we are going to borrow B under A, so balance A must be greater then balance B
       // otherwise the function is called incorrectly - probably we need to borrow A under B
       require(untouchedAmountA <= balanceA_, AppErrors.WRONG_VALUE);
-      console.log("BorrowLib._openPosition.untouchedAmountA", untouchedAmountA);
-      console.log("BorrowLib._openPosition.c.propA", c.propA);
-      console.log("BorrowLib._openPosition.c.propB", c.propB);
-      console.log("BorrowLib._openPosition.c.alpha18", c.alpha18);
     }
 
     AppLib.approveIfNeeded(c.assetA, balanceA_ - untouchedAmountA, address(c.converterLiquidator.converter));

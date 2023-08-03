@@ -110,7 +110,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
     (bool needStake, bool needUnstake) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
-    return KyberConverterStrategyLogicLib.needStrategyRebalance(state.pair, converter) || needStake || needUnstake;
+    return KyberConverterStrategyLogicLib.needStrategyRebalance(state.pair, _csbs.converter) || needStake || needUnstake;
   }
 
   function canFarm() external view returns (bool) {
@@ -156,7 +156,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
       state.pair,
-      [address(converter), address(AppLib._getLiquidator(_controller))],
+      [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
       baseState.splitter,
@@ -184,7 +184,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       planEntryData,
       amountsOut,
       controller(),
-      converter,
+      _csbs.converter,
       liquidationThresholds
     );
   }
@@ -218,7 +218,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
     (completed, tokenAmounts) = KyberConverterStrategyLogicLib.withdrawByAggStep(
-      [tokenToSwap_, aggregator_, controller(), address(converter), baseState.splitter],
+      [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
       planEntryData,

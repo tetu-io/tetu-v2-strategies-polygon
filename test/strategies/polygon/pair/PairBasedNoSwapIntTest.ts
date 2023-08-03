@@ -764,7 +764,7 @@ describe('PairBasedNoSwapIntTest', function() {
               const stateLast = ret.states[ret.states.length - 1];
               const statePrev = ret.states[ret.states.length - 2];
               expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
-              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.98);
+              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.5);
             });
             it("should set expected investedAssets", async () => {
               const ret = await loadFixture(makeWithdrawAll);

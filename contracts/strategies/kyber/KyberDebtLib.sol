@@ -135,9 +135,6 @@ library KyberDebtLib {
   ) external {
     (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRangeForTick(tick, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
     (uint prop0, uint prop1) = getEntryDataProportions(IPool(pairState.pool), newLowerTick, newUpperTick, pairState.depositorSwapTokens);
-    console.log("rebalanceNoSwaps.prop0", prop0);
-    console.log("rebalanceNoSwaps.prop1", prop1);
-    console.log("rebalanceNoSwaps.prop0 * BorrowLib.SUM_PROPORTIONS / (prop0 + prop1)", prop0 * BorrowLib.SUM_PROPORTIONS / (prop0 + prop1));
     PairBasedStrategyLogicLib.rebalanceNoSwaps(
       converterLiquidator,
       pairState,

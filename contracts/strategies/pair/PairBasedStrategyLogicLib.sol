@@ -5,7 +5,6 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "./PairBasedStrategyLib.sol";
 import "../ConverterStrategyBaseLib2.sol";
-import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 library PairBasedStrategyLogicLib {
@@ -84,7 +83,6 @@ library PairBasedStrategyLogicLib {
   ) external returns (
     uint[] memory tokenAmounts
   ) {
-    console.log("PairBasedStrategyLogicLib._beforeDeposit.amount_", amount_);
     tokenAmounts = new uint[](2);
     uint spentCollateral;
 
@@ -97,16 +95,10 @@ library PairBasedStrategyLogicLib {
       amount_,
       liquidationThresholds[tokenA] // amount_ is set in terms of collateral asset
     );
-    console.log("PairBasedStrategyLogicLib._beforeDeposit.tokenAmounts[1]", tokenAmounts[1]);
-    console.log("PairBasedStrategyLogicLib._beforeDeposit.spentCollateral", spentCollateral);
-    console.log("PairBasedStrategyLogicLib.liquidationThresholds[tokenA]",  liquidationThresholds[tokenA]);
-    console.log("PairBasedStrategyLogicLib.tokenA",  tokenA);
-    console.log("PairBasedStrategyLogicLib.tokenB",  tokenB);
 
     tokenAmounts[0] = amount_ > spentCollateral
       ? amount_ - spentCollateral
       : 0;
-    console.log("PairBasedStrategyLogicLib._beforeDeposit.tokenAmounts[0]", tokenAmounts[0] );
   }
 
   /// @notice Initialize {dest} in place. Underlying is always first in {dest.tokens}.
@@ -327,9 +319,6 @@ library PairBasedStrategyLogicLib {
     v.amountToSwap = values_[0];
     v.profitToCover = values_[1];
     v.oldTotalAssets = values_[2];
-    console.log("withdrawByAggStep.v.oldTotalAssets", v.oldTotalAssets);
-    console.log("withdrawByAggStep.profitToCover", v.profitToCover);
-    console.log("withdrawByAggStep.amountToSwap", v.amountToSwap);
 
     // initialize v
     PairBasedStrategyLogicLib.initWithdrawLocal(v.w, tokens, liquidationThresholds, planEntryData, v.controller);
@@ -360,7 +349,6 @@ library PairBasedStrategyLogicLib {
       v.w.tokens[0],
       v.w.tokens[1]
     );
-    console.log("withdrawByAggStep.loss", loss);
 
     // if {tokenAmounts} contains zero amount we should return empty array
     // this place is optimal to find zero amounts and prevent attempts to enter to the pool with zero amount
