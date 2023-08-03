@@ -296,9 +296,12 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
   }
 
-  function _preHardWork(bool reInvest) internal override {
+  /// @notice Check need-rebalance and fuse-ON
+  /// @return True if the hardwork should be skipped
+  function _preHardWork(bool reInvest) internal override returns (bool) {
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
     require(!_isFuseTriggeredOn(), KyberStrategyErrors.FUSE_IS_ACTIVE);
+    return false;
   }
 
   /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit

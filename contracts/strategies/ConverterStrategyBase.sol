@@ -462,7 +462,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /////////////////////////////////////////////////////////////////////
 
   /// @notice A virtual handler to make any action before hardwork
-  function _preHardWork(bool reInvest) internal virtual {}
+  /// @return True if the hardwork should be skipped
+  function _preHardWork(bool reInvest) internal virtual returns (bool) {
+    return false;
+  }
 
   /// @notice A virtual handler to make any action after hardwork
   function _postHardWork() internal virtual {}
@@ -493,35 +496,38 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
 
     console.log("ConverterStrategyBase._doHardWork.1");
-    _preHardWork(reInvest);
-    console.log("ConverterStrategyBase._doHardWork.2");
+    if (!_preHardWork(reInvest)) {
+      console.log("ConverterStrategyBase._doHardWork.2");
 
-    // claim rewards and get current asset balance
-    uint assetBalance;
-    (earned, lost, assetBalance) = _handleRewards();
-    console.log("ConverterStrategyBase._doHardWork.3");
+      // claim rewards and get current asset balance
+      uint assetBalance;
+      (earned, lost, assetBalance) = _handleRewards();
+      console.log("ConverterStrategyBase._doHardWork.3");
 
-    // re-invest income
-    (, uint amountSentToInsurance) = _depositToPoolUniversal(
-      reInvest
-      && investedAssetsNewPrices != 0
-      && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
-        ? assetBalance
-        : 0,
-      earnedByPrices,
-      investedAssetsNewPrices
-    );
-    console.log("ConverterStrategyBase._doHardWork.4");
-    (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(
-      investedAssetsNewPrices + assetBalance, // assets in use before deposit
-      _investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
-    );
-    console.log("ConverterStrategyBase._doHardWork.5");
+      // re-invest income
+      (, uint amountSentToInsurance) = _depositToPoolUniversal(
+        reInvest
+        && investedAssetsNewPrices != 0
+        && assetBalance > reinvestThresholdPercent * investedAssetsNewPrices / DENOMINATOR
+          ? assetBalance
+          : 0,
+        earnedByPrices,
+        investedAssetsNewPrices
+      );
+      console.log("ConverterStrategyBase._doHardWork.4");
+      (uint earned2, uint lost2) = ConverterStrategyBaseLib2._registerIncome(
+        investedAssetsNewPrices + assetBalance, // assets in use before deposit
+        _investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
+      );
+      console.log("ConverterStrategyBase._doHardWork.5");
 
-    _postHardWork();
+      _postHardWork();
 
-    emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
-    return (earned + earned2, lost + lost2);
+      emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
+      return (earned + earned2, lost + lost2);
+    } else {
+      return (0, 0);
+    }
   }
   //endregion Hardwork
 
