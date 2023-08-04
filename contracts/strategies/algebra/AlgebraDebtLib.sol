@@ -64,8 +64,8 @@ library AlgebraDebtLib {
     // calculate proportions
     (uint consumed0, uint consumed1,) = AlgebraLib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
     return depositorSwapTokens
-      ? (consumed1 * token1Price / token1Desired, consumed0)
-      : (consumed0, consumed1 * token1Price / token1Desired);
+      ? (1e18*consumed1 * token1Price / token1Desired, 1e18*consumed0)
+      : (1e18*consumed0, 1e18*consumed1 * token1Price / token1Desired);
   }
 
   function getEntryData(
