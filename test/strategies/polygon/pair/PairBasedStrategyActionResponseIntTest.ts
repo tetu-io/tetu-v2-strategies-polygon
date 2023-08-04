@@ -291,6 +291,18 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           expect(stateAfter.strategy.investedAssets).lt(10);
         });
+        it("isReadyToHardWork should return expected values", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(
+            b.strategy.address,
+            await Misc.impersonate(b.splitter.address)
+          );
+
+          expect(converterStrategyBase.isReadyToHardWork()).eq(false);
+          // put additional asset on balance of the strategy (to be able to run real hardwork)
+          await TokenUtils.getToken(b.asset, b.strategy.address, parseUnits('2000', 6));
+          expect(converterStrategyBase.isReadyToHardWork()).eq(true);
+        });
       });
     });
   });
@@ -431,6 +443,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           expect(stateAfter.strategy.investedAssets).lt(10);
         });
+        it("isReadyToHardWork should return false even if hardwork is really necessary", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(
+            b.strategy.address,
+            await Misc.impersonate(b.splitter.address)
+          );
+
+          expect(converterStrategyBase.isReadyToHardWork()).eq(false);
+          // put additional asset on balance of the strategy (to be able to run real hardwork)
+          await TokenUtils.getToken(b.asset, b.strategy.address, parseUnits('2000', 6));
+
+          expect(converterStrategyBase.isReadyToHardWork()).eq(false); // fuse is active, so no changes in results
+        });
       });
     });
   });
@@ -567,6 +592,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
           expect(stateAfter.strategy.investedAssets).lt(10);
+        });
+        it("isReadyToHardWork should return false even if hardwork is really necessary", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(
+            b.strategy.address,
+            await Misc.impersonate(b.splitter.address)
+          );
+
+          expect(converterStrategyBase.isReadyToHardWork()).eq(false);
+          // put additional asset on balance of the strategy (to be able to run real hardwork)
+          await TokenUtils.getToken(b.asset, b.strategy.address, parseUnits('2000', 6));
+
+          expect(converterStrategyBase.isReadyToHardWork()).eq(false); // need rebalance is still true, so no changes in results
         });
       });
     });

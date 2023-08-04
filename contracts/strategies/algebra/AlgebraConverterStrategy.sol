@@ -102,7 +102,9 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    return AlgebraConverterStrategyLogicLib.isReadyToHardWork(state, _csbs.converter, controller());
+    return !needRebalance()
+    && !_isFuseTriggeredOn()
+    && AlgebraConverterStrategyLogicLib.isReadyToHardWork(state, _csbs.converter, controller());
   }
 
   /// @notice Check if the strategy needs rebalancing.

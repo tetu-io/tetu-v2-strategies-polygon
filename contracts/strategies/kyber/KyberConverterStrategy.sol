@@ -106,6 +106,12 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   //region --------------------------------------------- METRIC VIEWS
 
+  /// @notice Check if the strategy is ready for hard work.
+  /// @return A boolean indicating if the strategy is ready for hard work.
+  function isReadyToHardWork() override external virtual view returns (bool) {
+    return !needRebalance() && !_isFuseTriggeredOn();
+  }
+
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {

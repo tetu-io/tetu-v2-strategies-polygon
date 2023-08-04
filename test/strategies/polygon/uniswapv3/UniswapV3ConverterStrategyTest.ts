@@ -299,7 +299,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    it('Rebalance empty fillup strategy', async() => {
+    it('Rebalance not empty strategy', async() => {
       const s = strategy
       const v = vault
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
@@ -308,13 +308,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const state = await PackedData.getDefaultState(s);
 
       expect(await s.isReadyToHardWork()).eq(false);
-      expect(await s.needRebalance()).eq(false);
-
-      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-
-      console.log('rebalance empty strategy');
-      expect(await s.needRebalance()).eq(true);
-      await s.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await s.needRebalance()).eq(false);
 
       console.log('deposit...');

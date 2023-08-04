@@ -105,7 +105,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    return UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state.pair, _csbs.converter);
+    return !needRebalance()
+    && !_isFuseTriggeredOn()
+    && UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state.pair, _csbs.converter);
   }
 
   /// @notice Check if the strategy needs rebalancing.
