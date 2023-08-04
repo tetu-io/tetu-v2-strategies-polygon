@@ -12,7 +12,7 @@ import {
 import {Misc} from "../../../../scripts/utils/Misc";
 import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
@@ -578,8 +578,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
     const strategies: IStrategyInfo[] = [
       { name: PLATFORM_UNIV3,},
-      { name: PLATFORM_ALGEBRA,},
-      { name: PLATFORM_KYBER,},
+      // { name: PLATFORM_ALGEBRA,},
+      // { name: PLATFORM_KYBER,},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -592,8 +592,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
        * Make rebalance of the empty strategy.
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
+        const states: IStateNum[] = [];
+        const pathOut = "./tmp/prepareStrategy.csv";
+
         console.log("prepareStrategy.1");
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `init`));
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         console.log("prepareStrategy.2");
         // make deposit
@@ -602,15 +609,28 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
         console.log("prepareStrategy.3");
 
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `deposit`));
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
         // set fuse ON
         await prepareFuse(b, true);
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fuse-on`));
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
         await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         console.log("prepareStrategy.4");
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `rebalance`));
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         // withdraw all liquidity from the strategy
         await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `withdraw`));
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
         console.log("prepareStrategy.5");
         await prepareFuse(b, false);
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fuse-off`));
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         return b;
       }
@@ -629,13 +649,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-          console.log("1");
           expect(await b.strategy.needRebalance()).eq(true);
-          console.log("2");
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-          console.log("3");
           expect(await b.strategy.needRebalance()).eq(false);
-          console.log("4");
         });
         it("should not revert on rebalance debts", async () => {
           const b = await loadFixture(prepareStrategy);

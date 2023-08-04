@@ -253,15 +253,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
-    console.log("_withdrawFromPool.amount", amount);
-
     // calculate profit/loss because of price changes, try to compensate the loss from the insurance
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(amount, earnedByPrices, investedAssetsNewPrices);
-
-    console.log("_withdrawFromPool.expectedWithdrewUSD", expectedWithdrewUSD);
-    console.log("_withdrawFromPool.assetPrice", assetPrice);
-    console.log("_withdrawFromPool.strategyLoss", strategyLoss);
   }
 
   /// @notice Withdraw all from the pool.
@@ -290,7 +284,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
-    console.log("_withdrawUniversal");
     _beforeWithdraw(amount);
 
     WithdrawUniversalLocal memory v;
@@ -365,7 +358,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         v.amountsToConvert,
         v.converter,
         AppLib._getLiquidator(controller()),
-        v.all ? amount : amount + earnedByPrices_,
+        v.balanceBefore + (v.all ? amount : amount + earnedByPrices_), // current balance + the amount required to be withdrawn on balance
         v.expectedMainAssetAmounts,
         liquidationThresholds
       );

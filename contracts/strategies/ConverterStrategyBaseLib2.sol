@@ -15,7 +15,6 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
-import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -528,10 +527,6 @@ library ConverterStrategyBaseLib2 {
     tokenAmounts = new uint[](2);
     tokenAmounts[0] = AppLib.balance(tokenA);
     tokenAmounts[1] = AppLib.balance(tokenB);
-    console.log("getTokenAmountsPair.tokenAmounts[0]", tokenAmounts[0]);
-    console.log("getTokenAmountsPair.tokenAmounts[1]", tokenAmounts[1]);
-    console.log("getTokenAmountsPair.liquidationThresholdsAB[0]", AppLib._getLiquidationThreshold(liquidationThresholdsAB[0]));
-    console.log("getTokenAmountsPair.liquidationThresholdsAB[1]", AppLib._getLiquidationThreshold(liquidationThresholdsAB[1]));
 
     address[] memory tokens = new address[](2);
     tokens[0] = tokenA;
