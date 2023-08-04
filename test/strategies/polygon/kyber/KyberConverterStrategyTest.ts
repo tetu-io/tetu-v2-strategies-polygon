@@ -204,7 +204,7 @@ describe('KyberConverterStrategyTest', function() {
       expect(stateSpecific.flags.needStake).eq(false)
       expect(stateSpecific.flags.needUnstake).eq(true)
 
-      await s.rebalanceNoSwaps(true)
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       expect(await s.needRebalance()).eq(false)
 
       state = await PackedData.getDefaultState(s);
@@ -275,7 +275,7 @@ describe('KyberConverterStrategyTest', function() {
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalanceNoSwaps(true)
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       expect(await s.needRebalance()).eq(false)
 
       console.log('Hardwork')
@@ -329,7 +329,7 @@ describe('KyberConverterStrategyTest', function() {
       await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       if (await s.needRebalance()) {
-        await s.rebalanceNoSwaps(true)
+        await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       }
 
       console.log('withdrawAll')

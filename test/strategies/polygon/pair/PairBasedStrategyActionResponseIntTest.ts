@@ -578,8 +578,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
     const strategies: IStrategyInfo[] = [
       { name: PLATFORM_UNIV3,},
-      // { name: PLATFORM_ALGEBRA,},
-      // { name: PLATFORM_KYBER,},
+      { name: PLATFORM_ALGEBRA,},
+      { name: PLATFORM_KYBER,},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {

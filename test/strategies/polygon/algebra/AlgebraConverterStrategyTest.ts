@@ -210,7 +210,7 @@ describe('AlgebraConverterStrategyTest', function() {
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalanceNoSwaps(true)
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       expect(await s.needRebalance()).eq(false)
 
       console.log('Hardwork')

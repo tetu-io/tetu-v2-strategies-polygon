@@ -24,6 +24,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {AlgebraLiquidityUtils} from "./utils/AlgebraLiquidityUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -179,7 +180,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
         process.exit(-1)
       }
 
-      await strategy.rebalanceNoSwaps(true)
+      await strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000})
     }
 
     expect(await s.needRebalance()).eq(false)
@@ -203,7 +204,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
       protocols: 'POLYGON_CURVE', // 'POLYGON_BALANCER_V2',
     };
 
-    const swapTransaction = await buildTxForSwap(JSON.stringify(params));
+    const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
     console.log('Transaction for swap: ', swapTransaction);
 
     await strategy.withdrawByAggStep(
@@ -218,25 +219,3 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
     expect(await s.needRebalance()).eq(false)
   })
 })
-
-function apiRequestUrl(methodName: string, queryParams: string) {
-  const chainId = hre.network.config.chainId;
-  const apiBaseUrl = 'https://api.1inch.io/v5.0/' + chainId;
-  const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
-  return apiBaseUrl + methodName + '?' + r;
-}
-
-async function buildTxForSwap(params: string, tries: number = 2) {
-  const url = apiRequestUrl('/swap', params);
-  console.log('url', url)
-  for (let i = 0; i < tries; i++) {
-    try {
-      const r = await fetch(url)
-      if (r && r.status === 200) {
-        return (await r.json()).tx
-      }
-    } catch (e) {
-      console.error('Err', e)
-    }
-  }
-}

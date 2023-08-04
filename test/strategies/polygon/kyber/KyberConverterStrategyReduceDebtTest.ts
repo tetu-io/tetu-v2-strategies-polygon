@@ -172,7 +172,7 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
         process.exit(-1)
       }
 
-      await strategy.rebalanceNoSwaps(true)
+      await strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
     }
 
     expect(await s.needRebalance()).eq(false)

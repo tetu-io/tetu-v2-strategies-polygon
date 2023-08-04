@@ -464,14 +464,14 @@ describe('UniswapV3ConverterStrategyTests', function() {
     //
     //   expect((await s.getState()).isFuseTriggered).eq(false)
     //   expect(await s.needRebalance()).eq(true)
-    //   await s.rebalanceNoSwaps(true)
+    //   await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
     //   expect((await s.getState()).isFuseTriggered).eq(true)
     //   expect(await s.needRebalance()).eq(false)
     //
     //   await s.connect(operator).disableFuse()
     //   expect((await s.getState()).isFuseTriggered).eq(false)
     //   expect(await s.needRebalance()).eq(true)
-    //   await s.rebalanceNoSwaps(true)
+    //   await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
     //   // expect((await s.getState()).isFuseTriggered).eq(false)
     // })
 
@@ -498,7 +498,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy.isReadyToHardWork()).eq(true);
       expect(await strategy.needRebalance()).eq(true);
 
-      const rebalanceGasUsed = await strategy.estimateGas.rebalanceNoSwaps(true);
+      const rebalanceGasUsed = await strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
       expect(rebalanceGasUsed.toNumber()).lessThan(5_000_000);
 
