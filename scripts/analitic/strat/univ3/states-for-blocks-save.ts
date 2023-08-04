@@ -1,5 +1,4 @@
 import hre, { ethers } from 'hardhat';
-import {IState, Uniswapv3StateUtils} from "../../../../test/strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
 import {
   ISplitter__factory,
   TetuVaultV2__factory, UniswapV3ConverterStrategy,
@@ -7,8 +6,9 @@ import {
 } from "../../../../typechain";
 import {Misc} from "../../../utils/Misc";
 import fs from "fs";
-import {MockHelper} from "../../../../test/baseUT/helpers/MockHelper";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {IStateNum, StateUtilsNum} from "../../../../test/baseUT/utils/StateUtilsNum";
+import {MaticAddresses} from "../../../addresses/MaticAddresses";
 
 // const STRATEGY = '0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1'; // dai
 const STRATEGY = '0x05C7D307632a36D31D7eECbE4cC5Aa46D15fA752'; // usdt
@@ -40,7 +40,7 @@ async function getStateForBlock(
   strategy: UniswapV3ConverterStrategy,
   vault: string,
   prefix: string
-) : Promise<IState> {
+) : Promise<IStateNum> {
   await hre.network.provider.request({
     method: "hardhat_reset",
     params: [
@@ -53,13 +53,11 @@ async function getStateForBlock(
     ],
   });
 
-  const facade = await MockHelper.createUniswapV3LibFacade(signer);
-  return Uniswapv3StateUtils.getState(
+  return StateUtilsNum.getState(
     signer,
     await Misc.impersonate(USER),
     strategy,
     TetuVaultV2__factory.connect(vault, signer),
-    facade,
     `${prefix}-${block.toString()}`,
   );
 }
@@ -81,7 +79,7 @@ async function main() {
   const vault = await ISplitter__factory.connect(splitter, signer).vault();
   console.log("vault", vault);
 
-  const states: IState[] = [];
+  const states: IStateNum[] = [];
 
   for (const block of blocks) {
     const blockPrev = block - 1;
@@ -96,7 +94,7 @@ async function main() {
     if (fs.existsSync(pathOut)) {
       fs.rmSync(pathOut);
     }
-    await Uniswapv3StateUtils.saveListStatesToCSVColumns(pathOut, states);
+    await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
   }
 
 }

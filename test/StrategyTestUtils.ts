@@ -35,18 +35,14 @@ import {
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
 import { Misc } from '../scripts/utils/Misc';
-import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {DeployerUtils} from "../scripts/utils/DeployerUtils";
-import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
+import {IRebalanceResults, IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
+import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
+import {PackedData} from "./baseUT/utils/PackedData";
 import {
   IHardworkEventInfo,
   IStateHardworkEvents,
   IUniV3FeesClaimedInfo
-} from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
-import {IRebalanceResults, IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
-import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
-import {PackedData} from "./baseUT/utils/PackedData";
-import {PLATFORM_UNIV3} from "./baseUT/strategies/AppPlatforms";
+} from "./baseUT/strategies/UniswapV3StrategyUtils";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -135,7 +131,6 @@ export async function rebalancePairBasedStrategyNoSwaps(
 export async function printStateDifference(decimals: number, stateBefore: IUniv3SpecificState, stateAfter: IUniv3SpecificState) {
   console.log('rebalanceEarned0', formatUnits(stateAfter.rebalanceEarned0.sub(stateBefore.rebalanceEarned0), decimals));
   console.log('rebalanceEarned1', formatUnits(stateAfter.rebalanceEarned1.sub(stateBefore.rebalanceEarned1), decimals));
-  console.log('rebalanceLost', formatUnits(stateAfter.rebalanceLost.sub(stateBefore.rebalanceLost), decimals));
 }
 
 export async function depositToVault(

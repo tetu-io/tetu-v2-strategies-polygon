@@ -578,7 +578,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       const hwReturns = await strategy3.connect(splitterSigner).callStatic.doHardWork()
 
       expect(hwReturns[0].div(100)).eq(earnedTotal.div(100))
-      expect(hwReturns[1].div(1000)).eq(specificState.rebalanceLost.div(1000))
+      // expect(hwReturns[1].div(1000)).eq(specificState.rebalanceLost.div(1000))
 
       await strategy3.connect(splitterSigner).doHardWork();
 

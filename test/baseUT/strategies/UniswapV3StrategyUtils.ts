@@ -11,6 +11,27 @@ import { MaticAddresses } from '../../../scripts/addresses/MaticAddresses';
 import { formatUnits } from 'ethers/lib/utils';
 import {PackedData} from "../utils/PackedData";
 
+export interface IHardworkEventInfo {
+  tvl: number;
+  earned: number;
+  lost: number;
+  apr: number;
+  avgApr: number;
+}
+
+export interface IUniV3FeesClaimedInfo {
+  fee0: number;
+  fee1: number;
+}
+/**
+ * Info from the events registered during the hardworking
+ */
+export interface IStateHardworkEvents {
+  lossCovered: number[];
+  loss: number[];
+  hardWork: IHardworkEventInfo[];
+  uniV3FeesClaimed: IUniV3FeesClaimedInfo[];
+}
 
 export class UniswapV3StrategyUtils {
   public static extractRebalanceLoss(cr: ContractReceipt): BigNumber[] {

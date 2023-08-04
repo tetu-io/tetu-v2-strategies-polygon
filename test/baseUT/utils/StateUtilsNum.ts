@@ -45,7 +45,6 @@ export interface IPairState {
 export interface IUniv3SpecificState {
   rebalanceEarned0: BigNumber; // rebalanceResults[0]
   rebalanceEarned1: BigNumber; // rebalanceResults[1]
-  rebalanceLost: BigNumber; // rebalanceResults[2]
 }
 
 export interface IUniv3Pool {
@@ -300,7 +299,6 @@ export class StateUtilsNum {
           univ3SpecificState = {
             rebalanceEarned0: specificState.rebalanceEarned0,
             rebalanceEarned1: specificState.rebalanceEarned1,
-            rebalanceLost: specificState.rebalanceLost,
           }
           const pool = await IUniswapV3Pool__factory.connect(state.pool, signer);
           const slot0 = await pool.slot0();
@@ -597,7 +595,6 @@ export class StateUtilsNum {
 
       'univ3.rebalanceEarned0',
       'univ3.rebalanceEarned1',
-      'univ3.rebalanceLost',
 
       "pool.token0",
       "pool.token1",
@@ -685,7 +682,6 @@ export class StateUtilsNum {
 
       item.univ3?.rebalanceEarned0,
       item.univ3?.rebalanceEarned1,
-      item.univ3?.rebalanceLost,
 
       item.univ3Pool?.token0,
       item.univ3Pool?.token1,
