@@ -365,7 +365,7 @@ library AlgebraConverterStrategyLogicLib {
     uint bonusRewardInTermOfTokenA;
     address h = state.pair.strategyProfitHolder;
 
-    {
+    if (state.pair.totalLiquidity != 0) {
       address rewardToken = state.rewardToken;
       address bonusRewardToken = state.bonusRewardToken;
       IncentiveKey memory key = getIncentiveKey(state);

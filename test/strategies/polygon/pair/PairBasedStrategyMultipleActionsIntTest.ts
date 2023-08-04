@@ -179,14 +179,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
        * Fuse OFF by default, rebalance is not needed
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
-
-        console.log('deposit...');
-        await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-        await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-        await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
-
-        return b;
+        return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
       }
 
       describe(`${strategyInfo.name}`, () => {
@@ -202,99 +195,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
-        });
-        it("should withdraw successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
-        });
-        it("should revert on rebalance", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          const needRebalanceBefore = await b.strategy.needRebalance();
-          expect(needRebalanceBefore).eq(false);
-
-          const platform = await converterStrategyBase.PLATFORM();
-          const expectedErrorMessage = platform === PLATFORM_UNIV3
-            ? "U3S-9 No rebalance needed"
-            : platform === PLATFORM_ALGEBRA
-              ? "AS-9 No rebalance needed"
-              : "KS-9 No rebalance needed";
-
-          await expect(
-            b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000})
-          ).revertedWith(expectedErrorMessage); // NO_REBALANCE_NEEDED
-        });
-        it("should rebalance debts successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
-          const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.strategy.withdrawByAggStep(
-            quote.tokenToSwap,
-            Misc.ZERO_ADDRESS,
-            quote.amountToSwap,
-            "0x",
-            planEntryData,
-            ENTRY_TO_POOL_IS_ALLOWED,
-            {gasLimit: 19_000_000}
-          );
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
-        });
-        it("should hardwork successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(
-            b.strategy.address,
-            await Misc.impersonate(b.splitter.address)
-          );
-
-          // put additional asset on balance of the strategy (to be able to run real hardwork)
-          await TokenUtils.getToken(b.asset, b.strategy.address, parseUnits('2000', 6));
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.strategy.investedAssets).gt(stateBefore.strategy.investedAssets);
-        });
-        it("should make emergency exit successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-
-          expect(stateAfter.strategy.investedAssets).lt(10);
-        });
-        it("isReadyToHardWork should return expected values", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(
-            b.strategy.address,
-            await Misc.impersonate(b.splitter.address)
-          );
-
-          expect(converterStrategyBase.isReadyToHardWork()).eq(false);
-          // put additional asset on balance of the strategy (to be able to run real hardwork)
-          await TokenUtils.getToken(b.asset, b.strategy.address, parseUnits('2000', 6));
-          expect(converterStrategyBase.isReadyToHardWork()).eq(true);
+          // todo
         });
       });
     });

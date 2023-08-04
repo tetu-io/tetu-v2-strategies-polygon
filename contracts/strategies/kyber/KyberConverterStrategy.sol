@@ -109,6 +109,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
+    // for simplicity of implementation this function doesn't calculate fees and just returns true
     return !needRebalance() && !_isFuseTriggeredOn();
   }
 
