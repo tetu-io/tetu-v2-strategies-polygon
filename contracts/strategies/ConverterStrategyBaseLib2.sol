@@ -510,7 +510,17 @@ library ConverterStrategyBaseLib2 {
   }
 
   /// @notice Calculate the token amounts for deposit and amount of loss (as old-total-asset - new-total-asset)
-  function getTokenAmounts(ITetuConverter converter, uint totalAssets, address tokenA, address tokenB) external returns (
+  /// @param liquidationThresholdsAB [liquidityThreshold of token A, liquidityThreshold of tokenB]
+  /// @return loss New total assets - old total assets
+  /// @return tokenAmounts Balances of the token A and token B.
+  ///                     If any balance is zero it's not possible to enter to the pool, so return empty array (len 0)
+  function getTokenAmountsPair(
+    ITetuConverter converter,
+    uint totalAssets,
+    address tokenA,
+    address tokenB,
+    uint[2] calldata liquidationThresholdsAB
+  ) external returns (
     uint loss,
     uint[] memory tokenAmounts
   ) {
@@ -530,7 +540,10 @@ library ConverterStrategyBaseLib2 {
       newTotalAssets < totalAssets
         ? totalAssets - newTotalAssets
         : 0,
-      tokenAmounts
+      (tokenAmounts[0] < AppLib._getLiquidationThreshold(liquidationThresholdsAB[0]))
+      || (tokenAmounts[1] < AppLib._getLiquidationThreshold(liquidationThresholdsAB[1]))
+        ? new uint[](0)
+        : tokenAmounts
     );
   }
 //endregion------------------------------------- calcInvestedAssets

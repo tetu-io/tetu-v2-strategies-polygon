@@ -124,13 +124,14 @@ library KyberDebtLib {
   //endregion  -------------------------------------------- Calc tick range
 
   //region  -------------------------------------------- Rebalance
+  /// @param liquidationThresholdsAB [liquidityThreshold of token A, liquidityThreshold of tokenB]
   function rebalanceNoSwaps(
     address[2] calldata converterLiquidator,
     PairBasedStrategyLogicLib.PairState storage pairState,
     uint profitToCover,
     uint totalAssets,
     address splitter,
-    mapping(address => uint) storage liquidityThresholds_,
+    uint[2] calldata liquidationThresholdsAB,
     int24 tick
   ) external {
     (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRangeForTick(tick, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
@@ -141,7 +142,7 @@ library KyberDebtLib {
       profitToCover,
       totalAssets,
       splitter,
-      liquidityThresholds_,
+  liquidationThresholdsAB,
       prop0 * BorrowLib.SUM_PROPORTIONS / (prop0 + prop1)
     );
     (pairState.lowerTick, pairState.upperTick) = (newLowerTick, newUpperTick);

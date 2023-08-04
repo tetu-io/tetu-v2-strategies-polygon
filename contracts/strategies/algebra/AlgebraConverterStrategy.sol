@@ -313,7 +313,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
     }
   }
 
-  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  /// @notice Make actions after rebalance: depositor enter, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
     if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
       _depositorEnter(tokenAmounts);

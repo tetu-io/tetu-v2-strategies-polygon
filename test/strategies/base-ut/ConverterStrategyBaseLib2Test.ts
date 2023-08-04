@@ -24,6 +24,8 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
+import {tetuConverter} from "../../../typechain/@tetu_io";
+import {totalmem} from "os";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -1113,7 +1115,104 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
+  describe("getTokenAmountsPair", () => {
+    let snapshot: string;
+    beforeEach(async function() {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function() {
+      await TimeUtils.rollback(snapshot);
+    });
 
+    interface IGetTokenAmountsPair {
+      totalAssets: string;
+      balances: string[];
+      tokens: MockToken[];
+      liquidationThresholds: string[];
+    }
+    interface IGetTokenAmountsResults {
+      loss: number;
+      tokenAmounts: number[];
+    }
+    async function callGetTokenAmountsPair(p: IGetTokenAmountsPair): Promise<IGetTokenAmountsResults> {
+      // set up TetuConverter with prices
+      const converter = await MockHelper.createMockTetuConverter(signer);
+      const priceOracle = await MockHelper.createPriceOracle(
+        signer,
+        p.tokens.map(x => x.address),
+        p.tokens.map(x => parseUnits("1", 18)),
+      );
+      const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(controller.address);
+
+      for (let i = 0; i < 2; ++i) {
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], await p.tokens[i].decimals()));
+      }
+
+      const ret = await facade.callStatic.getTokenAmountsPair(
+        converter.address,
+        parseUnits(p.totalAssets, 6),
+        p.tokens[0].address,
+        p.tokens[1].address,
+        [
+          parseUnits(p.liquidationThresholds[0], await p.tokens[0].decimals()),
+          parseUnits(p.liquidationThresholds[1], await p.tokens[1].decimals()),
+        ]
+      );
+
+      return {
+        loss: +formatUnits(ret.loss, 6),
+        tokenAmounts: ret.tokenAmounts.length === 0
+          ? []
+          : [
+            +formatUnits(ret.tokenAmounts[0], await p.tokens[0].decimals()),
+            +formatUnits(ret.tokenAmounts[1], await p.tokens[1].decimals()),
+          ]
+      }
+    }
+
+    it("should return expected tokenAmounts (len 2)", async () => {
+      const ret = await callGetTokenAmountsPair({
+        tokens: [usdc, usdt],
+        balances: ["100", "200"],
+        liquidationThresholds: ["99", "199"],
+        totalAssets: "4"
+      });
+      expect(
+        [ret.tokenAmounts.length, ret.tokenAmounts[0], ret.tokenAmounts[1]].join()
+      ).eq(
+        [2, 100, 200].join()
+      );
+    });
+
+    it("should return zero tokenAmounts if first amount is less the threshold", async () => {
+      const ret = await callGetTokenAmountsPair({
+        tokens: [usdc, usdt],
+        balances: ["100", "200"],
+        liquidationThresholds: ["101", "199"],
+        totalAssets: "4"
+      });
+      expect(ret.tokenAmounts.length).eq(0);
+    });
+    it("should return zero tokenAmounts if second amount is less the threshold", async () => {
+      const ret = await callGetTokenAmountsPair({
+        tokens: [usdc, usdt],
+        balances: ["100", "200"],
+        liquidationThresholds: ["99", "201"],
+        totalAssets: "4"
+      });
+      expect(ret.tokenAmounts.length).eq(0);
+    });
+    it("should return zero tokenAmounts is zero and thresholds are not set", async () => {
+      const ret = await callGetTokenAmountsPair({
+        tokens: [usdc, usdt],
+        balances: ["100", "0"],
+        liquidationThresholds: ["0", "0"],
+        totalAssets: "4"
+      });
+      expect(ret.tokenAmounts.length).eq(0);
+    });
+  });
 
 
   describe('getExpectedWithdrawnAmounts', () => {

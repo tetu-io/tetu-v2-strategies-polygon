@@ -47,6 +47,7 @@ library KyberConverterStrategyLogicLib {
     address tokenA;
     address tokenB;
     bool isStablePool;
+    uint[2] liquidationThresholdsAB;
 
     bool[2] fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
@@ -492,7 +493,7 @@ library KyberConverterStrategyLogicLib {
     uint[] memory tokenAmounts
   ) {
     RebalanceLocal memory v;
-    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState);
+    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState, liquidityThresholds_);
 
     bool needRebalance;
     int24 tick = KyberDebtLib.getCurrentTick(IPool(pairState.pool));
@@ -513,10 +514,10 @@ library KyberConverterStrategyLogicLib {
     // rebalancing debt, setting new tick range
     if (needRebalance) {
       uint coveredByRewards;
-      KyberDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, liquidityThresholds_, tick);
+      KyberDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, v.liquidationThresholdsAB, tick);
 
       uint loss;
-      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(v.converter, totalAssets_, v.tokenA, v.tokenB);
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
         coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
@@ -545,7 +546,8 @@ library KyberConverterStrategyLogicLib {
   function _initLocalVars(
     RebalanceLocal memory v,
     ITetuConverter converter_,
-    PairBasedStrategyLogicLib.PairState storage pairState
+    PairBasedStrategyLogicLib.PairState storage pairState,
+    mapping(address => uint) storage liquidityThresholds_
   ) internal view {
     v.pool = IPool(pairState.pool);
     v.fuseAB = pairState.fuseAB;
@@ -553,6 +555,8 @@ library KyberConverterStrategyLogicLib {
     v.tokenA = pairState.tokenA;
     v.tokenB = pairState.tokenB;
     v.isStablePool = pairState.isStablePool;
+    v.liquidationThresholdsAB[0] = liquidityThresholds_[v.tokenA];
+    v.liquidationThresholdsAB[1] = liquidityThresholds_[v.tokenB];
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]

@@ -164,4 +164,17 @@ contract ConverterStrategyBaseLibFacade2 {
   function findZeroAmount(uint[] memory amounts_, address[] memory tokens_) external view returns (bool) {
     return ConverterStrategyBaseLib2.findZeroAmount(amounts_, tokens_, liquidationThresholds);
   }
+
+  function getTokenAmountsPair(
+    ITetuConverter converter,
+    uint totalAssets,
+    address tokenA,
+    address tokenB,
+    uint[2] calldata liquidationThresholdsAB
+  ) external returns (
+    uint loss,
+    uint[] memory tokenAmounts
+  ) {
+    return ConverterStrategyBaseLib2.getTokenAmountsPair(converter, totalAssets, tokenA, tokenB, liquidationThresholdsAB);
+  }
 }

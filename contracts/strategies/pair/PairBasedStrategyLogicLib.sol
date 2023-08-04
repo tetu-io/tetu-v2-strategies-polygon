@@ -343,32 +343,25 @@ library PairBasedStrategyLogicLib {
       ConverterStrategyBaseLib2.sendToInsurance(v.w.tokens[0], profitToSend, v.splitter, v.oldTotalAssets);
     }
 
-    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmounts(
+    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(
       ITetuConverter(v.converter),
       v.oldTotalAssets,
       v.w.tokens[0],
-      v.w.tokens[1]
+      v.w.tokens[1],
+      [v.w.liquidationThresholds[0], v.w.liquidationThresholds[1]]
     );
-
-    // if {tokenAmounts} contains zero amount we should return empty array
-    // this place is optimal to find zero amounts and prevent attempts to enter to the pool with zero amount
-    if (
-     (tokenAmounts[0] < AppLib._getLiquidationThreshold(v.w.liquidationThresholds[0]))
-     || (tokenAmounts[1] < AppLib._getLiquidationThreshold(v.w.liquidationThresholds[1]))
-    ) {
-      tokenAmounts = new uint[](0);
-    }
   }
 
   /// @notice Rebalance asset to proportions {propTokenA}:{1e18-propTokenA}, fix profitToCover
   /// @param propTokenA Proportion of {tokenA}, > 0. Proportion of {tokenB} is calculates as 1e18 - prop0
+  /// @param liquidationThresholdsAB [liquidityThreshold of token A, liquidityThreshold of tokenB]
   function rebalanceNoSwaps(
     address[2] calldata converterLiquidator,
     PairBasedStrategyLogicLib.PairState storage pairState,
     uint profitToCover,
     uint totalAssets,
     address splitter,
-    mapping(address => uint) storage liquidityThresholds_,
+    uint[2] calldata liquidationThresholdsAB,
     uint propTokenA
   ) internal {
     address tokenA = pairState.tokenA;
@@ -380,8 +373,8 @@ library PairBasedStrategyLogicLib {
       tokenA,
       tokenB,
       propTokenA,
-      liquidityThresholds_[tokenA],
-      liquidityThresholds_[tokenB],
+  liquidationThresholdsAB[0], // liquidityThreshold of token A
+  liquidationThresholdsAB[1], // liquidityThreshold of token B
       profitToCover
     );
 
