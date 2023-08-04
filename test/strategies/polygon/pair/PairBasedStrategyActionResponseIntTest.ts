@@ -592,19 +592,24 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
        * Make rebalance of the empty strategy.
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
+        console.log("prepareStrategy.1");
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
 
+        console.log("prepareStrategy.2");
         // make deposit
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-        await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+        await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+        console.log("prepareStrategy.3");
 
         // set fuse ON
         await prepareFuse(b, true);
-        await b.strategy.rebalanceNoSwaps(true);
+        await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+        console.log("prepareStrategy.4");
 
         // withdraw all liquidity from the strategy
-        await b.vault.connect(signer).withdrawAll();
+        await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+        console.log("prepareStrategy.5");
         await prepareFuse(b, false);
 
         return b;
@@ -624,11 +629,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
+          console.log("1");
           expect(await b.strategy.needRebalance()).eq(true);
+          console.log("2");
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-          expect(await b.strategy.needRebalance()).eq(true);
+          console.log("3");
+          expect(await b.strategy.needRebalance()).eq(false);
+          console.log("4");
         });
-        it("should revert on rebalance debts", async () => {
+        it("should not revert on rebalance debts", async () => {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 

@@ -253,9 +253,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
+    console.log("_withdrawFromPool.amount", amount);
+
     // calculate profit/loss because of price changes, try to compensate the loss from the insurance
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(amount, earnedByPrices, investedAssetsNewPrices);
+
+    console.log("_withdrawFromPool.expectedWithdrewUSD", expectedWithdrewUSD);
+    console.log("_withdrawFromPool.assetPrice", assetPrice);
+    console.log("_withdrawFromPool.strategyLoss", strategyLoss);
   }
 
   /// @notice Withdraw all from the pool.
@@ -284,6 +290,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    console.log("_withdrawUniversal");
     _beforeWithdraw(amount);
 
     WithdrawUniversalLocal memory v;
@@ -526,10 +533,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
     (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
+    uint liquidity = _depositorLiquidity();
     return ConverterStrategyBaseLib2.calcInvestedAssets(
       tokens,
-      // quote exit should check zero liquidity
-      _depositorQuoteExit(_depositorLiquidity()),
+      liquidity == 0
+        ? new uint[](tokens.length)
+        : _depositorQuoteExit(liquidity),
       indexAsset,
       _csbs.converter
     );
