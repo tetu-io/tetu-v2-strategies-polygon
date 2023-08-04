@@ -17,6 +17,11 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant ALGEBRA_DEPOSITOR_VERSION = "1.0.0";
 
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A = 0;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B = 1;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_RT = 2;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_BRT = 3;
+
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
   /////////////////////////////////////////////////////////////////////
@@ -28,16 +33,16 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
-  /// @param profitHolderBalances Balances of [tokenA, tokenB, rewardToken, bonusRewardToken]
+  /// @return nums Balances of [tokenA, tokenB, rewardToken, bonusRewardToken] for profit holder
   function getSpecificState() external view returns (
-    uint[] memory profitHolderBalances
+    uint[] memory nums
   ) {
     address profitHolder = state.pair.strategyProfitHolder;
-    profitHolderBalances = new uint[](4);
-    profitHolderBalances[0] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
-    profitHolderBalances[1] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
-    profitHolderBalances[2] = IERC20(state.rewardToken).balanceOf(profitHolder);
-    profitHolderBalances[3] = IERC20(state.bonusRewardToken).balanceOf(profitHolder);
+    nums = new uint[](4);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_RT] = IERC20(state.rewardToken).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_BRT] = IERC20(state.bonusRewardToken).balanceOf(profitHolder);
   }
 
   /// @notice Returns the fees for the current state.

@@ -439,41 +439,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await s.needRebalance()).eq(false);
     });
 
-    // todo Change to new fuse
-    // it('Fuse test', async() => {
-    //   const s = strategy3
-    //   const v = vault3
-    //   const investAmount = _1;
-    //   const swapAssetValueForPriceMove = parseUnits('100000', 6);
-    //
-    //   const state = await PackedData.getDefaultState(s);
-    //   await PriceOracleImitatorUtils.uniswapV3(signer, state.pool, state.tokenA)
-    //
-    //   const newFuseThreshold = parseUnits('5', 14) // 0.05%
-    //   await s.setFuseThreshold(newFuseThreshold);
-    //
-    //   console.log('deposit...');
-    //   await v.deposit(investAmount, signer.address);
-    //
-    //   for (let i = 0; i < 100; i++) {
-    //     const priceChange = await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove)
-    //     if (priceChange.priceBChange.gt(newFuseThreshold)) {
-    //       break
-    //     }
-    //   }
-    //
-    //   expect((await s.getState()).isFuseTriggered).eq(false)
-    //   expect(await s.needRebalance()).eq(true)
-    //   await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-    //   expect((await s.getState()).isFuseTriggered).eq(true)
-    //   expect(await s.needRebalance()).eq(false)
-    //
-    //   await s.connect(operator).disableFuse()
-    //   expect((await s.getState()).isFuseTriggered).eq(false)
-    //   expect(await s.needRebalance()).eq(true)
-    //   await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-    //   // expect((await s.getState()).isFuseTriggered).eq(false)
-    // })
 
     it('Rebalance and hardwork', async() => {
       const investAmount = _10_000;

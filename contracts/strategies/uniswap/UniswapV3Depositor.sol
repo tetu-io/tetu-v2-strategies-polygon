@@ -20,6 +20,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant UNISWAPV3_DEPOSITOR_VERSION = "1.0.4";
 
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A = 0;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B = 1;
+
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
   /////////////////////////////////////////////////////////////////////
@@ -31,14 +34,14 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
+  /// @return nums Balances of [tokenA, tokenB] for profit holder
   function getSpecificState() external view returns (
-    uint[] memory rebalanceResults
+    uint[] memory nums
   ) {
     address strategyProfitHolder = state.pair.strategyProfitHolder;
-    rebalanceResults = new uint[](3);
-    rebalanceResults[0] = IERC20(state.pair.tokenA).balanceOf(strategyProfitHolder);
-    rebalanceResults[1] = IERC20(state.pair.tokenB).balanceOf(strategyProfitHolder);
-    rebalanceResults[2] = 0;
+    nums = new uint[](2);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A] = IERC20(state.pair.tokenA).balanceOf(strategyProfitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B] = IERC20(state.pair.tokenB).balanceOf(strategyProfitHolder);
   }
 
   /// @notice Returns the fees for the current state.

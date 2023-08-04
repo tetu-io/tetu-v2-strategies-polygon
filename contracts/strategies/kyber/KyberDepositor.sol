@@ -17,6 +17,13 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant KYBER_DEPOSITOR_VERSION = "1.0.0";
 
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A = 0;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B = 1;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_KNC = 2;
+  uint internal constant IDX_SS_FLAGS_STAKED = 0;
+  uint internal constant IDX_SS_FLAGS_NEED_STAKE = 1;
+  uint internal constant IDX_SS_FLAGS_NEED_UNSTAKE = 2;
+
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
   /////////////////////////////////////////////////////////////////////
@@ -29,20 +36,20 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
   /////////////////////////////////////////////////////////////////////
 
   /// @notice Returns the current state of the contract.
-  /// @return profitHolderBalances Balances of the profit holder for [tokenA, tokenB, KNC]
+  /// @return nums Balances of the profit holder for [tokenA, tokenB, KNC]
   /// @return flags [staked, needStake, needUnstake]
   function getSpecificState() external view returns (
-    uint[] memory profitHolderBalances,
+    uint[] memory nums,
     bool[] memory flags
   ) {
     address profitHolder = state.pair.strategyProfitHolder;
-    profitHolderBalances = new uint[](3);
-    profitHolderBalances[0] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
-    profitHolderBalances[1] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
-    profitHolderBalances[2] = IERC20(KyberConverterStrategyLogicLib.KNC).balanceOf(profitHolder);
+    nums = new uint[](3);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_KNC] = IERC20(KyberConverterStrategyLogicLib.KNC).balanceOf(profitHolder);
     flags = new bool[](3);
-    flags[0] = state.staked;
-    (flags[1], flags[2]) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
+    flags[IDX_SS_FLAGS_STAKED] = state.staked;
+    (flags[IDX_SS_FLAGS_NEED_STAKE], flags[IDX_SS_FLAGS_NEED_UNSTAKE]) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
   }
 
   /// @notice Returns the pool assets.

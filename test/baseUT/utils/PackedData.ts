@@ -39,7 +39,6 @@ const IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS = 1;
 //region IUniv3SpecificState indices
 const IDX_UIV3_SS_REBALANCE_EARNED0 = 0;
 const IDX_UIV3_SS_REBALANCE_EARNED1 = 1;
-const IDX_UIV3_SS_REBALANCE_LOST = 2;
 //endregion IUniv3SpecificState indices
 
 //region IAlgebraSpecificState indices
@@ -89,7 +88,6 @@ export interface IDefaultState {
 export interface IUniv3SpecificState {
   rebalanceEarned0: BigNumber;
   rebalanceEarned1: BigNumber;
-  rebalanceLost: BigNumber;
 }
 
 export interface IKyberSpecificState {
@@ -156,7 +154,6 @@ export class PackedData {
     return {
       rebalanceEarned0: ret[IDX_UIV3_SS_REBALANCE_EARNED0],
       rebalanceEarned1: ret[IDX_UIV3_SS_REBALANCE_EARNED1],
-      rebalanceLost: ret[IDX_UIV3_SS_REBALANCE_LOST],
     }
   }
 
@@ -164,9 +161,9 @@ export class PackedData {
     const ret = await strategy.getSpecificState();
     return {
       profitHolderBalances: {
-        balanceTokenA: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_TOKEN_A],
-        balanceTokenB: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_TOKEN_B],
-        balanceKNC: ret.profitHolderBalances[IDX_KYBER_PROFIT_HOLDER_KNC],
+        balanceTokenA: ret.nums[IDX_KYBER_PROFIT_HOLDER_TOKEN_A],
+        balanceTokenB: ret.nums[IDX_KYBER_PROFIT_HOLDER_TOKEN_B],
+        balanceKNC: ret.nums[IDX_KYBER_PROFIT_HOLDER_KNC],
       },
       flags: {
         staked: ret.flags[IDX_KYBER_FLAG_STAKED],
