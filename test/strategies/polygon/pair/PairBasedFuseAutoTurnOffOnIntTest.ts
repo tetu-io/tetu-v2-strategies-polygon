@@ -58,6 +58,8 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   const FUSE_IDX_LOWER_LIMIT_OFF = 1;
   const FUSE_IDX_UPPER_LIMIT_ON = 2;
   const FUSE_IDX_UPPER_LIMIT_OFF = 3;
+
+  const DEFAULT_OVERLAP_RATIO = 0.01;
 //endregion Constants
 
 //region Variables
@@ -112,7 +114,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     maxCountRebalances: number;
     /** up-down OR down-up */
     movePricesUpDown: boolean;
-    swapAmountPart?: number;
+    overlapRatio?: number;
   }
 
   interface IMovePriceResults {
@@ -133,7 +135,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     state: IDefaultState,
     states: IStateNum[],
     pathOut: string,
-    swapAmountPart?: number
+    overlapRatio?: number
   ): Promise<IPriceFuseStatus | undefined> {
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
     const currentFuseA = states.length === 0
@@ -144,35 +146,23 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       : states[states.length - 1].fuseStatusB;
 
     for (let i = 0; i < maxCountRebalances; ++i) {
-      const swapAmount1 = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-        signer,
-        b,
-        state.tokenA,
-        state.tokenB,
-        useTokenB
-          ? movePricesUpDown
-          : !movePricesUpDown,
-        0.1
-      );
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount1);
       const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
         signer,
         b,
         state.tokenA,
         state.tokenB,
-        useTokenB
-          ? movePricesUpDown
-          : !movePricesUpDown,
-        0.1
+        movePricesUpDown,
+        overlapRatio ?? DEFAULT_OVERLAP_RATIO
       );
       console.log("movePriceToChangeFuseStatus.swapAmount", swapAmount);
-
+      // await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
 
       if (movePricesUpDown) {
         await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
       } else {
         await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000, !useTokenB);
       }
+
       states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fw${i}`, {lib}));
       StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -224,7 +214,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       state,
       states,
       pathOut,
-      p.swapAmountPart
+      p.overlapRatio
     );
 
     console.log("=========================== back");
@@ -239,7 +229,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       state,
       states,
       pathOut,
-      p.swapAmountPart
+      p.overlapRatio
     );
 
     console.log("=========================== done");
@@ -255,13 +245,13 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 //endregion Utils
 
 //region Unit tests
-  describe('Increase price N steps, decrease price N steps', function () {
+  describe('Increase price N steps, decrease price N steps, default overlapRatio (0.001)', function () {
     interface IStrategyInfo {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      // { name: PLATFORM_UNIV3,},
-      // { name: PLATFORM_ALGEBRA,},
+      { name: PLATFORM_UNIV3,},
+      { name: PLATFORM_ALGEBRA,},
       { name: PLATFORM_KYBER,},
     ];
 
@@ -292,7 +282,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: true,
-                swapAmountPart: 100
               });
             }
             it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
@@ -315,7 +304,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: false,
-                swapAmountPart: 500
               });
             }
             it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
@@ -335,5 +323,84 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     });
   });
 
+  describe('Increase price N steps, decrease price N steps, overlapRatio = 0', function () {
+    interface IStrategyInfo {
+      name: string,
+    }
+    const strategies: IStrategyInfo[] = [
+      { name: PLATFORM_UNIV3,},
+      { name: PLATFORM_ALGEBRA,},
+      { name: PLATFORM_KYBER,},
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+
+        await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
+        return b;
+      }
+
+      describe(`${strategyInfo.name}`, () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        describe("Use liquidator", () => {
+          describe('Move tokenB prices up, down', function () {
+            async function makeTest(): Promise<IMovePriceResults> {
+              const b = await loadFixture(prepareStrategy);
+              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
+              return movePriceUpDown(b,{
+                maxCountRebalances: 25,
+                pathOut,
+                movePricesUpDown: true,
+                overlapRatio: 0
+              });
+            }
+            it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
+              const ret = await loadFixture(makeTest);
+              expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
+              expect(ret.rebalanceFuseOn?.price || 0).gte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_ON]);
+            });
+            it("should trigger fuse OFF at the end", async () => {
+              const ret = await loadFixture(makeTest);
+              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+              expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
+              expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_OFF]);
+            });
+          });
+          describe('Move tokenB prices down, up', function () {
+            async function makeTest(): Promise<IMovePriceResults> {
+              const b = await loadFixture(prepareStrategy);
+              const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
+              return movePriceUpDown(b,{
+                maxCountRebalances: 25,
+                pathOut,
+                movePricesUpDown: false,
+                overlapRatio: 0
+              });
+            }
+            it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
+              const ret = await loadFixture(makeTest);
+              expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
+              expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_ON]);
+            });
+            it("should trigger fuse OFF at the end", async () => {
+              const ret = await loadFixture(makeTest);
+              const status = ret.rebalanceFuseOff?.fuseStatus || 0;
+              expect(status === FUSE_OFF_1 || status === FUSE_ON_UPPER_LIMIT_3).eq(true);
+              expect(ret.rebalanceFuseOff?.price || 0).gte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_OFF]);
+            });
+          });
+        });
+      });
+    });
+  });
 //endregion Unit tests
 });

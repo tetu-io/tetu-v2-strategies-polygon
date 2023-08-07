@@ -129,10 +129,9 @@ export class PairBasedStrategyPrepareStateUtils {
    * @param priceTokenBUp
    *  true - move price of token B up == swap A to B
    *  false - move price of token B down == swap B to A
-   * @param overlapNextTickRatio
-   *  A part of amount in the next tick that should be swapped
-   *  together with full amount of the current tick
-   *  Value in the range: [0..1)
+   * @param overlapRatio
+   *  amount to swap = amount in the current tick * (1 + overlapRatio)
+   *  Value >= 0
    * @return
    *  priceTokenBUp === true: amount of token A to swap
    *  priceTokenBUp === false: amount of token B to swap
@@ -143,67 +142,47 @@ export class PairBasedStrategyPrepareStateUtils {
     tokenA: string,
     tokenB: string,
     priceTokenBUp: boolean,
-    overlapNextTickRatio: number
+    overlapRatio: number
   ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
     const lib = this.getLib(platform, b);
+    const pricesAB = await b.facadeLib2.getOracleAssetsPrices(b.converter.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
+
     const amountsInCurrentTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
     console.log("amountsInCurrentTick", amountsInCurrentTick);
 
     if (priceTokenBUp) {
-      // swap A to B, return amount A to swap
-      const amountsInNextTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(
-        signer,
-        platform,
-        lib,
-        b.pool,
-        -1
-      );
-      console.log("amountsInNextTick", amountsInNextTick);
-
       // calculate amount B that we are going to receive
-      const amountOut = amountsInCurrentTick[1].add(
-        amountsInNextTick[1].mul(
-          parseUnits(overlapNextTickRatio.toString(), 18)
-        ).div(Misc.ONE18)
-      );
-      console.log("amountOut", amountsInNextTick);
-      const amountIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
+      const amountBOut = amountsInCurrentTick[1].mul(
+        Misc.ONE18.add(parseUnits(overlapRatio.toString(), 18))
+      ).div(Misc.ONE18);
+
+      console.log("amountBOut", amountBOut);
+      const amountAIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
         signer,
         b,
         tokenA,
         tokenB,
-        amountOut
+        amountBOut
       );
-      console.log("Result amountIn", amountIn);
-      return amountIn;
+      console.log("amountAIn.to.up", amountAIn);
+      return amountAIn;
     } else {
-      // swap B to A, return amount B to swap
-      const amountsInNextTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(
-        signer,
-        platform,
-        lib,
-        b.pool,
-        1
-      );
-      console.log("amountsInNextTick", amountsInNextTick);
+      // calculate amount A that we are going to receive
+      const amountAOut = amountsInCurrentTick[0].mul(
+        Misc.ONE18.add(parseUnits(overlapRatio.toString(), 18))
+      ).div(Misc.ONE18);
 
-      // calculate amount B that we are going to receive
-      const amountOut = amountsInCurrentTick[0].add(
-        amountsInNextTick[0].mul(
-          parseUnits(overlapNextTickRatio.toString(), 18)
-        ).div(Misc.ONE18)
-      );
-      console.log("amountOut", amountsInNextTick);
-      const amountIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
+      console.log("amountAOut", amountAOut);
+      const amountBIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
         signer,
         b,
         tokenB,
         tokenA,
-        amountOut
+        amountAOut
       );
-      console.log("Result amountIn", amountIn);
-      return amountIn;
+      console.log("amountBIn.to.down", amountBIn);
+      return amountBIn;
     }
   }
 }

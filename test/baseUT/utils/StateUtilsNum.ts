@@ -46,9 +46,7 @@ export interface IPairState {
   upperTick: number;
   rebalanceTickRange: number;
   totalLiquidity: BigNumber;
-  prevTick?: ILiquidityAmountInTick,
   currentTick?: ILiquidityAmountInTick,
-  nextTick?: ILiquidityAmountInTick,
 }
 
 export interface IUniv3SpecificState {
@@ -145,9 +143,7 @@ export interface IStateNum {
 
   pairState?: IPairState;
 
-  pairPrevTick?: ILiquidityAmountInTick;
   pairCurrentTick?: ILiquidityAmountInTick;
-  pairNextTick?: ILiquidityAmountInTick;
 
   univ3?: IUniv3SpecificState
   univ3Pool?: IUniv3Pool;
@@ -246,8 +242,6 @@ export class StateUtilsNum {
     let withdrawDone: number | undefined;
 
     let currentTick: ILiquidityAmountInTick | undefined;
-    let prevTick: ILiquidityAmountInTick | undefined;
-    let nextTick: ILiquidityAmountInTick | undefined;
 
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
     const priceOracle = IPriceOracle__factory.connect(
@@ -310,16 +304,6 @@ export class StateUtilsNum {
             amountTokenA: +formatUnits(currentAmountA, assetDecimals),
             amountTokenB: +formatUnits(currentAmountB, await tokenB.decimals())
           }
-          const [prevAmountA, prevAmountB] = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, p.lib, state.pool, -1);
-          prevTick = {
-            amountTokenA: +formatUnits(prevAmountA, assetDecimals),
-            amountTokenB: +formatUnits(prevAmountB, await tokenB.decimals())
-          }
-          const [nextAmountA, nextAmountB] = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, p.lib, state.pool, 1);
-          nextTick = {
-            amountTokenA: +formatUnits(nextAmountA, assetDecimals),
-            amountTokenB: +formatUnits(nextAmountB, await tokenB.decimals())
-          }
         }
 
         pairState = {
@@ -330,9 +314,7 @@ export class StateUtilsNum {
           upperTick: state.upperTick,
           rebalanceTickRange: state.rebalanceTickRange,
           totalLiquidity: state.totalLiquidity,
-          prevTick,
           currentTick,
-          nextTick
         }
 
         if (isUniv3) {
@@ -450,8 +432,6 @@ export class StateUtilsNum {
       pairState,
 
       pairCurrentTick: currentTick,
-      pairNextTick: nextTick,
-      pairPrevTick: prevTick,
 
       univ3: univ3SpecificState,
       univ3Pool,
@@ -657,12 +637,8 @@ export class StateUtilsNum {
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
 
-      'pair.prev.tick.A',
-      'pair.prev.tick.B',
       'pair.tick.A',
       'pair.tick.B',
-      'pair.next.tick.A',
-      'pair.next.tick.B',
     ];
 
     return { stateHeaders };
@@ -751,12 +727,8 @@ export class StateUtilsNum {
       item.fixPriceChanges?.assetBefore,
       item.fixPriceChanges?.assetAfter,
 
-      item.pairPrevTick?.amountTokenA,
-      item.pairPrevTick?.amountTokenB,
       item.pairCurrentTick?.amountTokenA,
       item.pairCurrentTick?.amountTokenB,
-      item.pairNextTick?.amountTokenA,
-      item.pairNextTick?.amountTokenB,
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});

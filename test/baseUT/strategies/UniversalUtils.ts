@@ -64,6 +64,7 @@ export class UniversalUtils {
     amount: BigNumber,
     priceImpactTolerance = 99000 // 99% slippage
   ) {
+    console.log("movePoolPriceUp", amount);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, signer).decimals()
     const tokenAName = await TokenUtils.tokenSymbol(tokenA);
@@ -108,6 +109,7 @@ export class UniversalUtils {
     priceImpactTolerance = 40000, // 40%,
     silent = false
   ) {
+    console.log("movePoolPriceDown", amount);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, signer).decimals()
     const tokenAName = await TokenUtils.tokenSymbol(tokenA);

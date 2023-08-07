@@ -80,7 +80,7 @@ export class PairStrategyLiquidityUtils {
         });
         console.log("quoteExactOutputSingle.kyber.amountOut", amountOut);
         console.log("quoteExactOutputSingle.kyber.results", kyberRet);
-        return kyberRet.usedAmount;
+        return kyberRet.returnedAmount;
       default: throw Error(`quoteExactOutputSingle unknown ${platform}`);
     }
   }
