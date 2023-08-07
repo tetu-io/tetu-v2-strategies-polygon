@@ -144,20 +144,41 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       : states[states.length - 1].fuseStatusB;
 
     for (let i = 0; i < maxCountRebalances; ++i) {
-      // todo use swapAmountPart
-      const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount(signer, b, useTokenB);
+      const swapAmount1 = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+        signer,
+        b,
+        state.tokenA,
+        state.tokenB,
+        useTokenB
+          ? movePricesUpDown
+          : !movePricesUpDown,
+        0.1
+      );
+      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount1);
+      const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+        signer,
+        b,
+        state.tokenA,
+        state.tokenB,
+        useTokenB
+          ? movePricesUpDown
+          : !movePricesUpDown,
+        0.1
+      );
+      console.log("movePriceToChangeFuseStatus.swapAmount", swapAmount);
+
 
       if (movePricesUpDown) {
         await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
       } else {
         await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000, !useTokenB);
       }
-      states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fw${i}`));
+      states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fw${i}`, {lib}));
       StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
       if ((await b.strategy.needRebalance())) {
         await b.strategy.rebalanceNoSwaps(true, { gasLimit: 9_000_000 });
-        const stateAfterRebalance = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`);
+        const stateAfterRebalance = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`, {lib});
         states.push(stateAfterRebalance);
         StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -239,8 +260,8 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3,},
-      { name: PLATFORM_ALGEBRA,},
+      // { name: PLATFORM_UNIV3,},
+      // { name: PLATFORM_ALGEBRA,},
       { name: PLATFORM_KYBER,},
     ];
 

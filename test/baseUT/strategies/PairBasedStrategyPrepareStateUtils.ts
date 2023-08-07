@@ -19,7 +19,7 @@ import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER} from "./AppPlatforms";
+import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 
 /**
  * Utils to set up "current state of pair strategy" in tests
@@ -44,7 +44,14 @@ export class PairBasedStrategyPrepareStateUtils {
     const lib = this.getLib(platform, b);
     let countRebalance = 0;
     for (let i = 0; i < 10; ++i) {
-      const swapAmount = await this.getSwapAmount(signer, b, true);
+      const swapAmount = await this.getSwapAmount2(
+        signer,
+        b,
+        state.tokenA,
+        state.tokenB,
+        true,
+        0.1
+      );
       await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
       if (await b.strategy.needRebalance()) {
         if (countRebalance === 0) {
@@ -115,29 +122,88 @@ export class PairBasedStrategyPrepareStateUtils {
 
   /**
    * Get swap amount to move price up/down in the pool
+   * @param signer
+   * @param b
+   * @param tokenA
+   * @param tokenB
+   * @param priceTokenBUp
+   *  true - move price of token B up == swap A to B
+   *  false - move price of token B down == swap B to A
+   * @param overlapNextTickRatio
+   *  A part of amount in the next tick that should be swapped
+   *  together with full amount of the current tick
+   *  Value in the range: [0..1)
+   * @return
+   *  priceTokenBUp === true: amount of token A to swap
+   *  priceTokenBUp === false: amount of token B to swap
    */
-  static async getSwapAmount(
-      signer: SignerWithAddress,
-      b: IBuilderResults,
-      useTokenB: boolean
+  static async getSwapAmount2(
+    signer: SignerWithAddress,
+    b: IBuilderResults,
+    tokenA: string,
+    tokenB: string,
+    priceTokenBUp: boolean,
+    overlapNextTickRatio: number
   ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
     const lib = this.getLib(platform, b);
-    const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
-    const pricesAB = await b.facadeLib2.getOracleAssetsPrices(b.converter.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
-    console.log("getSwapAmount.pricesAB", +formatUnits(pricesAB[0], 18), +formatUnits(pricesAB[1], 18));
-    let swapAmount: BigNumber;
-    if (useTokenB) {
-      const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
-      console.log("getSwapAmount.priceB", +formatUnits(priceB, 6));
-      const swapAmount0 = amounts[1].mul(pricesAB[1]).div(parseUnits('1', 18));
-      swapAmount = swapAmount0.add(swapAmount0.div(100));
-    } else {
-      // const priceA = await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN);
-      const swapAmount0 = amounts[0].mul(pricesAB[0]).div(parseUnits('1', 18));
-      swapAmount = swapAmount0.add(parseUnits('0.001', 6));
-    }
+    const amountsInCurrentTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
+    console.log("amountsInCurrentTick", amountsInCurrentTick);
 
-    return swapAmount;
+    if (priceTokenBUp) {
+      // swap A to B, return amount A to swap
+      const amountsInNextTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(
+        signer,
+        platform,
+        lib,
+        b.pool,
+        -1
+      );
+      console.log("amountsInNextTick", amountsInNextTick);
+
+      // calculate amount B that we are going to receive
+      const amountOut = amountsInCurrentTick[1].add(
+        amountsInNextTick[1].mul(
+          parseUnits(overlapNextTickRatio.toString(), 18)
+        ).div(Misc.ONE18)
+      );
+      console.log("amountOut", amountsInNextTick);
+      const amountIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
+        signer,
+        b,
+        tokenA,
+        tokenB,
+        amountOut
+      );
+      console.log("Result amountIn", amountIn);
+      return amountIn;
+    } else {
+      // swap B to A, return amount B to swap
+      const amountsInNextTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(
+        signer,
+        platform,
+        lib,
+        b.pool,
+        1
+      );
+      console.log("amountsInNextTick", amountsInNextTick);
+
+      // calculate amount B that we are going to receive
+      const amountOut = amountsInCurrentTick[0].add(
+        amountsInNextTick[0].mul(
+          parseUnits(overlapNextTickRatio.toString(), 18)
+        ).div(Misc.ONE18)
+      );
+      console.log("amountOut", amountsInNextTick);
+      const amountIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
+        signer,
+        b,
+        tokenB,
+        tokenA,
+        amountOut
+      );
+      console.log("Result amountIn", amountIn);
+      return amountIn;
+    }
   }
 }

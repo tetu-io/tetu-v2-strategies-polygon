@@ -4,7 +4,7 @@ import hre from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
 import {
-  AlgebraConverterStrategy__factory,
+  AlgebraConverterStrategy__factory, AlgebraLib,
   BalancerBoostedStrategy__factory, BorrowManager,
   ConverterStrategyBase, ConverterStrategyBase__factory,
   IBalancerGauge__factory, IBorrowManager,
@@ -15,9 +15,9 @@ import {
   IPoolAdapter__factory, IPriceOracle,
   IPriceOracle__factory, IRebalancingV2Strategy, IRebalancingV2Strategy__factory,
   ISplitter__factory, ITetuConverter,
-  ITetuConverter__factory, IUniswapV3Pool__factory, KyberConverterStrategy__factory,
+  ITetuConverter__factory, IUniswapV3Pool__factory, KyberConverterStrategy__factory, KyberLib,
   TetuVaultV2,
-  UniswapV3ConverterStrategy__factory
+  UniswapV3ConverterStrategy__factory, UniswapV3Lib
 } from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
@@ -25,11 +25,17 @@ import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
 import {BigNumber} from "ethers";
 import {PackedData} from "./PackedData";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
+import {PairStrategyLiquidityUtils} from "../strategies/PairStrategyLiquidityUtils";
 
 export interface IRebalanceResults {
   fuseStatus?: number;
   loss: BigNumber;
   covered: BigNumber;
+}
+
+export interface ILiquidityAmountInTick {
+  amountTokenA: number;
+  amountTokenB: number;
 }
 
 export interface IPairState {
@@ -40,6 +46,9 @@ export interface IPairState {
   upperTick: number;
   rebalanceTickRange: number;
   totalLiquidity: BigNumber;
+  prevTick?: ILiquidityAmountInTick,
+  currentTick?: ILiquidityAmountInTick,
+  nextTick?: ILiquidityAmountInTick,
 }
 
 export interface IUniv3SpecificState {
@@ -135,6 +144,11 @@ export interface IStateNum {
   lockedPercent: number;
 
   pairState?: IPairState;
+
+  pairPrevTick?: ILiquidityAmountInTick;
+  pairCurrentTick?: ILiquidityAmountInTick;
+  pairNextTick?: ILiquidityAmountInTick;
+
   univ3?: IUniv3SpecificState
   univ3Pool?: IUniv3Pool;
   rebalanced?: {
@@ -155,6 +169,7 @@ export interface IFixPricesChangesEventInfo {
 export interface IGetStateParams {
   fixChangePrices?: IFixPricesChangesEventInfo[];
   rebalanced?: IRebalanceResults;
+  lib?: KyberLib | UniswapV3Lib | AlgebraLib;
 }
 
 /**
@@ -180,7 +195,7 @@ export class StateUtilsNum {
     strategy: IRebalancingV2Strategy,
     vault: TetuVaultV2,
     title?: string,
-    p?: IGetStateParams
+    p?: IGetStateParams,
   ): Promise<IStateNum> {
     return this.getState(
       signer,
@@ -188,7 +203,7 @@ export class StateUtilsNum {
       ConverterStrategyBase__factory.connect(strategy.address, strategy.signer),
       vault,
       title,
-      p
+      p,
     );
   }
 
@@ -198,7 +213,7 @@ export class StateUtilsNum {
     strategy: ConverterStrategyBase,
     vault: TetuVaultV2,
     title?: string,
-    p?: IGetStateParams
+    p?: IGetStateParams,
   ): Promise<IStateNum> {
     const block = await hre.ethers.provider.getBlock('latest');
     const splitterAddress = await vault.splitter();
@@ -229,6 +244,10 @@ export class StateUtilsNum {
     let fuseStatusA: number | undefined;
     let fuseStatusB: number | undefined;
     let withdrawDone: number | undefined;
+
+    let currentTick: ILiquidityAmountInTick | undefined;
+    let prevTick: ILiquidityAmountInTick | undefined;
+    let nextTick: ILiquidityAmountInTick | undefined;
 
     const converter = await ITetuConverter__factory.connect(await strategy.converter(), signer);
     const priceOracle = IPriceOracle__factory.connect(
@@ -262,9 +281,10 @@ export class StateUtilsNum {
       gaugeDecimals = (await gauge.decimals()).toNumber();
       gaugeStrategyBalance = +formatUnits(await gauge.balanceOf(strategy.address), gaugeDecimals);
     } else {
-      const isUniv3 = await strategy.PLATFORM() === PLATFORM_UNIV3;
-      const isAlgebra = await strategy.PLATFORM() === PLATFORM_ALGEBRA;
-      const isKyber = await strategy.PLATFORM() === PLATFORM_KYBER;
+      const platform = await strategy.PLATFORM();
+      const isUniv3 = platform === PLATFORM_UNIV3;
+      const isAlgebra = platform === PLATFORM_ALGEBRA;
+      const isKyber = platform === PLATFORM_KYBER;
 
       if (isUniv3 || isAlgebra || isKyber)  {
         const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
@@ -284,6 +304,24 @@ export class StateUtilsNum {
         fuseStatusB = state.fuseStatusTokenB;
         withdrawDone = state.withdrawDone;
 
+        if (p?.lib) {
+          const [currentAmountA, currentAmountB] = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, p.lib, state.pool, 0);
+          currentTick = {
+            amountTokenA: +formatUnits(currentAmountA, assetDecimals),
+            amountTokenB: +formatUnits(currentAmountB, await tokenB.decimals())
+          }
+          const [prevAmountA, prevAmountB] = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, p.lib, state.pool, -1);
+          prevTick = {
+            amountTokenA: +formatUnits(prevAmountA, assetDecimals),
+            amountTokenB: +formatUnits(prevAmountB, await tokenB.decimals())
+          }
+          const [nextAmountA, nextAmountB] = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, p.lib, state.pool, 1);
+          nextTick = {
+            amountTokenA: +formatUnits(nextAmountA, assetDecimals),
+            amountTokenB: +formatUnits(nextAmountB, await tokenB.decimals())
+          }
+        }
+
         pairState = {
           tokenA: state.tokenA,
           tokenB: state.tokenB,
@@ -292,6 +330,9 @@ export class StateUtilsNum {
           upperTick: state.upperTick,
           rebalanceTickRange: state.rebalanceTickRange,
           totalLiquidity: state.totalLiquidity,
+          prevTick,
+          currentTick,
+          nextTick
         }
 
         if (isUniv3) {
@@ -407,6 +448,11 @@ export class StateUtilsNum {
         : (Math.abs(directBorrows.totalLockedAmountInUnderlying) + Math.abs(reverseBorrows.totalLockedAmountInUnderlying)) / totalAssets,
 
       pairState,
+
+      pairCurrentTick: currentTick,
+      pairNextTick: nextTick,
+      pairPrevTick: prevTick,
+
       univ3: univ3SpecificState,
       univ3Pool,
 
@@ -610,6 +656,13 @@ export class StateUtilsNum {
 
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
+
+      'pair.prev.tick.A',
+      'pair.prev.tick.B',
+      'pair.tick.A',
+      'pair.tick.B',
+      'pair.next.tick.A',
+      'pair.next.tick.B',
     ];
 
     return { stateHeaders };
@@ -697,6 +750,13 @@ export class StateUtilsNum {
 
       item.fixPriceChanges?.assetBefore,
       item.fixPriceChanges?.assetAfter,
+
+      item.pairPrevTick?.amountTokenA,
+      item.pairPrevTick?.amountTokenB,
+      item.pairCurrentTick?.amountTokenA,
+      item.pairCurrentTick?.amountTokenB,
+      item.pairNextTick?.amountTokenA,
+      item.pairNextTick?.amountTokenB,
     ]);
 
     writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: override ? 'w' : 'a'});
