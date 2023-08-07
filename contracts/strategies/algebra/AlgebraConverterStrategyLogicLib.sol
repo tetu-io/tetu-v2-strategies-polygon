@@ -93,7 +93,7 @@ library AlgebraConverterStrategyLogicLib {
       }
       tickData[0] = tickSpacing;
       (tickData[1], tickData[2]) = AlgebraDebtLib.calcTickRange(IAlgebraPool(controllerPool[1]), tickRange, tickSpacing);
-      tickData[3] = tickRange;
+      tickData[3] = rebalanceTickRange;
     }
 
     PairBasedStrategyLogicLib.setInitialDepositorValues(
