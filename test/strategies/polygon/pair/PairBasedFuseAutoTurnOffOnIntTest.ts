@@ -24,6 +24,7 @@ import {PairStrategyLiquidityUtils} from "../../../baseUT/strategies/PairStrateg
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -63,9 +64,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   let snapshotBefore: string;
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
-  let libUniv3: UniswapV3Lib;
-  let libAlgebra: AlgebraLib;
-  let libKyber: KyberLib;
 //endregion Variables
 
   //region before, after
@@ -85,9 +83,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     });
 
     [signer, signer2] = await ethers.getSigners();
-    libUniv3 = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;
-    libAlgebra = await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib;
-    libKyber = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib;
   })
 
   after(async function () {
@@ -128,14 +123,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     thresholdsB: number[];
   }
 
-  function getLib(platform: string) : UniswapV3Lib | AlgebraLib | KyberLib {
-    return platform === PLATFORM_ALGEBRA
-      ? libAlgebra
-      : platform === PLATFORM_KYBER
-        ? libKyber
-        : libUniv3;
-  }
-
   async function movePriceToChangeFuseStatus(
     b: IBuilderResults,
     movePricesUpDown: boolean,
@@ -157,17 +144,8 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       : states[states.length - 1].fuseStatusB;
 
     for (let i = 0; i < maxCountRebalances; ++i) {
-      const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
-      let swapAmount: BigNumber;
-      if (useTokenB) {
-        const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
-        const swapAmount0 = amounts[1].mul(priceB).div(parseUnits('1', 6));
-        swapAmount = swapAmount0.add(swapAmount0.div(swapAmountPart || 100));
-      } else {
-        const priceA = await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN);
-        const swapAmount0 = amounts[0].mul(priceA).div(parseUnits('1', 6));
-        swapAmount = swapAmount0.add(parseUnits('0.001', 6));
-      }
+      // todo use swapAmountPart
+      const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount(signer, b, useTokenB);
 
       if (movePricesUpDown) {
         await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
@@ -206,7 +184,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     let rebalanceFuseOff: IPriceFuseStatus | undefined;
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
     const platform = await converterStrategyBase.PLATFORM();
-    const lib = getLib(platform);
+    const lib = await PairBasedStrategyPrepareStateUtils.getLib(platform, b);
 
     console.log('deposit...');
     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -253,23 +231,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       thresholdsB: state.fuseThresholdsB
     };
   }
-
-  // /**
-  //  * Deploy TetuConverter-contract and upgrade proxy
-  //  */
-  // async function injectTetuConverter() {
-  //   const core = await DeployerUtilsLocal.getCoreAddresses();
-  //   const tetuConverter = getConverterAddress();
-  //
-  //   const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
-  //   const controller = ControllerV2__factory.connect(core.controller, signer);
-  //   const governance = await controller.governance();
-  //   const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-  //
-  //   await controllerAsGov.announceProxyUpgrade([tetuConverter], [converterLogic.address]);
-  //   await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-  //   await controllerAsGov.upgradeProxy([tetuConverter]);
-  // }
 //endregion Utils
 
 //region Unit tests
@@ -288,23 +249,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
 
-        const lib = getLib(await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM());
-        const priceA = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN), 6);
-        const priceB = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN), 6);
-        console.log("priceA, priceB", priceA, priceB);
-
-        const ttA = [priceA - 0.0008, priceA - 0.0006, priceA + 0.0008, priceA + 0.0006].map(x => parseUnits(x.toString(), 18));
-        const ttB = [priceB - 0.0008, priceB - 0.0006, priceB + 0.0008, priceB + 0.0006].map(x => parseUnits(x.toString(), 18));
-        console.log("ttA, ttB", ttA, ttB);
-        // ["0.9996", "0.9998", "1.0003", "1.0001"];
-        await b.strategy.setFuseThresholds(
-          0,
-          [ttA[0], ttA[1], ttA[2], ttA[3]]
-        );
-        await b.strategy.setFuseThresholds(
-          1,
-          [ttB[0], ttB[1], ttB[2], ttB[3]]
-        );
+        await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;
       }
 

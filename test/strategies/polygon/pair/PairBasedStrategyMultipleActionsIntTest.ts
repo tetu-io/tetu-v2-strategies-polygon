@@ -70,10 +70,6 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
-
-  let libUniv3: UniswapV3Lib;
-  let libAlgebra: AlgebraLib;
-  let libKyber: KyberLib;
 //endregion Variables
 
 //region before, after
@@ -84,10 +80,6 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
     snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
-
-    libUniv3 = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;
-    libAlgebra = await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib;
-    libKyber = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib;
   })
 
   after(async function() {
@@ -105,61 +97,6 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after
-
-//region Utils
-  function getLib(platform: string) : UniswapV3Lib | AlgebraLib | KyberLib {
-    return platform === PLATFORM_ALGEBRA
-      ? libAlgebra
-      : platform === PLATFORM_KYBER
-        ? libKyber
-        : libUniv3;
-  }
-
-  async function prepareNeedRebalanceOn(b: IBuilderResults) {
-    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-    const platform = await converterStrategyBase.PLATFORM();
-    const state = await PackedData.getDefaultState(b.strategy);
-
-    // move strategy to "need to rebalance" state
-    const lib = getLib(platform);
-    let countRebalances = 0;
-    for (let i = 0; i < 10; ++i) {
-      let swapAmount: BigNumber;
-      const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
-      const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
-      const swapAmount0 = amounts[1].mul(priceB).div(parseUnits('1', 6));
-      swapAmount = swapAmount0.add(swapAmount0.div(100));
-      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
-      if (await b.strategy.needRebalance()) {
-        if (countRebalances === 0) {
-          await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-          countRebalances++;
-        } else {
-          break;
-        }
-      }
-    }
-  }
-
-  async function prepareFuse(b: IBuilderResults, triggerOn: boolean) {
-    console.log("activate fuse ON");
-    const lib = getLib(await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM());
-    const priceA = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDC_TOKEN), 6);
-    const priceB = +formatUnits(await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN), 6);
-    console.log("priceA, priceB", priceA, priceB);
-
-    const ttA = [priceA - 0.0008, priceA - 0.0006, priceA + 0.0008, priceA + 0.0006].map(x => parseUnits(x.toString(), 18));
-    const ttB = [
-      priceB - 0.0008,
-      priceB - 0.0006,
-      priceB + (triggerOn ? -0.0001 : 0.0004), // (!) fuse ON/OFF
-      priceB + (triggerOn ? -0.0002 : 0.0002),
-    ].map(x => parseUnits(x.toString(), 18));
-
-    await b.strategy.setFuseThresholds(0, [ttA[0], ttA[1], ttA[2], ttA[3]]);
-    await b.strategy.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
-  }
-//endregion Utils
 
 //region Unit tests
   describe("Loop with rebalance, hardwork, deposit and withdraw", () => {

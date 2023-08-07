@@ -177,4 +177,11 @@ contract ConverterStrategyBaseLibFacade2 {
   ) {
     return ConverterStrategyBaseLib2.getTokenAmountsPair(converter, totalAssets, tokenA, tokenB, liquidationThresholdsAB);
   }
+
+  function getOracleAssetsPrices(ITetuConverter converter, address tokenA, address tokenB) external view returns (
+    uint priceA,
+    uint priceB
+  ) {
+    return ConverterStrategyBaseLib2.getOracleAssetsPrices(converter, tokenA, tokenB);
+  }
 }
