@@ -36,8 +36,11 @@ library AlgebraDebtLib {
       if (bB > 0) {
         uint needTransferB = AlgebraLib.getPrice(pool, tokenA) * needToCoverA / 10 ** IERC20Metadata(tokenA).decimals();
         uint canTransferB = Math.min(needTransferB, bB);
-        IERC20(tokenB).safeTransferFrom(strategyProfitHolder, address(this), canTransferB);
-        needToCoverA -= needToCoverA * canTransferB / needTransferB;
+        // There is a chance to have needTransferB == canTransferB == 0 if loss = 1
+        if (canTransferB != 0) {
+          IERC20(tokenB).safeTransferFrom(strategyProfitHolder, address(this), canTransferB);
+          needToCoverA -= needToCoverA * canTransferB / needTransferB;
+        }
       }
       covered = loss - needToCoverA;
     }

@@ -276,13 +276,11 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
             }
             it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
               const ret = await loadFixture(makeTest);
-              console.log("ret", ret);
               expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_UPPER_LIMIT_3);
               expect(ret.rebalanceFuseOn?.price || 0).gte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_ON]);
             });
             it("should trigger fuse OFF at the end", async () => {
               const ret = await loadFixture(makeTest);
-              console.log("ret", ret);
               const status = ret.rebalanceFuseOff?.fuseStatus || 0;
               expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
               expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_OFF]);
@@ -301,13 +299,11 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
             }
             it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
               const ret = await loadFixture(makeTest);
-              console.log("ret", ret);
               expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
               expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_ON]);
             });
             it("should trigger fuse OFF at the end", async () => {
               const ret = await loadFixture(makeTest);
-              console.log("ret", ret);
               const status = ret.rebalanceFuseOff?.fuseStatus || 0;
               expect(status === FUSE_OFF_1 || status === FUSE_ON_UPPER_LIMIT_3).eq(true);
               expect(ret.rebalanceFuseOff?.price || 0).gte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_OFF]);

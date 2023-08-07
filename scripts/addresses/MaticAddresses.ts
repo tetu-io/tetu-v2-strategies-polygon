@@ -310,6 +310,7 @@ export class MaticAddresses {
   public static DYSTOPIA_TETU_USDPlus = '0x5A272ad79cBd3C874879E3FEc5753C2127f77583'.toLowerCase();
 
   // UNISWAP V3
+  public static UNISWAPV3_QUOTER = "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6".toLowerCase();
   // stable pools
   public static UNISWAPV3_USDC_DAI_100 = '0x5645dCB64c059aa11212707fbf4E7F984440a8Cf'.toLowerCase()
   public static UNISWAPV3_USDC_USDT_100 = '0xDaC8A8E6DBf8c690ec6815e0fF03491B2770255D'.toLowerCase()
@@ -332,11 +333,15 @@ export class MaticAddresses {
   public static ALGEBRA_USDC_USDT = '0x7b925e617aefd7fb3a93abe3a701135d7a1ba710'.toLowerCase()
   public static ALGEBRA_dQUICK_QUICK = '0x194257104FabFd9f48bD01bd71A719637B4bbfA9'.toLowerCase()
   public static ALGEBRA_USDC_QUICK = '0x022df0b3341B3A0157EEA97dD024A93f7496D631'.toLowerCase()
+  /** https://docs.quickswap.exchange/reference/smart-contracts/v3/04-quoter/#quoteexactoutputsingle */
+  public static ALGEBRA_QUOTER = "0xa15F0D7377B2A0C0c10db057f641beD21028FC89".toLowerCase();
 
   // KYBER
   public static KYBER_USDC_USDT = '0x879664ce5A919727b3Ed4035Cf12F7F740E8dF00'.toLowerCase()
   public static KYBER_WBTC_WETH = '0x4ebc4d2763e951197f07b6b8b3c2bdfbff7d6b5f'.toLowerCase()
   public static KYBER_KNC_USDC = '0x4b440a7de0ab7041934d0c171849a76cc33234fa'.toLowerCase()
+  /** https://docs.kyberswap.com/liquidity-solutions/kyberswap-elastic/contracts/elastic-contract-addresses */
+  public static KYBER_ELASTIC_QUOTER_V2 = "0x4d47fd5a29904Dae0Ef51b1c450C9750F15D7856".toLowerCase();
 
   // Aggregators
   public static AGG_ONEINCH_V5 = '0x1111111254EEB25477B68fb85Ed929f73A960582'.toLowerCase()

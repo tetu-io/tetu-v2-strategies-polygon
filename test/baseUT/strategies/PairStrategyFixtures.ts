@@ -33,6 +33,8 @@ export class PairStrategyFixtures {
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
       swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+      quoter: MaticAddresses.UNISWAPV3_QUOTER,
+
       liquidatorPools: [{
         pool: MaticAddresses.UNISWAPV3_USDC_USDT_100,
         swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
@@ -54,6 +56,7 @@ export class PairStrategyFixtures {
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.dQUICK_TOKEN, MaticAddresses.WMATIC_TOKEN,],
       swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+      quoter: MaticAddresses.ALGEBRA_QUOTER,
       liquidatorPools: [
         // for production
         {
@@ -91,6 +94,7 @@ export class PairStrategyFixtures {
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.KNC_TOKEN,],
       swapper: MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
+      quoter: MaticAddresses.KYBER_ELASTIC_QUOTER_V2,
       liquidatorPools: [
         {
           pool: MaticAddresses.KYBER_USDC_USDT,

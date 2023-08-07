@@ -49,6 +49,7 @@ export interface IBuilderParams {
   swapper: string;
   profitHolderTokens: string[];
   liquidatorPools: ITetuLiquidator.PoolDataStruct[];
+  quoter: string;
 
   compoundRatio?: number;
 }
@@ -69,6 +70,7 @@ export interface IBuilderResults {
   operator: SignerWithAddress;
   swapper: string;
   converter: ITetuConverter;
+  quoter: string;
 
   facadeLib2: ConverterStrategyBaseLibFacade2;
   libUniv3: UniswapV3Lib;
@@ -156,11 +158,11 @@ export class PairBasedStrategyBuilder {
       swapper: p.swapper,
       facadeLib2: await MockHelper.createConverterStrategyBaseLibFacade2(signer),
       converter: ITetuConverter__factory.connect(p.converter, signer),
+      quoter: p.quoter,
 
       libUniv3: await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib,
       libAlgebra: await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib,
       libKyber: await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib,
-
     }
   }
   static async buildUniv3(p: IBuilderParams): Promise<IBuilderResults> {

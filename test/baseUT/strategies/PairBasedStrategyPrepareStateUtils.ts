@@ -116,14 +116,20 @@ export class PairBasedStrategyPrepareStateUtils {
   /**
    * Get swap amount to move price up/down in the pool
    */
-  static async getSwapAmount(signer: SignerWithAddress, b: IBuilderResults, useTokenB: boolean): Promise<BigNumber> {
+  static async getSwapAmount(
+      signer: SignerWithAddress,
+      b: IBuilderResults,
+      useTokenB: boolean
+  ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
     const lib = this.getLib(platform, b);
     const amounts = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
     const pricesAB = await b.facadeLib2.getOracleAssetsPrices(b.converter.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
+    console.log("getSwapAmount.pricesAB", +formatUnits(pricesAB[0], 18), +formatUnits(pricesAB[1], 18));
     let swapAmount: BigNumber;
     if (useTokenB) {
-      // const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
+      const priceB = await lib.getPrice(b.pool, MaticAddresses.USDT_TOKEN);
+      console.log("getSwapAmount.priceB", +formatUnits(priceB, 6));
       const swapAmount0 = amounts[1].mul(pricesAB[1]).div(parseUnits('1', 18));
       swapAmount = swapAmount0.add(swapAmount0.div(100));
     } else {
