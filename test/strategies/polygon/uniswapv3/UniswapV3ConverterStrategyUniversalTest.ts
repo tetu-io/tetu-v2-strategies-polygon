@@ -119,10 +119,25 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         ));
       },
       strategyInit: async(strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
+        const state = await PackedData.getDefaultState(strategy)
+        const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, user).decimals()
+        const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, user).decimals()
         await StrategyTestUtils.setThresholds(
           strategy as unknown as IStrategyV2,
           user,
-          { reinvestThresholdPercent },
+          {
+            reinvestThresholdPercent,
+            rewardLiquidationThresholds: [
+              {
+                asset: state.tokenA,
+                threshold: parseUnits('0.0001', tokenADecimals),
+              },
+              {
+                asset: state.tokenB,
+                threshold: parseUnits('0.0001', tokenBDecimals),
+              },
+            ]
+          },
         );
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
         await PriceOracleImitatorUtils.uniswapV3(user, t[1], t[0])
@@ -132,7 +147,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+        const swapAmount = BigNumber.from(parseUnits('600000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniswapV3StrategyUtils.movePriceUp(
           swapUser,
           strategy.address,
@@ -145,7 +160,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
+        const swapAmount = BigNumber.from(parseUnits('600000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
         await UniswapV3StrategyUtils.movePriceDown(
           swapUser,
           strategy.address,

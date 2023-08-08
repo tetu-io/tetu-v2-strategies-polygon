@@ -3,14 +3,14 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IStrategyV2.sol";
-import "../interfaces/IRebalancingStrategy.sol";
+import "../interfaces/IRebalancingV2Strategy.sol";
 
-/// @title Gelato resolver for rebalancing strategies
+/// @title Gelato resolver for rebalancing v2 strategies
 /// @author a17
 contract RebalanceResolver {
   // --- CONSTANTS ---
 
-  string public constant VERSION = "2.0.0";
+  string public constant VERSION = "3.0.0";
 
   // --- VARIABLES ---
 
@@ -59,7 +59,7 @@ contract RebalanceResolver {
   function call() external {
     require(operators[msg.sender], "!operator");
 
-    try IRebalancingStrategy(strategy).rebalance() {} catch Error(string memory _err) {
+    try IRebalancingV2Strategy(strategy).rebalanceNoSwaps(true) {} catch Error(string memory _err) {
       revert(string(abi.encodePacked("Strategy error: 0x", _toAsciiString(strategy), " ", _err)));
     } catch (bytes memory _err) {
       revert(string(abi.encodePacked("Strategy low-level error: 0x", _toAsciiString(strategy), " ", string(_err))));
@@ -73,7 +73,7 @@ contract RebalanceResolver {
     if (
       !splitter.pausedStrategies(strategy_)
       && lastRebalance + delay < block.timestamp
-      && IRebalancingStrategy(strategy_).needRebalance()
+      && IRebalancingV2Strategy(strategy_).needRebalance()
     ) {
       return (true, abi.encodeWithSelector(RebalanceResolver.call.selector));
     }

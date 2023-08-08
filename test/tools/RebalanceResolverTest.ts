@@ -73,8 +73,8 @@ describe('RebalanceResolver tests', function () {
       const poolAddress = MaticAddresses.UNISWAPV3_USDC_WETH_500;
       // +-10% price (1 tick == 0.01% price change)
       const range = 1000;
-      // +-1% price - rebalance
-      const rebalanceRange = 100;
+      // +-0.4% price - rebalance
+      const rebalanceRange = 40;
 
       await _strategy.init(
         core.controller,
