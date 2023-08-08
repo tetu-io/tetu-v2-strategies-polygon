@@ -100,7 +100,7 @@ export class TokenUtils {
       console.log('transfer', await TokenUtils.tokenSymbol(tokenAddress), amount);
       console.log("balance", await IERC20__factory.connect(tokenAddress, signer).balanceOf(signer.address));
     }
-    return IERC20__factory.connect(tokenAddress, signer).transfer(destination, BigNumber.from(amount))
+    return IERC20__factory.connect(tokenAddress, signer).transfer(destination, BigNumber.from(amount), {gasLimit: 19_000_000})
   }
 
   public static async wrapNetworkToken(signer: SignerWithAddress, amount: string) {

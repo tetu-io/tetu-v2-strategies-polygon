@@ -50,7 +50,7 @@ export class PairBasedStrategyPrepareStateUtils {
         state.tokenA,
         state.tokenB,
         true,
-        0.1
+        1.1
       );
       await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
       if (await b.strategy.needRebalance()) {

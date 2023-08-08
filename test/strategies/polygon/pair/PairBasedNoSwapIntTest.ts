@@ -55,7 +55,7 @@ describe('PairBasedNoSwapIntTest', function() {
   const PLAN_REPAY_SWAP_REPAY = 1;
   const PLAN_SWAP_ONLY = 2;
 
-  const DEFAULT_OVERLAP_RATIO = 0.3;
+  const DEFAULT_SWAP_AMOUNT_RATIO = 0.3;
 
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
@@ -135,7 +135,7 @@ describe('PairBasedNoSwapIntTest', function() {
         state.tokenA,
         state.tokenB,
         p.movePricesUp,
-        DEFAULT_OVERLAP_RATIO
+        DEFAULT_SWAP_AMOUNT_RATIO
       );
       console.log("prepareOverCollateral.swapAmount", swapAmount);
 
@@ -311,9 +311,9 @@ describe('PairBasedNoSwapIntTest', function() {
       sharePriceDeviation: number
     }
     const strategies: IStrategyInfo[] = [
-      // { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-5},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-5},
       { name: PLATFORM_ALGEBRA, sharePriceDeviation: 1e-5},
-      // { name: PLATFORM_KYBER, sharePriceDeviation: 1e-5},
+      { name: PLATFORM_KYBER, sharePriceDeviation: 1e-5},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
