@@ -129,9 +129,10 @@ export class PairBasedStrategyPrepareStateUtils {
    * @param priceTokenBUp
    *  true - move price of token B up == swap A to B
    *  false - move price of token B down == swap B to A
-   * @param overlapRatio
-   *  amount to swap = amount in the current tick * (1 + overlapRatio)
-   *  Value >= 0
+   * @param swapAmountRatio
+   * * How to calculate swapAmount to move price in the pool
+   *  * A = amount of the token in the current tick
+   *  * swapAmount = A * alpha
    * @return
    *  priceTokenBUp === true: amount of token A to swap
    *  priceTokenBUp === false: amount of token B to swap
@@ -142,7 +143,7 @@ export class PairBasedStrategyPrepareStateUtils {
     tokenA: string,
     tokenB: string,
     priceTokenBUp: boolean,
-    overlapRatio: number
+    swapAmountRatio: number = 1
   ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
     const lib = this.getLib(platform, b);
@@ -154,7 +155,7 @@ export class PairBasedStrategyPrepareStateUtils {
     if (priceTokenBUp) {
       // calculate amount B that we are going to receive
       const amountBOut = amountsInCurrentTick[1].mul(
-        Misc.ONE18.add(parseUnits(overlapRatio.toString(), 18))
+        parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
 
       console.log("amountBOut", amountBOut);
@@ -170,7 +171,7 @@ export class PairBasedStrategyPrepareStateUtils {
     } else {
       // calculate amount A that we are going to receive
       const amountAOut = amountsInCurrentTick[0].mul(
-        Misc.ONE18.add(parseUnits(overlapRatio.toString(), 18))
+        parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
 
       console.log("amountAOut", amountAOut);

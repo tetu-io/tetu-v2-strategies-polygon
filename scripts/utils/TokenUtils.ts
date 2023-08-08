@@ -98,6 +98,7 @@ export class TokenUtils {
   public static async transfer(tokenAddress: string, signer: SignerWithAddress, destination: string, amount: string, silent?: boolean) {
     if (!silent) {
       console.log('transfer', await TokenUtils.tokenSymbol(tokenAddress), amount);
+      console.log("balance", await IERC20__factory.connect(tokenAddress, signer).balanceOf(signer.address));
     }
     return IERC20__factory.connect(tokenAddress, signer).transfer(destination, BigNumber.from(amount))
   }
