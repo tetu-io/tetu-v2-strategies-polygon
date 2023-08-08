@@ -19,7 +19,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -402,31 +401,25 @@ library UniswapV3ConverterStrategyLogicLib {
   ) external returns (
     uint[] memory tokenAmounts
   ) {
-    console.log("rebalanceNoSwaps.1");
     RebalanceLocal memory v;
     _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState, liquidityThresholds_);
 
-    console.log("rebalanceNoSwaps.2");
     bool needRebalance;
     int24 tick = UniswapV3DebtLib.getCurrentTick(IUniswapV3Pool(pairState.pool));
     (needRebalance,v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(pairState, v.converter, tick);
 
-    console.log("rebalanceNoSwaps.3");
     // update fuse status if necessary
     if (needRebalance) {
       // we assume here, that needRebalance is true if any fuse has changed state, see needStrategyRebalance impl
       PairBasedStrategyLogicLib.updateFuseStatus(pairState, v.fuseStatusChangedAB, v.fuseStatusAB);
     }
 
-    console.log("rebalanceNoSwaps.4");
     require(!checkNeedRebalance_ || needRebalance, Uni3StrategyErrors.NO_REBALANCE_NEEDED);
 
-    console.log("rebalanceNoSwaps.5");
     // rebalancing debt, setting new tick range
     if (needRebalance) {
       UniswapV3DebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, v.liquidationThresholdsAB, tick);
 
-      console.log("rebalanceNoSwaps.6");
       uint coveredByRewards;
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
