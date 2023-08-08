@@ -20,6 +20,8 @@ import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
+import {UniversalTestUtils} from "../utils/UniversalTestUtils";
+import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 
 /**
  * Utils to set up "current state of pair strategy" in tests
@@ -90,6 +92,10 @@ export class PairBasedStrategyPrepareStateUtils {
   /** Put addition amounts of tokenA and tokenB to balance of the profit holder */
   static async prepareToHardwork(signer: SignerWithAddress, b: IBuilderResults) {
     const state = await PackedData.getDefaultState(b.strategy);
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+    const platformVoter = await IController__factory.connect(await converterStrategyBase.controller(), signer).platformVoter();
+
+    await converterStrategyBase.connect(await Misc.impersonate(platformVoter)).setCompoundRatio(90_000);
 
     await TokenUtils.getToken(
       state.tokenA,

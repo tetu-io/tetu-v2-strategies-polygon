@@ -9,6 +9,7 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "./AlgebraStrategyErrors.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "hardhat/console.sol";
 
 contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IRebalancingV2Strategy {
 
@@ -291,6 +292,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
   }
 
   function _beforeWithdraw(uint /*amount*/) internal view override {
+    console.log("AlgebraConverterStrategy._beforeWithdraw.needRebalance()", needRebalance());
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
   }
 

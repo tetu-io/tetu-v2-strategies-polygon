@@ -9,7 +9,6 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -135,13 +134,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Rebalance using borrow/repay only, no swaps
   /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
   function rebalanceNoSwaps(bool checkNeedRebalance) external override {
-    console.log("UniswapV3ConverterStrategy.rebalanceNoSwaps");
     address _controller = controller();
     StrategyLib2.onlyOperators(_controller);
 
-    console.log("UniswapV3ConverterStrategy.rebalanceNoSwaps.1");
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
-    console.log("UniswapV3ConverterStrategy.rebalanceNoSwaps.2");
     uint[] memory tokenAmounts = UniswapV3ConverterStrategyLogicLib.rebalanceNoSwaps(
       state.pair,
       [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
@@ -151,9 +147,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       checkNeedRebalance,
       liquidationThresholds
     );
-    console.log("UniswapV3ConverterStrategy.rebalanceNoSwaps.3");
     _rebalanceAfter(tokenAmounts);
-    console.log("UniswapV3ConverterStrategy.rebalanceNoSwaps.4");
   }
   //endregion--------------------------------------------- REBALANCE
 
@@ -285,7 +279,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function _beforeWithdraw(uint /*amount*/) internal view override {
-    console.log("UniswapV3ConverterStrategy._beforeWithdraw.needRebalance()", needRebalance());
     require(!needRebalance(), Uni3StrategyErrors.NEED_REBALANCE);
   }
 
@@ -312,15 +305,10 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Make actions after rebalance: depositor enter, update invested assets
   function _rebalanceAfter(uint[] memory tokenAmounts) internal {
-    console.log("_rebalanceAfter");
     if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
-      console.log("_rebalanceAfter.tokenAmounts[0]", tokenAmounts[0]);
-      console.log("_rebalanceAfter.tokenAmounts[1]", tokenAmounts[1]);
       _depositorEnter(tokenAmounts);
     }
-    console.log("_updateInvestedAssets.before");
     _updateInvestedAssets();
-    console.log("_updateInvestedAssets.after");
   }
 
   function _isFuseTriggeredOn() internal view returns (bool) {
