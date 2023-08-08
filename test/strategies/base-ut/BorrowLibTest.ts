@@ -3844,6 +3844,27 @@ describe('BorrowLibTest', () => {
           })
         ).revertedWith("TS-32 too high value"); // TOO_HIGH
       });
+
+      it("should revert with TS-23 not allowed", async () => {
+        await expect(
+          makeRebalanceAssets({
+            tokenX: usdc,
+            tokenY: usdt,
+            proportion: 40,
+            prices: {priceX: "1", priceY: "1"},
+            strategyBalances: {balanceX: "1", balanceY: "1"},
+            repays: [{
+              collateralAsset: usdt,
+              borrowAsset: usdc,
+              totalDebtAmountOut: "2648",
+              totalCollateralAmountOut: "5000",
+              // we assume here that
+              // the amount to swap 999200 is lower than the threshold
+              // so, repay is not possible.
+            }]
+          })
+        ).revertedWith("TS-23 not allowed"); // NOT_ALLOWED
+      });
     });
   });
 

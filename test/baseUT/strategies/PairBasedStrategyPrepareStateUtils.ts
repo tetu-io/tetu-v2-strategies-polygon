@@ -20,6 +20,8 @@ import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
+import {UniversalTestUtils} from "../utils/UniversalTestUtils";
+import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 
 /**
  * Utils to set up "current state of pair strategy" in tests
@@ -50,7 +52,7 @@ export class PairBasedStrategyPrepareStateUtils {
         state.tokenA,
         state.tokenB,
         true,
-        0.1
+        1.1
       );
       await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
       if (await b.strategy.needRebalance()) {
@@ -90,6 +92,10 @@ export class PairBasedStrategyPrepareStateUtils {
   /** Put addition amounts of tokenA and tokenB to balance of the profit holder */
   static async prepareToHardwork(signer: SignerWithAddress, b: IBuilderResults) {
     const state = await PackedData.getDefaultState(b.strategy);
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+    const platformVoter = await IController__factory.connect(await converterStrategyBase.controller(), signer).platformVoter();
+
+    await converterStrategyBase.connect(await Misc.impersonate(platformVoter)).setCompoundRatio(90_000);
 
     await TokenUtils.getToken(
       state.tokenA,
@@ -129,9 +135,10 @@ export class PairBasedStrategyPrepareStateUtils {
    * @param priceTokenBUp
    *  true - move price of token B up == swap A to B
    *  false - move price of token B down == swap B to A
-   * @param overlapRatio
-   *  amount to swap = amount in the current tick * (1 + overlapRatio)
-   *  Value >= 0
+   * @param swapAmountRatio
+   * * How to calculate swapAmount to move price in the pool
+   *  * A = amount of the token in the current tick
+   *  * swapAmount = A * alpha
    * @return
    *  priceTokenBUp === true: amount of token A to swap
    *  priceTokenBUp === false: amount of token B to swap
@@ -142,7 +149,7 @@ export class PairBasedStrategyPrepareStateUtils {
     tokenA: string,
     tokenB: string,
     priceTokenBUp: boolean,
-    overlapRatio: number
+    swapAmountRatio: number = 1
   ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
     const lib = this.getLib(platform, b);
@@ -154,7 +161,7 @@ export class PairBasedStrategyPrepareStateUtils {
     if (priceTokenBUp) {
       // calculate amount B that we are going to receive
       const amountBOut = amountsInCurrentTick[1].mul(
-        Misc.ONE18.add(parseUnits(overlapRatio.toString(), 18))
+        parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
 
       console.log("amountBOut", amountBOut);
@@ -170,7 +177,7 @@ export class PairBasedStrategyPrepareStateUtils {
     } else {
       // calculate amount A that we are going to receive
       const amountAOut = amountsInCurrentTick[0].mul(
-        Misc.ONE18.add(parseUnits(overlapRatio.toString(), 18))
+        parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
 
       console.log("amountAOut", amountAOut);

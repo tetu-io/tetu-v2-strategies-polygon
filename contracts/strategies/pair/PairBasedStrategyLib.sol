@@ -400,7 +400,7 @@ library PairBasedStrategyLib {
       if (actions[IDX_SWAP_2]) {
         (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
 
-        if (actions[IDX_REPAY_2]) {
+        if (actions[IDX_REPAY_2] && idxToRepay1 != 0) {
           // see calculations inside estimateSwapAmountForRepaySwapRepay
           // There are two possibilities here:
           // 1) All collateral asset available on balance was swapped. We need additional repay to get assets in right proportions

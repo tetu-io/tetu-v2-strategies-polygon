@@ -55,6 +55,10 @@ library AppErrors {
 
   string public constant GOVERNANCE_ONLY = "TS-22 governance only";
 
+  /// @notice BorrowLib has recursive call, sub-calls are not allowed
+  ///         This error can happen if allowed proportion is too small, i.e. 0.0004 : (1-0.0004)
+  ///         Such situation can happen if amount to swap is almost equal to the amount of the token in the current tick,
+  ///         so swap will move us close to the border between ticks.
   string public constant NOT_ALLOWED = "TS-23 not allowed";
 
   string public constant ZERO_VALUE = "TS-24 zero value";

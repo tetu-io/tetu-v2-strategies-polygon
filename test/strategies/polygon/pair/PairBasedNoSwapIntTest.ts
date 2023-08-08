@@ -23,6 +23,7 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -49,9 +50,12 @@ describe('PairBasedNoSwapIntTest', function() {
   const ENTRY_TO_POOL_DISABLED = 0;
   const ENTRY_TO_POOL_IS_ALLOWED = 1;
   const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+
   const PLAN_SWAP_REPAY = 0;
   const PLAN_REPAY_SWAP_REPAY = 1;
   const PLAN_SWAP_ONLY = 2;
+
+  const DEFAULT_SWAP_AMOUNT_RATIO = 0.3;
 
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
@@ -112,7 +116,8 @@ describe('PairBasedNoSwapIntTest', function() {
 
     const depositAmount1 = parseUnits('10000', b.assetDecimals);
     await TokenUtils.getToken(b.asset, signer.address, depositAmount1.mul(p.countLoops));
-    let swapAmount = parseUnits('100000', b.assetDecimals);
+
+    const state = await PackedData.getDefaultState(b.strategy);
 
     await depositToVault(b.vault, signer, depositAmount1, b.assetDecimals, b.assetCtr, b.insurance);
     states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `init`));
@@ -123,6 +128,16 @@ describe('PairBasedNoSwapIntTest', function() {
       console.log('------------------ CYCLE', i, '------------------');
 
       await TimeUtils.advanceNBlocks(300);
+
+      const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+        signer,
+        b,
+        state.tokenA,
+        state.tokenB,
+        p.movePricesUp,
+        DEFAULT_SWAP_AMOUNT_RATIO
+      );
+      console.log("prepareOverCollateral.swapAmount", swapAmount);
 
       if (p.movePricesUp) {
         await UniversalUtils.movePoolPriceUp(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
@@ -142,9 +157,6 @@ describe('PairBasedNoSwapIntTest', function() {
         states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r${i}`));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
       }
-
-      // decrease swap amount slowly
-      swapAmount = swapAmount.mul(12).div(10); // div on 1.1
     }
 
     return {states};
@@ -307,7 +319,12 @@ describe('PairBasedNoSwapIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       let snapshot: string;
       async function prepareStrategy(): Promise<IBuilderResults> {
-        return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+
+        // provide $1000 of insurance to compensate possible price decreasing
+        await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits('1000', 6));
+
+        return b;
       }
 
       describe(`${strategyInfo.name}`, () => {
@@ -330,11 +347,6 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
               }
 
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
               it("should not change share price significantly", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
                 const sharePrice0 = states[0].vault.sharePrice;
@@ -342,6 +354,11 @@ describe('PairBasedNoSwapIntTest', function() {
                   const sharePrice = states[i].vault.sharePrice;
                   expect(sharePrice0).approximately(sharePrice, strategyInfo.sharePriceDeviation, states[i].title);
                 }
+              });
+              it("should reduce locked amount significantly", async () => {
+                const {states} = await loadFixture(callWithdrawSingleIteration);
+                const [stateLast, statePrev, ...rest] = [...states].reverse();
+                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
               });
               it("should enter to the pool at the end", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
@@ -371,11 +388,11 @@ describe('PairBasedNoSwapIntTest', function() {
                 expect(amountCollateralFinal).lt(amountCollateralPrev);
               });
 
-              it("should not change strategy.totalAssets too much", async () => {
+              it("should not change vault.totalAssets too much", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].strategy.totalAssets;
+                const totalAssets0 = states[0].vault.totalAssets;
                 for (let i = 1; i < states.length; ++i) {
-                  const totalAssets = states[i].strategy.totalAssets;
+                  const totalAssets = states[i].vault.totalAssets;
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets, 0.1)).eq(true);
                 }
               });
@@ -390,11 +407,6 @@ describe('PairBasedNoSwapIntTest', function() {
                 });
               }
 
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
               it("should not change share price significantly", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
                 const sharePrice0 = states[0].vault.sharePrice;
@@ -402,6 +414,11 @@ describe('PairBasedNoSwapIntTest', function() {
                   const sharePrice = states[i].vault.sharePrice;
                   expect(sharePrice0).approximately(sharePrice, strategyInfo.sharePriceDeviation, states[i].title);
                 }
+              });
+              it("should reduce locked amount significantly", async () => {
+                const {states} = await loadFixture(callWithdrawSingleIteration);
+                const [stateLast, statePrev, ...rest] = [...states].reverse();
+                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
               });
               it("should not enter to the pool at the end", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
@@ -425,11 +442,11 @@ describe('PairBasedNoSwapIntTest', function() {
                 expect(amountCollateralFinal).lt(amountCollateralPrev);
               });
 
-              it("should not change strategy.totalAssets too much", async () => {
+              it("should not change vault.totalAssets too much", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].strategy.totalAssets;
+                const totalAssets0 = states[0].vault.totalAssets;
                 for (let i = 1; i < states.length; ++i) {
-                  const totalAssets = states[i].strategy.totalAssets;
+                  const totalAssets = states[i].vault.totalAssets;
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets, 0.1)).eq(true);
                 }
               });
@@ -488,11 +505,11 @@ describe('PairBasedNoSwapIntTest', function() {
                 expect(amountCollateralFinal).lt(amountCollateralPrev);
               });
 
-              it("should not change strategy.totalAssets too much", async () => {
+              it("should not change vault.totalAssets too much", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].strategy.totalAssets;
+                const totalAssets0 = states[0].vault.totalAssets;
                 for (let i = 1; i < states.length; ++i) {
-                  const totalAssets = states[i].strategy.totalAssets;
+                  const totalAssets = states[i].vault.totalAssets;
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets, 0.1)).eq(true);
                 }
               });
@@ -542,11 +559,11 @@ describe('PairBasedNoSwapIntTest', function() {
                 const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
                 expect(amountCollateralFinal).lt(amountCollateralPrev);
               });
-              it("should not change strategy.totalAssets too much", async () => {
+              it("should not change vault.totalAssets too much", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].strategy.totalAssets;
+                const totalAssets0 = states[0].vault.totalAssets;
                 for (let i = 1; i < states.length; ++i) {
-                  const totalAssets = states[i].strategy.totalAssets;
+                  const totalAssets = states[i].vault.totalAssets;
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets, 0.1)).eq(true);
                 }
               });
@@ -654,11 +671,11 @@ describe('PairBasedNoSwapIntTest', function() {
                 expect(amountCollateralFinal).lt(amountCollateralPrev);
               });
 
-              it("should not change strategy.totalAssets too much", async () => {
+              it("should not change vault.totalAssets too much", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].strategy.totalAssets;
+                const totalAssets0 = states[0].vault.totalAssets;
                 for (let i = 1; i < states.length; ++i) {
-                  const totalAssets = states[i].strategy.totalAssets;
+                  const totalAssets = states[i].vault.totalAssets;
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets, 0.1)).eq(true);
                 }
               });
@@ -708,11 +725,11 @@ describe('PairBasedNoSwapIntTest', function() {
                 expect(amountCollateralFinal).lt(amountCollateralPrev);
               });
 
-              it("should not change strategy.totalAssets too much", async () => {
+              it("should not change vault.totalAssets too much", async () => {
                 const {states} = await loadFixture(callWithdrawSingleIteration);
-                const totalAssets0 = states[0].strategy.totalAssets;
+                const totalAssets0 = states[0].vault.totalAssets;
                 for (let i = 1; i < states.length; ++i) {
-                  const totalAssets = states[i].strategy.totalAssets;
+                  const totalAssets = states[i].vault.totalAssets;
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets, 0.1)).eq(true);
                 }
               });
@@ -776,7 +793,7 @@ describe('PairBasedNoSwapIntTest', function() {
               const ret = await loadFixture(makeWithdrawAll);
               const stateFirst = ret.states[0];
               const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.strategy.totalAssets).approximately(stateFirst.strategy.totalAssets, 100);
+              expect(stateLast.vault.totalAssets).approximately(stateFirst.vault.totalAssets, 100);
             });
           });
           describe('Move prices up, dont enter to pool after completion', function () {
@@ -859,7 +876,7 @@ describe('PairBasedNoSwapIntTest', function() {
               const ret = await loadFixture(makeWithdrawAll);
               const stateFirst = ret.states[0];
               const stateLast = ret.states[ret.states.length - 1];
-              expect(stateLast.strategy.totalAssets).approximately(stateFirst.strategy.totalAssets, 100);
+              expect(stateLast.vault.totalAssets).approximately(stateFirst.vault.totalAssets, 100);
             });
           });
           describe('Move prices down, dont enter to pool after completion', function () {

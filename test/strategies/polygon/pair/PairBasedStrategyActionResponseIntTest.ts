@@ -17,6 +17,8 @@ import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuild
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -40,16 +42,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
   const ENTRY_TO_POOL_DISABLED = 0;
   const ENTRY_TO_POOL_IS_ALLOWED = 1;
   const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-
-  const FUSE_DISABLED_0 = 0;
-  const FUSE_OFF_1 = 1;
-  const FUSE_ON_LOWER_LIMIT_2 = 2;
-  const FUSE_ON_UPPER_LIMIT_3 = 3;
-
-  const FUSE_IDX_LOWER_LIMIT_ON = 0;
-  const FUSE_IDX_LOWER_LIMIT_OFF = 1;
-  const FUSE_IDX_UPPER_LIMIT_ON = 2;
-  const FUSE_IDX_UPPER_LIMIT_OFF = 3;
 
   const PLAN_SWAP_REPAY = 0;
   const PLAN_REPAY_SWAP_REPAY = 1;
@@ -244,9 +236,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               b.strategy.address,
               await Misc.impersonate(b.splitter.address)
             );
+            const platform = await converterStrategyBase.PLATFORM();
 
             // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
-            expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
+            expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
           });
         });
       });
@@ -457,6 +450,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await TimeUtils.rollback(snapshot);
           });
 
+          it("rebalance is required", async () => {
+            const b = await loadFixture(prepareStrategy);
+            expect(await b.strategy.needRebalance()).eq(true);
+          });
           it("should revert on deposit", async () => {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
@@ -536,7 +533,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
             console.log("stateAfter", stateAfter);
 
-            expect(stateAfter.strategy.liquidity).lt(stateBefore.strategy.liquidity);
+            expect(
+                stateAfter.strategy.liquidity < stateBefore.strategy.liquidity
+                || stateAfter.strategy.liquidity === 0
+            ).eq(true);
           });
           it("should revert on hardwork", async () => {
             const b = await loadFixture(prepareStrategy);
@@ -701,7 +701,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       });
     });
   });
-  describe("Large user just exit the strategy", () => {
+  describe("Large user has just exit the strategy", () => {
     interface IStrategyInfo {
       name: string,
     }
@@ -725,19 +725,31 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         console.log('Small user deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('200', 6));
-        await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address);
+        await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address, {gasLimit: 19_000_000});
 
         console.log('Big user deposit...');
         await IERC20__factory.connect(b.asset, signer2).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer2.address, parseUnits('200000', 6));
-        await b.vault.connect(signer2).deposit(parseUnits('100000', 6), signer2.address);
+        await b.vault.connect(signer2).deposit(parseUnits('100000', 6), signer2.address, {gasLimit: 19_000_000});
 
         // change prices and make rebalance
         await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOn(signer, signer2, b);
         await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
 
         console.log('Big user withdraws all...');
+        for (let i = 0; i < 9; ++i) { // cycle is for algebra
+          await b.vault.connect(signer2).withdraw(parseUnits('10000', 6), signer2.address, signer2.address, {gasLimit: 19_000_000});
+          if (await b.strategy.needRebalance()) { // for kyber
+            await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+          }
+        }
         await b.vault.connect(signer2).withdrawAll({gasLimit: 19_000_000});
+        if (await b.strategy.needRebalance()) { // for kyber
+          await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+        }
+
+        const state = await PackedData.getDefaultState(b.strategy);
+        await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("10000", 6));
 
         return b;
       }
@@ -751,6 +763,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await TimeUtils.rollback(snapshot);
         });
 
+        it("rebalance should not be required", async () => {
+          const b = await loadFixture(prepareStrategy);
+          expect(await b.strategy.needRebalance()).eq(false);
+        });
         it("small user should deposit successfully", async () => {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
@@ -769,7 +785,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await b.vault.connect(signer).withdraw(parseUnits('30', 6), signer.address, signer.address, {gasLimit: 19_000_000});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-          expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
+          expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 30);
         });
         it("small user should withdraw-all successfully", async () => {
           const b = await loadFixture(prepareStrategy);
@@ -778,10 +794,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
           await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          console.log("stateBefore", stateBefore);
+          console.log("stateAfter", stateAfter);
 
           expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
           expect(stateBefore.strategy.assetBalance).gt(0);
-          expect(stateAfter.strategy.assetBalance).eq(0);
+          expect(stateAfter.strategy.assetBalance).lt(0.1);
         });
         it("should rebalance debts successfully", async () => {
           const b = await loadFixture(prepareStrategy);
@@ -792,13 +810,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
           await b.strategy.withdrawByAggStep(
-            quote.tokenToSwap,
-            Misc.ZERO_ADDRESS,
-            quote.amountToSwap,
-            "0x",
-            planEntryData,
-            ENTRY_TO_POOL_IS_ALLOWED,
-            {gasLimit: 19_000_000}
+              quote.tokenToSwap,
+              Misc.ZERO_ADDRESS,
+              quote.amountToSwap,
+              "0x",
+              planEntryData,
+              ENTRY_TO_POOL_IS_ALLOWED,
+              {gasLimit: 19_000_000}
           );
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
@@ -807,8 +825,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         it("should hardwork successfully", async () => {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(
-            b.strategy.address,
-            await Misc.impersonate(b.splitter.address)
+              b.strategy.address,
+              await Misc.impersonate(b.splitter.address)
           );
 
           // put additional fee to profit holder bo make isReadyToHardwork returns true

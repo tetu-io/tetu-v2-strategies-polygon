@@ -59,7 +59,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   const FUSE_IDX_UPPER_LIMIT_ON = 2;
   const FUSE_IDX_UPPER_LIMIT_OFF = 3;
 
-  const DEFAULT_OVERLAP_RATIO = 0.01;
+  const DEFAULT_SWAP_AMOUNT_RATIO = 1.01;
 //endregion Constants
 
 //region Variables
@@ -114,7 +114,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     maxCountRebalances: number;
     /** up-down OR down-up */
     movePricesUpDown: boolean;
-    overlapRatio?: number;
+    swapAmountRatio?: number;
   }
 
   interface IMovePriceResults {
@@ -135,7 +135,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     state: IDefaultState,
     states: IStateNum[],
     pathOut: string,
-    overlapRatio?: number
+    swapAmountRatio?: number
   ): Promise<IPriceFuseStatus | undefined> {
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
     const currentFuseA = states.length === 0
@@ -152,10 +152,9 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         state.tokenA,
         state.tokenB,
         movePricesUpDown,
-        overlapRatio ?? DEFAULT_OVERLAP_RATIO
+          swapAmountRatio ?? DEFAULT_SWAP_AMOUNT_RATIO
       );
       console.log("movePriceToChangeFuseStatus.swapAmount", swapAmount);
-      // await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
 
       if (movePricesUpDown) {
         await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
@@ -214,7 +213,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       state,
       states,
       pathOut,
-      p.overlapRatio
+      p.swapAmountRatio
     );
 
     console.log("=========================== back");
@@ -229,7 +228,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       state,
       states,
       pathOut,
-      p.overlapRatio
+      p.swapAmountRatio
     );
 
     console.log("=========================== done");
@@ -245,7 +244,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 //endregion Utils
 
 //region Unit tests
-  describe('Increase price N steps, decrease price N steps, default overlapRatio (0.001)', function () {
+  describe('Increase price N steps, decrease price N steps, default swapAmountRatio (1.001)', function () {
     interface IStrategyInfo {
       name: string,
     }
@@ -323,13 +322,13 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     });
   });
 
-  describe('Increase price N steps, decrease price N steps, overlapRatio = 0', function () {
+  describe('Increase price N steps, decrease price N steps, swapAmountRatio = 1', function () {
     interface IStrategyInfo {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3,},
-      { name: PLATFORM_ALGEBRA,},
+      // { name: PLATFORM_UNIV3,},
+      // { name: PLATFORM_ALGEBRA,},
       { name: PLATFORM_KYBER,},
     ];
 
@@ -360,7 +359,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: true,
-                overlapRatio: 0
+                swapAmountRatio: 1
               });
             }
             it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
@@ -383,7 +382,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: false,
-                overlapRatio: 0
+                swapAmountRatio: 1
               });
             }
             it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {

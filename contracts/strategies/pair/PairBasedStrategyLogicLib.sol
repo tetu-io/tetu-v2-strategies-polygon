@@ -376,8 +376,8 @@ library PairBasedStrategyLogicLib {
       tokenA,
       tokenB,
       propTokenA,
-  liquidationThresholdsAB[0], // liquidityThreshold of token A
-  liquidationThresholdsAB[1], // liquidityThreshold of token B
+      liquidationThresholdsAB[0], // liquidityThreshold of token A
+      liquidationThresholdsAB[1], // liquidityThreshold of token B
       profitToCover
     );
 
