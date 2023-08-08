@@ -103,7 +103,7 @@ async function main() {
   await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
   await vault.deposit(parseUnits('1000', 6), signer.address);
 
-  const state = await strategy.getState()
+  const state = await strategy.getDefaultState()
   for (let i = 0; i < 3; i++) {
     console.log(`Swap and rebalance. Step ${i}`)
     const amounts = await UniswapV3LiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.UNISWAPV3_USDC_USDT_100)
@@ -111,7 +111,7 @@ async function main() {
     let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6))
     swapAmount = swapAmount.add(swapAmount.div(100))
 
-    await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+    await UniversalUtils.movePoolPriceUp(signer, state.addr[2], state.addr[0], state.addr[1], MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
 
     if (!(await strategy.needRebalance())) {
       console.log('Not need rebalance. Something wrong')

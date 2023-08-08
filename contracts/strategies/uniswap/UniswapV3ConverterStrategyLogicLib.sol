@@ -97,7 +97,7 @@ library UniswapV3ConverterStrategyLogicLib {
       }
       tickData[0] = tickSpacing;
       (tickData[1], tickData[2]) = UniswapV3DebtLib.calcTickRange(pool, tickRange, tickSpacing);
-      tickData[3] = tickRange;
+      tickData[3] = rebalanceTickRange;
     }
 
     PairBasedStrategyLogicLib.setInitialDepositorValues(

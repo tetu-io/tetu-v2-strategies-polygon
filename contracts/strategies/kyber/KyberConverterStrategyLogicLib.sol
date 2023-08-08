@@ -98,7 +98,7 @@ library KyberConverterStrategyLogicLib {
       }
       tickData[0] = tickSpacing;
       (tickData[1], tickData[2]) = KyberDebtLib.calcTickRange(IPool(controllerPool[1]), tickRange, tickSpacing);
-      tickData[3] = tickRange;
+      tickData[3] = rebalanceTickRange;
     }
 
     PairBasedStrategyLogicLib.setInitialDepositorValues(
