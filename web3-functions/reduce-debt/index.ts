@@ -57,7 +57,8 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
     }
   }
 
-  const tokens = await strategy.getPoolTokens()
+  const defaultState = await strategy.getDefaultState()
+  const tokens = defaultState[0]
 
   const aToB = quote[0] === tokens[0]
 
@@ -78,7 +79,14 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
             to: strategyAddress,
             data: strategy.interface.encodeFunctionData(
               'withdrawByAggStep',
-              [[quote[0], aggQuote.to], quote[1], aggQuote.data, planEntryData, 1],
+              [
+                aToB ? tokens[0] : tokens[1],
+                aggQuote.to,
+                quote[1],
+                aggQuote.data,
+                planEntryData,
+                1
+              ]
             ),
           },
         ],
@@ -102,7 +110,14 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
             to: strategyAddress,
             data: strategy.interface.encodeFunctionData(
               'withdrawByAggStep',
-              [[quote[0], aggQuote.to], quote[1], aggQuote.data, planEntryData, 1],
+              [
+                quote[0] ? tokens[0] : tokens[1],
+                aggQuote.to,
+                quote[1],
+                aggQuote.data,
+                planEntryData,
+                1
+              ]
             ),
           },
         ],
@@ -143,7 +158,14 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
             to: strategyAddress,
             data: strategy.interface.encodeFunctionData(
               'withdrawByAggStep',
-              [[quote[0], to], quote[1], data, planEntryData, 1]
+              [
+                quote[0] ? tokens[0] : tokens[1],
+                to,
+                quote[1],
+                data,
+                planEntryData,
+                1
+              ]
               ),
           },
         ],

@@ -5,8 +5,8 @@ export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 export const STRATEGY_ABI = [
   'function needRebalance() external view returns (bool)',
   'function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap)',
-  'function withdrawByAggStep(address[2] calldata tokenToSwapAndAggregator, uint amountToSwap_, bytes memory swapData, bytes memory planEntryData, uint entryToPool)  external returns (bool completed)',
-  'function getPoolTokens() external view returns (address tokenA, address tokenB)',
+  'function withdrawByAggStep(address tokenToSwap_, address aggregator_, uint amountToSwap_, bytes memory swapData, bytes memory planEntryData, uint entryToPool)  external returns (bool completed)',
+  'function getDefaultState() external override view returns (address[] memory addr, int24[] memory tickData, uint[] memory nums, bool[] memory boolValues)',
 ]
 
 export const ERC20_ABI = [
