@@ -5,7 +5,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 
 contract RebalanceDebtConfig {
     string public constant VERSION = "1.0.0";
-    uint public constant PERCENT_DENOMINATOR = 100_00;
 
     struct Config {
         uint lockedPercentForDelayedRebalance;
