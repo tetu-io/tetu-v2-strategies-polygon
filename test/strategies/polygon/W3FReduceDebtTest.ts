@@ -60,6 +60,7 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
     userArgs = {
       strategy: strategy.address,
       reader: process.env.READER,
+      config: process.env.CONFIG,
       agg: "1inch", // 'openocean' | '1inch' | ''
       oneInchProtocols: "POLYGON_BALANCER_V2", // '' | 'POLYGON_BALANCER_V2'
     };

@@ -6,7 +6,7 @@ import {DeployerUtils} from "../utils/DeployerUtils";
 import {
   ControllerV2__factory,
   IERC20__factory,
-  IStrategyV2,
+  IStrategyV2, RebalanceDebtConfig,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
   UniswapV3Lib,
@@ -23,6 +23,7 @@ import {TokenUtils} from "../utils/TokenUtils";
 import {UniversalUtils} from "../../test/baseUT/strategies/UniversalUtils";
 import {MockHelper} from "../../test/baseUT/helpers/MockHelper";
 import {UniswapV3LiquidityUtils} from "../../test/strategies/polygon/uniswapv3/utils/UniswapV3LiquidityUtils";
+import {TimeUtils} from "../utils/TimeUtils";
 
 async function main() {
   const chainId = (await ethers.provider.getNetwork()).chainId
@@ -98,6 +99,9 @@ async function main() {
   const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN,])
   await strategy.connect(operator).setStrategyProfitHolder(profitHolder.address)
 
+  const config = await DeployerUtils.deployContract(signer, 'RebalanceDebtConfig', controller.address) as RebalanceDebtConfig
+  await config.connect(operator).setConfig(strategy.address, 25, 70, 3600)
+
   console.log('deposit...');
   await asset.approve(vault.address, Misc.MAX_UINT);
   await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
@@ -118,7 +122,7 @@ async function main() {
       process.exit(-1)
     }
 
-    await strategy.connect(operator).rebalanceNoSwaps(true)
+    await strategy.connect(operator).rebalanceNoSwaps(true, {gasLimit: 19_000_000,})
   }
 
   // signer must be operator for rebalancing
@@ -126,9 +130,11 @@ async function main() {
   const governanceAsSigner = await DeployerUtilsLocal.impersonate(await controllerV2.governance())
   await controllerV2.connect(governanceAsSigner).registerOperator(signer.address)
 
+  await TimeUtils.advanceBlocksOnTs(3600)
+
   console.log('')
   console.log('Run:')
-  console.log(`TEST_STRATEGY=${strategy.address} READER=${reader.address} npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost`)
+  console.log(`TEST_STRATEGY=${strategy.address} READER=${reader.address} CONFIG=${config.address} npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost`)
   console.log('')
 
   // start localhost hardhat node

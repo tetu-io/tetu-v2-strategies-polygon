@@ -171,6 +171,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = block.timestamp;
   }
   //endregion--------------------------------------------- REBALANCE
 
@@ -235,6 +236,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = 0;
   }
 
   function getPropNotUnderlying18() external view returns (uint) {

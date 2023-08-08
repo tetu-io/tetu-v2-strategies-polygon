@@ -1,7 +1,7 @@
 import { Web3Function, Web3FunctionContext } from '@gelatonetwork/web3-functions-sdk'
 import { BigNumber, Contract } from 'ethers'
 import {defaultAbiCoder, formatUnits} from 'ethers/lib/utils'
-import {ERC20_ABI, quoteOneInch, quoteOpenOcean, READER_ABI, STRATEGY_ABI, ZERO_ADDRESS} from '../w3f-utils'
+import {CONFIG_ABI, ERC20_ABI, quoteOneInch, quoteOpenOcean, READER_ABI, STRATEGY_ABI, ZERO_ADDRESS} from '../w3f-utils'
 
 // npx hardhat w3f-deploy uniswapv3-reduce-debt
 
@@ -9,13 +9,19 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
   const { userArgs, multiChainProvider } = context
   const strategyAddress = userArgs.strategy as string
   const readerAddress = userArgs.reader as string
-  const allowedLockedPercent = userArgs.allowedLockedPercent as number || 25
+  const configAddress = userArgs.config as string
+
+  // const allowedLockedPercent = userArgs.allowedLockedPercent as number || 25
   const agg = (userArgs.agg as string ?? '').trim()
   const oneInchProtocols = (userArgs.oneInchProtocols as string ?? '').trim()
   const provider = multiChainProvider.default()
   const chainId = (await provider.getNetwork()).chainId
   const strategy = new Contract(strategyAddress, STRATEGY_ABI, provider)
   const reader = new Contract(readerAddress, READER_ABI, provider)
+  const configContract = new Contract(configAddress, CONFIG_ABI, provider)
+  const config = await configContract.strategyConfig(strategyAddress)
+  console.log('Rebalance debt config', config)
+  const allowedLockedPercent = config[0]
   const isNeedRebalance = await strategy.needRebalance()
   const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber]
   if (r[1].eq(0)) {
@@ -41,6 +47,23 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
     }
   }
 
+  const defaultState = await strategy.getDefaultState()
+
+  if (percent < config[1].toNumber()) {
+    const ts = (await provider.getBlock(await provider.getBlockNumber())).timestamp
+    console.log('Last block timestamp', ts)
+    const lastRebalanceNoSwaps = defaultState[2][12].toNumber()
+    const delay = config[2].toNumber()
+    console.log('Last rebalanceNoSwaps', lastRebalanceNoSwaps)
+    console.log('Delay', delay)
+    if (ts - lastRebalanceNoSwaps < delay) {
+      return {
+        canExec: false,
+        message: `Waiting for delay ${delay} after rebalanceNoSwaps.`,
+      }
+    }
+  }
+
   const PLAN_REPAY_SWAP_REPAY = 1
 
   const planEntryData = defaultAbiCoder.encode(
@@ -57,7 +80,7 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
     }
   }
 
-  const defaultState = await strategy.getDefaultState()
+
   const tokens = defaultState[0]
 
   const aToB = quote[0] === tokens[0]

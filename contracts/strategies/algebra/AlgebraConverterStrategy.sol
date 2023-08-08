@@ -161,6 +161,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = block.timestamp;
   }
   //endregion--------------------------------------------- REBALANCE
 
@@ -225,6 +226,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = 0;
   }
 
   function getPropNotUnderlying18() external view returns (uint) {
