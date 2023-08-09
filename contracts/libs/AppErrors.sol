@@ -59,6 +59,10 @@ library AppErrors {
   ///         This error can happen if allowed proportion is too small, i.e. 0.0004 : (1-0.0004)
   ///         Such situation can happen if amount to swap is almost equal to the amount of the token in the current tick,
   ///         so swap will move us close to the border between ticks.
+  ///         It was decided, that it's ok to have revert in that case
+  ///         We can change this behavior by changing BorrowLib.rebalanceRepayBorrow implementation:
+  ///             if amount-to-repay passed to _repayDebt is too small to be used,
+  ///             we should increase it min amount required to make repay successfully (amount must be > threshold)
   string public constant NOT_ALLOWED = "TS-23 not allowed";
 
   string public constant ZERO_VALUE = "TS-24 zero value";

@@ -63,6 +63,15 @@ library AlgebraConverterStrategyLogicLib {
     int24 lowerTick;
     int24 upperTick;
   }
+
+  struct IsReadyToHardWorkLocal {
+    address tokenA;
+    address tokenB;
+    uint rewardInTermOfTokenA;
+    uint bonusRewardInTermOfTokenA;
+    uint fee0;
+    uint fee1;
+  }
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Helpers
@@ -360,9 +369,9 @@ library AlgebraConverterStrategyLogicLib {
   //region ------------------------------------------------ Rewards
 
   function isReadyToHardWork(State storage state, ITetuConverter converter, address controller) external view returns (bool isReady) {
-    address tokenA = state.pair.tokenA;
-    uint rewardInTermOfTokenA;
-    uint bonusRewardInTermOfTokenA;
+    IsReadyToHardWorkLocal memory v;
+    v.tokenA = state.pair.tokenA;
+    v.tokenB = state.pair.tokenB;
     address h = state.pair.strategyProfitHolder;
 
     if (state.pair.totalLiquidity != 0) {
@@ -374,37 +383,34 @@ library AlgebraConverterStrategyLogicLib {
       bonusReward += IERC20(bonusRewardToken).balanceOf(h);
       ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
       if (reward > 0) {
-        rewardInTermOfTokenA = liquidator.getPrice(rewardToken, tokenA, reward);
+        v.rewardInTermOfTokenA = liquidator.getPrice(rewardToken, v.tokenA, reward);
       }
-      if (bonusRewardInTermOfTokenA > 0) {
-        bonusRewardInTermOfTokenA = liquidator.getPrice(bonusRewardToken, tokenA, bonusReward);
+      if (v.bonusRewardInTermOfTokenA > 0) {
+        v.bonusRewardInTermOfTokenA = liquidator.getPrice(bonusRewardToken, v.tokenA, bonusReward);
       }
+      (v.fee0, v.fee1) = getFees(state);
     }
-
-    address tokenB = state.pair.tokenB;
 
     // check claimable amounts and compare with thresholds
-    (uint fee0, uint fee1) = getFees(state);
-
     if (state.pair.depositorSwapTokens) {
-      (fee0, fee1) = (fee1, fee0);
+      (v.fee0, v.fee1) = (v.fee1, v.fee0);
     }
 
-    fee0 += IERC20(tokenA).balanceOf(h);
-    fee1 += IERC20(tokenB).balanceOf(h);
+    v.fee0 += IERC20(v.tokenA).balanceOf(h);
+    v.fee1 += IERC20(v.tokenB).balanceOf(h);
 
     IPriceOracle oracle = AppLib._getPriceOracle(converter);
-    uint priceA = oracle.getAssetPrice(tokenA);
-    uint priceB = oracle.getAssetPrice(tokenB);
+    uint priceA = oracle.getAssetPrice(v.tokenA);
+    uint priceB = oracle.getAssetPrice(v.tokenB);
 
-    uint fee0USD = fee0 * priceA / 1e18;
-    uint fee1USD = fee1 * priceB / 1e18;
+    uint fee0USD = v.fee0 * priceA / 1e18;
+    uint fee1USD = v.fee1 * priceB / 1e18;
 
     return
       fee0USD > HARD_WORK_USD_FEE_THRESHOLD
       || fee1USD > HARD_WORK_USD_FEE_THRESHOLD
-      || rewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
-      || bonusRewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
+      || v.rewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
+      || v.bonusRewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
     ;
   }
 

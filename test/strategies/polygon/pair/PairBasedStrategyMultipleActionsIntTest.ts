@@ -23,6 +23,7 @@ import {BigNumber} from "ethers";
 import {PairStrategyLiquidityUtils} from "../../../baseUT/strategies/PairStrategyLiquidityUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -68,8 +69,11 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 //region Variables
   let snapshotBefore: string;
 
-  let signer: SignerWithAddress;
+  let signer1: SignerWithAddress;
   let signer2: SignerWithAddress;
+  let signer3: SignerWithAddress;
+  let signer4: SignerWithAddress;
+  let signer5: SignerWithAddress;
 //endregion Variables
 
 //region before, after
@@ -79,7 +83,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
     require("util").inspect.defaultOptions.depth = null;
 
     snapshotBefore = await TimeUtils.snapshot();
-    [signer, signer2] = await ethers.getSigners();
+    [signer1, signer2, signer3, signer4, signer5] = await ethers.getSigners();
   })
 
   after(async function() {
@@ -98,8 +102,27 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
   });
 //endregion before, after
 
+//region Utils
+  async function movePrices(b: IBuilderResults, movePricesUp: boolean, swapAmountRatio: number) {
+    const state = await PackedData.getDefaultState(b.strategy);
+    const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+        signer1,
+        b,
+        state.tokenA,
+        state.tokenB,
+        movePricesUp,
+        swapAmountRatio
+    );
+    if (movePricesUp) {
+      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
+    } else {
+      await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
+    }
+  }
+//endregion Utils
+
 //region Unit tests
-  describe("Loop with rebalance, hardwork, deposit and withdraw", () => {
+  describe("Deposit, rebalance, withdraw-all", () => {
     interface IStrategyInfo {
       name: string,
     }
@@ -116,7 +139,9 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
        * Fuse OFF by default, rebalance is not needed
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer1, signer2);
+        await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
+        return b;
       }
 
       describe(`${strategyInfo.name}`, () => {
@@ -128,11 +153,47 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
           await TimeUtils.rollback(snapshot);
         });
 
-        it("should deposit successfully", async () => {
+        it("multiple users should deposit/withdraw successfully", async () => {
           const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer1);
 
-          // todo
+          const users = [signer2, signer3, signer4, signer5];
+          const amounts = ["100", "1000", "10000", "5000"];
+
+          for (let i = 0; i < users.length; ++i) {
+
+            for (let j = i + 1; j < users.length; ++j) {
+              const signer = users[i];
+              const amount = parseUnits(amounts[j], 6);
+              // i-th user deposits j-th amount
+              await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+              await TokenUtils.getToken(b.asset, signer.address, amount);
+              await b.vault.connect(signer).deposit(amount, signer.address);
+
+              await movePrices(b, i % 2 === 0, (i + 1) / 10);
+
+              if (await b.strategy.needRebalance()) {
+                await b.strategy.rebalanceNoSwaps(true);
+              }
+            }
+
+            for (let j = i + 1; j < users.length; ++j) {
+              const signer = users[j];
+              const amount = parseUnits(amounts[i], 6);
+              // j-th user withdraws i-th amount
+              const maxAmount = await b.vault.connect(signer).maxWithdraw();
+              await b.vault.connect(signer).withdraw(
+                  maxAmount.lt(amount) ? maxAmount : amount,
+                  signer.address,
+                  signer.address
+              );
+              await movePrices(b, i % 2 === 0, (i + 1) / 10);
+
+              if (await b.strategy.needRebalance()) {
+                await b.strategy.rebalanceNoSwaps(true);
+              }
+            }
+          }
         });
       });
     });
