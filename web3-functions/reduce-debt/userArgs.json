@@ -1,7 +1,7 @@
 {
   "strategy": "0x05C7D307632a36D31D7eECbE4cC5Aa46D15fA752",
   "reader": "",
-  "allowedLockedPercent": 25,
+  "config": "",
   "agg": "",
   "oneInchProtocols": ""
 }
