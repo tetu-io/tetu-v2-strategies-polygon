@@ -9,7 +9,6 @@ import "./KyberConverterStrategyLogicLib.sol";
 import "../../libs/BorrowLib.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 library KyberDebtLib {
   using SafeERC20 for IERC20;
@@ -69,11 +68,6 @@ library KyberDebtLib {
 
     // calculate proportions
     (uint consumed0, uint consumed1,) = KyberLib.addLiquidityPreview(address(pool), lowerTick, upperTick, token0Desired, token1Desired);
-    console.log("KyberDetLib.getEntryDataProportions.consumed0", consumed0);
-    console.log("KyberDetLib.getEntryDataProportions.consumed1", consumed1);
-    console.log("KyberDetLib.getEntryDataProportions.depositorSwapTokens", depositorSwapTokens);
-    console.log("KyberDetLib.getEntryDataProportions.1e18*consumed0", 1e18*consumed0);
-    console.log("KyberDetLib.getEntryDataProportions.1e18*consumed1 * token1Price / token1Desired", 1e18*consumed1 * token1Price / token1Desired);
     return depositorSwapTokens
       ? (1e18*consumed1 * token1Price / token1Desired, 1e18*consumed0)
       : (1e18*consumed0, 1e18*consumed1 * token1Price / token1Desired);

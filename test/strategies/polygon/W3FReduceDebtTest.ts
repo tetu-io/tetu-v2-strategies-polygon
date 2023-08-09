@@ -13,10 +13,10 @@ const { w3f } = hre;
 
 // How to:
 
-// npx hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
+// NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
 // TEST_STRATEGY=<address> READER=<address> npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost
 
-// npx hardhat run scripts/special/prepareTestEnvForKyberReduceDebtW3F.ts
+// NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForKyberReduceDebtW3F.ts
 // TEST_STRATEGY=<address> READER=<address> npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost
 
 dotEnvConfig();
