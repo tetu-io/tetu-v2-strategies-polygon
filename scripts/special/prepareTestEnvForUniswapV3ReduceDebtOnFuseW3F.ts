@@ -4,7 +4,7 @@
 import hre, {ethers, run} from "hardhat";
 import {DeployerUtils} from "../utils/DeployerUtils";
 import {
-  ControllerV2__factory,
+  ControllerV2__factory, IAave3PriceOracle, IAave3PriceOracle__factory,
   IERC20__factory,
   IStrategyV2, RebalanceDebtConfig,
   UniswapV3ConverterStrategy,
@@ -24,6 +24,9 @@ import {UniversalUtils} from "../../test/baseUT/strategies/UniversalUtils";
 import {MockHelper} from "../../test/baseUT/helpers/MockHelper";
 import {UniswapV3LiquidityUtils} from "../../test/strategies/polygon/uniswapv3/utils/UniswapV3LiquidityUtils";
 import {TimeUtils} from "../utils/TimeUtils";
+import {PairStrategyLiquidityUtils} from "../../test/baseUT/strategies/PairStrategyLiquidityUtils";
+import {PriceOracleImitatorUtils} from "../../test/baseUT/converter/PriceOracleImitatorUtils";
+import {BigNumber} from "ethers";
 
 async function main() {
   const chainId = (await ethers.provider.getNetwork()).chainId
@@ -55,6 +58,8 @@ async function main() {
 
   const reader = await MockHelper.createPairBasedStrategyReader(signer);
   const lib = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib
+
+  await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, PolygonAddresses.USDC_TOKEN)
 
   const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
     asset.address,
@@ -102,20 +107,54 @@ async function main() {
   const config = await DeployerUtils.deployContract(signer, 'RebalanceDebtConfig', controller.address) as RebalanceDebtConfig
   await config.connect(operator).setConfig(strategy.address, 25, 70, 3600)
 
+  const priceOracle: IAave3PriceOracle = IAave3PriceOracle__factory.connect(MaticAddresses.AAVE3_PRICE_ORACLE, signer)
+  let prices: BigNumber[]
+  prices = await priceOracle.getAssetsPrices([MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+  // console.log('oracle', prices)
+  const fuseBUpperOn = prices[1].mul(parseUnits('1', 10)).add(parseUnits('0.0005'))
+  const fuseBUpperOff = prices[1].mul(parseUnits('1', 10)).add(parseUnits('0.0003'))
+  // console.log(fuseBUpperOn)
+  // console.log(fuseBUpperOff)
+
+  await strategy.connect(operator).setFuseThresholds(0, [
+    parseUnits('0.999'),
+    parseUnits('0.9994'),
+    parseUnits('1.001'),
+    parseUnits('1.0006')
+  ])
+  await strategy.connect(operator).setFuseThresholds(1, [
+    parseUnits('0.999'),
+    parseUnits('0.9994'),
+    fuseBUpperOn,
+    fuseBUpperOff
+  ])
+
   console.log('deposit...');
   await asset.approve(vault.address, Misc.MAX_UINT);
   await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
   await vault.deposit(parseUnits('1000', 6), signer.address);
 
   const state = await strategy.getDefaultState()
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     console.log(`Swap and rebalance. Step ${i}`)
+
     const amounts = await UniswapV3LiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.UNISWAPV3_USDC_USDT_100)
-    const priceB = await lib.getPrice(MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDT_TOKEN)
-    let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6))
-    swapAmount = swapAmount.add(swapAmount.div(100))
+    let swapAmount = await PairStrategyLiquidityUtils.quoteExactOutputSingle2(
+      signer,
+      strategy.address,
+      MaticAddresses.UNISWAPV3_QUOTER,
+      state.addr[2],
+      state.addr[0],
+      state.addr[1],
+      amounts[1]
+    )
+
+    swapAmount = swapAmount.add(100)
 
     await UniversalUtils.movePoolPriceUp(signer, state.addr[2], state.addr[0], state.addr[1], MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+
+    prices = await priceOracle.getAssetsPrices([MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
+    // console.log('oracle', prices)
 
     if (!(await strategy.needRebalance())) {
       console.log('Not need rebalance. Something wrong')
@@ -125,12 +164,20 @@ async function main() {
     await strategy.connect(operator).rebalanceNoSwaps(true, {gasLimit: 19_000_000,})
   }
 
+  const newState = await strategy.getDefaultState()
+  console.log(newState[2])
+
+  if (newState[2][2].toString() !== '3') {
+    console.log('Fuse not triggered. Something wrong')
+    process.exit(-1)
+  }
+
   // signer must be operator for rebalancing
   const controllerV2 = ControllerV2__factory.connect(controller.address, signer)
   const governanceAsSigner = await DeployerUtilsLocal.impersonate(await controllerV2.governance())
   await controllerV2.connect(governanceAsSigner).registerOperator(signer.address)
 
-  await TimeUtils.advanceBlocksOnTs(3600)
+  // await TimeUtils.advanceBlocksOnTs(3600)
 
   console.log('')
   console.log('Run:')

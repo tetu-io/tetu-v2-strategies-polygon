@@ -148,6 +148,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       liquidationThresholds
     );
     _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = block.timestamp;
   }
   //endregion--------------------------------------------- REBALANCE
 
@@ -212,6 +213,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = 0;
   }
 
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy

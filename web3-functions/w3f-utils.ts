@@ -17,6 +17,10 @@ export const READER_ABI = [
   'function getLockedUnderlyingAmount(address strategy_) external view returns (uint estimatedUnderlyingAmount, uint totalAssets)',
 ]
 
+export const CONFIG_ABI = [
+  'function strategyConfig(address strategy_) external view returns (uint lockedPercentForDelayedRebalance, uint lockedPercentForForcedRebalance, uint rebalanceDebtDelay)',
+]
+
 export interface IAggQuote {
   to: string,
   data: string,

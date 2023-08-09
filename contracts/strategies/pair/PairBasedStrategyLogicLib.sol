@@ -45,6 +45,8 @@ library PairBasedStrategyLogicLib {
     ///         and assets were converter to underlying using withdrawStepByAgg.
     ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
     uint withdrawDone;
+
+    uint lastRebalanceNoSwap;
   }
 
   struct RebalanceNoSwapsLocal {
@@ -211,7 +213,7 @@ library PairBasedStrategyLogicLib {
   /// @notice Returns the current state of the contract
   /// @return addr [tokenA, tokenB, pool, profitHolder]
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
-  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]
+  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B, lastRebalanceNoSwap]
   /// @return boolValues [isStablePool, depositorSwapTokens]
   function getDefaultState(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (
     address[] memory addr,
@@ -221,7 +223,7 @@ library PairBasedStrategyLogicLib {
   ) {
     addr = new address[](4);
     tickData = new int24[](4);
-    nums = new uint[](12);
+    nums = new uint[](13);
     boolValues = new bool[](2);
 
     addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_A] = pairState.tokenA;
@@ -242,6 +244,7 @@ library PairBasedStrategyLogicLib {
       nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 + i] = pairState.fuseAB[0].thresholds[i];
       nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 + i] = pairState.fuseAB[1].thresholds[i];
     }
+    nums[12] = pairState.lastRebalanceNoSwap;
 
     boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL] = pairState.isStablePool;
     boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS] = pairState.depositorSwapTokens;
