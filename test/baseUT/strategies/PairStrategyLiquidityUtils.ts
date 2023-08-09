@@ -61,6 +61,10 @@ export class PairStrategyLiquidityUtils {
           0
         );
       case PLATFORM_ALGEBRA:
+        console.log("algebra.quoteExactOutputSingle");
+        console.log("algebra.tokenIn", tokenIn);
+        console.log("algebra.tokenOut", tokenOut);
+        console.log("algebra.amountOut", amountOut);
         const algebraRet = await IAlgebraQuoter__factory.connect(b.quoter, signer).callStatic.quoteExactOutputSingle(
           tokenIn,
           tokenOut,

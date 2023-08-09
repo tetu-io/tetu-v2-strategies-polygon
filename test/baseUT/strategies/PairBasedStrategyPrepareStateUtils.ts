@@ -37,22 +37,25 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /** Set up "neeRebalance = true" */
-  static async prepareNeedRebalanceOn(signer: SignerWithAddress, signer2: SignerWithAddress, b: IBuilderResults) {
-    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-    const platform = await converterStrategyBase.PLATFORM();
+  static async prepareNeedRebalanceOn(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    b: IBuilderResults,
+    swapAmountRatio: number = 1.1
+  ) {
     const state = await PackedData.getDefaultState(b.strategy);
 
     // move strategy to "need to rebalance" state
-    const lib = this.getLib(platform, b);
     let countRebalance = 0;
     for (let i = 0; i < 10; ++i) {
+      console.log("i", i);
       const swapAmount = await this.getSwapAmount2(
         signer,
         b,
         state.tokenA,
         state.tokenB,
         true,
-        1.1
+        swapAmountRatio
       );
       await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
       if (await b.strategy.needRebalance()) {
@@ -153,7 +156,6 @@ export class PairBasedStrategyPrepareStateUtils {
   ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
     const lib = this.getLib(platform, b);
-    const pricesAB = await b.facadeLib2.getOracleAssetsPrices(b.converter.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
 
     const amountsInCurrentTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
     console.log("amountsInCurrentTick", amountsInCurrentTick);
