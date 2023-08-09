@@ -162,7 +162,7 @@ contract ConverterStrategyBaseLibFacade2 {
   }
 
   function findZeroAmount(uint[] memory amounts_, address[] memory tokens_) external view returns (bool) {
-    return ConverterStrategyBaseLib2.findZeroAmount(amounts_, tokens_, liquidationThresholds);
+    return ConverterStrategyBaseLib2.findZeroAmount(amounts_, tokens_);
   }
 
   function getTokenAmountsPair(

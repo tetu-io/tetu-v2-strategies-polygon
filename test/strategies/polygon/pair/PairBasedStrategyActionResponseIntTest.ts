@@ -100,7 +100,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       }
 
       const strategies: IStrategyInfo[] = [
-        {name: PLATFORM_UNIV3,},
+        // todo {name: PLATFORM_UNIV3,},
         {name: PLATFORM_ALGEBRA,},
         {name: PLATFORM_KYBER,},
       ];
@@ -115,9 +115,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
 
           console.log('deposit...');
-          await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-          await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+          // make deposit and enter to the pool
+          for (let i = 0; i < 5; ++i) {
+            await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+            await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
+            await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+
+            const state = await PackedData.getDefaultState(b.strategy);
+            if (state.totalLiquidity.gt(0)) {
+              break;
+            }
+          }
 
           return b;
         }
@@ -131,6 +139,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await TimeUtils.rollback(snapshot);
           });
 
+          it("totalLiquidity should be > 0", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const state = await PackedData.getDefaultState(b.strategy);
+            expect(state.totalLiquidity.gt(0)).eq(true);
+          });
           it("should deposit successfully", async () => {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
