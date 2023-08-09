@@ -198,10 +198,7 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Try to find zero amount
   /// @return True if {amounts_} array contains zero amount
-  function findZeroAmount(
-    uint[] memory amounts_,
-    address[] memory tokens_
-  ) internal pure returns (bool) {
+  function findZeroAmount(uint[] memory amounts_) internal pure returns (bool) {
     uint len = amounts_.length;
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       if (amounts_[i] == 0) return true;

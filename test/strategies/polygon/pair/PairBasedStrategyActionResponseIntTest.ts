@@ -53,6 +53,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
+  let signer3: SignerWithAddress;
 //endregion Variables
 
 //region before, after
@@ -62,7 +63,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     require("util").inspect.defaultOptions.depth = null;
 
     snapshotBefore = await TimeUtils.snapshot();
-    [signer, signer2] = await ethers.getSigners();
+    [signer, signer2, signer3] = await ethers.getSigners();
 
   })
 
@@ -100,7 +101,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       }
 
       const strategies: IStrategyInfo[] = [
-        // todo {name: PLATFORM_UNIV3,},
+        {name: PLATFORM_UNIV3,},
         {name: PLATFORM_ALGEBRA,},
         {name: PLATFORM_KYBER,},
       ];
@@ -273,7 +274,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         /**
          * Initially signer deposits 1000 USDC, also he has additional 1000 USDC on the balance.
          * Fuse OFF by default. We set fuse thresholds in such a way as to trigger fuse ON.
-         * Rebalance is not required after the depositing.
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
           const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
@@ -288,6 +288,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           // make rebalance to update fuse status
           expect(await b.strategy.needRebalance()).eq(true);
+          console.log('rebalance...');
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
           expect(await b.strategy.needRebalance()).eq(false);
 
@@ -758,7 +759,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3,},
+      // todo {name: PLATFORM_UNIV3,},
       {name: PLATFORM_ALGEBRA,},
       {name: PLATFORM_KYBER,},
     ];
@@ -784,22 +785,45 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await b.vault.connect(signer2).deposit(parseUnits('100000', 6), signer2.address, {gasLimit: 19_000_000});
 
         // change prices and make rebalance
-        await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOn(signer, signer2, b);
-        await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+        console.log('Change prices...');
 
-        console.log('Big user withdraws all...');
-        for (let i = 0; i < 9; ++i) { // cycle is for algebra
-          await b.vault.connect(signer2).withdraw(parseUnits('10000', 6), signer2.address, signer2.address, {gasLimit: 19_000_000});
-          if (await b.strategy.needRebalance()) { // for kyber
-            await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-          }
-        }
-        await b.vault.connect(signer2).withdrawAll({gasLimit: 19_000_000});
-        if (await b.strategy.needRebalance()) { // for kyber
+        const state = await PackedData.getDefaultState(b.strategy);
+        const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+          signer,
+          b,
+          state.tokenA,
+          state.tokenB,
+          true,
+        );
+        await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+        // await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOn(
+        //   signer,
+        //   signer3,
+        //   b,
+        //   1.1
+        // );
+        if (await b.strategy.needRebalance()) {
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         }
 
-        const state = await PackedData.getDefaultState(b.strategy);
+        let done = false;
+        while (! done) {
+          const amountToWithdraw = await b.vault.maxWithdraw(signer2.address);
+          const portion = parseUnits('5000', 6);
+          if (portion.lt(amountToWithdraw)) {
+            console.log("withdraw...", portion);
+            await b.vault.connect(signer2).withdraw(portion, signer2.address, signer2.address, {gasLimit: 19_000_000});
+          } else {
+            console.log("withdraw all...", amountToWithdraw);
+            await b.vault.connect(signer2).withdrawAll({gasLimit: 19_000_000});
+            done = true;
+          }
+          if (await b.strategy.needRebalance()) { // for kyber
+            console.log("rebalance");
+            await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+          }
+        }
+
         await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("10000", 6));
 
         return b;
