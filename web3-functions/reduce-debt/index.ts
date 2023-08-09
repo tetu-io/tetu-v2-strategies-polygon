@@ -20,7 +20,7 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
   const reader = new Contract(readerAddress, READER_ABI, provider)
   const configContract = new Contract(configAddress, CONFIG_ABI, provider)
   const config = await configContract.strategyConfig(strategyAddress)
-  console.log('Rebalance debt config', config)
+  // console.log('Rebalance debt config', config)
   const allowedLockedPercent = config[0]
   const isNeedRebalance = await strategy.needRebalance()
   const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber]
@@ -31,12 +31,27 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
     }
   }
 
+  const defaultState = await strategy.getDefaultState()
+  const isFuseTriggered =
+    defaultState[2][1].toString() === '2'
+    || defaultState[2][1].toString() === '3'
+    || defaultState[2][2].toString() === '2'
+    || defaultState[2][2].toString() === '3'
+  console.log('isFuseTriggered', isFuseTriggered)
+
   const percent = r[0].mul(100).div(r[1]).toNumber()
   console.log("Locked percent", percent)
-  if (percent <= allowedLockedPercent) {
+  if (!isFuseTriggered && percent <= allowedLockedPercent) {
     return {
       canExec: false,
       message: `Not need to reduce debt. Current locked: ${percent}%. Max allowed locked: ${allowedLockedPercent}%`,
+    }
+  }
+
+  if (isFuseTriggered && percent === 0) {
+    return {
+      canExec: false,
+      message: `Not need to reduce debt. Fuse triggered. Current locked: ${percent}%.`,
     }
   }
 
@@ -47,9 +62,7 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
     }
   }
 
-  const defaultState = await strategy.getDefaultState()
-
-  if (percent < config[1].toNumber()) {
+  if (!isFuseTriggered && percent < config[1].toNumber()) {
     const ts = (await provider.getBlock(await provider.getBlockNumber())).timestamp
     console.log('Last block timestamp', ts)
     const lastRebalanceNoSwaps = defaultState[2][12].toNumber()
@@ -64,22 +77,50 @@ Web3Function.onRun(async(context: Web3FunctionContext) => {
     }
   }
 
+  const PLAN_SWAP_REPAY = 0
   const PLAN_REPAY_SWAP_REPAY = 1
 
-  const planEntryData = defaultAbiCoder.encode(
-    ["uint256"],
-    [PLAN_REPAY_SWAP_REPAY]
-  )
+  const planEntryData = !isFuseTriggered
+    ? defaultAbiCoder.encode(
+      ["uint256"],
+      [PLAN_REPAY_SWAP_REPAY]
+    )
+    : defaultAbiCoder.encode(
+      ["uint256", "uint256"],
+      [PLAN_SWAP_REPAY, 0]
+    )
 
   const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData)
 
   if (quote[0] === ZERO_ADDRESS) {
-    return {
-      canExec: false,
-      message: 'Zero tokenToSwap.',
+    if (!isFuseTriggered) {
+      return {
+        canExec: false,
+        message: 'Zero tokenToSwap.',
+      }
+    } else {
+      const AGG_ONEINCH_V5 = '0x1111111254EEB25477B68fb85Ed929f73A960582'.toLowerCase()
+      return {
+        canExec: true,
+        callData: [
+          {
+            to: strategyAddress,
+            data: strategy.interface.encodeFunctionData(
+              'withdrawByAggStep',
+              [
+                ZERO_ADDRESS,
+                AGG_ONEINCH_V5,
+                0,
+                '0x00',
+                planEntryData,
+                0
+              ]
+            ),
+          },
+        ],
+      }
     }
   }
-
 
   const tokens = defaultState[0]
 
