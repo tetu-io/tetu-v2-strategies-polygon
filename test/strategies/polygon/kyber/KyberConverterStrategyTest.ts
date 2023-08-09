@@ -22,6 +22,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -50,7 +51,7 @@ describe('KyberConverterStrategyTest', function() {
   let asset: IERC20;
   let vault: TetuVaultV2;
   let strategy: KyberConverterStrategy;
-  const pId = 21
+  const pId = KYBER_PID;
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();

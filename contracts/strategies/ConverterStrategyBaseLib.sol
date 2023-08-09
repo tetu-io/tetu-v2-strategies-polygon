@@ -508,21 +508,24 @@ library ConverterStrategyBaseLib {
     uint collateralOut,
     uint repaidAmountOut
   ) {
-    // Make full/partial repayment
-    IERC20(borrowAsset).safeTransfer(address(converter_), amountRepay);
+    if (amountRepay >= AppLib.DUST_AMOUNT_TOKENS) {
+      // Make full/partial repayment
+      IERC20(borrowAsset).safeTransfer(address(converter_), amountRepay);
 
-    uint notUsedAmount;
-    (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
+      uint notUsedAmount;
+      (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
 
-    emit ClosePosition(collateralAsset, borrowAsset, amountRepay, address(this), collateralOut, notUsedAmount);
-    uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
+      emit ClosePosition(collateralAsset, borrowAsset, amountRepay, address(this), collateralOut, notUsedAmount);
+      uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
 
-    // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (debt-gap)
-    repaidAmountOut = balanceBorrowAsset > balanceAfter
-      ? balanceBorrowAsset - balanceAfter
-      : 0;
+      // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (debt-gap)
+      repaidAmountOut = balanceBorrowAsset > balanceAfter
+        ? balanceBorrowAsset - balanceAfter
+        : 0;
+      require(notUsedAmount == 0, StrategyLib2.WRONG_VALUE);
+    }
 
-    require(notUsedAmount == 0, StrategyLib2.WRONG_VALUE);
+    return (collateralOut, repaidAmountOut);
   }
 
   /// @notice Close the given position, pay {amountToRepay}, return collateral amount in result

@@ -201,7 +201,7 @@ library ConverterStrategyBaseLib2 {
   function findZeroAmount(
     uint[] memory amounts_,
     address[] memory tokens_
-  ) internal view returns (bool) {
+  ) internal pure returns (bool) {
     uint len = amounts_.length;
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
       if (amounts_[i] == 0) return true;

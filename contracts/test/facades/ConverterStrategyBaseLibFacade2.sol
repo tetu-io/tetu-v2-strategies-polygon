@@ -161,7 +161,7 @@ contract ConverterStrategyBaseLibFacade2 {
     return ConverterStrategyBaseLib2.HARDWORK_LOSS_TOLERANCE;
   }
 
-  function findZeroAmount(uint[] memory amounts_, address[] memory tokens_) external view returns (bool) {
+  function findZeroAmount(uint[] memory amounts_, address[] memory tokens_) external pure returns (bool) {
     return ConverterStrategyBaseLib2.findZeroAmount(amounts_, tokens_);
   }
 

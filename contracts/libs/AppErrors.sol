@@ -75,7 +75,7 @@ library AppErrors {
 
   string public constant NOT_IMPLEMENTED = "TS-28 not implemented";
 
-  /// @notice You are not allowed to make direct debt if a reverse debt exists and visa verse.
+  /// @notice You are not allowed to make direct debt if a NOT-DUST reverse debt exists and visa verse.
   string public constant OPPOSITE_DEBT_EXISTS = "TS-29 opposite debt exists";
 
   string public constant INVALID_VALUE = "TS-30 invalid value";
