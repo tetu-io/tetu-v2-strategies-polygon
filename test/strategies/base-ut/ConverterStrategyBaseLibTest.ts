@@ -3739,6 +3739,23 @@ describe('ConverterStrategyBaseLibTest', () => {
           })).revertedWith("SB: Wrong value"); // WRONG_VALUE
         });
       });
+      describe("Try to repay dust token", () => {
+        it("should not change balances", async () => {
+          const ret = await makeClosePosition({
+            balances: ["0.02", "0.01"],
+            collateralAsset: usdc,
+            borrowAsset: usdt,
+            amountRepay: "0.00004", // less than 100 tokens
+            repays: [{
+              collateralAsset: usdc,
+              borrowAsset: dai,
+              totalCollateralAmountOut: "90",
+              totalDebtAmountOut: "45",
+            }],
+          });
+          expect([ret.collateralAssetBalance, ret.borrowAssetBalance].join()).eq(["0.02", "0.01"].join())
+        });
+      });
     });
   });
 

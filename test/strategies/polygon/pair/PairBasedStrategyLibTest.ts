@@ -3242,7 +3242,7 @@ describe('PairBasedStrategyLibTest', () => {
         });
 
         it("should revert, usdt=>usdc exist", async () => {
-          // we are going to borrow usdt under usdc, but there is exist borrow of usdc under usdt
+          // we are going to borrow usdt under usdc, but there is existed borrow of usdc under usdt
           await expect(callBorrowToProportions({
             tokens: [usdc, usdt],
             indexCollateral: 0,
@@ -3268,7 +3268,7 @@ describe('PairBasedStrategyLibTest', () => {
           })).revertedWith("TS-29 opposite debt exists"); // OPPOSITE_DEBT_EXISTS
         });
         it("should revert, usdc=>usdt exist", async () => {
-          // we are going to borrow usdt under usdc, but there is exist borrow of usdc under usdt
+          // we are going to borrow usdt under usdc, but there is existed borrow of usdc under usdt
           await expect(callBorrowToProportions({
             tokens: [usdc, usdt],
             indexCollateral: 1,
@@ -3292,6 +3292,34 @@ describe('PairBasedStrategyLibTest', () => {
               totalDebtAmountOut: "50"
             }]
           })).revertedWith("TS-29 opposite debt exists"); // OPPOSITE_DEBT_EXISTS
+        });
+        it("should NOT revert if the debt is dust", async () => {
+          // we are going to borrow usdt under usdc, there is existed borrow of usdc under usdt with DUST amounts
+          const ret = await callBorrowToProportions({
+              tokens: [usdc, usdt],
+              indexCollateral: 0,
+              indexBorrow: 1,
+              balances: ["400", "100"],
+              liquidationThresholds: ["0", "0"],
+              propNotUnderlying18: "0.5",
+              borrows: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                converter: converter.address,
+                collateralAmount: "300",
+                maxTargetAmount: "150",
+                collateralAmountOut: "200",
+                borrowAmountOut: "100",
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                totalCollateralAmountOut: "0.001",
+                totalDebtAmountOut: "0.00009" // this amount is less than AppLib.DUST_AMOUNT_TOKENS tokens
+              }]
+          });
+
+          expect(ret.balances.join()).eq([200, 200].join());
         });
       });
     });

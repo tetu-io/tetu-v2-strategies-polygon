@@ -179,7 +179,7 @@ library BorrowLib {
         indexB: 0
       });
 
-      if (v.directDebt != 0) {
+      if (v.directDebt >= AppLib.DUST_AMOUNT_TOKENS) {
         // This branch of code cannot be called recursively.
         // Firstly repay(requiredAmount0) is called below. There are two possible results:
         // 1) requiredCost0 <= cost0
@@ -209,7 +209,7 @@ library BorrowLib {
         indexB: 1
       });
       // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
-      if (v.reverseDebt != 0) {
+      if (v.reverseDebt >= AppLib.DUST_AMOUNT_TOKENS) {
         require(repayAllowed, AppErrors.NOT_ALLOWED);
 
         // repay of v.asset0 is required

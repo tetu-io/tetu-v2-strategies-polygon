@@ -33,6 +33,7 @@ import {KyberLiquidityUtils} from "./utils/KyberLiquidityUtils";
 import {writeFileSyncRestoreFolder} from "../../../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -62,7 +63,7 @@ describe('KyberConverterStrategyDepegTest', function() {
   let vault: TetuVaultV2;
   let strategy: KyberConverterStrategy;
   let lib: KyberLib;
-  const pId = 21
+  const pId = KYBER_PID;
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();

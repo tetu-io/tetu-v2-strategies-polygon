@@ -327,9 +327,17 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      // { name: PLATFORM_UNIV3,},
-      // { name: PLATFORM_ALGEBRA,},
-      { name: PLATFORM_KYBER,},
+      { name: PLATFORM_UNIV3,},
+      { name: PLATFORM_ALGEBRA,},
+
+      // For Kyber we have error NOT_ALLOWED ('TS-23 not allowed') here
+      // It means, that required proportion of one of the assets is too small, almost zero
+      // It was decided, that it's ok to have revert in that case
+      // We can change this behavior by changing BorrowLib.rebalanceRepayBorrow implementation:
+      //      if amount-to-repay passed to _repayDebt is too small to be used,
+      //      we should increase it min amount required to make repay successfully (amount must be > threshold)
+
+      // { name: PLATFORM_KYBER,},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {

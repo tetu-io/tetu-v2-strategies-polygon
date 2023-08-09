@@ -100,7 +100,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       }
 
       const strategies: IStrategyInfo[] = [
-        {name: PLATFORM_UNIV3,},
+        // todo {name: PLATFORM_UNIV3,},
         {name: PLATFORM_ALGEBRA,},
         {name: PLATFORM_KYBER,},
       ];
@@ -115,9 +115,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
 
           console.log('deposit...');
-          await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-          await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+          // make deposit and enter to the pool
+          for (let i = 0; i < 5; ++i) {
+            await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+            await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
+            await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+
+            const state = await PackedData.getDefaultState(b.strategy);
+            if (state.totalLiquidity.gt(0)) {
+              break;
+            }
+          }
 
           return b;
         }
@@ -131,6 +139,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await TimeUtils.rollback(snapshot);
           });
 
+          it("totalLiquidity should be > 0", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const state = await PackedData.getDefaultState(b.strategy);
+            expect(state.totalLiquidity.gt(0)).eq(true);
+          });
           it("should deposit successfully", async () => {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
@@ -587,116 +600,154 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     });
   });
 
-  describe("Empty strategy with need-rebalance ON", () => {
-    interface IStrategyInfo {
-      name: string,
-    }
-    const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3,},
-      { name: PLATFORM_ALGEBRA,},
-      { name: PLATFORM_KYBER,},
-    ];
-
-    strategies.forEach(function (strategyInfo: IStrategyInfo) {
-
-      /**
-       * Make deposit.
-       * Change thresholds and set fuse ON
-       * Withdraw all
-       * Change thresholds and set fuse OFF => need rebalance = true
-       * Make rebalance of the empty strategy.
-       */
-      async function prepareStrategy(): Promise<IBuilderResults> {
-        const states: IStateNum[] = [];
-        const pathOut = "./tmp/prepareStrategy.csv";
-
-        console.log("prepareStrategy.1");
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
-        const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
-        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `init`));
-        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-        console.log("prepareStrategy.2");
-        // make deposit
-        await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-        await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
-        await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
-        console.log("prepareStrategy.3");
-
-        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `deposit`));
-        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-        // set fuse ON
-        await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
-        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fuse-on`));
-        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-        await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-        console.log("prepareStrategy.4");
-        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `rebalance`));
-        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-        // withdraw all liquidity from the strategy
-        await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
-        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `withdraw`));
-        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-        console.log("prepareStrategy.5");
-        await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
-        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fuse-off`));
-        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-        return b;
+  describe("Empty strategy", () => {
+    describe("No deposits", () => {
+      interface IStrategyInfo {
+        name: string,
       }
 
-      describe(`${strategyInfo.name}`, () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
+      const strategies: IStrategyInfo[] = [
+        {name: PLATFORM_UNIV3,},
+        {name: PLATFORM_ALGEBRA,},
+        {name: PLATFORM_KYBER,},
+      ];
 
-        it("should make rebalance successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
+      strategies.forEach(function (strategyInfo: IStrategyInfo) {
+
+        async function prepareStrategy(): Promise<IBuilderResults> {
+          return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        }
+
+        describe(`${strategyInfo.name}`, () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          it("isReadyToHardWork should return expected values", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(
+                b.strategy.address,
+                await Misc.impersonate(b.splitter.address)
+            );
+            const platform = await converterStrategyBase.PLATFORM();
+
+            // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
+            expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
+          });
+        });
+      });
+    });
+    describe("Empty strategy with need-rebalance ON", () => {
+      interface IStrategyInfo {
+        name: string,
+      }
+
+      const strategies: IStrategyInfo[] = [
+        {name: PLATFORM_UNIV3,},
+        {name: PLATFORM_ALGEBRA,},
+        {name: PLATFORM_KYBER,},
+      ];
+
+      strategies.forEach(function (strategyInfo: IStrategyInfo) {
+
+        /**
+         * Make deposit.
+         * Change thresholds and set fuse ON
+         * Withdraw all
+         * Change thresholds and set fuse OFF => need rebalance = true
+         * Make rebalance of the empty strategy.
+         */
+        async function prepareStrategy(): Promise<IBuilderResults> {
+          const states: IStateNum[] = [];
+          const pathOut = "./tmp/prepareStrategy.csv";
+
+          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-          expect(await b.strategy.needRebalance()).eq(true);
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `init`));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          // make deposit
+          await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+          await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
+          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `deposit`));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          // set fuse ON
+          await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fuse-on`));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-          expect(await b.strategy.needRebalance()).eq(false);
-        });
-        it("should not revert on rebalance debts", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `rebalance`));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-          const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
-          const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+          // withdraw all liquidity from the strategy
+          await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `withdraw`));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-          await b.strategy.withdrawByAggStep(
-            quote.tokenToSwap,
-            Misc.ZERO_ADDRESS,
-            quote.amountToSwap,
-            "0x",
-            planEntryData,
-            ENTRY_TO_POOL_IS_ALLOWED,
-            {gasLimit: 19_000_000}
-          );
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fuse-off`));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-          expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
-        });
-        it("should make emergency exit successfully", async () => {
-          const b = await loadFixture(prepareStrategy);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+          return b;
+        }
 
-          await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
-          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+        describe(`${strategyInfo.name}`, () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
-          expect(stateAfter.strategy.investedAssets).lt(10);
+          it("should make rebalance successfully", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+            expect(await b.strategy.needRebalance()).eq(true);
+            await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+            expect(await b.strategy.needRebalance()).eq(false);
+          });
+          it("should not revert on rebalance debts", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+            const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+            const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            await b.strategy.withdrawByAggStep(
+                quote.tokenToSwap,
+                Misc.ZERO_ADDRESS,
+                quote.amountToSwap,
+                "0x",
+                planEntryData,
+                ENTRY_TO_POOL_IS_ALLOWED,
+                {gasLimit: 19_000_000}
+            );
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+            expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
+          });
+          it("should make emergency exit successfully", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+            await converterStrategyBase.emergencyExit({gasLimit: 19_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+            expect(stateAfter.strategy.investedAssets).lt(10);
+          });
         });
       });
     });

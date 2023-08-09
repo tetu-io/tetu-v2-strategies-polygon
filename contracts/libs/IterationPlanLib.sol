@@ -203,11 +203,11 @@ library IterationPlanLib {
         // reverse debt
         (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
 
-        if (v.debtReverse == 0) {
+        if (v.debtReverse < AppLib.DUST_AMOUNT_TOKENS) { // there is reverse debt or the reverse debt is dust debt
           // direct debt
           (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
 
-          if (v.totalDebt == 0) {
+          if (v.totalDebt < AppLib.DUST_AMOUNT_TOKENS) { // there is direct debt or the direct debt is dust debt
             // This is final iteration - we need to swap leftovers and get amounts on balance in proper proportions.
             // The leftovers should be swapped to get following result proportions of the assets:
             //      underlying : not-underlying === 1e18 - propNotUnderlying18 : propNotUnderlying18

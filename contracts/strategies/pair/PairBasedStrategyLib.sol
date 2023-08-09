@@ -513,7 +513,7 @@ library PairBasedStrategyLib {
     // we are going to change direction of the borrow
     // let's ensure that there is no debt in opposite direction
     (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
-    require(needToRepay == 0, AppErrors.OPPOSITE_DEBT_EXISTS);
+    require(needToRepay < AppLib.DUST_AMOUNT_TOKENS, AppErrors.OPPOSITE_DEBT_EXISTS);
 
     BorrowLib.openPosition(
       cac,
