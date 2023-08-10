@@ -359,5 +359,195 @@ describe('PairBasedStrategyReaderTest', function() {
       });
     });
   });
+
+  describe("isWithdrawByAggCallRequired", () => {
+    let snapshot: string;
+    beforeEach(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    afterEach(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    interface IIsParams {
+      underlying: MockToken;
+      secondAsset: MockToken;
+
+      totalAssets: string;
+
+      fuseStatus?: number[];
+      withdrawDone?: number;
+      allowedLockedAmountPercent?: number;
+
+      repays?: IRepayParams[];
+      /** underlying, secondAsset */
+      prices?: string[];
+    }
+
+    interface IIsResults {
+      callResult: number;
+    }
+
+    async function callIsWithdrawByAggCallRequired(p: IIsParams): Promise<IIsResults> {
+      await strategy.setTotalAssets(parseUnits(p.totalAssets, await p.underlying.decimals()));
+      await strategy.setPoolTokens(p.underlying.address, p.secondAsset.address);
+      await strategy.setDefaultStateNums([
+        0, // IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
+        p?.fuseStatus ? p?.fuseStatus[0] : 1, // IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
+        p?.fuseStatus ? p?.fuseStatus[1] : 1, // IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B = 2;
+        p.withdrawDone ?? 0, // IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE = 3;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 = 4;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_1 = 5;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_2 = 6;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_3 = 7;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 = 8;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
+        0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
+      ]);
+
+      await splitter.setAsset(p.underlying.address);
+
+      if (p.prices) {
+        await priceOracle.changePrices(
+          [p.underlying.address, p.secondAsset.address],
+          [parseUnits(p.prices[0], 18), parseUnits(p.prices[1], 18)]
+        );
+      }
+
+      if (p.repays) {
+        for (const r of p.repays) {
+          await setupMockedRepay(converter, strategy.address, r);
+        }
+      }
+
+      const callResult = (
+        await reader.isWithdrawByAggCallRequired(strategy.address, p.allowedLockedAmountPercent ?? 0)
+      ).toNumber();
+      return {
+        callResult
+      }
+    }
+
+    describe("Full withdraw", () => {
+      it("should return 0 if fuse is not active", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          fuseStatus: [0, 0],
+          totalAssets: "500",
+          repays: []
+        });
+        expect(r.callResult).eq(0);
+      });
+      it("should return 0 if fuse is not triggered", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          fuseStatus: [1, 1],
+          totalAssets: "500",
+          repays: []
+        });
+        expect(r.callResult).eq(0);
+      });
+      it("should return 1 if a fuse A is triggered and withdraw is not completed", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          fuseStatus: [3, 1],
+          withdrawDone: 0,
+
+          totalAssets: "500",
+          repays: []
+        });
+        expect(r.callResult).eq(1);
+      });
+      it("should return 1 if a fuse B is triggered and withdraw is not completed", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          fuseStatus: [1, 2],
+          withdrawDone: 0,
+
+          totalAssets: "500",
+          repays: []
+        });
+        expect(r.callResult).eq(1);
+      });
+      it("should return 0 if a fuse is triggered but withdraw is completed", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          fuseStatus: [1, 1],
+          withdrawDone: 1,
+
+          totalAssets: "500",
+          repays: []
+        });
+        expect(r.callResult).eq(0);
+      });
+    });
+    describe("Debts rebalance", () => {
+      it("no debts, should return 0", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          totalAssets: "500",
+        });
+        expect(r.callResult).eq(0);
+      });
+      it("direct debt, rebalance is not required, should return 0", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          totalAssets: "500",
+          allowedLockedAmountPercent: 90,
+          repays: [{
+            collateralAsset: usdc,
+            borrowAsset: wmatic,
+            totalCollateralAmountOut: "1000",
+            totalDebtAmountOut: "700",
+            collateralAmountOut: "1000",
+            amountRepay: "700",
+          }]
+        });
+        expect(r.callResult).eq(0);
+      });
+      it("direct debt, rebalance is required, should return 2", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          totalAssets: "3000",
+          allowedLockedAmountPercent: 10,
+          repays: [{
+            collateralAsset: usdc,
+            borrowAsset: wmatic,
+            totalCollateralAmountOut: "1100",
+            totalDebtAmountOut: "700",
+            collateralAmountOut: "1000",
+            amountRepay: "700",
+          }]
+        });
+        expect(r.callResult).eq(2);
+      });
+      it("reverse debt, rebalance is required, should return 2", async () => {
+        const r = await callIsWithdrawByAggCallRequired({
+          underlying: usdc,
+          secondAsset: wmatic,
+          totalAssets: "3000",
+          allowedLockedAmountPercent: 50,
+          repays: [{
+            collateralAsset: wmatic,
+            borrowAsset: usdc,
+            totalCollateralAmountOut: "11000",
+            totalDebtAmountOut: "7000",
+            collateralAmountOut: "1000",
+            amountRepay: "700",
+          }]
+        });
+        expect(r.callResult).eq(2);
+      });
+    });
+  });
 //endregion Unit tests
 });

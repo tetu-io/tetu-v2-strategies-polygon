@@ -11,6 +11,7 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
   address internal _tokenA;
   address internal _tokenB;
   uint internal _totalAssets;
+  uint[] internal _nums;
 
   function setConverter(address converter_) external {
     _converter = converter_;
@@ -27,6 +28,11 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
   function setPoolTokens(address tokenA, address tokenB) external {
     _tokenA = tokenA;
     _tokenB = tokenB;
+  }
+
+  function setDefaultStateNums(uint[] memory nums_) external {
+    require(nums_.length == 12, "setDefaultStateNums nums length != 12, see getDefaultState impl");
+    _nums = nums_;
   }
 
   function converter() external view returns (address) {
@@ -56,7 +62,7 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
     addr[PairBasedStrategyLib.IDX_ADDR_DEFAULT_STATE_TOKEN_B] = _tokenB;
 
     tickData = new int24[](4);
-    nums = new uint[](12);
+    nums = _nums;
     boolValues = new bool[](2);
 
     return (addr, tickData, nums, boolValues);

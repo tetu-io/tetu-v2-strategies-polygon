@@ -778,6 +778,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         const states: IStateNum[] = [];
         const pathOut = "./tmp/large-user-prepare-strategy.csv";
 
+        const state = await PackedData.getDefaultState(b.strategy);
+        await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("50000", 6));
+
         console.log('Small user deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('200', 6));
@@ -787,15 +790,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         console.log('Big user deposit...');
         await IERC20__factory.connect(b.asset, signer2).approve(b.vault.address, Misc.MAX_UINT);
-        await TokenUtils.getToken(b.asset, signer2.address, parseUnits('200000', 6));
-        await b.vault.connect(signer2).deposit(parseUnits('100000', 6), signer2.address, {gasLimit: 19_000_000});
+        await TokenUtils.getToken(b.asset, signer2.address, parseUnits('100000', 6));
+        await b.vault.connect(signer2).deposit(parseUnits('50000', 6), signer2.address, {gasLimit: 19_000_000});
         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d1"));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         // change prices and make rebalance
         console.log('Change prices...');
 
-        const state = await PackedData.getDefaultState(b.strategy);
         const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
           signer,
           b,
@@ -807,10 +809,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "p"));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
+        console.log('Rebalance debts...');
+        // rebalance debts
+        await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+          await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+          Misc.ZERO_ADDRESS,
+          true
+        );
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
         if (await b.strategy.needRebalance()) {
+          console.log('Rebalance...');
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         }
 
+        console.log('Withdraw...');
         let done = false;
         while (! done) {
           const amountToWithdraw = await b.vault.maxWithdraw(signer2.address);
@@ -826,15 +840,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "w"));
           await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-          // rebalance debts
-          await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
-            await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
-            Misc.ZERO_ADDRESS,
-            true
-          );
-          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
-          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
           if (await b.strategy.needRebalance()) { // for kyber
             console.log("rebalance");
             await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
@@ -842,8 +847,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
           }
         }
-
-        await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("10000", 6));
 
         return b;
       }
