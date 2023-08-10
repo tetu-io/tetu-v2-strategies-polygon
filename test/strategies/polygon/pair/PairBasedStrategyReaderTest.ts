@@ -404,6 +404,7 @@ describe('PairBasedStrategyReaderTest', function() {
         0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
         0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
         0, // IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
+        0, // IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP = 12;
       ]);
 
       await splitter.setAsset(p.underlying.address);

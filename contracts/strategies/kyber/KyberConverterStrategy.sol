@@ -237,6 +237,11 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
     state.pair.lastRebalanceNoSwap = 0;
+
+    if (completed && _isFuseTriggeredOn()) {
+      // full withdraw was completed, we can exclude next calls of withdrawByAggStep
+      state.pair.withdrawDone = 1;
+    }
   }
 
   function getPropNotUnderlying18() external view returns (uint) {

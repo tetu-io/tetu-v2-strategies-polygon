@@ -67,6 +67,7 @@ library PairBasedStrategyLib {
   uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
   uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
   uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
+  uint public constant IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP = 12;
 
   uint public constant IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL = 0;
   uint public constant IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS = 1;

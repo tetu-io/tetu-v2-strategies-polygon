@@ -31,7 +31,7 @@ contract PairBasedStrategyReaderAccessMock is IPairBasedStrategyReaderAccess {
   }
 
   function setDefaultStateNums(uint[] memory nums_) external {
-    require(nums_.length == 12, "setDefaultStateNums nums length != 12, see getDefaultState impl");
+    require(nums_.length == 13, "setDefaultStateNums nums length != 13, see getDefaultState impl");
     _nums = nums_;
   }
 

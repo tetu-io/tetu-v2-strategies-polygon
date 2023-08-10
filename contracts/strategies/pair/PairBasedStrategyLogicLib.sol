@@ -46,6 +46,7 @@ library PairBasedStrategyLogicLib {
     ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
     uint withdrawDone;
 
+    /// @notice Timestamp of last call of rebalanceNoSwaps() or zero if withdrawByAggStep() was called last
     uint lastRebalanceNoSwap;
   }
 
@@ -244,7 +245,7 @@ library PairBasedStrategyLogicLib {
       nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 + i] = pairState.fuseAB[0].thresholds[i];
       nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 + i] = pairState.fuseAB[1].thresholds[i];
     }
-    nums[12] = pairState.lastRebalanceNoSwap;
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP] = pairState.lastRebalanceNoSwap;
 
     boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL] = pairState.isStablePool;
     boolValues[PairBasedStrategyLib.IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS] = pairState.depositorSwapTokens;
