@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../strategies/ConverterStrategyBaseLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library to make new borrow, extend/reduce exist borrows and repay to keep proper assets proportions
 /// @dev Swap through liquidator is still allowed to be able to get required profitToCover, but this amount is small
@@ -105,6 +106,12 @@ library BorrowLib {
     uint threshold1,
     uint addition0
   ) external {
+    console.log("rebalanceAssets.asset0", asset0);
+    console.log("rebalanceAssets.asset1", asset1);
+    console.log("rebalanceAssets.prop0", prop0);
+    console.log("rebalanceAssets.threshold0", threshold0);
+    console.log("rebalanceAssets.threshold1", threshold1);
+    console.log("rebalanceAssets.addition0", addition0);
     // pool always have TWO assets, it's not allowed ot have only one asset
     // so, we assume that the proportions are in the range (0...1e18)
     require(prop0 != 0, AppErrors.ZERO_VALUE);
@@ -138,9 +145,13 @@ library BorrowLib {
   ) internal {
     v.amount0 = IERC20(v.asset0).balanceOf(address(this));
     v.amount1 = IERC20(v.asset1).balanceOf(address(this));
+    console.log("_refreshRebalance.v.amount0", v.amount0);
+    console.log("_refreshRebalance.v.amount1", v.amount1);
 
     (v.directDebt, ) = converterLiquidator.converter.getDebtAmountCurrent(address(this), v.asset0, v.asset1, true);
     (v.reverseDebt, ) = converterLiquidator.converter.getDebtAmountCurrent(address(this), v.asset1, v.asset0, true);
+    console.log("_refreshRebalance.v.directDebt", v.directDebt);
+    console.log("_refreshRebalance.v.reverseDebt", v.reverseDebt);
 
     _rebalanceAssets(v, converterLiquidator, repayAllowed);
   }
@@ -162,6 +173,11 @@ library BorrowLib {
     uint totalCost = cost0 + cost1 - costAddition0;
     uint requiredCost0 = totalCost * v.prop0 / SUM_PROPORTIONS + costAddition0;
     uint requiredCost1 = totalCost * (SUM_PROPORTIONS - v.prop0) / SUM_PROPORTIONS;
+
+    console.log("_rebalanceAssets.cost0", cost0);
+    console.log("_rebalanceAssets.cost1", cost1);
+    console.log("_rebalanceAssets.requiredCost0", requiredCost0);
+    console.log("_rebalanceAssets.requiredCost1", requiredCost1);
 
     if (requiredCost0 > cost0) {
       // we need to increase amount of asset 0 and decrease amount of asset 1, so we need to borrow asset 0 (reverse)
@@ -189,6 +205,7 @@ library BorrowLib {
 
         // repay of v.asset1 is required
         uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
+        console.log("_rebalanceAssets.requiredAmount0", requiredAmount0);
         rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt);
       } else {
         // new (or additional) borrow of asset 0 under asset 1 is required
@@ -237,9 +254,13 @@ library BorrowLib {
     // we don't know exact amount to repay
     // but we are sure that amount {requiredAmountB ===> requiredAmountA} would be more than required
     uint capRequiredAmountA = requiredAmountB * c.alpha18 / 1e18;
-    ConverterStrategyBaseLib._repayDebt(c.converterLiquidator.converter, c.assetB, c.assetA, Math.min(capRequiredAmountA, amountDebtA));
-
-    _refreshRebalance(v, c.converterLiquidator, false);
+    console.log("rebalanceRepayBorrow.capRequiredAmountA", capRequiredAmountA);
+    console.log("rebalanceRepayBorrow.amountDebtA", amountDebtA);
+    uint amountToRepay = Math.min(capRequiredAmountA, amountDebtA);
+    if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
+      ConverterStrategyBaseLib._repayDebt(c.converterLiquidator.converter, c.assetB, c.assetA, amountToRepay);
+      _refreshRebalance(v, c.converterLiquidator, false);
+    } // else the assets are already in proper proportions
   }
 
   //endregion -------------------------------------------------- Internal helper functions

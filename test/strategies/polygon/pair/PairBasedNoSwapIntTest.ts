@@ -55,6 +55,11 @@ describe('PairBasedNoSwapIntTest', function() {
   const PLAN_REPAY_SWAP_REPAY = 1;
   const PLAN_SWAP_ONLY = 2;
 
+  const FUSE_DISABLED_0 = 0;
+  const FUSE_OFF_1 = 1;
+  const FUSE_ON_LOWER_LIMIT_2 = 2;
+  const FUSE_ON_UPPER_LIMIT_3 = 3;
+
   const DEFAULT_SWAP_AMOUNT_RATIO = 0.3;
 
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
@@ -795,6 +800,18 @@ describe('PairBasedNoSwapIntTest', function() {
               const stateLast = ret.states[ret.states.length - 1];
               expect(stateLast.vault.totalAssets).approximately(stateFirst.vault.totalAssets, 100);
             });
+            it("should have withdrawDone=0 at the end", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.pairState?.withdrawDone).eq(0); // 1 is set only if the fuse is triggered ON
+              expect(stateFirst.pairState?.withdrawDone).eq(0);
+            });
+            it("should set lastRebalanceNoSwap to 0 at the end", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
+            });
           });
           describe('Move prices up, dont enter to pool after completion', function () {
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
@@ -928,6 +945,74 @@ describe('PairBasedNoSwapIntTest', function() {
               const ret = await loadFixture(makeWithdrawAll);
               const [stateLast, ...rest] = [...ret.states].reverse();
               expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
+            });
+          });
+          describe("Full withdraw when fuse is triggered ON", () => {
+            async function initialize(): Promise<IBuilderResults> {
+              const b = await prepareStrategy();
+              await prepareOverCollateral(
+                  b, {
+                    movePricesUp: true,
+                    countLoops: 2
+                  },
+                  `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`
+              );
+              // prepare fuse
+              await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
+              // enable fuse
+              await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+
+              return b;
+            }
+
+            async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
+              return makeWithdrawTest(await loadFixture(initialize), {
+                movePricesUp: true, // not used here
+                singleIteration: false,
+                entryToPool: ENTRY_TO_POOL_DISABLED,
+                planKind: PLAN_SWAP_REPAY,
+                propNotUnderlying18: BigNumber.from(0)
+              });
+            }
+
+            it("initially should set fuse triggered ON", async () => {
+              const b = await loadFixture(initialize);
+              const state = await PackedData.getDefaultState(b.strategy);
+              expect(state.fuseStatusTokenA > FUSE_OFF_1 || state.fuseStatusTokenB > FUSE_OFF_1).eq(true);
+            });
+            it("initially should set withdrawDone = 0", async () => {
+              const b = await loadFixture(initialize);
+              const state = await PackedData.getDefaultState(b.strategy);
+              expect(state.withdrawDone).eq(0);
+            });
+            it("should not enter to the pool at the end", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.strategy.liquidity).lt(1000);
+            });
+            it("should set expected investedAssets", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.strategy.investedAssets).lt(1000);
+            });
+            it("should set expected totalAssets", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.vault.totalAssets).approximately(stateFirst.vault.totalAssets, 100);
+            });
+            it("should set withdrawDone=1 at the end", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateFirst = ret.states[0];
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.pairState?.withdrawDone).eq(1);
+              expect(stateFirst.pairState?.withdrawDone).eq(0);
+            });
+            it("should set lastRebalanceNoSwap to 0 at the end", async () => {
+              const ret = await loadFixture(makeWithdrawAll);
+              const stateLast = ret.states[ret.states.length - 1];
+              expect(stateLast.pairState?.lastRebalanceNoSwap).eq(0);
             });
           });
         });

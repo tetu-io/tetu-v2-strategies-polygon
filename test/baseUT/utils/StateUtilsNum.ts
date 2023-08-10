@@ -46,7 +46,9 @@ export interface IPairState {
   upperTick: number;
   rebalanceTickRange: number;
   totalLiquidity: BigNumber;
-  currentTick?: ILiquidityAmountInTick,
+  currentTick?: ILiquidityAmountInTick;
+  withdrawDone: number;
+  lastRebalanceNoSwap: number;
 }
 
 export interface IUniv3SpecificState {
@@ -315,6 +317,8 @@ export class StateUtilsNum {
           rebalanceTickRange: state.rebalanceTickRange,
           totalLiquidity: state.totalLiquidity,
           currentTick,
+          withdrawDone: state.withdrawDone,
+          lastRebalanceNoSwap: state.lastRebalanceNoSwap
         }
 
         if (isUniv3) {

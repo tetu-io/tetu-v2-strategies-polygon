@@ -3335,12 +3335,12 @@ describe('PairBasedStrategyLibTest', () => {
       expect((await facade._extractProp(PLAN_SWAP_ONLY, entryData)).toNumber()).eq(777);
     });
     it("should return max uint for PLAN_REPAY_SWAP_REPAY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256'], [PLAN_REPAY_SWAP_REPAY]);
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
       expect(await facade._extractProp(PLAN_REPAY_SWAP_REPAY, entryData)).eq(Misc.MAX_UINT);
     });
-    it("should return zero for unknown PLAN_XXX", async () => {
+    it("should revert if plan is unknown", async () => {
       const entryData = defaultAbiCoder.encode(['uint256'], [555]);
-      expect(await facade._extractProp(555, entryData)).eq(0);
+      await expect(facade._extractProp(555, entryData)).revertedWith("TS-9 wrong value"); // WRONG_VALUE
     });
   });
 

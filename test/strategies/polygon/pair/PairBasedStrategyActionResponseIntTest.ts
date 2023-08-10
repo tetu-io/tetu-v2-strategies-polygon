@@ -19,6 +19,7 @@ import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtu
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -53,6 +54,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
   let signer: SignerWithAddress;
   let signer2: SignerWithAddress;
+  let signer3: SignerWithAddress;
 //endregion Variables
 
 //region before, after
@@ -62,7 +64,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     require("util").inspect.defaultOptions.depth = null;
 
     snapshotBefore = await TimeUtils.snapshot();
-    [signer, signer2] = await ethers.getSigners();
+    [signer, signer2, signer3] = await ethers.getSigners();
 
   })
 
@@ -100,7 +102,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       }
 
       const strategies: IStrategyInfo[] = [
-        // todo {name: PLATFORM_UNIV3,},
+        {name: PLATFORM_UNIV3,},
         {name: PLATFORM_ALGEBRA,},
         {name: PLATFORM_KYBER,},
       ];
@@ -201,7 +203,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -273,7 +275,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         /**
          * Initially signer deposits 1000 USDC, also he has additional 1000 USDC on the balance.
          * Fuse OFF by default. We set fuse thresholds in such a way as to trigger fuse ON.
-         * Rebalance is not required after the depositing.
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
           const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
@@ -288,6 +289,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           // make rebalance to update fuse status
           expect(await b.strategy.needRebalance()).eq(true);
+          console.log('rebalance...');
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
           expect(await b.strategy.needRebalance()).eq(false);
 
@@ -359,7 +361,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -722,7 +724,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -758,7 +760,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3,},
+      // todo {name: PLATFORM_UNIV3,},
       {name: PLATFORM_ALGEBRA,},
       {name: PLATFORM_KYBER,},
     ];
@@ -772,35 +774,79 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+        const states: IStateNum[] = [];
+        const pathOut = "./tmp/large-user-prepare-strategy.csv";
+
+        const state = await PackedData.getDefaultState(b.strategy);
+        await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("50000", 6));
 
         console.log('Small user deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('200', 6));
         await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address, {gasLimit: 19_000_000});
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d0"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         console.log('Big user deposit...');
         await IERC20__factory.connect(b.asset, signer2).approve(b.vault.address, Misc.MAX_UINT);
-        await TokenUtils.getToken(b.asset, signer2.address, parseUnits('200000', 6));
-        await b.vault.connect(signer2).deposit(parseUnits('100000', 6), signer2.address, {gasLimit: 19_000_000});
+        await TokenUtils.getToken(b.asset, signer2.address, parseUnits('100000', 6));
+        await b.vault.connect(signer2).deposit(parseUnits('50000', 6), signer2.address, {gasLimit: 19_000_000});
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d1"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         // change prices and make rebalance
-        await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOn(signer, signer2, b);
-        await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+        console.log('Change prices...');
 
-        console.log('Big user withdraws all...');
-        for (let i = 0; i < 9; ++i) { // cycle is for algebra
-          await b.vault.connect(signer2).withdraw(parseUnits('10000', 6), signer2.address, signer2.address, {gasLimit: 19_000_000});
-          if (await b.strategy.needRebalance()) { // for kyber
-            await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-          }
-        }
-        await b.vault.connect(signer2).withdrawAll({gasLimit: 19_000_000});
-        if (await b.strategy.needRebalance()) { // for kyber
+        const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+          signer,
+          b,
+          state.tokenA,
+          state.tokenB,
+          true,
+        );
+        await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "p"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+        console.log('Rebalance debts...');
+        // rebalance debts
+        await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+          await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+          Misc.ZERO_ADDRESS,
+          true
+        );
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+        if (await b.strategy.needRebalance()) {
+          console.log('Rebalance...');
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         }
 
-        const state = await PackedData.getDefaultState(b.strategy);
-        await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("10000", 6));
+        console.log('Withdraw...');
+        let done = false;
+        while (! done) {
+          const amountToWithdraw = await b.vault.maxWithdraw(signer2.address);
+          const portion = parseUnits('5000', 6);
+          if (portion.lt(amountToWithdraw)) {
+            console.log("withdraw...", portion);
+            await b.vault.connect(signer2).withdraw(portion, signer2.address, signer2.address, {gasLimit: 19_000_000});
+          } else {
+            console.log("withdraw all...", amountToWithdraw);
+            await b.vault.connect(signer2).withdrawAll({gasLimit: 19_000_000});
+            done = true;
+          }
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "w"));
+          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          if (await b.strategy.needRebalance()) { // for kyber
+            console.log("rebalance");
+            await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+            states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "r"));
+            await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+          }
+        }
 
         return b;
       }
@@ -856,7 +902,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-          const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
           const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);

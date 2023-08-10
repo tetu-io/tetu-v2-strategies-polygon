@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
@@ -24,7 +25,11 @@ library IterationPlanLib {
   /// @notice Repay available amount-to-repay, swap all or part of collateral to borrowed-asset, make one repay if needed.
   ///         Swap + second repay tries to make asset balances to proportions required by the pool.
   ///         Proportions are read from pool through IPoolProportionsProvider(this) and re-read after swapping.
-  ///         (uint256) - (entry kind)
+  ///         (uint256, uint256) - (entry kind, propNotUnderlying18)
+  /// propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+  ///                     The assets should be swapped to get following result proportions:
+  ///                     not-underlying : underlying === propNotUnderlying18 : (1e18 - propNotUnderlying18)
+  ///                     Pass type(uint).max to read proportions from the pool.
   uint constant public PLAN_REPAY_SWAP_REPAY = 1;
 
   /// @notice Swap leftovers to required proportions, don't repay any debts
@@ -202,10 +207,14 @@ library IterationPlanLib {
 
         // reverse debt
         (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
+        console.log("v.debtReverse", v.debtReverse);
+        console.log("v.collateralReverse", v.collateralReverse);
 
         if (v.debtReverse < AppLib.DUST_AMOUNT_TOKENS) { // there is reverse debt or the reverse debt is dust debt
           // direct debt
           (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
+          console.log("v.totalDebt", v.totalDebt);
+          console.log("v.totalCollateral", v.totalCollateral);
 
           if (v.totalDebt < AppLib.DUST_AMOUNT_TOKENS) { // there is direct debt or the direct debt is dust debt
             // This is final iteration - we need to swap leftovers and get amounts on balance in proper proportions.
@@ -287,11 +296,15 @@ library IterationPlanLib {
     uint amountToSwap,
     uint indexToRepayPlus1
   ) {
-    require(balancesAB[1] != 0, AppErrors.UNFOLDING_2_ITERATIONS_REQUIRED);
     // use all available tokenB to repay debt and receive as much as possible tokenA
     uint amountToRepay = Math.min(balancesAB[1], totalBorrowB);
 
-    (uint collateralAmount,) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
+    uint collateralAmount;
+    if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
+      (collateralAmount,) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
+    } else {
+      amountToRepay = 0;
+    }
 
     // swap A to B: full or partial
     amountToSwap = estimateSwapAmountForRepaySwapRepay(

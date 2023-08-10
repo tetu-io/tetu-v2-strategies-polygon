@@ -1826,7 +1826,6 @@ describe('ConverterStrategyBaseLibTest', () => {
         await Promise.all(p.amounts.map(
           async (amount, index) => parseUnits(amount, await p.tokens[index].decimals())
         )),
-        p.tokens.map(x => x.address)
       );
 
       return {found};

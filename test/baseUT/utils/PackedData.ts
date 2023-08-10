@@ -31,6 +31,7 @@ const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 = 8;
 const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
 const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
 const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
+const IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP = 12;
 
 const IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL = 0;
 const IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS = 1;
@@ -83,6 +84,8 @@ export interface IDefaultState {
 
   isStablePool: boolean;
   depositorSwapTokens: boolean;
+
+  lastRebalanceNoSwap: number;
 }
 
 export interface IUniv3SpecificState {
@@ -143,9 +146,10 @@ export class PackedData {
         +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2], 18),
         +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3], 18),
       ],
+      lastRebalanceNoSwap: ret.nums[IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP].toNumber(),
 
       isStablePool: ret.boolValues[IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL],
-      depositorSwapTokens: ret.boolValues[IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS]
+      depositorSwapTokens: ret.boolValues[IDX_BOOL_VALUES_DEFAULT_STATE_DEPOSITOR_SWAP_TOKENS],
     }
   }
 
