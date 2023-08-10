@@ -43,6 +43,9 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
+  const PLAN_SWAP_REPAY = 0;
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_SWAP_ONLY = 2;
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -178,8 +181,8 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
     expect(await s.needRebalance()).eq(false)
 
     const planEntryData = defaultAbiCoder.encode(
-      ["uint256"],
-      [1]
+        ["uint256", "uint256"],
+        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
     );
     const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 

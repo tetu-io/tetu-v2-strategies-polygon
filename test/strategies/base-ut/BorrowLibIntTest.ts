@@ -24,7 +24,6 @@ import {MaticHolders} from "../../../scripts/addresses/MaticHolders";
 import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_WEIGHTS,
   GAS_BORROW_LIB_01,
   GAS_BORROW_LIB_02,
   GAS_BORROW_LIB_03,
@@ -43,7 +42,6 @@ describe('BorrowLibIntTest', () => {
 
   //region Variables
   let snapshotBefore: string;
-  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let converter: ITetuConverter;
   let usdc: IERC20Metadata;
@@ -56,8 +54,6 @@ describe('BorrowLibIntTest', () => {
   //region before, after
   before(async function () {
     [signer] = await ethers.getSigners();
-
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     snapshotBefore = await TimeUtils.snapshot();
     converter = await ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);

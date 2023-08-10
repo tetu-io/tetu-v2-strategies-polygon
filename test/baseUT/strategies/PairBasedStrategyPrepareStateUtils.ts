@@ -211,8 +211,8 @@ export class PairBasedStrategyPrepareStateUtils {
     const state = await PackedData.getDefaultState(strategyAsOperator);
 
     const planEntryData = defaultAbiCoder.encode(
-      ["uint256"],
-      [PLAN_REPAY_SWAP_REPAY]
+        ["uint256", "uint256"],
+        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
     );
 
     let step = 0;

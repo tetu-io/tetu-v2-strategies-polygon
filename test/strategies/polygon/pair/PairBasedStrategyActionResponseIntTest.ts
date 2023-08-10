@@ -203,7 +203,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -361,7 +361,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -724,7 +724,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-            const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+            const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
             const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
@@ -902,7 +902,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const b = await loadFixture(prepareStrategy);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-          const planEntryData = defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY]);
+          const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
           const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);

@@ -25,7 +25,11 @@ library IterationPlanLib {
   /// @notice Repay available amount-to-repay, swap all or part of collateral to borrowed-asset, make one repay if needed.
   ///         Swap + second repay tries to make asset balances to proportions required by the pool.
   ///         Proportions are read from pool through IPoolProportionsProvider(this) and re-read after swapping.
-  ///         (uint256) - (entry kind)
+  ///         (uint256, uint256) - (entry kind, propNotUnderlying18)
+  /// propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
+  ///                     The assets should be swapped to get following result proportions:
+  ///                     not-underlying : underlying === propNotUnderlying18 : (1e18 - propNotUnderlying18)
+  ///                     Pass type(uint).max to read proportions from the pool.
   uint constant public PLAN_REPAY_SWAP_REPAY = 1;
 
   /// @notice Swap leftovers to required proportions, don't repay any debts

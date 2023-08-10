@@ -321,7 +321,7 @@ describe('IterationPlanLibTest', () => {
       expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_SWAP_REPAY)
     });
     it("should return PLAN_REPAY_SWAP_REPAY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256'], [PLAN_REPAY_SWAP_REPAY]);
+      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, 1]);
       expect((await facade.getEntryKind(entryData)).toNumber()).eq(PLAN_REPAY_SWAP_REPAY)
     });
     it("should return PLAN_SWAP_ONLY", async () => {
