@@ -21,6 +21,9 @@ library AppLib {
   uint internal constant DEFAULT_LIQUIDATION_THRESHOLD = 100_000;
   uint internal constant DENOMINATOR = 100_000;
 
+  /// @notice Any amount less than the following is dust
+  uint public constant DUST_AMOUNT_TOKENS = 100;
+
   /// @notice Unchecked increment for for-cycles
   function uncheckedInc(uint i) internal pure returns (uint) {
     unchecked {

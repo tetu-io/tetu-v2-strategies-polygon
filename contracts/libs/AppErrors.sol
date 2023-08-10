@@ -59,19 +59,21 @@ library AppErrors {
   ///         This error can happen if allowed proportion is too small, i.e. 0.0004 : (1-0.0004)
   ///         Such situation can happen if amount to swap is almost equal to the amount of the token in the current tick,
   ///         so swap will move us close to the border between ticks.
+  ///         It was decided, that it's ok to have revert in that case
+  ///         We can change this behavior by changing BorrowLib.rebalanceRepayBorrow implementation:
+  ///             if amount-to-repay passed to _repayDebt is too small to be used,
+  ///             we should increase it min amount required to make repay successfully (amount must be > threshold)
   string public constant NOT_ALLOWED = "TS-23 not allowed";
 
   string public constant ZERO_VALUE = "TS-24 zero value";
 
   string public constant INCORRECT_SWAP_BY_AGG_PARAM = "TS-25 swap by agg";
 
-  string public constant UNFOLDING_2_ITERATIONS_REQUIRED = "TS-26 need 2 iterations of unfolding";
-
   string public constant OVER_COLLATERAL_DETECTED = "TS-27 over-collateral";
 
   string public constant NOT_IMPLEMENTED = "TS-28 not implemented";
 
-  /// @notice You are not allowed to make direct debt if a reverse debt exists and visa verse.
+  /// @notice You are not allowed to make direct debt if a NOT-DUST reverse debt exists and visa verse.
   string public constant OPPOSITE_DEBT_EXISTS = "TS-29 opposite debt exists";
 
   string public constant INVALID_VALUE = "TS-30 invalid value";

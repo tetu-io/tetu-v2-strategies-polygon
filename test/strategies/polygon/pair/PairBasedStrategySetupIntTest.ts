@@ -14,6 +14,7 @@ import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/Core
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 
 describe('PairBasedStrategySetupIntTest', () => {
   //region Variables
@@ -127,7 +128,7 @@ describe('PairBasedStrategySetupIntTest', () => {
   async function createKyber(): Promise<KyberConverterStrategy> {
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
     const core = Addresses.getCore();
-    const pId = 21;
+    const pId = KYBER_PID;
 
     const data = await DeployerUtilsLocal.deployAndInitVaultAndStrategy(
       PolygonAddresses.USDC_TOKEN,

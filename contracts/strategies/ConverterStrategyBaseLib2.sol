@@ -196,18 +196,12 @@ library ConverterStrategyBaseLib2 {
     return AppLib._getPriceOracle(converter).getAssetPrice(token);
   }
 
-  /// @notice Try to find zero amount or amount less than the threshold in {amounts_} array
-  /// @return True if {amounts_} array contains zero amount or amount less than the given threshold
-  function findZeroAmount(
-    uint[] memory amounts_,
-    address[] memory tokens_,
-    mapping(address => uint) storage liquidationThresholds_
-  ) internal view returns (bool) {
+  /// @notice Try to find zero amount
+  /// @return True if {amounts_} array contains zero amount
+  function findZeroAmount(uint[] memory amounts_) internal pure returns (bool) {
     uint len = amounts_.length;
     for (uint i = 0; i < len; i = AppLib.uncheckedInc(i)) {
-      if (amounts_[i] < AppLib._getLiquidationThreshold(liquidationThresholds_[tokens_[i]])) {
-        return true;
-      }
+      if (amounts_[i] == 0) return true;
     }
     return false;
   }

@@ -22,7 +22,8 @@ contract PairBasedStrategyLogicLibFacade {
     uint128 totalLiquidity,
     address strategyProfitHolder,
     PairBasedStrategyLib.FuseStateParams[2] memory fuseAB,
-    uint withdrawDone
+    uint withdrawDone,
+    uint lastRebalanceNoSwap
   ) external {
     pairState.tokenA = tokensAB[0];
     pairState.tokenB = tokensAB[1];
@@ -42,6 +43,7 @@ contract PairBasedStrategyLogicLibFacade {
     pairState.fuseAB[1] = fuseAB[1];
 
     pairState.withdrawDone = withdrawDone;
+    pairState.lastRebalanceNoSwap = lastRebalanceNoSwap;
   }
 
   function getPairState() external view returns(

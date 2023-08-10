@@ -170,7 +170,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     // send earned-by-prices to the insurance
     if (earnedByPrices_ != 0) {
-
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
         amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
       } else {
@@ -187,8 +186,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       uint[] memory amounts = _beforeDeposit(_csbs.converter, amountToDeposit, tokens, indexAsset);
 
       // make deposit, actually consumed amounts can be different from the desired amounts
-      if (!ConverterStrategyBaseLib2.findZeroAmount(amounts, tokens, liquidationThresholds)) {
-        // we cannot enter to pool if at least one of amounts is zero or less then the threshold
+      if (!ConverterStrategyBaseLib2.findZeroAmount(amounts)) {
+        // we cannot enter to pool if at least one of amounts is zero
+        // we check != 0 and don't use thresholds because some strategies allow to enter to the pool with amount < liquidation threshold
         (uint[] memory consumedAmounts,) = _depositorEnter(amounts);
         emit OnDepositorEnter(amounts, consumedAmounts);
       }

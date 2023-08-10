@@ -161,7 +161,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
             ]
           },
         ],
-        0 // withdrawDone
+        0,
+        0
       );
       const ret = await facade.needStrategyRebalance(
         converter.address,
@@ -508,7 +509,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
           status: p.initialFuseStatusAB[1],
           thresholds: [0, 0, 0, 0]
         }],
-        p.withdrawDone
+        p.withdrawDone,
+        0
       );
 
       await facade.updateFuseStatus(
@@ -982,7 +984,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
 
         function initWithdrawLocalTest(): Promise<IInitWithdrawLocalResults> {
-          const planEntryData = defaultAbiCoder.encode(['uint256'], [PLAN_REPAY_SWAP_REPAY]);
+          const planEntryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
           return callInitWithdrawLocal({
             tokens: [usdc, weth],
             liquidationThresholds: ["1", "2"],
@@ -1181,7 +1183,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
             ]
           },
         ],
-        p.state.withdrawDone
+        p.state.withdrawDone,
+        p.state.lastRebalanceNoSwap
       );
 
       const state = await PackedData.getDefaultState(facade as unknown as IPairBasedDefaultStateProvider);
@@ -1221,7 +1224,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
             fuseThresholdsB: [21, 22, 24, 23],
 
             isStablePool: true,
-            depositorSwapTokens: false
+            depositorSwapTokens: false,
+
+            lastRebalanceNoSwap: 0
           }
         });
       }
@@ -1292,7 +1297,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
             fuseThresholdsB: [21, 22, 24, 23],
 
             isStablePool: false,
-            depositorSwapTokens: true
+            depositorSwapTokens: true,
+
+            lastRebalanceNoSwap: 0
           }
         });
       }

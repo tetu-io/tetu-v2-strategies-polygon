@@ -214,6 +214,11 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     // enter to the pool
     _rebalanceAfter(tokenAmounts);
     state.pair.lastRebalanceNoSwap = 0;
+
+    if (completed && _isFuseTriggeredOn()) {
+      // full withdraw was completed, we can exclude next calls of withdrawByAggStep
+      state.pair.withdrawDone = 1;
+    }
   }
 
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy

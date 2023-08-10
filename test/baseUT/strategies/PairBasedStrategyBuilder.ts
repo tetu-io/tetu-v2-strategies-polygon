@@ -37,6 +37,8 @@ import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {MockHelper} from "../helpers/MockHelper";
 
+export const KYBER_PID = 21; // previous value was 21, new one is 40
+
 export interface IBuilderParams {
   gov: string;
   pool: string;
@@ -251,7 +253,7 @@ export class PairBasedStrategyBuilder {
   }
 
   static async buildKyber(p: IBuilderParams): Promise<IBuilderResults> {
-    const pId = 21 // todo 40
+    const pId = KYBER_PID;
 
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);

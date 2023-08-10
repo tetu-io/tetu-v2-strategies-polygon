@@ -1807,73 +1807,50 @@ describe('ConverterStrategyBaseLibTest', () => {
     interface IFindZeroAmountParams {
       tokens: MockToken[];
       amounts: string[];
-      thresholds: string[];
+      thresholds?: string[];
     }
     interface IFindZeroAmountResults {
       found: boolean;
     }
     async function callFindZeroAmount(p: IFindZeroAmountParams): Promise<IFindZeroAmountResults> {
-      for (let i = 0; i < p.tokens.length; ++i) {
-        await facade.setLiquidationThreshold(
-          p.tokens[i].address,
-          parseUnits(p.thresholds[i], await p.tokens[i].decimals())
-        )
+      if (p.thresholds) {
+        for (let i = 0; i < p.tokens.length; ++i) {
+          await facade.setLiquidationThreshold(
+              p.tokens[i].address,
+              parseUnits(p.thresholds[i], await p.tokens[i].decimals())
+          )
+        }
       }
 
       const found = await facade.findZeroAmount(
         await Promise.all(p.amounts.map(
           async (amount, index) => parseUnits(amount, await p.tokens[index].decimals())
         )),
-        p.tokens.map(x => x.address)
       );
 
       return {found};
     }
 
-    describe("default thresholds", () => {
-      it("should found zero amount", async () => {
-        const {found} = await callFindZeroAmount({
-          tokens: [usdc, usdt, weth],
-          amounts: ["0", "1", "0"],
-          thresholds: ["0", "0", "0"]
-        });
-        expect(found).eq(true);
+    it("should found zero amount on first position", async () => {
+      const {found} = await callFindZeroAmount({
+        tokens: [usdc, usdt, weth],
+        amounts: ["0", "1", "0"],
       });
-      it("should not found zero amount", async () => {
-        const {found} = await callFindZeroAmount({
-          tokens: [usdc, usdt, weth],
-          amounts: ["1", "2", "3"],
-          thresholds: ["0", "0", "0"]
-        });
-        expect(found).eq(false);
-      });
-      it("should found amount less than default thresholds (100)", async () => {
-        const {found} = await callFindZeroAmount({
-          tokens: [usdc, usdt],
-          amounts: ["1", "0.000009"],
-          thresholds: ["0", "0"]
-        });
-        expect(found).eq(true);
-      });
+      expect(found).eq(true);
     });
-
-    describe("Custom thresholds", () => {
-      it("should found zero amount", async () => {
-        const {found} = await callFindZeroAmount({
-          tokens: [usdc, usdt, weth],
-          amounts: ["1.2", "1.9", "0.9"],
-          thresholds: ["1", "2", "0"]
-        });
-        expect(found).eq(true);
+    it("should found zero amount on last position", async () => {
+      const {found} = await callFindZeroAmount({
+        tokens: [usdc, usdt, weth],
+        amounts: ["7", "1", "0"],
       });
-      it("should not found zero amount", async () => {
-        const {found} = await callFindZeroAmount({
-          tokens: [usdc, usdt, weth],
-          amounts: ["1.2", "1.9", "0.9"],
-          thresholds: ["1", "1.5", "0.5"]
-        });
-        expect(found).eq(false);
+      expect(found).eq(true);
+    });
+    it("should not found zero amount", async () => {
+      const {found} = await callFindZeroAmount({
+        tokens: [usdc, usdt, weth],
+        amounts: ["1", "2", "3"],
       });
+      expect(found).eq(false);
     });
   });
   //endregion Unit tests

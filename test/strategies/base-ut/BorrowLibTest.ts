@@ -311,6 +311,78 @@ describe('BorrowLibTest', () => {
                 expect(r.balanceY).eq(136);
               });
             });
+            describe("Need to increase USDC, reduce USDT, dust debts exist", () => {
+              let snapshot: string;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
+              async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+                return makeRebalanceAssets({
+                  tokenX: usdc,
+                  tokenY: usdt,
+                  proportion: 50_000,
+                  strategyBalances: {
+                    balanceX: "100",
+                    balanceY: "190"
+                  },
+                  repays: [
+                    { // direct DUST debt == zero debts
+                      collateralAsset: usdc,
+                      borrowAsset: usdt,
+                      totalCollateralAmountOut: "0.00009",
+                      totalDebtAmountOut: "0.00004", // less than 100 tokens
+                    },
+                    { // reverse DUST debt == zero debts
+                      collateralAsset: usdt,
+                      borrowAsset: usdc,
+                      totalCollateralAmountOut: "0.00009",
+                      totalDebtAmountOut: "0.00004", // less than 100 tokens
+                    },
+                  ],
+                  quoteRepays: [
+                    { // direct DUST debt == zero debts
+                      collateralAsset: usdc,
+                      borrowAsset: usdt,
+                      collateralAmountOut: "0.00009",
+                      amountRepay: "0.00004", // less than 100 tokens
+                    },
+                    { // reverse DUST debt == zero debts
+                      collateralAsset: usdt,
+                      borrowAsset: usdc,
+                      collateralAmountOut: "0.00009",
+                      amountRepay: "0.00004", // less than 100 tokens
+                    },
+                  ],
+                  borrows: [{
+                    // collateral = 90
+                    // We can borrow 60 usdc for 90 usdt, 90/60 = 1.5
+                    // We need proportions 1:1
+                    // so, 90 => 36 + 54, 54 usdt => 36 usdc
+                    // as result we will have 36 usdt and 36 borrowed usdc (with collateral 54 usdt)
+                    collateralAsset: usdt,
+                    borrowAsset: usdc,
+
+                    collateralAmount: "90",
+                    maxTargetAmount: "60",
+
+                    collateralAmountOut: "54",
+                    borrowAmountOut: "36",
+
+                    converter: ethers.Wallet.createRandom().address,
+                  }]
+                })
+              }
+
+              it("should set expected balances", async () => {
+                const r = await loadFixture(makeRebalanceAssetsTest);
+                expect(r.balanceX).eq(136);
+                expect(r.balanceY).eq(136);
+              });
+            });
           });
 
           describe("Current state - direct debt - USDT is borrowed under USDC", () => {
