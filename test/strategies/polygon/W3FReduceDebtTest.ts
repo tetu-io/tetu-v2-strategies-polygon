@@ -78,7 +78,7 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
       return
     }
 
-    const defaultState = await strategy.getDefaultState()
+    let defaultState = await strategy.getDefaultState()
     const isFuseTriggered =
       defaultState[2][1].toString() === '2'
       || defaultState[2][1].toString() === '3'
@@ -112,8 +112,10 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
         break
       }
 
-      if (isFuseTriggered && percent === 0) {
-        expect(result.message).eq('Not need to reduce debt. Fuse triggered. Current locked: 0%.')
+      defaultState = await strategy.getDefaultState()
+      if (isFuseTriggered && percent === 0 && defaultState[2][3].toString() === '1') {
+        expect(result.message).eq('Not need to reduce debt. Fuse triggered. Withdraw done. Current locked: 0%.')
+        console.log('balanceUSDT', balanceUSDT.toString())
         expect(balanceUSDT).lt(parseUnits('1', 6))
         break
       }
@@ -124,8 +126,6 @@ describe('Strategy reduce debt by Web3 Function tests', function() {
       // tslint:disable-next-line:ban-ts-ignore
       // @ts-ignore
       await signer.sendTransaction({ to: result.callData[0].to, data: result.callData[0].data, gasLimit: 19_000_000 });
-
     }
-
   })
 })

@@ -57,7 +57,7 @@ export async function quoteOneInch(
     protocols,
   }
   const url = `https://api-tetu.1inch.io/v5.0/${chainId}/swap?${(new URLSearchParams(JSON.parse(JSON.stringify(params)))).toString()}`
-  console.log(url)
+  console.log('1inch API request', url)
   try {
     const quote: { tx?: { to?: string, data?: string }, toTokenAmount?: string } = await fetchFunc(url)
     if (quote && quote.tx && quote.tx.data && quote.tx.to && quote.toTokenAmount) {
@@ -97,6 +97,7 @@ export async function quoteOpenOcean(
 
   const url = `https://open-api.openocean.finance/v3/${openOceanChains[chainId.toString()]}/swap_quote?${(new URLSearchParams(
     JSON.parse(JSON.stringify(params)))).toString()}`
+  console.log('OpenOcean API request', url)
   try {
     const quote: { data: { to?: string, data?: string, outAmount?: string } } = await fetchFunc(url)
     if (quote && quote.data && quote.data.to && quote.data.data && quote.data.outAmount) {
@@ -146,10 +147,12 @@ export async function runResolver(
     || defaultState[2][1].toString() === '3'
     || defaultState[2][2].toString() === '2'
     || defaultState[2][2].toString() === '3'
-  console.log('isFuseTriggered', isFuseTriggered)
+  const isWithdrawDone = defaultState[2][3].toNumber() > 0
+  // console.log('isFuseTriggered', isFuseTriggered)
+  // console.log('isWithdrawDone', isWithdrawDone)
 
   const percent = r[0].mul(100).div(r[1]).toNumber()
-  console.log("Locked percent", percent)
+  // console.log("Locked percent", percent)
   if (!isFuseTriggered && percent <= allowedLockedPercent) {
     return {
       canExec: false,
@@ -157,10 +160,10 @@ export async function runResolver(
     }
   }
 
-  if (isFuseTriggered && percent === 0) {
+  if (isFuseTriggered && percent === 0 && isWithdrawDone) {
     return {
       canExec: false,
-      message: `Not need to reduce debt. Fuse triggered. Current locked: ${percent}%.`,
+      message: `Not need to reduce debt. Fuse triggered. Withdraw done. Current locked: ${percent}%.`,
     }
   }
 
@@ -173,11 +176,11 @@ export async function runResolver(
 
   if (!isFuseTriggered && percent < config[1].toNumber()) {
     const ts = (await provider.getBlock(await provider.getBlockNumber())).timestamp
-    console.log('Last block timestamp', ts)
+    // console.log('Last block timestamp', ts)
     const lastRebalanceNoSwaps = defaultState[2][12].toNumber()
     const delay = config[2].toNumber()
-    console.log('Last rebalanceNoSwaps', lastRebalanceNoSwaps)
-    console.log('Delay', delay)
+    // console.log('Last rebalanceNoSwaps', lastRebalanceNoSwaps)
+    // console.log('Delay', delay)
     if (ts - lastRebalanceNoSwaps < delay) {
       return {
         canExec: false,
