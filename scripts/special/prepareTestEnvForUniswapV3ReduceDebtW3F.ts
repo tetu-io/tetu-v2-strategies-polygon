@@ -133,8 +133,11 @@ async function main() {
   await TimeUtils.advanceBlocksOnTs(3600)
 
   console.log('')
-  console.log('Run:')
+  console.log('Run W3F test:')
   console.log(`TEST_STRATEGY=${strategy.address} READER=${reader.address} CONFIG=${config.address} npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost`)
+  console.log('')
+  console.log('Run rebalance debt script for test:')
+  console.log(`TETU_REBALANCE_DEBT_STRATEGIES=${strategy.address} TETU_PAIR_BASED_STRATEGY_READER=${reader.address} TETU_REBALANCE_DEBT_CONFIG=${config.address} npx hardhat run scripts/rebalanceDebt.ts --network localhost`)
   console.log('')
 
   // start localhost hardhat node
