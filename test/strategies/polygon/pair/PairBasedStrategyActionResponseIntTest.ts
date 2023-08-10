@@ -760,7 +760,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      // todo {name: PLATFORM_UNIV3,},
+      {name: PLATFORM_UNIV3,},
       {name: PLATFORM_ALGEBRA,},
       {name: PLATFORM_KYBER,},
     ];

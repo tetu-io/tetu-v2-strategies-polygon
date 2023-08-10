@@ -1154,6 +1154,14 @@ library ConverterStrategyBaseLib {
     uint[] memory expectedMainAssetAmounts,
     mapping(address => uint) storage liquidationThresholds_
   ) external returns (uint expectedAmount) {
+    console.log("makeRequestedAmount.amountsToConvert_.length", amountsToConvert_.length);
+    console.log("makeRequestedAmount.amountsToConvert_[0]", amountsToConvert_[0]);
+    console.log("makeRequestedAmount.amountsToConvert_[1]", amountsToConvert_[1]);
+    console.log("makeRequestedAmount.amountsToConvert_[2]", amountsToConvert_[2]);
+    console.log("makeRequestedAmount.indexAsset_", indexAsset_);
+    console.log("makeRequestedAmount.requestedAmount", requestedAmount);
+    console.log("makeRequestedAmount.expectedMainAssetAmounts.length", expectedMainAssetAmounts.length);
+
     DataSetLocal memory v = DataSetLocal({
       len: tokens_.length,
       converter: converter_,
@@ -1171,13 +1179,15 @@ library ConverterStrategyBaseLib {
     uint[] memory expectedMainAssetAmounts,
     mapping(address => uint) storage liquidationThresholds_
   ) internal returns (uint expectedAmount) {
+    console.log("_makeRequestedAmount.1");
     // get the total expected amount
     for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
       expectedAmount += expectedMainAssetAmounts[i];
     }
+    console.log("_makeRequestedAmount.2");
 
     uint[] memory _liquidationThresholds = _getLiquidationThresholds(liquidationThresholds_, d_.tokens, d_.len);
-
+    console.log("_makeRequestedAmount.3");
     // we shouldn't repay a debt twice, it's inefficient
     // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
     // But: we shouldn't make repay(1) and than repay(10), we should make single repay(11)
@@ -1187,9 +1197,11 @@ library ConverterStrategyBaseLib {
     if (requestedAmount != type(uint).max
       && expectedAmount > requestedAmount * (AppLib.GAP_CONVERSION + AppLib.DENOMINATOR) / AppLib.DENOMINATOR
     ) {
+      console.log("_makeRequestedAmount.4");
       // amountsToConvert_ are enough to get requestedAmount
       _convertAfterWithdraw(d_, _liquidationThresholds, amountsToConvert_);
     } else {
+      console.log("_makeRequestedAmount.5");
       uint balance = IERC20(d_.tokens[d_.indexAsset]).balanceOf(address(this));
       requestedAmount = requestedAmount > balance
         ? requestedAmount - balance
@@ -1204,6 +1216,7 @@ library ConverterStrategyBaseLib {
         + expectedMainAssetAmounts[d_.indexAsset];
     }
 
+    console.log("_makeRequestedAmount.6");
     return expectedAmount;
   }
   //endregion-------------------------------------------- Make requested amount

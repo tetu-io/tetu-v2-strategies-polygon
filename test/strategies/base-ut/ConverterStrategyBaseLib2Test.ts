@@ -24,8 +24,6 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
-import {tetuConverter} from "../../../typechain/@tetu_io";
-import {totalmem} from "os";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade

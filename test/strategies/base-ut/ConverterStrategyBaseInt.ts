@@ -397,7 +397,7 @@ describe("ConverterStrategyBaseInt", () => {
           await depositToVault(cc.vault, signer, depositAmount1, decimals, asset, cc.insurance);
           const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
-          console.log("emergencyExit");
+          console.log("withdrawAllToSplitter");
           await cc.strategy.connect(await Misc.impersonate(cc.splitter.address)).withdrawAllToSplitter();
           const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 

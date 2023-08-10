@@ -6,7 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
-
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -253,6 +253,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
+    console.log("_withdrawFromPool.amount", amount);
     // calculate profit/loss because of price changes, try to compensate the loss from the insurance
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
     (expectedWithdrewUSD, assetPrice, strategyLoss,) = _withdrawUniversal(amount, earnedByPrices, investedAssetsNewPrices);
@@ -267,6 +268,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint assetPrice,
     uint strategyLoss
   ) {
+    console.log("_withdrawAllFromPool");
     return _withdrawFromPool(type(uint).max);
   }
 
@@ -284,13 +286,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    console.log("_withdrawUniversal.amount", amount);
+    console.log("_withdrawUniversal.earnedByPrices_", earnedByPrices_);
+    console.log("_withdrawUniversal.investedAssets_", investedAssets_);
     _beforeWithdraw(amount);
 
     WithdrawUniversalLocal memory v;
     v.all = amount == type(uint).max;
 
     if ((v.all || amount + earnedByPrices_ != 0) && investedAssets_ != 0) {
-
+      console.log("_withdrawUniversal.2");
       // --- init variables ---
       v.tokens = _depositorPoolAssets();
       v.asset = baseState.asset;
@@ -304,6 +309,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       v.assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.asset);
       // -----------------------
 
+      console.log("_withdrawUniversal.3");
       // calculate how much liquidity we need to withdraw for getting the requested amount
       (v.liquidityAmountToWithdraw, v.amountsToConvert) = ConverterStrategyBaseLib2.getLiquidityAmount(
         v.all ? 0 : amount + earnedByPrices_,
@@ -315,11 +321,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         v.depositorLiquidity
       );
 
+      console.log("_withdrawUniversal.4");
       if (v.liquidityAmountToWithdraw != 0) {
 
         // =============== WITHDRAW =====================
         // make withdraw
+        console.log("_withdrawUniversal.5");
         v.withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
+        console.log("_withdrawUniversal.6");
         // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
         // use what exactly was withdrew instead of the expectation
         // assume that liquidity cannot increase in _depositorExit
@@ -341,6 +350,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           v.withdrawnAmounts
         );
       } else {
+        console.log("_withdrawUniversal.7");
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
         v.expectedMainAssetAmounts = ConverterStrategyBaseLib2.postWithdrawActionsEmpty(
           v.converter,
@@ -350,6 +360,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         );
       }
 
+      console.log("_withdrawUniversal.8");
       // convert amounts to main asset
       // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts
       v.expectedTotalMainAssetAmount += ConverterStrategyBaseLib.makeRequestedAmount(
@@ -358,11 +369,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         v.amountsToConvert,
         v.converter,
         AppLib._getLiquidator(controller()),
-        v.balanceBefore + (v.all ? amount : amount + earnedByPrices_), // current balance + the amount required to be withdrawn on balance
+        (v.all ? amount : v.balanceBefore + amount + earnedByPrices_), // current balance + the amount required to be withdrawn on balance
         v.expectedMainAssetAmounts,
         liquidationThresholds
       );
 
+      console.log("_withdrawUniversal.9");
       if (earnedByPrices_ != 0) {
         amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
           v.asset,
