@@ -1303,7 +1303,7 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint expectedAmount
   ) {
-    console.log("_closePositionsToGetAmount");
+    console.log("_closePositionsToGetAmount.requestedAmount", requestedAmount);
     if (requestedAmount != 0) {
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = d_.tokens[d_.indexAsset];
@@ -1342,7 +1342,7 @@ library ConverterStrategyBaseLib {
           // make swap if necessary
           uint spentAmountIn;
           if (v.idxToSwap1 != 0) {
-            console.log("_closePositionsToGetAmount.3");
+            console.log("_closePositionsToGetAmount.v.amountToSwap", v.amountToSwap);
             uint indexIn = v.idxToSwap1 - 1;
             uint indexOut = indexIn == d_.indexAsset ? i : d_.indexAsset;
             (spentAmountIn,) = _liquidate(
@@ -1365,8 +1365,8 @@ library ConverterStrategyBaseLib {
 
           // repay a debt if necessary
           if (v.idxToRepay1 != 0) {
-            console.log("_closePositionsToGetAmount.4");
             uint indexBorrow = v.idxToRepay1 - 1;
+            console.log("_closePositionsToGetAmount.amount-to-repay", IERC20(d_.tokens[indexBorrow]).balanceOf(address(this)));
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             (uint expectedAmountOut,) = _repayDebt(
               d_.converter,
@@ -1380,11 +1380,12 @@ library ConverterStrategyBaseLib {
               expectedAmount += expectedAmountOut - spentAmountIn;
             }
           }
-          console.log("_closePositionsToGetAmount.5");
 
           // update balances and requestedAmount
           v.newBalanceAsset = IERC20(v.asset).balanceOf(address(this));
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
+          console.log("_closePositionsToGetAmount.v.newBalanceAsset", v.newBalanceAsset);
+          console.log("_closePositionsToGetAmount.v.newBalanceToken", v.newBalanceToken);
 
           if (v.newBalanceAsset > v.balanceAsset) {
             requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset

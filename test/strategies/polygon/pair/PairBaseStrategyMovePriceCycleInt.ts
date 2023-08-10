@@ -101,93 +101,6 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
 //endregion before, after
 
 //region Utils
-  async function unfoldBorrows(
-    strategyAsOperator: IRebalancingV2Strategy,
-    aggregator: string,
-    saveState?: (title: string) => Promise<void>,
-  ) {
-    const state = await PackedData.getDefaultState(strategyAsOperator);
-
-    const propNotUnderlying18 = 0; // for simplicity: we need 100% of underlying
-    const USE_SINGLE_ITERATION = true;
-    const planEntryData = defaultAbiCoder.encode(
-      ["uint256"],
-      [PLAN_REPAY_SWAP_REPAY]
-    );
-
-    let step = 0;
-    while (true) {
-      console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
-      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
-      console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
-
-      let swapData: BytesLike = "0x";
-      const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
-      const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
-
-      if (tokenToSwap !== Misc.ZERO_ADDRESS) {
-        if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          const params = {
-            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap.toString(),
-            fromAddress: strategyAsOperator.address,
-            slippage: 1,
-            disableEstimate: true,
-            allowPartialFill: false,
-            protocols: 'POLYGON_BALANCER_V2',
-          };
-          console.log("params", params);
-
-          const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-          console.log('Transaction for swap: ', swapTransaction);
-          swapData = swapTransaction.data;
-        } else if (aggregator === MaticAddresses.TETU_LIQUIDATOR) {
-          swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
-            tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap,
-            slippage: BigNumber.from(5_000)
-          });
-          console.log("swapData for tetu liquidator", swapData);
-        }
-      }
-      console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
-      console.log("tokenToSwap", tokenToSwap);
-      console.log("AGGREGATOR", aggregator) ;
-      console.log("amountToSwap", amountToSwap);
-      console.log("swapData", swapData);
-      console.log("planEntryData", planEntryData);
-      console.log("ENTRY_TO_POOL_IS_ALLOWED", ENTRY_TO_POOL_IS_ALLOWED);
-
-      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
-        tokenToSwap,
-        aggregator,
-        amountToSwap,
-        swapData,
-        planEntryData,
-        ENTRY_TO_POOL_IS_ALLOWED
-      );
-
-      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
-      await strategyAsOperator.withdrawByAggStep(
-        tokenToSwap,
-        aggregator,
-        amountToSwap,
-        swapData,
-        planEntryData,
-        ENTRY_TO_POOL_IS_ALLOWED
-      );
-      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
-
-      if (saveState) {
-        await saveState(`u${++step}`);
-      }
-      if (USE_SINGLE_ITERATION) break;
-      if (completed) break;
-    }
-  }
-
   interface ICyclesResults {
     states: IStateNum[];
   }
@@ -285,9 +198,10 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
         const percent = r.estimatedUnderlyingAmount.mul(100).div(r.totalAssets).toNumber();
         console.log("Locked percent", percent);
         if (percent > MAX_ALLLOWED_LOCKED_PERCENT) {
-          await unfoldBorrows(
+          await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
             strategyAsOperator,
             p.aggregator,
+            true, // use single iteration
             async stateTitle => {
               states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);

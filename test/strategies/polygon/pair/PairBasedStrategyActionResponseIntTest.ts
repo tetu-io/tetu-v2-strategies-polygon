@@ -19,6 +19,7 @@ import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtu
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -773,16 +774,23 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+        const states: IStateNum[] = [];
+        const pathOut = "./tmp/large-user-prepare-strategy.csv";
 
         console.log('Small user deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('200', 6));
         await b.vault.connect(signer).deposit(parseUnits('100', 6), signer.address, {gasLimit: 19_000_000});
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d0"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         console.log('Big user deposit...');
         await IERC20__factory.connect(b.asset, signer2).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer2.address, parseUnits('200000', 6));
         await b.vault.connect(signer2).deposit(parseUnits('100000', 6), signer2.address, {gasLimit: 19_000_000});
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d1"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
         // change prices and make rebalance
         console.log('Change prices...');
@@ -796,12 +804,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           true,
         );
         await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
-        // await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOn(
-        //   signer,
-        //   signer3,
-        //   b,
-        //   1.1
-        // );
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "p"));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
         if (await b.strategy.needRebalance()) {
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         }
@@ -818,9 +823,23 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await b.vault.connect(signer2).withdrawAll({gasLimit: 19_000_000});
             done = true;
           }
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "w"));
+          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          // rebalance debts
+          await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+            await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+            Misc.ZERO_ADDRESS,
+            true
+          );
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
+          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
           if (await b.strategy.needRebalance()) { // for kyber
             console.log("rebalance");
             await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+            states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "r"));
+            await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
           }
         }
 

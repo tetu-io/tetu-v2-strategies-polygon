@@ -292,11 +292,15 @@ library IterationPlanLib {
     uint amountToSwap,
     uint indexToRepayPlus1
   ) {
-    require(balancesAB[1] != 0, AppErrors.UNFOLDING_2_ITERATIONS_REQUIRED);
     // use all available tokenB to repay debt and receive as much as possible tokenA
     uint amountToRepay = Math.min(balancesAB[1], totalBorrowB);
 
-    (uint collateralAmount,) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
+    uint collateralAmount;
+    if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
+      (collateralAmount,) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
+    } else {
+      amountToRepay = 0;
+    }
 
     // swap A to B: full or partial
     amountToSwap = estimateSwapAmountForRepaySwapRepay(

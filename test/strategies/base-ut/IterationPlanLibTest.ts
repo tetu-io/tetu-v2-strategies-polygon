@@ -332,28 +332,26 @@ describe('IterationPlanLibTest', () => {
 
   describe("_buildPlanRepaySwapRepay", () => {
     describe("Bad paths", () => {
-      it("should revert if balance B is zero", async () => {
-        await expect(
-          facade._buildPlanRepaySwapRepay(
+      it("should NOT revert if balance B is zero", async () => {
+        await facade._buildPlanRepaySwapRepay(
             { // following values are not used in this test
               tokens: [usdc.address, usdt.address],
               converter: converter.address,
               liquidator: MaticAddresses.TETU_LIQUIDATOR,
-              prices: [],
-              decs: [],
+              prices: [Misc.ONE18, Misc.ONE18],
+              decs: [6, 6],
               planKind: 0,
               usePoolProportions: false,
-              balanceAdditions: [],
+              balanceAdditions: [0, 0],
               propNotUnderlying18: 0,
-              liquidationThresholds: []
+              liquidationThresholds: [0, 0]
             },
             [1000, 0],
             [0, 1], // any values
             1, // any value
             1, // any value
             1 // any value
-          )
-        ).revertedWith("TS-26 need 2 iterations of unfolding"); // UNFOLDING_2_ITERATIONS_REQUIRED
+        )
       });
     });
   });

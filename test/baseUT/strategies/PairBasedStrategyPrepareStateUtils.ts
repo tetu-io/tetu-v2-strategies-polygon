@@ -1,16 +1,16 @@
 import {IBuilderResults} from "./PairBasedStrategyBuilder";
 import {
-    AlgebraLib,
-    ControllerV2__factory,
-    ConverterStrategyBase__factory,
-    KyberLib,
-    UniswapV3Lib
+  AlgebraLib,
+  ControllerV2__factory,
+  ConverterStrategyBase__factory, IRebalancingV2Strategy,
+  KyberLib,
+  UniswapV3Lib
 } from "../../../typechain";
 import {PackedData} from "../utils/PackedData";
-import {BigNumber} from "ethers";
+import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
-import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {UniversalUtils} from "./UniversalUtils";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
@@ -20,8 +20,15 @@ import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
-import {UniversalTestUtils} from "../utils/UniversalTestUtils";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
+import {AggregatorUtils} from "../utils/AggregatorUtils";
+
+const ENTRY_TO_POOL_IS_ALLOWED = 1;
+const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+
+const PLAN_SWAP_REPAY = 0;
+const PLAN_REPAY_SWAP_REPAY = 1;
+const PLAN_SWAP_ONLY = 2;
 
 /**
  * Utils to set up "current state of pair strategy" in tests
@@ -192,6 +199,94 @@ export class PairBasedStrategyPrepareStateUtils {
       );
       console.log("amountBIn.to.down", amountBIn);
       return amountBIn;
+    }
+  }
+
+  static async unfoldBorrowsRepaySwapRepay(
+    strategyAsOperator: IRebalancingV2Strategy,
+    aggregator: string,
+    useSingleIteration: boolean,
+    saveState?: (title: string) => Promise<void>,
+  ) {
+    const state = await PackedData.getDefaultState(strategyAsOperator);
+
+    const planEntryData = defaultAbiCoder.encode(
+      ["uint256"],
+      [PLAN_REPAY_SWAP_REPAY]
+    );
+
+    let step = 0;
+    while (true) {
+      console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
+      console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
+
+      let swapData: BytesLike = "0x";
+      const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
+      const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
+
+      if (tokenToSwap !== Misc.ZERO_ADDRESS) {
+        if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
+          const params = {
+            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            amount: quote.amountToSwap.toString(),
+            fromAddress: strategyAsOperator.address,
+            slippage: 1,
+            disableEstimate: true,
+            allowPartialFill: false,
+            protocols: 'POLYGON_BALANCER_V2',
+          };
+          console.log("params", params);
+
+          const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
+          console.log('Transaction for swap: ', swapTransaction);
+          swapData = swapTransaction.data;
+        } else if (aggregator === MaticAddresses.TETU_LIQUIDATOR) {
+          swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
+            tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            amount: quote.amountToSwap,
+            slippage: BigNumber.from(5_000)
+          });
+          console.log("swapData for tetu liquidator", swapData);
+        }
+      }
+      console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
+      console.log("tokenToSwap", tokenToSwap);
+      console.log("AGGREGATOR", aggregator) ;
+      console.log("amountToSwap", amountToSwap);
+      console.log("swapData", swapData);
+      console.log("planEntryData", planEntryData);
+      console.log("ENTRY_TO_POOL_IS_ALLOWED", ENTRY_TO_POOL_IS_ALLOWED);
+
+      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
+        tokenToSwap,
+        aggregator,
+        amountToSwap,
+        swapData,
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED,
+        {gasLimit: 19_000_000}
+      );
+
+      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
+      await strategyAsOperator.withdrawByAggStep(
+        tokenToSwap,
+        aggregator,
+        amountToSwap,
+        swapData,
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED,
+        {gasLimit: 19_000_000}
+      );
+      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
+
+      if (saveState) {
+        await saveState(`u${++step}`);
+      }
+      if (useSingleIteration) break;
+      if (completed) break;
     }
   }
 }
