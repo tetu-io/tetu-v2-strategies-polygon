@@ -293,7 +293,7 @@ describe('PairBasedNoSwapIntTest', function() {
         aggregator: p.aggregator ?? Misc.ZERO_ADDRESS,
         entryToPool: p.entryToPool,
         planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY
-          ? defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY])
+          ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT])
           : p.planKind === PLAN_SWAP_REPAY
             ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, p?.propNotUnderlying18 ?? 0])
             : p.planKind === PLAN_SWAP_ONLY
