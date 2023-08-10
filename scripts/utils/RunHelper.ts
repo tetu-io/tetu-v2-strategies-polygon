@@ -3,13 +3,14 @@ import { ContractTransaction } from 'ethers';
 import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
 import { Misc } from './Misc';
+import {TransactionResponse} from "@ethersproject/abstract-provider/src.ts";
 
 const log: Logger<undefined> = new Logger(logSettings);
 
 
 export class RunHelper {
 
-  public static async runAndWait(callback: () => Promise<ContractTransaction>, stopOnError = true, wait = true) {
+  public static async runAndWait(callback: () => Promise<ContractTransaction|TransactionResponse>, stopOnError = true, wait = true) {
     console.log('Start on-chain transaction')
     const start = Date.now();
     const tr = await callback();
