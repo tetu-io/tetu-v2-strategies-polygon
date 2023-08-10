@@ -50,7 +50,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     0,
     0,
     true,
-    21,
+    40,
       [0, 0, Misc.MAX_UINT, 0],
       [0, 0, Misc.MAX_UINT, 0],
     {
