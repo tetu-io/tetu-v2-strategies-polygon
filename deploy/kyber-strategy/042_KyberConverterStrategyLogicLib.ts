@@ -14,3 +14,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['KyberConverterStrategyLogicLib'];
 func.dependencies = ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', ];
+func.skip = async () => true

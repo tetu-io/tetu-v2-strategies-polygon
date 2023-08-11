@@ -24,3 +24,4 @@ func.dependencies = [
   'PairBasedStrategyLib',
   'PairBasedStrategyLogicLib',
 ];
+func.skip = async () => true

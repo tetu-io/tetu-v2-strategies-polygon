@@ -56,3 +56,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['Strategy_BalancerBoostedStrategy_tUsd'];
 func.dependencies = ['BalancerBoostedStrategy'];
+func.skip = async () => true
