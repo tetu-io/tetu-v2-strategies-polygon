@@ -3326,21 +3326,37 @@ describe('PairBasedStrategyLibTest', () => {
   });
 
   describe("_extractProp", () => {
-    it("should return custom propNotUnderlying18 for PLAN_SWAP_REPAY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, 777]);
-      expect((await facade._extractProp(PLAN_SWAP_REPAY, entryData)).toNumber()).eq(777);
+    describe("Good paths", () => {
+      it("should return expected propNotUnderlying18 for PLAN_SWAP_REPAY", async () => {
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, Misc.ONE18]);
+        expect((await facade._extractProp(PLAN_SWAP_REPAY, entryData)).eq(Misc.ONE18)).eq(true);
+      });
+      it("should return propNotUnderlying18=MAX_UINT for PLAN_SWAP_REPAY", async () => {
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_REPAY, Misc.MAX_UINT]);
+        expect((await facade._extractProp(PLAN_SWAP_REPAY, entryData)).eq(Misc.MAX_UINT)).eq(true);
+      });
+      it("should return custom propNotUnderlying18 for PLAN_SWAP_ONLY", async () => {
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY, 777]);
+        expect((await facade._extractProp(PLAN_SWAP_ONLY, entryData)).toNumber()).eq(777);
+      });
+      it("should return max uint for PLAN_REPAY_SWAP_REPAY", async () => {
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+        expect(await facade._extractProp(PLAN_REPAY_SWAP_REPAY, entryData)).eq(Misc.MAX_UINT);
+      });
+      it("should return 0 for PLAN_REPAY_SWAP_REPAY", async () => {
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, 0]);
+        expect(await facade._extractProp(PLAN_REPAY_SWAP_REPAY, entryData)).eq(0);
+      });
     });
-    it("should return custom propNotUnderlying18 for PLAN_SWAP_ONLY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_SWAP_ONLY, 777]);
-      expect((await facade._extractProp(PLAN_SWAP_ONLY, entryData)).toNumber()).eq(777);
-    });
-    it("should return max uint for PLAN_REPAY_SWAP_REPAY", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
-      expect(await facade._extractProp(PLAN_REPAY_SWAP_REPAY, entryData)).eq(Misc.MAX_UINT);
-    });
-    it("should revert if plan is unknown", async () => {
-      const entryData = defaultAbiCoder.encode(['uint256'], [555]);
-      await expect(facade._extractProp(555, entryData)).revertedWith("TS-9 wrong value"); // WRONG_VALUE
+    describe("Bad paths", () => {
+      it("should revert if plan is unknown", async () => {
+        const entryData = defaultAbiCoder.encode(['uint256'], [555]);
+        await expect(facade._extractProp(555, entryData)).revertedWith("TS-9 wrong value"); // WRONG_VALUE
+      });
+      it("should revert if proportion is greater than 1e18", async () => {
+        const entryData = defaultAbiCoder.encode(['uint256', 'uint256'], [PLAN_REPAY_SWAP_REPAY, Misc.ONE18.add(1)]);
+        await expect(facade._extractProp(PLAN_SWAP_REPAY, entryData)).revertedWith("TS-30 invalid value"); // INVALID_VALUE
+      });
     });
   });
 

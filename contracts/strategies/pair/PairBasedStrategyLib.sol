@@ -668,7 +668,7 @@ library PairBasedStrategyLib {
       AppErrors.WRONG_VALUE
     );
     (, propNotUnderlying18) = abi.decode(planEntryData, (uint, uint));
-    require(propNotUnderlying18 <= 1e18 || propNotUnderlying18 == type(uint).max, AppErrors.WRONG_VALUE); // 0 is allowed
+    require(propNotUnderlying18 <= 1e18 || propNotUnderlying18 == type(uint).max, AppErrors.INVALID_VALUE); // 0 is allowed
   }
   //endregion ------------------------------------------ Utils
 }

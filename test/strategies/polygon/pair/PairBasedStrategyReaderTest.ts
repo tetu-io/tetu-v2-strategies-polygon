@@ -479,7 +479,7 @@ describe('PairBasedStrategyReaderTest', function() {
         const r = await callIsWithdrawByAggCallRequired({
           underlying: usdc,
           secondAsset: wmatic,
-          fuseStatus: [1, 1],
+          fuseStatus: [1, 2],
           withdrawDone: 1,
 
           totalAssets: "500",

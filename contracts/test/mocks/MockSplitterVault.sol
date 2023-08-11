@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
+import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
+import "hardhat/console.sol";
 
 /// @notice Mock of ISplitter (only methods required for tests)
 contract MockSplitterVault {
@@ -28,4 +30,16 @@ contract MockSplitterVault {
     return _insurance;
   }
 
+  function coverPossibleStrategyLoss(uint earned, uint lost) external {
+    console.log("coverPossibleStrategyLoss.lost", lost);
+    console.log("coverPossibleStrategyLoss.earned", earned);
+    earned; // hide warning
+    if (lost != 0) {
+      require(_vault != address(0), "MockSplitterVault zero vault");
+      require(_asset != address(0), "MockSplitterVault zero asset");
+      require(IERC20(_asset).balanceOf(address(this)) >= lost, "MockSplitterVault no balance to send loss");
+
+      IERC20(_asset).transfer(_vault, lost);
+    }
+  }
 }

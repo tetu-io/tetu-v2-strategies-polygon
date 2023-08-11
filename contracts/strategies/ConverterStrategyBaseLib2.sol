@@ -48,6 +48,11 @@ library ConverterStrategyBaseLib2 {
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
   event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
+  /// @notice Compensation of losses is not carried out completely
+  event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
+  /// @notice Payment to insurance was carried out only partially
+  event UnsentAmountToInsurance(uint sentAmount, uint unsentAmount, uint balance, uint totalAssets);
+
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -210,9 +215,14 @@ library ConverterStrategyBaseLib2 {
 //region -------------------------------------------- Cover loss, send profit to insurance
   /// @notice Send given amount of underlying to the insurance
   /// @param totalAssets_ Total strategy balance = balance of underlying + current invested assets amount
-  /// @return Amount of underlying sent to the insurance
-  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_) external returns (uint) {
-    uint amountToSend = Math.min(amount, IERC20(asset).balanceOf(address(this)));
+  /// @return sentAmount Amount of underlying sent to the insurance
+  /// @return unsentAmount Missed part of the {amount} that were not sent to the insurance
+  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_) external returns (
+    uint sentAmount,
+    uint unsentAmount
+  ) {
+    uint balance = IERC20(asset).balanceOf(address(this));
+    uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
 
@@ -225,7 +235,15 @@ library ConverterStrategyBaseLib2 {
 
       IERC20(asset).safeTransfer(address(ITetuVaultV2(ISplitter(splitter).vault()).insurance()), amountToSend);
     }
-    return amountToSend;
+
+    sentAmount = amountToSend;
+    unsentAmount = amount > amountToSend
+      ? amount - amountToSend
+      : 0;
+
+    if (unsentAmount != 0) {
+      emit UnsentAmountToInsurance(sentAmount, unsentAmount, balance, totalAssets_);
+    }
   }
 
   function _registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
@@ -246,21 +264,29 @@ library ConverterStrategyBaseLib2 {
     uint lost;
     (earned, lost) = _registerIncome(investedAssetsBefore, investedAssetsAfter);
     if (lost != 0) {
-      ISplitter(baseState.splitter).coverPossibleStrategyLoss(
-        earned,
-        getSafeLossToCover(
-          lost,
-          investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this)) // totalAssets
-        )
+      (uint lossToCover, uint lossUncovered) = getSafeLossToCover(
+        lost,
+        investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this)) // totalAssets
       );
+      ISplitter(baseState.splitter).coverPossibleStrategyLoss(earned, lossToCover);
+
+      if (lossUncovered != 0) {
+        emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
+      }
     }
     emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter);
   }
 
   /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter
-  function getSafeLossToCover(uint loss, uint totalAssets_) internal pure returns (uint) {
+  function getSafeLossToCover(uint loss, uint totalAssets_) internal pure returns (
+    uint lossToCover,
+    uint lossUncovered
+  ) {
     // see StrategySplitterV2._declareStrategyIncomeAndCoverLoss, _coverLoss implementations
-    return Math.min(loss, HARDWORK_LOSS_TOLERANCE * totalAssets_ / 100_000);
+    lossToCover = Math.min(loss, HARDWORK_LOSS_TOLERANCE * totalAssets_ / 100_000);
+    lossUncovered = loss > lossToCover
+      ? loss - lossToCover
+      : 0;
   }
 //endregion -------------------------------------------- Cover loss, send profit to insurance
 

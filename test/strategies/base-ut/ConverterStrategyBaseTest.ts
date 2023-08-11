@@ -3168,6 +3168,29 @@ describe('ConverterStrategyBaseTest', () => {
     });
   });
 
+  describe("_getTokensAccess", () => {
+    let snapshotLocal: string;
+    let ms: IStrategySetupResults;
+    before(async function() {
+      snapshotLocal = await TimeUtils.snapshot();
+      ms = await setupMockedStrategy({depositorTokens: [dai, usdc, usdt]});
+    });
+    after(async function() {
+      await TimeUtils.rollback(snapshotLocal);
+    });
+    it("should return 0", async () => {
+      const ret = await ms.strategy._getTokensAccess(dai.address);
+      expect(ret.indexAsset).eq(0);
+    });
+    it("should return 2", async () => {
+      const ret = await ms.strategy._getTokensAccess(usdt.address);
+      expect(ret.indexAsset).eq(2);
+    });
+    it("should revert if asset is unknown", async () => {
+      await expect(ms.strategy._getTokensAccess(weth.address)).revertedWith("SB: Wrong value"); // StrategyLib2.WRONG_VALUE
+    });
+  });
+
 
   describe('setReinvestThresholdPercent', () => {
     let snapshot: string;

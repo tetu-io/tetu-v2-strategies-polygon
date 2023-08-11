@@ -4,9 +4,10 @@ import {TimeUtils} from '../../../scripts/utils/TimeUtils';
 import {DeployerUtils} from '../../../scripts/utils/DeployerUtils';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {
+  ConverterStrategyBaseLib2__factory,
   ConverterStrategyBaseLibFacade2,
   MockToken,
-  PriceOracleMock, StrategySplitterV2
+  PriceOracleMock, StrategySplitterV2, UniswapV3ConverterStrategyLogicLib__factory
 } from '../../../typechain';
 import {expect} from 'chai';
 import {MockHelper} from '../../baseUT/helpers/MockHelper';
@@ -24,6 +25,13 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
+import {
+  RebalancedEventObject
+} from "../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib";
+import {
+  FixPriceChangesEventObject,
+  UncoveredLossEventObject
+} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -900,15 +908,189 @@ describe('ConverterStrategyBaseLibTest', () => {
   });
 
   describe("getSafeLossToCover", () => {
-    it("should return original value", async () => {
-      // 500 * 200_000 / 100_000 = 1000
-      const ret = (await facade.getSafeLossToCover(1000, 200_000)).toNumber();
-      expect(ret).eq(1000);
+    describe("loss == max allowed amount to cover", () => {
+      it("should return expected values", async () => {
+        // 500 * 200_000 / 100_000 = 1000
+        const ret = (await facade.getSafeLossToCover(1000, 200_000));
+        expect(ret.lossToCover.toNumber()).eq(1000);
+        expect(ret.lossUncovered.toNumber()).eq(0);
+      });
     });
-    it("should return cut value", async () => {
-      // 500 * 200_000 / 100_000 = 1000
-      const ret = (await facade.getSafeLossToCover(1001, 200_000)).toNumber();
-      expect(ret).eq(1000);
+    describe("loss > max allowed amount to cover", () => {
+      it("should return cut value", async () => {
+        // 500 * 200_000 / 100_000 = 1000
+        const ret = (await facade.getSafeLossToCover(1001, 200_000));
+        expect(ret.lossToCover.toNumber()).eq(1000);
+        expect(ret.lossUncovered.toNumber()).eq(1);
+      });
+    });
+  });
+
+  describe("coverLossAfterPriceChanging", () => {
+    interface ICoverLossAfterPriceChangingParams {
+      asset: MockToken;
+      strategyBalance: string;
+      investedAssetsBefore: string;
+      investedAssetsAfter: string;
+      expectedLossAmount: string;
+    }
+    interface IUncoveredLossEvent {
+      emittedLossToCover: number;
+      emittedLossUncovered: number;
+      emittedInvestedAssetsBefore: number;
+      emittedInvestedAssetsAfter: number;
+    }
+    interface IFixPriceChanges {
+      emittedInvestedAssetsBefore: number;
+      emittedInvestedAssetsAfter: number;
+    }
+    interface ICoverLossAfterPriceChangingResults {
+      earned: number;
+      vaultBalance: number;
+
+      uncoveredLoss?: IUncoveredLossEvent;
+      fixPriceChanges?: IFixPriceChanges;
+    }
+
+    async function callCoverLossAfterPriceChanging(p: ICoverLossAfterPriceChangingParams): Promise<ICoverLossAfterPriceChangingResults> {
+      // prepare splitter and vault
+      const splitter = await MockHelper.createMockSplitter(signer);
+      const vault = ethers.Wallet.createRandom().address;
+      await splitter.setAsset(p.asset.address);
+      await splitter.setVault(vault);
+
+      const assetDecimals = await p.asset.decimals();
+      const lossAmount = parseUnits(p.expectedLossAmount, assetDecimals);
+      if (lossAmount.gt(0)) {
+        await p.asset.mint(splitter.address, lossAmount);
+      }
+
+      await p.asset.mint(facade.address, parseUnits(p.strategyBalance, assetDecimals));
+
+      const earned = await facade.callStatic.coverLossAfterPriceChanging(
+          parseUnits(p.investedAssetsBefore, assetDecimals),
+          parseUnits(p.investedAssetsAfter, assetDecimals),
+          p.asset.address,
+          splitter.address
+      );
+
+      const tx = await facade.coverLossAfterPriceChanging(
+        parseUnits(p.investedAssetsBefore, assetDecimals),
+        parseUnits(p.investedAssetsAfter, assetDecimals),
+        p.asset.address,
+        splitter.address
+      );
+
+      let uncoveredLoss: IUncoveredLossEvent | undefined;
+      let fixPriceChanges: IFixPriceChanges | undefined;
+
+      const cr = await tx.wait();
+      const converterStrategyBaseLib2 = ConverterStrategyBaseLib2__factory.createInterface();
+      for (const event of (cr.events ?? [])) {
+        if (event.topics[0].toLowerCase() === converterStrategyBaseLib2.getEventTopic('UncoveredLoss').toLowerCase()) {
+          const log = (converterStrategyBaseLib2.decodeEventLog(
+              converterStrategyBaseLib2.getEvent('UncoveredLoss'),
+              event.data,
+              event.topics,
+          ) as unknown) as UncoveredLossEventObject;
+          uncoveredLoss = {
+            emittedLossToCover: +formatUnits(log.lossCovered, assetDecimals),
+            emittedInvestedAssetsAfter: +formatUnits(log.investedAssetsAfter, assetDecimals),
+            emittedInvestedAssetsBefore: +formatUnits(log.investedAssetsBefore, assetDecimals),
+            emittedLossUncovered: +formatUnits(log.lossUncovered, assetDecimals),
+          }
+        }
+        if (event.topics[0].toLowerCase() === converterStrategyBaseLib2.getEventTopic('FixPriceChanges').toLowerCase()) {
+          const log = (converterStrategyBaseLib2.decodeEventLog(
+              converterStrategyBaseLib2.getEvent('FixPriceChanges'),
+              event.data,
+              event.topics,
+          ) as unknown) as FixPriceChangesEventObject;
+          fixPriceChanges = {
+            emittedInvestedAssetsAfter: +formatUnits(log.investedAssetsOut, assetDecimals),
+            emittedInvestedAssetsBefore: +formatUnits(log.investedAssetsBefore, assetDecimals),
+          }
+        }
+      }
+
+      return {
+        fixPriceChanges,
+        uncoveredLoss,
+        earned: +formatUnits(earned, assetDecimals),
+        vaultBalance: +formatUnits(await p.asset.balanceOf(vault), assetDecimals),
+      }
+    }
+
+    describe("Lost is covered fully", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeTest(): Promise<ICoverLossAfterPriceChangingResults> {
+        return callCoverLossAfterPriceChanging({
+          asset: usdc,
+          investedAssetsAfter: "10000",
+          strategyBalance: "1000",
+          // max loss to cover = (1000 + 10_000)*500/100_000 = 55
+          investedAssetsBefore: "10055",
+          expectedLossAmount: "55"
+        });
+      }
+
+      it("should send full amount of loss to vault", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.vaultBalance).eq(55);
+      });
+      it("should emit FixPriceChanges with correct params", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.fixPriceChanges?.emittedInvestedAssetsAfter).eq(10_000);
+        expect(ret.fixPriceChanges?.emittedInvestedAssetsBefore).eq(10_055);
+      });
+      it("should not emit UncoveredLoss", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.uncoveredLoss === undefined).eq(true);
+      });
+    });
+    describe("Lost is covered partially", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeTest(): Promise<ICoverLossAfterPriceChangingResults> {
+        return callCoverLossAfterPriceChanging({
+          asset: usdc,
+          investedAssetsAfter: "10000",
+          strategyBalance: "1000",
+          // max loss to cover = (1000 + 10_000)*500/100_000 = 55
+          investedAssetsBefore: "10100", // 55 covered, 45 uncovered
+          expectedLossAmount: "55"
+        });
+      }
+
+      it("should send expected amount of loss to vault", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.vaultBalance).eq(55);
+      });
+      it("should emit FixPriceChanges with correct params", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.fixPriceChanges?.emittedInvestedAssetsAfter).eq(10_000);
+        expect(ret.fixPriceChanges?.emittedInvestedAssetsBefore).eq(10_100);
+      });
+      it("should emit UncoveredLoss with correct params", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.uncoveredLoss?.emittedLossToCover).eq(55);
+        expect(ret.uncoveredLoss?.emittedLossUncovered).eq(45);
+        expect(ret.uncoveredLoss?.emittedInvestedAssetsAfter).eq(10_000);
+        expect(ret.uncoveredLoss?.emittedInvestedAssetsBefore).eq(10_100);
+      });
     });
   });
 
@@ -921,7 +1103,8 @@ describe('ConverterStrategyBaseLibTest', () => {
       strategyBalance: string;
     }
     interface ISendToInsuranceResults {
-      amountToSend: number;
+      sentAmount: number;
+      unsentAmount: number;
       strategyBalance: number;
       insuranceBalance: number;
     }
@@ -938,7 +1121,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
       await p.asset.mint(facade.address, parseUnits(p.strategyBalance, decimals));
 
-      const amountToSend = await facade.callStatic.sendToInsurance(
+      const {sentAmount, unsentAmount}  = await facade.callStatic.sendToInsurance(
         p.asset.address,
         parseUnits(p.amount, decimals),
         splitter.address,
@@ -952,7 +1135,8 @@ describe('ConverterStrategyBaseLibTest', () => {
       );
 
       return {
-        amountToSend: +formatUnits(amountToSend, decimals),
+        sentAmount: +formatUnits(sentAmount, decimals),
+        unsentAmount: +formatUnits(unsentAmount, decimals),
         insuranceBalance: +formatUnits(await p.asset.balanceOf(insurance), decimals),
         strategyBalance: +formatUnits(await p.asset.balanceOf(facade.address), decimals),
       }
@@ -982,15 +1166,19 @@ describe('ConverterStrategyBaseLibTest', () => {
           it("should send amount to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(999);
-          })
+          });
           it("should reduce strategy balance on amount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.strategyBalance).eq(1000-999);
-          })
-          it("should return amount", async () => {
+          });
+          it("should return expected sentAmount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
-            expect(ret.amountToSend).eq(999);
-          })
+            expect(ret.sentAmount).eq(999);
+          });
+          it("should return expected unsentAmount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.unsentAmount).eq(0);
+          });
         });
         describe("Amount > max allowed value", () => {
           let snapshot: string;
@@ -1014,15 +1202,19 @@ describe('ConverterStrategyBaseLibTest', () => {
           it("should send expected amount to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(1000);
-          })
+          });
           it("should reduce strategy balance on expected amount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.strategyBalance).eq(2000-1000);
-          })
-          it("should return amount", async () => {
+          });
+          it("should return expected sentAmount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
-            expect(ret.amountToSend).eq(1000);
-          })
+            expect(ret.sentAmount).eq(1000);
+          });
+          it("should return expected unsentAmount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.unsentAmount).eq(20);
+          });
         });
         describe("Current balance is zero", () => {
           let snapshot: string;
@@ -1046,15 +1238,19 @@ describe('ConverterStrategyBaseLibTest', () => {
           it("should send nothing to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(0);
-          })
+          });
           it("should not change strategy balance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.strategyBalance).eq(0);
-          })
-          it("should return zero", async () => {
+          });
+          it("should return zero sentAmount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
-            expect(ret.amountToSend).eq(0);
-          })
+            expect(ret.sentAmount).eq(0);
+          });
+          it("should return expected", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.unsentAmount).eq(1020);
+          });
         });
       });
       describe("Amount > current balance", () => {
@@ -1080,15 +1276,19 @@ describe('ConverterStrategyBaseLibTest', () => {
           it("should send amount to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(100);
-          })
+          });
           it("should reduce strategy balance on amount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.strategyBalance).eq(0);
-          })
-          it("should return amount", async () => {
+          });
+          it("should return expected sentAmount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
-            expect(ret.amountToSend).eq(100);
-          })
+            expect(ret.sentAmount).eq(100);
+          });
+          it("should return expected unsentAmount", async () => {
+            const ret = await loadFixture(callSendToInsuranceTest);
+            expect(ret.unsentAmount).eq(500-100);
+          });
         });
       });
     });
