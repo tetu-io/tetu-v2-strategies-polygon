@@ -264,20 +264,21 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       }
 
       describe(`${strategyInfo.name}`, () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
         describe("Use liquidator", () => {
           describe('Move tokenB prices up, down', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeTest(): Promise<IMovePriceResults> {
-              const b = await loadFixture(prepareStrategy);
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
-              return movePriceUpDown(b,{
+              return movePriceUpDown(builderResults,{
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: true,
@@ -296,10 +297,19 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
             });
           });
           describe('Move tokenB prices down, up', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeTest(): Promise<IMovePriceResults> {
-              const b = await loadFixture(prepareStrategy);
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
-              return movePriceUpDown(b,{
+              return movePriceUpDown(builderResults,{
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: false,
@@ -350,20 +360,21 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       }
 
       describe(`${strategyInfo.name}`, () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
         describe("Use liquidator", () => {
           describe('Move tokenB prices up, down', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeTest(): Promise<IMovePriceResults> {
-              const b = await loadFixture(prepareStrategy);
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-up-down.csv`;
-              return movePriceUpDown(b,{
+              return movePriceUpDown(builderResults,{
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: true,
@@ -383,10 +394,19 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
             });
           });
           describe('Move tokenB prices down, up', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeTest(): Promise<IMovePriceResults> {
-              const b = await loadFixture(prepareStrategy);
               const pathOut = `./tmp/${strategyInfo.name}-fuse-move-prices-down-up.csv`;
-              return movePriceUpDown(b,{
+              return movePriceUpDown(builderResults,{
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: false,
