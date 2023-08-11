@@ -50,7 +50,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     0,
     0,
     true,
-    21,
+    40,
       [0, 0, Misc.MAX_UINT, 0],
       [0, 0, Misc.MAX_UINT, 0],
     {
@@ -61,3 +61,4 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['Strategy_KyberConverterStrategy_UsdcUsdt'];
 func.dependencies = ['KyberConverterStrategy'];
+func.skip = async () => true

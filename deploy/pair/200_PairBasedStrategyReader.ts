@@ -3,8 +3,7 @@ import { DeployFunction } from 'hardhat-deploy/types';
 import { hardhatDeploy } from '../../deploy_constants/deploy-helpers';
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
-  await hardhatDeploy(hre, 'AlgebraLib', true);
+  await hardhatDeploy(hre, 'PairBasedStrategyReader', true);
 };
 export default func;
-func.tags = ['AlgebraLib'];
-func.skip = async () => true
+func.tags = ['PairBasedStrategyReader'];

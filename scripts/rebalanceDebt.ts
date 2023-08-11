@@ -2,13 +2,15 @@
 import hre, {ethers} from "hardhat";
 import {runResolver} from "../web3-functions/w3f-utils";
 import axios from "axios";
+import {RunHelper} from "./utils/RunHelper";
+import {formatUnits} from "ethers/lib/utils";
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
 // test fuse
-// NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtOnFuseW3F.ts
+// NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtFuseW3F.ts
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
 const fetchFuncAxios = async (url: string) => {
@@ -57,7 +59,7 @@ async function main() {
   const provider = ethers.provider
   const signer = (await ethers.getSigners())[0]
 
-  while(1) {
+  while(true) {
     for (const strategyAddress of strateies) {
       const result = await runResolver(
         provider,
@@ -71,11 +73,28 @@ async function main() {
 
       if (result) {
         if (result.canExec) {
-          process.stdout.write('Send tx.. ')
-          const response = await signer.sendTransaction({ to: result.callData[0].to, data: result.callData[0].data, gasLimit: 10_000_000 })
-          process.stdout.write(`[tx: ${response.hash}].. `)
-          const receipt = await response.wait()
-          console.log(`done with ${receipt.gasUsed} gas`)
+          const gasPrice = await provider.getGasPrice();
+          console.info('Gas price: ' + formatUnits(gasPrice, 9));
+
+          await RunHelper.runAndWaitAndSpeedUp(provider, () =>
+              signer.sendTransaction({
+                to: result.callData[0].to,
+                data: result.callData[0].data,
+                gasLimit: 10_000_000,
+                gasPrice: (gasPrice * 1.1).toFixed(0),
+              }),
+            false, true,
+          )
+
+          /*await RunHelper.runAndWait(() =>
+              signer.sendTransaction({
+                to: result.callData[0].to,
+                data: result.callData[0].data,
+                gasLimit: 10_000_000,
+                gasPrice: (gasPrice * 1.3).toFixed(0),
+              }),
+            false, true,
+          )*/
         } else {
           console.log(result)
         }

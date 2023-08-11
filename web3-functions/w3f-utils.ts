@@ -2,28 +2,28 @@ import {StaticJsonRpcProvider} from "@ethersproject/providers/src.ts/url-json-rp
 import {BigNumber, Contract} from "ethers";
 import {defaultAbiCoder, formatUnits} from "ethers/lib/utils";
 
-export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const MAX_UINT = '115792089237316195423570985008687907853269984665640564039457584007913129639935'
 
-export const STRATEGY_ABI = [
+const STRATEGY_ABI = [
   'function needRebalance() external view returns (bool)',
   'function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap)',
   'function withdrawByAggStep(address tokenToSwap_, address aggregator_, uint amountToSwap_, bytes memory swapData, bytes memory planEntryData, uint entryToPool) external returns (bool completed)',
   'function getDefaultState() external view returns (address[] memory addr, int24[] memory tickData, uint[] memory nums, bool[] memory boolValues)',
 ]
 
-export const ERC20_ABI = [
+const ERC20_ABI = [
   'function decimals() external view returns (uint)',
 ]
 
-export const READER_ABI = [
+const READER_ABI = [
   'function getLockedUnderlyingAmount(address strategy_) external view returns (uint estimatedUnderlyingAmount, uint totalAssets)',
 ]
 
-export const CONFIG_ABI = [
+const CONFIG_ABI = [
   'function strategyConfig(address strategy_) external view returns (uint lockedPercentForDelayedRebalance, uint lockedPercentForForcedRebalance, uint rebalanceDebtDelay)',
 ]
 
-export interface IAggQuote {
+interface IAggQuote {
   to: string,
   data: string,
   outAmount: string
@@ -37,7 +37,7 @@ const openOceanChains = {
   '10': 'optimism',
 }
 
-export async function quoteOneInch(
+async function quoteOneInch(
   fromTokenAddress: string,
   toTokenAddress: string,
   amount: string,
@@ -76,7 +76,7 @@ export async function quoteOneInch(
   }
 }
 
-export async function quoteOpenOcean(
+async function quoteOpenOcean(
   inTokenAddress: string,
   outTokenAddress: string,
   amount: string,
@@ -194,8 +194,8 @@ export async function runResolver(
 
   const planEntryData = !isFuseTriggered
     ? defaultAbiCoder.encode(
-      ["uint256"],
-      [PLAN_REPAY_SWAP_REPAY]
+      ["uint256", "uint256"],
+      [PLAN_REPAY_SWAP_REPAY, MAX_UINT]
     )
     : defaultAbiCoder.encode(
       ["uint256", "uint256"],
@@ -204,7 +204,7 @@ export async function runResolver(
 
   const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData)
 
-  if (quote[0] === ZERO_ADDRESS) {
+  if (quote[1].toString() === '0') {
     if (!isFuseTriggered) {
       return {
         canExec: false,
@@ -220,7 +220,7 @@ export async function runResolver(
             data: strategy.interface.encodeFunctionData(
               'withdrawByAggStep',
               [
-                ZERO_ADDRESS,
+                quote[0],
                 AGG_ONEINCH_V5,
                 0,
                 '0x00',
@@ -262,7 +262,7 @@ export async function runResolver(
                 quote[1],
                 aggQuote.data,
                 planEntryData,
-                1
+                isFuseTriggered ? 0 : 1
               ]
             ),
           },
@@ -289,12 +289,12 @@ export async function runResolver(
             data: strategy.interface.encodeFunctionData(
               'withdrawByAggStep',
               [
-                quote[0] ? tokens[0] : tokens[1],
+                aToB ? tokens[0] : tokens[1],
                 aggQuote.to,
                 quote[1],
                 aggQuote.data,
                 planEntryData,
-                1
+                isFuseTriggered ? 0 : 1
               ]
             ),
           },
@@ -307,8 +307,8 @@ export async function runResolver(
 
     const aggQuotes = await Promise.all([
       quoteOneInch(
-        quote[0] ? tokens[0] : tokens[1],
-        quote[0] ? tokens[1] : tokens[0],
+        aToB ? tokens[0] : tokens[1],
+        aToB ? tokens[1] : tokens[0],
         quote[1].toString(),
         strategyAddress,
         chainId,
@@ -316,8 +316,8 @@ export async function runResolver(
         fetchFunc
       ),
       quoteOpenOcean(
-        quote[0] ? tokens[0] : tokens[1],
-        quote[0] ? tokens[1] : tokens[0],
+        aToB ? tokens[0] : tokens[1],
+        aToB ? tokens[1] : tokens[0],
         formatUnits(quote[1], decimals),
         strategyAddress,
         chainId,
@@ -339,12 +339,12 @@ export async function runResolver(
             data: strategy.interface.encodeFunctionData(
               'withdrawByAggStep',
               [
-                quote[0] ? tokens[0] : tokens[1],
+                aToB ? tokens[0] : tokens[1],
                 to,
                 quote[1],
                 data,
                 planEntryData,
-                1
+                isFuseTriggered ? 0 : 1
               ]
             ),
           },

@@ -7,10 +7,11 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   await hardhatDeploy(hre, 'KyberConverterStrategyLogicLib', true, {
     KyberLib: (await deployments.get('KyberLib')).address,
     KyberDebtLib: (await deployments.get('KyberDebtLib')).address,
-    ConverterStrategyBaseLib: (await deployments.get('ConverterStrategyBaseLib')).address,
-    // ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
+    ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
+    PairBasedStrategyLogicLib: (await deployments.get('PairBasedStrategyLogicLib')).address,
   });
 };
 export default func;
 func.tags = ['KyberConverterStrategyLogicLib'];
-func.dependencies = ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'KyberDebtLib'];
+func.dependencies = ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', ];
+func.skip = async () => true

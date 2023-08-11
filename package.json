@@ -20,7 +20,8 @@
     "verify-all": "hardhat etherscan-verify --network matic",
     "deploy-local": "hardhat deploy --write true --reset",
     "solhint": "solhint \"contracts/**/*.sol\"",
-    "sporalyzer": "node sporalyzer.js --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\""
+    "sporalyzer": "node sporalyzer.js --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\"",
+    "rebalance-debt:matic": "hardhat run scripts/rebalanceDebt.ts --network matic"
   },
   "keywords": [
     "solidity",

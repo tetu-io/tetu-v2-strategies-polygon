@@ -117,14 +117,14 @@ async function main() {
   // console.log(fuseBUpperOff)
 
   await strategy.connect(operator).setFuseThresholds(0, [
-    parseUnits('0.999'),
-    parseUnits('0.9994'),
-    parseUnits('1.001'),
-    parseUnits('1.0006')
+    parseUnits('0.99'),
+    parseUnits('0.994'),
+    parseUnits('1.01'),
+    parseUnits('1.006')
   ])
   await strategy.connect(operator).setFuseThresholds(1, [
-    parseUnits('0.999'),
-    parseUnits('0.9994'),
+    parseUnits('0.99'),
+    parseUnits('0.994'),
     fuseBUpperOn,
     fuseBUpperOff
   ])
@@ -132,7 +132,7 @@ async function main() {
   console.log('deposit...');
   await asset.approve(vault.address, Misc.MAX_UINT);
   await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
-  await vault.deposit(parseUnits('1000', 6), signer.address);
+  await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
 
   const state = await strategy.getDefaultState()
   for (let i = 0; i < 6; i++) {
