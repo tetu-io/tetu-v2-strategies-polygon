@@ -76,7 +76,7 @@ async function main() {
           const gasPrice = await provider.getGasPrice();
           console.info('Gas price: ' + formatUnits(gasPrice, 9));
 
-          await RunHelper.runAndWaitAndSpeedUp(process.env.TETU_MATIC_RPC_URL, process.env.TETU_PRIVATE_KEY, provider, () =>
+          await RunHelper.runAndWaitAndSpeedUp(provider, () =>
               signer.sendTransaction({
                 to: result.callData[0].to,
                 data: result.callData[0].data,

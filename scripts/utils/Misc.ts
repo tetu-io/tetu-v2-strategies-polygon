@@ -62,6 +62,10 @@ export class Misc {
     return ts.toNumber();
   }
 
+  public static getChainId() {
+    return hre.network.config.chainId;
+  }
+
   public static async getChainConfig() {
     const net = await ethers.provider.getNetwork();
     switch (net.chainId) {

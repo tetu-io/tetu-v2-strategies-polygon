@@ -6,6 +6,7 @@ import { Misc } from './Misc';
 import {TransactionResponse} from "@ethersproject/abstract-provider/src.ts";
 import {SpeedUp} from "./SpeedUp";
 import {StaticJsonRpcProvider} from "@ethersproject/providers/src.ts/url-json-rpc-provider";
+import {sendMessageToTelegram} from "../telegram/tg-sender";
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -47,7 +48,7 @@ export class RunHelper {
     return hash;
   }
 
-  public static async runAndWaitAndSpeedUp(rpcUrl: string, privateKey: string, provider: StaticJsonRpcProvider, callback: () => Promise<ContractTransaction|TransactionResponse>, stopOnError = true, wait = true) {
+  public static async runAndWaitAndSpeedUp(provider: StaticJsonRpcProvider, callback: () => Promise<ContractTransaction|TransactionResponse>, stopOnError = true, wait = true) {
     try {
       console.log('Start on-chain transaction')
       const start = Date.now();
@@ -77,7 +78,8 @@ export class RunHelper {
       if (stopOnError) {
         throw e;
       } else {
-        console.log('error', e)
+        await sendMessageToTelegram(`Run and wait error: ${e}`);
+        log.error('Run and wait error: ', e)
       }
     }
   }

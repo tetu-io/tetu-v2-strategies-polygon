@@ -1,75 +1,43 @@
 import axios, {AxiosResponse} from "axios";
 import Web3 from 'web3';
-import {ethers} from "ethers";
-import Transaction from '@ethereumjs/tx'
-import {Misc} from "./Misc";
-import Common from "ethereumjs-common";
+import {Logger} from "tslog";
+import logSettings from "../../log_settings";
+import {Transaction as EthereumTx} from '@ethereumjs/tx'
+import {sendMessageToTelegram} from "../telegram/tg-sender";
 
-const MATIC_CHAIN = Common.forCustomChain(
-  'mainnet', {
-    name: 'matic',
-    networkId: 137,
-    chainId: 137
-  },
-  'petersburg'
-);
-
-const LOCALHOST_CHAIN = Common.forCustomChain(
-  'mainnet', {
-    name: 'localhost',
-    networkId: 31337,
-    chainId: 31337
-  },
-  'petersburg'
-);
+const log: Logger<undefined> = new Logger(logSettings);
 
 export class SpeedUp {
-  public static async getChainConfig(provider: ethers.providers.Provider) {
+  public static getRpcUrl() {
+    return process.env.TETU_MATIC_RPC_URL
+  }
+
+  public static async getBlockGasLimit(provider: providers.Provider) {
     const net = await provider.getNetwork();
     switch (net.chainId) {
       case 137:
-        return MATIC_CHAIN;
+        return 15_000_000;
       case 31337:
-        return LOCALHOST_CHAIN;
-      default:
-        throw new Error('Unknown net ' + net.chainId)
-    }
-  }
-  public static async getDefaultNetworkGas(provider: ethers.providers.Provider) {
-    const net = await provider.getNetwork();
-    switch (net.chainId) {
-      case 137:
-        return 30_000_000_000;
+        return 15_000_000;
       case 250:
-        return 300_000_000_000;
-      case 56:
-        return 5_000_000_000;
+        return 9_000_000;
       default:
         throw new Error('Unknown net ' + net.chainId)
     }
   }
 
-  public static async getCurrentGas(provider: ethers.providers.Provider) {
-    try {
-      return Math.max(+(await provider.getGasPrice()).toString(), await this.getDefaultNetworkGas(provider));
-    } catch (e) {
-      console.error('Error get gas price', e);
-      return this.getDefaultNetworkGas(provider);
-    }
+  public static async speedUp(txHash: string, provider: providers.Provider): Promise<string> {
+    log.debug('SPEEDUP', txHash)
 
-  }
+    const url = SpeedUp.getRpcUrl();
 
-  public static async speedUp(rpcUrl, privateKey, txHash: string, provider: ethers.providers.Provider, addNonce = 0): Promise<string> {
-    console.log('SPEEDUP', txHash)
-
-    const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrl, {
-      keepAlive: true,
-      timeout: 120000, // ms
+    const web3Provider = new Web3(new Web3.providers.HttpProvider(url, {
+      timeout: 120000,
     }));
 
     let response: AxiosResponse;
     try {
-      response = await axios.post(rpcUrl,
+      response = await axios.post(url,
         `{"jsonrpc":"2.0","method":"eth_getTransactionByHash","params":["${txHash}"],"id":1}`,
         {
           headers: {
@@ -78,112 +46,96 @@ export class SpeedUp {
         },
       );
     } catch (e) {
+      await sendMessageToTelegram(`speed up error req eth_getTransactionByHash`);
       console.error('error request', e);
       return 'error';
     }
     const result = response.data.result;
-    // console.log('response', txHash, result);
+    log.debug('OLD TX', txHash, result);
     if (!result) {
       console.error('tx for speedup receipt is empty!', response)
       return 'error';
     }
 
     const nonce = Web3.utils.hexToNumber(result.nonce); // + addNonce probably will require for some cases but now we are dropping all if have error
-    console.log('nonce', nonce);
+    log.debug('nonce', nonce);
 
-    const gasPrice = await this.getCurrentGas(provider);
-    const gasPriceAdjusted = +(gasPrice * 2).toFixed(0);
+    const maxFeePerGasOrig = Web3.utils.hexToNumber(result.maxFeePerGas)
+    const maxPriorityFeePerGasOrig = Web3.utils.hexToNumber(result.maxPriorityFeePerGas)
+    log.debug('original maxFeePerGas', formatUnits(maxFeePerGasOrig, 9));
+    log.debug('original maxPriorityFeePerGas', formatUnits(maxPriorityFeePerGasOrig, 9));
 
-    console.log('current gas', gasPrice, gasPriceAdjusted, Web3.utils.numberToHex(gasPriceAdjusted));
+    const feeData = await provider.getFeeData();
+    log.debug('current gasPrice', formatUnits(feeData.gasPrice ?? BigNumber.from(0), 9));
+    log.debug('current maxPriorityFeePerGas', formatUnits(feeData.maxPriorityFeePerGas ?? BigNumber.from(0), 9));
+    log.debug('current maxFeePerGas', formatUnits(feeData.maxFeePerGas ?? BigNumber.from(0), 9));
+    log.debug('current lastBaseFeePerGas', formatUnits(feeData.lastBaseFeePerGas ?? BigNumber.from(0), 9));
 
-    const chain = await this.getChainConfig(provider);
-    const limit = 15_000_000
-    const tx = new Transaction(
+    let maxFeePerGasAdj = Math.floor(maxFeePerGasOrig * SpeedUp.increase())
+    let maxPriorityFeePerGasAdj = maxPriorityFeePerGasOrig
+
+    if (maxFeePerGasAdj < (feeData.maxFeePerGas?.toNumber() ?? 0)) {
+      maxFeePerGasAdj = Math.floor((feeData.maxFeePerGas?.toNumber() ?? 0) * SpeedUp.increase());
+    }
+
+    if (maxPriorityFeePerGasAdj < (feeData.lastBaseFeePerGas?.toNumber() ?? 0)) {
+      maxPriorityFeePerGasAdj = Math.floor((feeData.lastBaseFeePerGas?.toNumber() ?? 0) * SpeedUp.increase());
+    }
+
+    log.debug('===> maxFeePerGasAdj', formatUnits(maxFeePerGasAdj, 9));
+    log.debug('===> maxPriorityFeePerGasAdj', formatUnits(maxPriorityFeePerGasAdj, 9));
+
+    const chain = await Utils.getChainConfig(provider);
+    const limit = await this.getBlockGasLimit(provider);
+    const tx = new EthereumTx(
       {
         nonce: Web3.utils.numberToHex(nonce),
         from: result.from,
         to: result.to,
         data: result.input,
-        gasPrice: gasPriceAdjusted,
+        maxFeePerGas: Web3.utils.numberToHex(maxFeePerGasAdj),
+        maxPriorityFeePerGas: Web3.utils.numberToHex(maxPriorityFeePerGasAdj),
         gasLimit: Web3.utils.numberToHex(limit),
       },
       {common: chain});
 
 
-    tx.sign(Buffer.from(privateKey, 'hex'));
+    tx.sign(Buffer.from(process.env.TETU_PRIVATE_KEY, 'hex'));
 
     const txRaw = '0x' + tx.serialize().toString('hex');
 
+    return SpeedUp.sendAndWait(txRaw, web3Provider);
+  }
+
+  public static async sendAndWait(txRaw: string, web3Provider: Web3) {
     let newHash = '';
+    let finished = false;
+    web3Provider.eth.sendSignedTransaction(txRaw,)
+      .on('error', (err: unknown) => {
+        log.debug('send raw error', err);
+        newHash = 'error'
+        finished = true;
+      })
+      .on('transactionHash', (hash) => newHash = hash)
+      .on('receipt', (res: unknown) => {
+        log.debug('send raw receipt', res)
+        if (res.status) {
+          newHash = res.transactionHash
+        } else {
+          newHash = 'error'
+        }
+        finished = true;
+      })
 
-    try {
-      await web3.eth.sendSignedTransaction(txRaw, (err, res) => {
-        console.log('SpeedUp tx result', err, res);
-        newHash = res;
-      });
-    } catch (e) {
-      console.log('speedup tx error', e);
-      await SpeedUp.dropPending()
-    }
 
-    console.log('start waiting speedup result');
-    while (newHash === '') {
-      console.log('wait speedup result')
-      await Misc.delay(10000);
+    log.debug('start waiting send raw result');
+    while (!finished) {
+      log.debug('wait send raw result', newHash)
+      if (!finished) {
+        await Utils.delay(10_000);
+      }
     }
-    console.log('speed up result hash', newHash);
+    log.debug('send raw result hash', newHash);
     return newHash;
   }
-
-  public static async dropPending() {
-
-    const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrl, {
-      keepAlive: true,
-      timeout: 120000, // ms
-    }));
-    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-    const signer = new ethers.Wallet(privateKey, provider);
-    console.log('Drop all pending txs', signer.address)
-
-    while (true) {
-      const nonce = await web3.eth.getTransactionCount(signer.address)
-      console.log('nonce', nonce.toString());
-      const nonce1 = await web3.eth.getTransactionCount(signer.address, 'pending')
-      console.log('pending nonce', nonce1.toString());
-      if (nonce1 === nonce) {
-        console.log('NO PENDING');
-        return;
-      }
-      try {
-        const gasPrice = await this.getCurrentGas(provider);
-        const gasPriceAdjusted = +(gasPrice * 3).toFixed(0);
-
-        const chain = await this.getChainConfig(provider);
-        const limit = 15_000_000
-        console.log('current gas', gasPrice, gasPriceAdjusted);
-        const tx = new Transaction(
-          {
-            nonce: web3.utils.numberToHex(nonce),
-            from: signer.address,
-            to: signer.address,
-            // data: result.input,
-            gasPrice: web3.utils.numberToHex(gasPriceAdjusted),
-            gasLimit: web3.utils.numberToHex(limit),
-          },
-          {common: chain});
-
-
-        tx.sign(Buffer.from(privateKey, 'hex'));
-
-        const txRaw = '0x' + tx.serialize().toString('hex');
-
-        await web3.eth.sendSignedTransaction(txRaw, (err, res) => {
-          console.log('result', err, res);
-        });
-      } catch (e) {
-        console.log('error drop pedning loop', e);
-      }
-    }
-  }
-
 }
