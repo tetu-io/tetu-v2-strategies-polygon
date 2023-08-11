@@ -1,5 +1,4 @@
-import { ethers } from 'hardhat';
-import { ContractTransaction } from 'ethers';
+import {ContractTransaction, providers} from 'ethers';
 import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
 import { Misc } from './Misc';
@@ -7,13 +6,14 @@ import {TransactionResponse} from "@ethersproject/abstract-provider/src.ts";
 import {SpeedUp} from "./SpeedUp";
 import {StaticJsonRpcProvider} from "@ethersproject/providers/src.ts/url-json-rpc-provider";
 import {sendMessageToTelegram} from "../telegram/tg-sender";
+import {ethers} from "hardhat";
 
 const log: Logger<undefined> = new Logger(logSettings);
 
 
 export class RunHelper {
 
-  public static async waitBlocks(provider: ethers.providers.Provider, blocks: number) {
+  public static async waitBlocks(provider: providers.Provider, blocks: number) {
     const start = await provider.getBlockNumber();
     while (true) {
       console.log('wait 1sec');
@@ -25,7 +25,7 @@ export class RunHelper {
     }
   }
 
-  public static async waitAndSpeedUp(provider: StaticJsonRpcProvider, hash: string, speedUp = true, addNonce = 0): Promise<string> {
+  public static async waitAndSpeedUp(provider: StaticJsonRpcProvider, hash: string, speedUp = true): Promise<string> {
     console.log('waitAndSpeedUp', hash);
     let receipt;
     let count = 0;
@@ -37,12 +37,12 @@ export class RunHelper {
       console.log('not yet complete', count, hash);
       await Misc.delay(1000);
       count++;
-      if (count > 180 && speedUp) {
-        const newHash = await SpeedUp.speedUp(hash, provider, addNonce);
+      if (count > SpeedUp.waitCycles() && speedUp) {
+        const newHash = await SpeedUp.speedUp(hash, provider);
         if (!newHash || newHash === 'error') {
           throw Error("Wrong speedup! " + hash);
         }
-        return this.waitAndSpeedUp(provider, newHash, true, addNonce + 1);
+        return this.waitAndSpeedUp(provider, newHash, true);
       }
     }
     return hash;

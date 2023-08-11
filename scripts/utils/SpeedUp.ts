@@ -2,14 +2,27 @@ import axios, {AxiosResponse} from "axios";
 import Web3 from 'web3';
 import {Logger} from "tslog";
 import logSettings from "../../log_settings";
-import {Transaction as EthereumTx} from '@ethereumjs/tx'
 import {sendMessageToTelegram} from "../telegram/tg-sender";
+import {BigNumber, providers} from "ethers";
+import {formatUnits} from "ethers/lib/utils";
+import {Misc} from "./Misc";
+// import {Transaction as EthereumTx} from '@ethereumjs/tx'
 
 const log: Logger<undefined> = new Logger(logSettings);
+// tslint:disable-next-line:no-var-requires
+const EthereumTx = require('ethereumjs-tx').Transaction;
 
 export class SpeedUp {
+  public static increase() {
+    return 1.5
+  }
+
+  public static waitCycles() {
+    return 100
+  }
+
   public static getRpcUrl() {
-    return process.env.TETU_MATIC_RPC_URL
+    return process.env.TETU_MATIC_RPC_URL || ''
   }
 
   public static async getBlockGasLimit(provider: providers.Provider) {
@@ -60,8 +73,8 @@ export class SpeedUp {
     const nonce = Web3.utils.hexToNumber(result.nonce); // + addNonce probably will require for some cases but now we are dropping all if have error
     log.debug('nonce', nonce);
 
-    const maxFeePerGasOrig = Web3.utils.hexToNumber(result.maxFeePerGas)
-    const maxPriorityFeePerGasOrig = Web3.utils.hexToNumber(result.maxPriorityFeePerGas)
+    const maxFeePerGasOrig = Web3.utils.hexToNumber(result.maxFeePerGas) as number
+    const maxPriorityFeePerGasOrig = Web3.utils.hexToNumber(result.maxPriorityFeePerGas) as number
     log.debug('original maxFeePerGas', formatUnits(maxFeePerGasOrig, 9));
     log.debug('original maxPriorityFeePerGas', formatUnits(maxPriorityFeePerGasOrig, 9));
 
@@ -85,7 +98,7 @@ export class SpeedUp {
     log.debug('===> maxFeePerGasAdj', formatUnits(maxFeePerGasAdj, 9));
     log.debug('===> maxPriorityFeePerGasAdj', formatUnits(maxPriorityFeePerGasAdj, 9));
 
-    const chain = await Utils.getChainConfig(provider);
+    const chain = await Misc.getChainConfig();
     const limit = await this.getBlockGasLimit(provider);
     const tx = new EthereumTx(
       {
@@ -100,7 +113,7 @@ export class SpeedUp {
       {common: chain});
 
 
-    tx.sign(Buffer.from(process.env.TETU_PRIVATE_KEY, 'hex'));
+    tx.sign(Buffer.from(process.env.TETU_PRIVATE_KEY || '', 'hex'));
 
     const txRaw = '0x' + tx.serialize().toString('hex');
 
@@ -117,7 +130,8 @@ export class SpeedUp {
         finished = true;
       })
       .on('transactionHash', (hash) => newHash = hash)
-      .on('receipt', (res: unknown) => {
+      // tslint:disable-next-line:no-any
+      .on('receipt', (res: any) => {
         log.debug('send raw receipt', res)
         if (res.status) {
           newHash = res.transactionHash
@@ -132,7 +146,7 @@ export class SpeedUp {
     while (!finished) {
       log.debug('wait send raw result', newHash)
       if (!finished) {
-        await Utils.delay(10_000);
+        await Misc.delay(10_000);
       }
     }
     log.debug('send raw result hash', newHash);
