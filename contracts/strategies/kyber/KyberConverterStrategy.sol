@@ -160,6 +160,11 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     address _controller = controller();
     StrategyLib2.onlyOperators(_controller);
 
+    (bool needStake, bool needUnstake) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
+    if (needStake || needUnstake) {
+      checkNeedRebalance = false;
+    }
+
     (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
     uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
       state.pair,
@@ -168,7 +173,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       profitToCover,
       baseState.splitter,
       checkNeedRebalance,
-      liquidationThresholds
+      liquidationThresholds,
+      needStake || needUnstake
     );
     _rebalanceAfter(tokenAmounts);
     state.pair.lastRebalanceNoSwap = block.timestamp;
