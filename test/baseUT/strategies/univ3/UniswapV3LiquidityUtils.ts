@@ -1,4 +1,4 @@
-import {IUniswapV3Pool__factory, UniswapV3Lib} from "../../../../../typechain";
+import {IUniswapV3Pool__factory, UniswapV3Lib} from "../../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 export class UniswapV3LiquidityUtils {

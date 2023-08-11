@@ -21,7 +21,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {UniswapV3LiquidityUtils} from "./utils/UniswapV3LiquidityUtils";
+import {UniswapV3LiquidityUtils} from "../../../baseUT/strategies/univ3/UniswapV3LiquidityUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 

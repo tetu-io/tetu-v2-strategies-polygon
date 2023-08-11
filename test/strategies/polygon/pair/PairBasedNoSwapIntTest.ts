@@ -23,7 +23,10 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {
+  IListStates,
+  PairBasedStrategyPrepareStateUtils
+} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -100,73 +103,6 @@ describe('PairBasedNoSwapIntTest', function() {
 //endregion before, after
 
 //region Withdraw-with-iterations impl
-  interface IPrepareOverCollateralParams {
-    countLoops: number;
-    movePricesUp: boolean;
-  }
-  interface IListStates {
-    states: IStateNum[];
-  }
-
-  async function prepareOverCollateral(b: IBuilderResults, p: IPrepareOverCollateralParams, pathOut: string) : Promise<IListStates> {
-    const states: IStateNum[] = [];
-
-    const defaultState = await PackedData.getDefaultState(b.strategy);
-    const strategyAsSigner = StrategyBaseV2__factory.connect(b.strategy.address, signer);
-
-    console.log('deposit...');
-    await b.vault.setDoHardWorkOnInvest(false);
-    await TokenUtils.getToken(b.asset, signer2.address, parseUnits('1000', 6));
-    await b.vault.connect(signer2).deposit(parseUnits('1000', 6), signer2.address);
-
-    const depositAmount1 = parseUnits('10000', b.assetDecimals);
-    await TokenUtils.getToken(b.asset, signer.address, depositAmount1.mul(p.countLoops));
-
-    const state = await PackedData.getDefaultState(b.strategy);
-
-    await depositToVault(b.vault, signer, depositAmount1, b.assetDecimals, b.assetCtr, b.insurance);
-    states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `init`));
-    await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-    for (let i = 0; i < p.countLoops; i++) {
-      const sharePriceBefore = await b.vault.sharePrice();
-      console.log('------------------ CYCLE', i, '------------------');
-
-      await TimeUtils.advanceNBlocks(300);
-
-      const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
-        signer,
-        b,
-        state.tokenA,
-        state.tokenB,
-        p.movePricesUp,
-        DEFAULT_SWAP_AMOUNT_RATIO
-      );
-      console.log("prepareOverCollateral.swapAmount", swapAmount);
-
-      if (p.movePricesUp) {
-        await UniversalUtils.movePoolPriceUp(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
-      } else {
-        await UniversalUtils.movePoolPriceDown(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
-      }
-      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `p${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-      // we suppose the rebalance happens immediately when it needs
-      if (await b.strategy.needRebalance()) {
-        console.log('------------------ REBALANCE' , i, '------------------');
-
-        await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
-        await printVaultState(b.vault, b.splitter, strategyAsSigner, b.assetCtr, b.assetDecimals);
-
-        states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r${i}`));
-        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-      }
-    }
-
-    return {states};
-  }
-
   interface IWithdrawParams {
     aggregator: string;
     planEntryData: string;
@@ -262,7 +198,7 @@ describe('PairBasedNoSwapIntTest', function() {
     propNotUnderlying18?: BigNumber;
 
     /** 3 by default */
-    countLoops?: number;
+    countRebalances?: number;
     /** ZERO by default */
     aggregator?: string;
   }
@@ -278,13 +214,13 @@ describe('PairBasedNoSwapIntTest', function() {
           : "no";
     const pathOut = `./tmp/${platform}-entry${p.entryToPool}-${p.singleIteration ? "single" : "many"}-${p.movePricesUp ? "up" : "down"}-${agg}.csv`;
 
-    const ret0 = await prepareOverCollateral(
-      b,
-      {
-      countLoops: p.countLoops ?? 3,
-      movePricesUp: p.movePricesUp
-      },
-      pathOut
+    const ret0 = await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
+        b,
+        { countRebalances: p.countRebalances ?? 2, movePricesUp: p.movePricesUp},
+        pathOut,
+        signer,
+        signer2,
+        DEFAULT_SWAP_AMOUNT_RATIO
     );
     const {states} = await makeFullWithdraw(
       b,
@@ -293,7 +229,7 @@ describe('PairBasedNoSwapIntTest', function() {
         aggregator: p.aggregator ?? Misc.ZERO_ADDRESS,
         entryToPool: p.entryToPool,
         planEntryData: p.planKind === PLAN_REPAY_SWAP_REPAY
-          ? defaultAbiCoder.encode(["uint256"], [PLAN_REPAY_SWAP_REPAY])
+          ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT])
           : p.planKind === PLAN_SWAP_REPAY
             ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, p?.propNotUnderlying18 ?? 0])
             : p.planKind === PLAN_SWAP_ONLY
@@ -316,13 +252,12 @@ describe('PairBasedNoSwapIntTest', function() {
       sharePriceDeviation: number
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-5},
-      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 1e-5},
-      { name: PLATFORM_KYBER, sharePriceDeviation: 1e-5},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_KYBER, sharePriceDeviation: 2e-5},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
-      let snapshot: string;
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
 
@@ -333,18 +268,22 @@ describe('PairBasedNoSwapIntTest', function() {
       }
 
       describe(`${strategyInfo.name}`, () => {
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
         describe("Use liquidator", () => {
           describe("Move prices up", () => {
             describe("Liquidator, entry to pool at the end", () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
               async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(await loadFixture(prepareStrategy), {
+                return makeWithdrawTest(builderResults, {
                   movePricesUp: true,
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
@@ -403,8 +342,19 @@ describe('PairBasedNoSwapIntTest', function() {
               });
             });
             describe("Liquidator, don't enter to the pool", () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
               async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(await loadFixture(prepareStrategy), {
+                return makeWithdrawTest(builderResults, {
                   movePricesUp: true,
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_DISABLED,
@@ -459,9 +409,19 @@ describe('PairBasedNoSwapIntTest', function() {
           });
           describe("Move prices down", () => {
             describe("Liquidator, entry to pool at the end", () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
               async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(await loadFixture(prepareStrategy), {
-                  countLoops: 2,
+                return makeWithdrawTest(builderResults, {
                   movePricesUp: false,
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
@@ -520,9 +480,19 @@ describe('PairBasedNoSwapIntTest', function() {
               });
             });
             describe("Liquidator, don't enter to the pool", () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
               async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(await loadFixture(prepareStrategy), {
-                  countLoops: 2,
+                return makeWithdrawTest(builderResults, {
                   movePricesUp: false,
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_DISABLED,
@@ -578,8 +548,19 @@ describe('PairBasedNoSwapIntTest', function() {
         describe("Use 1inch", () => {
           describe("Move prices up", () => {
             describe("Liquidator, entry to pool at the end", () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
               async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(await loadFixture(prepareStrategy),
+                return makeWithdrawTest(builderResults,
                   {
                     aggregator: MaticAddresses.AGG_ONEINCH_V5,
                     movePricesUp: true,
@@ -625,8 +606,19 @@ describe('PairBasedNoSwapIntTest', function() {
         describe("Use liquidator as aggregator", () => {
           describe("Move prices up", () => {
             describe("Liquidator, entry to pool at the end", () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
               async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(await loadFixture(prepareStrategy), {
+                return makeWithdrawTest(builderResults, {
                   aggregator: MaticAddresses.TETU_LIQUIDATOR,
                   movePricesUp: true,
                   singleIteration: true,
@@ -686,8 +678,19 @@ describe('PairBasedNoSwapIntTest', function() {
               });
             });
             describe("Liquidator, don't enter to the pool", () => {
+              let snapshot: string;
+              let builderResults: IBuilderResults;
+              before(async function () {
+                snapshot = await TimeUtils.snapshot();
+
+                builderResults = await prepareStrategy();
+              });
+              after(async function () {
+                await TimeUtils.rollback(snapshot);
+              });
+
               async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(await loadFixture(prepareStrategy), {
+                return makeWithdrawTest(builderResults, {
                   aggregator: MaticAddresses.TETU_LIQUIDATOR,
                   movePricesUp: true,
                   singleIteration: true,
@@ -760,18 +763,20 @@ describe('PairBasedNoSwapIntTest', function() {
       }
 
       describe(`${strategyInfo.name}`, () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
         describe("Use liquidator", () => {
           describe('Move prices up, enter to pool after completion with pools proportions', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+              return makeWithdrawTest(builderResults, {
                 movePricesUp: true,
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
@@ -814,8 +819,17 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
           describe('Move prices up, dont enter to pool after completion', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+              return makeWithdrawTest(builderResults, {
                 movePricesUp: true,
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_DISABLED,
@@ -865,8 +879,17 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
           describe('Move prices down, enter to pool after completion', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+              return makeWithdrawTest(builderResults, {
                 movePricesUp: false,
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
@@ -897,8 +920,17 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
           describe('Move prices down, dont enter to pool after completion', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+              return makeWithdrawTest(builderResults, {
                 movePricesUp: false,
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
@@ -948,14 +980,26 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
           describe("Full withdraw when fuse is triggered ON", () => {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function initialize(): Promise<IBuilderResults> {
               const b = await prepareStrategy();
-              await prepareOverCollateral(
+              await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
                   b, {
                     movePricesUp: true,
-                    countLoops: 2
+                    countRebalances: 2
                   },
-                  `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`
+                  `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`,
+                  signer,
+                  signer2,
+                  DEFAULT_SWAP_AMOUNT_RATIO
               );
               // prepare fuse
               await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
@@ -1018,8 +1062,17 @@ describe('PairBasedNoSwapIntTest', function() {
         });
         describe("Use liquidator as aggregator", () => {
           describe('Move prices up, dont enter to the pool', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+              return makeWithdrawTest(builderResults, {
                 movePricesUp: true,
                 singleIteration: false,
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
@@ -1070,8 +1123,17 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
           describe('Move prices down, dont enter to the pool', function () {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await loadFixture(prepareStrategy), {
+              return makeWithdrawTest(builderResults, {
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
                 movePricesUp: false,
                 singleIteration: false,

@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/Math.sol";
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "./AppErrors.sol";
 import "./AppLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Support of withdraw iteration plans
 library IterationPlanLib {
@@ -207,14 +206,10 @@ library IterationPlanLib {
 
         // reverse debt
         (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
-        console.log("v.debtReverse", v.debtReverse);
-        console.log("v.collateralReverse", v.collateralReverse);
 
         if (v.debtReverse < AppLib.DUST_AMOUNT_TOKENS) { // there is reverse debt or the reverse debt is dust debt
           // direct debt
           (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
-          console.log("v.totalDebt", v.totalDebt);
-          console.log("v.totalCollateral", v.totalCollateral);
 
           if (v.totalDebt < AppLib.DUST_AMOUNT_TOKENS) { // there is direct debt or the direct debt is dust debt
             // This is final iteration - we need to swap leftovers and get amounts on balance in proper proportions.
@@ -468,11 +463,22 @@ library IterationPlanLib {
     // convert {toSell} amount of underlying to token
     if (toSell != 0 && balanceCollateral != 0) {
       toSell = Math.min(toSell, balanceCollateral);
-      if (toSell > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexCollateral])) {
+      uint threshold = AppLib._getLiquidationThreshold(p.liquidationThresholds[indexCollateral]);
+      if (toSell > threshold) {
         amountToSwap = toSell;
         indexTokenToSwapPlus1 = indexCollateral + 1;
+      } else {
+        // we need to sell amount less than the threshold, it's not allowed
+        // but it's dangerous to just ignore the selling because there is a chance to have error 35
+        // (There is a debt $3.29, we make repay $3.27 => error 35)
+        // it would be safer to sell a bit more amount if it's possible
+        if (balanceCollateral >= threshold + 1) {
+          amountToSwap = threshold + 1;
+          indexTokenToSwapPlus1 = indexCollateral + 1;
+        }
       }
     }
+
 
     return (indexTokenToSwapPlus1, amountToSwap, indexBorrow + 1);
   }

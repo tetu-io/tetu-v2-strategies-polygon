@@ -1,4 +1,4 @@
-import {IPool__factory, KyberLib} from "../../../../../typechain";
+import {IPool__factory, KyberLib} from "../../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 export class KyberLiquidityUtils {

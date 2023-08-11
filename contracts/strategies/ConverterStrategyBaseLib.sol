@@ -15,7 +15,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -255,7 +254,6 @@ library ConverterStrategyBaseLib {
     uint collateralAmountOut,
     uint borrowedAmountOut
   ) {
-    console.log("_openPosition", amountIn_);
     if (thresholdAmountIn_ == 0) {
       // zero threshold is not allowed because round-issues are possible, see openPosition.dust test
       // we assume here, that it's useless to borrow amount using collateral/borrow amount
@@ -510,11 +508,9 @@ library ConverterStrategyBaseLib {
     uint collateralOut,
     uint repaidAmountOut
   ) {
-    console.log("_closePositionExact.amountRepay", amountRepay);
     if (amountRepay >= AppLib.DUST_AMOUNT_TOKENS) {
       // Make full/partial repayment
       IERC20(borrowAsset).safeTransfer(address(converter_), amountRepay);
-      console.log("_closePositionExact.amountRepay.transfered", amountRepay);
 
       uint notUsedAmount;
       (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
@@ -1154,13 +1150,6 @@ library ConverterStrategyBaseLib {
     uint[] memory expectedMainAssetAmounts,
     mapping(address => uint) storage liquidationThresholds_
   ) external returns (uint expectedAmount) {
-    console.log("makeRequestedAmount.amountsToConvert_.length", amountsToConvert_.length);
-    console.log("makeRequestedAmount.amountsToConvert_[0]", amountsToConvert_[0]);
-    console.log("makeRequestedAmount.amountsToConvert_[1]", amountsToConvert_[1]);
-    console.log("makeRequestedAmount.amountsToConvert_[2]", amountsToConvert_[2]);
-    console.log("makeRequestedAmount.indexAsset_", indexAsset_);
-    console.log("makeRequestedAmount.requestedAmount", requestedAmount);
-    console.log("makeRequestedAmount.expectedMainAssetAmounts.length", expectedMainAssetAmounts.length);
 
     DataSetLocal memory v = DataSetLocal({
       len: tokens_.length,
@@ -1179,15 +1168,12 @@ library ConverterStrategyBaseLib {
     uint[] memory expectedMainAssetAmounts,
     mapping(address => uint) storage liquidationThresholds_
   ) internal returns (uint expectedAmount) {
-    console.log("_makeRequestedAmount.1");
     // get the total expected amount
     for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
       expectedAmount += expectedMainAssetAmounts[i];
     }
-    console.log("_makeRequestedAmount.2");
 
     uint[] memory _liquidationThresholds = _getLiquidationThresholds(liquidationThresholds_, d_.tokens, d_.len);
-    console.log("_makeRequestedAmount.3");
     // we shouldn't repay a debt twice, it's inefficient
     // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
     // But: we shouldn't make repay(1) and than repay(10), we should make single repay(11)
@@ -1197,11 +1183,9 @@ library ConverterStrategyBaseLib {
     if (requestedAmount != type(uint).max
       && expectedAmount > requestedAmount * (AppLib.GAP_CONVERSION + AppLib.DENOMINATOR) / AppLib.DENOMINATOR
     ) {
-      console.log("_makeRequestedAmount.4");
       // amountsToConvert_ are enough to get requestedAmount
       _convertAfterWithdraw(d_, _liquidationThresholds, amountsToConvert_);
     } else {
-      console.log("_makeRequestedAmount.5");
       uint balance = IERC20(d_.tokens[d_.indexAsset]).balanceOf(address(this));
       requestedAmount = requestedAmount > balance
         ? requestedAmount - balance
@@ -1216,7 +1200,6 @@ library ConverterStrategyBaseLib {
         + expectedMainAssetAmounts[d_.indexAsset];
     }
 
-    console.log("_makeRequestedAmount.6");
     return expectedAmount;
   }
   //endregion-------------------------------------------- Make requested amount
@@ -1316,7 +1299,6 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint expectedAmount
   ) {
-    console.log("_closePositionsToGetAmount.requestedAmount", requestedAmount);
     if (requestedAmount != 0) {
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = d_.tokens[d_.indexAsset];
@@ -1327,18 +1309,14 @@ library ConverterStrategyBaseLib {
       (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(d_.converter), d_.tokens, d_.len);
 
       for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
-        console.log("_closePositionsToGetAmount.i", i);
         if (i == d_.indexAsset) continue;
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-        console.log("_closePositionsToGetAmount.v.balanceAsset", v.balanceAsset);
-        console.log("_closePositionsToGetAmount.v.balanceToken", v.balanceToken);
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
         do {
-          console.log("_closePositionsToGetAmount.1");
           // generate iteration plan: [swap], [repay]
           (v.idxToSwap1, v.amountToSwap, v.idxToRepay1) = IterationPlanLib.buildIterationPlan(
             [address(d_.converter), address(d_.liquidator)],
@@ -1350,12 +1328,10 @@ library ConverterStrategyBaseLib {
             [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedAmount, d_.indexAsset, i]
           );
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
-          console.log("_closePositionsToGetAmount.2");
 
           // make swap if necessary
           uint spentAmountIn;
           if (v.idxToSwap1 != 0) {
-            console.log("_closePositionsToGetAmount.v.amountToSwap", v.amountToSwap);
             uint indexIn = v.idxToSwap1 - 1;
             uint indexOut = indexIn == d_.indexAsset ? i : d_.indexAsset;
             (spentAmountIn,) = _liquidate(
@@ -1379,7 +1355,6 @@ library ConverterStrategyBaseLib {
           // repay a debt if necessary
           if (v.idxToRepay1 != 0) {
             uint indexBorrow = v.idxToRepay1 - 1;
-            console.log("_closePositionsToGetAmount.amount-to-repay", IERC20(d_.tokens[indexBorrow]).balanceOf(address(this)));
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             (uint expectedAmountOut,) = _repayDebt(
               d_.converter,
@@ -1397,8 +1372,6 @@ library ConverterStrategyBaseLib {
           // update balances and requestedAmount
           v.newBalanceAsset = IERC20(v.asset).balanceOf(address(this));
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
-          console.log("_closePositionsToGetAmount.v.newBalanceAsset", v.newBalanceAsset);
-          console.log("_closePositionsToGetAmount.v.newBalanceToken", v.newBalanceToken);
 
           if (v.newBalanceAsset > v.balanceAsset) {
             requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
@@ -1415,7 +1388,6 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    console.log("_closePositionsToGetAmount.done");
     return expectedAmount;
   }
 //endregion ------------------------------------------------ Close position
@@ -1457,12 +1429,6 @@ library ConverterStrategyBaseLib {
     }
 
     // close the debt
-    console.log("_repayDebt.collateralAsset", collateralAsset);
-    console.log("_repayDebt.borrowAsset", borrowAsset);
-    console.log("_repayDebt.amountToRepay", amountToRepay);
-    console.log("_repayDebt.needToRepay", needToRepay);
-    console.log("_repayDebt.amountRepay", amountRepay);
-    console.log("_repayDebt.balanceBefore", balanceBefore);
     (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
 
     return (expectedAmountOut, repaidAmountOut);

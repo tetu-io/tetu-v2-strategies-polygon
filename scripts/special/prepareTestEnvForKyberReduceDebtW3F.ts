@@ -19,7 +19,7 @@ import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {TokenUtils} from "../utils/TokenUtils";
 import {UniversalUtils} from "../../test/baseUT/strategies/UniversalUtils";
 import {MockHelper} from "../../test/baseUT/helpers/MockHelper";
-import {KyberLiquidityUtils} from "../../test/strategies/polygon/kyber/utils/KyberLiquidityUtils";
+import {KyberLiquidityUtils} from "../../test/baseUT/strategies/kyber/KyberLiquidityUtils";
 import {TimeUtils} from "../utils/TimeUtils";
 
 async function main() {
