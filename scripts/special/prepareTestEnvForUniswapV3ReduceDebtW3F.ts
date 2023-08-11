@@ -22,7 +22,7 @@ import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {TokenUtils} from "../utils/TokenUtils";
 import {UniversalUtils} from "../../test/baseUT/strategies/UniversalUtils";
 import {MockHelper} from "../../test/baseUT/helpers/MockHelper";
-import {UniswapV3LiquidityUtils} from "../../test/strategies/polygon/uniswapv3/utils/UniswapV3LiquidityUtils";
+import {UniswapV3LiquidityUtils} from "../../test/baseUT/strategies/univ3/UniswapV3LiquidityUtils";
 import {TimeUtils} from "../utils/TimeUtils";
 
 async function main() {

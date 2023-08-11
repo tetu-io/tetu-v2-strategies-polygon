@@ -21,7 +21,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {KyberLiquidityUtils} from "./utils/KyberLiquidityUtils";
+import {KyberLiquidityUtils} from "../../../baseUT/strategies/kyber/KyberLiquidityUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 
 dotEnvConfig();

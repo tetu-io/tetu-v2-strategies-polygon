@@ -3,7 +3,7 @@ import {
   AlgebraLib,
   ControllerV2__factory,
   ConverterStrategyBase__factory, IRebalancingV2Strategy,
-  KyberLib,
+  KyberLib, StrategyBaseV2__factory,
   UniswapV3Lib
 } from "../../../typechain";
 import {PackedData} from "../utils/PackedData";
@@ -22,6 +22,8 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 import {AggregatorUtils} from "../utils/AggregatorUtils";
+import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
+import {depositToVault, printVaultState} from "../../StrategyTestUtils";
 
 const ENTRY_TO_POOL_IS_ALLOWED = 1;
 const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
@@ -29,6 +31,15 @@ const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
 const PLAN_SWAP_REPAY = 0;
 const PLAN_REPAY_SWAP_REPAY = 1;
 const PLAN_SWAP_ONLY = 2;
+
+export interface IPrepareOverCollateralParams {
+  countRebalances: number;
+  movePricesUp: boolean;
+}
+
+export interface IListStates {
+  states: IStateNum[];
+}
 
 /**
  * Utils to set up "current state of pair strategy" in tests
@@ -289,4 +300,85 @@ export class PairBasedStrategyPrepareStateUtils {
       if (completed) break;
     }
   }
+
+  /**
+   * Make "deposit-rebalance" cycles until expected count of rebalances won't make.
+   */
+  static async prepareOverCollateral(
+      b: IBuilderResults,
+      p: IPrepareOverCollateralParams,
+      pathOut: string,
+      signer: SignerWithAddress,
+      signer2: SignerWithAddress,
+      swapAmountRatio: number
+  ) : Promise<IListStates> {
+  const states: IStateNum[] = [];
+
+  const defaultState = await PackedData.getDefaultState(b.strategy);
+  const strategyAsSigner = StrategyBaseV2__factory.connect(b.strategy.address, signer);
+
+  console.log('deposit...');
+  await b.vault.setDoHardWorkOnInvest(false);
+  await TokenUtils.getToken(b.asset, signer2.address, parseUnits('1000', 6));
+  await b.vault.connect(signer2).deposit(parseUnits('1000', 6), signer2.address, { gasLimit: 19_000_000 });
+
+  const depositAmount1 = parseUnits('10000', b.assetDecimals);
+  await TokenUtils.getToken(b.asset, signer.address, depositAmount1);
+  await depositToVault(b.vault, signer, depositAmount1, b.assetDecimals, b.assetCtr, b.insurance);
+  states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `init`));
+  await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+  let loopStep = 0;
+  let countRebalances = 0;
+
+  // we recalculate swapAmount once per new tick
+  let upperTick: number | undefined;
+  let swapAmount: BigNumber = BigNumber.from(0);
+
+  while (countRebalances < p.countRebalances) {
+    const state = await PackedData.getDefaultState(b.strategy);
+    if (upperTick !== state.upperTick) {
+      swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+          signer,
+          b,
+          state.tokenA,
+          state.tokenB,
+          p.movePricesUp,
+          swapAmountRatio
+      );
+      upperTick = state.upperTick;
+    }
+    console.log("prepareOverCollateral.swapAmount", swapAmount);
+    console.log("prepareOverCollateral.upperTick", upperTick);
+
+    console.log('------------------ CYCLE', loopStep, '------------------');
+
+    await TimeUtils.advanceNBlocks(300);
+
+    if (p.movePricesUp) {
+      await UniversalUtils.movePoolPriceUp(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
+    } else {
+      await UniversalUtils.movePoolPriceDown(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
+    }
+    states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `p${loopStep}`));
+    await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+    // we suppose the rebalance happens immediately when it needs
+    if (await b.strategy.needRebalance()) {
+      console.log('------------------ REBALANCE' , loopStep, '------------------');
+
+      await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+      await printVaultState(b.vault, b.splitter, strategyAsSigner, b.assetCtr, b.assetDecimals);
+
+      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r${countRebalances}`));
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+      ++countRebalances;
+    }
+    ++loopStep;
+  }
+
+  return {states};
+}
+
 }

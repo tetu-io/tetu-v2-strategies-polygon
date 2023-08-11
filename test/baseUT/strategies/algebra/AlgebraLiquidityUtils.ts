@@ -1,4 +1,4 @@
-import {AlgebraLib, IAlgebraPool__factory, KyberLib} from "../../../../../typechain";
+import {AlgebraLib, IAlgebraPool__factory, KyberLib} from "../../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 export class AlgebraLiquidityUtils {

@@ -29,7 +29,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {KyberLiquidityUtils} from "./utils/KyberLiquidityUtils";
+import {KyberLiquidityUtils} from "../../../baseUT/strategies/kyber/KyberLiquidityUtils";
 import {writeFileSyncRestoreFolder} from "../../../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {PackedData} from "../../../baseUT/utils/PackedData";

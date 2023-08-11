@@ -22,7 +22,7 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {AlgebraLiquidityUtils} from "./utils/AlgebraLiquidityUtils";
+import {AlgebraLiquidityUtils} from "../../../baseUT/strategies/algebra/AlgebraLiquidityUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 

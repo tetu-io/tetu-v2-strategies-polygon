@@ -7,9 +7,9 @@ import {
   UniswapV3Lib
 } from "../../../typechain";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
-import {UniswapV3LiquidityUtils} from "../../strategies/polygon/uniswapv3/utils/UniswapV3LiquidityUtils";
-import {AlgebraLiquidityUtils} from "../../strategies/polygon/algebra/utils/AlgebraLiquidityUtils";
-import {KyberLiquidityUtils} from "../../strategies/polygon/kyber/utils/KyberLiquidityUtils";
+import {UniswapV3LiquidityUtils} from "./univ3/UniswapV3LiquidityUtils";
+import {AlgebraLiquidityUtils} from "./algebra/AlgebraLiquidityUtils";
+import {KyberLiquidityUtils} from "./kyber/KyberLiquidityUtils";
 import {BigNumber} from "ethers";
 import {IBuilderResults} from "./PairBasedStrategyBuilder";
 import {IUniswapV3Pool__factory} from "../../../typechain/factories/contracts/integrations/uniswap";
