@@ -389,5 +389,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
   //endregion ----------------------------------------------------- Others
 
+  function _getTokensAccess(address asset_) external view returns (address[] memory tokens, uint indexAsset) {
+    return _getTokens(asset_);
+  }
 
 }

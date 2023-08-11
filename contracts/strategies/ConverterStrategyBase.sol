@@ -170,7 +170,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // send earned-by-prices to the insurance
     if (earnedByPrices_ != 0) {
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
-        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
+        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
       } else {
         // needToDeposit is false and we don't have enough amount to cover earned-by-prices, we need to withdraw
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
@@ -362,7 +362,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       );
 
       if (earnedByPrices_ != 0) {
-        amountSentToInsurance = ConverterStrategyBaseLib2.sendToInsurance(
+        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
           v.asset,
           earnedByPrices_,
           baseState.splitter,

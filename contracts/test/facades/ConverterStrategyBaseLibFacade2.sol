@@ -126,11 +126,17 @@ contract ConverterStrategyBaseLibFacade2 {
     return ConverterStrategyBaseLib2.postWithdrawActionsEmpty(converter, tokens, indexAsset, amountsToConvert_);
   }
 
-  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (uint) {
+  function sendToInsurance(address asset, uint amount, address splitter, uint strategyBalance) external returns (
+    uint sentAmount,
+    uint unsentAmount
+  ) {
     return ConverterStrategyBaseLib2.sendToInsurance(asset, amount, splitter, strategyBalance);
   }
 
-  function getSafeLossToCover(uint loss, uint totalAssets_) external pure returns (uint) {
+  function getSafeLossToCover(uint loss, uint totalAssets_) external pure returns (
+    uint lossToCover,
+    uint lossUncovered
+  ) {
     return ConverterStrategyBaseLib2.getSafeLossToCover(loss, totalAssets_);
   }
 
@@ -150,11 +156,6 @@ contract ConverterStrategyBaseLibFacade2 {
     baseState.performanceFeeRatio = performanceFeeRatio;
     baseState.compoundRatio = compoundRatio;
     baseState.strategySpecificName = strategySpecificName;
-  }
-
-  function coverLossAfterPriceChanging(uint investedAssetsBefore, uint investedAssetsAfter) external returns (uint earned) {
-    require(baseState.splitter != address(0), "baseState not initialized");
-    return ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsAfter, baseState);
   }
 
   function getHardworkLossToleranceValue() external pure returns (uint) {
@@ -183,5 +184,20 @@ contract ConverterStrategyBaseLibFacade2 {
     uint priceB
   ) {
     return ConverterStrategyBaseLib2.getOracleAssetsPrices(converter, tokenA, tokenB);
+  }
+
+  function coverLossAfterPriceChanging(
+    uint investedAssetsBefore,
+    uint investedAssetsAfter,
+    address asset,
+    address splitter
+  ) external returns (uint earned) {
+    baseState.asset = asset;
+    baseState.splitter = splitter;
+    return ConverterStrategyBaseLib2.coverLossAfterPriceChanging(
+      investedAssetsBefore,
+      investedAssetsAfter,
+      baseState
+    );
   }
 }
