@@ -45,6 +45,31 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
   };
 }
 
+export async function txParams2() {
+
+  const gasPrice = (await ethers.provider.getGasPrice()).toNumber();
+  console.log('Gas price:', formatUnits(gasPrice, 9));
+  if (hreLocal.network.name === 'hardhat') {
+    return {
+      maxPriorityFeePerGas: parseUnits('1', 9),
+      maxFeePerGas: (gasPrice * 1.5).toFixed(0),
+    };
+  } else if (hreLocal.network.config.chainId === 137) {
+    return {
+      maxPriorityFeePerGas: parseUnits('31', 9),
+      maxFeePerGas: (gasPrice * 1.5).toFixed(0),
+    };
+  } else if (hreLocal.network.config.chainId === 1) {
+    return {
+      maxPriorityFeePerGas: parseUnits('1', 9),
+      maxFeePerGas: (gasPrice * 1.5).toFixed(0),
+    };
+  }
+  return {
+    gasPrice: (gasPrice * 1.1).toFixed(0),
+  };
+}
+
 export async function getDeployedContractByName(name: string) {
   const { deployments } = hreLocal;
   const contract = await deployments.get(name);
@@ -84,16 +109,17 @@ export async function hardhatDeploy(
 
   const newAdr = await deployments.get(deploymentName || contractName);
 
-  if (!oldAdr || oldAdr !== newAdr.address) {
-    if (verify && hre.network.name !== 'hardhat') {
-      await wait(10);
-      if (args) {
-        await verifyWithArgs(newAdr.address, args);
-      } else {
-        await verifyWithoutArgs(newAdr.address);
-      }
-    }
-  }
+  // verify manually later - much faster
+  // if (!oldAdr || oldAdr !== newAdr.address) {
+  //   if (verify && hre.network.name !== 'hardhat') {
+  //     await wait(10);
+  //     if (args) {
+  //       await verifyWithArgs(newAdr.address, args);
+  //     } else {
+  //       await verifyWithoutArgs(newAdr.address);
+  //     }
+  //   }
+  // }
 }
 
 

@@ -67,6 +67,7 @@ export class SpeedUp {
     log.debug('OLD TX', txHash, result);
     if (!result) {
       console.error('tx for speedup receipt is empty!', response)
+      await sendMessageToTelegram(`tx for speedup receipt is empty!`);
       return 'error';
     }
 

@@ -65,7 +65,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   //region --------------------------------------------- OPERATOR ACTIONS
 
   /// @notice Manually set status of the fuse
-  /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
+  /// @param status See PairBasedStrategyLib.FuseStatus enum for possible values
   /// @param index01 0 - token A, 1 - token B
   function setFuseStatus(uint index01, uint status) external {
     StrategyLib2.onlyOperators(controller());
@@ -83,6 +83,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB[index01], values);
   }
 
+  /// @dev Set a dedicated contract for rewards for properly counting.
+  ///      It is safe to allow change it to operator - we suppose the contract only temporally store the last rewards.
   function setStrategyProfitHolder(address strategyProfitHolder) external {
     StrategyLib2.onlyOperators(controller());
     state.pair.strategyProfitHolder = strategyProfitHolder;

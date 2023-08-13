@@ -2,6 +2,7 @@ import hre, {ethers} from "hardhat";
 import {BigNumber, BytesLike} from "ethers";
 import {defaultAbiCoder} from "ethers/lib/utils";
 import {ITetuLiquidator} from "../../../typechain";
+import { config as dotEnvConfig } from 'dotenv';
 
 /**
  *   function liquidate(
@@ -18,11 +19,22 @@ export interface ILiquidatorInputData {
   slippage: BigNumber;
 }
 
+dotEnvConfig();
+// tslint:disable-next-line:no-var-requires
+const argv = require('yargs/yargs')()
+  .env('TETU')
+  .options({
+    oneInchApiKey: {
+      type: 'string',
+      default: ''
+    },
+  }).argv;
+
 export class AggregatorUtils {
 
   static apiRequestUrl(methodName: string, queryParams: string) {
     const chainId = hre.network.config.chainId;
-    const apiBaseUrl = 'https://api.1inch.io/v5.0/' + chainId;
+    const apiBaseUrl = 'https://api.1inch.dev/v5.0/' + chainId;
     const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
     return apiBaseUrl + methodName + '?' + r;
   }
@@ -32,7 +44,12 @@ export class AggregatorUtils {
     console.log('url', url)
     for (let i = 0; i < tries; i++) {
       try {
-        const r = await fetch(url)
+        const r = await fetch(url, {
+          headers: {
+            'Authorization': 'Bearer ' + argv.oneInchApiKey,
+            'Content-Type': 'application/json'
+          }
+        })
         if (r && r.status === 200) {
           return (await r.json()).tx
         }
