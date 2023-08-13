@@ -18,6 +18,7 @@ import { deployAddresses } from './scripts/addresses/deploy-addresses';
 import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
 import path from 'path';
 import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from 'hardhat/builtin-tasks/task-names';
+import { exec } from 'child_process';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -115,8 +116,10 @@ export default {
       accounts: [argv.privateKey],
       url: 'http://127.0.0.1:8545',
     },
-    localhost: {
-      timeout: 9999999999,
+    foundry: {
+      chainId: 137,
+      url: 'http://127.0.0.1:8545',
+      // accounts: [argv.privateKey], do not use it, impersonate will be broken
     },
     eth: {
       url: argv.ethRpcUrl || '',

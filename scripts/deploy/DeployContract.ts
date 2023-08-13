@@ -110,7 +110,7 @@ export async function deployContract<T extends ContractFactory>(
   const receipt = await ethers.provider.getTransactionReceipt(instance.deployTransaction.hash);
   console.log('DEPLOYED: ', name, receipt.contractAddress);
 
-  if (hre.network.name !== 'hardhat' && hre.network.name !== 'zktest') {
+  if (hre.network.name !== 'hardhat' && hre.network.name !== 'foundry' && hre.network.name !== 'zktest') {
     await wait(hre, 10);
     if (args.length === 0) {
       await verify(hre, receipt.contractAddress);
@@ -171,6 +171,10 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
     return {
       maxPriorityFeePerGas: parseUnits('1', 9).toHexString(),
       maxFeePerGas: maxFee,
+    };
+  } else if (hre.network.name === 'foundry') {
+    return {
+      gasPrice: '0x' + Math.floor(gasPrice * 1.1).toString(16),
     };
   } else if (hre.network.config.chainId === 137) {
     return {
