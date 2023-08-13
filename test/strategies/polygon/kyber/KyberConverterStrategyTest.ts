@@ -101,8 +101,18 @@ describe('KyberConverterStrategyTest', function() {
           0,
           true,
           pId,
-            [0, 0, Misc.MAX_UINT, 0],
-            [0, 0, Misc.MAX_UINT, 0],
+          [
+            parseUnits('0.997'),
+            parseUnits('0.998'),
+            parseUnits('1.003'),
+            parseUnits('1.002')
+          ],
+          [
+            parseUnits('0.997'),
+            parseUnits('0.998'),
+            parseUnits('1.003'),
+            parseUnits('1.002')
+          ]
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -214,6 +224,7 @@ describe('KyberConverterStrategyTest', function() {
       expect(stateSpecific.flags.needStake).eq(false)
       expect(stateSpecific.flags.needUnstake).eq(false)
       expect(state.totalLiquidity).gt(0)
+      expect(await IERC20__factory.connect(MaticAddresses.KNC_TOKEN, signer).balanceOf(strategy.address)).eq(0)
 
       await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
 

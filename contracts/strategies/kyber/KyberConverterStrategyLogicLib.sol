@@ -51,6 +51,7 @@ library KyberConverterStrategyLogicLib {
 
     bool[2] fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
+    uint coveredByRewards;
   }
 
   struct EnterLocalVariables {
@@ -361,11 +362,11 @@ library KyberConverterStrategyLogicLib {
   function claimRewardsBeforeExitIfRequired(State storage state) external {
     (,bool needUnstake) = needRebalanceStaking(state);
     if (needUnstake) {
-      claimRewards(state);
+      claimRewards(state, false);
     }
   }
 
-  function claimRewards(State storage state) public returns (
+  function claimRewards(State storage state, bool transferFromProfitHolder) public returns (
     address[] memory tokensOut,
     uint[] memory amountsOut,
     uint[] memory balancesBefore
@@ -386,13 +387,26 @@ library KyberConverterStrategyLogicLib {
     if (tokenId > 0 && state.pair.totalLiquidity > 0) {
       (amountsOut[0], amountsOut[1]) = _claimFees(state);
       amountsOut[2] = _harvest(tokenId, state.pId);
+      if (!transferFromProfitHolder) {
+        if (amountsOut[0] > 0) {
+          IERC20(tokensOut[0]).safeTransfer(strategyProfitHolder, amountsOut[0]);
+        }
+        if (amountsOut[1] > 0) {
+          IERC20(tokensOut[1]).safeTransfer(strategyProfitHolder, amountsOut[1]);
+        }
+        if (amountsOut[2] > 0) {
+          IERC20(tokensOut[2]).safeTransfer(strategyProfitHolder, amountsOut[2]);
+        }
+      }
     }
 
-    for (uint i; i < tokensOut.length; ++i) {
-      uint b = IERC20(tokensOut[i]).balanceOf(strategyProfitHolder);
-      if (b > 0) {
-        IERC20(tokensOut[i]).transferFrom(strategyProfitHolder, address(this), b);
-        amountsOut[i] += b;
+    if (transferFromProfitHolder) {
+      for (uint i; i < tokensOut.length; ++i) {
+        uint b = IERC20(tokensOut[i]).balanceOf(strategyProfitHolder);
+        if (b > 0) {
+          IERC20(tokensOut[i]).transferFrom(strategyProfitHolder, address(this), b);
+          amountsOut[i] += b;
+        }
       }
     }
   }
@@ -488,7 +502,8 @@ library KyberConverterStrategyLogicLib {
     uint profitToCover,
     address splitter,
     bool checkNeedRebalance_,
-    mapping(address => uint) storage liquidityThresholds_
+    mapping(address => uint) storage liquidityThresholds_,
+    bool needStakeOrUnstakeOnly
   ) external returns (
     uint[] memory tokenAmounts
   ) {
@@ -512,16 +527,15 @@ library KyberConverterStrategyLogicLib {
     require(!checkNeedRebalance_ || needRebalance, KyberStrategyErrors.NO_REBALANCE_NEEDED);
 
     // rebalancing debt, setting new tick range
-    if (needRebalance) {
-      uint coveredByRewards;
+    if (needRebalance || needStakeOrUnstakeOnly) {
       KyberDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, v.liquidationThresholdsAB, tick);
 
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
       if (loss != 0) {
-        coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+        v.coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
-      emit Rebalanced(loss, profitToCover, coveredByRewards);
+      emit Rebalanced(loss, profitToCover, v.coveredByRewards);
     }
 
     return tokenAmounts;

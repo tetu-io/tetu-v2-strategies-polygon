@@ -122,7 +122,7 @@ abstract contract KyberDepositor is DepositorBase, Initializable {
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    return KyberConverterStrategyLogicLib.claimRewards(state);
+    return KyberConverterStrategyLogicLib.claimRewards(state, true);
   }
 
   /// @dev This empty reserved space is put in place to allow future versions to add new
