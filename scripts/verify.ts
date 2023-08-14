@@ -7,6 +7,10 @@ async function main() {
   await verify('StrategyLib');
   await verify('ConverterStrategyBaseLib', 'contracts/strategies');
   await verify('ConverterStrategyBaseLib2', 'contracts/strategies');
+  await verify('BorrowLib', 'contracts/libs');
+  await verify('PairBasedStrategyLib', 'contracts/strategies/pair');
+  await verify('PairBasedStrategyLogicLib', 'contracts/strategies/pair');
+  await verify('PairBasedStrategyReader', 'contracts/strategies/pair');
   await verify('BalancerLogicLib', 'contracts/strategies/balancer');
   await verify('BalancerBoostedStrategy', 'contracts/strategies/balancer');
   await verify('UniswapV3Lib', 'contracts/strategies/uniswap');
