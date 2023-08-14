@@ -24,6 +24,7 @@ import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-c
 import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
 import {depositToVault, printVaultState} from "../../StrategyTestUtils";
+import {NoSwapRebalanceEvents} from "./NoSwapRebalanceEvents";
 
 const ENTRY_TO_POOL_IS_ALLOWED = 1;
 const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
@@ -367,10 +368,10 @@ export class PairBasedStrategyPrepareStateUtils {
     if (await b.strategy.needRebalance()) {
       console.log('------------------ REBALANCE' , loopStep, '------------------');
 
-      await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+      const rebalanced = await NoSwapRebalanceEvents.makeRebalanceNoSwap(b.strategy.connect(signer));
       await printVaultState(b.vault, b.splitter, strategyAsSigner, b.assetCtr, b.assetDecimals);
 
-      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r${countRebalances}`));
+      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r${countRebalances}`, {rebalanced}));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
       ++countRebalances;

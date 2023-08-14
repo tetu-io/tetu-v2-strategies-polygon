@@ -34,7 +34,7 @@ export class AggregatorUtils {
 
   static apiRequestUrl(methodName: string, queryParams: string) {
     const chainId = hre.network.config.chainId;
-    const apiBaseUrl = 'https://api.1inch.dev/v5.0/' + chainId;
+    const apiBaseUrl = 'https://api-tetu.1inch.io/v5.0/' + chainId;
     const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
     return apiBaseUrl + methodName + '?' + r;
   }
