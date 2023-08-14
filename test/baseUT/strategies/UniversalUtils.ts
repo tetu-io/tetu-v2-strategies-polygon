@@ -1,4 +1,4 @@
-import {BigNumber} from "ethers";
+import {BigNumber, ContractReceipt, ethers} from "ethers";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
@@ -9,6 +9,33 @@ import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export class UniversalUtils {
+  /**
+   * Finds events "EventName(fee0, fee1)" in {tx}
+   */
+  public static extractClaimedFees(cr: ContractReceipt, eventName: string, eventAbi: string): [BigNumber, BigNumber] | undefined {
+    const abi = [
+      eventAbi,
+    ];
+    const iface = new ethers.utils.Interface(abi)
+    const topic = iface.getEventTopic(iface.getEvent(eventName))
+    let fee0 = BigNumber.from(0)
+    let fee1 = BigNumber.from(0)
+    if (cr.events) {
+      for (const event of cr.events) {
+        if (event.topics.includes(topic)) {
+          const decoded = ethers.utils.defaultAbiCoder.decode(
+            ['uint', 'uint'],
+            event.data
+          )
+          fee0 = fee0.add(decoded[0])
+          fee1 = fee1.add(decoded[1])
+        }
+      }
+    }
+
+    return [fee0, fee1];
+  }
+
   public static getApr(earned: BigNumber, investAmount: BigNumber, startTimestamp: number, endTimestamp: number) {
     const earnedPerSec1e10 = endTimestamp > startTimestamp ? earned.mul(parseUnits('1', 10)).div(endTimestamp - startTimestamp) : BigNumber.from(0);
     const earnedPerDay = earnedPerSec1e10.mul(86400).div(parseUnits('1', 10));

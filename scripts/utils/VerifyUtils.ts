@@ -20,49 +20,52 @@ const argv = require('yargs/yargs')()
   }).argv;
 
 
+const VERIFY= 'verify1';
+
 export class VerifyUtils {
 
 
   public static async verify(address: string) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
   // tslint:disable-next-line:no-any
   public static async verifyWithArgs(address: string, args: any[]) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address, constructorArguments: args
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
   // tslint:disable-next-line:no-any
   public static async verifyWithContractName(address: string, contractPath: string, args?: any[]) {
+    // console.log('contractPath', contractPath)
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address, contract: contractPath, constructorArguments: args
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
   // tslint:disable-next-line:no-any
   public static async verifyWithArgsAndContractName(address: string, args: any[], contractPath: string) {
     try {
-      await hre.run("verify:verify", {
+      await hre.run(VERIFY + ":verify", {
         address, constructorArguments: args, contract: contractPath
       })
     } catch (e) {
-      log.info('error verify ' + e);
+      log.error('error verify ' + e);
     }
   }
 
@@ -76,7 +79,7 @@ export class VerifyUtils {
           `address=${adr}`);
       // log.info("proxy verify resp", resp.data);
     } catch (e) {
-      log.info('error proxy verify ' + adr + e);
+      log.error('error proxy verify ' + adr + e);
     }
   }
 

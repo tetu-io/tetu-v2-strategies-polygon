@@ -287,7 +287,12 @@ describe('KyberConverterStrategyTest', function() {
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+
+      const tx = await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+      const txReceipt = await tx.wait();
+      const fees = UniversalUtils.extractClaimedFees(txReceipt, 'KyberFeesClaimed', 'event KyberFeesClaimed(uint fee0, uint fee1)')
+      console.log('fees', fees)
+
       expect(await s.needRebalance()).eq(false)
 
       console.log('Hardwork')
@@ -332,7 +337,10 @@ describe('KyberConverterStrategyTest', function() {
       await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       console.log('withdraw')
-      await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
+      const tx = await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
+      const txReceipt = await tx.wait();
+      const fees = UniversalUtils.extractClaimedFees(txReceipt, 'KyberFeesClaimed', 'event KyberFeesClaimed(uint fee0, uint fee1)')
+      console.log('fees', fees)
 
       console.log('after 1 day')
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
