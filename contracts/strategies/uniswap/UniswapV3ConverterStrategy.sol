@@ -73,6 +73,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  ///         Decimals 18. The thresholds are compared with prices from TetuConverter's price oracle.
   ///         Example: [0.9, 0.92, 1.08, 1.1]
   ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.
   ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
