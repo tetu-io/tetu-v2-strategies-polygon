@@ -140,10 +140,12 @@ async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+const VERIFY= 'verify1';
+
 // tslint:disable-next-line:no-any
 async function verify(hre: any, address: string) {
   try {
-    await hre.run('verify:verify', {
+    await hre.run(VERIFY + ":verify", {
       address,
     });
   } catch (e) {
@@ -154,7 +156,7 @@ async function verify(hre: any, address: string) {
 // tslint:disable-next-line:no-any
 async function verifyWithArgs(hre: any, address: string, args: any[]) {
   try {
-    await hre.run('verify:verify', {
+    await hre.run(VERIFY + ":verify", {
       address, constructorArguments: args,
     });
   } catch (e) {
