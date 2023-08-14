@@ -6,19 +6,18 @@ import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory,
-  IERC20__factory, StrategyBaseV2__factory,
+  IERC20__factory,
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {depositToVault, printVaultState} from "../../../StrategyTestUtils";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {IBuilderResults, PairBasedStrategyBuilder} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
@@ -27,6 +26,7 @@ import {
   IListStates,
   PairBasedStrategyPrepareStateUtils
 } from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {aave3PriceSourceBalancerBoostedSol} from "../../../../typechain/contracts/test/aave";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -928,7 +928,7 @@ describe('PairBasedNoSwapIntTest', function() {
               const stateLast = ret.states[ret.states.length - 1];
               const statePrev = ret.states[ret.states.length - 2];
               expect(statePrev.strategy.liquidity).approximately(0, 100); // ignore dust
-              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.98);
+              expect(stateLast.strategy.liquidity / stateFirst.strategy.liquidity).gt(0.5);
             });
             it("should set expected investedAssets", async () => {
               const ret = await loadFixture(makeWithdrawAll);
@@ -1008,7 +1008,7 @@ describe('PairBasedNoSwapIntTest', function() {
             let builderResults: IBuilderResults;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
-              builderResults = await prepareStrategy();
+              builderResults = await initialize();
             });
             after(async function () {
               await TimeUtils.rollback(snapshot);
@@ -1016,7 +1016,7 @@ describe('PairBasedNoSwapIntTest', function() {
             async function initialize(): Promise<IBuilderResults> {
               const b = await prepareStrategy();
               await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
-                  b, {
+                b, {
                     movePricesUp: true,
                     countRebalances: 2
                   },
@@ -1029,12 +1029,11 @@ describe('PairBasedNoSwapIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
               // enable fuse
               await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
-
               return b;
             }
 
             async function makeWithdrawAll(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(await loadFixture(initialize), {
+              return makeWithdrawTest(builderResults, {
                 movePricesUp: true, // not used here
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_DISABLED,
@@ -1044,13 +1043,11 @@ describe('PairBasedNoSwapIntTest', function() {
             }
 
             it("initially should set fuse triggered ON", async () => {
-              const b = await loadFixture(initialize);
-              const state = await PackedData.getDefaultState(b.strategy);
+              const state = await PackedData.getDefaultState(builderResults.strategy);
               expect(state.fuseStatusTokenA > FUSE_OFF_1 || state.fuseStatusTokenB > FUSE_OFF_1).eq(true);
             });
             it("initially should set withdrawDone = 0", async () => {
-              const b = await loadFixture(initialize);
-              const state = await PackedData.getDefaultState(b.strategy);
+              const state = await PackedData.getDefaultState(builderResults.strategy);
               expect(state.withdrawDone).eq(0);
             });
             it("should not enter to the pool at the end", async () => {

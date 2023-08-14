@@ -34,14 +34,15 @@ export class AggregatorUtils {
 
   static apiRequestUrl(methodName: string, queryParams: string) {
     const chainId = hre.network.config.chainId;
-    const apiBaseUrl = 'https://api-tetu.1inch.io/v5.0/' + chainId;
+    const apiBaseUrl = 'https://api-tetu.1inch.io/v5.2/' + chainId;
     const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
     return apiBaseUrl + methodName + '?' + r;
   }
 
   static async buildTxForSwap(params: string, tries: number = 2) {
     const url = this.apiRequestUrl('/swap', params);
-    console.log('url', url)
+    console.log('url', url);
+    console.log('argv.oneInchApiKey', argv.oneInchApiKey);
     for (let i = 0; i < tries; i++) {
       try {
         const r = await fetch(url, {
