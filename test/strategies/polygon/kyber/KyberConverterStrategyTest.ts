@@ -287,12 +287,10 @@ describe('KyberConverterStrategyTest', function() {
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-
       const tx = await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       const txReceipt = await tx.wait();
       const fees = UniversalUtils.extractClaimedFees(txReceipt, 'KyberFeesClaimed', 'event KyberFeesClaimed(uint fee0, uint fee1)')
       console.log('fees', fees)
-
       expect(await s.needRebalance()).eq(false)
 
       console.log('Hardwork')
