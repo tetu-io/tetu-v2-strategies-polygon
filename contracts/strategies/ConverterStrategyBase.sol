@@ -650,6 +650,6 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This empty reserved space is put in place to allow future versions to add new
   /// variables without shifting down storage in the inheritance chain.
   /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[50 - 5] private __gap; // 50 - count of variables
+  uint[50 - 4] private __gap; // 50 - count of variables
 
 }
