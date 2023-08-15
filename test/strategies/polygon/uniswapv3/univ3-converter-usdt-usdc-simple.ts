@@ -37,6 +37,8 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {NoSwapRebalanceEvents} from "../../../baseUT/strategies/NoSwapRebalanceEvents";
 
 
 const { expect } = chai;
@@ -257,6 +259,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const DELTA = 500;
     const pathOut = `./tmp/deposit_exit_states.csv`;
     const facade = await MockHelper.createUniswapV3LibFacade(signer); // we need it to generate IState
+    const state = await PackedData.getDefaultState(strategy);
     const states = [];
 
     // await strategy.setFuseThreshold(parseUnits('1'));
@@ -319,16 +322,20 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
 
       if (i % 2 === 0) {
-        await UniswapV3StrategyUtils.movePriceUp(
+        await UniversalUtils.movePoolPriceUp(
           signer2,
-          strategy.address,
+          state.pool,
+          state.tokenA,
+          state.tokenB,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
       } else {
-        await UniswapV3StrategyUtils.movePriceDown(
+        await UniversalUtils.movePoolPriceDown(
           signer2,
-          strategy.address,
+          state.pool,
+          state.tokenA,
+          state.tokenB,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
@@ -338,7 +345,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
-        await rebalancePairBasedStrategyNoSwaps(strategy, signer, decimals);
+        const rebalanced = await NoSwapRebalanceEvents.makeRebalanceNoSwap(strategy);
         await printVaultState(
           vault,
           splitter,
@@ -346,8 +353,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
           assetCtr,
           decimals,
         );
-        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`));
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+        console.log("rebalanced", rebalanced);
       }
 
 

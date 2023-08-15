@@ -198,25 +198,18 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
     console.log('Quote', quote)
 
-    const params = {
-      fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-      toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-      amount: quote.amountToSwap.toString(),
-      fromAddress: s.address,
-      slippage: 1,
-      disableEstimate: true,
-      allowPartialFill: false,
-      protocols: 'POLYGON_CURVE', // 'POLYGON_BALANCER_V2',
-    };
-
-    const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-    console.log('Transaction for swap: ', swapTransaction);
+    const swapData = AggregatorUtils.buildSwapTransactionDataOneInchV52(
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+        quote.amountToSwap,
+        s.address,
+    );
 
     await strategy.withdrawByAggStep(
       quote.tokenToSwap,
       MaticAddresses.AGG_ONEINCH_V5,
       quote.amountToSwap,
-      swapTransaction.data,
+      swapData, // swapTransaction.data,
       planEntryData,
       1
     );

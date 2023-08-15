@@ -239,21 +239,12 @@ export class PairBasedStrategyPrepareStateUtils {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          const params = {
-            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap.toString(),
-            fromAddress: strategyAsOperator.address,
-            slippage: 1,
-            disableEstimate: true,
-            allowPartialFill: false,
-            // protocols: 'POLYGON_BALANCER_V2',
-          };
-          console.log("params", params);
-
-          const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-          console.log('Transaction for swap: ', swapTransaction);
-          swapData = swapTransaction.data;
+          swapData = await AggregatorUtils.buildSwapTransactionData(
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            quote.amountToSwap,
+            strategyAsOperator.address,
+          );
         } else if (aggregator === MaticAddresses.TETU_LIQUIDATOR) {
           swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
             tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
@@ -270,7 +261,6 @@ export class PairBasedStrategyPrepareStateUtils {
       console.log("amountToSwap", amountToSwap);
       console.log("swapData", swapData);
       console.log("planEntryData", planEntryData);
-      console.log("ENTRY_TO_POOL_IS_ALLOWED", ENTRY_TO_POOL_IS_ALLOWED);
 
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
         tokenToSwap,

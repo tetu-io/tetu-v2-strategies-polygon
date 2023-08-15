@@ -101,23 +101,12 @@ describe('PairBasedStrategyLibIntTest', () => {
 
       let swapData: BytesLike = "0x";
       if (p.aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-        const params = {
-          fromTokenAddress: p.tokens[p.indexIn],
-          toTokenAddress: p.tokens[p.indexOut],
-          amount: amountToSwap.toString(),
-          fromAddress: facade.address,
-          slippage: 1,
-          disableEstimate: true,
-          allowPartialFill: false,
-          protocols: 'POLYGON_BALANCER_V2',
-        };
-        console.log("params", params);
-
-        const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-        console.log('Transaction for swap: ', swapTransaction);
-        swapData = swapTransaction.data;
-        console.log("swapData", swapData);
-        console.log("swapData.length", swapData.length);
+        swapData = await AggregatorUtils.buildSwapTransactionData(
+          p.tokens[p.indexIn],
+          p.tokens[p.indexOut],
+          amountToSwap,
+          facade.address,
+        );
       } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
         swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
           tokenIn: p.tokens[p.indexIn],

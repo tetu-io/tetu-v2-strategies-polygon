@@ -26,7 +26,6 @@ import {
   IListStates,
   PairBasedStrategyPrepareStateUtils
 } from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
-import {aave3PriceSourceBalancerBoostedSol} from "../../../../typechain/contracts/test/aave";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -135,31 +134,12 @@ describe('PairBasedNoSwapIntTest', function() {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (p.aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          // const params = {
-          //   src: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-          //   dst: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-          //   amount: quote.amountToSwap.toString(),
-          //   from: strategyAsOperator.address,
-          //   slippage: 1,
-          //   disableEstimate: true,
-          //   allowPartialFill: false,
-          //   // protocols: 'POLYGON_BALANCER_V2',
-          // };
-          const params = {
-            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap.toString(),
-            fromAddress: strategyAsOperator.address,
-            slippage: 1,
-            disableEstimate: true,
-            allowPartialFill: false,
-            // protocols: 'POLYGON_QUICKSWAP_V3',
-          };
-          console.log("params", params);
-
-          const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-          console.log('Transaction for 1inch swap: ', swapTransaction);
-          swapData = swapTransaction.data;
+          swapData = await AggregatorUtils.buildSwapTransactionData(
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            quote.amountToSwap,
+            strategyAsOperator.address,
+          );
         } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
           swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
             tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,

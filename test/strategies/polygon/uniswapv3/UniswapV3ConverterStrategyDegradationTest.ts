@@ -16,7 +16,7 @@ import {
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
@@ -25,9 +25,9 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/StateUtilsNum';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber, BytesLike} from "ethers";
-import {tetuConverter} from "../../../../typechain/@tetu_io";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -50,6 +50,15 @@ const argv = require('yargs/yargs')()
  */
 describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function() {
 //region Constants and variables
+  const PLAN_SWAP_REPAY = 0;
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLAN_SWAP_ONLY = 2;
+
+  const ENTRY_TO_POOL_DISABLED = 0;
+  const ENTRY_TO_POOL_IS_ALLOWED = 1;
+  const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
+
+
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -221,7 +230,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         expect(await strategy.needRebalance()).eq(true);
 
         console.log("Start rebalance, step", i);
-        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
+        await strategy.rebalanceNoSwaps(true,{gasLimit: 19_000_000});
         console.log("End rebalance, step", i);
 
         expect(await strategy.needRebalance()).eq(false);
@@ -250,7 +259,11 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       // const AGGREGATOR = MaticAddresses.AGG_ONEINCH_V5; // use real aggregator for swaps
       const AGGREGATOR = Misc.ZERO_ADDRESS; // use liquidator for swaps
 
-      const propNotUnderlying18 = 0; // we need 100% of underlying
+      const planEntryData = defaultAbiCoder.encode(
+          ["uint256", "uint256"],
+          [PLAN_REPAY_SWAP_REPAY, 0] // we need 100% of underlying
+      );
+
       const AMOUNT_TO_DEPOSIT= "1000";
       const MIN_AMOUNT_TO_RECEIVE_USDT = "0";
       const MIN_AMOUNT_TO_RECEIVE_USDC = "980";
@@ -267,7 +280,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       listStates.push(stateStepInitial);
       console.log(`initial`, stateStepInitial);
 
-      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
+      // await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
 
       // move price and get over-collateral
@@ -282,9 +295,11 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
         // Decrease price at first 10 steps, increase price on other 10 steps
         while (! await strategy.needRebalance()) {
-          await UniswapV3StrategyUtils.movePriceDown(
+          await UniversalUtils.movePoolPriceDown(
             signer,
-            strategy.address,
+            state.pool,
+            state.tokenA,
+            state.tokenB,
             MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
             swapAmount,
             100001
@@ -301,7 +316,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         expect(await strategy.needRebalance()).eq(true);
 
         console.log("Start rebalance, step", i);
-        await strategy.rebalanceNoSwaps({gasLimit: 19_000_000});
+        await strategy.rebalanceNoSwaps(true,{gasLimit: 19_000_000});
         console.log("End rebalance, step", i);
 
         expect(await strategy.needRebalance()).eq(false);
@@ -322,12 +337,11 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
       // try to withdraw all and get the assets in required proportions on the balance
       console.log("Withdraw by iterations");
-      await strategyAsOperator.withdrawByAggEntry();
 
       let completed = false;
       while (! completed) {
         // get info about swap required on next iteration
-        const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(propNotUnderlying18);
+        const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
         console.log("quote", quote);
 
         // prepare swap-data for the next iteration
@@ -339,26 +353,31 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         // for real aggregator we should prepare swap-transaction
         if (AGGREGATOR === MaticAddresses.AGG_ONEINCH_V5) {
           if (tokenToSwap !== Misc.ZERO_ADDRESS) {
-            const params = {
-              fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-              toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-              amount: quote.amountToSwap.toString(),
-              fromAddress: strategyAsOperator.address,
-              slippage: 1,
-              disableEstimate: true,
-              allowPartialFill: false,
-              protocols: 'POLYGON_BALANCER_V2',
-            };
-            console.log("params", params);
-
-            const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-            console.log('Transaction for swap: ', swapTransaction);
-            swapData = swapTransaction.data;
+            swapData = await AggregatorUtils.buildSwapTransactionData(
+              quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+              quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+              quote.amountToSwap,
+              strategyAsOperator.address,
+            );
           }
         }
 
-        completed = await strategyAsOperator.callStatic.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
-        await strategyAsOperator.withdrawByAggStep(tokenToSwap, amountToSwap, AGGREGATOR, swapData, propNotUnderlying18);
+        completed = await strategyAsOperator.callStatic.withdrawByAggStep(
+            tokenToSwap,
+            AGGREGATOR,
+            amountToSwap,
+            swapData,
+            planEntryData,
+            ENTRY_TO_POOL_IS_ALLOWED
+        );
+        await strategyAsOperator.withdrawByAggStep(
+            tokenToSwap,
+            AGGREGATOR,
+            amountToSwap,
+            swapData,
+            planEntryData,
+            ENTRY_TO_POOL_IS_ALLOWED
+        );
       }
 
       const stateStepFinal = await StateUtilsNum.getState(signer, user, strategy, vault, `final`);
