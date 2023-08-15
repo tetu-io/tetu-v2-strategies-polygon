@@ -104,17 +104,19 @@ export async function strategyBacktest(
 
       process.stdout.write(`[tx ${i} of ${txsTotal} ${poolTx.timestamp}] MINT`);
       const parts = (poolTx.tickUpper - poolTx.tickLower) / tickSpacing;
-      const newTickUpper = poolTx.tickUpper > liquidityTickUpper ? liquidityTickUpper : poolTx.tickUpper;
-      const newTickLower = poolTx.tickLower < liquidityTickLower ? liquidityTickLower : poolTx.tickLower;
-      for (let t = newTickLower; t < newTickUpper - tickSpacing; t += tickSpacing) {
-        await uniswapV3Calee.mint(
-          pool.address,
-          signer.address,
-          t,
-          t + tickSpacing,
-          BigNumber.from(poolTx.amount).div(parts),
-        );
-        process.stdout.write(`.`);
+      if (BigNumber.from(poolTx.amount).div(parts).gt(0)) {
+        const newTickUpper = poolTx.tickUpper > liquidityTickUpper ? liquidityTickUpper : poolTx.tickUpper;
+        const newTickLower = poolTx.tickLower < liquidityTickLower ? liquidityTickLower : poolTx.tickLower;
+        for (let t = newTickLower; t < newTickUpper - tickSpacing; t += tickSpacing) {
+          await uniswapV3Calee.mint(
+            pool.address,
+            signer.address,
+            t,
+            t + tickSpacing,
+            BigNumber.from(poolTx.amount).div(parts),
+          );
+          process.stdout.write(`.`);
+        }
       }
 
       console.log('');
