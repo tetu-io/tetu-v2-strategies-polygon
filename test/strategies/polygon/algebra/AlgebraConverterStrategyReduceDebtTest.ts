@@ -198,7 +198,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
     console.log('Quote', quote)
 
-    const swapData = AggregatorUtils.buildSwapTransactionDataOneInchV52(
+    const swapData = AggregatorUtils.buildSwapTransactionData(
         quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
         quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
         quote.amountToSwap,

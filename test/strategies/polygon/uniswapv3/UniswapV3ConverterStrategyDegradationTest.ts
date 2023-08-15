@@ -209,17 +209,21 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         // Decrease price at first 10 steps, increase price on other 10 steps
         while (! await strategy.needRebalance()) {
           if (i < COUNT) {
-            await UniswapV3StrategyUtils.movePriceDown(
+            await UniversalUtils.movePoolPriceDown(
               signer,
-              strategy.address,
+              state.pool,
+              state.tokenA,
+              state.tokenB,
               MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
               swapAmount,
               100001
             );
           } else {
-            await UniswapV3StrategyUtils.movePriceUp(
+            await UniversalUtils.movePoolPriceUp(
               signer,
-              strategy.address,
+              state.pool,
+              state.tokenA,
+              state.tokenB,
               MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
               swapAmount,
               100001

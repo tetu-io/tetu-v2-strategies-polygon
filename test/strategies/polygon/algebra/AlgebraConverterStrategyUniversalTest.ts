@@ -28,6 +28,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 
 
 dotEnvConfig();
@@ -217,12 +218,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniswapV3StrategyUtils.movePriceUp(
-          swapUser,
-          strategy.address,
-          MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-          swapAmount,
-        );
+        await UniversalUtils.movePoolPriceUp(swapUser, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
@@ -231,12 +227,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniswapV3StrategyUtils.makeVolume(
-          swapUser,
-          strategy.address,
-          MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-          swapAmount
-        )
+        await UniversalUtils.makePoolVolume(swapUser, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
     };
 

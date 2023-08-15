@@ -3,20 +3,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import hre, { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
-import {
-  IBorrowManager__factory,
-  IController,
-  IConverterController__factory,
-  IERC20,
-  IERC20__factory,
-  IStrategyV2,
-  ISwapper,
-  ISwapper__factory,
-  TetuConverter__factory,
-  TetuVaultV2,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory, VaultFactory__factory,
-} from '../../../../typechain';
+import {IBorrowManager__factory, IController, IConverterController__factory, IERC20, IERC20__factory, IStrategyV2, ISwapper, ISwapper__factory, TetuConverter__factory, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, VaultFactory__factory,} from '../../../../typechain';
 import { BigNumber } from 'ethers';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
@@ -29,8 +16,8 @@ import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 
 const { expect } = chai;
 
@@ -346,7 +333,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await s.isReadyToHardWork()).eq(false);
       expect(await s.needRebalance()).eq(false);
 
-      await UniswapV3StrategyUtils.movePriceUp(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
 
       console.log('rebalance empty strategy');
       expect(await s.needRebalance()).eq(true);
@@ -357,7 +344,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await v.deposit(investAmount, signer.address);
 
       const price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-      await UniswapV3StrategyUtils.movePriceDown(signer2, s.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+      await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
 
       console.log('rebalance not empty strategy');
       expect(await s.needRebalance()).eq(true);
