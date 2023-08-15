@@ -16,10 +16,10 @@ Twitter: https://twitter.com/tetu_io
 
 * [deployer] ```hardhat deploy --network matic```
 * [tetu governance] announce strategy for splitter
-* [converter governance] converterController.setWhitelistValues(strategyAddrress, true)
+* [converter governance] converterController.setWhitelistValues([strategyAddress], true)
 * check liquidator routes and add if it is needed
 * [operator] strategy.setLiquidationThreshold((asset, threshold)
-* [operator] strategy.setStrategyProfitHolder(strategyAddrress)
+* [operator] strategy.setStrategyProfitHolder(strategyAddress)
 * [operator] rebalanceDebtConfig.setConfig(strategyAddr, lockedPercentForDelayedRebalance, lockedPercentForForcedRebalance, rebalanceDebtDelay)
 * [gelato user] add task for NSR with RebalanceResolver address
 * [operator] run on server ```npm run rebalance-debt:matic``` with env vars set

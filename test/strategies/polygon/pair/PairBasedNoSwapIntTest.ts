@@ -78,11 +78,22 @@ describe('PairBasedNoSwapIntTest', function() {
 
 //region before, after
   before(async function() {
+    snapshotBefore = await TimeUtils.snapshot();
+    await hre.network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+            blockNumber: undefined,
+          },
+        },
+      ],
+    });
+
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;
-
-    snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2] = await ethers.getSigners();
   })
 
@@ -124,6 +135,16 @@ describe('PairBasedNoSwapIntTest', function() {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (p.aggregator === MaticAddresses.AGG_ONEINCH_V5) {
+          // const params = {
+          //   src: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+          //   dst: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+          //   amount: quote.amountToSwap.toString(),
+          //   from: strategyAsOperator.address,
+          //   slippage: 1,
+          //   disableEstimate: true,
+          //   allowPartialFill: false,
+          //   // protocols: 'POLYGON_BALANCER_V2',
+          // };
           const params = {
             fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
@@ -132,7 +153,7 @@ describe('PairBasedNoSwapIntTest', function() {
             slippage: 1,
             disableEstimate: true,
             allowPartialFill: false,
-            protocols: 'POLYGON_BALANCER_V2',
+            // protocols: 'POLYGON_QUICKSWAP_V3',
           };
           console.log("params", params);
 
@@ -561,64 +582,6 @@ describe('PairBasedNoSwapIntTest', function() {
             });
           });
         });
-        describe("Use 1inch", () => {
-          describe("Move prices up", () => {
-            describe("Liquidator, entry to pool at the end", () => {
-              let snapshot: string;
-              let builderResults: IBuilderResults;
-              before(async function () {
-                snapshot = await TimeUtils.snapshot();
-
-                builderResults = await prepareStrategy();
-              });
-              after(async function () {
-                await TimeUtils.rollback(snapshot);
-              });
-
-              async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-                return makeWithdrawTest(builderResults,
-                  {
-                    aggregator: MaticAddresses.AGG_ONEINCH_V5,
-                    movePricesUp: true,
-                    singleIteration: true,
-                    entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
-                    planKind: PLAN_REPAY_SWAP_REPAY,
-                  }
-                );
-              }
-
-              it("should reduce locked amount significantly", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, statePrev, ...rest] = [...states].reverse();
-                expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-              });
-              // Share price can change here because prices are not changed in 1inch
-              it("should enter to the pool at the end", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const [stateLast, ...rest] = [...states].reverse();
-                expect(stateLast.strategy.liquidity > 0).eq(true);
-              });
-              it("should put more liquidity to the pool", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
-                const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
-                expect(finalTotalLiquidity).gt(prevTotalLiquidity);
-              });
-              it("should reduce amount-to-repay", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const amountToRepayPrev = states[states.length - 2].converterDirect.amountsToRepay[0];
-                const amountToRepayFinal = states[states.length - 1].converterDirect.amountsToRepay[0]
-                expect(amountToRepayFinal).lt(amountToRepayPrev);
-              });
-              it("should reduce collateral amount", async () => {
-                const {states} = await loadFixture(callWithdrawSingleIteration);
-                const amountCollateralPrev = states[states.length - 2].converterDirect.collaterals[0];
-                const amountCollateralFinal = states[states.length - 1].converterDirect.collaterals[0]
-                expect(amountCollateralFinal).lt(amountCollateralPrev);
-              });
-            });
-          });
-        });
         describe("Use liquidator as aggregator", () => {
           describe("Move prices up", () => {
             describe("Liquidator, entry to pool at the end", () => {
@@ -765,6 +728,83 @@ describe('PairBasedNoSwapIntTest', function() {
                   expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
                 }
               });
+            });
+          });
+        });
+      });
+    });
+  });
+
+  describe('unfold debts using single iteration, 1inch @skip-on-coverage', function() {
+    interface IStrategyInfo {
+      name: string,
+      sharePriceDeviation: number
+    }
+    const strategies: IStrategyInfo[] = [
+      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_KYBER, sharePriceDeviation: 2e-5},
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+
+        // provide $1000 of insurance to compensate possible price decreasing
+        await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits('1000', 6));
+
+        return b;
+      }
+
+      describe(`${strategyInfo.name}`, () => {
+        describe("Move prices up", () => {
+          describe("Liquidator, entry to pool at the end", () => {
+            let snapshot: string;
+            let r: IMakeWithdrawTestResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+
+              r = await callWithdrawSingleIteration();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
+              return makeWithdrawTest(await prepareStrategy(),
+                  {
+                    aggregator: MaticAddresses.AGG_ONEINCH_V5,
+                    movePricesUp: true,
+                    singleIteration: true,
+                    entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
+                    planKind: PLAN_REPAY_SWAP_REPAY,
+                  }
+              );
+            }
+
+            it("should reduce locked amount significantly", async () => {
+              const [stateLast, statePrev, ...rest] = [...r.states].reverse();
+              expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+            });
+            // Share price can change here because prices are not changed in 1inch
+            it("should enter to the pool at the end", async () => {
+              const [stateLast, ...rest] = [...r.states].reverse();
+              expect(stateLast.strategy.liquidity > 0).eq(true);
+            });
+            it("should put more liquidity to the pool", async () => {
+              const prevTotalLiquidity = r.states[r.states.length - 2].strategy.liquidity;
+              const finalTotalLiquidity = r.states[r.states.length - 1].strategy.liquidity;
+              expect(finalTotalLiquidity).gt(prevTotalLiquidity);
+            });
+            it("should reduce amount-to-repay", async () => {
+              const amountToRepayPrev = r.states[r.states.length - 2].converterDirect.amountsToRepay[0];
+              const amountToRepayFinal = r.states[r.states.length - 1].converterDirect.amountsToRepay[0]
+              expect(amountToRepayFinal).lt(amountToRepayPrev);
+            });
+            it("should reduce collateral amount", async () => {
+              const amountCollateralPrev = r.states[r.states.length - 2].converterDirect.collaterals[0];
+              const amountCollateralFinal = r.states[r.states.length - 1].converterDirect.collaterals[0]
+              expect(amountCollateralFinal).lt(amountCollateralPrev);
             });
           });
         });

@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -611,6 +612,14 @@ library PairBasedStrategyLib {
       AppLib.approveIfNeeded(p.tokens[indexIn], amountIn, aggregator);
 
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
+      console.log("amountIn", amountIn);
+      console.log("address(this)", address(this));
+      console.log("msg.sender", msg.sender);
+      console.log("balanceTokenOutBefore", balanceTokenOutBefore);
+      console.log("p.tokens[indexIn]", p.tokens[indexIn]);
+      console.log("p.tokens[indexOut]", p.tokens[indexOut]);
+      console.log("aggregator", aggregator);
+      console.log("aggParams.swapData", aggParams.swapData.length);
 
       if (aggParams.useLiquidator) {
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
@@ -629,6 +638,10 @@ library PairBasedStrategyLib {
         }
 
         (bool success, bytes memory result) = aggregator.call(aggParams.swapData);
+        console.log("success", success);
+        console.log("result", result.length);
+        console.log("AppLib.balance(p.tokens[indexOut])", AppLib.balance(p.tokens[indexOut]));
+        console.logBytes(result);
         require(success, string(result));
 
         spentAmountIn = amountIn;

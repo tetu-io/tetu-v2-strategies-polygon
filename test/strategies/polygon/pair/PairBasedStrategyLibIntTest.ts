@@ -1,5 +1,5 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {ethers} from "hardhat";
+import hre, {ethers} from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {
@@ -30,10 +30,21 @@ describe('PairBasedStrategyLibIntTest', () => {
 
   //region before, after
   before(async function () {
-    [signer] = await ethers.getSigners();
-
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
     snapshotBefore = await TimeUtils.snapshot();
+    await hre.network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+            blockNumber: undefined,
+          },
+        },
+      ],
+    });
+
+    [signer] = await ethers.getSigners();
+    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
     const converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
@@ -43,6 +54,17 @@ describe('PairBasedStrategyLibIntTest', () => {
   });
 
   after(async function () {
+    await hre.network.provider.request({
+      method: "hardhat_reset",
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
+            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
+          },
+        },
+      ],
+    });
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after

@@ -247,7 +247,7 @@ export class PairBasedStrategyPrepareStateUtils {
             slippage: 1,
             disableEstimate: true,
             allowPartialFill: false,
-            protocols: 'POLYGON_BALANCER_V2',
+            // protocols: 'POLYGON_BALANCER_V2',
           };
           console.log("params", params);
 

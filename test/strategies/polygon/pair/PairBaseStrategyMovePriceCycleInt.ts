@@ -2,42 +2,19 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import chai from 'chai';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import hre, { ethers } from 'hardhat';
-import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import {
-  ControllerV2__factory,
-  IController__factory,
-  IERC20__factory,
-  IERC20Metadata,
   IERC20Metadata__factory,
-  IStrategyV2,
   StrategyBaseV2__factory,
-  StrategySplitterV2,
-  TetuVaultV2,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory, PairBasedStrategyReader, ConverterStrategyBase__factory, IRebalancingV2Strategy,
+  PairBasedStrategyReader, ConverterStrategyBase__factory,
 } from '../../../../typechain';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
-import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
-import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
-import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
-import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
-import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
-import { UniswapV3StrategyUtils } from '../../../baseUT/strategies/UniswapV3StrategyUtils';
-import {
-  depositToVault,
-  doHardWorkForStrategy, handleReceiptRebalance, printStateDifference,
-  printVaultState,
-  rebalancePairBasedStrategyNoSwaps,
-  redeemFromVault,
-} from '../../../StrategyTestUtils';
-import {BigNumber, BytesLike} from 'ethers';
-import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
+import {depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault,} from '../../../StrategyTestUtils';
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {IRebalanceEvents, IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
-import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
+import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
@@ -45,7 +22,6 @@ import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtu
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-
 
 const { expect } = chai;
 
