@@ -28,6 +28,7 @@ import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -77,6 +78,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 //region before after
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
+    await HardhatUtils.switchToMostCurrentBlock();
 
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
@@ -156,17 +158,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
   })
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 

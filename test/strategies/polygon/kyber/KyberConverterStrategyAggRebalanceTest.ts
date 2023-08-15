@@ -21,6 +21,7 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -52,17 +53,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -119,17 +110,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
   })
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 

@@ -24,6 +24,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniswapV3LiquidityUtils} from "../../../baseUT/strategies/univ3/UniswapV3LiquidityUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -60,18 +61,7 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -129,17 +119,7 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
   })
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 

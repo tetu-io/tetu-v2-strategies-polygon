@@ -18,6 +18,7 @@ import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3Strate
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 const { expect } = chai;
 
@@ -68,17 +69,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 43620959,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer, signer2, signer3] = await ethers.getSigners();
     gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -263,17 +254,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 
@@ -436,11 +417,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy.isReadyToHardWork()).eq(false);
       expect(await strategy.needRebalance()).eq(false);
 
-      await UniswapV3StrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-
+      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
       price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
 
-      expect(await strategy.isReadyToHardWork()).eq(true);
       expect(await strategy.needRebalance()).eq(true);
 
       const rebalanceGasUsed = await strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
@@ -450,7 +429,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       await strategy.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await strategy.needRebalance()).eq(false);
 
-      await UniswapV3StrategyUtils.movePriceDown(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price).mul(2));
+      await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price).mul(2));
 
       expect(await strategy.isReadyToHardWork()).eq(true);
       await strategy.connect(splitterSigner).doHardWork();

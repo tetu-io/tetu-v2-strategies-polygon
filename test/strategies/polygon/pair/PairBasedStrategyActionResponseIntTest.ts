@@ -20,6 +20,7 @@ import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/Pai
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -59,27 +60,16 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
 //region before, after
   before(async function() {
+    snapshotBefore = await TimeUtils.snapshot();
+
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;
 
-    snapshotBefore = await TimeUtils.snapshot();
     [signer, signer2, signer3] = await ethers.getSigners();
-
-  })
+  });
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after
@@ -245,7 +235,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             expect(stateAfter.strategy.investedAssets).lt(10);
           });
-          it("isReadyToHardWork should return expected values", async () => {
+          it("isReadyToHardWork should return expected value", async () => {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(
               b.strategy.address,
@@ -253,6 +243,20 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             );
             const platform = await converterStrategyBase.PLATFORM();
 
+            // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
+            expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
+          });
+          it("isReadyToHardWork should return expected value after hardwork", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(
+                b.strategy.address,
+                await Misc.impersonate(b.splitter.address)
+            );
+            const platform = await converterStrategyBase.PLATFORM();
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+
+            expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
+            await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
             // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
             expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
           });

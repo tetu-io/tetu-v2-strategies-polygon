@@ -26,6 +26,7 @@ import {AlgebraLiquidityUtils} from "../../../baseUT/strategies/algebra/AlgebraL
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -62,18 +63,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -139,17 +129,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
   })
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 

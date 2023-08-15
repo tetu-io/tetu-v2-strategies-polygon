@@ -17,13 +17,11 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
-  /** prop0 + prop1 */
-  const SUM_PROPORTIONS = 100_000;
   //region Variables
   let snapshotBefore: string;
-  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let facade: PairBasedStrategyLibFacade;
   //endregion Variables
@@ -31,20 +29,9 @@ describe('PairBasedStrategyLibIntTest', () => {
   //region before, after
   before(async function () {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
     [signer] = await ethers.getSigners();
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
     const converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
@@ -54,17 +41,7 @@ describe('PairBasedStrategyLibIntTest', () => {
   });
 
   after(async function () {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after

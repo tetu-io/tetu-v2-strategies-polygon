@@ -82,17 +82,6 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
   })
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after

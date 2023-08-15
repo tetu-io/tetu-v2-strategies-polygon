@@ -22,6 +22,7 @@ import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtu
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 const { expect } = chai;
 
@@ -43,35 +44,14 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
   //region before, after
   before(async function () {
     snapshotBefore = await TimeUtils.snapshot();
-
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer, signer2] = await ethers.getSigners();
     reader = await MockHelper.createPairBasedStrategyReader(signer);
   })
 
   after(async function () {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after

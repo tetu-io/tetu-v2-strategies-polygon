@@ -23,6 +23,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -55,17 +56,7 @@ describe('KyberConverterStrategyTest', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 44479520,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -152,18 +143,8 @@ describe('KyberConverterStrategyTest', function() {
   })
 
   after(async function() {
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
   });
 
   beforeEach(async function() {
