@@ -32,12 +32,12 @@ export async function strategyBacktest(
   disableBurns: boolean = false,
   disableMints: boolean = false,
 ): Promise<IBacktestResult> {
-  const state = await strategy.getState();
+  const state = await strategy.getDefaultState();
   const startTimestampLocal = Math.floor(Date.now() / 1000);
-  const tokenA = IERC20Metadata__factory.connect(state.tokenA, signer);
+  const tokenA = IERC20Metadata__factory.connect(state[0][0], signer);
   const tokenADecimals = await tokenA.decimals();
-  const tokenB = IERC20Metadata__factory.connect(state.tokenB, signer);
-  const pool = IUniswapV3Pool__factory.connect(state.pool, signer);
+  const tokenB = IERC20Metadata__factory.connect(state[0][1], signer);
+  const pool = IUniswapV3Pool__factory.connect(state[0][2], signer);
   const token0 = IERC20Metadata__factory.connect(await pool.token0(), signer);
   const token1 = IERC20Metadata__factory.connect(await pool.token1(), signer);
   const token0Decimals = await token0.decimals();
@@ -75,8 +75,8 @@ export async function strategyBacktest(
   const vaultTotalAssetsBefore = await vault.totalAssets()
   const insuranceAssetsBefore = await tokenA.balanceOf(await vault.insurance())
 
-  const initialState = await strategy.getState()
-  expect(initialState.totalLiquidity).gt(0)
+  const initialState = await strategy.getDefaultState()
+  expect(initialState[2][0]).gt(0)
 
   const liquidityTickLower = liquiditySnapshot.ticks[0].tickIdx;
   const liquidityTickUpper = liquiditySnapshot.ticks[liquiditySnapshot.ticks.length - 1].tickIdx;
@@ -196,7 +196,7 @@ export async function strategyBacktest(
       if (await strategy.needRebalance()) {
         rebalances++;
         process.stdout.write(`Rebalance ${rebalances}.. `);
-        tx = await strategy.rebalance();
+        tx = await strategy.rebalanceNoSwaps(true);
         txReceipt = await tx.wait();
         fees = UniswapV3StrategyUtils.extractClaimedFees(txReceipt)
         if (fees) {
@@ -208,13 +208,20 @@ export async function strategyBacktest(
         totalLossCoveredFromInsurance = totalLossCoveredFromInsurance.add(lossCovered)
         const extractedRebalanceLoss = UniswapV3StrategyUtils.extractRebalanceLoss(txReceipt)
         console.log('Rebalance swap loss', extractedRebalanceLoss[0])
-        console.log('Rebalance swap loss covered from rewards', extractedRebalanceLoss[1])
+        console.log('Rebalance swap loss covered from rewards', extractedRebalanceLoss[2])
         rebalanceLoss = rebalanceLoss.add(extractedRebalanceLoss[0])
-        totalLossCoveredFromRewards = totalLossCoveredFromRewards.add(extractedRebalanceLoss[1])
+        totalLossCoveredFromRewards = totalLossCoveredFromRewards.add(extractedRebalanceLoss[2])
         console.log(`done with ${txReceipt.gasUsed} gas.`);
       }
 
-      if ((await strategy.getState()).isFuseTriggered) {
+      const defaultState = await strategy.getDefaultState()
+      const isFuseTriggered =
+        defaultState[2][1].toString() === '2'
+        || defaultState[2][1].toString() === '3'
+        || defaultState[2][2].toString() === '2'
+        || defaultState[2][2].toString() === '3'
+
+      if (isFuseTriggered) {
         console.log('Fuse enabled!');
         break;
       }
@@ -253,8 +260,8 @@ export async function strategyBacktest(
     vaultName: await vault.name(),
     vaultAssetSymbol: await tokenA.symbol(),
     vaultAssetDecimals: tokenADecimals,
-    tickRange: (state.upperTick - state.lowerTick) / 2,
-    rebalanceTickRange: state.rebalanceTickRange,
+    tickRange: (state[1][2] - state[1][1]) / 2,
+    rebalanceTickRange: state[1][3],
     startTimestamp,
     endTimestamp,
     investAmount,
