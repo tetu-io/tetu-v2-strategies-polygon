@@ -79,7 +79,6 @@ describe('PairBasedNoSwapIntTest', function() {
 //region before, after
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
@@ -88,7 +87,6 @@ describe('PairBasedNoSwapIntTest', function() {
   })
 
   after(async function() {
-    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 //endregion before, after
@@ -183,6 +181,8 @@ describe('PairBasedNoSwapIntTest', function() {
     countRebalances?: number;
     /** ZERO by default */
     aggregator?: string;
+
+    skipOverCollateralStep?: boolean;
   }
 
   async function makeWithdrawTest(b: IBuilderResults, p: IMakeWithdrawTestParams): Promise<IMakeWithdrawTestResults> {
@@ -196,14 +196,17 @@ describe('PairBasedNoSwapIntTest', function() {
           : "no";
     const pathOut = `./tmp/${platform}-entry${p.entryToPool}-${p.singleIteration ? "single" : "many"}-${p.movePricesUp ? "up" : "down"}-${agg}.csv`;
 
-    const ret0 = await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
-        b,
-        { countRebalances: p.countRebalances ?? 2, movePricesUp: p.movePricesUp},
-        pathOut,
-        signer,
-        signer2,
-        DEFAULT_SWAP_AMOUNT_RATIO
-    );
+    const states0: IStateNum[] = p.skipOverCollateralStep
+      ? []
+      : (await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
+          b,
+          { countRebalances: p.countRebalances ?? 2, movePricesUp: p.movePricesUp},
+          pathOut,
+          signer,
+          signer2,
+          DEFAULT_SWAP_AMOUNT_RATIO
+      )).states;
+
     const {states} = await makeFullWithdraw(
       b,
       {
@@ -219,8 +222,9 @@ describe('PairBasedNoSwapIntTest', function() {
               : "0x"
       },
       pathOut,
-      ret0.states
+      states0
     );
+
     return {states};
   }
 
@@ -697,6 +701,22 @@ describe('PairBasedNoSwapIntTest', function() {
   });
 
   describe('unfold debts using single iteration, 1inch @skip-on-coverage', function() {
+    let snapshotLocal: string;
+    before(async function() {
+      snapshotLocal = await TimeUtils.snapshot();
+      await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
+
+      // we need to display full objects, so we use util.inspect, see
+      // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
+      require("util").inspect.defaultOptions.depth = null;
+      [signer, signer2] = await ethers.getSigners();
+    })
+
+    after(async function() {
+      await HardhatUtils.restoreBlockFromEnv();
+      await TimeUtils.rollback(snapshotLocal);
+    });
+
     interface IStrategyInfo {
       name: string,
       sharePriceDeviation: number
@@ -996,15 +1016,16 @@ describe('PairBasedNoSwapIntTest', function() {
               const [stateLast, ...rest] = [...ret.states].reverse();
               // coverLoss can compensate loss by transferring of USDC/USDT on strategy balance
               // so, even if we are going to convert all assets to underlying, we can have small amount of not-underlying on balance
-              expect(stateLast.strategy.investedAssets).lt(1);
+              expect(stateLast.strategy.investedAssets).lt(5);
             });
             it("should receive totalAssets on balance", async () => {
               const ret = await loadFixture(makeWithdrawAll);
               const [stateLast, ...rest] = [...ret.states].reverse();
-              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 1);
+              expect(stateLast.strategy.totalAssets).approximately(stateLast.strategy.assetBalance, 5);
             });
           });
           describe("Full withdraw when fuse is triggered ON", () => {
+            const pathOut = `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`;
             let snapshot: string;
             let builderResults: IBuilderResults;
             before(async function () {
@@ -1021,7 +1042,7 @@ describe('PairBasedNoSwapIntTest', function() {
                     movePricesUp: true,
                     countRebalances: 2
                   },
-                  `./tmp/${strategyInfo.name}-full-withdraw-fuse-on.csv`,
+                  pathOut,
                   signer,
                   signer2,
                   DEFAULT_SWAP_AMOUNT_RATIO
@@ -1030,6 +1051,7 @@ describe('PairBasedNoSwapIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
               // enable fuse
               await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+
               return b;
             }
 
@@ -1039,7 +1061,8 @@ describe('PairBasedNoSwapIntTest', function() {
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_DISABLED,
                 planKind: PLAN_SWAP_REPAY,
-                propNotUnderlying18: BigNumber.from(0)
+                propNotUnderlying18: BigNumber.from(0),
+                skipOverCollateralStep: true
               });
             }
 

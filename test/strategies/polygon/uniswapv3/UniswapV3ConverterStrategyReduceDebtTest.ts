@@ -25,6 +25,7 @@ import {UniswapV3LiquidityUtils} from "../../../baseUT/strategies/univ3/UniswapV
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -165,27 +166,20 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
     );
     const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
 
-    console.log('Quote', quote)
+    console.log('Quote', quote);
 
-    const params = {
-      fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-      toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-      amount: quote.amountToSwap.toString(),
-      fromAddress: s.address,
-      slippage: 1,
-      disableEstimate: true,
-      allowPartialFill: false,
-      protocols: 'POLYGON_CURVE', // 'POLYGON_BALANCER_V2',
-    };
-
-    const swapTransaction = await buildTxForSwap(JSON.stringify(params));
-    console.log('Transaction for swap: ', swapTransaction);
+    const swapData = await AggregatorUtils.buildSwapTransactionData(
+      quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+      quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+      quote.amountToSwap,
+      s.address,
+    );
 
     await strategy.withdrawByAggStep(
       quote.tokenToSwap,
       MaticAddresses.AGG_ONEINCH_V5,
       quote.amountToSwap,
-      swapTransaction.data,
+      swapData,
       planEntryData,
       1
     );
@@ -193,25 +187,3 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
     expect(await s.needRebalance()).eq(false)
   })
 })
-
-function apiRequestUrl(methodName: string, queryParams: string) {
-  const chainId = hre.network.config.chainId;
-  const apiBaseUrl = 'https://api.1inch.io/v5.0/' + chainId;
-  const r = (new URLSearchParams(JSON.parse(queryParams))).toString();
-  return apiBaseUrl + methodName + '?' + r;
-}
-
-async function buildTxForSwap(params: string, tries: number = 2) {
-  const url = apiRequestUrl('/swap', params);
-  console.log('url', url)
-  for (let i = 0; i < tries; i++) {
-    try {
-      const r = await fetch(url)
-      if (r && r.status === 200) {
-        return (await r.json()).tx
-      }
-    } catch (e) {
-      console.error('Err', e)
-    }
-  }
-}
