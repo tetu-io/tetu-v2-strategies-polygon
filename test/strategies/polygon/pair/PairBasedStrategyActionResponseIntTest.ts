@@ -218,7 +218,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             );
 
             // put additional fee to profit holder bo make isReadyToHardwork returns true
-            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
             await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
@@ -253,7 +253,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 await Misc.impersonate(b.splitter.address)
             );
             const platform = await converterStrategyBase.PLATFORM();
-            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
             expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
             await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
@@ -390,7 +390,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             );
 
             // put additional fee to profit holder bo make isReadyToHardwork returns true
-            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
             const platform = await converterStrategyBase.PLATFORM();
             const expectedErrorMessage = platform === PLATFORM_UNIV3
@@ -422,7 +422,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             expect(await converterStrategyBase.isReadyToHardWork()).eq(false);
             // put additional fee to profit holder bo make isReadyToHardwork returns true
-            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
             expect(await converterStrategyBase.isReadyToHardWork()).eq(false); // fuse is active, so no changes in results
           });
@@ -565,7 +565,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             );
 
             // put additional fee to profit holder bo make isReadyToHardwork returns true
-            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
             const platform = await converterStrategyBase.PLATFORM();
             const expectedErrorMessage = platform === PLATFORM_UNIV3
@@ -597,7 +597,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             expect(await converterStrategyBase.isReadyToHardWork()).eq(false);
             // put additional fee to profit holder bo make isReadyToHardwork returns true
-            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+            await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
             expect(await converterStrategyBase.isReadyToHardWork()).eq(false); // need rebalance is still true, so no changes in results
           });
@@ -931,7 +931,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           );
 
           // put additional fee to profit holder bo make isReadyToHardwork returns true
-          await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b);
+          await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, b.strategy);
 
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
           await converterStrategyBase.doHardWork({gasLimit: 19_000_000});

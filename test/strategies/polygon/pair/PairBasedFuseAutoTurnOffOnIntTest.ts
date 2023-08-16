@@ -173,7 +173,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     let rebalanceFuseOff: IPriceFuseStatus | undefined;
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
     const platform = await converterStrategyBase.PLATFORM();
-    const lib = await PairBasedStrategyPrepareStateUtils.getLib(platform, b);
+    const lib = b.lib;
 
     console.log('deposit...');
     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);

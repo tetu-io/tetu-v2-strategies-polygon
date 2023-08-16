@@ -1,4 +1,4 @@
-import {IBuilderResults} from "./PairBasedStrategyBuilder";
+import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
   AlgebraLib,
   ControllerV2__factory,
@@ -47,36 +47,35 @@ export interface IListStates {
  */
 export class PairBasedStrategyPrepareStateUtils {
 
-  static getLib(platform: string, b: IBuilderResults): UniswapV3Lib | AlgebraLib | KyberLib {
-    return platform === PLATFORM_ALGEBRA
-      ? b.libAlgebra
-      : platform === PLATFORM_KYBER
-        ? b.libKyber
-        : b.libUniv3;
-  }
-
   /** Set up "neeRebalance = true" */
   static async prepareNeedRebalanceOn(
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
-    b: IBuilderResults,
-    swapAmountRatio: number = 1.1
+    b: IStrategyBasicInfo,
+    swapAmountRatio: number = 1.1,
+    movePriceUp: boolean = true
   ) {
-    const state = await PackedData.getDefaultState(b.strategy);
 
     // move strategy to "need to rebalance" state
     let countRebalance = 0;
-    for (let i = 0; i < 10; ++i) {
+    for (let i = 0; i < 15; ++i) {
+      const state = await PackedData.getDefaultState(b.strategy);
+      console.log("lowerTick, upperTick", state.lowerTick, state.upperTick)
+
       console.log("i", i);
       const swapAmount = await this.getSwapAmount2(
         signer,
         b,
         state.tokenA,
         state.tokenB,
-        true,
+        movePriceUp,
         swapAmountRatio
       );
-      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      if (movePriceUp) {
+        await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      } else {
+        await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      }
       if (await b.strategy.needRebalance()) {
         if (countRebalance === 0) {
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
@@ -112,9 +111,9 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /** Put addition amounts of tokenA and tokenB to balance of the profit holder */
-  static async prepareToHardwork(signer: SignerWithAddress, b: IBuilderResults) {
-    const state = await PackedData.getDefaultState(b.strategy);
-    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+  static async prepareToHardwork(signer: SignerWithAddress, strategy: IRebalancingV2Strategy) {
+    const state = await PackedData.getDefaultState(strategy);
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, signer);
     const platformVoter = await IController__factory.connect(await converterStrategyBase.controller(), signer).platformVoter();
 
     await converterStrategyBase.connect(await Misc.impersonate(platformVoter)).setCompoundRatio(90_000);
@@ -167,14 +166,14 @@ export class PairBasedStrategyPrepareStateUtils {
    */
   static async getSwapAmount2(
     signer: SignerWithAddress,
-    b: IBuilderResults,
+    b: IStrategyBasicInfo,
     tokenA: string,
     tokenB: string,
     priceTokenBUp: boolean,
     swapAmountRatio: number = 1
   ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
-    const lib = this.getLib(platform, b);
+    const lib = b.lib;
 
     const amountsInCurrentTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
     console.log("amountsInCurrentTick", amountsInCurrentTick);
