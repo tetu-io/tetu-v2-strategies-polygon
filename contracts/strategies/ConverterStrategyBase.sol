@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+import "hardhat/console.sol";
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
 ///  Main asset == underlying: the asset deposited to the vault by users
@@ -118,6 +119,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     emit ConverterStrategyBaseLib2.ReinvestThresholdPercentChanged(DENOMINATOR / 100);
   }
 
+  /// @dev Liquidation thresholds are used to detect dust in many cases, not only in liquidation case
+  /// @param amount Min amount of token allowed to liquidate, token's decimals are used.
   function setLiquidationThreshold(address token, uint amount) external {
     ConverterStrategyBaseLib2.checkLiquidationThresholdChanged(controller(), token, amount);
     liquidationThresholds[token] = amount;
@@ -476,15 +479,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return earned Earned amount in terms of {asset}
   /// @return lost Lost amount in terms of {asset}
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
+    console.log("_doHardWork.1");
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
-
+    console.log("_doHardWork.2.investedAssetsNewPrices", investedAssetsNewPrices);
+    console.log("_doHardWork.2.earnedByPrices", earnedByPrices);
+    console.log("_doHardWork.2._csbs.investedAssets", _csbs.investedAssets);
     if (!_preHardWork(reInvest)) {
-
+      console.log("_doHardWork.3");
       // claim rewards and get current asset balance
       uint assetBalance;
       (earned, lost, assetBalance) = _handleRewards();
-
+      console.log("_doHardWork.4.lost,assetBalance", lost, assetBalance);
       // re-invest income
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
@@ -499,9 +505,9 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         investedAssetsNewPrices + assetBalance, // assets in use before deposit
         _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
-
+      console.log("_doHardWork.5.lost2", lost2);
       _postHardWork();
-
+      console.log("_doHardWork.6");
       emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
       return (earned + earned2, lost + lost2);
     } else {
