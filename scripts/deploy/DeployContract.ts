@@ -64,7 +64,7 @@ export async function deployContract<T extends ContractFactory>(
   // tslint:disable-next-line:no-any
   ...args: any[]
 ) {
-  if (hre.network.name !== 'hardhat') {
+  if (hre.network.name !== 'hardhat' && hre.network.name !== 'foundry') {
     await hre.run('compile');
   }
   const web3 = hre.web3;
