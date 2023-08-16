@@ -3,10 +3,18 @@ import hre, { ethers } from 'hardhat';
 import { runResolver } from '../web3-functions/w3f-utils';
 import axios from 'axios';
 import { RunHelper } from './utils/RunHelper';
-import { formatUnits } from 'ethers/lib/utils';
-import { txParams2 } from '../deploy_constants/deploy-helpers';
+import { getDeployedContractByName, txParams2 } from '../deploy_constants/deploy-helpers';
 import { Web3FunctionResultCallData } from '@gelatonetwork/web3-functions-sdk';
 import { sendMessageToTelegram } from './telegram/tg-sender';
+import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
+import {
+  ControllerV2__factory,
+  IStrategyV2__factory,
+  StrategySplitterV2__factory,
+  TetuVaultV2__factory,
+} from '../typechain';
+import { config as dotEnvConfig } from 'dotenv';
+import { subscribeTgBot } from './telegram/tg-subscribe';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -15,6 +23,128 @@ import { sendMessageToTelegram } from './telegram/tg-sender';
 // test fuse
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtFuseW3F.ts
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
+
+
+dotEnvConfig();
+// tslint:disable-next-line:no-var-requires
+const argv = require('yargs/yargs')()
+  .env('TETU')
+  .options({
+    rebalanceDebtAgg: {
+      type: 'string',
+      default: '',
+    },
+    rebalanceDebt1InchProtocols: {
+      type: 'string',
+      default: '',
+    },
+    rebalanceDebtMsgSuccess: {
+      type: 'boolean',
+      default: false,
+    },
+    rebalanceDebtLoopDelay: {
+      type: 'number',
+      default: 60_000,
+    },
+  }).argv;
+
+async function main() {
+  console.log('Strategies debt rebalancer');
+
+  if (!['localhost', 'matic'].includes(hre.network.name)) {
+    console.log('Unsupported network', hre.network.name);
+    console.log('Only localhost and matic networks supported');
+    process.exit(-1);
+  }
+
+  await subscribeTgBot();
+
+  const core = Addresses.getCore();
+  const configAddress = await getDeployedContractByName('RebalanceDebtConfig');
+  const readerAddress = await getDeployedContractByName('PairBasedStrategyReader');
+  console.log('Config: ', configAddress);
+
+
+  const agg = argv.rebalanceDebtAgg;
+  const oneInchProtocols = argv.rebalanceDebt1InchProtocols;
+
+  const provider = ethers.provider;
+  const signer = (await ethers.getSigners())[0];
+
+  // noinspection InfiniteLoopJS
+  while (true) {
+
+    try {
+      const vaults = await ControllerV2__factory.connect(core.controller, ethers.provider).vaultsList();
+      console.log('vaults', vaults.length);
+
+      for (const vault of vaults) {
+        const splitter = await TetuVaultV2__factory.connect(vault, ethers.provider).splitter();
+        const strategies = await StrategySplitterV2__factory.connect(splitter, ethers.provider).allStrategies();
+        console.log('strategies', strategies.length);
+
+        for (const strategyAddress of strategies) {
+
+          try {
+
+            if (!(await isStrategyEligibleForNSR(strategyAddress))) {
+              continue;
+            }
+            console.log('Processing strategy', strategyAddress);
+
+            const result = await runResolver(
+              provider,
+              strategyAddress,
+              readerAddress,
+              configAddress,
+              agg,
+              oneInchProtocols,
+              fetchFuncAxios,
+            );
+
+            if (result) {
+              if (result.canExec) {
+                console.log('Rebalance call', result);
+                if (typeof result.callData === 'string') {
+                  throw Error('wrong callData');
+                }
+                const tp = await txParams2();
+                const callData = result.callData as unknown as Web3FunctionResultCallData[];
+                await RunHelper.runAndWaitAndSpeedUp(provider, () =>
+                    signer.sendTransaction({
+                      to: callData[0].to,
+                      data: callData[0].data,
+                      ...tp,
+                    }),
+                  false, true,
+                );
+
+                console.log('Rebalance success!', strategyAddress);
+                if (argv.rebalanceDebtMsgSuccess) {
+                  await sendMessageToTelegram(`Rebalance success! ${strategyAddress}`);
+                }
+
+              } else {
+                console.log('Result can not be executed:', result.message);
+              }
+            } else {
+              console.log('Empty result!');
+              await sendMessageToTelegram('Empty result!');
+            }
+          } catch (e) {
+            console.log('Error inside strategy processing', strategyAddress, e);
+            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${e}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.log('error in debt rebalance loop', e);
+      await sendMessageToTelegram(`error in debt rebalance loop ${e}`);
+    }
+
+    await sleep(argv.rebalanceDebtLoopDelay);
+  }
+}
 
 const fetchFuncAxios = async(url: string) => {
   try {
@@ -37,82 +167,17 @@ function sleep(ms: number) {
   });
 }
 
-async function main() {
-  console.log('Strategies debt rebalancer');
+async function isStrategyEligibleForNSR(strategyAdr: string) {
+  const version = await IStrategyV2__factory.connect(strategyAdr, ethers.provider).STRATEGY_VERSION();
+  const name = await IStrategyV2__factory.connect(strategyAdr, ethers.provider).NAME();
 
-  if (!['localhost', 'matic'].includes(hre.network.name)) {
-    console.log('Unsupported network', hre.network.name);
-    console.log('Only localhost and matic networks supported');
-    process.exit(-1);
-  }
+  const names = new Set<string>([
+    'UniswapV3 Converter Strategy',
+    'Kyber Converter Strategy',
+    'Algebra Converter Strategy',
+  ]);
 
-  const strategiesStr = process.env.TETU_REBALANCE_DEBT_STRATEGIES;
-  if (!strategiesStr) {
-    console.error('Put strategy addresses to env TETU_REBALANCE_DEBT_STRATEGIES (comma separated)');
-    process.exit(-1);
-  }
-
-  const configAddress = process.env.TETU_REBALANCE_DEBT_CONFIG;
-  if (!configAddress) {
-    console.error('Put RebalanceDebtConfig deployed contract address to env TETU_REBALANCE_DEBT_CONFIG');
-    process.exit(-1);
-  }
-
-  const readerAddress = process.env.TETU_PAIR_BASED_STRATEGY_READER;
-  if (!readerAddress) {
-    console.error('Put PairBasedStrategyReader deployed contract address to env TETU_PAIR_BASED_STRATEGY_READER');
-    process.exit(-1);
-  }
-
-  const agg = process.env.TETU_REBALANCE_DEBT_AGG || '';
-  const oneInchProtocols = process.env.TETU_REBALANCE_DEBT_1INCH_PROTOCOLS || '';
-
-  const strateies = strategiesStr.split(',');
-  console.log('Strategies', strateies);
-
-  const provider = ethers.provider;
-  const signer = (await ethers.getSigners())[0];
-
-  while (true) {
-    for (const strategyAddress of strateies) {
-      const result = await runResolver(
-        provider,
-        strategyAddress,
-        readerAddress,
-        configAddress,
-        agg,
-        oneInchProtocols,
-        fetchFuncAxios,
-      );
-
-      if (result) {
-        if (result.canExec) {
-          const gasPrice = await provider.getGasPrice();
-          console.info('Gas price: ' + formatUnits(gasPrice, 9));
-
-          const tp = await txParams2();
-          if (typeof result.callData === 'string') {
-            throw Error('wrong callData');
-          }
-          const callData = result.callData as unknown as Web3FunctionResultCallData[];
-          await RunHelper.runAndWaitAndSpeedUp(provider, () =>
-              signer.sendTransaction({
-                to: callData[0].to,
-                data: callData[0].data,
-                ...tp,
-              }),
-            false, true,
-          );
-
-        } else {
-          console.log(result);
-        }
-      }
-
-    }
-
-    await sleep(3000);
-  }
+  return Number(version.charAt(0)) > 1 && names.has(name);
 }
 
 main().catch((error) => {

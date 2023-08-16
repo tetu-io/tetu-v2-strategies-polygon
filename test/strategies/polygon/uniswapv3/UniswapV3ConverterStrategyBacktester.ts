@@ -12,6 +12,10 @@ import {
 import {IBacktestResult, IContracts} from "../../../../scripts/uniswapV3Backtester/types";
 import {showBacktestResult, strategyBacktest} from "../../../../scripts/uniswapV3Backtester/strategyBacktest";
 
+
+// tslint:disable-next-line:no-var-requires
+const hre = require("hardhat");
+
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
 const argv = require('yargs/yargs')()
@@ -189,7 +193,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     return;
   }
 
-  if (argv.hardhatChainId !== 31337) {
+  if (argv.hardhatChainId !== 31337 && hre.network.name !== 'foundry') {
     console.log('Backtester can only work in the local hardhat network (31337 chainId)');
     return;
   }

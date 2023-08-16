@@ -70,7 +70,7 @@ export async function txParams2() {
   };
 }
 
-export async function getDeployedContractByName(name: string) {
+export async function getDeployedContractByName(name: string): Promise<string> {
   const { deployments } = hreLocal;
   const contract = await deployments.get(name);
   if (!contract) {

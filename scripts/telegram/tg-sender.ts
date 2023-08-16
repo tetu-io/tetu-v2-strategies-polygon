@@ -14,10 +14,6 @@ const log: Logger<undefined> = new Logger(logSettings);
 const argv = require('yargs/yargs')()
   .env('TETU')
   .options({
-    hardhatChainId: {
-      type: "number",
-      default: 137
-    },
     tgChatKey: {
       type: "string"
     },

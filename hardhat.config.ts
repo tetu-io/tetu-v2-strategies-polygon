@@ -117,7 +117,7 @@ export default {
       url: 'http://127.0.0.1:8545',
     },
     foundry: {
-      chainId: 137,
+      chainId: 31337,
       url: 'http://127.0.0.1:8545',
       // accounts: [argv.privateKey], do not use it, impersonate will be broken
     },
