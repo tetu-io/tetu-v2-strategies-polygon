@@ -26,10 +26,7 @@ import {
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
 import {
-  RebalancedEventObject
-} from "../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib";
-import {
-  FixPriceChangesEventObject,
+  FixPriceChangesEventObject, NotEnoughInsuranceEventObject,
   UncoveredLossEventObject
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 
@@ -1409,6 +1406,132 @@ describe('ConverterStrategyBaseLibTest', () => {
         totalAssets: "4"
       });
       expect(ret.tokenAmounts.length).eq(0);
+    });
+  });
+
+  describe("_coverLossAndCheckResults", () => {
+    interface ICoverLossParams {
+      asset: MockToken;
+      insuranceBalance: string;
+      lossToCover: string;
+      earned: string;
+    }
+    interface INotEnoughInsurance {
+      emittedLossUncovered: number;
+    }
+    interface ICoverLossResults {
+      vaultBalance: number;
+      insuranceBalance: number;
+      uncoveredLoss?: INotEnoughInsurance;
+    }
+
+    async function callCoverLoss(p: ICoverLossParams): Promise<ICoverLossResults> {
+      // prepare splitter and vault
+      const splitter = await MockHelper.createMockSplitter(signer);
+      const vault = ethers.Wallet.createRandom().address;
+      await splitter.setAsset(p.asset.address);
+      await splitter.setVault(vault);
+
+      const assetDecimals = await p.asset.decimals();
+
+      // splitter-mock plays a role of insurance in this test
+      const insuranceAmount = parseUnits(p.insuranceBalance, assetDecimals);
+      if (insuranceAmount.gt(0)) {
+        await p.asset.mint(splitter.address, insuranceAmount);
+      }
+
+      const tx = await facade._coverLossAndCheckResults(
+        splitter.address,
+        parseUnits(p.earned, assetDecimals),
+        parseUnits(p.lossToCover, assetDecimals),
+      );
+
+      let notEnoughInsurance: INotEnoughInsurance | undefined;
+
+      const cr = await tx.wait();
+      const converterStrategyBaseLib2 = ConverterStrategyBaseLib2__factory.createInterface();
+      for (const event of (cr.events ?? [])) {
+        if (event.topics[0].toLowerCase() === converterStrategyBaseLib2.getEventTopic('NotEnoughInsurance').toLowerCase()) {
+          const log = (converterStrategyBaseLib2.decodeEventLog(
+            converterStrategyBaseLib2.getEvent('NotEnoughInsurance'),
+            event.data,
+            event.topics,
+          ) as unknown) as NotEnoughInsuranceEventObject;
+          notEnoughInsurance = {
+            emittedLossUncovered: +formatUnits(log.lossUncovered, assetDecimals),
+          }
+        }
+      }
+
+      return {
+        uncoveredLoss: notEnoughInsurance,
+        vaultBalance: +formatUnits(await p.asset.balanceOf(vault), assetDecimals),
+        insuranceBalance: +formatUnits(await p.asset.balanceOf(splitter.address), assetDecimals),
+      }
+    }
+
+    describe("Loss is covered fully", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeTest(): Promise<ICoverLossResults> {
+        return callCoverLoss({
+          asset: usdc,
+          earned: "0",
+          insuranceBalance: "199",
+          lossToCover: "192",
+        });
+      }
+
+      it("should send full amount of loss to vault", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.vaultBalance).eq(192);
+      });
+      it("should send full amount of loss from insurance", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.insuranceBalance).eq(199 - 192);
+      });
+      it("should not emit NotEnoughInsurance", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.uncoveredLoss === undefined).eq(true);
+      });
+    });
+
+    describe("Loss is covered partially", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeTest(): Promise<ICoverLossResults> {
+        return callCoverLoss({
+          asset: usdc,
+          earned: "0",
+          insuranceBalance: "199",
+          lossToCover: "207",
+        });
+      }
+
+      it("should send partial amount of loss to vault", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.vaultBalance).eq(199);
+      });
+      it("should cover the loss from insurance", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.insuranceBalance).eq(0);
+      });
+      it("should emit NotEnoughInsurance with expected uncovered loss amount", async () => {
+        const ret = await loadFixture(makeTest);
+        expect(ret.uncoveredLoss?.emittedLossUncovered).eq(207 - 199);
+      });
     });
   });
 

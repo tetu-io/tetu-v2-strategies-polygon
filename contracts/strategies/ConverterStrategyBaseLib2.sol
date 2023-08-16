@@ -52,7 +52,8 @@ library ConverterStrategyBaseLib2 {
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
   /// @notice Payment to insurance was carried out only partially
   event UnsentAmountToInsurance(uint sentAmount, uint unsentAmount, uint balance, uint totalAssets);
-
+  /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
+  event NotEnoughInsurance(uint lossUncovered);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -268,13 +269,29 @@ library ConverterStrategyBaseLib2 {
         lost,
         investedAssetsAfter + IERC20(baseState.asset).balanceOf(address(this)) // totalAssets
       );
-      ISplitter(baseState.splitter).coverPossibleStrategyLoss(earned, lossToCover);
+      _coverLossAndCheckResults(baseState.splitter, earned, lossToCover);
 
       if (lossUncovered != 0) {
         emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
       }
     }
     emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter);
+  }
+
+  /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
+  ///         If the loss were covered only partially, emit {NotEnoughInsurance}
+  function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) internal {
+    address asset = ISplitter(splitter).asset();
+    address vault = ISplitter(splitter).vault();
+    uint balanceBefore = IERC20(asset).balanceOf(vault);
+    ISplitter(splitter).coverPossibleStrategyLoss(earned, lossToCover);
+    uint delta = IERC20(asset).balanceOf(vault); // temporary save balance-after to delta
+    delta = delta > balanceBefore
+      ? delta - balanceBefore
+      : 0;
+    if (delta < lossToCover) {
+      emit NotEnoughInsurance(lossToCover - delta);
+    }
   }
 
   /// @notice Cut loss-value to safe value that doesn't produce revert inside splitter

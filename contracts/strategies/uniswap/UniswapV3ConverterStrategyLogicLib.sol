@@ -440,7 +440,7 @@ library UniswapV3ConverterStrategyLogicLib {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
       uint notCovered = loss - coveredByRewards;
       if (notCovered != 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+        ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
     }
 

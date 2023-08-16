@@ -1,11 +1,9 @@
 import {BigNumber, Event, ContractReceipt} from "ethers";
 import {
-  AlgebraConverterStrategy__factory,
   AlgebraConverterStrategyLogicLib__factory,
   ConverterStrategyBase__factory,
   ConverterStrategyBaseLib2__factory, IERC20Metadata__factory,
   IRebalancingV2Strategy,
-  KyberConverterStrategy__factory,
   KyberConverterStrategyLogicLib__factory,
   PairBasedStrategyLib__factory,
   UniswapV3ConverterStrategyLogicLib__factory
@@ -15,12 +13,24 @@ import {
   RebalancedEventObject
 } from "../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib";
 import {PLATFORM_ALGEBRA, PLATFORM_UNIV3} from "./AppPlatforms";
-import {UncoveredLossEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
+import {
+  NotEnoughInsuranceEventObject,
+  UncoveredLossEventObject
+} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 
 interface IRebalancedEventValues {
   loss: BigNumber;
   covered: BigNumber;
+  /**
+   * Following amount was uncovered and cut because the amount is too high.
+   * Splitter wasn't event claimed to cover the loss.
+   * */
   uncoveredLoss: BigNumber;
+
+  /**
+   * Following amount was uncovered by splitter because insurance hadn't enough balance.
+   * */
+  notEnoughInsuranceLoss: BigNumber;
 }
 
 export interface IRebalanceEvents extends IRebalancedEventValues{
@@ -68,6 +78,7 @@ export class NoSwapRebalanceEvents {
     let fuseStatus: number | undefined;
     let loss: BigNumber | undefined;
     let covered: BigNumber | undefined;
+    let notEnoughInsuranceLoss: BigNumber | undefined;
 
     for (const event of (receipt.events ?? [])) {
       const e: Event = event;
@@ -102,6 +113,16 @@ export class NoSwapRebalanceEvents {
         ) as unknown) as UncoveredLossEventObject;
         uncoveredLoss = log.lossUncovered;
       }
+
+      if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('NotEnoughInsurance').toLowerCase()) {
+        console.log('>>> UncoveredLoss');
+        const log = (converterStrategyBaseLib2I.decodeEventLog(
+          converterStrategyBaseLib2I.getEvent('NotEnoughInsurance'),
+          event.data,
+          event.topics,
+        ) as unknown) as NotEnoughInsuranceEventObject;
+        notEnoughInsuranceLoss = log.lossUncovered;
+      }
     }
     console.log('*************');
     return {
@@ -109,6 +130,7 @@ export class NoSwapRebalanceEvents {
       loss: loss || BigNumber.from(0),
       covered: covered || BigNumber.from(0),
       uncoveredLoss: uncoveredLoss || BigNumber.from(0),
+      notEnoughInsuranceLoss: notEnoughInsuranceLoss || BigNumber.from(0),
     }
   }
 }

@@ -200,4 +200,8 @@ contract ConverterStrategyBaseLibFacade2 {
       baseState
     );
   }
+
+  function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) external {
+    ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, earned, lossToCover);
+  }
 }
