@@ -58,6 +58,7 @@ async function main() {
   }
 
   await subscribeTgBot();
+  await sendMessageToTelegram('Tetu rebalance debts started');
 
   const core = Addresses.getCore();
   const configAddress = await getDeployedContractByName('RebalanceDebtConfig');
