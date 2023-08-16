@@ -1,5 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
-import { ethers } from 'hardhat';
+import hre, { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { getAddress } from 'ethers/lib/utils';
@@ -25,16 +25,12 @@ const argv = require('yargs/yargs')()
       type: 'boolean',
       default: false,
     },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
   }).argv;
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
-  const backtestStartBlock = 45600000; // 7/28/2023 3:47:16 AM
-  const backtestEndBlock = 45700000; // 7/30/2023 3:31:06 PM
+  const backtestStartBlock = 45700000; // 7/30/2023 3:31:06 PM
+  const backtestEndBlock = 46000000; //
   const investAmountUnits: string = '10000' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
@@ -193,8 +189,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
     return;
   }
 
-  if (argv.hardhatChainId !== 31337 && hre.network.name !== 'foundry') {
-    console.log('Backtester can only work in the local hardhat network (31337 chainId)');
+  const chainId = hre.network.config.chainId
+  if (chainId !== 31337) {
+    console.log('Backtester can only work in the local hardhat or foundry network (31337 chainId)');
     return;
   }
 
