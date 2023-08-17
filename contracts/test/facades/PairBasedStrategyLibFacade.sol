@@ -79,9 +79,8 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     uint indexCollateral,
     uint indexBorrow
   ) external {
-    return PairBasedStrategyLib.borrowToProportions(p, indexCollateral, indexBorrow);
+    return PairBasedStrategyLib.borrowToProportions(p, indexCollateral, indexBorrow, true);
   }
-
 
   //region ---------------------------------------------- IPoolProportionsProvider implementation
 

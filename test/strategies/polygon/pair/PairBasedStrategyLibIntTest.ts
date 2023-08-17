@@ -3,8 +3,13 @@ import hre, {ethers} from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {
-  ConverterController__factory,
-  IERC20Metadata__factory, ITetuConverter__factory, PairBasedStrategyLibFacade
+  ConverterController__factory, IBorrowManager__factory,
+  IERC20Metadata__factory,
+  IPlatformAdapter, IPlatformAdapter__factory,
+  ITetuConverter,
+  ITetuConverter__factory,
+  MockToken,
+  PairBasedStrategyLibFacade
 } from "../../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
@@ -18,12 +23,22 @@ import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
+  const PLAN_REPAY_SWAP_REPAY = 1;
+  const PLATFORM_KIND_AAVE2_2 = 2;
+  const PLATFORM_KIND_AAVE3_3 = 3;
+
   //region Variables
   let snapshotBefore: string;
   let signer: SignerWithAddress;
   let facade: PairBasedStrategyLibFacade;
+  let converter: ITetuConverter;
+  let converterGovernance: SignerWithAddress;
+  let platformAdapterAave2: IPlatformAdapter;
+  let platformAdapterAave3: IPlatformAdapter;
   //endregion Variables
 
   //region before, after
@@ -34,10 +49,28 @@ describe('PairBasedStrategyLibIntTest', () => {
     [signer] = await ethers.getSigners();
 
     facade = await MockHelper.createPairBasedStrategyLibFacade(signer);
-    const converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
+    converter = ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
     const converterController = await ConverterController__factory.connect(await converter.controller(), signer);
-    const converterGovernance = await converterController.governance();
-    await converterController.connect(await Misc.impersonate(converterGovernance)).setWhitelistValues([facade.address], true);
+
+    converterGovernance = await Misc.impersonate(await converterController.governance());
+    await converterController.connect(converterGovernance).setWhitelistValues([facade.address], true);
+
+    const borrowManager = await IBorrowManager__factory.connect(await converterController.borrowManager(), signer);
+    const countPlatformAdapters = (await borrowManager.platformAdaptersLength()).toNumber();
+    for (let i = 0; i < countPlatformAdapters; ++i) {
+      const pa = IPlatformAdapter__factory.connect(await borrowManager.platformAdaptersAt(i), signer);
+      const platformKind = await pa.platformKind();
+      if (platformKind === PLATFORM_KIND_AAVE2_2) {
+        platformAdapterAave2 = pa;
+      } else if (platformKind === PLATFORM_KIND_AAVE3_3) {
+        platformAdapterAave3 = pa;
+      } else {
+        // disable all platform adapters except aave2 and aave3
+        // we use aave 2 and aave3 in this test because they both have debt-gap != 0
+        await pa.connect(converterGovernance).setFrozen(true);
+      }
+    }
+    if (!platformAdapterAave2 || !platformAdapterAave3) throw Error("Platform adapter wasn't found");
   });
 
   after(async function () {
@@ -478,5 +511,168 @@ describe('PairBasedStrategyLibIntTest', () => {
     });
   });
 
+  describe("withdrawStep", () => {
+    interface IWithdrawStepParams {
+      tokenX: string;
+      tokenY: string;
+
+      tokenToSwap?: string;
+      amountToSwap: string;
+
+      liquidationThresholds: string[];
+      propNotUnderlying18: string;
+
+      planKind: number;
+
+      balanceX: string;
+      balanceY: string;
+
+      // collateral amounts for exist borrows on AAVE2, AAVE3
+      collaterals: string[];
+    }
+
+    interface IWithdrawStepResults {
+      balanceX: number;
+      balanceY: number;
+    }
+
+    async function makeWithdrawStep(p: IWithdrawStepParams): Promise<IWithdrawStepResults> {
+      const tokenX = IERC20Metadata__factory.connect(p.tokenX, signer);
+      const tokenY = IERC20Metadata__factory.connect(p.tokenY, signer);
+      const decimalsX = await tokenX.decimals();
+      const decimalsY = await tokenY.decimals();
+      const signerFacade = await DeployerUtilsLocal.impersonate(facade.address);
+
+      await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+
+      // set up current balances
+      await TokenUtils.getToken(p.tokenX, facade.address, parseUnits(p.balanceX, decimalsX));
+      await TokenUtils.getToken(p.tokenY, facade.address, parseUnits(p.balanceY, decimalsY));
+
+      // prepare borrows
+      console.log("Prepare borrows");
+      const collateral0 = parseUnits(p.collaterals[0], decimalsX);
+      const collateral1 = parseUnits(p.collaterals[1], decimalsX);
+      await tokenX.connect(signerFacade).approve(converter.address, Misc.MAX_UINT);
+      await tokenY.connect(signerFacade).approve(converter.address, Misc.MAX_UINT);
+
+      await platformAdapterAave3.connect(converterGovernance).setFrozen(true);
+      const plan0 = await converter.findBorrowStrategies(
+        "0x",
+        MaticAddresses.USDC_TOKEN,
+        collateral0,
+        MaticAddresses.USDT_TOKEN,
+        1
+       );
+      console.log("plan0", plan0);
+      await TokenUtils.getToken(p.tokenX, facade.address, plan0.collateralAmountsOut[0]);
+      await converter.connect(signerFacade).borrow(
+        plan0.converters[0],
+        MaticAddresses.USDC_TOKEN,
+        plan0.collateralAmountsOut[0],
+        MaticAddresses.USDT_TOKEN,
+        plan0.amountToBorrowsOut[0],
+        facade.address
+      );
+
+      await platformAdapterAave3.connect(converterGovernance).setFrozen(false);
+      await platformAdapterAave2.connect(converterGovernance).setFrozen(true);
+
+      const plan1 = await converter.findBorrowStrategies(
+        "0x",
+        MaticAddresses.USDC_TOKEN,
+        collateral1,
+        MaticAddresses.USDT_TOKEN,
+        1
+      );
+      console.log("plan1", plan1);
+      await TokenUtils.getToken(p.tokenX, facade.address, plan1.collateralAmountsOut[0]);
+      await converter.connect(await DeployerUtilsLocal.impersonate(facade.address)).borrow(
+        plan1.converters[0],
+        MaticAddresses.USDC_TOKEN,
+        plan1.collateralAmountsOut[0],
+        MaticAddresses.USDT_TOKEN,
+        plan1.amountToBorrowsOut[0],
+        facade.address
+      );
+      await platformAdapterAave2.connect(converterGovernance).setFrozen(true);
+
+      await tokenY.connect(signerFacade).transfer(signer.address, plan0.amountToBorrowsOut[0]);
+      await tokenY.connect(signerFacade).transfer(signer.address, plan1.amountToBorrowsOut[0]);
+
+      console.log("Make withdraw");
+
+      await facade.withdrawStep(
+        [converter.address, MaticAddresses.TETU_LIQUIDATOR],
+        [p.tokenX, p.tokenY],
+        [
+          parseUnits(p.liquidationThresholds[0], decimalsX),
+          parseUnits(p.liquidationThresholds[1], decimalsY)
+        ],
+        p.tokenToSwap || Misc.ZERO_ADDRESS,
+        p.tokenToSwap === undefined
+          ? BigNumber.from(0)
+          : parseUnits(p.amountToSwap, await IERC20Metadata__factory.connect(p.tokenToSwap, signer).decimals()),
+        Misc.ZERO_ADDRESS,
+        "0x",
+        true,
+        p.planKind,
+        Array.isArray(p.propNotUnderlying18)
+          ? Misc.MAX_UINT
+          : parseUnits(p.propNotUnderlying18 || "0", 18)
+      );
+
+      return {
+        balanceX: +formatUnits(await tokenX.balanceOf(facade.address), decimalsX),
+        balanceY: +formatUnits(await tokenY.balanceOf(facade.address), decimalsY),
+      }
+    }
+
+    /**
+     * There are two borrows with debt-gap-required=true
+     * We are going to repay X
+     * First borrow has size A < X
+     * So, we close first borrow completely (A) and repay second borrow partially (B)
+     * A + B < X because of not-zero debt-gap of the first borrow.
+     * In this case, _borrowToProportions will revert with "TS-29 opposite debt exists".
+     * We need one more repay instead, so we will have R-S-R-R scheme
+     */
+    describe("SCB-777", () => {
+      let snapshot: string;
+      before(async function () {
+        snapshot = await TimeUtils.snapshot();
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshot);
+      });
+
+      async function makeWithdrawStepTest(): Promise<IWithdrawStepResults> {
+        return makeWithdrawStep({
+          tokenX: MaticAddresses.USDC_TOKEN,
+          tokenY: MaticAddresses.USDT_TOKEN,
+
+          amountToSwap: "727.183544",
+          tokenToSwap: MaticAddresses.USDC_TOKEN,
+
+          planKind: PLAN_REPAY_SWAP_REPAY,
+          propNotUnderlying18: "0.44",
+
+          liquidationThresholds: ["0.01000", "0.01000"],
+          balanceX: "373.533405",
+          balanceY: "290.142283",
+
+          collaterals: [
+            "635", // aave2
+            "198620" // aave3
+          ]
+        });
+      }
+
+      it("should not revert", async () => {
+        const ret = await makeWithdrawStepTest();
+        // expect([ret.balanceX, ret.balanceY].join()).eq([3004, 0].join());
+      });
+    });
+  });
 //endregion Unit tests
 });

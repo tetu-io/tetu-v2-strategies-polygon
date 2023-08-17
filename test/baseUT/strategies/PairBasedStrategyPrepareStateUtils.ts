@@ -1,11 +1,5 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
-import {
-  AlgebraLib,
-  ControllerV2__factory,
-  ConverterStrategyBase__factory, IRebalancingV2Strategy,
-  KyberLib, StrategyBaseV2__factory,
-  UniswapV3Lib
-} from "../../../typechain";
+import {ControllerV2__factory, ConverterStrategyBase__factory, IRebalancingV2Strategy, StrategyBaseV2__factory} from "../../../typechain";
 import {PackedData} from "../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
@@ -19,7 +13,6 @@ import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
@@ -145,7 +138,7 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /**
-   * Deploy new implemenation of TetuConverter-contract and upgrade proxy
+   * Deploy new implementation of TetuConverter-contract and upgrade proxy
    */
   static async injectTetuConverter(signer: SignerWithAddress) {
     const core = await DeployerUtilsLocal.getCoreAddresses();
@@ -159,6 +152,27 @@ export class PairBasedStrategyPrepareStateUtils {
     await controllerAsGov.announceProxyUpgrade([tetuConverter], [converterLogic.address]);
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
     await controllerAsGov.upgradeProxy([tetuConverter]);
+  }
+
+  /**
+   * Deploy new implementation of the given strategy and upgrade proxy
+   */
+  static async injectStrategy(
+    signer: SignerWithAddress,
+    strategyProxy: string,
+    contractName: string
+  ) {
+    const strategyLogic = await DeployerUtils.deployContract(signer, contractName);
+    const controller = ControllerV2__factory.connect(
+      await ConverterStrategyBase__factory.connect(strategyProxy, signer).controller(),
+      signer
+    );
+    const governance = await controller.governance();
+    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
+
+    await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
+    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
+    await controllerAsGov.upgradeProxy([strategyProxy]);
   }
 
   /**

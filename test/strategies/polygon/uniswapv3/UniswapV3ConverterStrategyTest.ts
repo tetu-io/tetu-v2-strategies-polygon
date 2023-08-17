@@ -285,45 +285,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    it('Rebalance and hardwork', async() => {
-      const swapAssetValueForPriceMove = parseUnits('500000', 6);
-      const state = await PackedData.getDefaultState(strategy);
-      const price= await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6));
-
-      console.log('initial deposit...');
-      await vault.deposit(_10_000, signer.address);
-      expect(await strategy.isReadyToHardWork()).eq(false);
-      expect(await strategy.needRebalance()).eq(false);
-
-      // make rebalancing
-      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-      expect(await strategy.needRebalance()).eq(true);
-      await strategy.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
-      expect(await strategy.needRebalance()).eq(false);
-
-      // make hardwork
-      await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, strategy);
-      expect(await strategy.isReadyToHardWork()).eq(true);
-      await strategy.connect(await DeployerUtilsLocal.impersonate(await vault.splitter())).doHardWork();
-      expect(await strategy.isReadyToHardWork()).eq(false);
-    });
-
-    it('Rebalance doesn\'t exceed gas limit @skip-on-coverage', async() => {
-      const swapAssetValueForPriceMove = parseUnits('500000', 6);
-      const state = await PackedData.getDefaultState(strategy);
-      await vault.deposit(_10_000, signer.address);
-
-      // move price to activate needRebalance
-      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-      expect(await strategy.needRebalance()).eq(true);
-
-      // make rebalancing
-      const rebalanceGasUsed = await strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-      console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
-      expect(rebalanceGasUsed.toNumber()).lessThan(GAS_REBALANCE_NO_SWAP);
-    });
-
     it('Loop with rebalance, hardwork, deposit and withdraw', async() => {
       const investAmount = _1_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);

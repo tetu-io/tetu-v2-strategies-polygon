@@ -15,6 +15,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -508,20 +509,28 @@ library ConverterStrategyBaseLib {
     uint collateralOut,
     uint repaidAmountOut
   ) {
+    console.log("ConverterStrategyBase._closePositionExact.collateralAsset", collateralAsset);
+    console.log("ConverterStrategyBase._closePositionExact.borrowAsset", borrowAsset);
+    console.log("ConverterStrategyBase._closePositionExact.amountRepay", amountRepay);
+    console.log("ConverterStrategyBase._closePositionExact.balanceBorrowAsset", balanceBorrowAsset);
     if (amountRepay >= AppLib.DUST_AMOUNT_TOKENS) {
       // Make full/partial repayment
       IERC20(borrowAsset).safeTransfer(address(converter_), amountRepay);
 
       uint notUsedAmount;
       (collateralOut, notUsedAmount,,) = converter_.repay(collateralAsset, borrowAsset, amountRepay, address(this));
+      console.log("ConverterStrategyBase._closePositionExact.notUsedAmount", notUsedAmount);
+      console.log("ConverterStrategyBase._closePositionExact.collateralOut", collateralOut);
 
       emit ClosePosition(collateralAsset, borrowAsset, amountRepay, address(this), collateralOut, notUsedAmount);
       uint balanceAfter = IERC20(borrowAsset).balanceOf(address(this));
+      console.log("ConverterStrategyBase._closePositionExact.balanceAfter", balanceAfter);
 
       // we cannot use amountRepay here because AAVE pool adapter is able to send tiny amount back (debt-gap)
       repaidAmountOut = balanceBorrowAsset > balanceAfter
         ? balanceBorrowAsset - balanceAfter
         : 0;
+      console.log("ConverterStrategyBase._closePositionExact.repaidAmountOut", repaidAmountOut);
       require(notUsedAmount == 0, StrategyLib2.WRONG_VALUE);
     }
 
@@ -1407,15 +1416,23 @@ library ConverterStrategyBaseLib {
     uint expectedAmountOut,
     uint repaidAmountOut
   ) {
+    console.log("ConverterStrategyBaseLib._repayDebt.collateralAsset", collateralAsset);
+    console.log("ConverterStrategyBaseLib._repayDebt.borrowAsset", borrowAsset);
+    console.log("ConverterStrategyBaseLib._repayDebt.amountToRepay", amountToRepay);
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
+    console.log("ConverterStrategyBaseLib._repayDebt.balanceBefore", balanceBefore);
 
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
     uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    console.log("ConverterStrategyBaseLib._repayDebt.needToRepay", needToRepay);
+    console.log("ConverterStrategyBaseLib._repayDebt.amountToRepay", amountToRepay);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;
     (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountRepay);
+    console.log("ConverterStrategyBaseLib._repayDebt.expectedAmountOut", expectedAmountOut);
+    console.log("ConverterStrategyBaseLib._repayDebt.swappedAmountOut", swappedAmountOut);
 
     if (expectedAmountOut > swappedAmountOut) {
       // Following situation is possible
@@ -1426,10 +1443,12 @@ library ConverterStrategyBaseLib {
       //       expectedAmountOut is calculated for 90 + 9 (90 - repay, 9 - direct swap)
       //       expectedAmountOut must be reduced on 9 here (!)
       expectedAmountOut -= swappedAmountOut;
+      console.log("ConverterStrategyBaseLib._repayDebt.expectedAmountOut.fixed", expectedAmountOut);
     }
 
     // close the debt
     (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
+    console.log("ConverterStrategyBaseLib._repayDebt.repaidAmountOut", repaidAmountOut);
 
     return (expectedAmountOut, repaidAmountOut);
   }

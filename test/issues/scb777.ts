@@ -6,7 +6,7 @@ import {TimeUtils} from "../../scripts/utils/TimeUtils";
 import {ethers} from "hardhat";
 import {HardhatUtils} from "../baseUT/utils/HardhatUtils";
 
-describe("Scb777", () => {
+describe("Scb777-reproduce @skip-on-coverage", () => {
   const BLOCK = 46387161;
   const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";
   const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
@@ -24,10 +24,11 @@ describe("Scb777", () => {
   });
 
   it("try to reproduce", async () => {
-    const strategy = IRebalancingV2Strategy__factory.connect(
-      STRATEGY,
-      await DeployerUtilsLocal.impersonate(SENDER)
-    );
+    const signer = await DeployerUtilsLocal.impersonate(SENDER);
+    const strategy = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+
+    await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+    await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
     await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
       strategy,

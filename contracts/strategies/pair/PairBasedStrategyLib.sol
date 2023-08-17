@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -360,6 +361,20 @@ library PairBasedStrategyLib {
   function _withdrawStep(IterationPlanLib.SwapRepayPlanParams memory p, SwapByAggParams memory aggParams) internal returns (
     bool completed
   ) {
+    console.log("_withdrawStep");
+    console.log("_withdrawStep.p.propNotUnderlying18", p.propNotUnderlying18);
+    console.log("_withdrawStep.prices", p.prices[0], p.prices[1]);
+    console.log("_withdrawStep.decs", p.decs[0], p.decs[1]);
+    console.log("_withdrawStep.liquidationThresholds", p.liquidationThresholds[0], p.liquidationThresholds[1]);
+    console.log("_withdrawStep.tokens", p.tokens[0], p.tokens[1]);
+    console.log("_withdrawStep.balanceAdditions", p.balanceAdditions[0], p.balanceAdditions[1]);
+    console.log("_withdrawStep.planKind", p.planKind);
+    console.log("_withdrawStep.usePoolProportions", p.usePoolProportions);
+    console.log("_withdrawStep.aggParams.useLiquidator", aggParams.useLiquidator);
+    console.log("_withdrawStep.aggParams.amountToSwap", aggParams.amountToSwap);
+    console.log("_withdrawStep.aggParams.tokenToSwap", aggParams.tokenToSwap);
+    console.log("_withdrawStep.aggParams.aggregator", aggParams.aggregator);
+
     (uint idxToSwap1, uint amountToSwap, uint idxToRepay1) = IterationPlanLib.buildIterationPlan(
       [address(p.converter), address(p.liquidator)],
       p.tokens,
@@ -376,6 +391,9 @@ library PairBasedStrategyLib {
         IDX_TOKEN
       ]
     );
+    console.log("_withdrawStep.idxToSwap1", idxToSwap1);
+    console.log("_withdrawStep.amountToSwap", amountToSwap);
+    console.log("_withdrawStep.idxToRepay1", idxToRepay1);
 
     bool[4] memory actions = [
       p.planKind == IterationPlanLib.PLAN_SWAP_ONLY || p.planKind == IterationPlanLib.PLAN_SWAP_REPAY, // swap 1
@@ -385,10 +403,12 @@ library PairBasedStrategyLib {
     ];
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
+      console.log("_withdrawStep.swap1.amountToSwap", amountToSwap);
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
     }
 
     if (idxToRepay1 != 0 && actions[IDX_REPAY_1]) {
+      console.log("_withdrawStep.repay1", IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this)));
       ConverterStrategyBaseLib._repayDebt(
         p.converter,
         p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
@@ -399,7 +419,12 @@ library PairBasedStrategyLib {
 
     if (idxToSwap1 != 0) {
       if (actions[IDX_SWAP_2]) {
+        console.log("_withdrawStep.swap2.asset.balance before swap", IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this)));
+        console.log("_withdrawStep.swap2.asset.balance before swap", IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this)));
+        console.log("_withdrawStep.swap2.amountToSwap", amountToSwap);
         (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
+        console.log("_withdrawStep.swap2.asset.balance after swap", IERC20(p.tokens[IDX_ASSET]).balanceOf(address(this)));
+        console.log("_withdrawStep.swap2.asset.balance after swap", IERC20(p.tokens[IDX_TOKEN]).balanceOf(address(this)));
 
         if (actions[IDX_REPAY_2] && idxToRepay1 != 0) {
           // see calculations inside estimateSwapAmountForRepaySwapRepay
@@ -411,29 +436,14 @@ library PairBasedStrategyLib {
             idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET,
             idxToRepay1 - 1
           );
+          console.log("_withdrawStep.amountToRepay2", amountToRepay2);
+          console.log("_withdrawStep.borrowInsteadRepay", borrowInsteadRepay);
 
           if (borrowInsteadRepay) {
-            borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
+            console.log("_withdrawStep.borrowInsteadRepay.2");
+            borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
-            // we need to know repaidAmount
-            // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
-            // temporary save current balance to repaidAmount
-            uint repaidAmount = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
-
-            ConverterStrategyBaseLib._repayDebt(
-              p.converter,
-              p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
-              p.tokens[idxToRepay1 - 1],
-              amountToRepay2
-            );
-            uint balanceAfter = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
-            repaidAmount = repaidAmount > balanceAfter
-              ? repaidAmount - balanceAfter
-              : 0;
-
-            if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
-              borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
-            }
+            _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, 2);
           }
         }
       } else {
@@ -453,6 +463,43 @@ library PairBasedStrategyLib {
     return idxToRepay1 == 0;
   }
 
+  /// @notice Make final repay in the scheme REPAY-SWAP-REPAY
+  ///         Depending on condition the final repay can be made several times or additional borrow can be made
+  /// @param amountToRepay Amount of {indexBorrow} asset that should be repaid
+  /// @param maxRecursionDeep Protection against too deep recursion. It would be interesting to take a look on the
+  ///                         case where 3 or more steps are required..
+  function _secondRepay(
+    IterationPlanLib.SwapRepayPlanParams memory p,
+    uint indexCollateral,
+    uint indexBorrow,
+    uint amountToRepay,
+    uint maxRecursionDeep
+  ) internal {
+    // we need to know repaidAmount
+    // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
+    uint balanceBefore = IERC20(p.tokens[indexBorrow]).balanceOf(address(this));
+    ConverterStrategyBaseLib._repayDebt(p.converter, p.tokens[indexCollateral], p.tokens[indexBorrow], amountToRepay);
+    uint balanceAfter = IERC20(p.tokens[indexBorrow]).balanceOf(address(this));
+
+    uint repaidAmount = balanceBefore > balanceAfter
+      ? balanceBefore - balanceAfter
+      : 0;
+
+    if (repaidAmount < amountToRepay && amountToRepay - repaidAmount > p.liquidationThresholds[indexBorrow]) {
+      // repaidAmount is less than expected
+      // we need to make additional borrow OR probably make one more repay
+      // repaidAmount can be less amountToRepay2 even if there is still opened debt, see SCB-777
+      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexCollateral], p.tokens[indexBorrow], false);
+      if (needToRepay > p.liquidationThresholds[indexBorrow]) {
+        // more repays are required
+        require(maxRecursionDeep > 0, AppErrors.TOO_DEEP_RECURSION_SECOND_REPAY);
+        _secondRepay(p, indexCollateral, indexBorrow, amountToRepay - repaidAmount, maxRecursionDeep - 1);
+      } else {
+        borrowToProportions(p, indexBorrow, indexCollateral, false);
+      }
+    }
+  }
+
   /// @notice Set balances to right proportions using borrow
   ///         (it can be necessary if propNotUnderlying18 was changed after swap)
   function _fixLeftoversProportions(IterationPlanLib.SwapRepayPlanParams memory p) internal {
@@ -464,11 +511,11 @@ library PairBasedStrategyLib {
 
     if (balanceAsset > targetAssets) {
       if (balanceAsset - targetAssets > p.liquidationThresholds[IDX_ASSET]) {
-        _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken);
+        _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken, true);
       }
     } else if (balanceToken > targetTokens) {
       if (balanceToken - targetTokens > p.liquidationThresholds[IDX_ASSET]) {
-        _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset);
+        _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset, true);
       }
     }
   }
@@ -477,14 +524,18 @@ library PairBasedStrategyLib {
   function borrowToProportions(
     IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
-    uint indexBorrow
+    uint indexBorrow,
+    bool checkOppositDebtDoesntExist
   ) internal {
+    console.log("borrowToProportions.balance collateral", IERC20(p.tokens[indexCollateral]).balanceOf(address(this)));
+    console.log("borrowToProportions.balance borrow", IERC20(p.tokens[indexBorrow]).balanceOf(address(this)));
     _borrowToProportions(
       p,
       indexCollateral,
       indexBorrow,
       IERC20(p.tokens[indexCollateral]).balanceOf(address(this)),
-      IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
+      IERC20(p.tokens[indexBorrow]).balanceOf(address(this)),
+      checkOppositDebtDoesntExist
     );
   }
 
@@ -494,8 +545,19 @@ library PairBasedStrategyLib {
     uint indexCollateral,
     uint indexBorrow,
     uint balanceCollateral,
-    uint balanceBorrow
+    uint balanceBorrow,
+    bool checkOppositDebtDoesntExist
   ) internal {
+    // we are going to change direction of the borrow
+    // let's ensure that there is no debt in opposite direction
+    if (checkOppositDebtDoesntExist) {
+      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
+      console.log("_borrowToProportions.collateral (reverse)", p.tokens[indexBorrow]);
+      console.log("_borrowToProportions.borrow (reverse)", p.tokens[indexCollateral]);
+      console.log("_borrowToProportions.needToRepay", needToRepay);
+      require(needToRepay < AppLib.DUST_AMOUNT_TOKENS, AppErrors.OPPOSITE_DEBT_EXISTS);
+    }
+
     BorrowLib.RebalanceAssetsCore memory cac = BorrowLib.RebalanceAssetsCore({
       converterLiquidator: BorrowLib.ConverterLiquidator(p.converter, p.liquidator),
       assetA: p.tokens[indexCollateral],
@@ -510,11 +572,6 @@ library PairBasedStrategyLib {
       indexA: indexCollateral,
       indexB: indexBorrow
     });
-
-    // we are going to change direction of the borrow
-    // let's ensure that there is no debt in opposite direction
-    (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
-    require(needToRepay < AppLib.DUST_AMOUNT_TOKENS, AppErrors.OPPOSITE_DEBT_EXISTS);
 
     BorrowLib.openPosition(
       cac,
@@ -554,6 +611,8 @@ library PairBasedStrategyLib {
       p.tokens[indexBorrow],
       true
     );
+    console.log("_getAmountToRepay2.needToRepay", needToRepay);
+    console.log("_getAmountToRepay2.collateralAmountOut", collateralAmountOut);
 
     if (needToRepay == 0) {
       // check if we need to make reverse borrow to fit to proportions: borrow collateral-asset under borrow-asset
