@@ -36,6 +36,7 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {IStrategyBasicInfo} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
 
 const { expect } = chai;
 
@@ -285,39 +286,42 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
   describe('UniswapV3 strategy tests', function() {
     it('Rebalance and hardwork', async() => {
-      const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
       const state = await PackedData.getDefaultState(strategy);
-
-      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault.splitter());
-      let price;
-      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+      const price= await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
       console.log('tokenB price', formatUnits(price, 6));
 
-      console.log('deposit...');
-      await vault.deposit(investAmount, signer.address);
-
+      console.log('initial deposit...');
+      await vault.deposit(_10_000, signer.address);
       expect(await strategy.isReadyToHardWork()).eq(false);
       expect(await strategy.needRebalance()).eq(false);
 
+      // make rebalancing
       await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-
       expect(await strategy.needRebalance()).eq(true);
-
-      const rebalanceGasUsed = await strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-      console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
-      expect(rebalanceGasUsed.toNumber()).lessThan(5_000_000);
-
       await strategy.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       expect(await strategy.needRebalance()).eq(false);
 
+      // make hardwork
       await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, strategy);
-      // await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1')).div(price).mul(2));
-
       expect(await strategy.isReadyToHardWork()).eq(true);
-      await strategy.connect(splitterSigner).doHardWork();
+      await strategy.connect(await DeployerUtilsLocal.impersonate(await vault.splitter())).doHardWork();
       expect(await strategy.isReadyToHardWork()).eq(false);
+    });
+
+    it('Rebalance doesn\'t exceed gas limit @skip-on-coverage', async() => {
+      const swapAssetValueForPriceMove = parseUnits('500000', 6);
+      const state = await PackedData.getDefaultState(strategy);
+      await vault.deposit(_10_000, signer.address);
+
+      // move price to activate needRebalance
+      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+      expect(await strategy.needRebalance()).eq(true);
+
+      // make rebalancing
+      const rebalanceGasUsed = await strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+      console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
+      expect(rebalanceGasUsed.toNumber()).lessThan(GAS_REBALANCE_NO_SWAP);
     });
 
     it('Loop with rebalance, hardwork, deposit and withdraw', async() => {

@@ -9,7 +9,7 @@ import {
   IERC20__factory,
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
-import {defaultAbiCoder, parseUnits} from 'ethers/lib/utils';
+import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
@@ -21,6 +21,12 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
+import {
+  ISwapper__factory
+} from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -948,6 +954,83 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
           expect(stateAfter.strategy.investedAssets).lt(10);
+        });
+      });
+    });
+  });
+
+  /**
+   * Kyber is not supported here for two reasons:
+   * 1) isReadyToHardWork always returns true for simplicity
+   * 2) prepareNeedRebalanceOnBigSwap doesn't work with Kyber
+   */
+  describe("SCB-776: Rebalance and hardwork (Univ3 and algebra only)", () => {
+    interface IStrategyInfo {
+      name: string,
+    }
+
+    const strategies: IStrategyInfo[] = [
+      {name: PLATFORM_UNIV3,},
+      {name: PLATFORM_ALGEBRA,},
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+        console.log('initial deposit...');
+        await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits('100000', b.assetDecimals));
+        await b.vault.connect(signer).deposit(parseUnits('10000', b.assetDecimals), signer.address);
+        expect(await converterStrategyBase.isReadyToHardWork()).eq(false);
+        expect(await b.strategy.needRebalance()).eq(false);
+
+        // set up needRebalance
+        // we use prepareNeedRebalanceOnBigSwap instead of prepareNeedRebalanceOn to reproduce SCB-776
+        await PairBasedStrategyPrepareStateUtils.prepareNeedRebalanceOnBigSwap(signer, signer2, b);
+
+        expect(await b.strategy.needRebalance()).eq(true);
+        return b;
+      }
+
+      describe(`${strategyInfo.name}`, () => {
+        let snapshot: string;
+        let snapshotEach: string;
+        let init: IBuilderResults;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+          init = await prepareStrategy();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+        beforeEach(async function () {
+          snapshotEach = await TimeUtils.snapshot();
+        });
+        afterEach(async function () {
+          await TimeUtils.rollback(snapshotEach);
+        });
+
+        it('doHardWork should set isReadyToHardWork OFF', async () => {
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(init.strategy.address, signer);
+
+          // make rebalancing
+          await init.strategy.rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+          expect(await init.strategy.needRebalance()).eq(false);
+
+          // make hardwork
+          await PairBasedStrategyPrepareStateUtils.prepareToHardwork(signer, init.strategy);
+          expect(await converterStrategyBase.isReadyToHardWork()).eq(true);
+          await converterStrategyBase.connect(await DeployerUtilsLocal.impersonate(await init.splitter.address)).doHardWork();
+          expect(await converterStrategyBase.isReadyToHardWork()).eq(false);
+        });
+
+        it('Rebalance doesn\'t exceed gas limit @skip-on-coverage', async () => {
+          const rebalanceGasUsed = await init.strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+          console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
+          expect(rebalanceGasUsed.toNumber()).lessThan(GAS_REBALANCE_NO_SWAP);
         });
       });
     });

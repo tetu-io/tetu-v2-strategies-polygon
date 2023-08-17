@@ -87,6 +87,20 @@ export class PairBasedStrategyPrepareStateUtils {
     }
   }
 
+  /** Set up "neeRebalance = true" */
+  static async prepareNeedRebalanceOnBigSwap(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    b: IStrategyBasicInfo
+  ) {
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+    const assetDecimals = await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).decimals()
+    const swapAssetValueForPriceMove = parseUnits('500000', assetDecimals);
+    const state = await PackedData.getDefaultState(b.strategy);
+
+    await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove);
+  }
+
   /** Setup fuse thresholds. Values are selected relative to the current prices */
   static async prepareFuse(b: IBuilderResults, triggerOn: boolean) {
     console.log("activate fuse ON");

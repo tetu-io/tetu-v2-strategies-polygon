@@ -19,6 +19,7 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -106,7 +107,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 //endregion Utils
 
 //region Unit tests
-  describe("Deposit, rebalance, withdraw-all", () => {
+  describe("Multiple users make actions simultaneously", () => {
     interface IStrategyInfo {
       name: string,
     }
