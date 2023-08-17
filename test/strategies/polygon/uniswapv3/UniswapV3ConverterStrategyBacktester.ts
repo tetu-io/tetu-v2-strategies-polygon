@@ -1,5 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
-import { ethers } from 'hardhat';
+import hre, { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { getAddress } from 'ethers/lib/utils';
@@ -12,6 +12,10 @@ import {
 import {IBacktestResult, IContracts} from "../../../../scripts/uniswapV3Backtester/types";
 import {showBacktestResult, strategyBacktest} from "../../../../scripts/uniswapV3Backtester/strategyBacktest";
 
+
+// tslint:disable-next-line:no-var-requires
+const hre = require("hardhat");
+
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
 const argv = require('yargs/yargs')()
@@ -21,18 +25,14 @@ const argv = require('yargs/yargs')()
       type: 'boolean',
       default: false,
     },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
   }).argv;
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
-  const backtestStartBlock = 43400000;
-  const backtestEndBlock = 43450000;
+  const backtestStartBlock = 45700000; // 7/30/2023 3:31:06 PM
+  const backtestEndBlock = 46000000; //
   const investAmountUnits: string = '10000' // 1k USDC, 1k WMATIC etc
-  const txLimit = 100; // 0 - unlimited
+  const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
 
@@ -46,7 +46,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     tickRange: 0,
     rebalanceTickRange: 0,
   }*/
-  /*const params = {
+  const params = {
     vaultAsset: MaticAddresses.USDC_TOKEN,
     pool: MaticAddresses.UNISWAPV3_USDC_USDT_100, // USDC_USDT_0.01%
     token0: MaticAddresses.USDC_TOKEN,
@@ -55,8 +55,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
     liquiditySnapshotSurroundingTickSpacings: 200, // 200*1*0.01% == +-2% price
     tickRange: 0, // 1 tick
     rebalanceTickRange: 0, // 1 tick
-  }*/
-  const params = {
+  }
+  /*const params = {
     vaultAsset: MaticAddresses.USDC_TOKEN,
     pool: MaticAddresses.UNISWAPV3_USDC_DAI_100, // USDC_DAI_0.01%
     token0: MaticAddresses.USDC_TOKEN,
@@ -65,7 +65,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     liquiditySnapshotSurroundingTickSpacings: 50, // 50*1*0.01% == +-0.5% price
     tickRange: 0, // 1 tick
     rebalanceTickRange: 0, // 1 tick
-  }
+  }*/
     // USDC vault
   /*{
     vaultAsset: MaticAddresses.USDC_TOKEN,
@@ -189,8 +189,9 @@ describe('UmiswapV3 converter strategy backtester', function() {
     return;
   }
 
-  if (argv.hardhatChainId !== 31337) {
-    console.log('Backtester can only work in the local hardhat network (31337 chainId)');
+  const chainId = hre.network.config.chainId
+  if (chainId !== 31337) {
+    console.log('Backtester can only work in the local hardhat or foundry network (31337 chainId)');
     return;
   }
 

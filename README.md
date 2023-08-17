@@ -14,13 +14,15 @@ Twitter: https://twitter.com/tetu_io
 
 ## Setup new UniswapV3 based strategy
 
-* [deployer] ```hardhat deploy --network matic```
-* [tetu governance] announce strategy for splitter
-* [converter governance] converterController.setWhitelistValues([strategyAddress], true)
-* check liquidator routes and add if it is needed
-* [operator] strategy.setLiquidationThreshold((asset, threshold)
-* [operator] strategy.setStrategyProfitHolder(strategyAddress)
-* [operator] rebalanceDebtConfig.setConfig(strategyAddr, lockedPercentForDelayedRebalance, lockedPercentForForcedRebalance, rebalanceDebtDelay)
-* [gelato user] add task for NSR with RebalanceResolver address
+* * [operator] ```hardhat deploy --network matic```
+* * [tetu governance] announce strategy for splitter
+* * [converter governance] converterController.setWhitelistValues([strategyAddress], true)
+* * [tetu governance] check liquidator routes and add if it is needed
+* * [operator] strategy.setLiquidationThreshold((asset, threshold) (for each 1000)
+* * [operator] strategy.seReinvestThreholdPercent((thresholdPerc18) (10)
+* * [operator] strategy.setStrategyProfitHolder(strategyAddress)
+* * [operator] rebalanceDebtConfig.setConfig(strategyAddr, lockedPercentForDelayedRebalance, lockedPercentForForcedRebalance, rebalanceDebtDelay)
+* * [tetu governance] Register RebalanceResolver as operator
+* * [operator] add task for NSR with RebalanceResolver address, register task executer in the resolver
 * [operator] run on server ```npm run rebalance-debt:matic``` with env vars set
-* [tetu governance] after 18h add strategy to splitter
+* [operator] after 18h add strategy to splitter

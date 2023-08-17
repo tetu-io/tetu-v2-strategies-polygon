@@ -36,7 +36,7 @@ export interface IStateHardworkEvents {
 export class UniswapV3StrategyUtils {
   public static extractRebalanceLoss(cr: ContractReceipt): BigNumber[] {
     const abi = [
-      "event Rebalanced(uint loss, uint coveredByRewards)",
+      "event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards)",
     ];
     const iface = new ethers.utils.Interface(abi)
     const topic = iface.getEventTopic(iface.getEvent('Rebalanced'))
@@ -44,14 +44,14 @@ export class UniswapV3StrategyUtils {
       for (const event of cr.events) {
         if (event.topics.includes(topic)) {
           const decoded = ethers.utils.defaultAbiCoder.decode(
-            ['uint', 'uint'],
+            ['uint', 'uint', 'uint'],
             event.data
           )
-          return [decoded[0], decoded[1]];
+          return [decoded[0], decoded[1], decoded[2]];
         }
       }
     }
-    return [BigNumber.from(0),BigNumber.from(0)]
+    return [BigNumber.from(0),BigNumber.from(0),BigNumber.from(0)]
   }
 
   /**
