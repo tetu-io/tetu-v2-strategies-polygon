@@ -19,7 +19,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -319,11 +318,8 @@ library UniswapV3ConverterStrategyLogicLib {
   function isReadyToHardWork(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter) external view returns (
     bool isReady
   ) {
-    console.log("isReadyToHardWork");
     // check claimable amounts and compare with thresholds
     (uint fee0, uint fee1) = getFees(pairState);
-    console.log("isReadyToHardWork.fee0", fee0);
-    console.log("isReadyToHardWork.fee1", fee1);
 
     if (pairState.depositorSwapTokens) {
       (fee0, fee1) = (fee1, fee0);
@@ -342,10 +338,6 @@ library UniswapV3ConverterStrategyLogicLib {
 
     uint fee0USD = fee0 * priceA / 1e18;
     uint fee1USD = fee1 * priceB / 1e18;
-
-    console.log("isReadyToHardWork.fee0USD", fee0USD);
-    console.log("isReadyToHardWork.fee1USD", fee1USD);
-    console.log("isReadyToHardWork.HARD_WORK_USD_FEE_THRESHOLD", HARD_WORK_USD_FEE_THRESHOLD);
 
     return fee0USD > HARD_WORK_USD_FEE_THRESHOLD || fee1USD > HARD_WORK_USD_FEE_THRESHOLD;
   }

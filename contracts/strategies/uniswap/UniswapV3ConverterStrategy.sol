@@ -9,7 +9,6 @@ import "../../interfaces/IRebalancingV2Strategy.sol";
 import "./Uni3StrategyErrors.sol";
 import "../pair/PairBasedStrategyLib.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 /// @title Delta-neutral liquidity hedging converter fill-up/swap rebalancing strategy for UniswapV3
 /// @notice This strategy provides delta-neutral liquidity hedging for Uniswap V3 pools. It rebalances the liquidity
@@ -21,7 +20,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   string public constant override NAME = "UniswapV3 Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.UNIV3;
-  string public constant override STRATEGY_VERSION = "2.0.0";
+  string public constant override STRATEGY_VERSION = "2.0.1";
 
   //endregion ------------------------------------------------- Constants
 
@@ -108,9 +107,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Check if the strategy is ready for hard work.
   /// @return A boolean indicating if the strategy is ready for hard work.
   function isReadyToHardWork() override external virtual view returns (bool) {
-    console.log("isReadyToHardWork.needRebalance", needRebalance());
-    console.log("isReadyToHardWork._isFuseTriggeredOn", _isFuseTriggeredOn());
-    console.log("isReadyToHardWork.isReadyToHardWork", UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state.pair, _csbs.converter));
     return !needRebalance()
     && !_isFuseTriggeredOn()
     && UniswapV3ConverterStrategyLogicLib.isReadyToHardWork(state.pair, _csbs.converter);
