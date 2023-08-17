@@ -286,6 +286,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    console.log("_withdrawUniversal", amount);
+
     _beforeWithdraw(amount);
 
     WithdrawUniversalLocal memory v;
@@ -298,11 +300,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       v.converter = _csbs.converter;
       v.indexAsset = AppLib.getAssetIndex(v.tokens, v.asset);
       v.balanceBefore = AppLib.balance(v.asset);
+      console.log("_withdrawUniversal.v.balanceBefore", v.balanceBefore);
 
       v.reservesBeforeWithdraw = _depositorPoolReserves();
       v.totalSupplyBeforeWithdraw = _depositorTotalSupply();
       v.depositorLiquidity = _depositorLiquidity();
       v.assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.asset);
+      console.log("_withdrawUniversal.v.totalSupplyBeforeWithdraw", v.totalSupplyBeforeWithdraw);
+      console.log("_withdrawUniversal.v.depositorLiquidity", v.depositorLiquidity);
       // -----------------------
 
       // calculate how much liquidity we need to withdraw for getting the requested amount
@@ -315,12 +320,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         investedAssets_,
         v.depositorLiquidity
       );
+      console.log("_withdrawUniversal.v.amountsToConvert", v.amountsToConvert[0], v.amountsToConvert[1]);
 
       if (v.liquidityAmountToWithdraw != 0) {
 
         // =============== WITHDRAW =====================
         // make withdraw
         v.withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
+        console.log("_withdrawUniversal.v.withdrawnAmounts", v.withdrawnAmounts[0], v.withdrawnAmounts[1]);
         // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
         // use what exactly was withdrew instead of the expectation
         // assume that liquidity cannot increase in _depositorExit
@@ -341,6 +348,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           v.amountsToConvert,
           v.withdrawnAmounts
         );
+        console.log("_withdrawUniversal.v.amountsToConvert.2", v.amountsToConvert[0], v.amountsToConvert[1]);
+        console.log("_withdrawUniversal.v.expectedMainAssetAmounts.2", v.expectedMainAssetAmounts[0], v.expectedMainAssetAmounts[1]);
       } else {
         // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
         v.expectedMainAssetAmounts = ConverterStrategyBaseLib2.postWithdrawActionsEmpty(
@@ -349,6 +358,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           v.indexAsset,
           v.amountsToConvert
         );
+        console.log("_withdrawUniversal.3");
       }
 
       // convert amounts to main asset
@@ -363,8 +373,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         v.expectedMainAssetAmounts,
         liquidationThresholds
       );
+      console.log("_withdrawUniversal.v.expectedTotalMainAssetAmount.4", v.expectedTotalMainAssetAmount);
 
       if (earnedByPrices_ != 0) {
+        console.log("_withdrawUniversal.v.expectedTotalMainAssetAmount.earnedByPrices_", earnedByPrices_);
         (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
           v.asset,
           earnedByPrices_,
@@ -375,12 +387,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
       v.investedAssetsAfterWithdraw = _updateInvestedAssets();
       v.balanceAfterWithdraw = AppLib.balance(v.asset);
+      console.log("_withdrawUniversal.v.investedAssetsAfterWithdraw", v.investedAssetsAfterWithdraw);
+      console.log("_withdrawUniversal.v.balanceAfterWithdraw", v.balanceAfterWithdraw);
 
       // we need to compensate difference if during withdraw we lost some assets
       (, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
         investedAssets_ + v.balanceBefore,
         v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw + amountSentToInsurance
       );
+      console.log("_withdrawUniversal.strategyLoss", strategyLoss);
+      console.log("_withdrawUniversal.v.expectedTotalMainAssetAmount", v.expectedTotalMainAssetAmount);
+      console.log("_withdrawUniversal.v.expectedTotalMainAssetAmount * v.assetPrice / 1e18", v.expectedTotalMainAssetAmount * v.assetPrice / 1e18);
 
       return (
         v.expectedTotalMainAssetAmount * v.assetPrice / 1e18,

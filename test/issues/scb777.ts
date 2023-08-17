@@ -90,8 +90,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const splitterSigner = await DeployerUtilsLocal.impersonate(SPLITTER);
       const strategy = IRebalancingV2Strategy__factory.connect(STRATEGY, splitterSigner);
 
-      // await PairBasedStrategyPrepareStateUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
-      // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
+      await PairBasedStrategyPrepareStateUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
+      await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
 
       const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, splitterSigner);
       // await converterStrategyBase.withdrawToSplitter(parseUnits(AMOUNT, 6));
