@@ -34,6 +34,7 @@ import {writeFileSyncRestoreFolder} from "../../../baseUT/utils/FileUtils";
 import {writeFileSync} from "fs";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -67,17 +68,7 @@ describe('KyberConverterStrategyDepegTest', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 44479520,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -158,17 +149,7 @@ describe('KyberConverterStrategyDepegTest', function() {
 
   after(async function() {
     await TimeUtils.rollback(snapshotBefore);
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
   });
 
   beforeEach(async function() {

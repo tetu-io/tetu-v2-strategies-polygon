@@ -56,7 +56,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.0";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.1";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -118,6 +118,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     emit ConverterStrategyBaseLib2.ReinvestThresholdPercentChanged(DENOMINATOR / 100);
   }
 
+  /// @dev Liquidation thresholds are used to detect dust in many cases, not only in liquidation case
+  /// @param amount Min amount of token allowed to liquidate, token's decimals are used.
   function setLiquidationThreshold(address token, uint amount) external {
     ConverterStrategyBaseLib2.checkLiquidationThresholdChanged(controller(), token, amount);
     liquidationThresholds[token] = amount;
@@ -478,13 +480,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _doHardWork(bool reInvest) internal returns (uint earned, uint lost) {
     // ATTENTION! splitter will not cover the loss if it is lower than profit
     (uint investedAssetsNewPrices, uint earnedByPrices) = _fixPriceChanges(true);
-
     if (!_preHardWork(reInvest)) {
-
       // claim rewards and get current asset balance
       uint assetBalance;
       (earned, lost, assetBalance) = _handleRewards();
-
       // re-invest income
       (, uint amountSentToInsurance) = _depositToPoolUniversal(
         reInvest
@@ -499,9 +498,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         investedAssetsNewPrices + assetBalance, // assets in use before deposit
         _csbs.investedAssets + AppLib.balance(baseState.asset) + amountSentToInsurance // assets in use after deposit
       );
-
       _postHardWork();
-
       emit OnHardWorkEarnedLost(investedAssetsNewPrices, earnedByPrices, earned, lost, earned2, lost2);
       return (earned + earned2, lost + lost2);
     } else {

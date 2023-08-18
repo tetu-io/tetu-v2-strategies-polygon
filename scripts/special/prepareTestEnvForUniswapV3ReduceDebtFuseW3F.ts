@@ -5,7 +5,7 @@ import hre, {ethers, run} from "hardhat";
 import {DeployerUtils} from "../utils/DeployerUtils";
 import {
   ControllerV2__factory, IAave3PriceOracle, IAave3PriceOracle__factory,
-  IERC20__factory,
+  IERC20__factory, IRebalancingV2Strategy__factory,
   IStrategyV2, RebalanceDebtConfig,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
@@ -27,6 +27,7 @@ import {TimeUtils} from "../utils/TimeUtils";
 import {PairStrategyLiquidityUtils} from "../../test/baseUT/strategies/PairStrategyLiquidityUtils";
 import {PriceOracleImitatorUtils} from "../../test/baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
+import {PackedData} from "../../test/baseUT/utils/PackedData";
 
 async function main() {
   const chainId = (await ethers.provider.getNetwork()).chainId
@@ -134,24 +135,29 @@ async function main() {
   await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
   await vault.deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
 
-  const state = await strategy.getDefaultState()
+  const state = await PackedData.getDefaultState(strategy);
+  // const state = await strategy.getDefaultState()
   for (let i = 0; i < 6; i++) {
     console.log(`Swap and rebalance. Step ${i}`)
 
     const amounts = await UniswapV3LiquidityUtils.getLiquidityAmountsInCurrentTick(signer, lib, MaticAddresses.UNISWAPV3_USDC_USDT_100)
-    let swapAmount = await PairStrategyLiquidityUtils.quoteExactOutputSingle2(
+    let swapAmount = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
       signer,
-      strategy.address,
-      MaticAddresses.UNISWAPV3_QUOTER,
-      state.addr[2],
-      state.addr[0],
-      state.addr[1],
+      {
+        strategy: IRebalancingV2Strategy__factory.connect(strategy.address, signer),
+        pool: state.pool,
+        quoter: MaticAddresses.UNISWAPV3_QUOTER,
+        swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+        lib
+      },
+      state.tokenA,
+      state.tokenB,
       amounts[1]
     )
 
     swapAmount = swapAmount.add(100)
 
-    await UniversalUtils.movePoolPriceUp(signer, state.addr[2], state.addr[0], state.addr[1], MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+    await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
 
     prices = await priceOracle.getAssetsPrices([MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
     // console.log('oracle', prices)

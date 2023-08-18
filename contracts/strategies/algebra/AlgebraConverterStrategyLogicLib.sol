@@ -537,6 +537,7 @@ library AlgebraConverterStrategyLogicLib {
 
       uint loss;
       (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
+
       if (loss != 0) {
         coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
@@ -554,7 +555,7 @@ library AlgebraConverterStrategyLogicLib {
       coveredByRewards = AlgebraDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
       uint notCovered = loss - coveredByRewards;
       if (notCovered != 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
+        ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
     }
 

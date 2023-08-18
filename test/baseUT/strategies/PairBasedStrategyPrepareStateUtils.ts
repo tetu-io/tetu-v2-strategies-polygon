@@ -1,11 +1,5 @@
-import {IBuilderResults} from "./PairBasedStrategyBuilder";
-import {
-  AlgebraLib,
-  ControllerV2__factory,
-  ConverterStrategyBase__factory, IRebalancingV2Strategy,
-  KyberLib, StrategyBaseV2__factory,
-  UniswapV3Lib
-} from "../../../typechain";
+import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
+import {ControllerV2__factory, ConverterStrategyBase__factory, IRebalancingV2Strategy, StrategyBaseV2__factory} from "../../../typechain";
 import {PackedData} from "../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
@@ -19,18 +13,12 @@ import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
 import {depositToVault, printVaultState} from "../../StrategyTestUtils";
-
-const ENTRY_TO_POOL_IS_ALLOWED = 1;
-const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-
-const PLAN_SWAP_REPAY = 0;
-const PLAN_REPAY_SWAP_REPAY = 1;
-const PLAN_SWAP_ONLY = 2;
+import {NoSwapRebalanceEvents} from "./NoSwapRebalanceEvents";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;
@@ -46,36 +34,35 @@ export interface IListStates {
  */
 export class PairBasedStrategyPrepareStateUtils {
 
-  static getLib(platform: string, b: IBuilderResults): UniswapV3Lib | AlgebraLib | KyberLib {
-    return platform === PLATFORM_ALGEBRA
-      ? b.libAlgebra
-      : platform === PLATFORM_KYBER
-        ? b.libKyber
-        : b.libUniv3;
-  }
-
   /** Set up "neeRebalance = true" */
   static async prepareNeedRebalanceOn(
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
-    b: IBuilderResults,
-    swapAmountRatio: number = 1.1
+    b: IStrategyBasicInfo,
+    swapAmountRatio: number = 1.1,
+    movePriceUp: boolean = true
   ) {
-    const state = await PackedData.getDefaultState(b.strategy);
 
     // move strategy to "need to rebalance" state
     let countRebalance = 0;
-    for (let i = 0; i < 10; ++i) {
+    for (let i = 0; i < 15; ++i) {
+      const state = await PackedData.getDefaultState(b.strategy);
+      console.log("lowerTick, upperTick", state.lowerTick, state.upperTick)
+
       console.log("i", i);
       const swapAmount = await this.getSwapAmount2(
         signer,
         b,
         state.tokenA,
         state.tokenB,
-        true,
+        movePriceUp,
         swapAmountRatio
       );
-      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      if (movePriceUp) {
+        await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      } else {
+        await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+      }
       if (await b.strategy.needRebalance()) {
         if (countRebalance === 0) {
           await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
@@ -85,6 +72,20 @@ export class PairBasedStrategyPrepareStateUtils {
         }
       }
     }
+  }
+
+  /** Set up "neeRebalance = true" */
+  static async prepareNeedRebalanceOnBigSwap(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    b: IStrategyBasicInfo
+  ) {
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+    const assetDecimals = await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).decimals()
+    const swapAssetValueForPriceMove = parseUnits('500000', assetDecimals);
+    const state = await PackedData.getDefaultState(b.strategy);
+
+    await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove);
   }
 
   /** Setup fuse thresholds. Values are selected relative to the current prices */
@@ -111,9 +112,9 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /** Put addition amounts of tokenA and tokenB to balance of the profit holder */
-  static async prepareToHardwork(signer: SignerWithAddress, b: IBuilderResults) {
-    const state = await PackedData.getDefaultState(b.strategy);
-    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+  static async prepareToHardwork(signer: SignerWithAddress, strategy: IRebalancingV2Strategy) {
+    const state = await PackedData.getDefaultState(strategy);
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, signer);
     const platformVoter = await IController__factory.connect(await converterStrategyBase.controller(), signer).platformVoter();
 
     await converterStrategyBase.connect(await Misc.impersonate(platformVoter)).setCompoundRatio(90_000);
@@ -131,7 +132,7 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /**
-   * Deploy new implemenation of TetuConverter-contract and upgrade proxy
+   * Deploy new implementation of TetuConverter-contract and upgrade proxy
    */
   static async injectTetuConverter(signer: SignerWithAddress) {
     const core = await DeployerUtilsLocal.getCoreAddresses();
@@ -145,6 +146,27 @@ export class PairBasedStrategyPrepareStateUtils {
     await controllerAsGov.announceProxyUpgrade([tetuConverter], [converterLogic.address]);
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
     await controllerAsGov.upgradeProxy([tetuConverter]);
+  }
+
+  /**
+   * Deploy new implementation of the given strategy and upgrade proxy
+   */
+  static async injectStrategy(
+    signer: SignerWithAddress,
+    strategyProxy: string,
+    contractName: string
+  ) {
+    const strategyLogic = await DeployerUtils.deployContract(signer, contractName);
+    const controller = ControllerV2__factory.connect(
+      await ConverterStrategyBase__factory.connect(strategyProxy, signer).controller(),
+      signer
+    );
+    const governance = await controller.governance();
+    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
+
+    await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
+    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
+    await controllerAsGov.upgradeProxy([strategyProxy]);
   }
 
   /**
@@ -166,14 +188,14 @@ export class PairBasedStrategyPrepareStateUtils {
    */
   static async getSwapAmount2(
     signer: SignerWithAddress,
-    b: IBuilderResults,
+    b: IStrategyBasicInfo,
     tokenA: string,
     tokenB: string,
     priceTokenBUp: boolean,
     swapAmountRatio: number = 1
   ): Promise<BigNumber> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
-    const lib = this.getLib(platform, b);
+    const lib = b.lib;
 
     const amountsInCurrentTick = await PairStrategyLiquidityUtils.getLiquidityAmountsInCurrentTick(signer, platform, lib, b.pool);
     console.log("amountsInCurrentTick", amountsInCurrentTick);
@@ -238,21 +260,12 @@ export class PairBasedStrategyPrepareStateUtils {
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
-          const params = {
-            fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-            toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-            amount: quote.amountToSwap.toString(),
-            fromAddress: strategyAsOperator.address,
-            slippage: 1,
-            disableEstimate: true,
-            allowPartialFill: false,
-            protocols: 'POLYGON_BALANCER_V2',
-          };
-          console.log("params", params);
-
-          const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-          console.log('Transaction for swap: ', swapTransaction);
-          swapData = swapTransaction.data;
+          swapData = await AggregatorUtils.buildSwapTransactionData(
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+            quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+            quote.amountToSwap,
+            strategyAsOperator.address,
+          );
         } else if (aggregator === MaticAddresses.TETU_LIQUIDATOR) {
           swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
             tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
@@ -269,7 +282,6 @@ export class PairBasedStrategyPrepareStateUtils {
       console.log("amountToSwap", amountToSwap);
       console.log("swapData", swapData);
       console.log("planEntryData", planEntryData);
-      console.log("ENTRY_TO_POOL_IS_ALLOWED", ENTRY_TO_POOL_IS_ALLOWED);
 
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
         tokenToSwap,
@@ -367,10 +379,10 @@ export class PairBasedStrategyPrepareStateUtils {
     if (await b.strategy.needRebalance()) {
       console.log('------------------ REBALANCE' , loopStep, '------------------');
 
-      await b.strategy.connect(signer).rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+      const rebalanced = await NoSwapRebalanceEvents.makeRebalanceNoSwap(b.strategy.connect(signer));
       await printVaultState(b.vault, b.splitter, strategyAsSigner, b.assetCtr, b.assetDecimals);
 
-      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r${countRebalances}`));
+      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r${countRebalances}`, {rebalanced}));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
       ++countRebalances;

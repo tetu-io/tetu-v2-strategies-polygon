@@ -18,7 +18,7 @@ import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
 import path from 'path';
 import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from 'hardhat/builtin-tasks/task-names';
 import { exec } from 'child_process';
-import './scripts/hardhat-verify/verify1-task';
+// todo import './scripts/hardhat-verify/verify1-task';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -41,7 +41,7 @@ const argv = require('yargs/yargs')()
     },
     maticForkBlock: {
       type: 'number',
-      default: 43620959,
+      default: 46320827,
     },
     hardhatLogsEnabled: {
       type: 'boolean',

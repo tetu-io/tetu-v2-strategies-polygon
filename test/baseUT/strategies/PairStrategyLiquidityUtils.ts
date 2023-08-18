@@ -11,7 +11,7 @@ import {UniswapV3LiquidityUtils} from "./univ3/UniswapV3LiquidityUtils";
 import {AlgebraLiquidityUtils} from "./algebra/AlgebraLiquidityUtils";
 import {KyberLiquidityUtils} from "./kyber/KyberLiquidityUtils";
 import {BigNumber} from "ethers";
-import {IBuilderResults} from "./PairBasedStrategyBuilder";
+import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {IUniswapV3Pool__factory} from "../../../typechain/factories/contracts/integrations/uniswap";
 
 export class PairStrategyLiquidityUtils {
@@ -45,7 +45,7 @@ export class PairStrategyLiquidityUtils {
    */
   static async quoteExactOutputSingle(
     signer: SignerWithAddress,
-    b: IBuilderResults,
+    b: IStrategyBasicInfo,
     tokenIn: string,
     tokenOut: string,
     amountOut: BigNumber
@@ -79,50 +79,6 @@ export class PairStrategyLiquidityUtils {
           tokenIn,
           tokenOut,
           feeUnits: await IPool__factory.connect(b.pool, signer).swapFeeUnits(),
-          amount: amountOut,
-          limitSqrtP: 0
-        });
-        console.log("quoteExactOutputSingle.kyber.amountOut", amountOut);
-        console.log("quoteExactOutputSingle.kyber.results", kyberRet);
-        return kyberRet.returnedAmount;
-      default: throw Error(`quoteExactOutputSingle unknown ${platform}`);
-    }
-  }
-
-  static async quoteExactOutputSingle2(
-    signer: SignerWithAddress,
-    strategy: string,
-    quoter: string,
-    pool: string,
-    tokenIn: string,
-    tokenOut: string,
-    amountOut: BigNumber
-  ): Promise<BigNumber> {
-    const platform = await ConverterStrategyBase__factory.connect(strategy, signer).PLATFORM();
-    switch (platform) {
-      case PLATFORM_UNIV3:
-        return IUniswapV3Quoter__factory.connect(quoter, signer).callStatic.quoteExactOutputSingle(
-          tokenIn,
-          tokenOut,
-          await IUniswapV3Pool__factory.connect(pool, signer).fee(),
-          amountOut,
-          0
-        );
-      case PLATFORM_ALGEBRA:
-        const algebraRet = await IAlgebraQuoter__factory.connect(quoter, signer).callStatic.quoteExactOutputSingle(
-          tokenIn,
-          tokenOut,
-          amountOut,
-          0
-        );
-        console.log("quoteExactOutputSingle.algebra.amountOut", amountOut);
-        console.log("quoteExactOutputSingle.algebra.results", algebraRet);
-        return algebraRet.amountIn;
-      case PLATFORM_KYBER:
-        const kyberRet = await IKyberQuoterV2__factory.connect(quoter, signer).callStatic.quoteExactOutputSingle({
-          tokenIn,
-          tokenOut,
-          feeUnits: await IPool__factory.connect(pool, signer).swapFeeUnits(),
           amount: amountOut,
           limitSqrtP: 0
         });

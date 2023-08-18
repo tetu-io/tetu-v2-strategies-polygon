@@ -413,27 +413,9 @@ library PairBasedStrategyLib {
           );
 
           if (borrowInsteadRepay) {
-            borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
+            borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
-            // we need to know repaidAmount
-            // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
-            // temporary save current balance to repaidAmount
-            uint repaidAmount = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
-
-            ConverterStrategyBaseLib._repayDebt(
-              p.converter,
-              p.tokens[idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET],
-              p.tokens[idxToRepay1 - 1],
-              amountToRepay2
-            );
-            uint balanceAfter = IERC20(p.tokens[idxToRepay1 - 1]).balanceOf(address(this));
-            repaidAmount = repaidAmount > balanceAfter
-              ? repaidAmount - balanceAfter
-              : 0;
-
-            if (repaidAmount < amountToRepay2 && amountToRepay2 - repaidAmount > p.liquidationThresholds[idxToRepay1 - 1]) {
-              borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET);
-            }
+            _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
           }
         }
       } else {
@@ -453,6 +435,47 @@ library PairBasedStrategyLib {
     return idxToRepay1 == 0;
   }
 
+  /// @notice Make final repay in the scheme REPAY-SWAP-REPAY
+  ///         Depending on condition the final repay can be made several times or additional borrow can be made
+  /// @param amountToRepay Amount of {indexBorrow} asset that should be repaid
+  /// @param needToRepayPrev Amount-to-repay on previous call of the {_secondRepay}
+  ///                        This amount should decrease on each step of recursion.
+  ///                        if it doesn't decrease repay is not successfull and it's useless to continue to call repays
+  ///                        It can happen if liquidationThreshold has incorrect value (i.t. it's too low or zero)
+  function _secondRepay(
+    IterationPlanLib.SwapRepayPlanParams memory p,
+    uint indexCollateral,
+    uint indexBorrow,
+    uint amountToRepay,
+    uint needToRepayPrev
+  ) internal {
+    // we need to know repaidAmount
+    // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
+    uint balanceBefore = IERC20(p.tokens[indexBorrow]).balanceOf(address(this));
+    ConverterStrategyBaseLib._repayDebt(p.converter, p.tokens[indexCollateral], p.tokens[indexBorrow], amountToRepay);
+    uint balanceAfter = IERC20(p.tokens[indexBorrow]).balanceOf(address(this));
+
+    uint repaidAmount = balanceBefore > balanceAfter
+      ? balanceBefore - balanceAfter
+      : 0;
+
+    if (repaidAmount < amountToRepay && amountToRepay - repaidAmount > p.liquidationThresholds[indexBorrow]) {
+      // repaidAmount is less than expected
+      // we need to make additional borrow OR probably make one more repay
+      // repaidAmount can be less amountToRepay2 even if there is still opened debt, see SCB-777
+      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexCollateral], p.tokens[indexBorrow], true);
+      if (
+        needToRepay > p.liquidationThresholds[indexBorrow]
+        && needToRepay < needToRepayPrev // amount of debt was reduced on prev iteration of recursion
+      ) {
+        // more repays are required
+        _secondRepay(p, indexCollateral, indexBorrow, amountToRepay - repaidAmount, needToRepay);
+      } else {
+        borrowToProportions(p, indexBorrow, indexCollateral, false);
+      }
+    }
+  }
+
   /// @notice Set balances to right proportions using borrow
   ///         (it can be necessary if propNotUnderlying18 was changed after swap)
   function _fixLeftoversProportions(IterationPlanLib.SwapRepayPlanParams memory p) internal {
@@ -464,11 +487,11 @@ library PairBasedStrategyLib {
 
     if (balanceAsset > targetAssets) {
       if (balanceAsset - targetAssets > p.liquidationThresholds[IDX_ASSET]) {
-        _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken);
+        _borrowToProportions(p, IDX_ASSET, IDX_TOKEN, balanceAsset, balanceToken, true);
       }
     } else if (balanceToken > targetTokens) {
       if (balanceToken - targetTokens > p.liquidationThresholds[IDX_ASSET]) {
-        _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset);
+        _borrowToProportions(p, IDX_TOKEN, IDX_ASSET, balanceToken, balanceAsset, true);
       }
     }
   }
@@ -477,14 +500,16 @@ library PairBasedStrategyLib {
   function borrowToProportions(
     IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
-    uint indexBorrow
+    uint indexBorrow,
+    bool checkOppositDebtDoesntExist
   ) internal {
     _borrowToProportions(
       p,
       indexCollateral,
       indexBorrow,
       IERC20(p.tokens[indexCollateral]).balanceOf(address(this)),
-      IERC20(p.tokens[indexBorrow]).balanceOf(address(this))
+      IERC20(p.tokens[indexBorrow]).balanceOf(address(this)),
+      checkOppositDebtDoesntExist
     );
   }
 
@@ -494,8 +519,16 @@ library PairBasedStrategyLib {
     uint indexCollateral,
     uint indexBorrow,
     uint balanceCollateral,
-    uint balanceBorrow
+    uint balanceBorrow,
+    bool checkOppositDebtDoesntExist
   ) internal {
+    // we are going to change direction of the borrow
+    // let's ensure that there is no debt in opposite direction
+    if (checkOppositDebtDoesntExist) {
+      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
+      require(needToRepay < AppLib.DUST_AMOUNT_TOKENS, AppErrors.OPPOSITE_DEBT_EXISTS);
+    }
+
     BorrowLib.RebalanceAssetsCore memory cac = BorrowLib.RebalanceAssetsCore({
       converterLiquidator: BorrowLib.ConverterLiquidator(p.converter, p.liquidator),
       assetA: p.tokens[indexCollateral],
@@ -510,11 +543,6 @@ library PairBasedStrategyLib {
       indexA: indexCollateral,
       indexB: indexBorrow
     });
-
-    // we are going to change direction of the borrow
-    // let's ensure that there is no debt in opposite direction
-    (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
-    require(needToRepay < AppLib.DUST_AMOUNT_TOKENS, AppErrors.OPPOSITE_DEBT_EXISTS);
 
     BorrowLib.openPosition(
       cac,

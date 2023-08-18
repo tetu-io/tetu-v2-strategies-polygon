@@ -30,19 +30,18 @@ import {
   OnDepositorExitEventObject,
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategy';
 import {
-  RebalancedEventObject,
   UniV3FeesClaimedEventObject,
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
 import { Misc } from '../scripts/utils/Misc';
-import {IRebalanceResults, IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
-import {FuseStatusChangedEventObject} from "../typechain/contracts/strategies/pair/PairBasedStrategyLib";
+import {IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
 import {PackedData} from "./baseUT/utils/PackedData";
 import {
   IHardworkEventInfo,
   IStateHardworkEvents,
   IUniV3FeesClaimedInfo
 } from "./baseUT/strategies/UniswapV3StrategyUtils";
+import {IRebalanceEvents, NoSwapRebalanceEvents} from "./baseUT/strategies/NoSwapRebalanceEvents";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -111,13 +110,17 @@ export async function rebalancePairBasedStrategyNoSwaps(
   signer: SignerWithAddress,
   decimals: number,
   checkNeedRebalance: boolean = true
-) : Promise<IRebalanceResults> {
+) : Promise<IRebalanceEvents> {
   console.log('### REBALANCE CALL ###');
   const stateBefore = await PackedData.getSpecificStateUniv3(strategy);
 
   const tx = await strategy.connect(signer).rebalanceNoSwaps(checkNeedRebalance, {gasLimit: 10_000_000});
   const receipt = await tx.wait();
-  const ret = await handleReceiptRebalance(receipt, decimals);
+  const ret = await handleReceiptRebalance(
+    receipt,
+    decimals,
+    await strategy.PLATFORM()
+  );
 
   const stateAfter = await PackedData.getSpecificStateUniv3(strategy);
 
@@ -297,41 +300,14 @@ export async function handleReceiptRedeem(receipt: ContractReceipt, decimals: nu
   console.log('*************');
 }
 
-export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number): Promise<IRebalanceResults> {
-  console.log('*** REBALANCE LOGS ***');
-  const pairLibI = PairBasedStrategyLib__factory.createInterface();
-  const univ3LogicLibI = UniswapV3ConverterStrategyLogicLib__factory.createInterface();
-  let fuseStatus: number | undefined;
-  let loss: BigNumber | undefined;
-  let covered: BigNumber | undefined;
-
-  for (const event of (receipt.events ?? [])) {
-    if (event.topics[0].toLowerCase() === pairLibI.getEventTopic('FuseStatusChanged').toLowerCase()) {
-      console.log('>>> !!!!!!!!!!!!!!!!!!!!!!!!! FuseTriggered !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-      const log = (pairLibI.decodeEventLog(
-        pairLibI.getEvent('FuseStatusChanged'),
-        event.data,
-        event.topics,
-      ) as unknown) as FuseStatusChangedEventObject;
-      fuseStatus = log.fuseStatus.toNumber();
-    }
-    if (event.topics[0].toLowerCase() === univ3LogicLibI.getEventTopic('Rebalanced').toLowerCase()) {
-      console.log('/// Strategy rebalanced');
-      const log = (univ3LogicLibI.decodeEventLog(
-        univ3LogicLibI.getEvent('Rebalanced'),
-        event.data,
-        event.topics,
-      ) as unknown) as RebalancedEventObject;
-      loss = log.loss;
-      covered = log.coveredByRewards;
-    }
-  }
-  console.log('*************');
-  return {
-    fuseStatus,
-    loss: loss || BigNumber.from(0),
-    covered: covered || BigNumber.from(0)
-  }
+/**
+ *
+ * @param receipt
+ * @param decimals
+ * @param platform One of PLATFORM_XXX, i.e. PLATFORM_UNIV3
+ */
+export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number, platform: string): Promise<IRebalanceEvents> {
+  return NoSwapRebalanceEvents.handleReceiptRebalance(receipt, decimals, platform);
 }
 
 export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals: number) : Promise<IStateHardworkEvents> {
