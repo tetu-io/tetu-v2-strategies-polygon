@@ -117,7 +117,7 @@ async function main() {
                       data: callData[0].data,
                       ...tp,
                     }),
-                  false, true,
+                  true, true,
                 );
 
                 console.log('Rebalance success!', strategyAddress);
