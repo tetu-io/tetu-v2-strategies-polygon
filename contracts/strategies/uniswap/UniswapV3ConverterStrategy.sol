@@ -227,6 +227,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
   /// @return Proportion of the not-underlying [0...1e18]
   function getPropNotUnderlying18() external view override returns (uint) {
+    console.log("getPropNotUnderlying18", UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state.pair));
     return UniswapV3ConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
   }
   //endregion ------------------------------------ Withdraw by iterations

@@ -5,7 +5,7 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
-  ConverterStrategyBase__factory,
+  ConverterStrategyBase__factory, IController__factory,
   IERC20__factory,
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
@@ -28,6 +28,10 @@ import {
   PLAN_REPAY_SWAP_REPAY,
   PLAN_SWAP_REPAY
 } from "../../../baseUT/AppConstants";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+import {
+  ISwapper__factory
+} from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -71,6 +75,16 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
   });
 //endregion before, after
 
+  function tokenName(token: string): string {
+    switch (token) {
+      case MaticAddresses.USDC_TOKEN: return "USDC";
+      case MaticAddresses.USDT_TOKEN: return "USDT";
+      case MaticAddresses.WETH_TOKEN: return "WETH";
+      case MaticAddresses.WMATIC_TOKEN: return "WMATIC";
+      default: return token;
+    }
+  }
+
 //region Unit tests
   /**
    * There are 6 possible actions and 2 flags: fuse F and need-rebalance NR
@@ -86,12 +100,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     describe("Fuse off, need-rebalance off", () => {
       interface IStrategyInfo {
         name: string,
+        notUnderlyingToken: string;
       }
 
       const strategies: IStrategyInfo[] = [
-        {name: PLATFORM_UNIV3,},
-        {name: PLATFORM_ALGEBRA,},
-        {name: PLATFORM_KYBER,},
+        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        // {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
+        {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
       ];
 
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -101,7 +118,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
          * Fuse OFF by default, rebalance is not needed
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+              strategyInfo.name,
+              signer,
+              signer2,
+              strategyInfo.notUnderlyingToken
+          );
 
           console.log('deposit...');
           // make deposit and enter to the pool
@@ -119,7 +141,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           return b;
         }
 
-        describe(`${strategyInfo.name}`, () => {
+        describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -204,6 +226,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               {gasLimit: 19_000_000}
             );
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            console.log("stateBefore", stateBefore);
+            console.log("stateAfter", stateAfter);
 
             expect(stateAfter.strategy.investedAssets).approximately(stateBefore.strategy.investedAssets, 100);
           });
@@ -263,12 +287,16 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     describe("Fuse ON, need-rebalance off", () => {
       interface IStrategyInfo {
         name: string,
+        notUnderlyingToken: string;
       }
 
       const strategies: IStrategyInfo[] = [
-        {name: PLATFORM_UNIV3,},
-        {name: PLATFORM_ALGEBRA,},
-        {name: PLATFORM_KYBER,},
+        {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+
+        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
+        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
       ];
 
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -278,7 +306,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
          * Fuse OFF by default. We set fuse thresholds in such a way as to trigger fuse ON.
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+              strategyInfo.name,
+              signer,
+              signer2,
+              strategyInfo.notUnderlyingToken
+          );
 
           console.log('deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -297,7 +330,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           return b;
         }
 
-        describe(`${strategyInfo.name}`, () => {
+        describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -429,12 +462,16 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     describe("Fuse off, need-rebalance ON", () => {
       interface IStrategyInfo {
         name: string,
+        notUnderlyingToken: string;
       }
 
       const strategies: IStrategyInfo[] = [
-        {name: PLATFORM_UNIV3,},
-        {name: PLATFORM_ALGEBRA,},
-        {name: PLATFORM_KYBER,},
+        {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+
+        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
+        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
       ];
 
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -445,7 +482,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
          * We make at first single rebalance to be sure that initial amount is deposited to the pool.
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+              strategyInfo.name,
+              signer,
+              signer2,
+              strategyInfo.notUnderlyingToken
+          );
 
           console.log('deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -457,7 +499,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           return b;
         }
 
-        describe(`${strategyInfo.name}`, () => {
+        describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
           let snapshot: string;
           before(async function () {
             snapshot = await TimeUtils.snapshot();
@@ -1022,6 +1064,119 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const rebalanceGasUsed = await init.strategy.estimateGas.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
           console.log('>>> REBALANCE GAS USED', rebalanceGasUsed.toNumber());
           expect(rebalanceGasUsed.toNumber()).lessThan(GAS_REBALANCE_NO_SWAP);
+        });
+      });
+    });
+  });
+
+  describe("Loop with rebalance, hardwork, deposit and withdraw @skip-on-coverage", () => {
+    interface IStrategyInfo {
+      name: string,
+      notUnderlyingToken: string;
+    }
+
+    const strategies: IStrategyInfo[] = [
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+            strategyInfo.name,
+            signer,
+            signer2,
+            strategyInfo.notUnderlyingToken
+        );
+
+        await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+        await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
+        await TokenUtils.getToken(b.asset, signer3.address, parseUnits('2000', 6));
+
+        return b;
+      }
+
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it('should not revert', async () => {
+          const COUNT_CYCLES = 10;
+          const b = await loadFixture(prepareStrategy);
+
+          const investAmount = parseUnits("1000", 6);
+          const swapAssetValueForPriceMove = parseUnits('500000', 6);
+          const state = await PackedData.getDefaultState(b.strategy);
+          const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const price = await ISwapper__factory.connect(b.swapper, signer).getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+          console.log('tokenB price', formatUnits(price, 6));
+
+          const platformVoter = await DeployerUtilsLocal.impersonate(
+              await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
+          );
+          await converterStrategyBase.connect(platformVoter).setCompoundRatio(50000);
+
+          console.log('initial deposits...');
+          await b.vault.connect(signer).deposit(investAmount, signer.address, {gasLimit: 19_000_000});
+          await b.vault.connect(signer3).deposit(investAmount, signer3.address, {gasLimit: 19_000_000});
+
+          let lastDirectionUp = false
+          for (let i = 0; i < COUNT_CYCLES; i++) {
+            console.log(`==================== CYCLE ${i} ====================`);
+            await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits('100000', 6));
+
+            if (i % 3) {
+              if (!lastDirectionUp) {
+                await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove);
+              } else {
+                await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+              }
+              lastDirectionUp = !lastDirectionUp
+            }
+
+            if (await b.strategy.needRebalance()) {
+              console.log('Rebalance..')
+              await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+            }
+
+            if (i % 5) {
+              console.log('Hardwork..')
+              await converterStrategyBase.connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
+            }
+
+            if (i % 2) {
+              console.log('Deposit..')
+              await b.vault.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address, {gasLimit: 19_000_000});
+            } else {
+              console.log('Withdraw..')
+              const toWithdraw = parseUnits('100.111437', 6)
+              const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
+              await b.vault.connect(signer3).requestWithdraw()
+              await b.vault.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address, {gasLimit: 19_000_000})
+              const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
+              console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
+            }
+          }
+
+          await b.vault.connect(signer3).requestWithdraw();
+          console.log('withdrawAll as signer3...');
+          await b.vault.connect(signer3).withdrawAll({gasLimit: 19_000_000});
+
+          await b.vault.connect(signer).requestWithdraw();
+          console.log('withdrawAll...');
+          await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
         });
       });
     });
