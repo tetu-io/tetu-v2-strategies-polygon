@@ -11,10 +11,10 @@ library PairBasedStrategyLogicLib {
   //region ------------------------------------------------------- Data types
   /// @notice Local variables required inside withdrawByAggStep and quoteWithdrawByAgg
   struct WithdrawLocal {
-    /// [underlying, not-underlying]
+    /// @notice [underlying, not-underlying]
     address[] tokens;
     address controller;
-    /// liquidationThresholds for the {tokens}
+    /// @notice liquidationThresholds for the {tokens}, greater or equal to {DEFAULT_LIQUIDATION_THRESHOLD}
     uint[] liquidationThresholds;
     uint planKind;
     uint propNotUnderlying18;
@@ -123,8 +123,8 @@ library PairBasedStrategyLogicLib {
     (dest.tokens[0], dest.tokens[1]) = (tokens_[0], tokens_[1]);
 
     dest.liquidationThresholds = new uint[](2);
-    dest.liquidationThresholds[0] = liquidationThresholds[dest.tokens[0]];
-    dest.liquidationThresholds[1] = liquidationThresholds[dest.tokens[1]];
+    dest.liquidationThresholds[0] = AppLib._getLiquidationThreshold(liquidationThresholds[dest.tokens[0]]);
+    dest.liquidationThresholds[1] = AppLib._getLiquidationThreshold(liquidationThresholds[dest.tokens[1]]);
   }
 
   function calcTickRange(int24 tick, int24 tickRange, int24 tickSpacing) public pure returns (

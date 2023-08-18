@@ -968,7 +968,7 @@ describe('ConverterStrategyBaseLibTest', () => {
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
-                { // _getAmountToSell gives 2020 instead 2000, so 20 exceed usdc will be exhanged
+                { // _getAmountToSell gives 2020 instead 2000, so 20 exceed usdc will be exchanged
                   // we need second liquidation to exchange them back
                   amountIn: "2020", // usdc, 2000 + 1%, see _getAmountToSell
                   amountOut: "2020", // dai

@@ -415,7 +415,7 @@ library PairBasedStrategyLib {
           if (borrowInsteadRepay) {
             borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
-            _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, 2);
+            _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
           }
         }
       } else {
@@ -438,14 +438,16 @@ library PairBasedStrategyLib {
   /// @notice Make final repay in the scheme REPAY-SWAP-REPAY
   ///         Depending on condition the final repay can be made several times or additional borrow can be made
   /// @param amountToRepay Amount of {indexBorrow} asset that should be repaid
-  /// @param maxRecursionDeep Protection against too deep recursion. It would be interesting to take a look on the
-  ///                         case where 3 or more steps are required..
+  /// @param needToRepayPrev Amount-to-repay on previous call of the {_secondRepay}
+  ///                        This amount should decrease on each step of recursion.
+  ///                        if it doesn't decrease repay is not successfull and it's useless to continue to call repays
+  ///                        It can happen if liquidationThreshold has incorrect value (i.t. it's too low or zero)
   function _secondRepay(
     IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow,
     uint amountToRepay,
-    uint maxRecursionDeep
+    uint needToRepayPrev
   ) internal {
     // we need to know repaidAmount
     // we cannot relay on the value returned by _repayDebt because of SCB-710, we need to check balances
@@ -461,11 +463,13 @@ library PairBasedStrategyLib {
       // repaidAmount is less than expected
       // we need to make additional borrow OR probably make one more repay
       // repaidAmount can be less amountToRepay2 even if there is still opened debt, see SCB-777
-      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexCollateral], p.tokens[indexBorrow], false);
-      if (needToRepay > p.liquidationThresholds[indexBorrow]) {
+      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexCollateral], p.tokens[indexBorrow], true);
+      if (
+        needToRepay > p.liquidationThresholds[indexBorrow]
+        && needToRepay < needToRepayPrev // amount of debt was reduced on prev iteration of recursion
+      ) {
         // more repays are required
-        require(maxRecursionDeep > 0, AppErrors.TOO_DEEP_RECURSION_SECOND_REPAY);
-        _secondRepay(p, indexCollateral, indexBorrow, amountToRepay - repaidAmount, maxRecursionDeep - 1);
+        _secondRepay(p, indexCollateral, indexBorrow, amountToRepay - repaidAmount, needToRepay);
       } else {
         borrowToProportions(p, indexBorrow, indexCollateral, false);
       }
