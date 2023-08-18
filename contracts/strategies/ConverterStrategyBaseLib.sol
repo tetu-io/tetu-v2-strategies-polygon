@@ -95,6 +95,7 @@ library ConverterStrategyBaseLib {
 
   struct CloseDebtsForRequiredAmountLocal {
     address asset;
+    uint balanceAsset0;
     uint balanceAsset;
     uint balanceToken;
 
@@ -1311,6 +1312,7 @@ library ConverterStrategyBaseLib {
         if (i == d_.indexAsset) continue;
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
+        v.balanceAsset0 = v.balanceAsset;
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
@@ -1344,10 +1346,15 @@ library ConverterStrategyBaseLib {
               false
             );
             if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
+              // this is a final swap, we calculate expected amount as
+              //              expected amount of swap spentAmountIn - initial asset balance
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
               // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
               // we don't need to take into account conversion to get toSell amount
-              expectedAmount += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
+              uint expectedAmountAdd = spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
+              expectedAmount += expectedAmountAdd > v.balanceAsset0
+                ? expectedAmountAdd - v.balanceAsset0
+                : 0;
             }
           }
 

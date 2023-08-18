@@ -104,10 +104,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       }
 
       const strategies: IStrategyInfo[] = [
-        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-        // {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-        // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-        // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
+        {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+        {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
         {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
       ];
 
@@ -1076,7 +1076,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
 
@@ -1098,6 +1098,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('2000', 6));
         await TokenUtils.getToken(b.asset, signer3.address, parseUnits('2000', 6));
 
+        const investAmount = parseUnits("1000", 6);
+        console.log('initial deposits...');
+        await b.vault.connect(signer).deposit(investAmount, signer.address, {gasLimit: 19_000_000});
+        await b.vault.connect(signer3).deposit(investAmount, signer3.address, {gasLimit: 19_000_000});
+
         return b;
       }
 
@@ -1114,23 +1119,18 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const COUNT_CYCLES = 10;
           const b = await loadFixture(prepareStrategy);
 
-          const investAmount = parseUnits("1000", 6);
           const swapAssetValueForPriceMove = parseUnits('500000', 6);
           const state = await PackedData.getDefaultState(b.strategy);
-          const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
-          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
           const price = await ISwapper__factory.connect(b.swapper, signer).getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
           console.log('tokenB price', formatUnits(price, 6));
+
+          const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
           const platformVoter = await DeployerUtilsLocal.impersonate(
               await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
           );
           await converterStrategyBase.connect(platformVoter).setCompoundRatio(50000);
-
-          console.log('initial deposits...');
-          await b.vault.connect(signer).deposit(investAmount, signer.address, {gasLimit: 19_000_000});
-          await b.vault.connect(signer3).deposit(investAmount, signer3.address, {gasLimit: 19_000_000});
 
           let lastDirectionUp = false
           for (let i = 0; i < COUNT_CYCLES; i++) {
@@ -1160,7 +1160,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               console.log('Deposit..')
               await b.vault.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address, {gasLimit: 19_000_000});
             } else {
-              console.log('Withdraw..')
+              console.log('Withdraw..');
               const toWithdraw = parseUnits('100.111437', 6)
               const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
               await b.vault.connect(signer3).requestWithdraw()
