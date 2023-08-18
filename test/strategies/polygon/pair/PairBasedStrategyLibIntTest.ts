@@ -25,11 +25,9 @@ import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/Pai
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {PLAN_REPAY_SWAP_REPAY, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
 
 describe('PairBasedStrategyLibIntTest', () => {
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLATFORM_KIND_AAVE2_2 = 2;
-  const PLATFORM_KIND_AAVE3_3 = 3;
 
   //region Variables
   let snapshotBefore: string;

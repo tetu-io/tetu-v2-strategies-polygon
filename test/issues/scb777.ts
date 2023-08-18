@@ -9,6 +9,7 @@ import {PackedData} from "../baseUT/utils/PackedData";
 import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("Scb777: withdrawByAgg, TC-29", () => {
@@ -74,8 +75,6 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
   describe("Scb778: withdrawByAgg, not enough balance", () => {
     const DELTA = 2;
-    const ENTRY_TO_POOL_IS_ALLOWED = 1;
-    const PLAN_REPAY_SWAP_REPAY = 1;
     const BLOCK = 46405849;
     const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";
     const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";

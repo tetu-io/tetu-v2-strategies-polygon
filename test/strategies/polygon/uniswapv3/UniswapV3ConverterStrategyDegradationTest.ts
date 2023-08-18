@@ -29,6 +29,7 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -51,15 +52,6 @@ const argv = require('yargs/yargs')()
  */
 describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function() {
 //region Constants and variables
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
-  const ENTRY_TO_POOL_DISABLED = 0;
-  const ENTRY_TO_POOL_IS_ALLOWED = 1;
-  const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-
-
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }

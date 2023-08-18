@@ -20,13 +20,14 @@ import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/Pai
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
 import {
-  ISwapper__factory
-} from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
+  ENTRY_TO_POOL_DISABLED,
+  ENTRY_TO_POOL_IS_ALLOWED,
+  PLAN_REPAY_SWAP_REPAY,
+  PLAN_SWAP_REPAY
+} from "../../../baseUT/AppConstants";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -45,16 +46,6 @@ const argv = require('yargs/yargs')()
 
 describe('PairBasedStrategyActionResponseIntTest', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) return;
-
-//region Constants
-  const ENTRY_TO_POOL_DISABLED = 0;
-  const ENTRY_TO_POOL_IS_ALLOWED = 1;
-  const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-//endregion Constants
 
 //region Variables
   let snapshotBefore: string;

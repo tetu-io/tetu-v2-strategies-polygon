@@ -27,13 +27,6 @@ import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 const { expect } = chai;
 
 describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
-  const ENTRY_TO_POOL_IS_ALLOWED = 1;
-  const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
 //region Variables
   let snapshotBefore: string;
   let signer: SignerWithAddress;

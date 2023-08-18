@@ -8,15 +8,13 @@ import {
   IController,
   IConverterController__factory,
   IERC20,
-  IERC20__factory, IRebalancingV2Strategy__factory,
-  IStrategyV2,
+  IERC20__factory, IStrategyV2,
   ISwapper,
   ISwapper__factory,
   TetuConverter__factory,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
-  UniswapV3Lib,
   VaultFactory__factory,
 } from '../../../../typechain';
 import { BigNumber } from 'ethers';
@@ -34,9 +32,6 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
-import {IStrategyBasicInfo} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
-import {GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
 
 const { expect } = chai;
 

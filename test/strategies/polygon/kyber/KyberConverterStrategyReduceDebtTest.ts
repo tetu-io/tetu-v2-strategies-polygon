@@ -25,6 +25,7 @@ import {KyberLiquidityUtils} from "../../../baseUT/strategies/kyber/KyberLiquidi
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
+import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -45,9 +46,6 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
 
   let snapshotBefore: string;
   let snapshot: string;

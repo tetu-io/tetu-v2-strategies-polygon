@@ -27,6 +27,12 @@ import {
   PairBasedStrategyPrepareStateUtils
 } from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {
+  ENTRY_TO_POOL_DISABLED,
+  ENTRY_TO_POOL_IS_ALLOWED,
+  ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED, FUSE_OFF_1,
+  PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY
+} from "../../../baseUT/AppConstants";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -51,19 +57,6 @@ const argv = require('yargs/yargs')()
  */
 describe('PairBasedNoSwapIntTest', function() {
 //region Constants
-  const ENTRY_TO_POOL_DISABLED = 0;
-  const ENTRY_TO_POOL_IS_ALLOWED = 1;
-  const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
-  const FUSE_DISABLED_0 = 0;
-  const FUSE_OFF_1 = 1;
-  const FUSE_ON_LOWER_LIMIT_2 = 2;
-  const FUSE_ON_UPPER_LIMIT_3 = 3;
-
   const DEFAULT_SWAP_AMOUNT_RATIO = 0.3;
 //endregion Constants
 

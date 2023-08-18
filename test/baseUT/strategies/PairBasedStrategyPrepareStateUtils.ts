@@ -18,13 +18,7 @@ import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
 import {depositToVault, printVaultState} from "../../StrategyTestUtils";
 import {NoSwapRebalanceEvents} from "./NoSwapRebalanceEvents";
-
-const ENTRY_TO_POOL_IS_ALLOWED = 1;
-const ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED = 2;
-
-const PLAN_SWAP_REPAY = 0;
-const PLAN_REPAY_SWAP_REPAY = 1;
-const PLAN_SWAP_ONLY = 2;
+import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;

@@ -16,12 +16,9 @@ import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {expect} from "chai";
 import {Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY} from "../../baseUT/AppConstants";
 
 describe('IterationPlanLibTest', () => {
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
   //region Variables
   let snapshotBefore: string;
   let snapshot: string;

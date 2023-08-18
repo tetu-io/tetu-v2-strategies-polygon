@@ -27,6 +27,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -47,10 +48,6 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
-
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
 
   let snapshotBefore: string;
   let snapshot: string;
