@@ -17,17 +17,16 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mocks/MockLiquidationUtils";
 import {BigNumber} from "ethers";
+import {
+  FUSE_DISABLED_0,
+  FUSE_OFF_1,
+  FUSE_ON_LOWER_LIMIT_2,
+  FUSE_ON_UPPER_LIMIT_3,
+  PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY,
+  PLAN_SWAP_REPAY
+} from "../../../baseUT/AppConstants";
 
 describe('PairBasedStrategyLibTest', () => {
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
-  const FUSE_DISABLED_0 = 0;
-  const FUSE_OFF_1 = 1;
-  const FUSE_ON_LOWER_LIMIT_2 = 2;
-  const FUSE_ON_UPPER_LIMIT_3 = 3;
-
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
   //region Variables

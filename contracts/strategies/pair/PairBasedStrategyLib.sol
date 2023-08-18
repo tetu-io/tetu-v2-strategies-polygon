@@ -414,6 +414,7 @@ library PairBasedStrategyLib {
 
           if (borrowInsteadRepay) {
             borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
+
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
             _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
           }
