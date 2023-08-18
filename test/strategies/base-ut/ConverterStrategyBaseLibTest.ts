@@ -999,7 +999,8 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(1000); // 3000 - 2020 + 20
+            // see SCB-779 fix inside _closePositionsToGetAmount for details of calculations
+            expect(r.expectedAmountMainAssetOut).eq(970.297029); // 3000*2000/2020 - 2020 + 20
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
