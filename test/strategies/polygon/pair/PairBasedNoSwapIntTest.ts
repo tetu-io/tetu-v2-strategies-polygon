@@ -193,7 +193,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
     const states0: IStateNum[] = p.skipOverCollateralStep
       ? []
-      : (await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
+      : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
           b,
           { countRebalances: p.countRebalances ?? 2, movePricesUp: p.movePricesUp},
           pathOut,
@@ -1040,7 +1040,7 @@ describe('PairBasedNoSwapIntTest', function() {
             });
             async function initialize(): Promise<IBuilderResults> {
               const b = await prepareStrategy();
-              await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
+              await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
                 b, {
                     movePricesUp: true,
                     countRebalances: 2

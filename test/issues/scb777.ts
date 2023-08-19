@@ -1,5 +1,10 @@
 import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
-import {ConverterStrategyBase__factory, IRebalancingV2Strategy__factory} from "../../typechain";
+import {
+  ConverterStrategyBase__factory,
+  IRebalancingV2Strategy__factory,
+  StrategySplitterV2__factory,
+  TetuVaultV2__factory
+} from "../../typechain";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
@@ -10,9 +15,11 @@ import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
+import {StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
+import {ethers} from "hardhat";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
-  describe("Scb777: withdrawByAgg, TC-29", () => {
+  describe("SCB-777: withdrawByAgg, TC-29", () => {
     const BLOCK = 46387161;
     const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";
     const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
@@ -43,7 +50,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
     });
   });
 
-  describe("Scb779: withdraw, sb too high", () => {
+  describe("SCB-779: withdraw, sb too high", () => {
     const BLOCK = 46387104;
     const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";
     const SPLITTER = "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c";
@@ -61,19 +68,29 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
     });
 
     it("try to reproduce", async () => {
+      const [signer] = await ethers.getSigners();
       const splitterSigner = await DeployerUtilsLocal.impersonate(SPLITTER);
       const strategy = IRebalancingV2Strategy__factory.connect(STRATEGY, splitterSigner);
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(SPLITTER, signer)).vault(),
+        signer
+      );
+      const pathOut = "./tmp/scb-779.csv";
 
       await PairBasedStrategyPrepareStateUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
       await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
 
       const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, splitterSigner);
       // await converterStrategyBase.withdrawToSplitter(parseUnits(AMOUNT, 6));
+
+      const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'before');
       await converterStrategyBase.withdrawAllToSplitter();
+      const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'after');
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [stateBefore, stateAfter], {mainAssetSymbol: "uscd"}, true);
     });
   });
 
-  describe("Scb778: withdrawByAgg, not enough balance", () => {
+  describe("SCB-778: withdrawByAgg, not enough balance", () => {
     const DELTA = 2;
     const BLOCK = 46405849;
     const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";

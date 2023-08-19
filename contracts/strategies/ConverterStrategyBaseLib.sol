@@ -95,7 +95,6 @@ library ConverterStrategyBaseLib {
 
   struct CloseDebtsForRequiredAmountLocal {
     address asset;
-    uint balanceAsset0;
     uint balanceAsset;
     uint balanceToken;
 
@@ -1196,8 +1195,7 @@ library ConverterStrategyBaseLib {
       // We should try to close the exist debts instead:
       //    convert a part of main assets to get amount of secondary assets required to repay the debts
       // and only then make conversion.
-      expectedAmount = _closePositionsToGetAmount(d_, _liquidationThresholds, requestedAmount)
-        + expectedMainAssetAmounts[d_.indexAsset];
+      expectedAmount = _closePositionsToGetAmount(d_, _liquidationThresholds, requestedAmount);
     }
 
     return expectedAmount;
@@ -1312,7 +1310,6 @@ library ConverterStrategyBaseLib {
         if (i == d_.indexAsset) continue;
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
-        v.balanceAsset0 = v.balanceAsset;
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
@@ -1345,16 +1342,12 @@ library ConverterStrategyBaseLib {
               AppLib._getLiquidationThreshold(liquidationThresholds_[indexIn]),
               false
             );
+
             if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
-              // this is a final swap, we calculate expected amount as
-              //              expected amount of swap spentAmountIn - initial asset balance
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
               // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
               // we don't need to take into account conversion to get toSell amount
-              uint expectedAmountAdd = spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
-              expectedAmount += expectedAmountAdd > v.balanceAsset0
-                ? expectedAmountAdd - v.balanceAsset0
-                : 0;
+              expectedAmount += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
             }
           }
 
@@ -1363,18 +1356,17 @@ library ConverterStrategyBaseLib {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             uint amountToRepay = IERC20(d_.tokens[indexBorrow]).balanceOf(address(this));
-            (uint expectedAmountOut, uint repaidAmountOut) = _repayDebt(
+            (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
               d_.converter,
               d_.tokens[indexCollateral],
               d_.tokens[indexBorrow],
               amountToRepay
             );
-
             if (indexCollateral == d_.indexAsset) {
               require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
-              if (repaidAmountOut < amountToRepay) {
+              if (repaidAmountOut < amountSendToRepay) {
                 // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
-                expectedAmount += expectedAmountOut * repaidAmountOut / amountToRepay - spentAmountIn;
+                expectedAmount += expectedAmountOut * repaidAmountOut / amountSendToRepay - spentAmountIn;
               } else {
                 expectedAmount += expectedAmountOut - spentAmountIn;
               }
@@ -1410,6 +1402,7 @@ library ConverterStrategyBaseLib {
   /// @param amountToRepay Max available amount of borrow asset that we can repay
   /// @return expectedAmountOut Estimated amount of main asset that should be added to balance = collateral - {toSell}
   /// @return repaidAmountOut Actually paid amount
+  /// @return amountSendToRepay Amount send to repay
   function _repayDebt(
     ITetuConverter converter,
     address collateralAsset,
@@ -1417,17 +1410,18 @@ library ConverterStrategyBaseLib {
     uint amountToRepay
   ) internal returns (
     uint expectedAmountOut,
-    uint repaidAmountOut
+    uint repaidAmountOut,
+    uint amountSendToRepay
   ) {
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
 
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
-    uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    amountSendToRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;
-    (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountRepay);
+    (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountSendToRepay);
 
     if (expectedAmountOut > swappedAmountOut) {
       // Following situation is possible
@@ -1441,9 +1435,9 @@ library ConverterStrategyBaseLib {
     }
 
     // close the debt
-    (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
+    (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountSendToRepay, balanceBefore);
 
-    return (expectedAmountOut, repaidAmountOut);
+    return (expectedAmountOut, repaidAmountOut, amountSendToRepay);
   }
   //endregion ------------------------------------------------ Repay debts
 

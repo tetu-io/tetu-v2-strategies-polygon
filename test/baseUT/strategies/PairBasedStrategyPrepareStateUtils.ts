@@ -315,8 +315,9 @@ export class PairBasedStrategyPrepareStateUtils {
 
   /**
    * Make "deposit-rebalance" cycles until expected count of rebalances won't make.
+   * As result, we will have high locked-amount in converter and relatively high percent of locked amounts.
    */
-  static async prepareOverCollateral(
+  static async prepareTwistedDebts(
       b: IBuilderResults,
       p: IPrepareOverCollateralParams,
       pathOut: string,
