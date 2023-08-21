@@ -206,21 +206,33 @@ export class PairBasedStrategyPrepareStateUtils {
         parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
 
+      // zero amount is not allowed, we will receive i.e. "AS" error on Algebra
+      const requiredAmountBOut = amountBOut.eq(0)
+        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
+        : amountBOut;
+
       console.log("amountBOut", amountBOut);
       const amountAIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
         signer,
         b,
         tokenA,
         tokenB,
-        amountBOut
+        requiredAmountBOut
       );
       console.log("amountAIn.to.up", amountAIn);
-      return amountAIn;
+      return amountAIn.eq(0)
+        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
+        : amountAIn;
     } else {
       // calculate amount A that we are going to receive
       const amountAOut = amountsInCurrentTick[0].mul(
         parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
+
+      // zero amount is not allowed, we will receive i.e. "AS" error on Algebra
+      const requiredAmountAOut = amountAOut.eq(0)
+        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
+        : amountAOut;
 
       console.log("amountAOut", amountAOut);
       const amountBIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
@@ -228,10 +240,13 @@ export class PairBasedStrategyPrepareStateUtils {
         b,
         tokenB,
         tokenA,
-        amountAOut
+        requiredAmountAOut
       );
       console.log("amountBIn.to.down", amountBIn);
-      return amountBIn;
+      return amountBIn.eq(0)
+        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
+        : amountBIn;
+
     }
   }
 
