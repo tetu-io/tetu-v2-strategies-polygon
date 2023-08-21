@@ -797,7 +797,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       });
     });
   });
-  describe("Large user has just exit the strategy @skip-on-coverage", () => {
+  describe("Large user has just exit the strategy", () => {
     interface IStrategyInfo {
       name: string,
     }
@@ -1386,9 +1386,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
-      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      // {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
 
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
@@ -1429,7 +1429,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const COUNT_CYCLES = 10;
           const b = await loadFixture(prepareStrategy);
 
+          // Following amount is used as swapAmount for both tokens A and B...
           const swapAssetValueForPriceMove = parseUnits('500000', 6);
+          // ... but WMATIC has different decimals than USDC, so we should use different swapAmount in that case
+          const swapAssetValueForPriceMoveDown = strategyInfo.name === PLATFORM_UNIV3
+            && strategyInfo.notUnderlyingToken === MaticAddresses.WMATIC_TOKEN
+            ? parseUnits('300000', 18)
+            : undefined;
+
           const state = await PackedData.getDefaultState(b.strategy);
           console.log("state", state);
           const price = await ISwapper__factory.connect(b.swapper, signer).getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
@@ -1437,7 +1444,6 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-          const platform = await converterStrategyBase.PLATFORM();
 
           const platformVoter = await DeployerUtilsLocal.impersonate(
               await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
@@ -1450,21 +1456,24 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
 
             if (i % 3) {
+              const movePricesUp = !lastDirectionUp;
               await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
                   signer,
                   b.swapper,
-                  !lastDirectionUp,
+                  movePricesUp,
                   state,
-                  platform === PLATFORM_KYBER
+                strategyInfo.name === PLATFORM_KYBER
                     ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
                         signer,
                         b,
                         state.tokenA,
                         state.tokenB,
-                        !lastDirectionUp,
+                        movePricesUp,
                         1.1
                       )
-                    : swapAssetValueForPriceMove
+                    : swapAssetValueForPriceMove,
+                5,
+                swapAssetValueForPriceMoveDown
               );
               lastDirectionUp = !lastDirectionUp
             }

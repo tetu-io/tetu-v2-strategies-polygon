@@ -184,4 +184,42 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
     });
   });
 
+  describe("SCB-782: withdraw all, overflowed", () => {
+    const BLOCK = 46568814;
+    const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";
+    const SPLITTER = "0xA31cE671A0069020F7c87ce23F9cAAA7274C794c";
+
+    let snapshotBefore: string;
+    before(async function () {
+      snapshotBefore = await TimeUtils.snapshot();
+      await HardhatUtils.switchToBlock(BLOCK);
+    });
+
+    after(async function () {
+      await TimeUtils.rollback(snapshotBefore);
+      await HardhatUtils.restoreBlockFromEnv();
+    });
+
+    it("try to reproduce", async () => {
+      const [signer] = await ethers.getSigners();
+      const splitterSigner = await DeployerUtilsLocal.impersonate(SPLITTER);
+      const strategy = IRebalancingV2Strategy__factory.connect(STRATEGY, splitterSigner);
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(SPLITTER, signer)).vault(),
+        signer
+      );
+      const pathOut = "./tmp/scb-779.csv";
+
+      await PairBasedStrategyPrepareStateUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
+      // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
+
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, splitterSigner);
+
+      const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'before');
+      await converterStrategyBase.withdrawAllToSplitter();
+      const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'after');
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [stateBefore, stateAfter], {mainAssetSymbol: "uscd"}, true);
+    });
+  });
+
 });

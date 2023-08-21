@@ -50,6 +50,7 @@ export class UniversalUtils {
     swapperAddress: string,
     amountA: BigNumber,
   ) {
+    console.log("makePoolVolume.state", state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const swapAmount = amountA.div(2);
     let price;
@@ -88,7 +89,7 @@ export class UniversalUtils {
     amountA: BigNumber,
     priceImpactTolerance = 99000 // 99% slippage
   ) {
-    console.log("movePoolPriceUp.amountA", amountA);
+    console.log("movePoolPriceUp.amountA", amountA, state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals()
     const tokenAName = await TokenUtils.tokenSymbol(state.tokenA);
@@ -131,7 +132,7 @@ export class UniversalUtils {
     priceImpactTolerance = 40000, // 40%,
     silent = false
   ) {
-    console.log("movePoolPriceDown.amountB", amountB);
+    console.log("movePoolPriceDown.amountB", amountB, state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals()
     const tokenAName = await TokenUtils.tokenSymbol(state.tokenA);

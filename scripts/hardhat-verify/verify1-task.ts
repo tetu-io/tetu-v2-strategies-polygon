@@ -422,6 +422,7 @@ subtask(TASK_VERIFY_ETHERSCAN_GET_MINIMAL_INPUT)
   .addParam('sourceName')
   .setAction(async({ sourceName }: GetMinimalInputArgs, { run }) => {
     // console.log('Run ', TASK_VERIFY_ETHERSCAN_GET_MINIMAL_INPUT);
+
     const cloneDeep = require('lodash.clonedeep') as typeof LodashCloneDeepT;
     const dependencyGraph: DependencyGraph = await run(
       TASK_COMPILE_SOLIDITY_GET_DEPENDENCY_GRAPH,
