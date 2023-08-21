@@ -15,6 +15,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -631,6 +632,13 @@ library ConverterStrategyBaseLib {
 
     // Oracle in TetuConverter "knows" only limited number of the assets
     // It may not know prices for reward assets, so for rewards this validation should be skipped to avoid TC-4 error
+    console.log("_liquidateWithRoute.tokenIn_", tokenIn_);
+    console.log("_liquidateWithRoute.amountIn_", amountIn_);
+    console.log("_liquidateWithRoute.tokenOut_", tokenOut_);
+    console.log("_liquidateWithRoute.receivedAmountOut", receivedAmountOut);
+    console.log("_liquidateWithRoute.slippage_", slippage_);
+    console.log("_liquidateWithRoute.balanceBefore", balanceBefore);
+    console.log("_liquidateWithRoute.balanceAfter", balanceAfter);
     require(skipValidation || converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
     emit Liquidation(tokenIn_, tokenOut_, amountIn_, amountIn_, receivedAmountOut);
   }
@@ -979,7 +987,7 @@ library ConverterStrategyBaseLib {
               asset,
               p.amountP,
               _REWARD_LIQUIDATION_SLIPPAGE,
-              liquidationThresholds[p.rewardToken],
+              AppLib._getLiquidationThreshold(liquidationThresholds[p.rewardToken]),
               false // use conversion validation for these rewards
             );
             amountToPerformanceAndInsurance += p.receivedAmountOut;
@@ -996,7 +1004,7 @@ library ConverterStrategyBaseLib {
             asset,
             p.amountCP,
             _REWARD_LIQUIDATION_SLIPPAGE,
-            liquidationThresholds[p.rewardToken],
+            AppLib._getLiquidationThreshold(liquidationThresholds[p.rewardToken]),
             true // skip conversion validation for rewards because we can have arbitrary assets here
           );
           amountToPerformanceAndInsurance += p.receivedAmountOut * (rewardAmounts[i] - p.amountFC) / p.amountCP;
@@ -1030,7 +1038,13 @@ library ConverterStrategyBaseLib {
     tokenAmounts = _getCollaterals(amount_, tokens_, weights_, totalWeight_, indexAsset_, AppLib._getPriceOracle(converter_));
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
-    tokenAmounts = _getTokenAmounts(converter_, tokens_, indexAsset_, tokenAmounts, liquidationThresholds[tokens_[indexAsset_]]);
+    tokenAmounts = _getTokenAmounts(
+      converter_,
+      tokens_,
+      indexAsset_,
+      tokenAmounts,
+      AppLib._getLiquidationThreshold(liquidationThresholds[tokens_[indexAsset_]])
+    );
   }
 
   /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.
@@ -1109,7 +1123,7 @@ library ConverterStrategyBaseLib {
             asset,
             token,
             collaterals_[i],
-            AppLib._getLiquidationThreshold(thresholdAsset_)
+            thresholdAsset_
           );
 
           // zero borrowed amount is possible here (conversion is not available)
@@ -1339,7 +1353,7 @@ library ConverterStrategyBaseLib {
               d_.tokens[indexOut],
               v.amountToSwap,
               _ASSET_LIQUIDATION_SLIPPAGE,
-              AppLib._getLiquidationThreshold(liquidationThresholds_[indexIn]),
+              liquidationThresholds_[indexIn],
               false
             );
 
@@ -1388,7 +1402,7 @@ library ConverterStrategyBaseLib {
           v.balanceToken = v.newBalanceToken;
         } while (!v.exitLoop);
 
-        if (requestedAmount < AppLib._getLiquidationThreshold(liquidationThresholds_[d_.indexAsset])) break;
+        if (requestedAmount < liquidationThresholds_[d_.indexAsset]) break;
       }
     }
 
@@ -1442,6 +1456,8 @@ library ConverterStrategyBaseLib {
   //endregion ------------------------------------------------ Repay debts
 
 //region------------------------------------------------ Other helpers
+
+  /// @return liquidationThresholdsOut Liquidation thresholds of the {tokens_}, result values > 0
   function _getLiquidationThresholds(
     mapping(address => uint) storage liquidationThresholds,
     address[] memory tokens_,
@@ -1451,7 +1467,7 @@ library ConverterStrategyBaseLib {
   ) {
     liquidationThresholdsOut = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      liquidationThresholdsOut[i] = liquidationThresholds[tokens_[i]];
+      liquidationThresholdsOut[i] = AppLib._getLiquidationThreshold(liquidationThresholds[tokens_[i]]);
     }
   }
 //endregion--------------------------------------------- Other helpers

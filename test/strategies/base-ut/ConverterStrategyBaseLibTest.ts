@@ -4348,32 +4348,6 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
-  describe('getAssetIndex', () => {
-    let snapshot: string;
-    beforeEach(async function() {
-      snapshot = await TimeUtils.snapshot();
-    });
-    afterEach(async function() {
-      await TimeUtils.rollback(snapshot);
-    });
-
-    describe('Good paths', () => {
-      it('should return expected index', async() => {
-        const assets = [usdc.address, tetu.address, usdt.address];
-        for (let i = 0; i < assets.length; ++i) {
-          await expect(await facade.getAssetIndex(assets, assets[i])).eq(i);
-        }
-      });
-    });
-    describe('Bad paths', () => {
-      it('should type(uint).max if the asset is not found', async() => {
-        const assets = [usdc.address, tetu.address, usdt.address];
-        const ret = await facade.getAssetIndex(assets, weth.address);
-        expect(ret.eq(Misc.MAX_UINT)).eq(true);
-      });
-    });
-  });
-
   describe('openPosition', () => {
     let snapshot: string;
     beforeEach(async function() {

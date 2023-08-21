@@ -577,8 +577,7 @@ library ConverterStrategyBaseLib2 {
       newTotalAssets < totalAssets
         ? totalAssets - newTotalAssets
         : 0,
-      (tokenAmounts[0] < AppLib._getLiquidationThreshold(liquidationThresholdsAB[0]))
-      || (tokenAmounts[1] < AppLib._getLiquidationThreshold(liquidationThresholdsAB[1]))
+      (tokenAmounts[0] < liquidationThresholdsAB[0] || tokenAmounts[1] < liquidationThresholdsAB[1])
         ? new uint[](0)
         : tokenAmounts
     );

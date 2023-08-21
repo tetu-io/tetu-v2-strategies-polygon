@@ -196,7 +196,7 @@ library IterationPlanLib {
     if (p.planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
       v.swapLeftoversNeeded = true;
     } else {
-      if (requestedAmount < AppLib._getLiquidationThreshold(p.liquidationThresholds[indexAsset])) {
+      if (requestedAmount < p.liquidationThresholds[indexAsset]) {
         // we don't need to repay any debts anymore, but we should swap leftovers
         v.swapLeftoversNeeded = true;
       } else {
@@ -409,13 +409,13 @@ library IterationPlanLib {
     (uint targetA, uint targetB) = _getTargetAmounts(p.prices, p.decs, balanceA, balanceB, propB, indexA, indexB);
     if (balanceA < targetA) {
       // we need to swap not-underlying to underlying
-      if (balanceB - targetB > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexB])) {
+      if (balanceB - targetB > p.liquidationThresholds[indexB]) {
         amountToSwap = balanceB - targetB;
         indexTokenToSwapPlus1 = indexB + 1;
       }
     } else {
       // we need to swap underlying to not-underlying
-      if (balanceA - targetA > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexA])) {
+      if (balanceA - targetA > p.liquidationThresholds[indexA]) {
         amountToSwap = balanceA - targetA;
         indexTokenToSwapPlus1 = indexA + 1;
       }
@@ -465,7 +465,7 @@ library IterationPlanLib {
     // convert {toSell} amount of underlying to token
     if (toSell != 0 && balanceCollateral != 0) {
       toSell = Math.min(toSell, balanceCollateral);
-      uint threshold = AppLib._getLiquidationThreshold(p.liquidationThresholds[indexCollateral]);
+      uint threshold = p.liquidationThresholds[indexCollateral];
       if (toSell > threshold) {
         amountToSwap = toSell;
         indexTokenToSwapPlus1 = indexCollateral + 1;

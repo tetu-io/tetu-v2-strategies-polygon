@@ -390,11 +390,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
     await TimeUtils.advanceNBlocks(300);
 
-    if (p.movePricesUp) {
-      await UniversalUtils.movePoolPriceUp(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
-    } else {
-      await UniversalUtils.movePoolPriceDown(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
-    }
+    await this.movePriceBySteps(signer, b.swapper, p.movePricesUp, defaultState, swapAmount);
     states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `p${loopStep}`));
     await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 

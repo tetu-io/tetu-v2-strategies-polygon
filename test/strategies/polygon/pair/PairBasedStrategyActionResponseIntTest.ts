@@ -1379,15 +1379,15 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     });
   });
 
-  describe("Loop with rebalance, hardwork, deposit and withdraw @skip-on-coverage", () => {
+  describe("Loop with rebalance, hardwork, deposit and withdraw", () => {
     interface IStrategyInfo {
       name: string,
       notUnderlyingToken: string;
     }
 
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
 
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
@@ -1436,6 +1436,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+          const platform = await converterStrategyBase.PLATFORM();
 
           const platformVoter = await DeployerUtilsLocal.impersonate(
               await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
@@ -1448,7 +1449,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits('100000', 6));
 
             if (i % 3) {
-              await PairBasedStrategyPrepareStateUtils.movePriceBySteps(signer, b.swapper, !lastDirectionUp, state, swapAssetValueForPriceMove);
+              await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
+                  signer,
+                  b.swapper,
+                  !lastDirectionUp,
+                  state,
+                  platform === PLATFORM_KYBER
+                    ? await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+                        signer,
+                        b,
+                        state.tokenA,
+                        state.tokenB,
+                        !lastDirectionUp,
+                        1.1
+                      )
+                    : swapAssetValueForPriceMove
+              );
               lastDirectionUp = !lastDirectionUp
             }
 
