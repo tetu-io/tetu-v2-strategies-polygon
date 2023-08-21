@@ -53,6 +53,8 @@ interface IKyberSwapElasticLM {
 
   function admin() external view returns(address);
 
+  function updateOperator(address user, bool grantOrRevoke) external;
+
   /**
    * @dev Add new pool to LM
    * @param poolAddr pool address

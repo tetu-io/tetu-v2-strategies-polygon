@@ -28,6 +28,7 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 
 
 dotEnvConfig();
@@ -55,7 +56,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
 
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, number][] = [
-    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, 5],
+    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, KYBER_PID],
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();

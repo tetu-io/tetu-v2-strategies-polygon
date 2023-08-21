@@ -225,7 +225,8 @@ describe('KyberConverterStrategyTest', function() {
 
       // addPool
       now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
-      await farmingContract.connect(admin).addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
+      await farmingContract.connect(admin).updateOperator(signer.address, true)
+      await farmingContract.addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
       const newPid = (await farmingContract.poolLength()).toNumber() - 1
       await s.connect(operator).changePId(newPid)
 
