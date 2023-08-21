@@ -26,12 +26,7 @@ import {BigNumber} from "ethers";
 import {PackedData} from "./PackedData";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
 import {PairStrategyLiquidityUtils} from "../strategies/PairStrategyLiquidityUtils";
-
-export interface IRebalanceResults {
-  fuseStatus?: number;
-  loss: BigNumber;
-  covered: BigNumber;
-}
+import {IRebalanceEvents} from "../strategies/NoSwapRebalanceEvents";
 
 export interface ILiquidityAmountInTick {
   amountTokenA: number;
@@ -152,6 +147,8 @@ export interface IStateNum {
   rebalanced?: {
     loss: number;
     covered: number;
+    uncoveredLoss: number;
+    notEnoughInsuranceLoss: number;
   }
   fixPriceChanges?: IFixPricesChangesEventInfo;
 }
@@ -166,7 +163,7 @@ export interface IFixPricesChangesEventInfo {
 }
 export interface IGetStateParams {
   fixChangePrices?: IFixPricesChangesEventInfo[];
-  rebalanced?: IRebalanceResults;
+  rebalanced?: IRebalanceEvents;
   lib?: KyberLib | UniswapV3Lib | AlgebraLib;
 }
 
@@ -444,10 +441,14 @@ export class StateUtilsNum {
         ? {
           loss: +formatUnits(p.rebalanced.loss, assetDecimals),
           covered: +formatUnits(p.rebalanced.covered, assetDecimals),
+          uncoveredLoss: +formatUnits(p.rebalanced.uncoveredLoss, assetDecimals),
+          notEnoughInsuranceLoss: +formatUnits(p.rebalanced.notEnoughInsuranceLoss, assetDecimals),
         }
         : {
           loss: 0,
-          covered: 0
+          covered: 0,
+          uncoveredLoss: 0,
+          notEnoughInsuranceLoss: 0,
         },
       fixPriceChanges: p?.fixChangePrices
         ? p?.fixChangePrices[0]
@@ -637,6 +638,8 @@ export class StateUtilsNum {
 
       'rebalanced.loss',
       'rebalanced.covered',
+      'rebalanced.uncovered',
+      'rebalanced.notEnoughInsuranceLoss',
 
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
@@ -727,6 +730,8 @@ export class StateUtilsNum {
 
       item.rebalanced?.loss,
       item.rebalanced?.covered,
+      item.rebalanced?.uncoveredLoss,
+      item.rebalanced?.notEnoughInsuranceLoss,
 
       item.fixPriceChanges?.assetBefore,
       item.fixPriceChanges?.assetAfter,

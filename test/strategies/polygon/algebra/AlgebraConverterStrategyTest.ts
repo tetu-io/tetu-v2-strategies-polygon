@@ -26,6 +26,7 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {BigNumber} from "ethers";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -56,17 +57,7 @@ describe('AlgebraConverterStrategyTest', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 43620959,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -170,18 +161,8 @@ describe('AlgebraConverterStrategyTest', function() {
   })
 
   after(async function() {
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
   });
 
   beforeEach(async function() {

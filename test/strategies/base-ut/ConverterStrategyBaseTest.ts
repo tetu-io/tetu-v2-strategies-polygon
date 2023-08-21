@@ -949,7 +949,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(2050);
+            expect(r.expectedAmountMainAsset).eq(1955); // 1000 + 950 + 100*50/1000, see fix for SCB-779
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
@@ -1298,7 +1298,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(9100);
+            expect(r.expectedAmountMainAsset).eq(7350); // 100 + 7000 + 2000 * 100/800, see fix for SCB-779
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
@@ -1405,7 +1405,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(15040-40); // 6000 + 4000 + 9000 - 1000 - 3000 + 10 + 30 - 40
+            expect(r.expectedAmountMainAsset).eq(14948.304135); // 6000 + 4000*300/301 + 9000*700/703 - 1000 - 3000 + 10 + 30 - 40, see fix SCB-779
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
@@ -1459,7 +1459,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(9800); // 2900 + 1900 + 3000 + 2000
+            expect(r.expectedAmountMainAsset).eq(6793.333333); // 2900*200/500 + 1900*100/300 + 3000 + 2000, see fix SCB-779
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
@@ -1517,7 +1517,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(15040-40); // 6000 + 4000 + 9000 - 1000 - 3000 + 10 + 30 - 40
+            expect(r.expectedAmountMainAsset).eq(14948.304135); // 6000 + 4000*300/301 + 9000*700/703 - 1000 - 3000 + 10 + 30 - 40, see fix SCB-779
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
@@ -1571,7 +1571,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(9800); // 2900 + 1900 + 3000 + 2000
+            expect(r.expectedAmountMainAsset).eq(6793.333333); // 2900*200/500 + 1900*100/300 + 3000 + 2000, see fix SCB-779
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
@@ -1627,7 +1627,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);
-            expect(r.expectedAmountMainAsset).eq(9800); // 2900 + 1900 + 3000 + 2000
+            expect(r.expectedAmountMainAsset).eq(6793.333333); // 2900*200/500 + 1900*100/300 + 3000 + 2000
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeRequestedAmountFixture);

@@ -37,7 +37,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {MockHelper} from "../helpers/MockHelper";
 
-export const KYBER_PID = 21; // previous value was 21, new one is 40
+export const KYBER_PID = 40; // previous value was 21, new one is 40
 
 export interface IBuilderParams {
   gov: string;
@@ -56,28 +56,29 @@ export interface IBuilderParams {
   compoundRatio?: number;
 }
 
-export interface IBuilderResults {
+export interface IStrategyBasicInfo {
+  strategy: IRebalancingV2Strategy;
+  swapper: string;
+  quoter: string;
+  pool: string;
+  lib: UniswapV3Lib | AlgebraLib | KyberLib;
+}
+
+export interface IBuilderResults extends IStrategyBasicInfo {
   gov: SignerWithAddress;
 
   core: CoreAddresses;
-  strategy: IRebalancingV2Strategy;
   vault: TetuVaultV2;
   insurance: string;
   splitter: StrategySplitterV2;
-  pool: string;
   asset: string;
   assetCtr: IERC20Metadata;
   assetDecimals: number;
   stateParams: IStateParams;
   operator: SignerWithAddress;
-  swapper: string;
   converter: ITetuConverter;
-  quoter: string;
 
   facadeLib2: ConverterStrategyBaseLibFacade2;
-  libUniv3: UniswapV3Lib;
-  libAlgebra: AlgebraLib;
-  libKyber: KyberLib;
 }
 
 export class PairBasedStrategyBuilder {
@@ -100,7 +101,8 @@ export class PairBasedStrategyBuilder {
       p: IBuilderParams,
       controllerAsGov: ControllerV2,
       core: CoreAddresses,
-      data: IVaultStrategyInfo
+      data: IVaultStrategyInfo,
+      lib: UniswapV3Lib | AlgebraLib | KyberLib
   ): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
@@ -162,11 +164,10 @@ export class PairBasedStrategyBuilder {
       converter: ITetuConverter__factory.connect(p.converter, signer),
       quoter: p.quoter,
 
-      libUniv3: await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib,
-      libAlgebra: await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib,
-      libKyber: await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib,
+      lib
     }
   }
+
   static async buildUniv3(p: IBuilderParams): Promise<IBuilderResults> {
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);
@@ -203,7 +204,8 @@ export class PairBasedStrategyBuilder {
       false,
     );
 
-    return this.build(p, controller, core, data);
+    const lib = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;
+    return this.build(p, controller, core, data, lib);
   }
 
   static async buildAlgebra(p: IBuilderParams): Promise<IBuilderResults> {
@@ -249,7 +251,8 @@ export class PairBasedStrategyBuilder {
         300,
         false,
     );
-    return this.build(p, controller, core, data);
+    const lib = await DeployerUtils.deployContract(signer, 'AlgebraLib') as AlgebraLib;
+    return this.build(p, controller, core, data, lib);
   }
 
   static async buildKyber(p: IBuilderParams): Promise<IBuilderResults> {
@@ -298,6 +301,7 @@ export class PairBasedStrategyBuilder {
         300,
         false,
     );
-    return this.build(p, controllerAsGov, core, data);
+    const lib = await DeployerUtils.deployContract(signer, 'KyberLib') as KyberLib;
+    return this.build(p, controllerAsGov, core, data, lib);
   }
 }

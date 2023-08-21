@@ -78,7 +78,5 @@ library AppErrors {
 
   string public constant INVALID_VALUE = "TS-30 invalid value";
 
-
-
   string public constant TOO_HIGH = "TS-32 too high value";
 }

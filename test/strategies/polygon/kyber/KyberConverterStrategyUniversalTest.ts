@@ -27,6 +27,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 
 dotEnvConfig();
@@ -64,18 +65,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
   const statesParams: {[poolId: string]: IStateParams} = {}
 
   before(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 44366000,
-          },
-        },
-      ],
-    });
-
+    await HardhatUtils.switchToMostCurrentBlock();
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
 
     const [signer] = await ethers.getSigners();
@@ -114,17 +104,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
       await StateUtils.saveListStatesToCSVColumns(pathOut, states[poolId], statesParams[poolId])
       await StateUtils.outputProfit(states[poolId])
     }
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
   });
 
   targets.forEach(t => {

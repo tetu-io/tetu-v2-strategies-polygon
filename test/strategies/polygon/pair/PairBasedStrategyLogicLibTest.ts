@@ -21,18 +21,16 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {IBorrowParamsNum} from "../../../baseUT/mocks/TestDataTypes";
 import {setupMockedBorrowEntryKind1} from "../../../baseUT/mocks/MockRepayUtils";
 import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
+import {
+  FUSE_DISABLED_0,
+  FUSE_OFF_1,
+  FUSE_ON_LOWER_LIMIT_2,
+  PLAN_REPAY_SWAP_REPAY,
+  PLAN_SWAP_REPAY
+} from "../../../baseUT/AppConstants";
 
 describe('PairBasedStrategyLogicLibTest', () => {
 //region Constants and variables
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
-  const FUSE_DISABLED_0 = 0;
-  const FUSE_OFF_1 = 1;
-  const FUSE_ON_LOWER_LIMIT_2 = 2;
-  const FUSE_ON_UPPER_LIMIT_3 = 3;
-
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
 

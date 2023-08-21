@@ -43,6 +43,9 @@ export class UniversalUtils {
     return +formatUnits(apr, 3)
   }
 
+  /**
+   * todo Currently this function assumes that tokenA is underlying, so we cannot use it for pools with swapped tokens
+   */
   public static async makePoolVolume(
     signer: SignerWithAddress,
     pool: string,
@@ -82,6 +85,10 @@ export class UniversalUtils {
     console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`);
   }
 
+  /**
+   * todo Currently this function assumes that tokenA is underlying, so we cannot use it for pools with swapped tokens
+   *
+   */
   public static async movePoolPriceUp(
     signer: SignerWithAddress,
     pool: string,
@@ -126,6 +133,9 @@ export class UniversalUtils {
     };
   }
 
+  /**
+   * todo Currently this function assumes that tokenA is underlying, so we cannot use it for pools with swapped tokens
+   */
   public static async movePoolPriceDown(
     signer: SignerWithAddress,
     pool: string,

@@ -25,6 +25,9 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {AlgebraLiquidityUtils} from "../../../baseUT/strategies/algebra/AlgebraLiquidityUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -46,10 +49,6 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
     return;
   }
 
-  const PLAN_SWAP_REPAY = 0;
-  const PLAN_REPAY_SWAP_REPAY = 1;
-  const PLAN_SWAP_ONLY = 2;
-
   let snapshotBefore: string;
   let snapshot: string;
   let signer: SignerWithAddress;
@@ -61,18 +60,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -138,17 +126,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
   })
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 
@@ -197,25 +175,18 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
 
     console.log('Quote', quote)
 
-    const params = {
-      fromTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
-      toTokenAddress: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
-      amount: quote.amountToSwap.toString(),
-      fromAddress: s.address,
-      slippage: 1,
-      disableEstimate: true,
-      allowPartialFill: false,
-      protocols: 'POLYGON_CURVE', // 'POLYGON_BALANCER_V2',
-    };
-
-    const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
-    console.log('Transaction for swap: ', swapTransaction);
+    const swapData = AggregatorUtils.buildSwapTransactionData(
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+        quote.amountToSwap,
+        s.address,
+    );
 
     await strategy.withdrawByAggStep(
       quote.tokenToSwap,
       MaticAddresses.AGG_ONEINCH_V5,
       quote.amountToSwap,
-      swapTransaction.data,
+      swapData, // swapTransaction.data,
       planEntryData,
       1
     );

@@ -1150,7 +1150,6 @@ library ConverterStrategyBaseLib {
     uint[] memory expectedMainAssetAmounts,
     mapping(address => uint) storage liquidationThresholds_
   ) external returns (uint expectedAmount) {
-
     DataSetLocal memory v = DataSetLocal({
       len: tokens_.length,
       converter: converter_,
@@ -1356,16 +1355,22 @@ library ConverterStrategyBaseLib {
           if (v.idxToRepay1 != 0) {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
-            (uint expectedAmountOut,) = _repayDebt(
+            uint amountToRepay = IERC20(d_.tokens[indexBorrow]).balanceOf(address(this));
+            (uint expectedAmountOut, uint repaidAmountOut) = _repayDebt(
               d_.converter,
               d_.tokens[indexCollateral],
               d_.tokens[indexBorrow],
-              IERC20(d_.tokens[indexBorrow]).balanceOf(address(this))
+              amountToRepay
             );
 
             if (indexCollateral == d_.indexAsset) {
               require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
-              expectedAmount += expectedAmountOut - spentAmountIn;
+              if (repaidAmountOut < amountToRepay) {
+                // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
+                expectedAmount += expectedAmountOut * repaidAmountOut / amountToRepay - spentAmountIn;
+              } else {
+                expectedAmount += expectedAmountOut - spentAmountIn;
+              }
             }
           }
 
