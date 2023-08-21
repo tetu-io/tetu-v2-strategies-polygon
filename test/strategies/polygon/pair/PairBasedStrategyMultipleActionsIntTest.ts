@@ -88,7 +88,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 //endregion Utils
 
 //region Unit tests
-  describe("Multiple users make actions simultaneously", () => {
+  describe("Multiple users make actions simultaneously @skip-on-coverage", () => {
     interface IStrategyInfo {
       name: string,
     }

@@ -422,7 +422,8 @@ export class PairBasedStrategyPrepareStateUtils {
     movePricesUpDown: boolean,
     state: IDefaultState,
     totalSwapAmount: BigNumber,
-    countIterations: number = 5
+    countIterations: number = 5,
+    totalSwapAmountForDown?: BigNumber
   ) {
     console.log("movePriceBySteps.totalSwapAmount", totalSwapAmount);
     await UniversalUtils.makePoolVolume(signer, state, swapper, totalSwapAmount);
@@ -430,9 +431,17 @@ export class PairBasedStrategyPrepareStateUtils {
     const swapAmountPerIteration = totalSwapAmount.div(countIterations);
     for (let j = 0; j < countIterations; ++j) {
       if (movePricesUpDown) {
+        console.log("movePriceBySteps.UP", swapAmountPerIteration);
         await UniversalUtils.movePoolPriceUp(signer, state, swapper, swapAmountPerIteration, 40000);
       } else {
-        await UniversalUtils.movePoolPriceDown(signer, state, swapper, swapAmountPerIteration, 40000);
+        console.log("movePriceBySteps.DOWN", (totalSwapAmountForDown ?? totalSwapAmount).div(countIterations));
+        await UniversalUtils.movePoolPriceDown(
+          signer,
+          state,
+          swapper,
+          (totalSwapAmountForDown || totalSwapAmount).div(countIterations),
+          40000
+        );
       }
     }
   }
