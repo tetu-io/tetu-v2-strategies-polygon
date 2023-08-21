@@ -6,7 +6,7 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { isContractExist, txParams } from '../../deploy_constants/deploy-helpers';
 import { RunHelper } from '../../scripts/utils/RunHelper';
-import {Misc} from "../../scripts/utils/Misc";
+import {parseUnits} from "ethers/lib/utils";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
@@ -51,8 +51,18 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     0,
     true,
     40,
-      [0, 0, Misc.MAX_UINT, 0],
-      [0, 0, Misc.MAX_UINT, 0],
+    [
+      parseUnits('0.997'),
+      parseUnits('0.998'),
+      parseUnits('1.003'),
+      parseUnits('1.002')
+    ],
+    [
+      parseUnits('0.997'),
+      parseUnits('0.998'),
+      parseUnits('1.003'),
+      parseUnits('1.002')
+    ],
     {
       ...params,
     },
@@ -61,4 +71,3 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
 export default func;
 func.tags = ['Strategy_KyberConverterStrategy_UsdcUsdt'];
 func.dependencies = ['KyberConverterStrategy'];
-func.skip = async () => true
