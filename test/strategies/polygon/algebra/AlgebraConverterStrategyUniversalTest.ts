@@ -72,6 +72,14 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       startTime: 1663631794,
       endTime: 4104559500
     }],
+    // todo implement 3 ticks logic
+    /*[MaticAddresses.USDC_TOKEN, MaticAddresses.ALGEBRA_USDC_DAI, 60, 60, {
+      rewardToken: MaticAddresses.dQUICK_TOKEN,
+      bonusRewardToken: MaticAddresses.WMATIC_TOKEN,
+      pool: MaticAddresses.ALGEBRA_USDC_DAI,
+      startTime: 1665192929,
+      endTime: 4104559500
+    }],*/
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();

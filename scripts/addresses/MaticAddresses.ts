@@ -331,6 +331,7 @@ export class MaticAddresses {
 
   // ALGEBRA
   public static ALGEBRA_USDC_USDT = '0x7b925e617aefd7fb3a93abe3a701135d7a1ba710'.toLowerCase()
+  public static ALGEBRA_USDC_DAI = '0xe7e0eb9f6bcccfe847fdf62a3628319a092f11a2'.toLowerCase()
   public static ALGEBRA_dQUICK_QUICK = '0x194257104FabFd9f48bD01bd71A719637B4bbfA9'.toLowerCase()
   public static ALGEBRA_USDC_QUICK = '0x022df0b3341B3A0157EEA97dD024A93f7496D631'.toLowerCase()
   /** https://docs.quickswap.exchange/reference/smart-contracts/v3/04-quoter/#quoteexactoutputsingle */
