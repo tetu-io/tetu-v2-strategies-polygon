@@ -130,14 +130,14 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
           swapAmountRatio ?? DEFAULT_SWAP_AMOUNT_RATIO
       );
       console.log("movePriceToChangeFuseStatus.swapAmount", totalSwapAmount);
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, b.swapper, totalSwapAmount);
+      await UniversalUtils.makePoolVolume(signer, state, b.swapper, totalSwapAmount);
 
       const swapAmount = totalSwapAmount.div(COUNT_ITERATIONS);
       for (let j = 0; j < COUNT_ITERATIONS; ++j) {
         if (movePricesUpDown) {
-          await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+          await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, swapAmount, 40000);
         } else {
-          await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+          await UniversalUtils.movePoolPriceDown(signer, state, b.swapper, swapAmount, 40000);
         }
 
         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fw${i}`, {lib: b.lib}));

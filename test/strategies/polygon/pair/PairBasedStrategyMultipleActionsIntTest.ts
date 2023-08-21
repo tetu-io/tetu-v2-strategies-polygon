@@ -80,9 +80,9 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
         swapAmountRatio
     );
     if (movePricesUp) {
-      await UniversalUtils.movePoolPriceUp(signer1, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
+      await UniversalUtils.movePoolPriceUp(signer1, state, b.swapper, swapAmount);
     } else {
-      await UniversalUtils.movePoolPriceDown(signer1, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount);
+      await UniversalUtils.movePoolPriceDown(signer1, state, b.swapper, swapAmount);
     }
   }
 //endregion Utils

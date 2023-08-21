@@ -1276,9 +1276,7 @@ describe('PairBasedNoSwapIntTest', function() {
           for (let i = 0; i < 3; ++i) {
             await UniversalUtils.movePoolPriceDown(
               signer,
-              defaultState.pool,
-              defaultState.tokenA,
-              defaultState.tokenB,
+              defaultState,
               b.swapper,
               parseUnits('600000', 6),
               100001

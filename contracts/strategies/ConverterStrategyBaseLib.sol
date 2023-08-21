@@ -15,7 +15,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
-import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -632,13 +631,6 @@ library ConverterStrategyBaseLib {
 
     // Oracle in TetuConverter "knows" only limited number of the assets
     // It may not know prices for reward assets, so for rewards this validation should be skipped to avoid TC-4 error
-    console.log("_liquidateWithRoute.tokenIn_", tokenIn_);
-    console.log("_liquidateWithRoute.amountIn_", amountIn_);
-    console.log("_liquidateWithRoute.tokenOut_", tokenOut_);
-    console.log("_liquidateWithRoute.receivedAmountOut", receivedAmountOut);
-    console.log("_liquidateWithRoute.slippage_", slippage_);
-    console.log("_liquidateWithRoute.balanceBefore", balanceBefore);
-    console.log("_liquidateWithRoute.balanceAfter", balanceAfter);
     require(skipValidation || converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
     emit Liquidation(tokenIn_, tokenOut_, amountIn_, amountIn_, receivedAmountOut);
   }

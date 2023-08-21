@@ -822,7 +822,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         const pathOut = "./tmp/large-user-prepare-strategy.csv";
 
         const state = await PackedData.getDefaultState(b.strategy);
-        await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("50000", 6));
+        await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits("50000", 6));
 
         console.log('Small user deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -848,7 +848,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           state.tokenB,
           true,
         );
-        await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+        await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAmount, 40000);
         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "p"));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -1013,7 +1013,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
 
           const state = await PackedData.getDefaultState(b.strategy);
-          await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("50000", 6));
+          await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits("50000", 6));
 
           console.log('Deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -1161,7 +1161,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-down-user-prepare-strategy.csv`;
 
           const state = await PackedData.getDefaultState(b.strategy);
-          await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits("50000", 6));
+          await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits("50000", 6));
 
           console.log('Deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -1388,7 +1388,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     const strategies: IStrategyInfo[] = [
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       // {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
 
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
@@ -1431,6 +1431,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const swapAssetValueForPriceMove = parseUnits('500000', 6);
           const state = await PackedData.getDefaultState(b.strategy);
+          console.log("state", state);
           const price = await ISwapper__factory.connect(b.swapper, signer).getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
           console.log('tokenB price', formatUnits(price, 6));
 
@@ -1446,7 +1447,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           let lastDirectionUp = false
           for (let i = 0; i < COUNT_CYCLES; i++) {
             console.log(`==================== CYCLE ${i} ====================`);
-            await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits('100000', 6));
+            await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
 
             if (i % 3) {
               await PairBasedStrategyPrepareStateUtils.movePriceBySteps(

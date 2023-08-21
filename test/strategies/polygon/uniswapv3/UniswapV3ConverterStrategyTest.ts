@@ -297,13 +297,13 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       let lastDirectionUp = false
       for (let i = 0; i < 10; i++) {
-        await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
+        await UniversalUtils.makePoolVolume(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
 
         if (i % 3) {
           if (!lastDirectionUp) {
-            await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+            await UniversalUtils.movePoolPriceUp(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
           } else {
-            await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+            await UniversalUtils.movePoolPriceDown(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
           }
           lastDirectionUp = !lastDirectionUp
         }
@@ -354,14 +354,14 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('deposit...');
       await vault3.deposit(investAmount, signer.address);
 
-      await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
+      await UniversalUtils.movePoolPriceUp(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
       await strategy3.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
       price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
 
-      await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
+      await UniversalUtils.movePoolPriceDown(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
       await strategy3.rebalanceNoSwaps(true, { gasLimit: 10_000_000 });
 
-      await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
+      await UniversalUtils.makePoolVolume(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
 
       state = await PackedData.getDefaultState(strategy3);
       const specificState = await PackedData.getSpecificStateUniv3(strategy3);

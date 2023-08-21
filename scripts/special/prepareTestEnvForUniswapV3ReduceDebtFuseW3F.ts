@@ -157,7 +157,7 @@ async function main() {
 
     swapAmount = swapAmount.add(100)
 
-    await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+    await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
 
     prices = await priceOracle.getAssetsPrices([MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN])
     // console.log('oracle', prices)

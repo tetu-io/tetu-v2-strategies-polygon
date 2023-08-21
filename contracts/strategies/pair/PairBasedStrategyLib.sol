@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -663,13 +662,6 @@ library PairBasedStrategyLib {
 
         spentAmountIn = amountIn;
       }
-
-      console.log("_swap.p.liquidationThresholds[indexIn]", p.liquidationThresholds[indexIn]);
-      console.log("_swap.p.tokens[indexIn]", p.tokens[indexIn]);
-      console.log("_swap.amountIn", amountIn);
-      console.log("_swap.p.tokens[indexOut]", p.tokens[indexOut]);
-      console.log("_swap.balanceTokenOutBefore", balanceTokenOutBefore);
-      console.log("_swap._ASSET_LIQUIDATION_SLIPPAGE", _ASSET_LIQUIDATION_SLIPPAGE);
 
       require(
         p.converter.isConversionValid(

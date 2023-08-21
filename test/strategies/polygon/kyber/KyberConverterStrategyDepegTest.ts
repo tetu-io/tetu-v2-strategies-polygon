@@ -197,7 +197,7 @@ describe('KyberConverterStrategyDepegTest', function() {
         }
         // console.log ('SwapAmount to change tick', swapAmount)
         // console.log(`Price down ${i}`)
-        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
+        await UniversalUtils.movePoolPriceDown(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
       }
 
       // console.log(`# setting price to middle of tick`)
@@ -205,7 +205,7 @@ describe('KyberConverterStrategyDepegTest', function() {
       priceA = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDC_TOKEN)
       swapAmount = amounts[0].mul(priceA).div(parseUnits('1', 6)).div(2)
       // console.log ('swapAmount to set middle tick price', swapAmount)
-      await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
+      await UniversalUtils.movePoolPriceDown(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
 
       const priceBAfter = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
       console.log(`# USDT price changed: ${formatUnits(priceBBefore, 6)} -> ${formatUnits(priceBAfter, 6)}`)

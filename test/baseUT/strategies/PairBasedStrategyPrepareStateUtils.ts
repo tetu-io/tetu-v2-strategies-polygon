@@ -66,9 +66,9 @@ export class PairBasedStrategyPrepareStateUtils {
         swapAmountRatio
       );
       if (movePriceUp) {
-        await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+        await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAmount, 40000);
       } else {
-        await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+        await UniversalUtils.movePoolPriceDown(signer2, state, b.swapper, swapAmount, 40000);
       }
       if (await b.strategy.needRebalance()) {
         if (countRebalance === 0) {
@@ -92,7 +92,7 @@ export class PairBasedStrategyPrepareStateUtils {
     const swapAssetValueForPriceMove = parseUnits('500000', assetDecimals);
     const state = await PackedData.getDefaultState(b.strategy);
 
-    await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove);
+    await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAssetValueForPriceMove);
   }
 
   /** Setup fuse thresholds. Values are selected relative to the current prices */
@@ -425,14 +425,14 @@ export class PairBasedStrategyPrepareStateUtils {
     countIterations: number = 5
   ) {
     console.log("movePriceBySteps.totalSwapAmount", totalSwapAmount);
-    await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, swapper, totalSwapAmount);
+    await UniversalUtils.makePoolVolume(signer, state, swapper, totalSwapAmount);
 
     const swapAmountPerIteration = totalSwapAmount.div(countIterations);
     for (let j = 0; j < countIterations; ++j) {
       if (movePricesUpDown) {
-        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, swapper, swapAmountPerIteration, 40000);
+        await UniversalUtils.movePoolPriceUp(signer, state, swapper, swapAmountPerIteration, 40000);
       } else {
-        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, swapper, swapAmountPerIteration, 40000);
+        await UniversalUtils.movePoolPriceDown(signer, state, swapper, swapAmountPerIteration, 40000);
       }
     }
   }

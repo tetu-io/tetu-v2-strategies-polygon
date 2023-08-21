@@ -134,9 +134,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
 
       await UniversalUtils.movePoolPriceDown(
         signer,
-        state.pool,
-        state.tokenA,
-        state.tokenB,
+        state,
         MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
         parseUnits('200000', 6)
       );
@@ -171,9 +169,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
 
       await UniversalUtils.movePoolPriceDown(
         signer,
-        state.pool,
-        state.tokenA,
-        state.tokenB,
+        state,
         MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
         parseUnits('200000', 6)
       );
@@ -201,7 +197,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
       await TokenUtils.getToken(asset.address, signer.address, parseUnits('1000', 6));
       await vault.deposit(parseUnits('1000', 6), signer.address);
 
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAssetValue.div(3));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAssetValue.div(3));
 
       console.log('emergency exit');
       const operator = await UniversalTestUtils.getAnOperator(s.address, signer)
@@ -209,9 +205,7 @@ describe.skip('KyberConverterStrategyAggRebalanceTest', function() {
 
       await UniversalUtils.movePoolPriceDown(
         signer,
-        state.pool,
-        state.tokenA,
-        state.tokenB,
+        state,
         MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
         swapAssetValue
       );
