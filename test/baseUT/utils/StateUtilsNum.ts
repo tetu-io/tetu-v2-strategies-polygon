@@ -282,7 +282,7 @@ export class StateUtilsNum {
       if (isUniv3 || isAlgebra || isKyber)  {
         const uniswapV3Strategy = UniswapV3ConverterStrategy__factory.connect(strategy.address, signer);
         const state = await PackedData.getDefaultState(uniswapV3Strategy);
-        console.log("state", state);
+        // console.log("state", state);
         liquidity = +formatUnits(state.totalLiquidity, assetDecimals); // todo correct decimals?
         const tokenB = await IERC20Metadata__factory.connect(state.tokenB, signer);
 

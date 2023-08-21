@@ -1,6 +1,13 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
-import {ControllerV2__factory, ConverterStrategyBase__factory, IRebalancingV2Strategy, StrategyBaseV2__factory} from "../../../typechain";
-import {PackedData} from "../utils/PackedData";
+import {
+  AlgebraLib,
+  ControllerV2__factory,
+  ConverterStrategyBase__factory,
+  IRebalancingV2Strategy, KyberLib,
+  StrategyBaseV2__factory,
+  UniswapV3Lib
+} from "../../../typechain";
+import {IDefaultState, PackedData} from "../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
@@ -208,7 +215,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
       // zero amount is not allowed, we will receive i.e. "AS" error on Algebra
       const requiredAmountBOut = amountBOut.eq(0)
-        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
         : amountBOut;
 
       console.log("amountBOut", amountBOut);
@@ -221,7 +228,7 @@ export class PairBasedStrategyPrepareStateUtils {
       );
       console.log("amountAIn.to.up", amountAIn);
       return amountAIn.eq(0)
-        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
         : amountAIn;
     } else {
       // calculate amount A that we are going to receive
@@ -231,7 +238,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
       // zero amount is not allowed, we will receive i.e. "AS" error on Algebra
       const requiredAmountAOut = amountAOut.eq(0)
-        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
         : amountAOut;
 
       console.log("amountAOut", amountAOut);
@@ -244,7 +251,7 @@ export class PairBasedStrategyPrepareStateUtils {
       );
       console.log("amountBIn.to.down", amountBIn);
       return amountBIn.eq(0)
-        ? parseUnits("1", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
         : amountBIn;
 
     }
@@ -409,4 +416,28 @@ export class PairBasedStrategyPrepareStateUtils {
   return {states};
 }
 
+    /**
+     * Move prices using given swapAmount using several iterations to avoid swapping of too big amounts.
+     * A swapAmount, required to move to next range, can be calculated using {getSwapAmount2}
+     */
+  static async movePriceBySteps(
+    signer: SignerWithAddress,
+    swapper: string,
+    movePricesUpDown: boolean,
+    state: IDefaultState,
+    totalSwapAmount: BigNumber,
+    countIterations: number = 5
+  ) {
+    console.log("movePriceBySteps.totalSwapAmount", totalSwapAmount);
+    await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, swapper, totalSwapAmount);
+
+    const swapAmountPerIteration = totalSwapAmount.div(countIterations);
+    for (let j = 0; j < countIterations; ++j) {
+      if (movePricesUpDown) {
+        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, swapper, swapAmountPerIteration, 40000);
+      } else {
+        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, swapper, swapAmountPerIteration, 40000);
+      }
+    }
+  }
 }

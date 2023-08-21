@@ -1448,11 +1448,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, parseUnits('100000', 6));
 
             if (i % 3) {
-              if (!lastDirectionUp) {
-                await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove);
-              } else {
-                await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
-              }
+              await PairBasedStrategyPrepareStateUtils.movePriceBySteps(signer, b.swapper, !lastDirectionUp, state, swapAssetValueForPriceMove);
               lastDirectionUp = !lastDirectionUp
             }
 
