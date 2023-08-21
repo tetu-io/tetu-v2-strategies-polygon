@@ -242,7 +242,7 @@ describe('IterationPlanLibTest', () => {
         });
       });
       describe("Partial swap", () => {
-        it("should return expected amount-to-swap", async () => {
+        it("should return expected amount-to-swap, different prices", async () => {
           const r = await makeEstimateSwapAmount({
             balancesAB: ["500", "400"],
             indicesAB: [0, 1],
@@ -258,8 +258,27 @@ describe('IterationPlanLibTest', () => {
             prices: ["2", "0.5"],
           });
 
-          // 20230706.2.calc.xlsx, s = 0.25, aB3 = 116.6667, aB2 = 1120 * 0.5 = 560
-          expect(r.amountToSwapA).eq(560);
+          // see calculations/estimateSwapAmountForRepaySwapRepay.xlsx
+          expect(r.amountToSwapA).eq(350);
+        });
+        it("should return expected amount-to-swap, same prices", async () => {
+          const r = await makeEstimateSwapAmount({
+            balancesAB: ["1000", "200"],
+            indicesAB: [0, 1],
+            propB: "0.5",
+
+            totalCollateralA: "600",
+            totalBorrowB: "300",
+
+            collateralA: "400",
+            amountToRepayB: "200",
+
+            decimals: [6, 6],
+            prices: ["1", "1"],
+          });
+
+          // see calculations/estimateSwapAmountForRepaySwapRepay.xlsx
+          expect(r.amountToSwapA).eq(700);
         });
       });
     });

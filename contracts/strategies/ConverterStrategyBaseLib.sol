@@ -979,7 +979,7 @@ library ConverterStrategyBaseLib {
               asset,
               p.amountP,
               _REWARD_LIQUIDATION_SLIPPAGE,
-              liquidationThresholds[p.rewardToken],
+              AppLib._getLiquidationThreshold(liquidationThresholds[p.rewardToken]),
               false // use conversion validation for these rewards
             );
             amountToPerformanceAndInsurance += p.receivedAmountOut;
@@ -996,7 +996,7 @@ library ConverterStrategyBaseLib {
             asset,
             p.amountCP,
             _REWARD_LIQUIDATION_SLIPPAGE,
-            liquidationThresholds[p.rewardToken],
+            AppLib._getLiquidationThreshold(liquidationThresholds[p.rewardToken]),
             true // skip conversion validation for rewards because we can have arbitrary assets here
           );
           amountToPerformanceAndInsurance += p.receivedAmountOut * (rewardAmounts[i] - p.amountFC) / p.amountCP;
@@ -1030,7 +1030,13 @@ library ConverterStrategyBaseLib {
     tokenAmounts = _getCollaterals(amount_, tokens_, weights_, totalWeight_, indexAsset_, AppLib._getPriceOracle(converter_));
 
     // make borrow and save amounts of tokens available for deposit to tokenAmounts, zero result amounts are possible
-    tokenAmounts = _getTokenAmounts(converter_, tokens_, indexAsset_, tokenAmounts, liquidationThresholds[tokens_[indexAsset_]]);
+    tokenAmounts = _getTokenAmounts(
+      converter_,
+      tokens_,
+      indexAsset_,
+      tokenAmounts,
+      AppLib._getLiquidationThreshold(liquidationThresholds[tokens_[indexAsset_]])
+    );
   }
 
   /// @notice For each {token_} calculate a part of {amount_} to be used as collateral according to the weights.
@@ -1109,7 +1115,7 @@ library ConverterStrategyBaseLib {
             asset,
             token,
             collaterals_[i],
-            AppLib._getLiquidationThreshold(thresholdAsset_)
+            thresholdAsset_
           );
 
           // zero borrowed amount is possible here (conversion is not available)
@@ -1195,8 +1201,7 @@ library ConverterStrategyBaseLib {
       // We should try to close the exist debts instead:
       //    convert a part of main assets to get amount of secondary assets required to repay the debts
       // and only then make conversion.
-      expectedAmount = _closePositionsToGetAmount(d_, _liquidationThresholds, requestedAmount)
-        + expectedMainAssetAmounts[d_.indexAsset];
+      expectedAmount = _closePositionsToGetAmount(d_, _liquidationThresholds, requestedAmount);
     }
 
     return expectedAmount;
@@ -1340,9 +1345,10 @@ library ConverterStrategyBaseLib {
               d_.tokens[indexOut],
               v.amountToSwap,
               _ASSET_LIQUIDATION_SLIPPAGE,
-              AppLib._getLiquidationThreshold(liquidationThresholds_[indexIn]),
+              liquidationThresholds_[indexIn],
               false
             );
+
             if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
               // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
@@ -1356,18 +1362,17 @@ library ConverterStrategyBaseLib {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             uint amountToRepay = IERC20(d_.tokens[indexBorrow]).balanceOf(address(this));
-            (uint expectedAmountOut, uint repaidAmountOut) = _repayDebt(
+            (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
               d_.converter,
               d_.tokens[indexCollateral],
               d_.tokens[indexBorrow],
               amountToRepay
             );
-
             if (indexCollateral == d_.indexAsset) {
               require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
-              if (repaidAmountOut < amountToRepay) {
+              if (repaidAmountOut < amountSendToRepay) {
                 // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
-                expectedAmount += expectedAmountOut * repaidAmountOut / amountToRepay - spentAmountIn;
+                expectedAmount += expectedAmountOut * repaidAmountOut / amountSendToRepay - spentAmountIn;
               } else {
                 expectedAmount += expectedAmountOut - spentAmountIn;
               }
@@ -1379,9 +1384,11 @@ library ConverterStrategyBaseLib {
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
 
           if (v.newBalanceAsset > v.balanceAsset) {
-            requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
-              ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
-              : 0;
+            if (requestedAmount != type(uint).max) {
+              requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
+                ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
+                : 0;
+            } // requestedAmount can be checked for equality to type(uint).max below, we cannot max value
           }
 
           v.exitLoop = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
@@ -1389,7 +1396,7 @@ library ConverterStrategyBaseLib {
           v.balanceToken = v.newBalanceToken;
         } while (!v.exitLoop);
 
-        if (requestedAmount < AppLib._getLiquidationThreshold(liquidationThresholds_[d_.indexAsset])) break;
+        if (requestedAmount < liquidationThresholds_[d_.indexAsset]) break;
       }
     }
 
@@ -1403,6 +1410,7 @@ library ConverterStrategyBaseLib {
   /// @param amountToRepay Max available amount of borrow asset that we can repay
   /// @return expectedAmountOut Estimated amount of main asset that should be added to balance = collateral - {toSell}
   /// @return repaidAmountOut Actually paid amount
+  /// @return amountSendToRepay Amount send to repay
   function _repayDebt(
     ITetuConverter converter,
     address collateralAsset,
@@ -1410,17 +1418,18 @@ library ConverterStrategyBaseLib {
     uint amountToRepay
   ) internal returns (
     uint expectedAmountOut,
-    uint repaidAmountOut
+    uint repaidAmountOut,
+    uint amountSendToRepay
   ) {
     uint balanceBefore = IERC20(borrowAsset).balanceOf(address(this));
 
     // get amount of debt with debt-gap
     (uint needToRepay,) = converter.getDebtAmountCurrent(address(this), collateralAsset, borrowAsset, true);
-    uint amountRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
+    amountSendToRepay = Math.min(amountToRepay < needToRepay ? amountToRepay : needToRepay, balanceBefore);
 
     // get expected amount without debt-gap
     uint swappedAmountOut;
-    (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountRepay);
+    (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountSendToRepay);
 
     if (expectedAmountOut > swappedAmountOut) {
       // Following situation is possible
@@ -1434,13 +1443,15 @@ library ConverterStrategyBaseLib {
     }
 
     // close the debt
-    (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountRepay, balanceBefore);
+    (, repaidAmountOut) = _closePositionExact(converter, collateralAsset, borrowAsset, amountSendToRepay, balanceBefore);
 
-    return (expectedAmountOut, repaidAmountOut);
+    return (expectedAmountOut, repaidAmountOut, amountSendToRepay);
   }
   //endregion ------------------------------------------------ Repay debts
 
 //region------------------------------------------------ Other helpers
+
+  /// @return liquidationThresholdsOut Liquidation thresholds of the {tokens_}, result values > 0
   function _getLiquidationThresholds(
     mapping(address => uint) storage liquidationThresholds,
     address[] memory tokens_,
@@ -1450,7 +1461,7 @@ library ConverterStrategyBaseLib {
   ) {
     liquidationThresholdsOut = new uint[](len);
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      liquidationThresholdsOut[i] = liquidationThresholds[tokens_[i]];
+      liquidationThresholdsOut[i] = AppLib._getLiquidationThreshold(liquidationThresholds[tokens_[i]]);
     }
   }
 //endregion--------------------------------------------- Other helpers

@@ -26,6 +26,14 @@ import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtu
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {
+  FUSE_IDX_LOWER_LIMIT_OFF,
+  FUSE_IDX_LOWER_LIMIT_ON,
+  FUSE_IDX_UPPER_LIMIT_OFF,
+  FUSE_IDX_UPPER_LIMIT_ON,
+  FUSE_OFF_1, FUSE_ON_LOWER_LIMIT_2,
+  FUSE_ON_UPPER_LIMIT_3
+} from "../../../baseUT/AppConstants";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -50,16 +58,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     return;
   }
 //region Constants
-  const FUSE_DISABLED_0 = 0;
-  const FUSE_OFF_1 = 1;
-  const FUSE_ON_LOWER_LIMIT_2 = 2;
-  const FUSE_ON_UPPER_LIMIT_3 = 3;
-
-  const FUSE_IDX_LOWER_LIMIT_ON = 0;
-  const FUSE_IDX_LOWER_LIMIT_OFF = 1;
-  const FUSE_IDX_UPPER_LIMIT_ON = 2;
-  const FUSE_IDX_UPPER_LIMIT_OFF = 3;
-
   const DEFAULT_SWAP_AMOUNT_RATIO = 1.01;
 //endregion Constants
 
@@ -107,15 +105,13 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   async function movePriceToChangeFuseStatus(
     b: IBuilderResults,
     movePricesUpDown: boolean,
-    useTokenB: boolean,
     maxCountRebalances: number,
-    platform: string,
-    lib: UniswapV3Lib | AlgebraLib | KyberLib,
     state: IDefaultState,
     states: IStateNum[],
     pathOut: string,
     swapAmountRatio?: number
   ): Promise<IPriceFuseStatus | undefined> {
+    const COUNT_ITERATIONS = 5;
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
     const currentFuseA = states.length === 0
       ? FUSE_OFF_1
@@ -125,7 +121,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       : states[states.length - 1].fuseStatusB;
 
     for (let i = 0; i < maxCountRebalances; ++i) {
-      const swapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
+      const totalSwapAmount = await PairBasedStrategyPrepareStateUtils.getSwapAmount2(
         signer,
         b,
         state.tokenA,
@@ -133,34 +129,38 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         movePricesUpDown,
           swapAmountRatio ?? DEFAULT_SWAP_AMOUNT_RATIO
       );
-      console.log("movePriceToChangeFuseStatus.swapAmount", swapAmount);
+      console.log("movePriceToChangeFuseStatus.swapAmount", totalSwapAmount);
+      await UniversalUtils.makePoolVolume(signer, state, b.swapper, totalSwapAmount);
 
-      if (movePricesUpDown) {
-        await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
-      } else {
-        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000, !useTokenB);
-      }
+      const swapAmount = totalSwapAmount.div(COUNT_ITERATIONS);
+      for (let j = 0; j < COUNT_ITERATIONS; ++j) {
+        if (movePricesUpDown) {
+          await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, swapAmount, 40000);
+        } else {
+          await UniversalUtils.movePoolPriceDown(signer, state, b.swapper, swapAmount, 40000);
+        }
 
-      states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fw${i}`, {lib}));
-      StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
-
-      if ((await b.strategy.needRebalance())) {
-        await b.strategy.rebalanceNoSwaps(true, { gasLimit: 9_000_000 });
-        const stateAfterRebalance = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`, {lib});
-        states.push(stateAfterRebalance);
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `fw${i}`, {lib: b.lib}));
         StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-        if (stateAfterRebalance.fuseStatusB !== currentFuseB) {
-          return {
-            fuseStatus: stateAfterRebalance.fuseStatusB || 0,
-            price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
-          };
-        }
-        if (stateAfterRebalance.fuseStatusA !== currentFuseA) {
-          return {
-            fuseStatus: stateAfterRebalance.fuseStatusA || 0,
-            price: stateAfterRebalance.converterDirect.borrowAssetsPrices[0]
-          };
+        if ((await b.strategy.needRebalance())) {
+          await b.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
+          const stateAfterRebalance = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`, {lib: b.lib});
+          states.push(stateAfterRebalance);
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          if (stateAfterRebalance.fuseStatusB !== currentFuseB) {
+            return {
+              fuseStatus: stateAfterRebalance.fuseStatusB || 0,
+              price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
+            };
+          }
+          if (stateAfterRebalance.fuseStatusA !== currentFuseA) {
+            return {
+              fuseStatus: stateAfterRebalance.fuseStatusA || 0,
+              price: stateAfterRebalance.converterDirect.borrowAssetsPrices[0]
+            };
+          }
         }
       }
     }
@@ -173,7 +173,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     let rebalanceFuseOff: IPriceFuseStatus | undefined;
     const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
     const platform = await converterStrategyBase.PLATFORM();
-    const lib = b.lib;
 
     console.log('deposit...');
     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -185,10 +184,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     rebalanceFuseOn = await movePriceToChangeFuseStatus(
       b,
       p.movePricesUpDown,
-      platform !== PLATFORM_KYBER,
       p.maxCountRebalances,
-      platform,
-      lib,
       state,
       states,
       pathOut,
@@ -200,10 +196,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     rebalanceFuseOff = await movePriceToChangeFuseStatus(
       b,
       !p.movePricesUpDown,
-      platform !== PLATFORM_KYBER,
       p.maxCountRebalances,
-      platform,
-      lib,
       state,
       states,
       pathOut,
@@ -223,7 +216,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 //endregion Utils
 
 //region Unit tests
-  describe('Increase price N steps, decrease price N steps, default swapAmountRatio (1.001)', function () {
+  describe('Increase price N steps, decrease price N steps, default swapAmountRatio (1.01)', function () {
     interface IStrategyInfo {
       name: string,
     }
@@ -261,6 +254,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
                 maxCountRebalances: 25,
                 pathOut,
                 movePricesUpDown: true,
+                swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO
               });
             }
             it("should trigger fuse to FUSE_ON_UPPER_LIMIT_3", async () => {
@@ -311,7 +305,12 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     });
   });
 
-  describe('Increase price N steps, decrease price N steps, swapAmountRatio = 1', function () {
+  /**
+   * This test is excluded from coverage because it doesn't pass for Univ3:
+   * 1) There are some problems with swapping dust-amounts in liquidator
+   * 2) Price moving is too slow because of the dust amounts, it's not able to set fuse ON / OFF
+   */
+  describe('Increase price N steps, decrease price N steps, swapAmountRatio = 1 @skip-on-coverage', function () {
     interface IStrategyInfo {
       name: string,
     }

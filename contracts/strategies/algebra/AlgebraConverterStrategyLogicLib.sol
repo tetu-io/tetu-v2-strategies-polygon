@@ -575,8 +575,8 @@ library AlgebraConverterStrategyLogicLib {
     v.tokenA = pairState.tokenA;
     v.tokenB = pairState.tokenB;
     v.isStablePool = pairState.isStablePool;
-    v.liquidationThresholdsAB[0] = liquidityThresholds_[v.tokenA];
-    v.liquidationThresholdsAB[1] = liquidityThresholds_[v.tokenB];
+    v.liquidationThresholdsAB[0] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenA]);
+    v.liquidationThresholdsAB[1] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenB]);
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]

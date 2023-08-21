@@ -123,9 +123,9 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
               : 0.3
       );
       if (p.movePricesUp) {
-        await UniversalUtils.movePoolPriceUp(signer2, b.pool, defaultState.tokenA, defaultState.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceUp(signer2, defaultState, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       } else {
-        await UniversalUtils.movePoolPriceDown(signer2, b.pool, defaultState.tokenA, defaultState.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceDown(signer2, defaultState, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
       }
       states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, `p${i}`));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);

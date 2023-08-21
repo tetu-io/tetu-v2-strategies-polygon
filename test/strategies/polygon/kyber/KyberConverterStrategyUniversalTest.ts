@@ -153,9 +153,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.movePoolPriceUp(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount,
         );
@@ -168,9 +166,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
         await UniversalUtils.movePoolPriceDown(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount,
         );
@@ -184,9 +180,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.makePoolVolume(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount
         )

@@ -5,16 +5,12 @@ pragma solidity 0.8.17;
 import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
 import "../../strategies/ConverterStrategyBaseLib.sol";
 
-/// @notice Provide public access to internal functions of ConverterStrategyBaseLib and AppLib
+/// @notice Provide public access to internal functions of ConverterStrategyBaseLib
 contract ConverterStrategyBaseLibFacade {
   mapping(address => uint) private liquidationThresholds;
 
   function setLiquidationThreshold(address asset, uint values) external {
     liquidationThresholds[asset] = values;
-  }
-
-  function getAssetIndex(address[] memory tokens_, address asset_) external pure returns (uint) {
-    return AppLib.getAssetIndex(tokens_, asset_);
   }
 
   function getCollaterals(

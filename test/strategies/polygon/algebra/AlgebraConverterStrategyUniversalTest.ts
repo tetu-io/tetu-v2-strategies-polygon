@@ -198,7 +198,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniversalUtils.movePoolPriceUp(swapUser, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceUp(swapUser, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
@@ -207,7 +207,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniversalUtils.makePoolVolume(swapUser, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
+        await UniversalUtils.makePoolVolume(swapUser, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
     };
 

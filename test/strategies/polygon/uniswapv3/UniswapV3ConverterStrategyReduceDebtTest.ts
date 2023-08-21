@@ -148,7 +148,7 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
       let swapAmount = amounts[1].mul(priceB).div(parseUnits('1', 6))
       swapAmount = swapAmount.add(swapAmount.div(100))
 
-      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAmount);
 
       if (!(await strategy.needRebalance())) {
         console.log('Not need rebalance. Something wrong')
