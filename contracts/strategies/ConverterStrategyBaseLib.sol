@@ -1192,9 +1192,11 @@ library ConverterStrategyBaseLib {
       _convertAfterWithdraw(d_, _liquidationThresholds, amountsToConvert_);
     } else {
       uint balance = IERC20(d_.tokens[d_.indexAsset]).balanceOf(address(this));
-      requestedAmount = requestedAmount > balance
-        ? requestedAmount - balance
-        : 0;
+      if (requestedAmount != type(uint).max) {
+        requestedAmount = requestedAmount > balance
+          ? requestedAmount - balance
+          : 0;
+      }
 
       // amountsToConvert_ are NOT enough to get requestedAmount
       // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
@@ -1388,7 +1390,7 @@ library ConverterStrategyBaseLib {
               requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
                 ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
                 : 0;
-            } // requestedAmount can be checked for equality to type(uint).max below, we cannot max value
+            } // requestedAmount can be checked for equality to type(uint).max below, we cannot change max value
           }
 
           v.exitLoop = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
