@@ -338,6 +338,7 @@ export class MaticAddresses {
 
   // KYBER
   public static KYBER_USDC_USDT = '0x879664ce5A919727b3Ed4035Cf12F7F740E8dF00'.toLowerCase()
+  public static KYBER_USDC_DAI = '0x02A3E4184b145eE64A6Df3c561A3C0c6e2f23DFa'.toLowerCase()
   public static KYBER_WBTC_WETH = '0x4ebc4d2763e951197f07b6b8b3c2bdfbff7d6b5f'.toLowerCase()
   public static KYBER_KNC_USDC = '0x4b440a7de0ab7041934d0c171849a76cc33234fa'.toLowerCase()
   /** https://docs.kyberswap.com/liquidity-solutions/kyberswap-elastic/contracts/elastic-contract-addresses */
