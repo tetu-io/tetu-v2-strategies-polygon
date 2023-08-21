@@ -1384,9 +1384,11 @@ library ConverterStrategyBaseLib {
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
 
           if (v.newBalanceAsset > v.balanceAsset) {
-            requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
-              ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
-              : 0;
+            if (requestedAmount != type(uint).max) {
+              requestedAmount = requestedAmount > v.newBalanceAsset - v.balanceAsset
+                ? requestedAmount - (v.newBalanceAsset - v.balanceAsset)
+                : 0;
+            } // requestedAmount can be checked for equality to type(uint).max below, we cannot max value
           }
 
           v.exitLoop = (v.balanceAsset == v.newBalanceAsset && v.balanceToken == v.newBalanceToken);
