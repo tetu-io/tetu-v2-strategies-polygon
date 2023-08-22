@@ -35,11 +35,16 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
   // before depeg start ts - 1690882487
   const backtestStartBlock = 45764000; // Aug-01-2023 02:55:08 AM +UTC // 45700000; // 7/30/2023 3:31:06 PM
-  const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC - fails on ts 1690914072
+  // const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC - fails on ts 1690914072
+  const backtestEndBlock = 45785000; // Aug-01-2023 03:32:23 PM +UTC
   const investAmountUnits: string = '10000' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
+  const rebalanceDebt = true;
+  const allowedLockedPercent = 25;
+  const forceRebalanceDebtLockedPercent = 70;
+  const rebalanceDebtDelay = 3600;
 
   /*const params = {
     vaultAsset: MaticAddresses.WMATIC_TOKEN,
@@ -258,6 +263,11 @@ describe('UmiswapV3 converter strategy backtester', function() {
       txLimit,
       disableBurns,
       disableMints,
+      rebalanceDebt,
+      contracts.reader,
+      allowedLockedPercent,
+      forceRebalanceDebtLockedPercent,
+      rebalanceDebtDelay,
     )
   })
 });

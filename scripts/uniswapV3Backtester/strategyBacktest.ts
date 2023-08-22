@@ -1,14 +1,14 @@
 /* tslint:disable:no-trailing-whitespace */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
-  IERC20Metadata__factory, IUniswapV3Pool__factory,
+  IERC20Metadata__factory, IUniswapV3Pool__factory, PairBasedStrategyReader,
   TetuVaultV2,
   UniswapV3Callee,
   UniswapV3ConverterStrategy,
   UniswapV3Lib
 } from "../../typechain";
 import {IPoolLiquiditySnapshot, TransactionType, UniswapV3Utils} from "../utils/UniswapV3Utils";
-import {formatUnits, getAddress, parseUnits} from "ethers/lib/utils";
+import {defaultAbiCoder, formatUnits, getAddress, parseUnits} from "ethers/lib/utils";
 import {BigNumber} from "ethers";
 import {Misc} from "../utils/Misc";
 import {expect} from "chai";
@@ -16,6 +16,7 @@ import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {IBacktestResult} from "./types";
 import {UniswapV3StrategyUtils} from "../../test/baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
+import {MaticAddresses} from "../addresses/MaticAddresses";
 
 export async function strategyBacktest(
   signer: SignerWithAddress,
@@ -31,6 +32,11 @@ export async function strategyBacktest(
   txLimit: number = 0,
   disableBurns: boolean = false,
   disableMints: boolean = false,
+  rebalanceDebt = false,
+  reader: PairBasedStrategyReader|undefined,
+  allowedLockedPercent: number = 25,
+  forceRebalanceDebtLockedPercent: number = 70,
+  rebalanceDebtDelay: number = 3600
 ): Promise<IBacktestResult> {
   const state = await strategy.getDefaultState();
   const startTimestampLocal = Math.floor(Date.now() / 1000);
@@ -54,6 +60,7 @@ export async function strategyBacktest(
   let fees
   let tx
   let txReceipt
+  let lastNSRTimestamp = 0
 
   console.log(`Starting backtest of ${await vault.name()}`);
   console.log(`Filling pool with initial liquidity from snapshot (${liquiditySnapshot.ticks.length} ticks)..`);
@@ -197,7 +204,7 @@ export async function strategyBacktest(
     if (previousTimestamp !== poolTx.timestamp) {
       if (await strategy.needRebalance()) {
         rebalances++;
-        process.stdout.write(`Rebalance ${rebalances}.. `);
+        process.stdout.write(`NSR ${rebalances}.. `);
         tx = await strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         txReceipt = await tx.wait();
         fees = UniswapV3StrategyUtils.extractClaimedFees(txReceipt)
@@ -214,6 +221,7 @@ export async function strategyBacktest(
         rebalanceLoss = rebalanceLoss.add(extractedRebalanceLoss[0])
         totalLossCoveredFromRewards = totalLossCoveredFromRewards.add(extractedRebalanceLoss[2])
         console.log(`done with ${txReceipt.gasUsed} gas.`);
+        lastNSRTimestamp = poolTx.timestamp
       }
 
       const defaultState = await strategy.getDefaultState()
@@ -226,6 +234,48 @@ export async function strategyBacktest(
       if (isFuseTriggered) {
         console.log('Fuse enabled!');
         break;
+      }
+
+      if (rebalanceDebt && reader) {
+        const r = await reader.getLockedUnderlyingAmount(strategy.address) as [BigNumber, BigNumber]
+        const percent = r[0].mul(100).div(r[1]).toNumber();
+        // console.log('Locked percent', percent)
+        const needForcedRebalanceDebt = percent > forceRebalanceDebtLockedPercent;
+        const needDelayedRebalanceDebt = percent > allowedLockedPercent && poolTx.timestamp - lastNSRTimestamp > rebalanceDebtDelay
+
+        if (needDelayedRebalanceDebt) {
+          console.log(`Delayed rebalance debt (locked: ${percent}%, allowed: ${allowedLockedPercent}%)`)
+        }
+        if (needForcedRebalanceDebt) {
+          console.log(`Forced rebalance debt (locked: ${percent}%, force rebalance debt locked: ${forceRebalanceDebtLockedPercent}%)`)
+        }
+
+        if (needDelayedRebalanceDebt || needForcedRebalanceDebt) {
+          const PLAN_SWAP_REPAY = 0;
+          const PLAN_REPAY_SWAP_REPAY = 1;
+
+          const planEntryData = /*!isFuseTriggered
+            ?*/ defaultAbiCoder.encode(
+            ['uint256', 'uint256'],
+            [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT],
+          )
+          /*: defaultAbiCoder.encode(
+            ['uint256', 'uint256'],
+            [PLAN_SWAP_REPAY, 0],
+          );*/
+
+          const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+
+          console.log('withdrawByAggStep..')
+          await strategy.withdrawByAggStep(
+            quote[0],
+            MaticAddresses.ZERO_ADDRESS,
+            quote[1],
+            '0x00',
+            planEntryData,
+            /*isFuseTriggered ? 0 : */1,
+          )
+        }
       }
     }
 

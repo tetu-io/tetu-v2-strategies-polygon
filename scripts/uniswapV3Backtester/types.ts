@@ -1,7 +1,7 @@
 import {
   CErc20Immutable,
   CompPriceOracleImitator, Comptroller, ControllerV2, JumpRateModelV2,
-  MockToken, MultiGauge, PriceOracleImitator, TetuConverter, TetuLiquidator,
+  MockToken, MultiGauge, PairBasedStrategyReader, PriceOracleImitator, TetuConverter, TetuLiquidator,
   TetuVaultV2, Uni3Swapper,
   UniswapV3Callee,
   UniswapV3ConverterStrategy,
@@ -61,6 +61,8 @@ export interface IContracts {
   controller: ControllerV2
   gauge: MultiGauge
   vaultFactory: VaultFactory
+
+  reader: PairBasedStrategyReader
 }
 
 export interface IVaultUniswapV3StrategyInfo {
