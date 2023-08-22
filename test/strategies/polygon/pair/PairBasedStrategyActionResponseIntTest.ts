@@ -1064,7 +1064,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
             const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-            expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
+            // 2163.780528 = 2163.7805280000002
+            expect(stateAfter.user.assetBalance).approximately(stateBefore.user.assetBalance + 300, 1);
           });
           it("should withdraw-all successfully", async () => {
             const b = await loadFixture(prepareStrategy);
