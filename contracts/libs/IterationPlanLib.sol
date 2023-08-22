@@ -14,6 +14,7 @@ library IterationPlanLib {
   /// @notice Swap collateral asset to get required amount-to-repay, then repay and get more collateral back.
   ///         It tries to minimizes count of repay-operations.
   ///         If there are no debts, swap leftovers to get required proportions of the asset.
+  ///         This mode is intended i.e. for "withdraw all"
   ///         (uint256, uint256) - (entry kind, propNotUnderlying18)
   /// propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                     The assets should be swapped to get following result proportions:
@@ -24,6 +25,7 @@ library IterationPlanLib {
   /// @notice Repay available amount-to-repay, swap all or part of collateral to borrowed-asset, make one repay if needed.
   ///         Swap + second repay tries to make asset balances to proportions required by the pool.
   ///         Proportions are read from pool through IPoolProportionsProvider(this) and re-read after swapping.
+  ///         This mode is intended i.e. for rebalancing debts using single iteration.
   ///         (uint256, uint256) - (entry kind, propNotUnderlying18)
   /// propNotUnderlying18 Required proportion of not-underlying for the final swap of leftovers, [0...1e18].
   ///                     The assets should be swapped to get following result proportions:
@@ -96,7 +98,7 @@ library IterationPlanLib {
     uint bA1;
     uint bB1;
     uint alpha;
-    uint s;
+    uint swapRatio;
     uint aB3;
     uint cA1;
     uint cB1;
@@ -194,7 +196,7 @@ library IterationPlanLib {
     if (p.planKind == IterationPlanLib.PLAN_SWAP_ONLY) {
       v.swapLeftoversNeeded = true;
     } else {
-      if (requestedAmount < AppLib._getLiquidationThreshold(p.liquidationThresholds[indexAsset])) {
+      if (requestedAmount < p.liquidationThresholds[indexAsset]) {
         // we don't need to repay any debts anymore, but we should swap leftovers
         v.swapLeftoversNeeded = true;
       } else {
@@ -339,11 +341,11 @@ library IterationPlanLib {
     // bAN, bBN - balances of A and B; aAN, aBN - amounts of A and B; cAN, cBN - collateral/borrow amounts of A/B
     // alpha ~ cAN/cBN - estimated ratio of collateral/borrow
     // s = swap ratio, aA is swapped to aB, so aA = s * aB
-    // g = split ratio, bA1 is divided on two parts: bA1 * gamma, bA1 * (1 + gamma). First part is swapped.
+    // g = split ratio, bA1 is divided on two parts: bA1 * gamma, bA1 * (1 - gamma). First part is swapped.
     // X = proportion of A, Y = proportion of B
 
     // Formulas
-    // aB3 = (x * bB2 - Y * bA2) / (alpha * y + x)
+    // aB3 = (x * bB2 - y * bA2) / (alpha * y + x)
     // gamma = (y * bA1 - x * bB1) / (bA1 * (x * s + y))
 
     // There are following stages:
@@ -366,20 +368,20 @@ library IterationPlanLib {
 
 // 2. full swap
     v.aA2 = v.bA1;
-    v.s = 1e18 * p.prices[indexB] / p.prices[indexA]; // no decimals because we use costs: costA = s * costB
+    v.swapRatio = 1e18; // we assume swap ratio 1:1
 
 // 3. repay 2
     // aB3 = (x * bB2 - Y * bA2) / (alpha * y + x)
     v.aB3 = (
-      v.x * (v.bB1 + v.aA2 * v.s / 1e18)    // bB2 = v.bB1 + v.aA2 * v.s / 1e18
-      - v.y * (v.bA1 - v.aA2)               // bA2 = v.bA1 - v.aA2;
+      v.x * (v.bB1 + v.aA2 * v.swapRatio / 1e18)    // bB2 = v.bB1 + v.aA2 * v.s / 1e18
+      - v.y * (v.bA1 - v.aA2)                       // bA2 = v.bA1 - v.aA2;
     ) / (v.y * v.alpha / 1e18 + v.x);
 
     if (v.aB3 > v.cB1) {
       // there is not enough debt to make second repay
       // we need to make partial swap and receive assets in right proportions in result
       // v.gamma = 1e18 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
-      v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.s / 1e18 + v.y));
+      v.aA2 = v.bA1 * (v.y * v.bA1 - v.x * v.bB1) / (v.bA1 * (v.x * v.swapRatio / 1e18 + v.y));
     }
 
     return v.aA2 * p.decs[indexA] / p.prices[indexA];
@@ -407,13 +409,13 @@ library IterationPlanLib {
     (uint targetA, uint targetB) = _getTargetAmounts(p.prices, p.decs, balanceA, balanceB, propB, indexA, indexB);
     if (balanceA < targetA) {
       // we need to swap not-underlying to underlying
-      if (balanceB - targetB > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexB])) {
+      if (balanceB - targetB > p.liquidationThresholds[indexB]) {
         amountToSwap = balanceB - targetB;
         indexTokenToSwapPlus1 = indexB + 1;
       }
     } else {
       // we need to swap underlying to not-underlying
-      if (balanceA - targetA > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexA])) {
+      if (balanceA - targetA > p.liquidationThresholds[indexA]) {
         amountToSwap = balanceA - targetA;
         indexTokenToSwapPlus1 = indexA + 1;
       }
@@ -463,7 +465,7 @@ library IterationPlanLib {
     // convert {toSell} amount of underlying to token
     if (toSell != 0 && balanceCollateral != 0) {
       toSell = Math.min(toSell, balanceCollateral);
-      uint threshold = AppLib._getLiquidationThreshold(p.liquidationThresholds[indexCollateral]);
+      uint threshold = p.liquidationThresholds[indexCollateral];
       if (toSell > threshold) {
         amountToSwap = toSell;
         indexTokenToSwapPlus1 = indexCollateral + 1;

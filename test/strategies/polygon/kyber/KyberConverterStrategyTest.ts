@@ -177,7 +177,7 @@ describe('KyberConverterStrategyTest', function() {
       expect(stateSpecific.flags.needUnstake).eq(false)
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       const farmingContract = IKyberSwapElasticLM__factory.connect('0x7D5ba536ab244aAA1EA42aB88428847F25E3E676', signer)
       const poolInfo = await farmingContract.getPoolInfo(pId)
@@ -207,7 +207,7 @@ describe('KyberConverterStrategyTest', function() {
       expect(state.totalLiquidity).gt(0)
       expect(await IERC20__factory.connect(MaticAddresses.KNC_TOKEN, signer).balanceOf(strategy.address)).eq(0)
 
-      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
 
       console.log('Rebalance without stake')
       expect(await s.needRebalance()).eq(true)
@@ -225,7 +225,8 @@ describe('KyberConverterStrategyTest', function() {
 
       // addPool
       now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
-      await farmingContract.connect(admin).addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
+      await farmingContract.connect(admin).updateOperator(signer.address, true)
+      await farmingContract.addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
       const newPid = (await farmingContract.poolLength()).toNumber() - 1
       await s.connect(operator).changePId(newPid)
 
@@ -264,7 +265,7 @@ describe('KyberConverterStrategyTest', function() {
 
       expect(await s.needRebalance()).eq(false)
 
-      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
@@ -298,7 +299,7 @@ describe('KyberConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
@@ -313,7 +314,7 @@ describe('KyberConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       console.log('withdraw')
       const tx = await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
@@ -325,7 +326,7 @@ describe('KyberConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       if (await s.needRebalance()) {
         await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});

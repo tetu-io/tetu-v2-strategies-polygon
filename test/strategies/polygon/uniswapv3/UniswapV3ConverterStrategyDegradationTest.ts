@@ -179,7 +179,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
       listStates.push(stateStepInitial);
       console.log(`initial`, stateStepInitial);
 
-      await UniswapV3StrategyUtils.makeVolume(signer, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
       for (let i = 0; i < COUNT * 2; ++i) {
         const state0 = await PackedData.getDefaultState(strategy);
@@ -195,9 +195,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
           if (i < COUNT) {
             await UniversalUtils.movePoolPriceDown(
               signer,
-              state.pool,
-              state.tokenA,
-              state.tokenB,
+              state,
               MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
               swapAmount,
               100001
@@ -205,9 +203,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
           } else {
             await UniversalUtils.movePoolPriceUp(
               signer,
-              state.pool,
-              state.tokenA,
-              state.tokenB,
+              state,
               MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
               swapAmount,
               100001
@@ -285,9 +281,7 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
         while (! await strategy.needRebalance()) {
           await UniversalUtils.movePoolPriceDown(
             signer,
-            state.pool,
-            state.tokenA,
-            state.tokenB,
+            state,
             MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
             swapAmount,
             100001

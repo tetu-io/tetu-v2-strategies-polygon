@@ -414,6 +414,7 @@ library PairBasedStrategyLib {
 
           if (borrowInsteadRepay) {
             borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
+
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
             _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
           }
@@ -635,7 +636,7 @@ library PairBasedStrategyLib {
     // let's ensure that "next swap" is made using correct token
     require(aggParams.tokenToSwap == p.tokens[indexIn], AppErrors.INCORRECT_SWAP_BY_AGG_PARAM);
 
-    if (amountIn > AppLib._getLiquidationThreshold(p.liquidationThresholds[indexIn])) {
+    if (amountIn > p.liquidationThresholds[indexIn]) {
       AppLib.approveIfNeeded(p.tokens[indexIn], amountIn, aggregator);
 
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);

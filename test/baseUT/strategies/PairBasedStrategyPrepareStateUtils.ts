@@ -1,6 +1,13 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
-import {ControllerV2__factory, ConverterStrategyBase__factory, IRebalancingV2Strategy, StrategyBaseV2__factory} from "../../../typechain";
-import {PackedData} from "../utils/PackedData";
+import {
+  AlgebraLib,
+  ControllerV2__factory,
+  ConverterStrategyBase__factory,
+  IRebalancingV2Strategy, KyberLib,
+  StrategyBaseV2__factory,
+  UniswapV3Lib
+} from "../../../typechain";
+import {IDefaultState, PackedData} from "../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
@@ -59,9 +66,9 @@ export class PairBasedStrategyPrepareStateUtils {
         swapAmountRatio
       );
       if (movePriceUp) {
-        await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+        await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAmount, 40000);
       } else {
-        await UniversalUtils.movePoolPriceDown(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAmount, 40000);
+        await UniversalUtils.movePoolPriceDown(signer2, state, b.swapper, swapAmount, 40000);
       }
       if (await b.strategy.needRebalance()) {
         if (countRebalance === 0) {
@@ -85,7 +92,7 @@ export class PairBasedStrategyPrepareStateUtils {
     const swapAssetValueForPriceMove = parseUnits('500000', assetDecimals);
     const state = await PackedData.getDefaultState(b.strategy);
 
-    await UniversalUtils.movePoolPriceUp(signer2, state.pool, state.tokenA, state.tokenB, b.swapper, swapAssetValueForPriceMove);
+    await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAssetValueForPriceMove);
   }
 
   /** Setup fuse thresholds. Values are selected relative to the current prices */
@@ -206,21 +213,33 @@ export class PairBasedStrategyPrepareStateUtils {
         parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
 
+      // zero amount is not allowed, we will receive i.e. "AS" error on Algebra
+      const requiredAmountBOut = amountBOut.eq(0)
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
+        : amountBOut;
+
       console.log("amountBOut", amountBOut);
       const amountAIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
         signer,
         b,
         tokenA,
         tokenB,
-        amountBOut
+        requiredAmountBOut
       );
       console.log("amountAIn.to.up", amountAIn);
-      return amountAIn;
+      return amountAIn.eq(0)
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
+        : amountAIn;
     } else {
       // calculate amount A that we are going to receive
       const amountAOut = amountsInCurrentTick[0].mul(
         parseUnits(swapAmountRatio.toString(), 18)
       ).div(Misc.ONE18);
+
+      // zero amount is not allowed, we will receive i.e. "AS" error on Algebra
+      const requiredAmountAOut = amountAOut.eq(0)
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenA, signer).decimals()))
+        : amountAOut;
 
       console.log("amountAOut", amountAOut);
       const amountBIn = await PairStrategyLiquidityUtils.quoteExactOutputSingle(
@@ -228,10 +247,13 @@ export class PairBasedStrategyPrepareStateUtils {
         b,
         tokenB,
         tokenA,
-        amountAOut
+        requiredAmountAOut
       );
       console.log("amountBIn.to.down", amountBIn);
-      return amountBIn;
+      return amountBIn.eq(0)
+        ? parseUnits("1000", (await IERC20Metadata__factory.connect(tokenB, signer).decimals()))
+        : amountBIn;
+
     }
   }
 
@@ -315,8 +337,9 @@ export class PairBasedStrategyPrepareStateUtils {
 
   /**
    * Make "deposit-rebalance" cycles until expected count of rebalances won't make.
+   * As result, we will have high locked-amount in converter and relatively high percent of locked amounts.
    */
-  static async prepareOverCollateral(
+  static async prepareTwistedDebts(
       b: IBuilderResults,
       p: IPrepareOverCollateralParams,
       pathOut: string,
@@ -367,11 +390,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
     await TimeUtils.advanceNBlocks(300);
 
-    if (p.movePricesUp) {
-      await UniversalUtils.movePoolPriceUp(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
-    } else {
-      await UniversalUtils.movePoolPriceDown(signer2, defaultState.pool, defaultState.tokenA, defaultState.tokenB, b.swapper, swapAmount);
-    }
+    await this.movePriceBySteps(signer, b.swapper, p.movePricesUp, defaultState, swapAmount);
     states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `p${loopStep}`));
     await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -393,4 +412,37 @@ export class PairBasedStrategyPrepareStateUtils {
   return {states};
 }
 
+    /**
+     * Move prices using given swapAmount using several iterations to avoid swapping of too big amounts.
+     * A swapAmount, required to move to next range, can be calculated using {getSwapAmount2}
+     */
+  static async movePriceBySteps(
+    signer: SignerWithAddress,
+    swapper: string,
+    movePricesUpDown: boolean,
+    state: IDefaultState,
+    totalSwapAmount: BigNumber,
+    countIterations: number = 5,
+    totalSwapAmountForDown?: BigNumber
+  ) {
+    console.log("movePriceBySteps.totalSwapAmount", totalSwapAmount);
+    await UniversalUtils.makePoolVolume(signer, state, swapper, totalSwapAmount);
+
+    const swapAmountPerIteration = totalSwapAmount.div(countIterations);
+    for (let j = 0; j < countIterations; ++j) {
+      if (movePricesUpDown) {
+        console.log("movePriceBySteps.UP", swapAmountPerIteration);
+        await UniversalUtils.movePoolPriceUp(signer, state, swapper, swapAmountPerIteration, 40000);
+      } else {
+        console.log("movePriceBySteps.DOWN", (totalSwapAmountForDown ?? totalSwapAmount).div(countIterations));
+        await UniversalUtils.movePoolPriceDown(
+          signer,
+          state,
+          swapper,
+          (totalSwapAmountForDown || totalSwapAmount).div(countIterations),
+          40000
+        );
+      }
+    }
+  }
 }

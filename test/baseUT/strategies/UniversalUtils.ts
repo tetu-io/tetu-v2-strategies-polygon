@@ -7,6 +7,7 @@ import {
 } from "../../../typechain";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {IDefaultState} from "../utils/PackedData";
 
 export class UniversalUtils {
   /**
@@ -43,85 +44,75 @@ export class UniversalUtils {
     return +formatUnits(apr, 3)
   }
 
-  /**
-   * todo Currently this function assumes that tokenA is underlying, so we cannot use it for pools with swapped tokens
-   */
   public static async makePoolVolume(
     signer: SignerWithAddress,
-    pool: string,
-    tokenA: string,
-    tokenB: string,
+    state: IDefaultState,
     swapperAddress: string,
-    amount: BigNumber,
+    amountA: BigNumber,
   ) {
+    console.log("makePoolVolume.state", state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
-    const swapAmount = amount.div(2);
+    const swapAmount = amountA.div(2);
     let price;
     let priceBefore;
-    const signerBalanceOfTokenA = await TokenUtils.balanceOf(tokenA, signer.address);
-    const signerBalanceOfTokenB = await TokenUtils.balanceOf(tokenB, signer.address);
+    const signerBalanceOfTokenA = await TokenUtils.balanceOf(state.tokenA, signer.address);
+    const signerBalanceOfTokenB = await TokenUtils.balanceOf(state.tokenB, signer.address);
     if (signerBalanceOfTokenA.lt(swapAmount)) {
-      await TokenUtils.getToken(tokenA, signer.address, amount);
+      await TokenUtils.getToken(state.tokenA, signer.address, amountA);
     }
 
     console.log('Making pool volume...');
-    priceBefore = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    priceBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log('tokenB price', formatUnits(priceBefore, 6));
     console.log('swap in pool tokenA to tokenB...');
-    await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString());
-    await swapper.connect(signer).swap(pool, tokenA, tokenB, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
-    price = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
+    await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
+    price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log('tokenB new price', formatUnits(price, 6));
     console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%');
     priceBefore = price;
-    const gotTokenBAmount = (await TokenUtils.balanceOf(tokenB, signer.address)).sub(signerBalanceOfTokenB);
+    const gotTokenBAmount = (await TokenUtils.balanceOf(state.tokenB, signer.address)).sub(signerBalanceOfTokenB);
     // console.log('gotTokenBAmount', gotTokenBAmount)
     console.log('swap in pool tokenB to tokenA...');
     console.log('Swap amount of tokenB:', gotTokenBAmount.toString());
-    await TokenUtils.transfer(tokenB, signer, swapper.address, gotTokenBAmount.toString());
-    await swapper.connect(signer).swap(pool, tokenB, tokenA, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
-    price = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    await TokenUtils.transfer(state.tokenB, signer, swapper.address, gotTokenBAmount.toString());
+    await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
+    price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log('tokenB new price', formatUnits(price, 6));
     console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`);
   }
 
-  /**
-   * todo Currently this function assumes that tokenA is underlying, so we cannot use it for pools with swapped tokens
-   *
-   */
   public static async movePoolPriceUp(
     signer: SignerWithAddress,
-    pool: string,
-    tokenA: string,
-    tokenB: string,
+    state: IDefaultState,
     swapperAddress: string,
-    amount: BigNumber,
+    amountA: BigNumber,
     priceImpactTolerance = 99000 // 99% slippage
   ) {
-    console.log("movePoolPriceUp", amount);
+    console.log("movePoolPriceUp.amountA", amountA, state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
-    const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, signer).decimals()
-    const tokenAName = await TokenUtils.tokenSymbol(tokenA);
-    const tokenBName = await TokenUtils.tokenSymbol(tokenB);
-    const swapAmount = amount;
+    const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals()
+    const tokenAName = await TokenUtils.tokenSymbol(state.tokenA);
+    const tokenBName = await TokenUtils.tokenSymbol(state.tokenB);
+    const swapAmount = amountA;
     let priceA;
     let priceB;
     let priceABefore;
     let priceBBefore;
-    const signerBalanceOfTokenA = await TokenUtils.balanceOf(tokenA, signer.address);
+    const signerBalanceOfTokenA = await TokenUtils.balanceOf(state.tokenA, signer.address);
     if (signerBalanceOfTokenA.lt(swapAmount)) {
-      await TokenUtils.getToken(tokenA, signer.address, amount);
+      await TokenUtils.getToken(state.tokenA, signer.address, amountA);
     }
 
     console.log('Moving price up...');
-    priceABefore = await swapper.getPrice(pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceBBefore = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    priceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
+    priceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
     console.log('swap in pool tokenA to tokenB...', tokenAName, '->', tokenBName);
-    await TokenUtils.transfer(tokenA, signer, swapper.address, swapAmount.toString());
-    await swapper.connect(signer).swap(pool, tokenA, tokenB, signer.address, priceImpactTolerance);
-    priceA = await swapper.getPrice(pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceB = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
+    await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, priceImpactTolerance);
+    priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
+    priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
     if (priceBBefore.gt(0)) {
       console.log('Price change', formatUnits(priceB.sub(priceBBefore).mul(1e13).div(priceBBefore).div(1e8), 3) + '%');
@@ -133,47 +124,42 @@ export class UniversalUtils {
     };
   }
 
-  /**
-   * todo Currently this function assumes that tokenA is underlying, so we cannot use it for pools with swapped tokens
-   */
   public static async movePoolPriceDown(
     signer: SignerWithAddress,
-    pool: string,
-    tokenA: string,
-    tokenB: string,
+    state: IDefaultState,
     swapperAddress: string,
-    amount: BigNumber,
+    amountB: BigNumber,
     priceImpactTolerance = 40000, // 40%,
     silent = false
   ) {
-    console.log("movePoolPriceDown", amount);
+    console.log("movePoolPriceDown.amountB", amountB, state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
-    const tokenADecimals = await IERC20Metadata__factory.connect(tokenA, signer).decimals()
-    const tokenAName = await TokenUtils.tokenSymbol(tokenA);
-    const tokenBName = await TokenUtils.tokenSymbol(tokenB);
-    const swapAmount = amount;
+    const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals()
+    const tokenAName = await TokenUtils.tokenSymbol(state.tokenA);
+    const tokenBName = await TokenUtils.tokenSymbol(state.tokenB);
+    const swapAmount = amountB;
     let priceA;
     let priceB;
     let priceABefore;
     let priceBBefore;
-    const signerBalanceOfTokenB = await TokenUtils.balanceOf(tokenB, signer.address);
+    const signerBalanceOfTokenB = await TokenUtils.balanceOf(state.tokenB, signer.address);
     if (signerBalanceOfTokenB.lt(swapAmount)) {
-      await TokenUtils.getToken(tokenB, signer.address, amount, silent);
+      await TokenUtils.getToken(state.tokenB, signer.address, amountB, silent);
     }
 
     if (!silent) {
       console.log('Moving price down...');
     }
-    priceABefore = await swapper.getPrice(pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceBBefore = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    priceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
+    priceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     if (!silent) {
       console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
       console.log('swap in pool tokenB to tokenA...', tokenBName, '->', tokenAName);
     }
-    await TokenUtils.transfer(tokenB, signer, swapper.address, swapAmount.toString(), silent);
-    await swapper.connect(signer).swap(pool, tokenB, tokenA, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
-    priceA = await swapper.getPrice(pool, tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceB = await swapper.getPrice(pool, tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    await TokenUtils.transfer(state.tokenB, signer, swapper.address, swapAmount.toString(), silent);
+    await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
+    priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
+    priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
     if (!silent) {
       console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
       console.log('Price change', '-' + formatUnits(priceA.sub(priceABefore).mul(1e13).div(priceABefore).div(1e8), 3) + '%');

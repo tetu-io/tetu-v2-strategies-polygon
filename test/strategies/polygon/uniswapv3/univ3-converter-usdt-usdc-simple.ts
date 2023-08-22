@@ -262,18 +262,14 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       if (i % 2 === 0) {
         await UniversalUtils.movePoolPriceUp(
           signer2,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );
       } else {
         await UniversalUtils.movePoolPriceDown(
           signer2,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
           swapAmount,
         );

@@ -193,7 +193,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
     const states0: IStateNum[] = p.skipOverCollateralStep
       ? []
-      : (await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
+      : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
           b,
           { countRebalances: p.countRebalances ?? 2, movePricesUp: p.movePricesUp},
           pathOut,
@@ -799,7 +799,7 @@ describe('PairBasedNoSwapIntTest', function() {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      // { name: PLATFORM_UNIV3, },
+      { name: PLATFORM_UNIV3, },
       { name: PLATFORM_ALGEBRA, },
       { name: PLATFORM_KYBER, }
     ];
@@ -1040,7 +1040,7 @@ describe('PairBasedNoSwapIntTest', function() {
             });
             async function initialize(): Promise<IBuilderResults> {
               const b = await prepareStrategy();
-              await PairBasedStrategyPrepareStateUtils.prepareOverCollateral(
+              await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
                 b, {
                     movePricesUp: true,
                     countRebalances: 2
@@ -1276,9 +1276,7 @@ describe('PairBasedNoSwapIntTest', function() {
           for (let i = 0; i < 3; ++i) {
             await UniversalUtils.movePoolPriceDown(
               signer,
-              defaultState.pool,
-              defaultState.tokenA,
-              defaultState.tokenB,
+              defaultState,
               b.swapper,
               parseUnits('600000', 6),
               100001

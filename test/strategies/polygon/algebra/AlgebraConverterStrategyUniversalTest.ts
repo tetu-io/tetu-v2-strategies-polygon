@@ -72,6 +72,14 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       startTime: 1663631794,
       endTime: 4104559500
     }],
+    // todo implement 3 ticks logic
+    /*[MaticAddresses.USDC_TOKEN, MaticAddresses.ALGEBRA_USDC_DAI, 60, 60, {
+      rewardToken: MaticAddresses.dQUICK_TOKEN,
+      bonusRewardToken: MaticAddresses.WMATIC_TOKEN,
+      pool: MaticAddresses.ALGEBRA_USDC_DAI,
+      startTime: 1665192929,
+      endTime: 4104559500
+    }],*/
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();
@@ -198,7 +206,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniversalUtils.movePoolPriceUp(swapUser, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
+        await UniversalUtils.movePoolPriceUp(swapUser, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
@@ -207,7 +215,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniversalUtils.makePoolVolume(swapUser, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
+        await UniversalUtils.makePoolVolume(swapUser, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
     };
 

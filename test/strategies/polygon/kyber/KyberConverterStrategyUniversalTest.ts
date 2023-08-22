@@ -28,6 +28,7 @@ import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {KYBER_PID, KYBER_USDC_DAI_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 
 
 dotEnvConfig();
@@ -55,7 +56,8 @@ describe('KyberConverterStrategyUniversalTest', async () => {
 
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, number][] = [
-    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, 5],
+    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, KYBER_PID],
+    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_DAI, 0, 0, KYBER_USDC_DAI_PID],
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();
@@ -153,9 +155,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.movePoolPriceUp(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount,
         );
@@ -168,9 +168,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
         await UniversalUtils.movePoolPriceDown(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount,
         );
@@ -184,9 +182,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.makePoolVolume(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount
         )

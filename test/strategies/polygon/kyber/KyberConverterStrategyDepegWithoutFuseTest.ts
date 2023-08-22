@@ -51,7 +51,7 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('KyberConverterStrategyDepegTest', function() {
+describe('KyberConverterStrategyDepegWithoutFuseTest', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -162,6 +162,7 @@ describe('KyberConverterStrategyDepegTest', function() {
 
   it('Depeg USDT', async() => {
     const changeTicksPerStep = 10
+    const steps = 5
     const rowsCaption = ['Step', 'USDT Price', 'Total assets', 'USDT Collateral', 'USDC Amount to repay', 'Locked underlying', 'Health Factor']
     const rows: [string, number, number, number, number, number, number][] = []
     const s = strategy
@@ -179,7 +180,7 @@ describe('KyberConverterStrategyDepegTest', function() {
     const priceBStart = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
     rows.push(['#0', +formatUnits(priceBStart, 6), +formatUnits(await s.totalAssets(), 6), borrowInfo[1].collaterals[0], borrowInfo[1].amountsToRepay[0], borrowInfo[1].totalLockedAmountInUnderlying, borrowInfo[0].healthFactors[0][0]])
 
-    for (let i = 1; i <= 50; i++) {
+    for (let i = 1; i <= steps; i++) {
       console.log(``)
       console.log(`## STEP ${i}`)
       // console.log(`# changing price to ${changeTicksPerStep} ticks lower`)
@@ -197,7 +198,7 @@ describe('KyberConverterStrategyDepegTest', function() {
         }
         // console.log ('SwapAmount to change tick', swapAmount)
         // console.log(`Price down ${i}`)
-        await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
+        await UniversalUtils.movePoolPriceDown(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
       }
 
       // console.log(`# setting price to middle of tick`)
@@ -205,7 +206,7 @@ describe('KyberConverterStrategyDepegTest', function() {
       priceA = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDC_TOKEN)
       swapAmount = amounts[0].mul(priceA).div(parseUnits('1', 6)).div(2)
       // console.log ('swapAmount to set middle tick price', swapAmount)
-      await UniversalUtils.movePoolPriceDown(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
+      await UniversalUtils.movePoolPriceDown(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, swapAmount, 40000, true);
 
       const priceBAfter = await lib.getPrice(MaticAddresses.KYBER_USDC_USDT, MaticAddresses.USDT_TOKEN)
       console.log(`# USDT price changed: ${formatUnits(priceBBefore, 6)} -> ${formatUnits(priceBAfter, 6)}`)

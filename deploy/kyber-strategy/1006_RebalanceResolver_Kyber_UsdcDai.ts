@@ -9,11 +9,11 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     'RebalanceResolver',
     true,
     undefined,
-    'RebalanceResolver_Kyber_UsdcUsdt',
-    [(await deployments.get('Strategy_KyberConverterStrategy_UsdcUsdt')).address],
+    'RebalanceResolver_Kyber_UsdcDai',
+    [(await deployments.get('Strategy_KyberConverterStrategy_UsdcDai')).address],
     true
   )
 };
 export default func;
-func.tags = ['RebalanceResolver_Kyber_UsdcUsdt'];
-func.dependencies = ['Strategy_KyberConverterStrategy_UsdcUsdt'];
+func.tags = ['RebalanceResolver_Kyber_UsdcDai'];
+func.dependencies = ['Strategy_KyberConverterStrategy_UsdcDai'];

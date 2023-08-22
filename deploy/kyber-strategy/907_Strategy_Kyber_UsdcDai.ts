@@ -10,16 +10,16 @@ import {parseUnits} from "ethers/lib/utils";
 
 const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
-  const { deployer, CONVERTER_ADDRESS, KYBER_USDC_USDT, SPLITTER_USDC_ADDRESS, KNC_ADDRESS} = await getNamedAccounts();
+  const { deployer, CONVERTER_ADDRESS, KYBER_USDC_DAI, SPLITTER_USDC_ADDRESS, KNC_ADDRESS} = await getNamedAccounts();
 
-  if (await isContractExist(hre, 'Strategy_KyberConverterStrategy_UsdcUsdt')) {
+  if (await isContractExist(hre, 'Strategy_KyberConverterStrategy_UsdcDai')) {
     return;
   }
 
   const core = Addresses.getCore() as CoreAddresses;
 
   const strategyImplDeployment = await deployments.get('KyberConverterStrategy');
-  const proxyDeployResult = await deployments.deploy('Strategy_KyberConverterStrategy_UsdcUsdt', {
+  const proxyDeployResult = await deployments.deploy('Strategy_KyberConverterStrategy_UsdcDai', {
     contract: '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
     from: deployer,
     log: true,
@@ -27,7 +27,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   });
 
   await deployments.execute(
-    'Strategy_KyberConverterStrategy_UsdcUsdt',
+    'Strategy_KyberConverterStrategy_UsdcDai',
     {
       from: deployer,
       log: true,
@@ -46,11 +46,11 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     core.controller,
     SPLITTER_USDC_ADDRESS,
     CONVERTER_ADDRESS,
-    KYBER_USDC_USDT,
+    KYBER_USDC_DAI,
     0,
     0,
     true,
-    40,
+    42,
     [
       parseUnits('0.997'),
       parseUnits('0.998'),
@@ -69,5 +69,5 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   ));
 };
 export default func;
-func.tags = ['Strategy_KyberConverterStrategy_UsdcUsdt'];
+func.tags = ['Strategy_KyberConverterStrategy_UsdcDai'];
 func.dependencies = ['KyberConverterStrategy'];

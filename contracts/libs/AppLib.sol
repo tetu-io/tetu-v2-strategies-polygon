@@ -80,9 +80,14 @@ library AppLib {
     return IPriceOracle(IConverterController(converter_.controller()).priceOracle());
   }
 
+  /// @notice Calculate liquidation threshold, use default value if the threshold is not set
+  ///         It's allowed to set any not-zero threshold, it this case default value is not used
+  /// @dev This function should be applied to the threshold at the moment of the reading its value from the storage.
+  ///      So, if we pass {mapping(address => uint) storage liquidationThresholds}, the threshold can be zero
+  ///      bug if we pass {uint liquidationThreshold} to a function, the threshold should be not zero
   function _getLiquidationThreshold(uint threshold) internal pure returns (uint) {
-    return threshold > AppLib.DEFAULT_LIQUIDATION_THRESHOLD
-      ? threshold
-      : AppLib.DEFAULT_LIQUIDATION_THRESHOLD;
+    return threshold == 0
+      ? AppLib.DEFAULT_LIQUIDATION_THRESHOLD
+      : threshold;
   }
 }
