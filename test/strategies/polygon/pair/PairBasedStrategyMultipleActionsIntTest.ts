@@ -203,7 +203,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
     });
   });
 
-  describe("Two univ3-strategies: loop with rebalance, hardwork, deposit and withdraw", () => {
+  describe("Two univ3-strategies: loop with rebalance, hardwork, deposit and withdraw @skip-on-coverage", () => {
     const CAPACITY_1 = "1500";
     const CAPACITY_2 = "6000";
     const USER_BALANCE_1 = "1000";
