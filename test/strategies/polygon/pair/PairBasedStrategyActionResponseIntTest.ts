@@ -1460,7 +1460,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const movePricesUp = !lastDirectionUp;
               await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
                   signer,
-                  b.swapper,
+                  b,
                   movePricesUp,
                   state,
                 strategyInfo.name === PLATFORM_KYBER
@@ -1473,8 +1473,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                         1.1
                       )
                     : swapAssetValueForPriceMove,
-                5,
-                swapAssetValueForPriceMoveDown
+                swapAssetValueForPriceMoveDown,
+                5
               );
               lastDirectionUp = !lastDirectionUp
             }

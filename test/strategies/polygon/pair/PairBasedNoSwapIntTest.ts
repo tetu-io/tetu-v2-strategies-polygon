@@ -33,6 +33,7 @@ import {
   ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED, FUSE_OFF_1,
   PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY
 } from "../../../baseUT/AppConstants";
+import {platform} from "os";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -172,7 +173,7 @@ describe('PairBasedNoSwapIntTest', function() {
     singleIteration: boolean;
     propNotUnderlying18?: BigNumber;
 
-    /** 3 by default */
+    /** 2 by default */
     countRebalances?: number;
     /** ZERO by default */
     aggregator?: string;
@@ -421,6 +422,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                   planKind: PLAN_REPAY_SWAP_REPAY,
+                  countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
                 });
               }
 
@@ -496,6 +498,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_DISABLED,
                   planKind: PLAN_REPAY_SWAP_REPAY,
+                  countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
                 });
               }
 
@@ -569,6 +572,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                   planKind: PLAN_REPAY_SWAP_REPAY,
+                  countRebalances: 1
                 });
               }
 
@@ -645,6 +649,7 @@ describe('PairBasedNoSwapIntTest', function() {
                   singleIteration: true,
                   entryToPool: ENTRY_TO_POOL_DISABLED,
                   planKind: PLAN_REPAY_SWAP_REPAY,
+                  countRebalances: 1
                 });
               }
               it("should reduce locked amount significantly", async () => {
@@ -941,7 +946,8 @@ describe('PairBasedNoSwapIntTest', function() {
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                 planKind: PLAN_SWAP_REPAY,
-                propNotUnderlying18: BigNumber.from(Misc.MAX_UINT) // use pool's proportions
+                propNotUnderlying18: BigNumber.from(Misc.MAX_UINT), // use pool's proportions
+                countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
               });
             }
 
@@ -983,6 +989,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 singleIteration: false,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
                 planKind: PLAN_SWAP_REPAY,
+                countRebalances: strategyInfo.name === PLATFORM_ALGEBRA ? 1 : 2
               });
             }
 

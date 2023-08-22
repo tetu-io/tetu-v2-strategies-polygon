@@ -1,13 +1,19 @@
-import {BigNumber, ContractReceipt, ethers} from "ethers";
+import {BigNumber, BigNumberish, ContractReceipt, ethers} from "ethers";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
-  IERC20Metadata__factory,
-  ISwapper__factory,
+  IERC20__factory,
+  IERC20Metadata__factory, ISwapper,
+  ISwapper__factory, SwapHelper,
 } from "../../../typechain";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {IDefaultState} from "../utils/PackedData";
+
+export interface IPriceChanges {
+  priceAChange: BigNumber;
+  priceBChange: BigNumber;
+}
 
 export class UniversalUtils {
   /**
@@ -44,11 +50,15 @@ export class UniversalUtils {
     return +formatUnits(apr, 3)
   }
 
+  /**
+   * {swapHelper} allows to use safeTransferAndSwap to swap
+   */
   public static async makePoolVolume(
     signer: SignerWithAddress,
     state: IDefaultState,
     swapperAddress: string,
     amountA: BigNumber,
+    swapHelper?: SwapHelper
   ) {
     console.log("makePoolVolume.state", state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
@@ -65,8 +75,14 @@ export class UniversalUtils {
     priceBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('tokenB price', formatUnits(priceBefore, 6));
     console.log('swap in pool tokenA to tokenB...');
-    await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
-    await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
+
+    if (swapHelper) {
+      await UniversalUtils.safeTransferAndSwap(swapper.connect(signer), swapAmount, state.pool, state.tokenA, state.tokenB, signer, 10_000, swapHelper);
+    } else {
+      await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
+      await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
+    }
+
     price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('tokenB new price', formatUnits(price, 6));
     console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%');
@@ -75,20 +91,30 @@ export class UniversalUtils {
     // console.log('gotTokenBAmount', gotTokenBAmount)
     console.log('swap in pool tokenB to tokenA...');
     console.log('Swap amount of tokenB:', gotTokenBAmount.toString());
-    await TokenUtils.transfer(state.tokenB, signer, swapper.address, gotTokenBAmount.toString());
-    await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
+
+    if (swapHelper) {
+      await UniversalUtils.safeTransferAndSwap(swapper.connect(signer), gotTokenBAmount, state.pool, state.tokenB, state.tokenA, signer, 10_000, swapHelper);
+    } else {
+      await TokenUtils.transfer(state.tokenB, signer, swapper.address, gotTokenBAmount.toString());
+      await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
+    }
+
     price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('tokenB new price', formatUnits(price, 6));
     console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`);
   }
 
+  /**
+   * {swapHelper} allows to use safeTransferAndSwap to swap
+   */
   public static async movePoolPriceUp(
     signer: SignerWithAddress,
     state: IDefaultState,
     swapperAddress: string,
     amountA: BigNumber,
-    priceImpactTolerance = 99000 // 99% slippage
-  ) {
+    priceImpactTolerance = 99000, // 99% slippage
+    swapHelper?: SwapHelper,
+  ): Promise<IPriceChanges> {
     console.log("movePoolPriceUp.amountA", amountA, state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals()
@@ -108,9 +134,14 @@ export class UniversalUtils {
     priceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     priceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('swap in pool tokenA to tokenB...', tokenAName, '->', tokenBName);
-    await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
-    console.log("now call swap");
-    await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, priceImpactTolerance, {gasLimit: 19_000_000});
+
+    if (swapHelper) {
+      await UniversalUtils.safeTransferAndSwap(swapper.connect(signer), swapAmount, state.pool, state.tokenA, state.tokenB, signer, priceImpactTolerance, swapHelper);
+    } else {
+      await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
+      await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, priceImpactTolerance, {gasLimit: 19_000_000});
+    }
+
     priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
@@ -124,14 +155,18 @@ export class UniversalUtils {
     };
   }
 
+  /**
+   * {swapHelper} allows to use safeTransferAndSwap to swap
+   */
   public static async movePoolPriceDown(
     signer: SignerWithAddress,
     state: IDefaultState,
     swapperAddress: string,
     amountB: BigNumber,
     priceImpactTolerance = 40000, // 40%,
-    silent = false
-  ) {
+    silent = false,
+    swapHelper?: SwapHelper,
+  ): Promise<IPriceChanges> {
     console.log("movePoolPriceDown.amountB", amountB, state);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, signer).decimals()
@@ -156,8 +191,14 @@ export class UniversalUtils {
       console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
       console.log('swap in pool tokenB to tokenA...', tokenBName, '->', tokenAName);
     }
-    await TokenUtils.transfer(state.tokenB, signer, swapper.address, swapAmount.toString(), silent);
-    await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
+
+    if (swapHelper) {
+      await UniversalUtils.safeTransferAndSwap(swapper.connect(signer), swapAmount, state.pool, state.tokenB, state.tokenA, signer, priceImpactTolerance, swapHelper);
+    } else {
+      await TokenUtils.transfer(state.tokenB, signer, swapper.address, swapAmount.toString(), silent);
+      await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
+    }
+
     priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     if (!silent) {
@@ -168,5 +209,69 @@ export class UniversalUtils {
       priceAChange: priceA.sub(priceABefore).mul(1e9).mul(1e9).div(priceABefore),
       priceBChange: priceB.sub(priceBBefore).mul(1e9).mul(1e9).div(priceBBefore),
     };
+  }
+
+  /**
+   * Try to make swap. If PRICE IMPACT error happens, try to split the swap amount on parts and swap the parts.
+   * In worst case, it swaps only a part of {swapAmount}, but doesn't throw PRICE IMPACT exception
+   */
+  public static async safeTransferAndSwap(
+    swapper: ISwapper,
+    swapAmount: BigNumber,
+    pool: string,
+    tokenIn: string,
+    tokenOut: string,
+    signer: SignerWithAddress,
+    priceImpactTolerance: number,
+    swapHelper: SwapHelper,
+    allowedDeep: number = 2,
+  ) {
+    console.log("safeTransferAndSwap", swapAmount);
+    await IERC20__factory.connect(tokenIn, signer).approve(swapHelper.address, swapAmount);
+    try {
+      await swapHelper.transferAndSwap(
+        swapper.address,
+        swapAmount,
+        pool,
+        tokenIn,
+        tokenOut,
+        priceImpactTolerance,
+        {gasLimit: 10_000_000}
+      );
+    } catch (error) {
+      console.log("safeTransferAndSwap ERROR:", error);
+      if (error instanceof Error) {
+        // Error: "VM Exception while processing transaction: reverted with reason string '!PRICE 99988'"
+        if (error.message.startsWith("VM Exception while processing transaction: reverted with reason string '!PRICE ")) { // i.e. "!PRICE 99789"
+          if (allowedDeep > 0) {
+            console.log("Price impact is detected. Let's try to split swap amount on several lesser amounts");
+            const COUNT_ITERATIONS = 4;
+            const portion = swapAmount.div(COUNT_ITERATIONS);
+            let amountSwapped = BigNumber.from(0);
+            for (let i = 0; i < COUNT_ITERATIONS; ++i) {
+              const amountToSwap = i === COUNT_ITERATIONS - 1
+                ? swapAmount.sub(amountSwapped)
+                : portion;
+              console.log("swap portion", amountToSwap);
+              await this.safeTransferAndSwap(
+                swapper,
+                amountToSwap,
+                pool,
+                tokenIn,
+                tokenOut,
+                signer,
+                priceImpactTolerance,
+                swapHelper,
+                allowedDeep - 1,
+              );
+              amountSwapped = amountSwapped.add(amountToSwap);
+            }
+          }
+        } else {
+          throw error;
+        }
+      }
+
+    }
   }
 }
