@@ -1398,14 +1398,20 @@ describe('ConverterStrategyBaseLibTest', () => {
       });
       expect(ret.tokenAmounts.length).eq(0);
     });
-    it("should return zero tokenAmounts is zero and thresholds are not set", async () => {
+    it("should return tokenAmounts equal to the balances if the thresholds are not set (not real case)", async () => {
       const ret = await callGetTokenAmountsPair({
         tokens: [usdc, usdt],
         balances: ["100", "0"],
-        liquidationThresholds: ["0", "0"],
+        liquidationThresholds: ["0", "0"], // not real case
         totalAssets: "4"
       });
-      expect(ret.tokenAmounts.length).eq(0);
+      // getTokenAmountsPair assumes, that AppLib._getLiquidationThreshold is already applied to liquidationThresholds
+      // so the thresholds are not zero. So, actually this test tests not real case
+      expect(
+        [ret.tokenAmounts.length, ret.tokenAmounts[0], ret.tokenAmounts[1]].join()
+      ).eq(
+        [2, 100, 0].join()
+      );
     });
   });
 

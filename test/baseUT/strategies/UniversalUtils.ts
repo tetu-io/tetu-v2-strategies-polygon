@@ -62,12 +62,12 @@ export class UniversalUtils {
     }
 
     console.log('Making pool volume...');
-    priceBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    priceBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('tokenB price', formatUnits(priceBefore, 6));
     console.log('swap in pool tokenA to tokenB...');
     await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
     await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
-    price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('tokenB new price', formatUnits(price, 6));
     console.log('Price change', formatUnits(price.sub(priceBefore).mul(1e13).div(priceBefore).div(1e8), 3) + '%');
     priceBefore = price;
@@ -77,7 +77,7 @@ export class UniversalUtils {
     console.log('Swap amount of tokenB:', gotTokenBAmount.toString());
     await TokenUtils.transfer(state.tokenB, signer, swapper.address, gotTokenBAmount.toString());
     await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, 10000, {gasLimit: 10_000_000}); // 10% slippage
-    price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('tokenB new price', formatUnits(price, 6));
     console.log(`TokenB price change: -${formatUnits(priceBefore.sub(price).mul(1e13).div(priceBefore).div(1e8), 3)}%`);
   }
@@ -105,14 +105,14 @@ export class UniversalUtils {
     }
 
     console.log('Moving price up...');
-    priceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-    console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
+    priceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
+    priceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log('swap in pool tokenA to tokenB...', tokenAName, '->', tokenBName);
     await TokenUtils.transfer(state.tokenA, signer, swapper.address, swapAmount.toString());
-    await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, priceImpactTolerance);
-    priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    console.log("now call swap");
+    await swapper.connect(signer).swap(state.pool, state.tokenA, state.tokenB, signer.address, priceImpactTolerance, {gasLimit: 19_000_000});
+    priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
+    priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
     if (priceBBefore.gt(0)) {
       console.log('Price change', formatUnits(priceB.sub(priceBBefore).mul(1e13).div(priceBBefore).div(1e8), 3) + '%');
@@ -150,16 +150,16 @@ export class UniversalUtils {
     if (!silent) {
       console.log('Moving price down...');
     }
-    priceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    priceABefore = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
+    priceBBefore = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     if (!silent) {
       console.log(tokenBName, '(tokenB) price', formatUnits(priceBBefore, tokenADecimals));
       console.log('swap in pool tokenB to tokenA...', tokenBName, '->', tokenAName);
     }
     await TokenUtils.transfer(state.tokenB, signer, swapper.address, swapAmount.toString(), silent);
     await swapper.connect(signer).swap(state.pool, state.tokenB, state.tokenA, signer.address, priceImpactTolerance, {gasLimit: 19_000_000,});
-    priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0);
-    priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
+    priceA = await swapper.getPrice(state.pool, state.tokenA, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
+    priceB = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0, {gasLimit: 19_000_000});
     if (!silent) {
       console.log(tokenBName, '(tokenB) new price', formatUnits(priceB, tokenADecimals));
       console.log('Price change', '-' + formatUnits(priceA.sub(priceABefore).mul(1e13).div(priceABefore).div(1e8), 3) + '%');
