@@ -13,6 +13,10 @@ import {IBacktestResult, IContracts} from "../../../../scripts/uniswapV3Backtest
 import {showBacktestResult, strategyBacktest} from "../../../../scripts/uniswapV3Backtester/strategyBacktest";
 
 
+// How to
+// anvil --prune-history
+// hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyBacktester.ts --network foundry
+
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
 
@@ -31,7 +35,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
   // before depeg start ts - 1690882487
   const backtestStartBlock = 45764000; // Aug-01-2023 02:55:08 AM +UTC // 45700000; // 7/30/2023 3:31:06 PM
-  const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC
+  const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC - fails on ts 1690914072
   const investAmountUnits: string = '10000' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
@@ -216,6 +220,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
       params.tickRange,
       params.rebalanceTickRange
     )
+
+    await contracts.uniswapV3Calee.toggleNoRevert()
   });
 
   after(async function() {
