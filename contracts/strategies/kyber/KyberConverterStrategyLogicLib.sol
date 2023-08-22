@@ -18,7 +18,7 @@ library KyberConverterStrategyLogicLib {
   uint internal constant DEFAULT_FUSE_THRESHOLD = 5e15;
   IBasePositionManager internal constant KYBER_NFT = IBasePositionManager(0xe222fBE074A436145b255442D919E4E3A6c6a480);
   IKyberSwapElasticLM internal constant FARMING_CENTER = IKyberSwapElasticLM(0x7D5ba536ab244aAA1EA42aB88428847F25E3E676);
-  ITicksFeesReader internal constant TICKS_FEES_READER = ITicksFeesReader(0x8Fd8Cb948965d9305999D767A02bf79833EADbB3);
+  // ITicksFeesReader internal constant TICKS_FEES_READER = ITicksFeesReader(0x8Fd8Cb948965d9305999D767A02bf79833EADbB3);
   address public constant KNC = 0x1C954E8fe737F99f68Fa1CCda3e51ebDB291948C;
   //endregion ------------------------------------------------ Constants
 
@@ -419,8 +419,13 @@ library KyberConverterStrategyLogicLib {
     uint bABefore = AppLib.balance(tokenA);
     uint bBBefore = AppLib.balance(tokenB);
 
-    (uint token0Owed, uint token1Owed) = TICKS_FEES_READER.getTotalFeesOwedToPosition(address(KYBER_NFT), state.pair.pool, nftIds[0]);
-    if (token0Owed > 0 || token1Owed > 0) {
+    // this extracting fees method was disabled because it can trigger revert 'No rToken to burn'
+    // reproduced in test test/strategies/polygon/pair/PairBasedStrategyActionResponseIntTest.ts
+    // (uint token0Owed, uint token1Owed) = TICKS_FEES_READER.getTotalFeesOwedToPosition(address(KYBER_NFT), state.pair.pool, nftIds[0]);
+    // if (token0Owed > 0 || token1Owed > 0) {
+
+    (IBasePositionManager.Position memory pos,) = KYBER_NFT.positions(nftIds[0]);
+    if (pos.rTokenOwed > 0) {
       FARMING_CENTER.claimFee(nftIds, 0, 0, state.pair.pool, false, block.timestamp);
 
       amountA = AppLib.balance(tokenA) - bABefore;

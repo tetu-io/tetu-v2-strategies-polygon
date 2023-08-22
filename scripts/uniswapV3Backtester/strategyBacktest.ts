@@ -168,7 +168,7 @@ export async function strategyBacktest(
         continue;
       }
       const priceBefore = await uniswapV3Helper.getPrice(pool.address, tokenB.address);
-      await uniswapV3Calee.swap(pool.address, signer.address, tokenIn, amountIn);
+      await uniswapV3Calee.swap(pool.address, signer.address, tokenIn, amountIn, {gasLimit: 19_000_000});
       const priceAfter = await uniswapV3Helper.getPrice(pool.address, tokenB.address);
 
       const priceChangeVal = priceAfter.sub(priceBefore).mul(1e15).div(priceBefore).div(1e8);
@@ -198,7 +198,7 @@ export async function strategyBacktest(
       if (await strategy.needRebalance()) {
         rebalances++;
         process.stdout.write(`Rebalance ${rebalances}.. `);
-        tx = await strategy.rebalanceNoSwaps(true);
+        tx = await strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         txReceipt = await tx.wait();
         fees = UniswapV3StrategyUtils.extractClaimedFees(txReceipt)
         if (fees) {
