@@ -3318,6 +3318,56 @@ describe('BorrowLibTest', () => {
                   expect(r.balanceY).eq(43.988);
                 });
               });
+              describe("Total cost < addition0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+                  return makeRebalanceAssets({
+                    tokenX: usdc,
+                    tokenY: usdt,
+                    proportion: 50_000,
+                    additionX: "150", // < 120 + 0
+                    strategyBalances: {
+                      balanceX: "0",
+                      balanceY: "120"
+                    },
+                    // 10*(100000+300)/100000 = 10.03
+                    // Swap 10.03 USDT to 10.03 USDC. This is a ProfitToCover amount.
+                    // After swap, we will have 109.97 USDT
+                    // 109.97 USDT = C => gamma*C [USDC] + (1-gamma)*C*alpha [USDT]
+                    // where alpha = 1.5 (we can borrow 60 usdc for 90 usdt, 90/60 = 1.5)
+                    // proportions x:y = 1:1
+                    // (1*1/1.5*109.97) / (109.97*(1+1/1.5)) = 0.4
+                    // => gamma = 0.4
+                    // 43.988 USDT is left on balance, 65.982 USDT is used as collateral
+                    borrows: [{
+                      collateralAsset: usdt,
+                      borrowAsset: usdc,
+
+                      collateralAmount: "109.97",
+                      maxTargetAmount: "73.313333", // 109.97 / 1.5
+
+                      collateralAmountOut: "65.982",
+                      borrowAmountOut: "43.987999",
+
+                      converter: ethers.Wallet.createRandom().address,
+                    }],
+                    liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "10.03", amountOut: "10.03"}]
+                  })
+                }
+
+                it("should set expected balances", async () => {
+                  const r = await loadFixture(makeRebalanceAssetsTest);
+                  expect(r.balanceX).eq(10.03 + 43.987999);
+                  expect(r.balanceY).eq(43.988);
+                });
+              });
             });
             describe("Need to reduce USDC, increase USDT", () => {
               let snapshot: string;
