@@ -81,6 +81,7 @@ export interface IBacktestResult {
   investAmount: BigNumber;
   earned: BigNumber;
   rebalances: number;
+  rebalancesDebt: number;
   startPrice: BigNumber;
   endPrice: BigNumber;
   maxPrice: BigNumber;
@@ -99,4 +100,7 @@ export interface IBacktestResult {
   totalLossCovered: BigNumber;
   totalLossCoveredFromRewards: BigNumber;
   rebalanceLoss: BigNumber;
+  allowedLockedPercent: number;
+  forceRebalanceDebtLockedPercent: number;
+  rebalanceDebtDelay: number;
 }

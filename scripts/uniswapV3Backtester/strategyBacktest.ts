@@ -93,6 +93,7 @@ export async function strategyBacktest(
   let maxPrice = startPrice;
   let i = 0;
   let rebalances = 0;
+  let rebalancesDebt = 0;
   const poolTxs = await UniswapV3Utils.getPoolTransactions(
     getAddress(uniswapV3RealPoolAddress),
     backtestStartBlock,
@@ -251,6 +252,7 @@ export async function strategyBacktest(
         }
 
         if (needDelayedRebalanceDebt || needForcedRebalanceDebt) {
+          rebalancesDebt++
           const PLAN_SWAP_REPAY = 0;
           const PLAN_REPAY_SWAP_REPAY = 1;
 
@@ -264,7 +266,7 @@ export async function strategyBacktest(
             [PLAN_SWAP_REPAY, 0],
           );*/
 
-          const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+          const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData, {gasLimit: 19_000_000});
 
           console.log('withdrawByAggStep..')
           await strategy.withdrawByAggStep(
@@ -274,6 +276,7 @@ export async function strategyBacktest(
             '0x00',
             planEntryData,
             /*isFuseTriggered ? 0 : */1,
+            {gasLimit: 19_000_000}
           )
         }
       }
@@ -319,6 +322,7 @@ export async function strategyBacktest(
     investAmount,
     earned,
     rebalances,
+    rebalancesDebt,
     startPrice,
     endPrice,
     maxPrice,
@@ -337,6 +341,9 @@ export async function strategyBacktest(
     totalLossCovered: totalLossCoveredFromInsurance,
     totalLossCoveredFromRewards,
     rebalanceLoss,
+    allowedLockedPercent,
+    forceRebalanceDebtLockedPercent,
+    rebalanceDebtDelay
   };
 }
 
@@ -350,6 +357,7 @@ export function getApr(earned: BigNumber, investAmount: BigNumber, startTimestam
 export function showBacktestResult(r: IBacktestResult) {
   console.log(`Strategy ${r.vaultName}. Tick range: ${r.tickRange} (+-${r.tickRange /
   100}% price). Rebalance tick range: ${r.rebalanceTickRange} (+-${r.rebalanceTickRange / 100}% price).`);
+  console.log(`Allowed locked: ${r.allowedLockedPercent}%. Forced rebalance debt locked: ${r.forceRebalanceDebtLockedPercent}%. Rebalance debt delay: ${r.rebalanceDebtDelay} secs.`)
 
   const vaultApr = getApr(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
   console.log(`Vault APR (in ui): ${vaultApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Earned: ${formatUnits(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
@@ -358,7 +366,7 @@ export function showBacktestResult(r: IBacktestResult) {
   const realApr = getApr(r.earned.sub(r.totalLossCovered).sub(r.totalLossCoveredFromRewards), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
   console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Rebalance swap loss: ${formatUnits(r.rebalanceLoss, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Price change loss: ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Covered swap loss from rewards: ${formatUnits(r.totalLossCoveredFromRewards, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
 
-  console.log(`Rebalances: ${r.rebalances}.`);
+  console.log(`Rebalances: ${r.rebalances}. Rebalance debts: ${r.rebalancesDebt}.`);
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.startTimestamp *
     1000).toLocaleTimeString('en-US')}. Finish: ${new Date(r.endTimestamp *
@@ -367,9 +375,13 @@ export function showBacktestResult(r: IBacktestResult) {
     r.endPrice,
     r.vaultAssetDecimals,
   )}. Min price: ${formatUnits(r.minPrice, r.vaultAssetDecimals)}. Max price: ${formatUnits(r.maxPrice, r.vaultAssetDecimals)}.`);
-  console.log(`Mints: ${!r.disableMints ? 'enabled' : 'disabled'}. Burns: ${!r.disableBurns
-    ? 'enabled'
-    : 'disabled'}.`);
+
+  if (r.disableMints || r.disableBurns) {
+    console.log(`Mints: ${!r.disableMints ? 'enabled' : 'disabled'}. Burns: ${!r.disableBurns
+      ? 'enabled'
+      : 'disabled'}.`);
+  }
+
   console.log(`Time spent for backtest: ${periodHuman(r.backtestLocalTimeSpent)}.`);
   console.log('');
 }

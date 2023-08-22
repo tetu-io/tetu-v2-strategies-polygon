@@ -96,7 +96,7 @@ export async function deployContractSilently<T extends ContractFactory>(
   const instance = await _factory.deploy(...args, {
     // large gas limit is required for npm run coverage
     // see https://github.com/NomicFoundation/hardhat/issues/3121
-    gasLimit: hre.network.name === 'hardhat' ? 29_000_000 : undefined,
+    gasLimit: hre.network.name === 'hardhat' || hre.network.name === 'foundry' ? 29_000_000 : undefined,
     ...(await txParams(hre, signer.provider as providers.Provider, true)),
   });
 
