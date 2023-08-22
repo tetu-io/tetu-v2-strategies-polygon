@@ -74,6 +74,10 @@ library PairBasedStrategyLogicLib {
   }
   //endregion ------------------------------------------------------- Data types
 
+  //region ------------------------------------------------------- Events
+  event ProfitToCoverNotEnough(uint profitToCoverRequired, uint profitToCoverSent);
+  //endregion ------------------------------------------------------- Events
+
   //region ------------------------------------------------------- Helpers
   /// @notice Prepare array of amounts ready to deposit, borrow missed amounts
   function _beforeDeposit(
@@ -386,6 +390,9 @@ library PairBasedStrategyLogicLib {
     if (profitToCover != 0) {
       uint profitToSend = Math.min(profitToCover, IERC20(tokenA).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToSend, splitter, totalAssets);
+      if (profitToSend != profitToCover) {
+        emit ProfitToCoverNotEnough(profitToCover, profitToSend);
+      }
     }
   }
   //endregion ------------------------------------------------------- PairState-helpers

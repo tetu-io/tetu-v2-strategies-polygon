@@ -12,7 +12,7 @@ import {BigNumber, BytesLike} from "ethers";
 import {PairStrategyLiquidityUtils} from "./PairStrategyLiquidityUtils";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
-import {UniversalUtils} from "./UniversalUtils";
+import {IPriceChanges, UniversalUtils} from "./UniversalUtils";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
@@ -66,9 +66,9 @@ export class PairBasedStrategyPrepareStateUtils {
         swapAmountRatio
       );
       if (movePriceUp) {
-        await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAmount, 40000);
+        await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAmount, 40000, b.swapHelper);
       } else {
-        await UniversalUtils.movePoolPriceDown(signer2, state, b.swapper, swapAmount, 40000);
+        await UniversalUtils.movePoolPriceDown(signer2, state, b.swapper, swapAmount, 40000, false, b.swapHelper);
       }
       if (await b.strategy.needRebalance()) {
         if (countRebalance === 0) {
@@ -92,7 +92,7 @@ export class PairBasedStrategyPrepareStateUtils {
     const swapAssetValueForPriceMove = parseUnits('500000', assetDecimals);
     const state = await PackedData.getDefaultState(b.strategy);
 
-    await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAssetValueForPriceMove);
+    await UniversalUtils.movePoolPriceUp(signer2, state, b.swapper, swapAssetValueForPriceMove, 40_000, b.swapHelper);
   }
 
   /** Setup fuse thresholds. Values are selected relative to the current prices */
@@ -390,7 +390,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
     await TimeUtils.advanceNBlocks(300);
 
-    await this.movePriceBySteps(signer, b.swapper, p.movePricesUp, defaultState, swapAmount);
+    await this.movePriceBySteps(signer, b, p.movePricesUp, defaultState, swapAmount);
     states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `p${loopStep}`));
     await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -412,37 +412,37 @@ export class PairBasedStrategyPrepareStateUtils {
   return {states};
 }
 
-    /**
-     * Move prices using given swapAmount using several iterations to avoid swapping of too big amounts.
-     * A swapAmount, required to move to next range, can be calculated using {getSwapAmount2}
-     */
   static async movePriceBySteps(
     signer: SignerWithAddress,
-    swapper: string,
+    b: IBuilderResults,
     movePricesUpDown: boolean,
     state: IDefaultState,
     totalSwapAmount: BigNumber,
-    countIterations: number = 5,
-    totalSwapAmountForDown?: BigNumber
+    totalSwapAmountForDown?: BigNumber,
+    countIterations?: number
   ) {
-    console.log("movePriceBySteps.totalSwapAmount", totalSwapAmount);
-    await UniversalUtils.makePoolVolume(signer, state, swapper, totalSwapAmount);
+    const countSteps = countIterations ?? 1;
+    const totalAmountToSwap = movePricesUpDown
+      ? totalSwapAmount
+      : totalSwapAmountForDown || totalSwapAmount;
 
-    const swapAmountPerIteration = totalSwapAmount.div(countIterations);
-    for (let j = 0; j < countIterations; ++j) {
+    for (let i = 0; i < countSteps; ++i) {
+      const swapAmount = totalAmountToSwap.div(countSteps ?? 5);
+
+      await UniversalUtils.makePoolVolume(signer, state, b.swapper, swapAmount, b.swapHelper);
+
+      let pricesWereChanged: IPriceChanges;
       if (movePricesUpDown) {
-        console.log("movePriceBySteps.UP", swapAmountPerIteration);
-        await UniversalUtils.movePoolPriceUp(signer, state, swapper, swapAmountPerIteration, 40000);
+        pricesWereChanged = await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, swapAmount, 40000, b.swapHelper);
       } else {
-        console.log("movePriceBySteps.DOWN", (totalSwapAmountForDown ?? totalSwapAmount).div(countIterations));
-        await UniversalUtils.movePoolPriceDown(
-          signer,
-          state,
-          swapper,
-          (totalSwapAmountForDown || totalSwapAmount).div(countIterations),
-          40000
-        );
+        pricesWereChanged = await UniversalUtils.movePoolPriceDown(signer, state, b.swapper, swapAmount, 40000, false, b.swapHelper);
+      }
+
+      console.log("pricesWereChanged", pricesWereChanged);
+      if (pricesWereChanged.priceBChange.eq(0) && pricesWereChanged.priceAChange.eq(0)) {
+        throw Error("movePriceBySteps cannot change prices");
       }
     }
   }
+
 }

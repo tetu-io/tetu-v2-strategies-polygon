@@ -159,67 +159,75 @@ library BorrowLib {
     uint cost1 = v.amount1 * v.pd.prices[1] / v.pd.decs[1];
     uint costAddition0 = v.addition0 * v.pd.prices[0] / v.pd.decs[0];
 
-    uint totalCost = cost0 + cost1 - costAddition0;
-    uint requiredCost0 = totalCost * v.prop0 / SUM_PROPORTIONS + costAddition0;
-    uint requiredCost1 = totalCost * (SUM_PROPORTIONS - v.prop0) / SUM_PROPORTIONS;
+    if (cost0 + cost1 > costAddition0) {
+      uint totalCost = cost0 + cost1 - costAddition0;
 
-    if (requiredCost0 > cost0) {
-      // we need to increase amount of asset 0 and decrease amount of asset 1, so we need to borrow asset 0 (reverse)
-      RebalanceAssetsCore memory c10 = RebalanceAssetsCore({
-        converterLiquidator: converterLiquidator,
-        assetA: v.asset1,
-        assetB: v.asset0,
-        propA: SUM_PROPORTIONS - v.prop0,
-        propB: v.prop0,
-        alpha18: 1e18 * v.pd.prices[0] * v.pd.decs[1] / v.pd.prices[1] / v.pd.decs[0],
-        thresholdA: v.threshold1,
-        addonA: 0,
-        addonB: v.addition0,
-        indexA: 1,
-        indexB: 0
-      });
+      uint requiredCost0 = totalCost * v.prop0 / SUM_PROPORTIONS + costAddition0;
+      uint requiredCost1 = totalCost * (SUM_PROPORTIONS - v.prop0) / SUM_PROPORTIONS;
 
-      if (v.directDebt >= AppLib.DUST_AMOUNT_TOKENS) {
-        // This branch of code cannot be called recursively.
-        // Firstly repay(requiredAmount0) is called below. There are two possible results:
-        // 1) requiredCost0 <= cost0
-        // 2) v.directDebt == 0
-        // so, this code cannot be called second time
-        require(repayAllowed, AppErrors.NOT_ALLOWED);
+      if (requiredCost0 > cost0) {
+        // we need to increase amount of asset 0 and decrease amount of asset 1, so we need to borrow asset 0 (reverse)
+        RebalanceAssetsCore memory c10 = RebalanceAssetsCore({
+          converterLiquidator: converterLiquidator,
+          assetA: v.asset1,
+          assetB: v.asset0,
+          propA: SUM_PROPORTIONS - v.prop0,
+          propB: v.prop0,
+          alpha18: 1e18 * v.pd.prices[0] * v.pd.decs[1] / v.pd.prices[1] / v.pd.decs[0],
+          thresholdA: v.threshold1,
+          addonA: 0,
+          addonB: v.addition0,
+          indexA: 1,
+          indexB: 0
+        });
 
-        // repay of v.asset1 is required
-        uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
-        rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt);
-      } else {
-        // new (or additional) borrow of asset 0 under asset 1 is required
-        openPosition(c10, v.pd, v.amount1, v.amount0);
+        if (v.directDebt >= AppLib.DUST_AMOUNT_TOKENS) {
+          // This branch of code cannot be called recursively.
+          // Firstly repay(requiredAmount0) is called below. There are two possible results:
+          // 1) requiredCost0 <= cost0
+          // 2) v.directDebt == 0
+          // so, this code cannot be called second time
+          require(repayAllowed, AppErrors.NOT_ALLOWED);
+
+          // repay of v.asset1 is required
+          uint requiredAmount0 = (requiredCost0 - cost0) * v.pd.decs[0] / v.pd.prices[0];
+          rebalanceRepayBorrow(v, c10, requiredAmount0, v.directDebt);
+        } else {
+          // new (or additional) borrow of asset 0 under asset 1 is required
+          openPosition(c10, v.pd, v.amount1, v.amount0);
+        }
+      } else if (requiredCost0 < cost0) {
+        RebalanceAssetsCore memory c01 = RebalanceAssetsCore({
+          converterLiquidator: converterLiquidator,
+          assetA: v.asset0,
+          assetB: v.asset1,
+          propA: v.prop0,
+          propB: SUM_PROPORTIONS - v.prop0,
+          alpha18: 1e18 * v.pd.prices[1] * v.pd.decs[0] / v.pd.prices[0] / v.pd.decs[1],
+          thresholdA: v.threshold0,
+          addonA: v.addition0,
+          addonB: 0,
+          indexA: 0,
+          indexB: 1
+        });
+        // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
+        if (v.reverseDebt >= AppLib.DUST_AMOUNT_TOKENS) {
+          require(repayAllowed, AppErrors.NOT_ALLOWED);
+
+          // repay of v.asset0 is required
+          // requiredCost0 < cost0 => requiredCost1 > cost1
+          uint requiredAmount1 = (requiredCost1 - cost1) * v.pd.decs[1] / v.pd.prices[1];
+          rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt);
+        } else {
+          // new or additional borrow of asset 1 under asset 0 is required
+          openPosition(c01, v.pd, v.amount0, v.amount1);
+        }
       }
-    } else if (requiredCost0 < cost0) {
-      RebalanceAssetsCore memory c01 = RebalanceAssetsCore({
-        converterLiquidator: converterLiquidator,
-        assetA: v.asset0,
-        assetB: v.asset1,
-        propA: v.prop0,
-        propB: SUM_PROPORTIONS - v.prop0,
-        alpha18: 1e18 * v.pd.prices[1] * v.pd.decs[0] / v.pd.prices[0] / v.pd.decs[1],
-        thresholdA: v.threshold0,
-        addonA: v.addition0,
-        addonB: 0,
-        indexA: 0,
-        indexB: 1
-      });
-      // we need to decrease amount of asset 0 and increase amount of asset 1, so we need to borrow asset 1 (direct)
-      if (v.reverseDebt >= AppLib.DUST_AMOUNT_TOKENS) {
-        require(repayAllowed, AppErrors.NOT_ALLOWED);
-
-        // repay of v.asset0 is required
-        // requiredCost0 < cost0 => requiredCost1 > cost1
-        uint requiredAmount1 = (requiredCost1 - cost1) * v.pd.decs[1] / v.pd.prices[1];
-        rebalanceRepayBorrow(v, c01, requiredAmount1, v.reverseDebt);
-      } else {
-        // new or additional borrow of asset 1 under asset 0 is required
-        openPosition(c01, v.pd, v.amount0, v.amount1);
-      }
+    } else {
+      // if costAddition0 exceeds cost0 + cost1, all amounts should be converted to asset 0
+      // for simplicity, we don't make any swaps or borrows (amount addition0 is assumed to be small)
+      // and just leave balances as is
+      // as result, profit-to-cover will be reduced from costAddition0 to v.amount0
     }
   }
 
