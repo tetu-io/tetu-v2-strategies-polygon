@@ -55,6 +55,9 @@ export interface IBuilderParams {
   quoter: string;
 
   compoundRatio?: number;
+  buffer?: number;
+  depositFee?: number;
+  withdrawFee?: number;
 }
 
 export interface IStrategyBasicInfo {
@@ -201,9 +204,9 @@ export class PairBasedStrategyBuilder {
       },
       controller,
       gov,
-      0,
-      300,
-      300,
+      p.buffer ?? 0,
+        p.depositFee ?? 300,
+      p.withdrawFee ?? 300,
       false,
     );
 
