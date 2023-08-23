@@ -19,7 +19,7 @@ import {
     ITetuLiquidator,
     KyberConverterStrategy,
     KyberConverterStrategy__factory, KyberLib,
-    StrategySplitterV2,
+    StrategySplitterV2, SwapHelper,
     TetuVaultV2,
     UniswapV3ConverterStrategy,
     UniswapV3ConverterStrategy__factory, UniswapV3Lib,
@@ -55,6 +55,9 @@ export interface IBuilderParams {
   quoter: string;
 
   compoundRatio?: number;
+  buffer?: number;
+  depositFee?: number;
+  withdrawFee?: number;
 }
 
 export interface IStrategyBasicInfo {
@@ -63,6 +66,7 @@ export interface IStrategyBasicInfo {
   quoter: string;
   pool: string;
   lib: UniswapV3Lib | AlgebraLib | KyberLib;
+  swapHelper?: SwapHelper;
 }
 
 export interface IBuilderResults extends IStrategyBasicInfo {
@@ -165,7 +169,8 @@ export class PairBasedStrategyBuilder {
       converter: ITetuConverter__factory.connect(p.converter, signer),
       quoter: p.quoter,
 
-      lib
+      lib,
+      swapHelper: await MockHelper.createSwapperHelper(signer)
     }
   }
 
@@ -199,9 +204,9 @@ export class PairBasedStrategyBuilder {
       },
       controller,
       gov,
-      0,
-      300,
-      300,
+      p.buffer ?? 0,
+        p.depositFee ?? 300,
+      p.withdrawFee ?? 300,
       false,
     );
 

@@ -3318,6 +3318,43 @@ describe('BorrowLibTest', () => {
                   expect(r.balanceY).eq(43.988);
                 });
               });
+              describe("Total cost < addition0", () => {
+                let snapshot: string;
+                before(async function () {
+                  snapshot = await TimeUtils.snapshot();
+                });
+                after(async function () {
+                  await TimeUtils.rollback(snapshot);
+                });
+
+                async function makeRebalanceAssetsTest(): Promise<IRebalanceAssetsResults> {
+                  return makeRebalanceAssets({
+                    tokenX: usdc,
+                    tokenY: usdt,
+                    proportion: 50_000,
+                    additionX: "150", // 150 > 121 + 17
+                    strategyBalances: {
+                      balanceX: "17",
+                      balanceY: "121"
+                    },
+                    borrows: [{
+                      collateralAsset: usdt,
+                      borrowAsset: usdc,
+
+                      collateralAmount: "10000",
+                      maxTargetAmount: "7500",
+
+                      converter: ethers.Wallet.createRandom().address,
+                    }],
+                  })
+                }
+
+                it("should not change balances", async () => {
+                  const r = await loadFixture(makeRebalanceAssetsTest);
+                  expect(r.balanceX).eq(17);
+                  expect(r.balanceY).eq(121);
+                });
+              });
             });
             describe("Need to reduce USDC, increase USDT", () => {
               let snapshot: string;

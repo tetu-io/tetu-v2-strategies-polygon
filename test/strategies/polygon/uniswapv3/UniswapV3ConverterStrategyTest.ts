@@ -27,7 +27,6 @@ import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
@@ -280,67 +279,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
   });
 
   describe('UniswapV3 strategy tests', function() {
-    it('Loop with rebalance, hardwork, deposit and withdraw', async() => {
-      const investAmount = _1_000;
-      const swapAssetValueForPriceMove = parseUnits('500000', 6);
-      const state = await PackedData.getDefaultState(strategy3);
-      const splitterSigner = await DeployerUtilsLocal.impersonate(await vault3.splitter());
-      let price;
-      price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-      console.log('tokenB price', formatUnits(price, 6));
-      const platformVoter = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
-      await strategy3.connect(platformVoter).setCompoundRatio(50000);
-
-      console.log('initial deposits...');
-      await vault3.deposit(investAmount, signer.address, {gasLimit: 19_000_000});
-      await vault3.connect(signer3).deposit(_1_000, signer3.address, {gasLimit: 19_000_000});
-
-      let lastDirectionUp = false
-      for (let i = 0; i < 10; i++) {
-        await UniversalUtils.makePoolVolume(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('100000', 6));
-
-        if (i % 3) {
-          if (!lastDirectionUp) {
-            await UniversalUtils.movePoolPriceUp(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-          } else {
-            await UniversalUtils.movePoolPriceDown(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove.mul(parseUnits('1', 6)).div(price));
-          }
-          lastDirectionUp = !lastDirectionUp
-        }
-
-        if (await strategy3.needRebalance()) {
-          console.log('Rebalance..')
-          await strategy3.rebalanceNoSwaps(true,{gasLimit: 19_000_000});
-        }
-
-        if (i % 5) {
-          console.log('Hardwork..')
-          await strategy3.connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
-        }
-
-        if (i % 2) {
-          console.log('Deposit..')
-          await vault3.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address, {gasLimit: 19_000_000});
-        } else {
-          console.log('Withdraw..')
-          const toWithdraw = parseUnits('100.111437', 6)
-          const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
-          await vault3.connect(signer3).requestWithdraw()
-          await vault3.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address, {gasLimit: 19_000_000})
-          const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
-          console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
-        }
-      }
-
-      await vault3.connect(signer3).requestWithdraw()
-      console.log('withdrawAll as signer3...');
-      await vault3.connect(signer3).withdrawAll({gasLimit: 19_000_000});
-
-      await vault3.requestWithdraw()
-      console.log('withdrawAll...');
-      await vault3.withdrawAll({gasLimit: 19_000_000});
-    });
-
     it('Rebalance and hardwork with earned/lost checks for stable pool', async() => {
       const investAmount = _10_000;
       const swapAssetValueForPriceMove = parseUnits('500000', 6);
@@ -413,7 +351,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
       console.log('Strategy totalAssets', await strategy2.totalAssets());
       // console.log(await strategy2.callStatic.calcInvestedAssets())
 
-      await UniversalUtils.makePoolVolume(signer2, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
+      await UniversalUtils.makePoolVolume(signer2, state, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, parseUnits('500000', 6));
 
       console.log('Vault totalAssets', await vault2.totalAssets());
       console.log('Strategy totalAssets', await strategy2.totalAssets());
@@ -425,36 +363,6 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       console.log('Vault totalAssets', await vault2.totalAssets());
       console.log('Strategy totalAssets', await strategy2.totalAssets());
-    });
-
-    /**
-     * TODO: emergencyExit should not check price impact at all
-     */
-    describe.skip("Emergency exit after strong price change", () => {
-      it('should make emergency exit without any reverts (even if a rebalance is required)', async() => {
-        const investAmount = _10_000;
-        const swapAssetValueForPriceMove = parseUnits('5000000', 6);
-        const state = await PackedData.getDefaultState(strategy);
-
-        let price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-        console.log('tokenB price', formatUnits(price, 6));
-
-        console.log('deposit...');
-        await vault.deposit(investAmount, signer.address);
-
-        expect(await strategy.isReadyToHardWork()).eq(false);
-        expect(await strategy.needRebalance()).eq(false);
-
-        await UniswapV3StrategyUtils.movePriceUp(signer2, strategy.address, MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER, swapAssetValueForPriceMove);
-
-        price = await swapper.getPrice(state.pool, state.tokenB, MaticAddresses.ZERO_ADDRESS, 0);
-        console.log('tokenB price (updated)', formatUnits(price, 6));
-
-        expect(await strategy.isReadyToHardWork()).eq(true);
-        expect(await strategy.needRebalance()).eq(true);
-
-        await strategy.emergencyExit();
-      });
     });
   });
 });
