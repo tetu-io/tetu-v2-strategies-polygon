@@ -15,6 +15,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -1134,26 +1135,20 @@ library ConverterStrategyBaseLib {
 
 //region--------------------------------------------------- Make requested amount
 
-
-
-  /// @notice Convert {amountsToConvert_} to the main {asset}
-  ///         Swap leftovers (if any) to the main asset.
+  /// @notice Convert {amountsToConvert_} to the given {asset}
+  ///         Swap leftovers (if any) to the given asset.
   ///         If result amount is less than expected, try to close any other available debts (1 repay per block only)
   /// @param tokens_ Results of _depositorPoolAssets() call (list of depositor's asset in proper order)
-  /// @param indexAsset_ Index of main {asset} in {tokens}
-  /// @param requestedAmount Total amount of main asset that we need to receive on balance (to be withdrawn).
-  ///                        Max uint means attempt to withdraw all possible invested assets.
-  /// @param amountsToConvert_ Amounts available for conversion after withdrawing from the pool
-  /// @param expectedMainAssetAmounts Amounts of main asset that we expect to receive after conversion amountsToConvert_
-  /// @return expectedAmount Expected total amount of main asset after all conversions, swaps and repays
+  /// @param indexAsset_ Index of the given {asset} in {tokens}
+  /// @param requestedAmount Total amount of the given asset that we need to have on balance at the end.
+  ///                        Max uint means attempt to withdraw all possible amount.
+  /// @return expectedAmount Expected total amount of given asset after all conversions, swaps and repays
   function makeRequestedAmount(
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory amountsToConvert_,
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
     uint requestedAmount,
-    uint[] memory expectedMainAssetAmounts,
     mapping(address => uint) storage liquidationThresholds_
   ) external returns (uint expectedAmount) {
     DataSetLocal memory v = DataSetLocal({
@@ -1163,50 +1158,14 @@ library ConverterStrategyBaseLib {
       indexAsset: indexAsset_,
       liquidator: liquidator_
     });
-    return _makeRequestedAmount(v, amountsToConvert_, requestedAmount, expectedMainAssetAmounts, liquidationThresholds_);
-  }
-
-  function _makeRequestedAmount(
-    DataSetLocal memory d_,
-    uint[] memory amountsToConvert_,
-    uint requestedAmount,
-    uint[] memory expectedMainAssetAmounts,
-    mapping(address => uint) storage liquidationThresholds_
-  ) internal returns (uint expectedAmount) {
-    // get the total expected amount
-    for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
-      expectedAmount += expectedMainAssetAmounts[i];
+    uint[] memory _liquidationThresholds = _getLiquidationThresholds(liquidationThresholds_, v.tokens, v.len);
+    uint balance = IERC20(v.tokens[v.indexAsset]).balanceOf(address(this));
+    if (requestedAmount != type(uint).max) {
+      requestedAmount = requestedAmount > balance
+        ? requestedAmount - balance
+        : 0;
     }
-
-    uint[] memory _liquidationThresholds = _getLiquidationThresholds(liquidationThresholds_, d_.tokens, d_.len);
-    // we shouldn't repay a debt twice, it's inefficient
-    // suppose, we have usdt = 1 and we need to convert it to usdc, then get additional usdt=10 and make second repay
-    // But: we shouldn't make repay(1) and than repay(10), we should make single repay(11)
-    // Note: AAVE3 allows to make two repays in a single block, see Aave3SingleBlockTest in TetuConverter
-    //       but it doesn't allow to make borrow and repay in a single block.
-
-    if (requestedAmount != type(uint).max
-      && expectedAmount > requestedAmount * (AppLib.GAP_CONVERSION + AppLib.DENOMINATOR) / AppLib.DENOMINATOR
-    ) {
-      // amountsToConvert_ are enough to get requestedAmount
-      _convertAfterWithdraw(d_, _liquidationThresholds, amountsToConvert_);
-    } else {
-      uint balance = IERC20(d_.tokens[d_.indexAsset]).balanceOf(address(this));
-      if (requestedAmount != type(uint).max) {
-        requestedAmount = requestedAmount > balance
-          ? requestedAmount - balance
-          : 0;
-      }
-
-      // amountsToConvert_ are NOT enough to get requestedAmount
-      // We are allowed to make only one repay per block, so, we shouldn't try to convert amountsToConvert_
-      // We should try to close the exist debts instead:
-      //    convert a part of main assets to get amount of secondary assets required to repay the debts
-      // and only then make conversion.
-      expectedAmount = _closePositionsToGetAmount(d_, _liquidationThresholds, requestedAmount);
-    }
-
-    return expectedAmount;
+    return _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
   }
   //endregion-------------------------------------------- Make requested amount
 
@@ -1298,6 +1257,8 @@ library ConverterStrategyBaseLib {
   }
 
   /// @dev Implements {IterationPlanLib.PLAN_SWAP_REPAY} only
+  ///      Note: AAVE3 allows to make two repays in a single block, see Aave3SingleBlockTest in TetuConverter
+  ///      but it doesn't allow to make borrow and repay in a single block.
   function _closePositionsToGetAmount(
     DataSetLocal memory d_,
     uint[] memory liquidationThresholds_,

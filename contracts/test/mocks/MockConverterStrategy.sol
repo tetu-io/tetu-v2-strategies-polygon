@@ -368,22 +368,18 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _makeRequestedAmountAccess(
     address[] memory tokens_,
     uint indexAsset_,
-    uint[] memory amountsToConvert_,
     ITetuConverter converter_,
     ITetuLiquidator liquidator_,
-    uint requestedAmount,
-    uint[] memory expectedMainAssetAmounts
+    uint requestedAmount
   ) external returns (
     uint expectedTotalAmountMainAsset
   ) {
     return ConverterStrategyBaseLib.makeRequestedAmount(
       tokens_,
       indexAsset_,
-      amountsToConvert_,
       converter_,
       liquidator_,
       requestedAmount,
-      expectedMainAssetAmounts,
       liquidationThresholds
     );
   }

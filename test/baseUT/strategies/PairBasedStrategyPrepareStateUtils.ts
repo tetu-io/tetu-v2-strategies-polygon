@@ -424,12 +424,10 @@ export class PairBasedStrategyPrepareStateUtils {
     const countSteps = countIterations ?? 1;
     const totalAmountToSwap = movePricesUpDown
       ? totalSwapAmount
-      : totalSwapAmountForDown || totalSwapAmount;
+      : (totalSwapAmountForDown || totalSwapAmount);
 
     for (let i = 0; i < countSteps; ++i) {
       const swapAmount = totalAmountToSwap.div(countSteps ?? 5);
-
-      await UniversalUtils.makePoolVolume(signer, state, b.swapper, swapAmount, b.swapHelper);
 
       let pricesWereChanged: IPriceChanges;
       if (movePricesUpDown) {

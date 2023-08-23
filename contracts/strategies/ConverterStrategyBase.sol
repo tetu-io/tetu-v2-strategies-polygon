@@ -35,14 +35,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
   struct WithdrawUniversalLocal {
     bool all;
-    uint[] reservesBeforeWithdraw;
-    uint totalSupplyBeforeWithdraw;
     uint depositorLiquidity;
     uint liquidityAmountToWithdraw;
     uint assetPrice;
-    uint[] amountsToConvert;
     uint expectedTotalMainAssetAmount;
-    uint[] expectedMainAssetAmounts;
     uint investedAssetsAfterWithdraw;
     uint balanceAfterWithdraw;
     address[] tokens;
@@ -299,14 +295,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       v.indexAsset = AppLib.getAssetIndex(v.tokens, v.asset);
       v.balanceBefore = AppLib.balance(v.asset);
 
-      v.reservesBeforeWithdraw = _depositorPoolReserves();
-      v.totalSupplyBeforeWithdraw = _depositorTotalSupply();
       v.depositorLiquidity = _depositorLiquidity();
       v.assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.asset);
       // -----------------------
 
       // calculate how much liquidity we need to withdraw for getting the requested amount
-      (v.liquidityAmountToWithdraw, v.amountsToConvert) = ConverterStrategyBaseLib2.getLiquidityAmount(
+      (v.liquidityAmountToWithdraw, ) = ConverterStrategyBaseLib2.getLiquidityAmount(
         v.all ? 0 : amount + earnedByPrices_,
         address(this),
         v.tokens,
@@ -317,50 +311,21 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       );
 
       if (v.liquidityAmountToWithdraw != 0) {
-
-        // =============== WITHDRAW =====================
-        // make withdraw
         v.withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
         // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
         // use what exactly was withdrew instead of the expectation
         // assume that liquidity cannot increase in _depositorExit
         v.liquidityAmountToWithdraw = v.depositorLiquidity - _depositorLiquidity();
         emit OnDepositorExit(v.liquidityAmountToWithdraw, v.withdrawnAmounts);
-        // ==============================================
-
-        // we need to call expectation after withdraw for calculate it based on the real liquidity amount that was withdrew
-        // it should be called BEFORE the converter will touch our positions coz we need to call quote the estimations
-        // amountsToConvert should contains amounts was withdrawn from the pool and amounts received from the converter
-        (v.expectedMainAssetAmounts, v.amountsToConvert) = ConverterStrategyBaseLib2.postWithdrawActions(
-          v.converter,
-          v.tokens,
-          v.indexAsset,
-          v.reservesBeforeWithdraw,
-          v.liquidityAmountToWithdraw,
-          v.totalSupplyBeforeWithdraw,
-          v.amountsToConvert,
-          v.withdrawnAmounts
-        );
-      } else {
-        // we don't need to withdraw any amounts from the pool, available converted amounts are enough for us
-        v.expectedMainAssetAmounts = ConverterStrategyBaseLib2.postWithdrawActionsEmpty(
-          v.converter,
-          v.tokens,
-          v.indexAsset,
-          v.amountsToConvert
-        );
       }
 
-      // convert amounts to main asset
-      // it is safe to use amountsToConvert from expectation - we will try to repay only necessary amounts
-      v.expectedTotalMainAssetAmount += ConverterStrategyBaseLib.makeRequestedAmount(
+      // try to receive at least requested amount of the main asset on the balance
+      v.expectedTotalMainAssetAmount = ConverterStrategyBaseLib.makeRequestedAmount(
         v.tokens,
         v.indexAsset,
-        v.amountsToConvert,
         v.converter,
         AppLib._getLiquidator(controller()),
         (v.all ? amount : v.balanceBefore + amount + earnedByPrices_), // current balance + the amount required to be withdrawn on balance
-        v.expectedMainAssetAmounts,
         liquidationThresholds
       );
 

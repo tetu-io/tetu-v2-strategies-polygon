@@ -6,7 +6,7 @@ import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory, IController__factory,
-  IERC20__factory,
+  IERC20__factory, StrategyBaseV2__factory,
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
 import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
@@ -16,12 +16,20 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {
+  IListStates,
+  IPrepareOverCollateralParams,
+  PairBasedStrategyPrepareStateUtils
+} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {GAS_REBALANCE_NO_SWAP} from "../../../baseUT/GasLimits";
+import {
+  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_ASSETS,
+  GAS_LIMIT_PAIR_BASED_WITHDRAW,
+  GAS_REBALANCE_NO_SWAP
+} from "../../../baseUT/GasLimits";
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
@@ -32,6 +40,10 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {
   ISwapper__factory
 } from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
+import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
+import {depositToVault, printVaultState} from "../../../StrategyTestUtils";
+import {BigNumber} from "ethers";
+import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -280,6 +292,17 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             await converterStrategyBase.doHardWork({gasLimit: 19_000_000});
             // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
             expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
+          });
+
+          it("withdraw should not exceed gas limits @skip-on-coverage", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+            const tx = await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
+            const cr = await tx.wait();
+            controlGasLimitsEx(cr.gasUsed, GAS_LIMIT_PAIR_BASED_WITHDRAW, (u, t) => {
+              expect(u).to.be.below(t + 1);
+            });
           });
         });
       });
