@@ -82,6 +82,8 @@ export interface IBacktestResult {
   earned: BigNumber;
   rebalances: number;
   rebalancesDebt: number;
+  rebalancesDebtDelayed: number;
+  rebalancesDebtClosing: number;
   startPrice: BigNumber;
   endPrice: BigNumber;
   maxPrice: BigNumber;
@@ -103,4 +105,5 @@ export interface IBacktestResult {
   allowedLockedPercent: number;
   forceRebalanceDebtLockedPercent: number;
   rebalanceDebtDelay: number;
+  timeOnFuse: number;
 }

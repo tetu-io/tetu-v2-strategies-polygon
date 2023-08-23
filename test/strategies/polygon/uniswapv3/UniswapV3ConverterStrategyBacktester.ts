@@ -2,7 +2,7 @@
 import hre, { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { getAddress } from 'ethers/lib/utils';
+import {getAddress, parseUnits} from 'ethers/lib/utils';
 import { IPoolLiquiditySnapshot, UniswapV3Utils } from '../../../../scripts/utils/UniswapV3Utils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { config as dotEnvConfig } from 'dotenv';
@@ -35,16 +35,21 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
   // before depeg start ts - 1690882487
   const backtestStartBlock = 45764000; // Aug-01-2023 02:55:08 AM +UTC // 45700000; // 7/30/2023 3:31:06 PM
+  const backtestEndBlock = 45900000; // Aug-02-2023 12:45:52 AM +UTC - ok tested
+  // const backtestEndBlock = 45990000; // next
   // const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC - fails on ts 1690914072
-  const backtestEndBlock = 45785000; // Aug-01-2023 03:32:23 PM +UTC
   const investAmountUnits: string = '100' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
   const disableMints = false;
   const rebalanceDebt = true;
   const allowedLockedPercent = 5;
-  const forceRebalanceDebtLockedPercent = 15;
+  const forceRebalanceDebtLockedPercent = 20;
   const rebalanceDebtDelay = 360;
+  const fuseThresholds = [
+    ['0.9989', '0.9991', '1.0011', '1.0009',],
+    ['0.9989', '0.9991', '1.0011', '1.0009',],
+  ]
 
   /*const params = {
     vaultAsset: MaticAddresses.WMATIC_TOKEN,
@@ -226,7 +231,10 @@ describe('UmiswapV3 converter strategy backtester', function() {
       params.rebalanceTickRange
     )
 
-    await contracts.uniswapV3Calee.toggleNoRevert()
+    await contracts.strategy.setFuseThresholds(0, fuseThresholds[0].map(a => parseUnits(a)))
+    await contracts.strategy.setFuseThresholds(1, fuseThresholds[1].map(a => parseUnits(a)))
+
+    // await contracts.uniswapV3Calee.toggleNoRevert()
   });
 
   after(async function() {
@@ -236,7 +244,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       console.log('');
       console.log(`=== Uniswap V3 delta-neutral strategy backtester ===`);
       console.log('');
-      showBacktestResult(backtestResult);
+      showBacktestResult(backtestResult, fuseThresholds);
     }
   });
 

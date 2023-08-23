@@ -61,6 +61,8 @@ export async function strategyBacktest(
   let tx
   let txReceipt
   let lastNSRTimestamp = 0
+  let rebalancesDebtDelayed = 0
+  let rebalancesDebtClosing = 0
 
   console.log(`Starting backtest of ${await vault.name()}`);
   console.log(`Filling pool with initial liquidity from snapshot (${liquiditySnapshot.ticks.length} ticks)..`);
@@ -103,6 +105,9 @@ export async function strategyBacktest(
   const txsTotal = txLimit === 0 || txLimit > poolTxs.length ? poolTxs.length : txLimit;
   let endTimestamp = startTimestamp;
   let previousTimestamp = startTimestamp;
+  let timeOnFuse = 0
+  let lastFuseTimestamp = 0
+
   for (const poolTx of poolTxs) {
     i++;
     endTimestamp = poolTx.timestamp;
@@ -167,6 +172,8 @@ export async function strategyBacktest(
     if (poolTx.type === TransactionType.SWAP) {
       const swap0to1 = parseUnits(poolTx.amount1, token1Decimals).lt(0);
       const tokenIn = swap0to1 ? token0.address : token1.address;
+      const tokenInDecimals = swap0to1 ? token0Decimals : token1Decimals
+      const tokenInSymbol = swap0to1 ? token0Symbol : token1Symbol
       const amountIn = swap0to1 ? parseUnits(poolTx.amount0, token0Decimals) : parseUnits(
         poolTx.amount1,
         token1Decimals,
@@ -189,7 +196,7 @@ export async function strategyBacktest(
         : token1Symbol} -> ${swap0to1 ? token1Symbol : token0Symbol}. Price: ${formatUnits(
         priceAfter,
         tokenADecimals,
-      )}${priceChangeStr}.`);
+      )}${priceChangeStr}. Amount: ${formatUnits(amountIn, tokenInDecimals)} ${tokenInSymbol}.`);
 
       if (priceAfter.gt(maxPrice)) {
         maxPrice = priceAfter;
@@ -203,9 +210,18 @@ export async function strategyBacktest(
     }
 
     if (previousTimestamp !== poolTx.timestamp) {
+      let defaultState = await strategy.getDefaultState()
+      let isFuseTriggered = defaultState[2][1].toString() === '2' || defaultState[2][1].toString() === '3' || defaultState[2][2].toString() === '2' || defaultState[2][2].toString() === '3'
+
+      if (!isFuseTriggered && lastFuseTimestamp > 0) {
+        console.log('No fuse trigger: continue work.')
+        lastFuseTimestamp = 0
+      }
+
       if (await strategy.needRebalance()) {
         rebalances++;
         process.stdout.write(`NSR ${rebalances}.. `);
+        const lockedPercentBefore = await getLockedPercent(reader, strategy.address)
         tx = await strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         txReceipt = await tx.wait();
         fees = UniswapV3StrategyUtils.extractClaimedFees(txReceipt)
@@ -214,70 +230,81 @@ export async function strategyBacktest(
           fee1 = fee1.add(fees[1])
         }
         const lossCovered = UniversalTestUtils.extractLossCoveredUniversal(txReceipt)
-        console.log('LossCovered from insurance', lossCovered)
+        const lockedPercentAfter = await getLockedPercent(reader, strategy.address)
+        console.log(`done with ${txReceipt.gasUsed} gas.`);
+        console.log(`Locked for debt service: ${lockedPercentBefore}% -> ${lockedPercentAfter}%. Price change Loss covered by insurance: ${formatUnits(lossCovered, tokenADecimals)}.`)
         totalLossCoveredFromInsurance = totalLossCoveredFromInsurance.add(lossCovered)
         const extractedRebalanceLoss = UniswapV3StrategyUtils.extractRebalanceLoss(txReceipt)
-        console.log('Rebalance swap loss', extractedRebalanceLoss[0])
-        console.log('Rebalance swap loss covered from rewards', extractedRebalanceLoss[2])
+        // console.log('NSR loss', extractedRebalanceLoss[0])
+        // console.log('NSR loss covered from rewards', extractedRebalanceLoss[2])
         rebalanceLoss = rebalanceLoss.add(extractedRebalanceLoss[0])
         totalLossCoveredFromRewards = totalLossCoveredFromRewards.add(extractedRebalanceLoss[2])
-        console.log(`done with ${txReceipt.gasUsed} gas.`);
+
         lastNSRTimestamp = poolTx.timestamp
       }
 
-      const defaultState = await strategy.getDefaultState()
-      const isFuseTriggered =
-        defaultState[2][1].toString() === '2'
-        || defaultState[2][1].toString() === '3'
-        || defaultState[2][2].toString() === '2'
-        || defaultState[2][2].toString() === '3'
+      defaultState = await strategy.getDefaultState()
+      isFuseTriggered = defaultState[2][1].toString() === '2' || defaultState[2][1].toString() === '3' || defaultState[2][2].toString() === '2' || defaultState[2][2].toString() === '3'
+      const isWithdrawDone = defaultState[2][3].toNumber() > 0;
 
       if (isFuseTriggered) {
-        console.log('Fuse enabled!');
-        break;
+        if (lastFuseTimestamp > 0 && lastFuseTimestamp !== poolTx.timestamp) {
+          timeOnFuse += poolTx.timestamp - lastFuseTimestamp
+        }
+
+        if (lastFuseTimestamp === 0) {
+          console.log('Fuse trigger: liquidity is not provided, NSR stopped.')
+        }
+
+        lastFuseTimestamp = poolTx.timestamp
       }
 
       if (rebalanceDebt && reader) {
-        const r = await reader.getLockedUnderlyingAmount(strategy.address) as [BigNumber, BigNumber]
-        const percent = r[0].mul(100).div(r[1]).toNumber();
-        // console.log('Locked percent', percent)
-        const needForcedRebalanceDebt = percent > forceRebalanceDebtLockedPercent;
-        const needDelayedRebalanceDebt = percent > allowedLockedPercent && poolTx.timestamp - lastNSRTimestamp > rebalanceDebtDelay
+        const percent = await getLockedPercent(reader, strategy.address)
+        const needForcedRebalanceDebt = !isFuseTriggered && percent > forceRebalanceDebtLockedPercent;
+        const needDelayedRebalanceDebt = !isFuseTriggered && percent > allowedLockedPercent && poolTx.timestamp - lastNSRTimestamp > rebalanceDebtDelay
 
-        if (needDelayedRebalanceDebt) {
-          console.log(`Delayed rebalance debt (locked: ${percent}%, allowed: ${allowedLockedPercent}%)`)
-        }
-        if (needForcedRebalanceDebt) {
-          console.log(`Forced rebalance debt (locked: ${percent}%, force rebalance debt locked: ${forceRebalanceDebtLockedPercent}%)`)
-        }
-
-        if (needDelayedRebalanceDebt || needForcedRebalanceDebt) {
+        if ((isFuseTriggered && !isWithdrawDone) || needDelayedRebalanceDebt || needForcedRebalanceDebt) {
           rebalancesDebt++
+          if (needDelayedRebalanceDebt || needForcedRebalanceDebt) {
+            process.stdout.write(`Rebalance debt ${rebalancesDebt} (${needDelayedRebalanceDebt ? 'delayed' : 'forced'}).. `)
+            if (needDelayedRebalanceDebt) {
+              rebalancesDebtDelayed++
+            }
+          } else {
+            process.stdout.write(`Rebalance debt ${rebalancesDebt} (closing debts on fuse trigger).. `)
+            rebalancesDebtClosing++
+          }
+
           const PLAN_SWAP_REPAY = 0;
           const PLAN_REPAY_SWAP_REPAY = 1;
 
-          const planEntryData = /*!isFuseTriggered
-            ?*/ defaultAbiCoder.encode(
+          const planEntryData = !isFuseTriggered
+            ? defaultAbiCoder.encode(
             ['uint256', 'uint256'],
             [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT],
           )
-          /*: defaultAbiCoder.encode(
+          : defaultAbiCoder.encode(
             ['uint256', 'uint256'],
             [PLAN_SWAP_REPAY, 0],
-          );*/
+          );
 
           const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData, {gasLimit: 19_000_000});
 
-          console.log('withdrawByAggStep..')
-          await strategy.withdrawByAggStep(
+          tx = await strategy.withdrawByAggStep(
             quote[0],
             MaticAddresses.ZERO_ADDRESS,
             quote[1],
             '0x00',
             planEntryData,
-            /*isFuseTriggered ? 0 : */1,
+            isFuseTriggered ? 0 : 1,
             {gasLimit: 19_000_000}
           )
+          txReceipt = await tx.wait()
+          console.log(`done with ${txReceipt.gasUsed} gas.`)
+          const percentAfter = await getLockedPercent(reader, strategy.address)
+          console.log(`Locked for debt service: ${percent}% -> ${percentAfter}%. ${isFuseTriggered && isWithdrawDone ? 'Withdraw done.' : ''}`)
+
         }
       }
     }
@@ -343,7 +370,10 @@ export async function strategyBacktest(
     rebalanceLoss,
     allowedLockedPercent,
     forceRebalanceDebtLockedPercent,
-    rebalanceDebtDelay
+    rebalanceDebtDelay,
+    timeOnFuse,
+    rebalancesDebtDelayed,
+    rebalancesDebtClosing,
   };
 }
 
@@ -354,23 +384,24 @@ export function getApr(earned: BigNumber, investAmount: BigNumber, startTimestam
   return +formatUnits(apr, 3)
 }
 
-export function showBacktestResult(r: IBacktestResult) {
+export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = []) {
   console.log(`Strategy ${r.vaultName}. Tick range: ${r.tickRange} (+-${r.tickRange /
   100}% price). Rebalance tick range: ${r.rebalanceTickRange} (+-${r.rebalanceTickRange / 100}% price).`);
-  console.log(`Allowed locked: ${r.allowedLockedPercent}%. Forced rebalance debt locked: ${r.forceRebalanceDebtLockedPercent}%. Rebalance debt delay: ${r.rebalanceDebtDelay} secs.`)
+  console.log(`Allowed locked: ${r.allowedLockedPercent}%. Forced rebalance debt locked: ${r.forceRebalanceDebtLockedPercent}%. Rebalance debt delay: ${r.rebalanceDebtDelay} secs. Fuse thresholds: [${fuseThresholds[0].join(',')}], [${fuseThresholds[1].join(',')}].`)
 
   const vaultApr = getApr(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
   console.log(`Vault APR (in ui): ${vaultApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Earned: ${formatUnits(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
   const strategyApr = getApr(r.hardworkEarned.sub(r.hardworkLost), r.strategyTotalAssetsAfter, r.startTimestamp, r.endTimestamp)
   console.log(`Strategy APR (in ui): ${strategyApr}%. Total assets: ${formatUnits(r.strategyTotalAssetsAfter, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork earned: ${formatUnits(r.hardworkEarned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork lost: ${formatUnits(r.hardworkLost, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
   const realApr = getApr(r.earned.sub(r.totalLossCovered).sub(r.totalLossCoveredFromRewards), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
-  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Rebalance swap loss: ${formatUnits(r.rebalanceLoss, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Price change loss: ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Covered swap loss from rewards: ${formatUnits(r.totalLossCoveredFromRewards, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Price change loss (covered by insurance): ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. NSR loss: ${formatUnits(r.rebalanceLoss, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Covered NSR loss from rewards: ${formatUnits(r.totalLossCoveredFromRewards, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
 
-  console.log(`Rebalances: ${r.rebalances}. Rebalance debts: ${r.rebalancesDebt}.`);
+  console.log(`Rebalances: ${r.rebalances}. Rebalance debts: ${r.rebalancesDebt} (${r.rebalancesDebtDelayed} delayed, ${r.rebalancesDebt - r.rebalancesDebtDelayed - r.rebalancesDebtClosing} forced, ${r.rebalancesDebtClosing} closing).`);
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.startTimestamp *
     1000).toLocaleTimeString('en-US')}. Finish: ${new Date(r.endTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.endTimestamp * 1000).toLocaleTimeString('en-US')}.`);
+  console.log(`Time on fuse trigger: ${periodHuman(r.timeOnFuse)}.`)
   console.log(`Start price of ${r.tokenBSymbol}: ${formatUnits(r.startPrice, r.vaultAssetDecimals)}. End price: ${formatUnits(
     r.endPrice,
     r.vaultAssetDecimals,
@@ -405,4 +436,9 @@ export function periodHuman(periodSecs: number) {
     periodStr += `${periodSecs - periodMins * 60}s`;
   }
   return periodStr;
+}
+
+async function getLockedPercent(reader: PairBasedStrategyReader, strategyAddress) {
+  const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber]
+  return  r[0].mul(100).div(r[1]).toNumber();
 }
