@@ -20,7 +20,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {NoSwapRebalanceEvents} from "../../../baseUT/strategies/NoSwapRebalanceEvents";
+import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 
 
 const { expect } = chai;
@@ -279,10 +279,10 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
-        const rebalanced = await NoSwapRebalanceEvents.makeRebalanceNoSwap(strategy);
+        const rebalanced = await CaptureEvents.makeRebalanceNoSwap(strategy);
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
 
-        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {rebalanced}));
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {eventsSet: rebalanced}));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
         console.log("rebalanced", rebalanced);
       }

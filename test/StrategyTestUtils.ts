@@ -41,7 +41,7 @@ import {
   IStateHardworkEvents,
   IUniV3FeesClaimedInfo
 } from "./baseUT/strategies/UniswapV3StrategyUtils";
-import {IRebalanceEvents, NoSwapRebalanceEvents} from "./baseUT/strategies/NoSwapRebalanceEvents";
+import {IEventsSet, CaptureEvents} from "./baseUT/strategies/CaptureEvents";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -110,7 +110,7 @@ export async function rebalancePairBasedStrategyNoSwaps(
   signer: SignerWithAddress,
   decimals: number,
   checkNeedRebalance: boolean = true
-) : Promise<IRebalanceEvents> {
+) : Promise<IEventsSet> {
   console.log('### REBALANCE CALL ###');
   const stateBefore = await PackedData.getSpecificStateUniv3(strategy);
 
@@ -306,8 +306,8 @@ export async function handleReceiptRedeem(receipt: ContractReceipt, decimals: nu
  * @param decimals
  * @param platform One of PLATFORM_XXX, i.e. PLATFORM_UNIV3
  */
-export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number, platform: string): Promise<IRebalanceEvents> {
-  return NoSwapRebalanceEvents.handleReceiptRebalance(receipt, decimals, platform);
+export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number, platform: string): Promise<IEventsSet> {
+  return CaptureEvents.handleReceipt(receipt, decimals, platform);
 }
 
 export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals: number) : Promise<IStateHardworkEvents> {
