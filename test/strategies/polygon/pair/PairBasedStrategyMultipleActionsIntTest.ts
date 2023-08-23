@@ -299,7 +299,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, name, p));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut1, states, b.stateParams, true);
 
-        states2.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase2, b.vault, name));
+        states2.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase2, b.vault, name, p));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut2, states2, b.stateParams, true);
       }
 

@@ -383,7 +383,6 @@ export class CaptureEvents {
       }
 
       if (event.topics[0].toLowerCase() === converterStrategyBaseLib2I.getEventTopic('FixPriceChanges').toLowerCase()) {
-        console.log('>>> !!!!!!!!!!!!!!!!!!!!!!!!! FuseTriggered !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
         const log = (converterStrategyBaseLib2I.decodeEventLog(
           converterStrategyBaseLib2I.getEvent('FixPriceChanges'),
           event.data,
@@ -410,7 +409,7 @@ export class CaptureEvents {
         };
       }
     }
-    console.log('************* EventsSet:', ret);
+    console.log('*************');
     return ret;
   }
 
