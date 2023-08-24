@@ -303,8 +303,14 @@ export async function strategyBacktest(
           txReceipt = await tx.wait()
           console.log(`done with ${txReceipt.gasUsed} gas.`)
           const percentAfter = await getLockedPercent(reader, strategy.address)
-          console.log(`Locked for debt service: ${percent}% -> ${percentAfter}%. ${isFuseTriggered && isWithdrawDone ? 'Withdraw done.' : ''}`)
+          const lossCovered = UniversalTestUtils.extractLossCoveredUniversal(txReceipt)
 
+          const extractedRebalanceLoss = UniswapV3StrategyUtils.extractRebalanceDebtLoss(txReceipt)
+
+          console.log(`Locked for debt service: ${percent}% -> ${percentAfter}%.${isFuseTriggered && isWithdrawDone ? ' Withdraw done.' : ''} Price change Loss covered by insurance: ${formatUnits(lossCovered, tokenADecimals)}. Swap loss: ${formatUnits(extractedRebalanceLoss[0], tokenADecimals)}. Swap loss covered by rewards: ${formatUnits(extractedRebalanceLoss[1], tokenADecimals)}.`)
+
+          totalLossCoveredFromInsurance = totalLossCoveredFromInsurance.add(lossCovered)
+          totalLossCoveredFromRewards = totalLossCoveredFromRewards.add(extractedRebalanceLoss[1])
         }
       }
     }
@@ -374,6 +380,7 @@ export async function strategyBacktest(
     timeOnFuse,
     rebalancesDebtDelayed,
     rebalancesDebtClosing,
+    poolTxs: poolTxs.length,
   };
 }
 
@@ -394,18 +401,20 @@ export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = []) 
   const strategyApr = getApr(r.hardworkEarned.sub(r.hardworkLost), r.strategyTotalAssetsAfter, r.startTimestamp, r.endTimestamp)
   console.log(`Strategy APR (in ui): ${strategyApr}%. Total assets: ${formatUnits(r.strategyTotalAssetsAfter, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork earned: ${formatUnits(r.hardworkEarned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork lost: ${formatUnits(r.hardworkLost, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
   const realApr = getApr(r.earned.sub(r.totalLossCovered).sub(r.totalLossCoveredFromRewards), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
-  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Price change loss (covered by insurance): ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. NSR loss: ${formatUnits(r.rebalanceLoss, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Covered NSR loss from rewards: ${formatUnits(r.totalLossCoveredFromRewards, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Price change loss (covered by insurance): ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. NSR loss: ${formatUnits(r.rebalanceLoss, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Covered NSR and swap loss from rewards: ${formatUnits(r.totalLossCoveredFromRewards, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+
+  console.log(`Insurance balance: ${r.insuranceAssetsAfter.gt(r.insuranceAssetsBefore) ? '+' : ''}${formatUnits(r.insuranceAssetsAfter.sub(r.insuranceAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
 
   console.log(`Rebalances: ${r.rebalances}. Rebalance debts: ${r.rebalancesDebt} (${r.rebalancesDebtDelayed} delayed, ${r.rebalancesDebt - r.rebalancesDebtDelayed - r.rebalancesDebtClosing} forced, ${r.rebalancesDebtClosing} closing).`);
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.startTimestamp *
     1000).toLocaleTimeString('en-US')}. Finish: ${new Date(r.endTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.endTimestamp * 1000).toLocaleTimeString('en-US')}.`);
-  console.log(`Time on fuse trigger: ${periodHuman(r.timeOnFuse)}.`)
-  console.log(`Start price of ${r.tokenBSymbol}: ${formatUnits(r.startPrice, r.vaultAssetDecimals)}. End price: ${formatUnits(
+  console.log(`Time on fuse trigger: ${periodHuman(r.timeOnFuse)} (${Math.round(r.timeOnFuse / (r.endTimestamp - r.startTimestamp) * 1000)/10}%).`)
+  console.log(`Prices in pool: start - ${formatUnits(r.startPrice, r.vaultAssetDecimals)}, end: ${formatUnits(
     r.endPrice,
     r.vaultAssetDecimals,
-  )}. Min price: ${formatUnits(r.minPrice, r.vaultAssetDecimals)}. Max price: ${formatUnits(r.maxPrice, r.vaultAssetDecimals)}.`);
+  )}, min: ${formatUnits(r.minPrice, r.vaultAssetDecimals)}, max: ${formatUnits(r.maxPrice, r.vaultAssetDecimals)}.`);
 
   if (r.disableMints || r.disableBurns) {
     console.log(`Mints: ${!r.disableMints ? 'enabled' : 'disabled'}. Burns: ${!r.disableBurns
@@ -413,7 +422,7 @@ export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = []) 
       : 'disabled'}.`);
   }
 
-  console.log(`Time spent for backtest: ${periodHuman(r.backtestLocalTimeSpent)}.`);
+  console.log(`Time spent for backtest: ${periodHuman(r.backtestLocalTimeSpent)}. Pool transactions: ${r.poolTxs}. Strategy transactions: ${r.rebalances + r.rebalancesDebt + 2}.`);
   console.log('');
 }
 

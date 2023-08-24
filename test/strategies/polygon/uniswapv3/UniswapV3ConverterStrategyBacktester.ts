@@ -36,6 +36,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // before depeg start ts - 1690882487
   const backtestStartBlock = 45764000; // Aug-01-2023 02:55:08 AM +UTC // 45700000; // 7/30/2023 3:31:06 PM
   const backtestEndBlock = 45900000; // Aug-02-2023 12:45:52 AM +UTC - ok tested
+  // const backtestEndBlock = 45780000;
   // const backtestEndBlock = 45990000; // next
   // const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC - fails on ts 1690914072
   const investAmountUnits: string = '100' // 1k USDC, 1k WMATIC etc
@@ -233,6 +234,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
 
     await contracts.strategy.setFuseThresholds(0, fuseThresholds[0].map(a => parseUnits(a)))
     await contracts.strategy.setFuseThresholds(1, fuseThresholds[1].map(a => parseUnits(a)))
+    // console.log('Fuse threshold 0', fuseThresholds[0].map(a => parseUnits(a).toString()))
+    // console.log('Fuse threshold 1', fuseThresholds[1].map(a => parseUnits(a).toString()))
 
     // await contracts.uniswapV3Calee.toggleNoRevert()
   });

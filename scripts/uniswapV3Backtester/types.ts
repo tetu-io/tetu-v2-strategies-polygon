@@ -106,4 +106,5 @@ export interface IBacktestResult {
   forceRebalanceDebtLockedPercent: number;
   rebalanceDebtDelay: number;
   timeOnFuse: number;
+  poolTxs: number;
 }
