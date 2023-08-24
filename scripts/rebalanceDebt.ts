@@ -91,7 +91,8 @@ async function main() {
             if (!(await isStrategyEligibleForNSR(strategyAddress))) {
               continue;
             }
-            console.log('Processing strategy', strategyAddress);
+            const strategyName = await IStrategyV2__factory.connect(strategyAddress, ethers.provider).NAME();
+            console.log('Processing strategy', strategyName, strategyAddress);
 
             const result = await runResolver(
               provider,
@@ -105,9 +106,9 @@ async function main() {
 
             if (result) {
               if (result.canExec) {
-                console.log('Rebalance call', result);
+                console.log('Rebalance call', strategyName, result);
                 if (typeof result.callData === 'string') {
-                  throw Error('wrong callData');
+                  throw Error('wrong callData for ' + strategyName);
                 }
                 const tp = await txParams2();
                 const callData = result.callData as unknown as Web3FunctionResultCallData[];
@@ -120,17 +121,17 @@ async function main() {
                   true, true,
                 );
 
-                console.log('Rebalance success!', strategyAddress);
+                console.log('Rebalance success!', strategyName, strategyAddress);
                 if (argv.rebalanceDebtMsgSuccess) {
-                  await sendMessageToTelegram(`Rebalance success! ${strategyAddress}`);
+                  await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
                 }
 
               } else {
-                console.log('Result can not be executed:', result.message);
+                console.log('Result can not be executed:', strategyName, result.message);
               }
             } else {
-              console.log('Empty result!');
-              await sendMessageToTelegram('Empty result!');
+              console.log('Empty result!', strategyName);
+              await sendMessageToTelegram('Empty result! ' + strategyName);
             }
           } catch (e) {
             console.log('Error inside strategy processing', strategyAddress, e);
