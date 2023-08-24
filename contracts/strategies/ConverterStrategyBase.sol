@@ -34,19 +34,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   struct WithdrawUniversalLocal {
-    bool all;
-    uint depositorLiquidity;
-    uint liquidityAmountToWithdraw;
-    uint assetPrice;
-    uint expectedTotalMainAssetAmount;
-    uint investedAssetsAfterWithdraw;
-    uint balanceAfterWithdraw;
-    address[] tokens;
-    address asset;
-    uint indexAsset;
-    uint balanceBefore;
-    uint[] withdrawnAmounts;
     ITetuConverter converter;
+    /// @notice Target asset that should be received on balance.
+    ///         It's underlying in _withdrawUniversal(), but it can be any other asset in requirePayAmountBack()
+    address asset;
+    /// @notice List of tokens received by _depositorPoolAssets()
+    address[] tokens;
+    /// @notice Index of the {asset} in {tokens}
+    uint indexAsset;
+    /// @notice Initial balance of the [asset}
+    uint balanceBefore;
   }
   //endregion -------------------------------------------------------- DATA TYPES
 
@@ -59,6 +56,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
   uint internal constant GAP_CONVERSION = 1_000;
   uint internal constant DENOMINATOR = 100_000;
+  /// @notice If we need to withdraw A, we always tries to receive on balance A + delta
+  ///         and have at least delta on balance after withdraw to prevent situation when we have debts
+  ///         but don't have any liquidity to pay the debts and receive locked collaterals back
+  ///
+  ///         Delta will be in the range [GAP_WITHDRAW...2 * GAP_WITHDRAW]
+  uint internal constant GAP_WITHDRAW = 1_000;
   //endregion -------------------------------------------------------- CONSTANTS
 
   //region -------------------------------------------------------- VARIABLES
@@ -235,6 +238,63 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
   //endregion -------------------------------------------------------- Convert amounts before deposit
 
+  //region -------------------------------------------------------- Get requested amount
+
+  /// @notice Initialize members of {v}
+  function _initWithdrawUniversalLocal(address asset_, WithdrawUniversalLocal memory v) internal view {
+    v.tokens = _depositorPoolAssets();
+    v.asset = asset_;
+    v.converter = _csbs.converter;
+    v.indexAsset = AppLib.getAssetIndex(v.tokens, asset_);
+    v.balanceBefore = AppLib.balance(asset_);
+  }
+
+  /// @notice Get the specified {amount} of the given {v.asset} on the balance
+  /// @dev Ensures that either all debts are closed, or a non-zero amount remains on the balance or in the pool to pay off the debts
+  /// @param amount_ Required amount of {v.asset}
+  /// @return expectedTotalAssetAmount Expected amount of {v.asset} that should be received on the balance
+  function _makeRequestedAmount(
+    uint amount_,
+    uint investedAssets_,
+    WithdrawUniversalLocal memory v
+  ) internal returns (
+    uint expectedTotalAssetAmount
+  ) {
+    uint depositorLiquidity = _depositorLiquidity();
+
+    // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
+    uint liquidityAmountToWithdraw = ConverterStrategyBaseLib2.getLiquidityAmount(
+      amount_,
+      address(this),
+      v.tokens,
+      v.indexAsset,
+      v.converter,
+      investedAssets_,
+      depositorLiquidity
+    );
+
+    if (liquidityAmountToWithdraw != 0) {
+      uint[] memory withdrawnAmounts = _depositorExit(liquidityAmountToWithdraw);
+      // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
+      // use what exactly was withdrew instead of the expectation
+      // assume that liquidity cannot increase in _depositorExit
+      liquidityAmountToWithdraw = depositorLiquidity - _depositorLiquidity();
+      emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
+    }
+
+    // try to receive at least requested amount of the {v.asset} on the balance
+    return ConverterStrategyBaseLib.makeRequestedAmount(
+      v.tokens,
+      v.indexAsset,
+      v.converter,
+      AppLib._getLiquidator(controller()),
+      (amount_ == type(uint).max ? amount_ : v.balanceBefore + amount_), // current balance + the amount required to be withdrawn on balance
+      liquidationThresholds
+    );
+  }
+
+  //endregion -------------------------------------------------------- Get requested amount
+
   //region -------------------------------------------------------- Withdraw from the pool
 
   function _beforeWithdraw(uint /*amount*/) internal virtual {
@@ -269,65 +329,32 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   }
 
   /// @dev The function is virtual to simplify unit testing
-  /// @param amount Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
+  /// @param amount_ Amount to be trying to withdrawn. Max uint means attempt to withdraw all possible invested assets.
   /// @param earnedByPrices_ Additional amount that should be withdrawn and send to the insurance
   /// @param investedAssets_ Value of invested assets recalculated using current prices
   /// @return expectedWithdrewUSD The value that we should receive after withdrawing in terms of USD value of each asset in the pool
-  /// @return __assetPrice Price of the {asset} taken from the price oracle
+  /// @return assetPrice Price of the {asset} taken from the price oracle
   /// @return strategyLoss Loss before withdrawing: [new-investedAssets - old-investedAssets]
   /// @return amountSentToInsurance Actual amount of underlying sent to the insurance
-  function _withdrawUniversal(uint amount, uint earnedByPrices_, uint investedAssets_) virtual internal returns (
+  function _withdrawUniversal(uint amount_, uint earnedByPrices_, uint investedAssets_) virtual internal returns (
     uint expectedWithdrewUSD,
-    uint __assetPrice,
+    uint assetPrice,
     uint strategyLoss,
     uint amountSentToInsurance
   ) {
+    // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
+    uint amount = amount_ == type(uint).max
+      ? amount_
+      : (amount_ + earnedByPrices_) * (DENOMINATOR + GAP_WITHDRAW) / DENOMINATOR;
     _beforeWithdraw(amount);
 
-    WithdrawUniversalLocal memory v;
-    v.all = amount == type(uint).max;
+    if (amount != 0 && investedAssets_ != 0) {
+      WithdrawUniversalLocal memory v;
+      _initWithdrawUniversalLocal(baseState.asset, v);
 
-    if ((v.all || amount + earnedByPrices_ != 0) && investedAssets_ != 0) {
-      // --- init variables ---
-      v.tokens = _depositorPoolAssets();
-      v.asset = baseState.asset;
-      v.converter = _csbs.converter;
-      v.indexAsset = AppLib.getAssetIndex(v.tokens, v.asset);
-      v.balanceBefore = AppLib.balance(v.asset);
-
-      v.depositorLiquidity = _depositorLiquidity();
-      v.assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.asset);
-      // -----------------------
-
-      // calculate how much liquidity we need to withdraw for getting the requested amount
-      (v.liquidityAmountToWithdraw, ) = ConverterStrategyBaseLib2.getLiquidityAmount(
-        v.all ? 0 : amount + earnedByPrices_,
-        address(this),
-        v.tokens,
-        v.indexAsset,
-        v.converter,
-        investedAssets_,
-        v.depositorLiquidity
-      );
-
-      if (v.liquidityAmountToWithdraw != 0) {
-        v.withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
-        // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
-        // use what exactly was withdrew instead of the expectation
-        // assume that liquidity cannot increase in _depositorExit
-        v.liquidityAmountToWithdraw = v.depositorLiquidity - _depositorLiquidity();
-        emit OnDepositorExit(v.liquidityAmountToWithdraw, v.withdrawnAmounts);
-      }
-
-      // try to receive at least requested amount of the main asset on the balance
-      v.expectedTotalMainAssetAmount = ConverterStrategyBaseLib.makeRequestedAmount(
-        v.tokens,
-        v.indexAsset,
-        v.converter,
-        AppLib._getLiquidator(controller()),
-        (v.all ? amount : v.balanceBefore + amount + earnedByPrices_), // current balance + the amount required to be withdrawn on balance
-        liquidationThresholds
-      );
+      // get at least requested amount of the underlying on the balance
+      assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.asset);
+      expectedWithdrewUSD = _makeRequestedAmount(amount, investedAssets_, v) * assetPrice / 1e18;
 
       if (earnedByPrices_ != 0) {
         (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
@@ -338,23 +365,19 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         );
       }
 
-      v.investedAssetsAfterWithdraw = _updateInvestedAssets();
-      v.balanceAfterWithdraw = AppLib.balance(v.asset);
-
       // we need to compensate difference if during withdraw we lost some assets
       (, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
         investedAssets_ + v.balanceBefore,
-        v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw + amountSentToInsurance
-      );
-
-      return (
-        v.expectedTotalMainAssetAmount * v.assetPrice / 1e18,
-        v.assetPrice,
-        strategyLoss,
-        amountSentToInsurance
+        _updateInvestedAssets() + AppLib.balance(v.asset) + amountSentToInsurance
       );
     }
-    return (0, 0, 0, 0);
+
+    return (
+      expectedWithdrewUSD,
+      assetPrice,
+      strategyLoss,
+      amountSentToInsurance
+    );
   }
 
   /// @notice If pool supports emergency withdraw need to call it for emergencyExit()
@@ -524,58 +547,69 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //region -------------------------------------------------------- ITetuConverterCallback
 
   /// @notice Converters asks to send some amount back.
+  ///         The results depend on whether the required amount is on the balance:
+  ///         1. The {amount_} exists on the balance: send the amount to TetuConverter, return {amount_}
+  ///         2. The {amount_} doesn't exist on the balance. Try to receive the {amount_}.
+  ///         2.1. if the required amount is received: return {amount_}
+  ///         2.2. if less amount X (X < {amount_}) is received return X - gap
+  ///         In the case 2 no amount is send to TetuConverter.
+  ///         Converter should make second call of requirePayAmountBack({amountOut}) to receive the assets.
   /// @param theAsset_ Required asset (either collateral or borrow)
   /// @param amount_ Required amount of the {theAsset_}
-  /// @return amountOut Amount sent to balance of TetuConverter, amountOut <= amount_
-  function requirePayAmountBack(address theAsset_, uint amount_) external pure override returns (uint amountOut) {
-    theAsset_; // hide warning until the code below is not fixed
-    amount_; // hide warning until the code below is not fixed
-    amountOut; // hide warning until the code below is not fixed
+  /// @return amountOut Amount that was send OR can be send next time to the converter
+  function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
+    WithdrawUniversalLocal memory v;
+    _initWithdrawUniversalLocal(theAsset_, v);
 
-    ///////////////////////////////////////////////////////////////////////////////
-    // todo Current implementation doesn't take into account over-collateralization
-    // it's too dangerous to use liquidity from the pool for getting {amount_}
-    // there is a chance to waste
-    revert(AppErrors.NOT_IMPLEMENTED);
-    ///////////////////////////////////////////////////////////////////////////////
+    (uint _investedAssets, uint earnedByPrices) = _fixPriceChanges(true);
+    if (earnedByPrices != 0) {
+      address underlying = baseState.asset;
+      ConverterStrategyBaseLib2.sendToInsurance(
+        underlying,
+        earnedByPrices,
+        baseState.splitter,
+        _investedAssets + (theAsset_ == underlying ? v.balanceBefore : AppLib.balance(underlying))
+      );
+    }
 
+    // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
+    // At first we add only a half of gap.
+    // This is min allowed amount that we should have on balance to be able to send {amount_} to the converter
+    uint amount = amount_ * (DENOMINATOR + GAP_WITHDRAW) / DENOMINATOR;
 
-//    address __converter = address(converter);
-//    require(msg.sender == __converter, StrategyLib2.DENIED);
-//
-//    // detect index of the target asset
-//    (address[] memory tokens, uint indexTheAsset) = _getTokens(theAsset_);
-//    // get amount of target asset available to be sent
-//    uint balance = AppLib.balance(theAsset_);
-//
-//    // withdraw from the pool if not enough
-//    if (balance < amount_) {
-//      // the strategy doesn't have enough target asset on balance
-//      // withdraw all from the pool but don't convert assets to underlying
-//
-//      // we don't close debts here because
-//      // there is a chance to close the debt that is asked by the converter.
-//      // We assume, that the amount is comparatively small
-//      // and it's not possible to drain all liquidity here
-//      uint liquidity = _depositorLiquidity();
-//      if (liquidity != 0) {
-//        uint[] memory withdrawnAmounts = _depositorExit(liquidity);
-//        emit OnDepositorExit(liquidity, withdrawnAmounts);
-//      }
-//    }
-//
-//    amountOut = ConverterStrategyBaseLib.swapToGivenAmountAndSendToConverter(
-//      amount_,
-//      indexTheAsset,
-//      tokens,
-//      __converter,
-//      controller(),
-//      baseState.asset,
-//      liquidationThresholds
-//    );
-//
-//    // update invested assets anyway, even if we suppose it will be called in other places
-//    _updateInvestedAssets();
+    if (v.balanceBefore >= amount) {
+      // the requested amount is available, send it to the converter
+      IERC20(theAsset_).safeTransfer(address(v.converter), amount_);
+      amountOut = amount_;
+    } else {
+      // the requested amount is not available
+      // so, we cannot send anything to converter in this call
+      // try to receive requested amount to balance and receive the amount
+      // that converter should use in next call to receive any assets
+      // we should receive amount + X, where X is in the range (GAP_WITHDRAW, 2 * GAP_WITHDRAW]
+      if (amount != 0 && _investedAssets != 0) {
+        amount = amount_ * (DENOMINATOR + 2 * GAP_WITHDRAW) / DENOMINATOR;
+        // get at least requested amount of {theAsset_} on the balance
+        _makeRequestedAmount(amount, _investedAssets, v);
+
+        uint balanceAfter = AppLib.balance(theAsset_);
+        amountOut = balanceAfter > v.balanceBefore
+          ? balanceAfter - v.balanceBefore
+          : 0;
+        amountOut = v.balanceBefore * DENOMINATOR / (DENOMINATOR + GAP_WITHDRAW);
+      } else {
+        // there are no invested amounts, we can use balance only
+        // but we cannot send all amount, we should keep not zero amount on balance
+        // to avoid situation "opened debts, no liquidity to pay"
+        // as soon as converter asks for payment, we have an opened debt..
+        amountOut = v.balanceBefore * DENOMINATOR / (DENOMINATOR + GAP_WITHDRAW);
+      }
+    }
+
+    // update invested assets anyway, even if we suppose it will be called in other places
+    _updateInvestedAssets();
+
+    return amountOut;
   }
 
   /// @notice TetuConverter calls this function when it sends any amount to user's balance

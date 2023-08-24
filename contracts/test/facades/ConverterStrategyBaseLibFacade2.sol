@@ -33,8 +33,7 @@ contract ConverterStrategyBaseLibFacade2 {
     uint investedAssets,
     uint depositorLiquidity
   ) external returns (
-    uint resultAmount,
-    uint[] memory amountsToConvertOut
+    uint resultAmount
   ) {
     return ConverterStrategyBaseLib2.getLiquidityAmount(
       targetAmount_,

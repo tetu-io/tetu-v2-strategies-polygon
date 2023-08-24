@@ -74,19 +74,14 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
   ///               liquidityAmount = _depositorLiquidity() * {liquidityRatioOut} / 1e18
-  ///         User needs to withdraw {targetAmount_} in main asset.
-  ///         There are two kinds of available liquidity:
+  ///         User needs to withdraw {targetAmount_} in some asset.
+  ///         There are three kinds of available liquidity:
   ///         1) liquidity in the pool - {depositorLiquidity_}
   ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
-  ///         To withdraw {targetAmount_} we need
-  ///         1) Reconvert converted amounts back to main asset
-  ///         2) IF result amount is not necessary - withdraw some liquidity from the pool
-  ///            and also convert it to the main asset.
-  /// @dev This is a writable function with read-only behavior (because of the quote-call)
-  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy; 0 - withdraw all
+  ///         3) Liquidity locked in the debts.
+  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy; type(uint).max - withdraw all
   /// @param strategy_ Address of the strategy
   /// @return resultAmount Amount of liquidity that should be withdrawn from the pool, cannot exceed depositorLiquidity
-  /// @return amountsToConvertOut Amounts of {tokens} that should be converted to the main asset
   function getLiquidityAmount(
     uint targetAmount_,
     address strategy_,
@@ -96,38 +91,32 @@ library ConverterStrategyBaseLib2 {
     uint investedAssets,
     uint depositorLiquidity
   ) external returns (
-    uint resultAmount,
-    uint[] memory amountsToConvertOut
+    uint resultAmount
   ) {
-    bool all = targetAmount_ == 0;
+    bool all = targetAmount_ != type(uint).max;
+    if (! all) {
+      // reduce targetAmount_ on the amounts of not-underlying assets available on the balance
+      uint len = tokens.length;
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        // assume here that the targetAmount_ is already reduced on available balance of the target asset
+        if (indexAsset == i) continue;
 
-    uint len = tokens.length;
-    amountsToConvertOut = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) continue;
+        address token = tokens[i];
+        uint balance = IERC20(token).balanceOf(address(this));
+        if (balance != 0) {
+          // let's estimate collateral that we received back after repaying balance-amount
+          // if the debt is reverse, the amount will be converted using current prices
+          // it's less accurate - in result we will receive more amount than required
+          (uint expectedCollateral,) = converter.quoteRepay(strategy_, tokens[indexAsset], token, balance);  // todo
 
-      address token = tokens[i];
-      uint balance = IERC20(token).balanceOf(address(this));
-      if (balance != 0) {
-        // let's estimate collateral that we received back after repaying balance-amount
-        (uint expectedCollateral,) = converter.quoteRepay(strategy_, tokens[indexAsset], token, balance);
+          targetAmount_ = targetAmount_ > expectedCollateral
+            ? targetAmount_ - expectedCollateral
+            : 0;
 
-        if (all || targetAmount_ != 0) {
-          // We always repay WHOLE available balance-amount even if it gives us much more amount then we need.
-          // We cannot repay a part of it because converter doesn't allow to know
-          // what amount should be repaid to get given amount of collateral.
-          // And it's too dangerous to assume that we can calculate this amount
-          // by reducing balance-amount proportionally to expectedCollateral/targetAmount_
-          amountsToConvertOut[i] = balance;
+          investedAssets = investedAssets > expectedCollateral
+            ? investedAssets - expectedCollateral
+            : 0;
         }
-
-        targetAmount_ = targetAmount_ > expectedCollateral
-          ? targetAmount_ - expectedCollateral
-          : 0;
-
-        investedAssets = investedAssets > expectedCollateral
-          ? investedAssets - expectedCollateral
-          : 0;
       }
     }
 
