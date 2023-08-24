@@ -35,9 +35,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
   // before depeg start ts - 1690882487
   const backtestStartBlock = 45764000; // Aug-01-2023 02:55:08 AM +UTC // 45700000; // 7/30/2023 3:31:06 PM
-  const backtestEndBlock = 45900000; // Aug-02-2023 12:45:52 AM +UTC - ok tested
-  // const backtestEndBlock = 45780000;
-  // const backtestEndBlock = 45990000; // next
+  // const backtestEndBlock = 45900000; // Aug-02-2023 12:45:52 AM +UTC
+  const backtestEndBlock = 45825000;
   // const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC - fails on ts 1690914072
   const investAmountUnits: string = '100' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
@@ -48,8 +47,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
   const forceRebalanceDebtLockedPercent = 20;
   const rebalanceDebtDelay = 360;
   const fuseThresholds = [
-    ['0.9989', '0.9991', '1.0011', '1.0009',],
-    ['0.9989', '0.9991', '1.0011', '1.0009',],
+    ['0.999', '0.9991', '1.001', '1.0009',],
+    ['0.999', '0.9991', '1.001', '1.0009',],
   ]
 
   /*const params = {
@@ -247,7 +246,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       console.log('');
       console.log(`=== Uniswap V3 delta-neutral strategy backtester ===`);
       console.log('');
-      showBacktestResult(backtestResult, fuseThresholds);
+      showBacktestResult(backtestResult, fuseThresholds, backtestStartBlock, backtestEndBlock);
     }
   });
 

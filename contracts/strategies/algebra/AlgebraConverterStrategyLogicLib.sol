@@ -24,7 +24,7 @@ library AlgebraConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
-  event RebalancedDebt(uint loss, uint coveredByRewards);
+  event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
   event AlgebraRewardsClaimed(uint reward, uint bonusReward);
   //endregion ------------------------------------------------ Data types
@@ -625,7 +625,7 @@ library AlgebraConverterStrategyLogicLib {
     if (loss != 0) {
       coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
-    emit RebalancedDebt(loss, coveredByRewards);
+    emit RebalancedDebt(loss, values_[1], coveredByRewards);
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)

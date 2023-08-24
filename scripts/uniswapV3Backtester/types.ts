@@ -101,7 +101,9 @@ export interface IBacktestResult {
   insuranceAssetsAfter: BigNumber;
   totalLossCovered: BigNumber;
   totalLossCoveredFromRewards: BigNumber;
+  totalProfitCovered: BigNumber;
   rebalanceLoss: BigNumber;
+  nsrAndRebalanceDebtLoss: BigNumber;
   allowedLockedPercent: number;
   forceRebalanceDebtLockedPercent: number;
   rebalanceDebtDelay: number;

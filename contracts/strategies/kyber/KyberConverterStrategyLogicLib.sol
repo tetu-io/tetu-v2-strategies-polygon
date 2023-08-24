@@ -24,7 +24,7 @@ library KyberConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
-  event RebalancedDebt(uint loss, uint coveredByRewards);
+  event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event KyberFeesClaimed(uint fee0, uint fee1);
   event KyberRewardsClaimed(uint reward);
   //endregion ------------------------------------------------ Events
@@ -624,7 +624,7 @@ library KyberConverterStrategyLogicLib {
     if (loss != 0) {
       coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
-    emit RebalancedDebt(loss, coveredByRewards);
+    emit RebalancedDebt(loss, values_[1], coveredByRewards);
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
