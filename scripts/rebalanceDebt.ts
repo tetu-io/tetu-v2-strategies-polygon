@@ -91,7 +91,7 @@ async function main() {
             if (!(await isStrategyEligibleForNSR(strategyAddress))) {
               continue;
             }
-            const strategyName = await IStrategyV2__factory.connect(strategyAddress, ethers.provider).NAME();
+            const strategyName = await IStrategyV2__factory.connect(strategyAddress, ethers.provider).strategySpecificName();
             console.log('Processing strategy', strategyName, strategyAddress);
 
             const result = await runResolver(
