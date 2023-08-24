@@ -44,6 +44,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint indexAsset;
     /// @notice Initial balance of the [asset}
     uint balanceBefore;
+    uint indexUnderlying;
   }
   //endregion -------------------------------------------------------- DATA TYPES
 
@@ -241,12 +242,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //region -------------------------------------------------------- Get requested amount
 
   /// @notice Initialize members of {v}
-  function _initWithdrawUniversalLocal(address asset_, WithdrawUniversalLocal memory v) internal view {
+  /// @param underlying true if asset_ is underlying
+  function _initWithdrawUniversalLocal(address asset_, WithdrawUniversalLocal memory v, bool underlying) internal view {
     v.tokens = _depositorPoolAssets();
     v.asset = asset_;
     v.converter = _csbs.converter;
     v.indexAsset = AppLib.getAssetIndex(v.tokens, asset_);
     v.balanceBefore = AppLib.balance(asset_);
+    v.indexUnderlying = underlying ? v.indexAsset : AppLib.getAssetIndex(v.tokens, baseState.asset);
   }
 
   /// @notice Get the specified {amount} of the given {v.asset} on the balance
@@ -265,12 +268,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
     uint liquidityAmountToWithdraw = ConverterStrategyBaseLib2.getLiquidityAmount(
       amount_,
-      address(this),
       v.tokens,
       v.indexAsset,
       v.converter,
       investedAssets_,
-      depositorLiquidity
+      depositorLiquidity,
+      v.indexUnderlying
     );
 
     if (liquidityAmountToWithdraw != 0) {
@@ -350,7 +353,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
 
     if (amount != 0 && investedAssets_ != 0) {
       WithdrawUniversalLocal memory v;
-      _initWithdrawUniversalLocal(baseState.asset, v);
+      _initWithdrawUniversalLocal(baseState.asset, v, true);
 
       // get at least requested amount of the underlying on the balance
       assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.asset);
@@ -559,7 +562,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @return amountOut Amount that was send OR can be send next time to the converter
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
     WithdrawUniversalLocal memory v;
-    _initWithdrawUniversalLocal(theAsset_, v);
+    _initWithdrawUniversalLocal(theAsset_, v, false);
 
     (uint _investedAssets, uint earnedByPrices) = _fixPriceChanges(true);
     if (earnedByPrices != 0) {

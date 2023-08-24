@@ -15,6 +15,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -80,47 +81,54 @@ library ConverterStrategyBaseLib2 {
   ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
   ///         3) Liquidity locked in the debts.
   /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy; type(uint).max - withdraw all
-  /// @param strategy_ Address of the strategy
   /// @return resultAmount Amount of liquidity that should be withdrawn from the pool, cannot exceed depositorLiquidity
   function getLiquidityAmount(
     uint targetAmount_,
-    address strategy_,
     address[] memory tokens,
     uint indexAsset,
     ITetuConverter converter,
     uint investedAssets,
-    uint depositorLiquidity
-  ) external returns (
+    uint depositorLiquidity,
+    uint indexUnderlying
+  ) external view returns (
     uint resultAmount
   ) {
-    bool all = targetAmount_ != type(uint).max;
-    if (! all) {
+    console.log("getLiquidityAmount.investedAssets", investedAssets);
+    console.log("getLiquidityAmount.targetAmount_", targetAmount_);
+    if (targetAmount_ != type(uint).max) {
       // reduce targetAmount_ on the amounts of not-underlying assets available on the balance
       uint len = tokens.length;
+      (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter), tokens, len);
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        console.log("getLiquidityAmount.i", i);
         // assume here that the targetAmount_ is already reduced on available balance of the target asset
         if (indexAsset == i) continue;
 
-        address token = tokens[i];
-        uint balance = IERC20(token).balanceOf(address(this));
-        if (balance != 0) {
-          // let's estimate collateral that we received back after repaying balance-amount
-          // if the debt is reverse, the amount will be converted using current prices
-          // it's less accurate - in result we will receive more amount than required
-          (uint expectedCollateral,) = converter.quoteRepay(strategy_, tokens[indexAsset], token, balance);  // todo
+        uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+        console.log("getLiquidityAmount.tokenBalance", tokenBalance);
+        if (tokenBalance != 0) {
+          uint tokenBalanceInAsset = tokenBalance * prices[i] * decs[indexAsset] / prices[indexAsset] / decs[i];
+          console.log("getLiquidityAmount.tokenBalanceInAsset", tokenBalanceInAsset);
 
-          targetAmount_ = targetAmount_ > expectedCollateral
-            ? targetAmount_ - expectedCollateral
+          targetAmount_ = targetAmount_ > tokenBalanceInAsset
+            ? targetAmount_ - tokenBalanceInAsset
             : 0;
 
-          investedAssets = investedAssets > expectedCollateral
-            ? investedAssets - expectedCollateral
+          console.log("getLiquidityAmount.targetAmount_", targetAmount_);
+          uint tokenBalanceInUnderlying = indexUnderlying == indexAsset
+            ? tokenBalanceInAsset
+            : tokenBalance * prices[i] * decs[indexUnderlying] / prices[indexUnderlying] / decs[i];
+          console.log("getLiquidityAmount.tokenBalanceInUnderlying", tokenBalanceInUnderlying);
+
+          investedAssets = investedAssets > tokenBalanceInUnderlying
+            ? investedAssets - tokenBalanceInUnderlying
             : 0;
+          console.log("getLiquidityAmount.investedAssets", investedAssets);
         }
       }
     }
 
-    uint liquidityRatioOut = all || investedAssets == 0
+    uint liquidityRatioOut = targetAmount_ == type(uint).max || investedAssets == 0
       ? 1e18
       : ((targetAmount_ == 0)
         ? 0
