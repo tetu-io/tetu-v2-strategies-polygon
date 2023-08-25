@@ -593,6 +593,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       if (amount != 0 && _investedAssets != 0) {
         amount = amount_ * (DENOMINATOR + 2 * GAP_WITHDRAW) / DENOMINATOR;
         // get at least requested amount of {theAsset_} on the balance
+
+        // todo reduce amount on the already available balance of theAsset
         _makeRequestedAmount(amount, _investedAssets, v);
 
         uint balanceAfter = AppLib.balance(theAsset_);

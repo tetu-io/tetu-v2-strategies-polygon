@@ -93,12 +93,16 @@ library ConverterStrategyBaseLib2 {
   ) external view returns (
     uint resultAmount
   ) {
+    console.log("getLiquidityAmount.indexAsset", indexAsset);
+    console.log("getLiquidityAmount.indexUnderlying", indexUnderlying);
     console.log("getLiquidityAmount.investedAssets", investedAssets);
     console.log("getLiquidityAmount.targetAmount_", targetAmount_);
     if (targetAmount_ != type(uint).max) {
       // reduce targetAmount_ on the amounts of not-underlying assets available on the balance
       uint len = tokens.length;
       (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter), tokens, len);
+      console.log("getLiquidityAmount.prices", prices[0], prices[1]);
+      console.log("getLiquidityAmount.decs", decs[0], decs[1]);
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         console.log("getLiquidityAmount.i", i);
         // assume here that the targetAmount_ is already reduced on available balance of the target asset
@@ -115,6 +119,7 @@ library ConverterStrategyBaseLib2 {
             : 0;
 
           console.log("getLiquidityAmount.targetAmount_", targetAmount_);
+
           uint tokenBalanceInUnderlying = indexUnderlying == indexAsset
             ? tokenBalanceInAsset
             : tokenBalance * prices[i] * decs[indexUnderlying] / prices[indexUnderlying] / decs[i];
@@ -126,21 +131,23 @@ library ConverterStrategyBaseLib2 {
           console.log("getLiquidityAmount.investedAssets", investedAssets);
         }
       }
+
+      if (indexAsset != indexUnderlying) {
+        // convert targetAmount_ to underlying
+        targetAmount_ =  targetAmount_ * prices[indexAsset] * decs[indexUnderlying] / prices[indexUnderlying] / decs[indexAsset];
+      }
     }
 
     uint liquidityRatioOut = targetAmount_ == type(uint).max || investedAssets == 0
       ? 1e18
       : ((targetAmount_ == 0)
         ? 0
-        : 1e18
-        * 101 // add 1% on top...
-        * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-        / 100 // .. add 1% on top
+        : 1e18 * 101 * targetAmount_ / investedAssets / 100 // a part of amount that we are going to withdraw + 1% on top
       );
 
-    resultAmount = liquidityRatioOut != 0
-      ? Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity)
-      : 0;
+    resultAmount = liquidityRatioOut == 0
+      ? 0
+      : Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity);
   }
 
   /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
