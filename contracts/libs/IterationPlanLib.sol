@@ -445,7 +445,7 @@ library IterationPlanLib {
     uint indexBorrow,
     uint balanceCollateral,
     uint balanceBorrow
-  ) internal pure returns (
+  ) internal view returns (
     uint indexTokenToSwapPlus1,
     uint amountToSwap,
     uint indexRepayTokenPlus1
@@ -480,7 +480,6 @@ library IterationPlanLib {
         }
       }
     }
-
 
     return (indexTokenToSwapPlus1, amountToSwap, indexBorrow + 1);
   }
