@@ -445,7 +445,7 @@ library IterationPlanLib {
     uint indexBorrow,
     uint balanceCollateral,
     uint balanceBorrow
-  ) internal view returns (
+  ) internal pure returns (
     uint indexTokenToSwapPlus1,
     uint amountToSwap,
     uint indexRepayTokenPlus1
