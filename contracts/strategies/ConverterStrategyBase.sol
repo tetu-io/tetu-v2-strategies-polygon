@@ -57,7 +57,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.1";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.2";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
