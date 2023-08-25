@@ -1,9 +1,8 @@
 import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {
   ConverterStrategyBase__factory,
-  IRebalancingV2Strategy__factory,
+  IRebalancingV2Strategy__factory, ISplitter__factory,
   StrategySplitterV2__factory,
-  ISplitter__factory,
   TetuVaultV2__factory
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
@@ -331,6 +330,34 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       await TimeUtils.advanceNBlocks(1);
 
       await HardhatUtils.restoreBlockFromEnv();
+    });
+  });
+
+  describe("SCB-787: hardwork out of gas", () => {
+    const BLOCK = 46728471;
+    const SPLITTER = "0xa31ce671a0069020f7c87ce23f9caaa7274c794c";
+    const SENDER = "0xcc16d636dd05b52ff1d8b9ce09b09bc62b11412b";
+    const STRATEGY = "0x4b8bd2623d7480850e406b9f2960305f44c7adeb";
+
+    let snapshotBefore: string;
+    before(async function () {
+      snapshotBefore = await TimeUtils.snapshot();
+      await HardhatUtils.switchToBlock(BLOCK);
+    });
+
+    after(async function () {
+      await TimeUtils.rollback(snapshotBefore);
+      await HardhatUtils.restoreBlockFromEnv();
+    });
+
+    it("try to reproduce", async () => {
+      const [signer] = await ethers.getSigners();
+      const sender = await DeployerUtilsLocal.impersonate(SENDER);
+      const splitter = StrategySplitterV2__factory.connect(SPLITTER, sender);
+      await splitter.doHardWork();
+
+      await PairBasedStrategyPrepareStateUtils.injectStrategy(sender, SPLITTER, "UniswapV3ConverterStrategy");
+      // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
     });
   });
 });
