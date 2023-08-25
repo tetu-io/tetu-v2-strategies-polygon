@@ -122,15 +122,14 @@ async function main() {
                       }),
                     true, true,
                   );
+                  console.log('Rebalance success!', strategyName, strategyAddress);
+                  if (argv.rebalanceDebtMsgSuccess) {
+                    await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
+                  }
                 }catch (e) {
                   console.log('Error EXECUTE',strategyName, strategyAddress, e);
                   await sendMessageToTelegram(`Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
                 }
-                console.log('Rebalance success!', strategyName, strategyAddress);
-                if (argv.rebalanceDebtMsgSuccess) {
-                  await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
-                }
-
               } else {
                 console.log('Result can not be executed:', strategyName, result.message);
               }
