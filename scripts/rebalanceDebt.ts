@@ -24,6 +24,7 @@ import { subscribeTgBot } from './telegram/tg-subscribe';
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtFuseW3F.ts
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
+const MAX_ERROR_LENGTH = 10000;
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -112,15 +113,19 @@ async function main() {
                 }
                 const tp = await txParams2();
                 const callData = result.callData as unknown as Web3FunctionResultCallData[];
-                await RunHelper.runAndWaitAndSpeedUp(provider, () =>
-                    signer.sendTransaction({
-                      to: callData[0].to,
-                      data: callData[0].data,
-                      ...tp,
-                    }),
-                  true, true,
-                );
-
+                try {
+                  await RunHelper.runAndWaitAndSpeedUp(provider, () =>
+                      signer.sendTransaction({
+                        to: callData[0].to,
+                        data: callData[0].data,
+                        ...tp,
+                      }),
+                    true, true,
+                  );
+                }catch (e) {
+                  console.log('Error EXECUTE',strategyName, strategyAddress, e);
+                  await sendMessageToTelegram(`Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
+                }
                 console.log('Rebalance success!', strategyName, strategyAddress);
                 if (argv.rebalanceDebtMsgSuccess) {
                   await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
@@ -135,13 +140,13 @@ async function main() {
             }
           } catch (e) {
             console.log('Error inside strategy processing', strategyAddress, e);
-            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${e}`);
+            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
           }
         }
       }
     } catch (e) {
       console.log('error in debt rebalance loop', e);
-      await sendMessageToTelegram(`error in debt rebalance loop ${e}`);
+      await sendMessageToTelegram(`error in debt rebalance loop ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
     }
 
     await sleep(argv.rebalanceDebtLoopDelay);
