@@ -557,13 +557,17 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///         2.2. if less amount X (X < {amount_}) is received return X - gap
   ///         In the case 2 no amount is send to TetuConverter.
   ///         Converter should make second call of requirePayAmountBack({amountOut}) to receive the assets.
-  /// @param theAsset_ Required asset (either collateral or borrow)
-  /// @param amount_ Required amount of the {theAsset_}
-  /// @return amountOut Amount that was send OR can be send next time to the converter
+  /// @param theAsset_ Required asset (either collateral or borrow), it can be NOT underlying
+  /// @param amount_ Required amount of {theAsset_}
+  /// @return amountOut Amount that was send OR can be claimed on the next call.
+  ///                   The caller should control own balance to know if the amount was actually send
+  ///                   (because we need compatibility with exist not-NSR strategies)
   function requirePayAmountBack(address theAsset_, uint amount_) external override returns (uint amountOut) {
     WithdrawUniversalLocal memory v;
     _initWithdrawUniversalLocal(theAsset_, v, false);
-
+    require(msg.sender == address(v.converter), StrategyLib.DENIED);
+    require(amount_ != 0, AppErrors.ZERO_VALUE);
+    
     (uint _investedAssets, uint earnedByPrices) = _fixPriceChanges(true);
     if (earnedByPrices != 0) {
       address underlying = baseState.asset;
@@ -576,7 +580,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     }
 
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
-    // At first we add only a half of gap.
+    // At first we add only 1 gap.
     // This is min allowed amount that we should have on balance to be able to send {amount_} to the converter
     uint amount = amount_ * (DENOMINATOR + GAP_WITHDRAW) / DENOMINATOR;
 
@@ -587,15 +591,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     } else {
       // the requested amount is not available
       // so, we cannot send anything to converter in this call
-      // try to receive requested amount to balance and receive the amount
-      // that converter should use in next call to receive any assets
-      // we should receive amount + X, where X is in the range (GAP_WITHDRAW, 2 * GAP_WITHDRAW]
+      // try to receive requested amount to balance
+      // we should receive amount with extra gap, where gap is in the range (GAP_WITHDRAW, 2 * GAP_WITHDRAW]
+      // The caller will be able to claim received amount (w/o extra gap) in the next call
       if (amount != 0 && _investedAssets != 0) {
         amount = amount_ * (DENOMINATOR + 2 * GAP_WITHDRAW) / DENOMINATOR;
         // get at least requested amount of {theAsset_} on the balance
 
-        // todo reduce amount on the already available balance of theAsset
-        _makeRequestedAmount(amount, _investedAssets, v);
+        _makeRequestedAmount(amount - v.balanceBefore, _investedAssets, v);
 
         uint balanceAfter = AppLib.balance(theAsset_);
         amountOut = balanceAfter > v.balanceBefore
@@ -603,10 +606,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           : 0;
         amountOut = v.balanceBefore * DENOMINATOR / (DENOMINATOR + GAP_WITHDRAW);
       } else {
-        // there are no invested amounts, we can use balance only
+        // there are no invested amounts, we can use amount on balance only
         // but we cannot send all amount, we should keep not zero amount on balance
         // to avoid situation "opened debts, no liquidity to pay"
-        // as soon as converter asks for payment, we have an opened debt..
+        // as soon as the converter asks for payment, we still have an opened debt..
         amountOut = v.balanceBefore * DENOMINATOR / (DENOMINATOR + GAP_WITHDRAW);
       }
     }

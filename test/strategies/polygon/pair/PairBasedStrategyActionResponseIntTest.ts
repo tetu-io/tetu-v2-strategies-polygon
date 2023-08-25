@@ -1171,6 +1171,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             expect(stateAfter.strategy.investedAssets).lt(10);
           });
+          describe("withdraw various amounts", () => {
+
+          })
         });
       });
     });

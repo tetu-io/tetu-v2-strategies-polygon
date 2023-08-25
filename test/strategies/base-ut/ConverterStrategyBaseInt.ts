@@ -435,8 +435,7 @@ describe("ConverterStrategyBaseInt", () => {
     });
   });
 
-  // todo enable after SCB-718
-  describe.skip("requirePayAmountBack", () => {
+  describe("requirePayAmountBack", () => {
     interface IMakeRepayTheBorrowResults {
       afterDeposit: IStateNum;
       afterRepay: IStateNum;

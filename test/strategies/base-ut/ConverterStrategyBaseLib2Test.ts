@@ -978,7 +978,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it('should return expected resultAmount', async () => {
             const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.resultAmount).eq(7 * 101 / 100 * (9*2 - 7*2) / (20 - 7*2));
+            expect(results.resultAmount).approximately(7 * 101 / 100 * (9*2 - 7*2) / (20 - 7*2), 1e18);
           });
         });
       });

@@ -186,8 +186,7 @@ describe('ConverterStrategyBaseTest', () => {
 
   //region Unit tests
 
-  // todo enable after SCB-718
-  describe.skip("requirePayAmountBack", () => {
+  describe("requirePayAmountBack", () => {
     interface IRequirePayAmountBackTestResults {
       amountOut: number;
       converterUsdcBalances: number[]; // depositorTokens = [dai, usdc, usdt];

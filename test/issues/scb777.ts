@@ -2,11 +2,8 @@ import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBased
 import {
   ConverterStrategyBase__factory,
   IRebalancingV2Strategy__factory,
-<<<<<<< Updated upstream
   StrategySplitterV2__factory,
-=======
   ISplitter__factory,
->>>>>>> Stashed changes
   TetuVaultV2__factory
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
@@ -19,15 +16,8 @@ import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
-<<<<<<< Updated upstream
 import {StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
-=======
-import {ethers} from "hardhat";
-import {StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
-import {ISplitter__factory} from "../../typechain";
-
->>>>>>> Stashed changes
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("SCB-777: withdrawByAgg, TC-29", () => {
@@ -303,6 +293,42 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
         {mainAssetSymbol: "usdc"},
         true
       );
+
+      await HardhatUtils.restoreBlockFromEnv();
+    });
+  });
+
+  describe("Kyber dai-usdc, decimals", () => {
+    const BLOCK = 46725290;
+    const STRATEGY = "0x8ec9134046740f83bded78d6ddcadaec42fc61b0";
+    const SENDER = "0xddddd5541d5d8c5725765352793c8651a06f5b09";
+
+    let snapshotBefore: string;
+    before(async function () {
+      snapshotBefore = await TimeUtils.snapshot();
+    });
+
+    after(async function () {
+      await TimeUtils.rollback(snapshotBefore);
+    });
+
+    it("try to reproduce", async () => {
+      // await HardhatUtils.switchToBlock(BLOCK_DEPLOYED);
+      await HardhatUtils.switchToBlock(BLOCK - 1);
+      const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+
+      const planEntryData = defaultAbiCoder.encode(
+        ["uint256", "uint256"],
+        [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]
+      );
+
+      const block = (await ethers.provider.getBlock("latest")).number;
+      console.log("block", block);
+
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
+      console.log("quote", quote);
+      await TimeUtils.advanceNBlocks(1);
 
       await HardhatUtils.restoreBlockFromEnv();
     });

@@ -20,9 +20,8 @@ import "hardhat/console.sol";
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
 
-  /////////////////////////////////////////////////////////////////////
-  //region Data types
-  /////////////////////////////////////////////////////////////////////
+//region--------------------------------------------------- Data types
+
   /// @notice Local vars for {_recycle}, workaround for stack too deep
   struct RecycleLocalParams {
     /// @notice Compound amount + Performance amount
@@ -146,11 +145,9 @@ library ConverterStrategyBaseLib {
     uint toInsurance;
     uint[] amountsToForward;
   }
-  //endregion Data types
+//endregion--------------------------------------------------- Data types
 
-  /////////////////////////////////////////////////////////////////////
-  //region Constants
-  /////////////////////////////////////////////////////////////////////
+//region--------------------------------------------------- Constants
 
   /// @notice approx one month for average block time 2 sec
   uint internal constant _LOAN_PERIOD_IN_BLOCKS = 30 days / 2;
@@ -163,11 +160,9 @@ library ConverterStrategyBaseLib {
   /// @notice Allow to swap more then required (i.e. 1_000 => +1%) inside {swapToGivenAmount}
   ///         to avoid additional swap if the swap will return amount a bit less than we expected
   uint internal constant OVERSWAP = PRICE_IMPACT_TOLERANCE + _ASSET_LIQUIDATION_SLIPPAGE;
-  //endregion Constants
+//endregion--------------------------------------------------- Constants
 
-  /////////////////////////////////////////////////////////////////////
-  //region Events
-  /////////////////////////////////////////////////////////////////////
+//region--------------------------------------------------- Events
   /// @notice A borrow was made
   event OpenPosition(
     address converter,
@@ -208,11 +203,9 @@ library ConverterStrategyBaseLib {
     uint toPerf,
     uint toInsurance
   );
-  //endregion Events
+//endregion---------------------------------------------------  Events
 
-  /////////////////////////////////////////////////////////////////////
-  //region Borrow and close positions
-  /////////////////////////////////////////////////////////////////////
+//region--------------------------------------------------- Borrow and close positions
 
   /// @notice Make one or several borrow necessary to supply/borrow required {amountIn_} according to {entryData_}
   ///         Max possible collateral should be approved before calling of this function.
@@ -544,11 +537,9 @@ library ConverterStrategyBaseLib {
   ) {
     return _closePosition(tetuConverter_, collateralAsset, borrowAsset, amountToRepay);
   }
-  //endregion Borrow and close positions
+//endregion--------------------------------------------------- Borrow and close positions
 
-  /////////////////////////////////////////////////////////////////////
-  //region Liquidation
-  /////////////////////////////////////////////////////////////////////
+//region--------------------------------------------------- Liquidation
 
   /// @notice Make liquidation if estimated amountOut exceeds the given threshold
   /// @param liquidationThresholdForTokenIn_ Liquidation threshold for {amountIn_}
@@ -635,191 +626,7 @@ library ConverterStrategyBaseLib {
     require(skipValidation || converter_.isConversionValid(tokenIn_, amountIn_, tokenOut_, receivedAmountOut, slippage_), AppErrors.PRICE_IMPACT);
     emit Liquidation(tokenIn_, tokenOut_, amountIn_, amountIn_, receivedAmountOut);
   }
-  //endregion Liquidation
-
-  /////////////////////////////////////////////////////////////////////
-  //region requirePayAmountBack
-  /////////////////////////////////////////////////////////////////////
-
-  /// @param amount_ Amount of the main asset requested by converter
-  /// @param indexTheAsset Index of the asset required by converter in the {tokens}
-  /// @param asset Main asset or underlying (it can be different from tokens[indexTheAsset])
-  /// @return amountOut Amount of the main asset sent to converter
-  function swapToGivenAmountAndSendToConverter(
-    uint amount_,
-    uint indexTheAsset,
-    address[] memory tokens,
-    address converter,
-    address controller,
-    address asset,
-    mapping(address => uint) storage liquidationThresholds
-  ) external returns (
-    uint amountOut
-  ) {
-    address theAsset = tokens[indexTheAsset];
-    uint[] memory thresholds = _getLiquidationThresholds(liquidationThresholds, tokens, tokens.length);
-
-    // msg.sender == converter; we assume here that it was checked before the call of this function
-    amountOut = IERC20(theAsset).balanceOf(address(this));
-
-    // convert withdrawn assets to the target asset if not enough
-    if (amountOut < amount_) {
-      ConverterStrategyBaseLib.swapToGivenAmount(
-        amount_ - amountOut,
-        tokens,
-        indexTheAsset,
-        asset, // underlying === main asset
-        ITetuConverter(converter),
-        AppLib._getLiquidator(controller),
-        thresholds,
-        OVERSWAP
-      );
-      amountOut = IERC20(theAsset).balanceOf(address(this));
-    }
-
-    // we should send the asset as is even if it is lower than requested
-    // but shouldn't sent more amount than requested
-    amountOut = Math.min(amount_, amountOut);
-    if (amountOut != 0) {
-      IERC20(theAsset).safeTransfer(converter, amountOut);
-    }
-
-    // There are two cases of calling requirePayAmountBack by converter:
-    // 1) close a borrow: we will receive collateral back and amount of investedAssets almost won't change
-    // 2) rebalancing: we have real loss, it will be taken into account at next hard work
-    emit ReturnAssetToConverter(theAsset, amountOut);
-
-    // let's leave any leftovers un-invested, they will be reinvested at next hardwork
-  }
-
-  /// @notice Swap available amounts of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
-  /// @param targetAmount_ Required amount of tokens[indexTheAsset_] that should be received by swap(s)
-  /// @param tokens_ tokens received from {_depositorPoolAssets}
-  /// @param indexTargetAsset_ Index of target asset in tokens_ array
-  /// @param underlying_ Index of underlying
-  /// @param liquidationThresholds_ Liquidation thresholds for the {tokens_}
-  /// @param overswap_ Allow to swap more then required (i.e. 1_000 => +1%)
-  ///                  to avoid additional swap if the swap return amount a bit less than we expected
-  /// @return spentAmounts Any amounts spent during the swaps
-  /// @return receivedAmounts Any amounts received during the swaps
-  function swapToGivenAmount(
-    uint targetAmount_,
-    address[] memory tokens_,
-    uint indexTargetAsset_,
-    address underlying_,
-    ITetuConverter converter_,
-    ITetuLiquidator liquidator_,
-    uint[] memory liquidationThresholds_,
-    uint overswap_
-  ) internal returns (
-    uint[] memory spentAmounts,
-    uint[] memory receivedAmounts
-  ) {
-    SwapToGivenAmountLocal memory v;
-    v.len = tokens_.length;
-
-    v.availableAmounts = new uint[](v.len);
-    for (; v.i < v.len; v.i = AppLib.uncheckedInc(v.i)) {
-      v.availableAmounts[v.i] = IERC20(tokens_[v.i]).balanceOf(address(this));
-    }
-
-    (spentAmounts, receivedAmounts) = _swapToGivenAmount(
-      SwapToGivenAmountInputParams({
-        targetAmount: targetAmount_,
-        tokens: tokens_,
-        indexTargetAsset: indexTargetAsset_,
-        underlying: underlying_,
-        amounts: v.availableAmounts,
-        converter: converter_,
-        liquidator: liquidator_,
-        liquidationThresholds: liquidationThresholds_,
-        overswap: overswap_
-      })
-    );
-  }
-
-  /// @notice Swap available {amounts_} of {tokens_} to receive {targetAmount_} of {tokens[indexTheAsset_]}
-  /// @return spentAmounts Any amounts spent during the swaps
-  /// @return receivedAmounts Any amounts received during the swaps
-  function _swapToGivenAmount(SwapToGivenAmountInputParams memory p) internal returns (
-    uint[] memory spentAmounts,
-    uint[] memory receivedAmounts
-  ) {
-    SwapToGetAmountLocal memory v;
-    v.len = p.tokens.length;
-    receivedAmounts = new uint[](v.len);
-    spentAmounts = new uint[](v.len);
-
-    // calculate prices, decimals
-    (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(p.converter), p.tokens, v.len);
-
-    // we need to swap other assets to the asset
-    // at first we should swap NOT underlying.
-    // if it would be not enough, we can swap underlying too.
-
-    // swap NOT underlying, initialize {indexUnderlying}
-    uint indexUnderlying;
-    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      if (p.underlying == p.tokens[i]) {
-        indexUnderlying = i;
-        continue;
-      }
-      if (p.indexTargetAsset == i) continue;
-
-      (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, i);
-      spentAmounts[i] += spent;
-      receivedAmounts[p.indexTargetAsset] += received;
-
-      if (receivedAmounts[p.indexTargetAsset] >= p.targetAmount) break;
-    }
-
-    // swap underlying
-    if (receivedAmounts[p.indexTargetAsset] < p.targetAmount && p.indexTargetAsset != indexUnderlying) {
-      (uint spent, uint received) = _swapToGetAmount(receivedAmounts[p.indexTargetAsset], p, v, indexUnderlying);
-      spentAmounts[indexUnderlying] += spent;
-      receivedAmounts[p.indexTargetAsset] += received;
-    }
-  }
-
-  /// @notice Swap a part of amount of asset {tokens[indexTokenIn]} to {targetAsset} to get {targetAmount} in result
-  /// @param receivedTargetAmount Already received amount of {targetAsset} in previous swaps
-  /// @param indexTokenIn Index of the tokenIn in p.tokens
-  function _swapToGetAmount(
-    uint receivedTargetAmount,
-    SwapToGivenAmountInputParams memory p,
-    SwapToGetAmountLocal memory v,
-    uint indexTokenIn
-  ) internal returns (
-    uint amountSpent,
-    uint amountReceived
-  ) {
-    if (p.amounts[indexTokenIn] != 0) {
-      // we assume here, that p.targetAmount > receivedTargetAmount, see _swapToGivenAmount implementation
-
-      // calculate amount that should be swapped
-      // {overswap} allows to swap a bit more
-      // to avoid additional swaps if the swap will give us a bit less amount than expected
-      uint amountIn = (
-        (p.targetAmount - receivedTargetAmount)
-        * v.prices[p.indexTargetAsset] * v.decs[indexTokenIn]
-        / v.prices[indexTokenIn] / v.decs[p.indexTargetAsset]
-      ) * (p.overswap + AppLib.DENOMINATOR) / AppLib.DENOMINATOR;
-
-      (amountSpent, amountReceived) = _liquidate(
-        p.converter,
-        p.liquidator,
-        p.tokens[indexTokenIn],
-        p.tokens[p.indexTargetAsset],
-        Math.min(amountIn, p.amounts[indexTokenIn]),
-        _ASSET_LIQUIDATION_SLIPPAGE,
-        p.liquidationThresholds[indexTokenIn],
-        false
-      );
-    }
-
-    return (amountSpent, amountReceived);
-  }
-  //endregion requirePayAmountBack
+//endregion--------------------------------------------------- Liquidation
 
 //region--------------------------------------------------- Recycle rewards
 
@@ -1168,64 +975,6 @@ library ConverterStrategyBaseLib {
     return _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
   }
   //endregion-------------------------------------------- Make requested amount
-
-//region ------------------------------------------------ Withdraw helpers
-
-  /// @notice Convert {amountsToConvert_} (available on balance) to the main asset
-  ///         Swap leftovers if any.
-  ///         Result amount can be less than requested one, we don't try to close any other debts here
-  /// @param liquidationThreshold_ Min allowed amount of main asset to be liquidated in {liquidator} for {tokens}
-  /// @param amountsToConvert Amounts to convert, the order of asset is same as in {tokens}
-  /// @return collateralOut Total amount of main asset returned after closing positions
-  /// @return repaidAmountsOut What amounts were spent in exchange of the {collateralOut}
-  function _convertAfterWithdraw(
-    DataSetLocal memory d_,
-    uint[] memory liquidationThreshold_,
-    uint[] memory amountsToConvert
-  ) internal returns (
-    uint collateralOut,
-    uint[] memory repaidAmountsOut
-  ) {
-    ConvertAfterWithdrawLocal memory v;
-    v.asset = d_.tokens[d_.indexAsset];
-    v.balanceBefore = IERC20(v.asset).balanceOf(address(this));
-    v.len = d_.tokens.length;
-
-    // Close positions to convert all required amountsToConvert
-    repaidAmountsOut = new uint[](d_.tokens.length);
-    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      if (i == d_.indexAsset || amountsToConvert[i] == 0) continue;
-      (, repaidAmountsOut[i]) = _closePosition(d_.converter, v.asset, d_.tokens[i], amountsToConvert[i]);
-    }
-
-    // Manually swap remain leftovers
-    for (uint i; i < v.len; i = AppLib.uncheckedInc(i)) {
-      if (i == d_.indexAsset || amountsToConvert[i] == 0) continue;
-      if (amountsToConvert[i] > repaidAmountsOut[i]) {
-        (v.spent, v.received) = _liquidate(
-          d_.converter,
-          d_.liquidator,
-          d_.tokens[i],
-          v.asset,
-          amountsToConvert[i] - repaidAmountsOut[i],
-          _ASSET_LIQUIDATION_SLIPPAGE,
-          liquidationThreshold_[i],
-          false
-        );
-        collateralOut += v.received;
-        repaidAmountsOut[i] += v.spent;
-      }
-    }
-
-    // Calculate amount of received collateral
-    v.balance = IERC20(v.asset).balanceOf(address(this));
-    collateralOut = v.balance > v.balanceBefore
-      ? v.balance - v.balanceBefore
-      : 0;
-
-    return (collateralOut, repaidAmountsOut);
-  }
-//endregion ------------------------------------------------ convertAfterWithdraw
 
 //region ------------------------------------------------ Close position
   /// @notice Close debts (if it's allowed) in converter until we don't have {requestedAmount} on balance
