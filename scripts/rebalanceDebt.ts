@@ -24,6 +24,7 @@ import { subscribeTgBot } from './telegram/tg-subscribe';
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtFuseW3F.ts
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
+const MAX_ERROR_LENGTH = 1000;
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -91,7 +92,8 @@ async function main() {
             if (!(await isStrategyEligibleForNSR(strategyAddress))) {
               continue;
             }
-            console.log('Processing strategy', strategyAddress);
+            const strategyName = await IStrategyV2__factory.connect(strategyAddress, ethers.provider).strategySpecificName();
+            console.log('Processing strategy', strategyName, strategyAddress);
 
             const result = await runResolver(
               provider,
@@ -105,42 +107,45 @@ async function main() {
 
             if (result) {
               if (result.canExec) {
-                console.log('Rebalance call', result);
+                console.log('Rebalance call', strategyName, result);
                 if (typeof result.callData === 'string') {
-                  throw Error('wrong callData');
+                  throw Error('wrong callData for ' + strategyName);
                 }
                 const tp = await txParams2();
                 const callData = result.callData as unknown as Web3FunctionResultCallData[];
-                await RunHelper.runAndWaitAndSpeedUp(provider, () =>
-                    signer.sendTransaction({
-                      to: callData[0].to,
-                      data: callData[0].data,
-                      ...tp,
-                    }),
-                  true, true,
-                );
-
-                console.log('Rebalance success!', strategyAddress);
-                if (argv.rebalanceDebtMsgSuccess) {
-                  await sendMessageToTelegram(`Rebalance success! ${strategyAddress}`);
+                try {
+                  await RunHelper.runAndWaitAndSpeedUp(provider, () =>
+                      signer.sendTransaction({
+                        to: callData[0].to,
+                        data: callData[0].data,
+                        ...tp,
+                      }),
+                    true, true,
+                  );
+                  console.log('Rebalance success!', strategyName, strategyAddress);
+                  if (argv.rebalanceDebtMsgSuccess) {
+                    await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
+                  }
+                }catch (e) {
+                  console.log('Error EXECUTE',strategyName, strategyAddress, e);
+                  await sendMessageToTelegram(`Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
                 }
-
               } else {
-                console.log('Result can not be executed:', result.message);
+                console.log('Result can not be executed:', strategyName, result.message);
               }
             } else {
-              console.log('Empty result!');
-              await sendMessageToTelegram('Empty result!');
+              console.log('Empty result!', strategyName);
+              await sendMessageToTelegram('Empty result! ' + strategyName);
             }
           } catch (e) {
             console.log('Error inside strategy processing', strategyAddress, e);
-            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${e}`);
+            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
           }
         }
       }
     } catch (e) {
       console.log('error in debt rebalance loop', e);
-      await sendMessageToTelegram(`error in debt rebalance loop ${e}`);
+      await sendMessageToTelegram(`error in debt rebalance loop ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
     }
 
     await sleep(argv.rebalanceDebtLoopDelay);

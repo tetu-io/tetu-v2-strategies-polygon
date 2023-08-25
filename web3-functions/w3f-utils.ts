@@ -90,11 +90,14 @@ async function quoteOneInch(
 async function quoteOpenOcean(
   inTokenAddress: string,
   outTokenAddress: string,
-  amount: string,
+  amountWithDecimals: BigNumber,
   account: string,
   chainId: number,
+  provider: StaticJsonRpcProvider,
   fetchFunc: (url: string) => Promise<unknown>,
 ): Promise<IAggQuote | undefined> {
+
+  const amount = formatUnits(amountWithDecimals, await (new Contract(inTokenAddress, ERC20_ABI, provider)).decimals());
 
   const chainName = openOceanChains.get(chainId) ?? 'unknown chain';
   const params = {
@@ -215,8 +218,10 @@ export async function runResolver(
     );
 
   const quote = await strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+  const tokenToSwap = quote[0];
+  const amountToSwap = quote[1];
 
-  if (quote[1].toString() === '0') {
+  if (amountToSwap.toString() === '0') {
     if (!isFuseTriggered) {
       return {
         canExec: false,
@@ -232,7 +237,7 @@ export async function runResolver(
             data: strategy.interface.encodeFunctionData(
               'withdrawByAggStep',
               [
-                quote[0],
+                tokenToSwap,
                 AGG_ONEINCH_V5,
                 0,
                 '0x00',
@@ -248,13 +253,13 @@ export async function runResolver(
 
   const tokens = defaultState[0];
 
-  const aToB = quote[0] === tokens[0];
+  const aToB = tokenToSwap === tokens[0];
 
   if (agg === '1inch') {
     const aggQuote = await quoteOneInch(
       aToB ? tokens[0] : tokens[1],
       aToB ? tokens[1] : tokens[0],
-      quote[1].toString(),
+      amountToSwap.toString(),
       strategyAddress,
       chainId,
       fetchFunc,
@@ -271,7 +276,7 @@ export async function runResolver(
               [
                 aToB ? tokens[0] : tokens[1],
                 aggQuote.to,
-                quote[1],
+                amountToSwap,
                 aggQuote.data,
                 planEntryData,
                 isFuseTriggered ? 0 : 1,
@@ -282,14 +287,13 @@ export async function runResolver(
       };
     }
   } else if (agg === 'openocean') {
-    const tokenIn = new Contract(quote[0] ? tokens[0] : tokens[1], ERC20_ABI, provider);
-    const decimals = await tokenIn.decimals();
     const aggQuote = await quoteOpenOcean(
       aToB ? tokens[0] : tokens[1],
       aToB ? tokens[1] : tokens[0],
-      formatUnits(quote[1], decimals),
+      amountToSwap,
       strategyAddress,
       chainId,
+      provider,
       fetchFunc,
     );
     if (aggQuote) {
@@ -303,7 +307,7 @@ export async function runResolver(
               [
                 aToB ? tokens[0] : tokens[1],
                 aggQuote.to,
-                quote[1],
+                tokenToSwap,
                 aggQuote.data,
                 planEntryData,
                 isFuseTriggered ? 0 : 1,
@@ -314,14 +318,14 @@ export async function runResolver(
       };
     }
   } else {
-    const tokenIn = new Contract(quote[0] ? tokens[0] : tokens[1], ERC20_ABI, provider);
+    const tokenIn = new Contract(tokenToSwap ? tokens[0] : tokens[1], ERC20_ABI, provider);
     const decimals = await tokenIn.decimals();
 
     const aggQuotes = await Promise.all([
       quoteOneInch(
         aToB ? tokens[0] : tokens[1],
         aToB ? tokens[1] : tokens[0],
-        quote[1].toString(),
+        amountToSwap.toString(),
         strategyAddress,
         chainId,
         fetchFunc,
@@ -330,9 +334,10 @@ export async function runResolver(
       quoteOpenOcean(
         aToB ? tokens[0] : tokens[1],
         aToB ? tokens[1] : tokens[0],
-        formatUnits(quote[1], decimals),
+        amountToSwap,
         strategyAddress,
         chainId,
+        provider,
         fetchFunc,
       ),
     ]);
@@ -353,7 +358,7 @@ export async function runResolver(
               [
                 aToB ? tokens[0] : tokens[1],
                 to,
-                quote[1],
+                amountToSwap,
                 data,
                 planEntryData,
                 isFuseTriggered ? 0 : 1,
