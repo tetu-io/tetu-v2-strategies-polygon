@@ -24,7 +24,7 @@ import { subscribeTgBot } from './telegram/tg-subscribe';
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtFuseW3F.ts
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
-const MAX_ERROR_LENGTH = 10000;
+const MAX_ERROR_LENGTH = 1000;
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
