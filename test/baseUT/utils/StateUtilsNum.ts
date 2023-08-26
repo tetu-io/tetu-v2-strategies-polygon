@@ -3,22 +3,7 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre from "hardhat";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {writeFileSync} from "fs";
-import {
-  AlgebraConverterStrategy__factory, AlgebraLib,
-  BalancerBoostedStrategy__factory, BorrowManager,
-  ConverterStrategyBase, ConverterStrategyBase__factory,
-  IBalancerGauge__factory, IBorrowManager,
-  IBorrowManager__factory,
-  IConverterController__factory,
-  IERC20__factory,
-  IERC20Metadata__factory,
-  IPoolAdapter__factory, IPriceOracle,
-  IPriceOracle__factory, IRebalancingV2Strategy, IRebalancingV2Strategy__factory,
-  ISplitter__factory, ITetuConverter,
-  ITetuConverter__factory, IUniswapV3Pool__factory, KyberConverterStrategy__factory, KyberLib,
-  TetuVaultV2,
-  UniswapV3ConverterStrategy__factory, UniswapV3Lib
-} from "../../../typechain";
+import {AlgebraConverterStrategy__factory, AlgebraLib, BalancerBoostedStrategy__factory, ConverterStrategyBase, ConverterStrategyBase__factory, IBalancerGauge__factory, IBorrowManager, IBorrowManager__factory, IConverterController__factory, IERC20Metadata__factory, IPoolAdapter__factory, IPriceOracle, IPriceOracle__factory, IRebalancingV2Strategy, ISplitter__factory, ITetuConverter, ITetuConverter__factory, IUniswapV3Pool__factory, KyberConverterStrategy__factory, KyberLib, TetuVaultV2, UniswapV3ConverterStrategy__factory, UniswapV3Lib} from "../../../typechain";
 import {MockHelper} from "../helpers/MockHelper";
 import {writeFileSyncRestoreFolder} from "./FileUtils";
 import {ConverterAdaptersHelper} from "../converter/ConverterAdaptersHelper";
@@ -26,7 +11,7 @@ import {BigNumber} from "ethers";
 import {PackedData} from "./PackedData";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
 import {PairStrategyLiquidityUtils} from "../strategies/PairStrategyLiquidityUtils";
-import {IRebalanceEvents} from "../strategies/NoSwapRebalanceEvents";
+import {CaptureEvents, IEventsSet, ISummaryFromEventsSet} from "../strategies/CaptureEvents";
 
 export interface ILiquidityAmountInTick {
   amountTokenA: number;
@@ -144,13 +129,7 @@ export interface IStateNum {
 
   univ3?: IUniv3SpecificState
   univ3Pool?: IUniv3Pool;
-  rebalanced?: {
-    loss: number;
-    covered: number;
-    uncoveredLoss: number;
-    notEnoughInsuranceLoss: number;
-  }
-  fixPriceChanges?: IFixPricesChangesEventInfo;
+  events?: ISummaryFromEventsSet;
 }
 
 export interface IStateParams {
@@ -162,8 +141,7 @@ export interface IFixPricesChangesEventInfo {
   assetAfter: number;
 }
 export interface IGetStateParams {
-  fixChangePrices?: IFixPricesChangesEventInfo[];
-  rebalanced?: IRebalanceEvents;
+  eventsSet?: IEventsSet;
   lib?: KyberLib | UniswapV3Lib | AlgebraLib;
 }
 
@@ -437,22 +415,7 @@ export class StateUtilsNum {
       univ3: univ3SpecificState,
       univ3Pool,
 
-      rebalanced: p?.rebalanced
-        ? {
-          loss: +formatUnits(p.rebalanced.loss, assetDecimals),
-          covered: +formatUnits(p.rebalanced.covered, assetDecimals),
-          uncoveredLoss: +formatUnits(p.rebalanced.uncoveredLoss, assetDecimals),
-          notEnoughInsuranceLoss: +formatUnits(p.rebalanced.notEnoughInsuranceLoss, assetDecimals),
-        }
-        : {
-          loss: 0,
-          covered: 0,
-          uncoveredLoss: 0,
-          notEnoughInsuranceLoss: 0,
-        },
-      fixPriceChanges: p?.fixChangePrices
-        ? p?.fixChangePrices[0]
-        : undefined
+      events: CaptureEvents.getSummaryFromEventsSet(p?.eventsSet),
     }
 
     // console.log(dest)
@@ -636,10 +599,16 @@ export class StateUtilsNum {
       'fuseStatusB',
       'withdrawDone',
 
-      'rebalanced.loss',
-      'rebalanced.covered',
-      'rebalanced.uncovered',
-      'rebalanced.notEnoughInsuranceLoss',
+      'events.lossSplitter',
+      'events.lossCoveredVault',
+      'events.lossUncoveredCutByMax',
+      'events.unsentAmountToInsurance',
+      'events.lossUncoveredNotEnoughInsurance',
+      'events.toPerfRecycle',
+      'events.toInsuranceRecycle',
+      'events.coveredByRewardsRebalance',
+      'events.profitToCoverRebalance',
+      'events.lossRebalance',
 
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
@@ -728,13 +697,19 @@ export class StateUtilsNum {
       item.fuseStatusB,
       item.withdrawDone,
 
-      item.rebalanced?.loss,
-      item.rebalanced?.covered,
-      item.rebalanced?.uncoveredLoss,
-      item.rebalanced?.notEnoughInsuranceLoss,
+      item.events?.lossSplitter,
+      item.events?.lossCoveredVault,
+      item.events?.lossUncoveredCutByMax,
+      item.events?.unsentAmountToInsurance,
+      item.events?.lossUncoveredNotEnoughInsurance,
+      item.events?.toPerfRecycle,
+      item.events?.toInsuranceRecycle,
+      item.events?.coveredByRewardsRebalance,
+      item.events?.profitToCoverRebalance,
+      item.events?.lossRebalance,
 
-      item.fixPriceChanges?.assetBefore,
-      item.fixPriceChanges?.assetAfter,
+      item.events?.investedAssetsBeforeFixPriceChanges,
+      item.events?.investedAssetsAfterFixPriceChanges,
 
       item.pairCurrentTick?.amountTokenA,
       item.pairCurrentTick?.amountTokenB,

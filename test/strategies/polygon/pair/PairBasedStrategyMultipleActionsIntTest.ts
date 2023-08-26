@@ -24,8 +24,9 @@ import {
   ISwapper__factory
 } from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {IGetStateParams, IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
+import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -138,12 +139,12 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
               // deposit
               for (let j = i + 1; j < users.length; ++j) {
-                const signer = users[i];
+                const user = users[i];
                 const amount = parseUnits(amounts[j], 6);
                 // i-th user deposits j-th amount
-                await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-                await TokenUtils.getToken(b.asset, signer.address, amount);
-                await b.vault.connect(signer).deposit(amount, signer.address, {gasLimit: 19_000_000});
+                await IERC20__factory.connect(b.asset, user).approve(b.vault.address, Misc.MAX_UINT);
+                await TokenUtils.getToken(b.asset, user.address, amount);
+                await b.vault.connect(user).deposit(amount, user.address, {gasLimit: 19_000_000});
                 deposits[i] += +formatUnits(amount, 6);
 
                 await movePrices(b, i % 2 === 0, (i + 1) / 10);
@@ -155,14 +156,14 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
               // withdraw
               for (let j = i + 1; j < users.length; ++j) {
-                const signer = users[j];
+                const user = users[j];
                 const amount = parseUnits(amounts[i], 6);
                 // j-th user withdraws i-th amount
-                const maxAmount = await b.vault.connect(signer).maxWithdraw(signer.address);
-                await b.vault.connect(signer).withdraw(
+                const maxAmount = await b.vault.connect(user).maxWithdraw(user.address);
+                await b.vault.connect(user).withdraw(
                     maxAmount.lt(amount) ? maxAmount : amount,
-                    signer.address,
-                    signer.address,
+                    user.address,
+                    user.address,
                     {gasLimit: 19_000_000}
                 );
                 await movePrices(b, i % 2 === 0, (i + 1) / 10);
@@ -175,10 +176,10 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
             // withdraw-all
             for (let i = 0; i < users.length; ++i) {
-              const signer = users[i];
-              const maxAmount = await b.vault.connect(signer).maxWithdraw(signer.address);
+              const user = users[i];
+              const maxAmount = await b.vault.connect(user).maxWithdraw(user.address);
               if (maxAmount.gt(0)) {
-                await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+                await b.vault.connect(user).withdrawAll({gasLimit: 19_000_000});
               }
 
               await movePrices(b, i % 2 === 0, (i + 1) / 10);
@@ -187,7 +188,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
               }
 
               balances[i] = +formatUnits(
-                await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(signer.address),
+                await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, user).balanceOf(user.address),
                 6
               );
             }
@@ -221,6 +222,10 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
       strategy2: IRebalancingV2Strategy;
     }
 
+    /**
+     * Initialize two instances of Univ3 strategy, add both to the splitter.
+     * Prepare initial balances of both users.
+     */
     async function prepareStrategy(): Promise<IPrepareResults> {
       const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(PLATFORM_UNIV3, signer, signer2);
 
@@ -248,7 +253,8 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
       await b.splitter.connect(b.gov).addStrategies([strategy2.address], [0]);
 
       await ConverterUtils.whitelist([strategy2.address]);
-      await ISetupPairBasedStrategy__factory.connect(strategy2.address, b.operator).setStrategyProfitHolder(defaultState.profitHolder);
+      const profitHolder2 = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy2.address, [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.dQUICK_TOKEN, MaticAddresses.WMATIC_TOKEN,])
+      await ISetupPairBasedStrategy__factory.connect(strategy2.address, b.operator).setStrategyProfitHolder(profitHolder2.address);
 
       // set strategy capacities
       await b.splitter.setStrategyCapacity(b.strategy.address, parseUnits(CAPACITY_1, 6));
@@ -274,8 +280,10 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
       const strategies = [b.strategy, b.strategy2];
       const users = [signer, signer2];
 
-      const pathOut = "./tmp/two-univ3-loop.csv"
+      const pathOut1 = "./tmp/two-univ3-loop-strategy1.csv"
+      const pathOut2 = "./tmp/two-univ3-loop-strategy2.csv"
       const states: IStateNum[] = [];
+      const states2: IStateNum[] = [];
 
       const state = await PackedData.getDefaultState(b.strategy);
       console.log("state", state);
@@ -285,14 +293,21 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
       const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
       const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+      const converterStrategyBase2 = ConverterStrategyBase__factory.connect(b.strategy2.address, signer);
+
+      const registerStates = async function (name: string, p?: IGetStateParams) {
+        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, name, p));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut1, states, b.stateParams, true);
+
+        states2.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase2, b.vault, name, p));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut2, states2, b.stateParams, true);
+      }
 
       const platformVoter = await DeployerUtilsLocal.impersonate(
           await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
       );
       await converterStrategyBase.connect(platformVoter).setCompoundRatio(50000);
-
-      states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "init"));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+      await registerStates("init");
 
       let lastDirectionUp = false
       for (let i = 0; i < COUNT_CYCLES; i++) {
@@ -302,27 +317,25 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
         if (i % 3) {
           const movePricesUp = !lastDirectionUp;
-          await PairBasedStrategyPrepareStateUtils.movePriceBySteps(signer, b, movePricesUp, state, swapAssetValueForPriceMove);
-          lastDirectionUp = !lastDirectionUp
-          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "p"));
-          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+          await PairBasedStrategyPrepareStateUtils.movePriceBySteps(signer3, b, movePricesUp, state, swapAssetValueForPriceMove);
+          lastDirectionUp = !lastDirectionUp;
+          await registerStates("p");
         }
 
         for (const strategy of strategies) {
           if (await strategy.needRebalance()) {
-            console.log('Rebalance..')
-            await strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
-            states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "r"));
-            await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            console.log('Rebalance..');
+            const eventsSet = await CaptureEvents.makeRebalanceNoSwap(strategy);
+            await registerStates("r", {eventsSet});
           }
         }
 
         if (i % 5) {
           for (const strategy of strategies) {
             console.log('Hardwork..')
-            await ConverterStrategyBase__factory.connect(strategy.address, signer).connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
-            states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "h"));
-            await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            const eventsSet = await CaptureEvents.makeHardwork(ConverterStrategyBase__factory.connect(strategy.address, signer).connect(splitterSigner));
+            // await ConverterStrategyBase__factory.connect(strategy.address, signer).connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
+            await registerStates("h", {eventsSet});
           }
         }
 
@@ -330,28 +343,30 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
           const amountOnBalance = await IERC20__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(users[iuser].address);
           switch (i % 4 + iuser) {
             case 0:
-            case 2:
+            case 2: {
               console.log(`User ${iuser} deposits..`, +formatUnits(amountOnBalance, 6));
               const amountToDeposit = i % 2 === (iuser === 0 ? 0 : 2)
                 ? amountOnBalance.div(2)
                 : amountOnBalance.mul(5).div(6);
-              await b.vault.connect(users[iuser]).deposit(amountToDeposit, users[iuser].address, {gasLimit: 19_000_000});
-              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `d${iuser}`));
-              await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+              const eventsSet = await CaptureEvents.makeDeposit(b.vault.connect(users[iuser]), PLATFORM_UNIV3, amountToDeposit);
+              // await b.vault.connect(users[iuser]).deposit(amountToDeposit, users[iuser].address, {gasLimit: 19_000_000});
+              await registerStates(`d${iuser}`, {eventsSet});
               break;
+            }
             case 3:
-            case 4:
+            case 4: {
               console.log(`User ${iuser} withdraws..`);
               const amountToWithdraw = i % 2 === (iuser === 0 ? 0 : 2)
                 ? amountOnBalance.div(3)
                 : amountOnBalance.mul(2).div(3);
               const balBefore = await TokenUtils.balanceOf(state.tokenA, users[iuser].address);
               await b.vault.connect(users[iuser]).requestWithdraw();
-              await b.vault.connect(users[iuser]).withdraw(amountToWithdraw, users[iuser].address, users[iuser].address, {gasLimit: 19_000_000})
+              // await b.vault.connect(users[iuser]).withdraw(amountToWithdraw, users[iuser].address, users[iuser].address, {gasLimit: 19_000_000})
+              const eventsSet = await CaptureEvents.makeWithdraw(b.vault.connect(users[iuser]), PLATFORM_UNIV3, amountToWithdraw);
               const balAfter = await TokenUtils.balanceOf(state.tokenA, users[iuser].address)
               console.log(`To withdraw: ${amountToWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
-              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w${iuser}`));
-              await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+              await registerStates(`w${iuser}`, {eventsSet});
+            }
           }
         }
       }
@@ -359,10 +374,10 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
       for (let iuser = 0; iuser < 2; ++iuser) {
         await b.vault.connect(users[iuser]).requestWithdraw();
         console.log(`withdrawAll as ${iuser}...`);
-        await b.vault.connect(users[iuser]).withdrawAll({gasLimit: 19_000_000});
+        const eventsSet = await CaptureEvents.makeWithdrawAll(b.vault.connect(users[iuser]), PLATFORM_UNIV3);
+        // await b.vault.connect(users[iuser]).withdrawAll({gasLimit: 19_000_000});
 
-        states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `wa${iuser}`));
-        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+        await registerStates(`wa${iuser}`, {eventsSet});
       }
     });
   });

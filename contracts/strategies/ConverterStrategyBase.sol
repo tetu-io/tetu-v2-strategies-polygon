@@ -57,7 +57,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.1";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.2";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -170,8 +170,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     bool needToDeposit = amountToDeposit > _csbs.reinvestThresholdPercent * investedAssets_ / DENOMINATOR;
     uint balanceBefore = AppLib.balance(_asset);
 
-    // send earned-by-prices to the insurance
-    if (earnedByPrices_ != 0) {
+    // send earned-by-prices to the insurance, ignore dust values
+    if (earnedByPrices_ > AppLib._getLiquidationThreshold(liquidationThresholds[_asset])) {
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
         (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
       } else {

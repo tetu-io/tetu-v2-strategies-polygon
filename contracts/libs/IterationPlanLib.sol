@@ -481,7 +481,6 @@ library IterationPlanLib {
       }
     }
 
-
     return (indexTokenToSwapPlus1, amountToSwap, indexBorrow + 1);
   }
 

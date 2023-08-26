@@ -3041,8 +3041,8 @@ describe('ConverterStrategyBaseTest', () => {
         console.log(ret);
         expect(ret.strategyLoss).not.eq(0);
       });
-
     });
+
     describe("amountToDeposit <= threshold", () => {
       describe("earnedByPrices == 0 (no changes)", () => {
         let snapshotLocal: string;
@@ -3061,6 +3061,39 @@ describe('ConverterStrategyBaseTest', () => {
             investedAssets: "1000000",
 
             reinvestThresholdPercent: 2
+          });
+        }
+
+        it("should send zero amount to insurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.insuranceBalance).eq(0);
+        });
+        it("should return zero amountSentToInsurance", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.amountSentToInsurance).eq(0);
+        });
+        it("should return zero strategy loss", async () => {
+          const ret = await loadFixture(makeDepositToPoolTest);
+          expect(ret.strategyLoss).eq(0);
+        });
+      });
+      describe("earnedByPrices has dust value (no changes)", () => {
+        let snapshotLocal: string;
+        before(async function() {
+          snapshotLocal = await TimeUtils.snapshot();
+        });
+        after(async function() {
+          await TimeUtils.rollback(snapshotLocal);
+        });
+        async function makeDepositToPoolTest(): Promise<IDepositToPoolUniResults> {
+          return makeDepositToPool({
+            amount: "1",
+            earnedByPrices: "0.09", // DEFAULT_LIQUIDATION_THRESHOLD = 100_000
+            initialBalances: ["0", "712", "0"], // dai, usdc, usdt // 10 = initial amount, 702 - amount to deposit
+
+            investedAssets: "1000000",
+
+            reinvestThresholdPercent: 2,
           });
         }
 

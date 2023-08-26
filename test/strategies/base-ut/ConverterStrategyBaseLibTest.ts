@@ -1174,11 +1174,12 @@ describe('ConverterStrategyBaseLibTest', () => {
             /**
              * Initially: 1010 dai, 400 usdc, debt (2000 dai borrowed under 3000 usdc)
              * Convert 1010 dai to 1010 usdc
+             * Now we have 1410 usdc, less than required 1411. Make next swap-repay
              * Convert 1010+400 usdc to 2115 dai
              * Convert 2115 dai to 2115 usdc
              */
             return makeClosePositionToGetRequestedAmountTest({
-              requestedAmount: "500", // usdc
+              requestedAmount: "1411", // usdc
               tokens: [usdc, dai],
               indexAsset: 0,
               balances: ["400", "1010"], // usdc, dai
@@ -1219,6 +1220,46 @@ describe('ConverterStrategyBaseLibTest', () => {
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
             expect(r.balances.join()).eq([2115, 0].join()); // 2880 + 2000 - 1010
+          });
+        });
+        describe("SCB-787: swap1, repay1, swap2, stop (required amount of USDC is received)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeClosePositionToGetRequestedAmountFixture(): Promise<IClosePositionToGetRequestedAmountResults> {
+            return makeClosePositionToGetRequestedAmountTest({
+              requestedAmount: "0.001789", // usdc
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["0.000484", "0.001279"], // usdc, dai
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0.001", "0.001"],
+              liquidations: [
+                {tokenIn: usdt, tokenOut: usdc, amountIn: "0.001279", amountOut: "0.001277"},
+                {tokenIn: usdt, tokenOut: usdc, amountIn: "0.002132", amountOut: "0.002130"},
+              ],
+              quoteRepays: [
+                {collateralAsset: usdt, borrowAsset: usdc, amountRepay: "0.001761", collateralAmountOut: "0.002132"},
+              ],
+              repays: [{
+                collateralAsset: usdt,
+                borrowAsset: usdc,
+                totalDebtAmountOut: "234.316595",
+                totalCollateralAmountOut: "280.962168",
+                amountRepay: "0.001761",
+                collateralAmountOut: "0.002132",
+              }]
+            });
+          }
+
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
+            expect(r.balances.join()).eq([0.002130, 0].join());
           });
         });
       });
