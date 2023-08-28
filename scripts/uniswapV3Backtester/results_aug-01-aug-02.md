@@ -3,6 +3,7 @@
 
 ## Origin params
 **Real APR: -3.253%**
+
 **Rebalances: 58. Rebalance debts: 52 (11 delayed, 35 forced, 6 closing)**
 
 ```
@@ -17,15 +18,17 @@ const fuseThresholds = [
 
 ## Best APR params
 **Real APR: 10.783%** (~$20 for $100k tvl)
+
 **Rebalances: 54. Rebalance debts: 49 (11 delayed, 30 forced, 8 closing)**
 ```
 ['0.999', '0.9991', '1.001', '1.0009',],
 ['0.999', '0.9991', '1.001', '1.0009',],
 ```
 
-## Fewer debt rebalances
+## Fewer debt rebalances params
 **Real APR: -0.74%**
-Rebalances: 54. Rebalance debts: 16 (1 delayed, 0 forced, 15 closing).
+
+**Rebalances: 54. Rebalance debts: 16 (1 delayed, 0 forced, 15 closing)**
 ```
 const allowedLockedPercent = 25;
 const forceRebalanceDebtLockedPercent = 70;
