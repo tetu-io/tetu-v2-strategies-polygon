@@ -90,6 +90,7 @@ export interface IBacktestResult {
   minPrice: BigNumber;
   backtestLocalTimeSpent: number;
   tokenBSymbol: string;
+  tokenBDecimals: number;
   disableBurns: boolean;
   disableMints: boolean;
   hardworkEarned: BigNumber;
@@ -100,6 +101,7 @@ export interface IBacktestResult {
   insuranceAssetsBefore: BigNumber;
   insuranceAssetsAfter: BigNumber;
   totalLossCovered: BigNumber;
+  totalPriceChangeLoss: BigNumber;
   totalLossCoveredFromRewards: BigNumber;
   totalProfitCovered: BigNumber;
   rebalanceLoss: BigNumber;
@@ -109,4 +111,5 @@ export interface IBacktestResult {
   rebalanceDebtDelay: number;
   timeOnFuse: number;
   poolTxs: number;
+  strategyTokenBBalance: BigNumber;
 }

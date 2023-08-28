@@ -65,6 +65,7 @@ export async function strategyBacktest(
   let rebalancesDebtClosing = 0
   let totalProfitCovered = BigNumber.from(0)
   let nsrAndRebalanceDebtLoss = BigNumber.from(0)
+  let totalPriceChangeLoss = BigNumber.from(0)
 
   console.log(`Starting backtest of ${await vault.name()}`);
   console.log(`Filling pool with initial liquidity from snapshot (${liquiditySnapshot.ticks.length} ticks)..`);
@@ -232,17 +233,19 @@ export async function strategyBacktest(
           fee1 = fee1.add(fees[1])
         }
         const lossCovered = UniversalTestUtils.extractLossCoveredUniversal(txReceipt)
+
+        const lossUncovered = UniswapV3StrategyUtils.extractPriceChangeLoss(txReceipt)
+
         const lockedPercentAfter = await getLockedPercent(reader, strategy.address)
         console.log(`done with ${txReceipt.gasUsed} gas.`);
         totalLossCoveredFromInsurance = totalLossCoveredFromInsurance.add(lossCovered)
         const extractedRebalanceLoss = UniswapV3StrategyUtils.extractRebalanceLoss(txReceipt)
         console.log(`Locked for debt service: ${lockedPercentBefore}% -> ${lockedPercentAfter}%. Price change loss covered by insurance: ${formatUnits(lossCovered, tokenADecimals)}. Price change profit to cover: ${formatUnits(extractedRebalanceLoss[1], tokenADecimals)}.`)
-        // console.log('NSR loss', extractedRebalanceLoss[0])
-        // console.log('NSR loss covered from rewards', extractedRebalanceLoss[2])
         rebalanceLoss = rebalanceLoss.add(extractedRebalanceLoss[0])
         totalLossCoveredFromRewards = totalLossCoveredFromRewards.add(extractedRebalanceLoss[2])
         totalProfitCovered = totalProfitCovered.add(extractedRebalanceLoss[1])
         nsrAndRebalanceDebtLoss = nsrAndRebalanceDebtLoss.add(extractedRebalanceLoss[0])
+        totalPriceChangeLoss = totalPriceChangeLoss.add(lossUncovered[0].add(lossUncovered[1]))
 
         lastNSRTimestamp = poolTx.timestamp
       }
@@ -306,17 +309,28 @@ export async function strategyBacktest(
           )
           txReceipt = await tx.wait()
           console.log(`done with ${txReceipt.gasUsed} gas.`)
+
+          fees = UniswapV3StrategyUtils.extractClaimedFees(txReceipt)
+          if (fees) {
+            fee0 = fee0.add(fees[0])
+            fee1 = fee1.add(fees[1])
+          }
+
           const percentAfter = await getLockedPercent(reader, strategy.address)
           const lossCovered = UniversalTestUtils.extractLossCoveredUniversal(txReceipt)
 
-          const extractedRebalanceLoss = UniswapV3StrategyUtils.extractRebalanceDebtLoss(txReceipt)
+          const lossUncovered = UniswapV3StrategyUtils.extractPriceChangeLoss(txReceipt)
 
-          console.log(`Locked for debt service: ${percent}% -> ${percentAfter}%.${isFuseTriggered && isWithdrawDone ? ' Withdraw done.' : ''} Price change Loss covered by insurance: ${formatUnits(lossCovered, tokenADecimals)}. Price change profit to cover: ${formatUnits(extractedRebalanceLoss[1], tokenADecimals)}. Swap loss: ${formatUnits(extractedRebalanceLoss[0], tokenADecimals)}. Swap loss covered by rewards: ${formatUnits(extractedRebalanceLoss[2], tokenADecimals)}.`)
+          const extractedRebalanceLoss = UniswapV3StrategyUtils.extractRebalanceDebtLoss(txReceipt)
+          const extractedUnsentAmountToInsurance = UniswapV3StrategyUtils.extractRebalanceDebtUnsentProfitToCover(txReceipt)
+
+          console.log(`Locked for debt service: ${percent}% -> ${percentAfter}%.${isFuseTriggered && isWithdrawDone ? ' Withdraw done.' : ''} Price change Loss covered by insurance: ${formatUnits(lossCovered, tokenADecimals)}. Price change profit to cover: ${formatUnits(extractedRebalanceLoss[1], tokenADecimals)}. Swap loss: ${formatUnits(extractedRebalanceLoss[0], tokenADecimals)}. Swap loss for cover by rewards: ${formatUnits(extractedRebalanceLoss[2], tokenADecimals)}. Covered loss from rewards: ${extractedUnsentAmountToInsurance[0]}.`)
 
           totalLossCoveredFromInsurance = totalLossCoveredFromInsurance.add(lossCovered)
           totalLossCoveredFromRewards = totalLossCoveredFromRewards.add(extractedRebalanceLoss[2])
           totalProfitCovered = totalProfitCovered.add(extractedRebalanceLoss[1])
           nsrAndRebalanceDebtLoss = nsrAndRebalanceDebtLoss.add(extractedRebalanceLoss[0])
+          totalPriceChangeLoss = totalPriceChangeLoss.add(lossUncovered[0].add(lossUncovered[1]))
         }
       }
     }
@@ -349,6 +363,9 @@ export async function strategyBacktest(
   const insuranceAssetsAfter = await tokenA.balanceOf(await vault.insurance())
 
   const earned = tokenA.address === token0.address ? fee0.add(fee1.mul(endPrice).div(parseUnits('1', token1Decimals))) : fee1.add(fee0.mul(endPrice).div(parseUnits('1', token0Decimals)));
+
+  const strategyTokenBBalance = await tokenB.balanceOf(strategy.address)
+  const tokenBDecimals = await tokenB.decimals()
 
   return {
     vaultName: await vault.name(),
@@ -389,6 +406,9 @@ export async function strategyBacktest(
     poolTxs: poolTxs.length,
     totalProfitCovered,
     nsrAndRebalanceDebtLoss,
+    strategyTokenBBalance,
+    tokenBDecimals,
+    totalPriceChangeLoss,
   };
 }
 
@@ -404,14 +424,23 @@ export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = [], 
   100}% price). Rebalance tick range: ${r.rebalanceTickRange} (+-${r.rebalanceTickRange / 100}% price).`);
   console.log(`Allowed locked: ${r.allowedLockedPercent}%. Forced rebalance debt locked: ${r.forceRebalanceDebtLockedPercent}%. Rebalance debt delay: ${r.rebalanceDebtDelay} secs. Fuse thresholds: [${fuseThresholds[0].join(',')}], [${fuseThresholds[1].join(',')}].`)
 
+  // real APR revenue
+  const realApr = getApr(r.earned.add(r.totalProfitCovered).sub(r.totalLossCovered).sub(r.totalLossCoveredFromRewards), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
+  console.log(`Real APR (    revenue    ): ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Profit to cover: ${formatUnits(r.totalProfitCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Loss covered by insurance: ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. NSR and swap loss covered from rewards: ${formatUnits(r.totalLossCoveredFromRewards, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+
+  // real APR balance change
+  const totalBalanceAfter = r.vaultTotalAssetsAfter.add(r.insuranceAssetsAfter)
+  const totalBalanceBefore = r.vaultTotalAssetsBefore.add(r.insuranceAssetsBefore)
+  const realAprBalances = getApr(totalBalanceAfter.sub(totalBalanceBefore), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
+  console.log(`Real APR (balances change): ${realAprBalances}%. Balance change: ${totalBalanceAfter.gt(totalBalanceBefore) ? '+' : ''}${formatUnits(totalBalanceAfter.sub(totalBalanceBefore), r.vaultAssetDecimals)}. Before: ${formatUnits(totalBalanceBefore, r.vaultAssetDecimals)}. After: ${formatUnits(totalBalanceAfter, r.vaultAssetDecimals)}.`)
+
+  // ui APRs
   const vaultApr = getApr(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
   console.log(`Vault APR (in ui): ${vaultApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Earned: ${formatUnits(r.vaultTotalAssetsAfter.sub(r.vaultTotalAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
   const strategyApr = getApr(r.hardworkEarned.sub(r.hardworkLost), r.strategyTotalAssetsAfter, r.startTimestamp, r.endTimestamp)
   console.log(`Strategy APR (in ui): ${strategyApr}%. Total assets: ${formatUnits(r.strategyTotalAssetsAfter, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork earned: ${formatUnits(r.hardworkEarned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Hardwork lost: ${formatUnits(r.hardworkLost, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
-  const realApr = getApr(r.earned.add(r.totalProfitCovered).sub(r.totalLossCovered).sub(r.nsrAndRebalanceDebtLoss), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)
-  console.log(`Real APR: ${realApr}%. Total assets before: ${formatUnits(r.vaultTotalAssetsBefore, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Fees earned: ${formatUnits(r.earned, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Price change loss (covered by insurance): ${formatUnits(r.totalLossCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. NSR and swap loss: ${formatUnits(r.nsrAndRebalanceDebtLoss, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Covered NSR and swap loss from rewards: ${formatUnits(r.totalLossCoveredFromRewards, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}. Profit to cover: ${formatUnits(r.totalProfitCovered, r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
 
-  console.log(`Insurance balance: ${r.insuranceAssetsAfter.gt(r.insuranceAssetsBefore) ? '+' : ''}${formatUnits(r.insuranceAssetsAfter.sub(r.insuranceAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
+  console.log(`Insurance balance change: ${r.insuranceAssetsAfter.gt(r.insuranceAssetsBefore) ? '+' : ''}${formatUnits(r.insuranceAssetsAfter.sub(r.insuranceAssetsBefore), r.vaultAssetDecimals)} ${r.vaultAssetSymbol}.`)
 
   console.log(`Rebalances: ${r.rebalances}. Rebalance debts: ${r.rebalancesDebt} (${r.rebalancesDebtDelayed} delayed, ${r.rebalancesDebt - r.rebalancesDebtDelayed - r.rebalancesDebtClosing} forced, ${r.rebalancesDebtClosing} closing).`);
   console.log(`Period: ${periodHuman(r.endTimestamp - r.startTimestamp)}. Start: ${new Date(r.startTimestamp *
@@ -419,10 +448,10 @@ export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = [], 
     1000).toLocaleTimeString('en-US')} (block: ${startBlock}). Finish: ${new Date(r.endTimestamp *
     1000).toLocaleDateString('en-US')} ${new Date(r.endTimestamp * 1000).toLocaleTimeString('en-US')} (block: ${endBlock}).`);
   console.log(`Time on fuse trigger: ${periodHuman(r.timeOnFuse)} (${Math.round(r.timeOnFuse / (r.endTimestamp - r.startTimestamp) * 1000)/10}%).`)
-  console.log(`Prices in pool: start - ${formatUnits(r.startPrice, r.vaultAssetDecimals)}, end: ${formatUnits(
+  console.log(`Prices in pool: start ${formatUnits(r.startPrice, r.vaultAssetDecimals)}, end ${formatUnits(
     r.endPrice,
     r.vaultAssetDecimals,
-  )}, min: ${formatUnits(r.minPrice, r.vaultAssetDecimals)}, max: ${formatUnits(r.maxPrice, r.vaultAssetDecimals)}.`);
+  )}, min ${formatUnits(r.minPrice, r.vaultAssetDecimals)}, max ${formatUnits(r.maxPrice, r.vaultAssetDecimals)}.`);
 
   if (r.disableMints || r.disableBurns) {
     console.log(`Mints: ${!r.disableMints ? 'enabled' : 'disabled'}. Burns: ${!r.disableBurns

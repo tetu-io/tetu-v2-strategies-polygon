@@ -33,11 +33,8 @@ const argv = require('yargs/yargs')()
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
-  // before depeg start ts - 1690882487
   const backtestStartBlock = 45764000; // Aug-01-2023 02:55:08 AM +UTC // 45700000; // 7/30/2023 3:31:06 PM
-  // const backtestEndBlock = 45900000; // Aug-02-2023 12:45:52 AM +UTC
-  const backtestEndBlock = 45825000;
-  // const backtestEndBlock = 46000000; // Aug-07-2023 01:26:23 AM +UTC - fails on ts 1690914072
+  const backtestEndBlock = 45825000; // 8/2/2023 7:02:34 PM
   const investAmountUnits: string = '100' // 1k USDC, 1k WMATIC etc
   const txLimit = 0; // 0 - unlimited
   const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
@@ -244,7 +241,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
     if (backtestResult) {
       console.log('');
       console.log('');
-      console.log(`=== Uniswap V3 delta-neutral strategy backtester ===`);
+      console.log(`=== Uniswap V3 NSR strategy backtester ===`);
       console.log('');
       showBacktestResult(backtestResult, fuseThresholds, backtestStartBlock, backtestEndBlock);
     }

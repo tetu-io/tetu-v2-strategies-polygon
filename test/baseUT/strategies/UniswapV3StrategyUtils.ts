@@ -34,6 +34,26 @@ export interface IStateHardworkEvents {
 }
 
 export class UniswapV3StrategyUtils {
+  public static extractRebalanceDebtUnsentProfitToCover(cr: ContractReceipt): BigNumber[] {
+    const abi = [
+      "event UnsentAmountToInsurance(uint sentAmount, uint unsentAmount, uint balance, uint totalAssets)",
+    ];
+    const iface = new ethers.utils.Interface(abi)
+    const topic = iface.getEventTopic(iface.getEvent('UnsentAmountToInsurance'))
+    if (cr.events) {
+      for (const event of cr.events) {
+        if (event.topics.includes(topic)) {
+          const decoded = ethers.utils.defaultAbiCoder.decode(
+            ['uint', 'uint', 'uint', 'uint'],
+            event.data
+          )
+          return [decoded[0], decoded[1], decoded[2], decoded[3]];
+        }
+      }
+    }
+    return [BigNumber.from(0),BigNumber.from(0),BigNumber.from(0)]
+  }
+
   public static extractRebalanceDebtLoss(cr: ContractReceipt): BigNumber[] {
     const abi = [
       "event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards)",
@@ -48,6 +68,26 @@ export class UniswapV3StrategyUtils {
             event.data
           )
           return [decoded[0], decoded[1], decoded[2]];
+        }
+      }
+    }
+    return [BigNumber.from(0),BigNumber.from(0),BigNumber.from(0)]
+  }
+
+  public static extractPriceChangeLoss(cr: ContractReceipt): BigNumber[] {
+    const abi = [
+      "event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter)",
+    ];
+    const iface = new ethers.utils.Interface(abi)
+    const topic = iface.getEventTopic(iface.getEvent('UncoveredLoss'))
+    if (cr.events) {
+      for (const event of cr.events) {
+        if (event.topics.includes(topic)) {
+          const decoded = ethers.utils.defaultAbiCoder.decode(
+            ['uint', 'uint', 'uint', 'uint'],
+            event.data
+          )
+          return [decoded[0], decoded[1], decoded[2], decoded[3]];
         }
       }
     }
