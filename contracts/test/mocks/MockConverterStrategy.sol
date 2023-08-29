@@ -343,7 +343,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
   //endregion ---------------------------------------- _beforeDeposit
 
-  //region ----------------------------------------------------- Others
+  //region ----------------------------------------------------- makeRequestedAmount
 
   struct MakeRequestedAmountParams {
     bool useMockedValues;
@@ -390,24 +390,17 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   }
 
   function _makeRequestedAmountAccess(
-    address[] memory tokens_,
-    uint indexAsset_,
-    ITetuConverter converter_,
-    ITetuLiquidator liquidator_,
-    uint requestedAmount
+    uint amount_,
+    uint investedAssets_,
+    WithdrawUniversalLocal memory v
   ) external returns (
-    uint expectedTotalAmountMainAsset
+    uint expectedTotalAssetAmount
   ) {
-    return ConverterStrategyBaseLib.makeRequestedAmount(
-      tokens_,
-      indexAsset_,
-      converter_,
-      liquidator_,
-      requestedAmount,
-      liquidationThresholds
-    );
-  }  //region ----------------------------------------------------- Others
+    return _makeRequestedAmount(amount_, investedAssets_, v);
+  }
+  //endregion ----------------------------------------------------- makeRequestedAmount
 
+  //region ----------------------------------------------------- Others
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
   }

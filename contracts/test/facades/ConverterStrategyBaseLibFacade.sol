@@ -248,4 +248,24 @@ contract ConverterStrategyBaseLibFacade {
   ) {
     return ConverterStrategyBaseLib._closePosition(converter_, collateralAsset, borrowAsset, amountToRepay);
   }
+
+
+  function _makeRequestedAmountAccess(
+    address[] memory tokens_,
+    uint indexAsset_,
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
+    uint requestedAmount
+  ) external returns (
+    uint expectedTotalAmountMainAsset
+  ) {
+    return ConverterStrategyBaseLib.makeRequestedAmount(
+      tokens_,
+      indexAsset_,
+      converter_,
+      liquidator_,
+      requestedAmount,
+      liquidationThresholds
+    );
+  }
 }

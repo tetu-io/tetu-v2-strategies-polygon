@@ -38,11 +38,11 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     ITetuConverter converter;
     /// @notice Target asset that should be received on balance.
     ///         It's underlying in _withdrawUniversal(), but it can be any other asset in requirePayAmountBack()
-    address asset;
+    address theAsset;
     /// @notice List of tokens received by _depositorPoolAssets()
     address[] tokens;
     /// @notice Index of the {asset} in {tokens}
-    uint indexAsset;
+    uint indexTheAsset;
     /// @notice Initial balance of the [asset}
     uint balanceBefore;
     uint indexUnderlying;
@@ -246,17 +246,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @param underlying true if asset_ is underlying
   function _initWithdrawUniversalLocal(address asset_, WithdrawUniversalLocal memory v, bool underlying) internal view {
     v.tokens = _depositorPoolAssets();
-    v.asset = asset_;
+    v.theAsset = asset_;
     v.converter = _csbs.converter;
-    v.indexAsset = AppLib.getAssetIndex(v.tokens, asset_);
+    v.indexTheAsset = AppLib.getAssetIndex(v.tokens, asset_);
     v.balanceBefore = AppLib.balance(asset_);
-    v.indexUnderlying = underlying ? v.indexAsset : AppLib.getAssetIndex(v.tokens, baseState.asset);
+    v.indexUnderlying = underlying ? v.indexTheAsset : AppLib.getAssetIndex(v.tokens, baseState.asset);
   }
 
   /// @notice Get the specified {amount} of the given {v.asset} on the balance
   /// @dev Ensures that either all debts are closed, or a non-zero amount remains on the balance or in the pool to pay off the debts
-  /// @param amount_ Required amount of {v.asset}
+  /// @param amount_ Required amount of {v.asset}. Use type(uint).max to withdraw all
   /// @return expectedTotalAssetAmount Expected amount of {v.asset} that should be received on the balance
+  ///                                  Expected total amount of given asset after all withdraws, conversions, swaps and repays
   function _makeRequestedAmount(
     uint amount_,
     uint investedAssets_,
@@ -265,36 +266,47 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint expectedTotalAssetAmount
   ) {
     uint depositorLiquidity = _depositorLiquidity();
+    console.log("_makeRequestedAmount.depositorLiquidity", depositorLiquidity);
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
     uint liquidityAmountToWithdraw = ConverterStrategyBaseLib2.getLiquidityAmount(
       amount_,
       v.tokens,
-      v.indexAsset,
+      v.indexTheAsset,
       v.converter,
       investedAssets_,
       depositorLiquidity,
       v.indexUnderlying
     );
+    console.log("_makeRequestedAmount.liquidityAmountToWithdraw", liquidityAmountToWithdraw);
 
+    uint withdrawnAsset;
     if (liquidityAmountToWithdraw != 0) {
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmountToWithdraw);
+      console.log("_makeRequestedAmount.withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1]);
       // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
       // use what exactly was withdrew instead of the expectation
       // assume that liquidity cannot increase in _depositorExit
       liquidityAmountToWithdraw = depositorLiquidity - _depositorLiquidity();
       emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
+
+      // temporary save balance to withdrawnAsset
+      withdrawnAsset = IERC20(v.theAsset).balanceOf(address(this));
+      withdrawnAsset = withdrawnAsset > v.balanceBefore
+        ? withdrawnAsset - v.balanceBefore
+        : 0;
     }
 
     // try to receive at least requested amount of the {v.asset} on the balance
     return ConverterStrategyBaseLib.makeRequestedAmount(
       v.tokens,
-      v.indexAsset,
+      v.indexTheAsset,
       v.converter,
       AppLib._getLiquidator(controller()),
       (amount_ == type(uint).max ? amount_ : v.balanceBefore + amount_), // current balance + the amount required to be withdrawn on balance
       liquidationThresholds
-    );
+    )
+    + withdrawnAsset; // todo do we need it?
   }
 
   //endregion -------------------------------------------------------- Get requested amount
@@ -357,12 +369,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       _initWithdrawUniversalLocal(baseState.asset, v, true);
 
       // get at least requested amount of the underlying on the balance
-      assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.asset);
+      assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.theAsset);
       expectedWithdrewUSD = _makeRequestedAmount(amount, investedAssets_, v) * assetPrice / 1e18;
 
       if (earnedByPrices_ != 0) {
         (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
-          v.asset,
+          v.theAsset,
           earnedByPrices_,
           baseState.splitter,
           investedAssets_ + v.balanceBefore
@@ -372,7 +384,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // we need to compensate difference if during withdraw we lost some assets
       (, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
         investedAssets_ + v.balanceBefore,
-        _updateInvestedAssets() + AppLib.balance(v.asset) + amountSentToInsurance
+        _updateInvestedAssets() + AppLib.balance(v.theAsset) + amountSentToInsurance
       );
     }
 
@@ -576,7 +588,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     _initWithdrawUniversalLocal(theAsset_, v, false);
     require(msg.sender == address(v.converter), StrategyLib.DENIED);
     require(amount_ != 0, AppErrors.ZERO_VALUE);
-    require(v.indexAsset != type(uint).max, AppErrors.WRONG_ASSET);
+    require(v.indexTheAsset != type(uint).max, AppErrors.WRONG_ASSET);
 
     console.log("requirePayAmountBack.1");
     (uint _investedAssets, uint earnedByPrices) = _fixPriceChanges(true);
