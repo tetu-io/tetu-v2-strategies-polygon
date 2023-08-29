@@ -140,12 +140,19 @@ export async function runResolver(
   oneInchProtocols: string,
   fetchFunc: (url: string) => Promise<unknown>,
 ): Promise<Web3FunctionResult> {
+  console.log('run Resolver', `
+  strategyAddress: ${strategyAddress}
+  readerAddress: ${readerAddress}
+  configAddress: ${configAddress}
+  agg: ${agg}
+  oneInchProtocols: ${oneInchProtocols}
+  `)
   const chainId = (await provider.getNetwork()).chainId;
   const strategy = new Contract(strategyAddress, STRATEGY_ABI, provider);
   const reader = new Contract(readerAddress, READER_ABI, provider);
   const configContract = new Contract(configAddress, CONFIG_ABI, provider);
   const config = await configContract.strategyConfig(strategyAddress);
-  // console.log('Rebalance debt config', config)
+  console.log('Rebalance debt config', config)
   const allowedLockedPercent = config[0];
   const isNeedRebalance = await strategy.needRebalance();
   const r = await reader.getLockedUnderlyingAmount(strategyAddress) as [BigNumber, BigNumber];
@@ -157,6 +164,7 @@ export async function runResolver(
   }
 
   const defaultState = await strategy.getDefaultState();
+  console.log('Rebalance debt config', defaultState)
   const isFuseTriggered =
     defaultState[2][1].toString() === '2'
     || defaultState[2][1].toString() === '3'

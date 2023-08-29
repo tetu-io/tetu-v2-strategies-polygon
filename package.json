@@ -17,7 +17,7 @@
     "lint-fix": "tslint --fix -p tsconfig.json",
     "update-block": "ts-node scripts/utils/UpdateBlock.ts",
     "deploy-prod": "hardhat deploy --network matic --write true",
-    "verify-all": "hardhat etherscan-verify --network matic",
+    "verify-all": "hardhat run scripts/verify.ts --network matic && hardhat etherscan-verify --network matic",
     "deploy-local": "hardhat deploy --write true --reset",
     "solhint": "solhint \"contracts/**/*.sol\"",
     "sporalyzer": "node sporalyzer.js --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\"",
