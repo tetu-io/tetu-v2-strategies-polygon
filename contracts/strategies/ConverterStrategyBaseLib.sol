@@ -1447,7 +1447,7 @@ library ConverterStrategyBaseLib {
     (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountSendToRepay);
 
     if (expectedAmountOut > swappedAmountOut) {
-      // Following situation is possible
+      // SCB-789 Following situation is possible
       //    needToRepay = 100, needToRepayExact = 90 (debt gap is 10)
       //    1) amountRepay = 80
       //       expectedAmountOut is calculated for 80, no problems
