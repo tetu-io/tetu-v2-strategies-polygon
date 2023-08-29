@@ -475,12 +475,15 @@ library ConverterStrategyBaseLib2 {
   ) internal returns (
     uint amountOut
   ) {
+    console.log("_calcInvestedAssets");
     CalcInvestedAssetsLocal memory v;
     v.len = tokens.length;
     v.asset = tokens[indexAsset];
 
     // calculate prices, decimals
     (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
+    console.log("_calcInvestedAssets.prices.length", v.prices.length);
+    console.log("_calcInvestedAssets.decs.length", v.decs.length);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array

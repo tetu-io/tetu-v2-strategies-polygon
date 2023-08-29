@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -260,7 +261,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     uint amount_,
     uint investedAssets_,
     WithdrawUniversalLocal memory v
-  ) internal returns (
+  ) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
     uint depositorLiquidity = _depositorLiquidity();
@@ -512,8 +513,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   /// @dev This is writable function because we need to update current balances in the internal protocols.
   /// @return Invested asset amount under control (in terms of {asset})
   function _calcInvestedAssets() internal returns (uint) {
+    console.log("_calcInvestedAssets");
     (address[] memory tokens, uint indexAsset) = _getTokens(baseState.asset);
+    console.log("_calcInvestedAssets.indexAsset", indexAsset);
+    console.log("_calcInvestedAssets.tokens", tokens[0], tokens[1]);
     uint liquidity = _depositorLiquidity();
+    console.log("_calcInvestedAssets.liquidity", liquidity);
+    console.log("_calcInvestedAssets._depositorQuoteExit(liquidity)", _depositorQuoteExit(liquidity)[0], _depositorQuoteExit(liquidity)[1]);
     return ConverterStrategyBaseLib2.calcInvestedAssets(
       tokens,
       liquidity == 0
@@ -536,9 +542,12 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   ///                   It's to dangerous to get this to try to get this amount here because of the problem "borrow-repay is not allowed in a single block"
   ///                   So, we need to handle it in the caller code.
   function _fixPriceChanges(bool updateInvestedAssetsAmount_) internal returns (uint investedAssetsOut, uint earnedOut) {
+    console.log("_fixPriceChanges");
     if (updateInvestedAssetsAmount_) {
       uint investedAssetsBefore = _csbs.investedAssets;
+      console.log("_fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
       investedAssetsOut = _updateInvestedAssets();
+      console.log("_fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
       earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsOut, baseState);
     } else {
       investedAssetsOut = _csbs.investedAssets;
@@ -567,9 +576,14 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     _initWithdrawUniversalLocal(theAsset_, v, false);
     require(msg.sender == address(v.converter), StrategyLib.DENIED);
     require(amount_ != 0, AppErrors.ZERO_VALUE);
-    
+    require(v.indexAsset != type(uint).max, AppErrors.WRONG_ASSET);
+
+    console.log("requirePayAmountBack.1");
     (uint _investedAssets, uint earnedByPrices) = _fixPriceChanges(true);
+    console.log("requirePayAmountBack.2._investedAssets", _investedAssets);
+    console.log("requirePayAmountBack.2.earnedByPrices", earnedByPrices);
     if (earnedByPrices != 0) {
+      console.log("requirePayAmountBack.3");
       address underlying = baseState.asset;
       ConverterStrategyBaseLib2.sendToInsurance(
         underlying,
@@ -578,13 +592,18 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         _investedAssets + (theAsset_ == underlying ? v.balanceBefore : AppLib.balance(underlying))
       );
     }
+    console.log("requirePayAmountBack.4");
 
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     // At first we add only 1 gap.
     // This is min allowed amount that we should have on balance to be able to send {amount_} to the converter
-    uint amount = amount_ * (DENOMINATOR + GAP_WITHDRAW) / DENOMINATOR;
+    uint amountPlusGap = amount_ * (DENOMINATOR + GAP_WITHDRAW) / DENOMINATOR;
+    console.log("requirePayAmountBack.amount", amount_);
+    console.log("requirePayAmountBack.amountPlusGap", amountPlusGap);
+    console.log("requirePayAmountBack.v.balanceBefore", v.balanceBefore);
+    console.log("requirePayAmountBack._investedAssets", _investedAssets);
 
-    if (v.balanceBefore >= amount) {
+    if (v.balanceBefore >= amountPlusGap) {
       // the requested amount is available, send it to the converter
       IERC20(theAsset_).safeTransfer(address(v.converter), amount_);
       amountOut = amount_;
@@ -594,23 +613,24 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // try to receive requested amount to balance
       // we should receive amount with extra gap, where gap is in the range (GAP_WITHDRAW, 2 * GAP_WITHDRAW]
       // The caller will be able to claim received amount (w/o extra gap) in the next call
-      if (amount != 0 && _investedAssets != 0) {
-        amount = amount_ * (DENOMINATOR + 2 * GAP_WITHDRAW) / DENOMINATOR;
-        // get at least requested amount of {theAsset_} on the balance
-
-        _makeRequestedAmount(amount - v.balanceBefore, _investedAssets, v);
-
-        uint balanceAfter = AppLib.balance(theAsset_);
-        amountOut = balanceAfter > v.balanceBefore
-          ? balanceAfter - v.balanceBefore
-          : 0;
-        amountOut = v.balanceBefore * DENOMINATOR / (DENOMINATOR + GAP_WITHDRAW);
-      } else {
+      if (_investedAssets == 0) {
         // there are no invested amounts, we can use amount on balance only
         // but we cannot send all amount, we should keep not zero amount on balance
         // to avoid situation "opened debts, no liquidity to pay"
         // as soon as the converter asks for payment, we still have an opened debt..
         amountOut = v.balanceBefore * DENOMINATOR / (DENOMINATOR + GAP_WITHDRAW);
+        console.log("requirePayAmountBack.amountOut.3", amountOut);
+      } else {
+        uint amountTwoGaps = amount_ * (DENOMINATOR + 2 * GAP_WITHDRAW) / DENOMINATOR;
+        // get at least requested amount of {theAsset_} on the balance
+        _makeRequestedAmount(amountTwoGaps - v.balanceBefore, _investedAssets, v);
+
+        uint balanceAfter = AppLib.balance(theAsset_);
+        console.log("requirePayAmountBack.balanceAfter", balanceAfter);
+        amountOut = balanceAfter > amountPlusGap
+          ? amount_
+          : balanceAfter * DENOMINATOR / (DENOMINATOR + GAP_WITHDRAW);
+        console.log("requirePayAmountBack.amountOut.2", amountOut);
       }
     }
 

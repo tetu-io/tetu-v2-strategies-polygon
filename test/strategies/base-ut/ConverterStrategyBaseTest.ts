@@ -1,7 +1,7 @@
 import {SignerWithAddress} from '@nomiclabs/hardhat-ethers/signers';
 import {
   ControllerV2__factory,
-  IController, IERC20Metadata__factory, ISplitter__factory,
+  IController, IERC20__factory, IERC20Metadata__factory, ISplitter__factory,
   IStrategyV2, ITetuVaultV2__factory,
   MockConverterStrategy,
   MockConverterStrategy__factory,
@@ -187,109 +187,186 @@ describe('ConverterStrategyBaseTest', () => {
   //region Unit tests
 
   describe("requirePayAmountBack", () => {
-    interface IRequirePayAmountBackTestResults {
+    interface IRequirePayAmountBackParams {
+      tokens: MockToken[];
+      indexAsset?: number;
+      initialStrategyBalances?: string[];
+      investedAssets?: string;
+      prices?: string[];
+
+      theAsset: MockToken;
+      /** Requested amount */
+      amount: string;
+      /** Amount of the asset to put on balance during the call of _makeRequestedAmount */
+      amountToPutOnBalance?: string;
+
+      senderIsNotConverter?: boolean;
+
+      /** assume decimal 18 */
+      depositorLiquidity?: string;
+
+      /** sync with {tokens} */
+      depositorQuoteExitAmounts?: string[];
+    }
+
+    interface IRequirePayAmountBackResults {
       amountOut: number;
-      converterUsdcBalances: number[]; // depositorTokens = [dai, usdc, usdt];
-      strategyUsdcBalances: number[]; // depositorTokens = [dai, usdc, usdt];
+      converterBalances: number[]; // depositorTokens = [dai, usdc, usdt];
+      strategyBalances: number[]; // depositorTokens = [dai, usdc, usdt];
     }
 
-    interface IPrepareWithdrawParams {
-      investedAssetsBeforeWithdraw: BigNumber;
-      liquidations?: ILiquidationParams[];
-      initialBalances?: ITokenAmount[];
-      repayments?: IRepayParams[];
-    }
+    async function callRequirePayAmountBack(p: IRequirePayAmountBackParams): Promise<IRequirePayAmountBackResults> {
+      const decimalsTheAsset = await p.theAsset.decimals();
+      const decimals: number[] = await Promise.all(p.tokens.map(
+        async t => t.decimals()
+      ));
 
-    async function prepareWithdraw(
-      ms: IStrategySetupResults,
-      depositorLiquidity: BigNumber,
-      depositorPoolReserves: BigNumber[],
-      depositorTotalSupply: BigNumber,
-      withdrawnAmounts: BigNumber[],
-      params?: IPrepareWithdrawParams
-    ) {
-      if (params?.initialBalances) {
-        for (const tokenAmount of params?.initialBalances) {
-          await tokenAmount.token.mint(ms.strategy.address, tokenAmount.amount);
-        }
-      }
-      if (params?.liquidations) {
-        for (const liquidation of params?.liquidations) {
-          await setupMockedLiquidation(liquidator, liquidation);
-          await setupIsConversionValid(ms.tetuConverter, liquidation, true);
-        }
-      }
-      if (params?.repayments) {
-        for (const repayment of params.repayments) {
-          await setupMockedRepay(ms.tetuConverter, ms.strategy.address, repayment);
+      const ms = await setupMockedStrategy({
+        depositorTokens: p.tokens,
+        depositorWeights: p.tokens.map(x => 1),
+        depositorReserves: p.tokens.map(x => "1000"),
+      });
+
+      // setup initial balances
+      if (p.initialStrategyBalances) {
+        for (let i = 0; i < p.tokens.length; ++i) {
+          await p.tokens[i].mint(ms.strategy.address, parseUnits(p.initialStrategyBalances[i], decimals[i]));
         }
       }
 
-      await ms.strategy.setDepositorLiquidity(depositorLiquidity);
-      console.log("setDepositorLiquidity", depositorLiquidity);
-      await ms.strategy.setDepositorPoolReserves(depositorPoolReserves);
-      await ms.strategy.setTotalSupply(depositorTotalSupply);
+      // setup mocks
+      await ms.strategy.setInvestedAssets(parseUnits(p.investedAssets || "0", decimals[p.indexAsset || 0]));
+      const assetProvider = ethers.Wallet.createRandom().address;
+      const amountToPutOnBalance = parseUnits(p.amountToPutOnBalance ?? "0", decimalsTheAsset);
+      await p.theAsset.mint(assetProvider, amountToPutOnBalance);
+      await p.theAsset.connect(
+        await Misc.impersonate(assetProvider)
+      ).approve(ms.strategy.address, amountToPutOnBalance);
 
-      await ms.strategy.setDepositorExit(depositorLiquidity, withdrawnAmounts);
-      await ms.strategy.setDepositorQuoteExit(depositorLiquidity, withdrawnAmounts);
+      await ms.strategy.setMakeRequestedAmountParams(
+        p.theAsset.address,
+        assetProvider,
+        amountToPutOnBalance,
+        0 // not used int this test
+      );
 
-      // _updateInvestedAssets is called at the end of requirePayAmountBack when the liquidity is 0
-      await ms.strategy.setDepositorQuoteExit(0, withdrawnAmounts);
-    }
+      await ms.strategy.setDepositorLiquidity(
+        parseUnits(p?.depositorLiquidity || "0", 18)
+      );
+      await ms.strategy.setDepositorQuoteExit(
+        parseUnits(p?.depositorLiquidity || "0", 18),
+        await Promise.all(p.tokens.map(
+          async (x, index) => parseUnits(
+            p?.depositorQuoteExitAmounts
+              ? p.depositorQuoteExitAmounts[index]
+              : "0",
+            decimals[index]
+          )
+        ))
+      );
 
-    async function getResults(ms: IStrategySetupResults, amountOut: BigNumber): Promise<IRequirePayAmountBackTestResults> {
+      // set up price oracle
+      await setupPrices(
+        ms.priceOracle,
+        p.tokens,
+        p.tokens.map((x, index) => p.prices ? p.prices[index] : "1")
+      );
+
+      const strategyAsSender = ms.strategy.connect(
+        p.senderIsNotConverter
+          ? await Misc.impersonate(ethers.Wallet.createRandom().address)
+          : await Misc.impersonate(ms.tetuConverter.address)
+      );
+      const amountOut = await strategyAsSender.callStatic.requirePayAmountBack(p.theAsset.address, parseUnits(p.amount, decimalsTheAsset));
+      console.log("requirePayAmountBack", p.theAsset.address, parseUnits(p.amount, decimalsTheAsset));
+      await strategyAsSender.requirePayAmountBack(p.theAsset.address, parseUnits(p.amount, decimalsTheAsset));
+
       return {
-        amountOut: +formatUnits(amountOut, await usdc.decimals()),
-        converterUsdcBalances: await Promise.all(
-          ms.depositorTokens.map(
-            async token => +formatUnits(await token.balanceOf(ms.tetuConverter.address), await token.decimals()),
-          )
-        ),
-        strategyUsdcBalances: await Promise.all(
-          ms.depositorTokens.map(
-            async token => +formatUnits(await token.balanceOf(ms.strategy.address), await token.decimals()),
-          )
-        ),
+        amountOut: +formatUnits(amountOut, decimalsTheAsset),
+        converterBalances: await Promise.all(p.tokens.map(
+          async (x, index) => +formatUnits(await x.balanceOf(ms.tetuConverter.address), decimals[index])
+        )),
+        strategyBalances: await Promise.all(p.tokens.map(
+          async (x, index) => +formatUnits(await x.balanceOf(ms.strategy.address), decimals[index])
+        ))
       }
     }
 
     describe("Good paths", () => {
       describe("There is enough asset on the balance", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
+        describe("The asset is underlying", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
-        async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-          const ms = await setupMockedStrategy();
-          await usdc.mint(ms.strategy.address, parseUnits("100", 6));
-          const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
-          await ms.strategy.setDepositorQuoteExit(0, [0, 0, 0]);
-          const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("99", 6));
-          await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("99", 6));
-          return getResults(ms, amountOut);
-        }
+          async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackResults> {
+            return callRequirePayAmountBack({
+              tokens: [usdc, usdt],
+              indexAsset: 0,
 
-        it("should return expected amount", async () => {
-          const r = await loadFixture(makeRequirePayAmountBackTest);
-          expect(r.amountOut).eq(99);
+              amount: "99",
+              theAsset: usdc,
+              investedAssets: "10000",
+              initialStrategyBalances: ["100", "0"]
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequirePayAmountBackTest);
+            expect(r.amountOut).eq(99);
+          });
+          it("should set expected balance of USDC in converter", async () => {
+            const r = await loadFixture(makeRequirePayAmountBackTest);
+            expect(r.converterBalances[0]).eq(99);
+          });
+          it("should set expected balance of USDC in strategy", async () => {
+            const r = await loadFixture(makeRequirePayAmountBackTest);
+            expect(r.strategyBalances[0]).eq(1);
+          });
         });
-        it("should set expected balance of USDC in converter", async () => {
-          const r = await loadFixture(makeRequirePayAmountBackTest);
-          expect(r.converterUsdcBalances[1]).eq(99);
-        });
-        it("should set expected balance of USDC in strategy", async () => {
-          const r = await loadFixture(makeRequirePayAmountBackTest);
-          expect(r.strategyUsdcBalances[1]).eq(1);
+        describe("The asset is not underlying", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackResults> {
+            return callRequirePayAmountBack({
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+
+              amount: "99",
+              theAsset: usdt,
+              investedAssets: "10000",
+              initialStrategyBalances: ["0", "100"]
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequirePayAmountBackTest);
+            expect(r.amountOut).eq(99);
+          });
+          it("should set expected balance of USDC in converter", async () => {
+            const r = await loadFixture(makeRequirePayAmountBackTest);
+            expect(r.converterBalances[1]).eq(99);
+          });
+          it("should set expected balance of USDC in strategy", async () => {
+            const r = await loadFixture(makeRequirePayAmountBackTest);
+            expect(r.strategyBalances[1]).eq(1);
+          });
         });
       });
 
       describe("There is NOT enough asset on the balance", () => {
-        describe("Liquidity > 0", () => {
-          describe("Withdrawn asset + balance >= required amount", () => {
+        describe("_makeRequestedAmount generates all requested amount", () => {
+          describe("The asset is underlying", () => {
             let snapshot: string;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
@@ -298,70 +375,37 @@ describe('ConverterStrategyBaseTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const ms = await setupMockedStrategy();
-              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
+            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackResults> {
+              return callRequirePayAmountBack({
+                tokens: [usdc, usdt],
+                indexAsset: 0,
 
-              await prepareWithdraw(
-                ms,
-                parseUnits("6", 6), // total liquidity of the user
-                [
-                  parseUnits("1000", 18), // dai
-                  parseUnits("2000", 6), // usdc
-                  parseUnits("3000", 6), // usdt
-                ],
-                parseUnits("6000", 6), // total supply
-                [
-                  parseUnits("0.505", 18),
-                  parseUnits("17", 6),
-                  parseUnits("1.515", 6),
-                ],
-                {
-                  investedAssetsBeforeWithdraw: BigNumber.from(3927000000), // total invested amount, value from calcInvestedAmount()
-                  initialBalances: [
-                    {token: dai, amount: parseUnits("0", 18)},
-                    {token: usdc, amount: parseUnits("1000", 6)},
-                    {token: usdt, amount: parseUnits("0", 6)},
-                  ],
-                  repayments: [
-                    // {
-                    //   collateralAsset: usdc,
-                    //   borrowAsset: dai,
-                    //   totalDebtAmountOut: parseUnits("0.505", 18),
-                    //   amountRepay: parseUnits("0.505", 18),
-                    //   totalCollateralAmountOut: parseUnits("1980", 6),
-                    // },
-                    // {
-                    //   collateralAsset: usdc,
-                    //   borrowAsset: usdt,
-                    //   totalDebtAmountOut: parseUnits("1.515", 6),
-                    //   amountRepay: parseUnits("1.515", 6),
-                    //   totalCollateralAmountOut: parseUnits("1930", 6),
-                    // },
-                  ]
-                }
-              )
+                amount: "100", // 100 is not enough, we need to have 100 + 1%, see GAP_WITHDRAW
+                theAsset: usdc,
+                initialStrategyBalances: ["100", "0"],
 
-              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1003", 6));
-              await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("1003", 6));
+                amountToPutOnBalance: "10",
 
-              return getResults(ms, amountOut);
+                investedAssets: "2",
+                depositorLiquidity: "100",
+                depositorQuoteExitAmounts: ["1", "1"]
+              });
             }
 
             it("should return expected amount", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.amountOut).eq(1003);
+              expect(r.amountOut).eq(100);
             });
-            it("should set expected balance of USDC in converter", async () => {
+            it("should not send amount to converter", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.converterUsdcBalances[1]).eq(1003);
+              expect(r.converterBalances[0]).eq(0);
             });
-            it("should set expected balances in strategy", async () => {
+            it("should set expected balance of USDC in strategy", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.strategyUsdcBalances.join()).eq([0.505, 14, 1.515].join()); // 1000 + 17 - 1003 = 14
+              expect(r.strategyBalances[0]).eq(110);
             });
           });
-          describe("Withdrawn underlying + balance < required amount", () => {
+          describe("The asset is not underlying", () => {
             let snapshot: string;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
@@ -370,64 +414,39 @@ describe('ConverterStrategyBaseTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const ms = await setupMockedStrategy();
-              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
+            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackResults> {
+              return callRequirePayAmountBack({
+                tokens: [usdc, usdt],
+                indexAsset: 0,
 
-              await prepareWithdraw(
-                ms,
-                parseUnits("6", 6), // total liquidity of the user
-                [
-                  parseUnits("1000", 18), // dai
-                  parseUnits("2000", 6), // usdc
-                  parseUnits("3000", 6), // usdt
-                ],
-                parseUnits("6000", 6), // total supply
-                [
-                  parseUnits("1.505", 18),
-                  parseUnits("17", 6),
-                  parseUnits("1.515", 6),
-                ],
-                {
-                  investedAssetsBeforeWithdraw: BigNumber.from(3927000000), // total invested amount, value from calcInvestedAmount()
-                  initialBalances: [
-                    {token: dai, amount: parseUnits("0", 18)},
-                    {token: usdc, amount: parseUnits("1000", 6)},
-                    {token: usdt, amount: parseUnits("0", 6)},
-                  ],
-                  liquidations: [
-                    {
-                      amountIn: "1.006", // assume that all prices are 1 and overswap is 300+300=600
-                      amountOut: "5", // assume that all prices are 1
-                      tokenIn: dai,
-                      tokenOut: usdc
-                    },
-                  ],
-                }
-              )
+                amount: "100", // 100 is not enough, we need to have 100 + 1%, see GAP_WITHDRAW
+                theAsset: usdt,
+                initialStrategyBalances: ["500", "100"],
 
-              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("1018", 6));
-              await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("1018", 6));
+                amountToPutOnBalance: "20",
 
-              return getResults(ms, amountOut);
+                investedAssets: "2",
+                depositorLiquidity: "100",
+                depositorQuoteExitAmounts: ["1", "1"]
+              });
             }
 
             it("should return expected amount", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.amountOut).eq(1018);
+              expect(r.amountOut).eq(100);
             });
-            it("should set expected balance of USDC in converter", async () => {
+            it("should not change balance of not-underlying in converter", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.converterUsdcBalances[1]).eq(1018);
+              expect(r.converterBalances[1]).eq(0);
             });
-            it("should set expected balances in strategy", async () => {
+            it("should set expected balance of not-underlying in strategy", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.strategyUsdcBalances.join()).eq([0.499, 4, 1.515].join()); // dai, usdc, usdt; 1.505 - 1.006 = 0.499
+              expect(r.strategyBalances[1]).eq(120);
             });
           });
         });
-        describe("Liquidity == 0", () => {
-          describe("Total amount is enough", () => {
+        describe("_makeRequestedAmount generates less amount than requested one", () => {
+          describe("The asset is underlying", () => {
             let snapshot: string;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
@@ -436,62 +455,37 @@ describe('ConverterStrategyBaseTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const ms = await setupMockedStrategy();
-              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
+            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackResults> {
+              return callRequirePayAmountBack({
+                tokens: [usdc, usdt],
+                indexAsset: 0,
 
-              await prepareWithdraw(
-                ms,
-                parseUnits("0", 6), // user has NOT liquidity in the pool
-                [
-                  parseUnits("1000", 18), // dai
-                  parseUnits("2000", 6), // usdc
-                  parseUnits("3000", 6), // usdt
-                ],
-                parseUnits("6000", 6), // total supply
-                [
-                  parseUnits("0.505", 18),
-                  parseUnits("17", 6),
-                  parseUnits("1.515", 6),
-                ],
-                {
-                  investedAssetsBeforeWithdraw: BigNumber.from(3927000000),
-                  initialBalances: [
-                    {token: dai, amount: parseUnits("0", 18)},
-                    {token: usdc, amount: parseUnits("1000", 6)},
-                    {token: usdt, amount: parseUnits("1000", 6)},
-                  ],
-                  liquidations: [
-                    {
-                      amountIn: "1000",
-                      amountOut: "1005",
-                      tokenIn: usdt,
-                      tokenOut: usdc
-                    },
-                  ],
-                }
-              );
+                amount: "100",
+                theAsset: usdc,
+                initialStrategyBalances: ["0", "1000"],
 
-              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
-              await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
+                amountToPutOnBalance: "18",
 
-              return getResults(ms, amountOut);
+                investedAssets: "2",
+                depositorLiquidity: "100",
+                depositorQuoteExitAmounts: ["1", "1"]
+              });
             }
 
             it("should return expected amount", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.amountOut).eq(2000);
+              expect(r.amountOut).eq(17.821782); // 18/(100000+1000)*100000
             });
-            it("should set expected balance of USDC in converter", async () => {
+            it("should not send amount to converter", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.converterUsdcBalances[1]).eq(2000);
+              expect(r.converterBalances[0]).eq(0);
             });
-            it("should set expected balances in strategy", async () => {
+            it("should set expected balance of USDC in strategy", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.strategyUsdcBalances.join()).eq([0, 5, 0].join()); // dai, usdc, usdt
+              expect(r.strategyBalances[0]).eq(18);
             });
           });
-          describe("Total amount is NOT enough", () => {
+          describe("The asset is not underlying", () => {
             let snapshot: string;
             before(async function () {
               snapshot = await TimeUtils.snapshot();
@@ -500,85 +494,36 @@ describe('ConverterStrategyBaseTest', () => {
               await TimeUtils.rollback(snapshot);
             });
 
-            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-              const ms = await setupMockedStrategy();
-              const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
+            async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackResults> {
+              return callRequirePayAmountBack({
+                tokens: [usdc, usdt],
+                indexAsset: 0,
 
-              await prepareWithdraw(
-                ms,
-                parseUnits("0", 6), // user has NOT liquidity in the pool
-                [
-                  parseUnits("1000", 18), // dai
-                  parseUnits("2000", 6), // usdc
-                  parseUnits("3000", 6), // usdt
-                ],
-                parseUnits("6000", 6), // total supply
-                [
-                  parseUnits("0.505", 18),
-                  parseUnits("17", 6),
-                  parseUnits("1.515", 6),
-                ],
-                {
-                  investedAssetsBeforeWithdraw: BigNumber.from(3927000000),
-                  initialBalances: [
-                    {token: dai, amount: parseUnits("0", 18)},
-                    {token: usdc, amount: parseUnits("1000", 6)},
-                    {token: usdt, amount: parseUnits("500", 6)},
-                  ],
-                  liquidations: [
-                    {
-                      amountIn: "500",
-                      amountOut: "505",
-                      tokenIn: usdt,
-                      tokenOut: usdc
-                    },
-                  ],
-                }
-              );
+                amount: "100",
+                theAsset: usdt,
+                initialStrategyBalances: ["500", "50"],
 
-              const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
-              await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("2000", 6));
+                amountToPutOnBalance: "10",
 
-              return getResults(ms, amountOut);
+                investedAssets: "2",
+                depositorLiquidity: "100",
+                depositorQuoteExitAmounts: ["1", "1"]
+              });
             }
 
             it("should return expected amount", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.amountOut).eq(1505);
+              expect(r.amountOut).eq(59.40594); // (50 + 10)/(100000+1000)*100000
             });
-            it("should set expected balance of USDC in converter", async () => {
+            it("should not change balance of not-underlying in converter", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.converterUsdcBalances[1]).eq(1505);
+              expect(r.converterBalances[1]).eq(0);
             });
-            it("should set expected balances in strategy", async () => {
+            it("should set expected balance of not-underlying in strategy", async () => {
               const r = await loadFixture(makeRequirePayAmountBackTest);
-              expect(r.strategyUsdcBalances.join()).eq([0, 0, 0].join()); // dai, usdc, usdt
+              expect(r.strategyBalances[1]).eq(60);
             });
           });
-        });
-      });
-      describe("Zero amount", () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        async function makeRequirePayAmountBackTest(): Promise<IRequirePayAmountBackTestResults> {
-          const ms = await setupMockedStrategy();
-          await usdc.mint(ms.strategy.address, parseUnits("100", 6));
-          const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
-          await ms.strategy.setDepositorQuoteExit(0, [0, 0, 0]);
-          const amountOut = await strategyAsTC.callStatic.requirePayAmountBack(usdc.address, parseUnits("0", 6));
-          await strategyAsTC.requirePayAmountBack(usdc.address, parseUnits("0", 6));
-          return getResults(ms, amountOut);
-        }
-
-        it("should return zero amount", async () => {
-          const r = await loadFixture(makeRequirePayAmountBackTest);
-          expect(r.amountOut).eq(0);
         });
       });
     });
@@ -592,28 +537,20 @@ describe('ConverterStrategyBaseTest', () => {
       });
 
       it('should revert if not tetu converter', async () => {
-        const ms = await setupMockedStrategy();
-        await usdc.mint(ms.strategy.address, parseUnits('100', 6));
-        const strategyAsNotTC = ms.strategy.connect(await Misc.impersonate(ethers.Wallet.createRandom().address));
         await expect(
-          strategyAsNotTC.requirePayAmountBack(
-            usdc.address,
-            parseUnits("99", 6)
-          )
+          callRequirePayAmountBack({senderIsNotConverter: true, tokens: [usdc, usdt], amount: "100", theAsset: usdt})
         ).revertedWith("SB: Denied"); // DENIED
       });
       it('should revert if wrong asset', async () => {
-        const ms = await setupMockedStrategy();
-        await usdc.mint(ms.strategy.address, parseUnits('100', 6));
-        const strategyAsTC = ms.strategy.connect(await Misc.impersonate(ms.tetuConverter.address));
         await expect(
-          strategyAsTC.requirePayAmountBack(
-            weth.address, // (!) wrong asset, not registered in the depositor
-            parseUnits("99", 18),
-          )
-        ).revertedWith("SB: Wrong value"); // StrategyLib.WRONG_VALUE
+          callRequirePayAmountBack({tokens: [usdc, usdt], amount: "100", theAsset: dai})
+        ).revertedWith("TS-14 wrong asset"); // WRONG_ASSET
       });
-
+      it("should revert if amount is zero", async () => {
+        await expect(
+          callRequirePayAmountBack({tokens: [usdc, usdt], amount: "0", theAsset: usdc})
+        ).revertedWith("TS-24 zero value"); // ZERO_VALUE
+      });
     });
   });
 
@@ -699,14 +636,12 @@ describe('ConverterStrategyBaseTest', () => {
       tokens: MockToken[];
       indexAsset: number;
       balances: string[];
-      amountsToConvert: string[];
       prices: string[];
       liquidationThresholds: string[];
       liquidations: ILiquidationParams[];
       quoteRepays: IQuoteRepayParams[];
       repays: IRepayParams[];
       isConversionValid?: boolean;
-      expectedMainAssetAmounts: string[];
     }
 
     async function makeRequestedAmountTest(
@@ -749,25 +684,21 @@ describe('ConverterStrategyBaseTest', () => {
       const ret = await ms.strategy.callStatic._makeRequestedAmountAccess(
         p.tokens.map(x => x.address),
         p.indexAsset,
-        p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         ms.tetuConverter.address,
         liquidator.address,
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
-        p.expectedMainAssetAmounts.map((x, index) => parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
       );
 
       const tx = await ms.strategy._makeRequestedAmountAccess(
         p.tokens.map(x => x.address),
         p.indexAsset,
-        p.amountsToConvert.map((x, index) => parseUnits(p.amountsToConvert[index], decimals[index])),
         ms.tetuConverter.address,
         liquidator.address,
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
-        p.expectedMainAssetAmounts.map((x, index) => parseUnits(p.expectedMainAssetAmounts[index], decimals[p.indexAsset])),
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
@@ -798,13 +729,11 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, dai],
               indexAsset: 0,
               balances: ["2500", "0"], // usdc, dai
-              amountsToConvert: ["0", "0"], // usdc, dai
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [],
               quoteRepays: [],
               repays: [],
-              expectedMainAssetAmounts: ["0", "0"],
             });
           }
 
@@ -832,7 +761,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["107", "2000"], // usdc, usdt
-              amountsToConvert: ["100", "2000"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [],
@@ -850,7 +778,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "400000",
                 totalCollateralAmountOut: "800000"
               }],
-              expectedMainAssetAmounts: ["100", "3999"]
             });
           }
 
@@ -878,7 +805,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1004", "2000"], // usdc, usdt
-              amountsToConvert: ["1000", "1100"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [],
@@ -896,7 +822,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "1100",
                 totalCollateralAmountOut: "1102"
               }],
-              expectedMainAssetAmounts: ["1000", "1101"]
             });
           }
 
@@ -924,7 +849,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1000", "1000"], // usdc, usdt
-              amountsToConvert: ["1000", "1000"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{amountIn: "950", amountOut: "950", tokenIn: usdt, tokenOut: usdc}],
@@ -942,7 +866,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "50",
                 totalCollateralAmountOut: "100"
               }],
-              expectedMainAssetAmounts: ["1000", "1000"]
             });
           }
 
@@ -970,7 +893,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["6000", "999"], // usdc, usdt
-              amountsToConvert: ["6000", "999"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
@@ -991,7 +913,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "400000",
                 totalCollateralAmountOut: "800000"
               }],
-              expectedMainAssetAmounts: ["3000", "1000"]
             });
           }
 
@@ -1019,7 +940,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["60000", "999"], // usdc, usdt
-              amountsToConvert: ["60000", "999"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
@@ -1039,7 +959,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "400000",
                 totalCollateralAmountOut: "800000"
               }],
-              expectedMainAssetAmounts: ["3000", "1000"]
             });
           }
 
@@ -1067,13 +986,11 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1000", "2000"], // usdc, usdt
-              amountsToConvert: ["1000", "1000"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{amountIn: "1000", amountOut: "1001", tokenIn: usdt, tokenOut: usdc}],
               quoteRepays: [],
               repays: [],
-              expectedMainAssetAmounts: ["1300", "1200"]
             });
           }
 
@@ -1101,13 +1018,11 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1004", "1002"], // usdc, usdt
-              amountsToConvert: ["1001", "1002"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{amountIn: "1002", amountOut: "1003", tokenIn: usdt, tokenOut: usdc}],
               quoteRepays: [],
               repays: [],
-              expectedMainAssetAmounts: ["700", "700"]
             });
           }
 
@@ -1135,7 +1050,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1000", "103"], // usdc, usdt
-              amountsToConvert: ["1000", "103"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [{
@@ -1146,7 +1060,6 @@ describe('ConverterStrategyBaseTest', () => {
               }],
               quoteRepays: [],
               repays: [],
-              expectedMainAssetAmounts: ["1000", "121"]
             });
           }
 
@@ -1175,7 +1088,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["3001", "2000"], // usdc, usdt
-              amountsToConvert: ["3000", "2000"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
@@ -1195,7 +1107,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "400000",
                 totalCollateralAmountOut: "800000"
               }],
-              expectedMainAssetAmounts: ["3000", "2000"]
             });
           }
 
@@ -1223,7 +1134,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["3000", "2000"], // usdc, usdt
-              amountsToConvert: ["3000", "2000"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
@@ -1243,7 +1153,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "6000",
                 totalCollateralAmountOut: "10000"
               }],
-              expectedMainAssetAmounts: ["3000", "2000"]
             });
           }
 
@@ -1271,7 +1180,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["100", "8000"], // usdc, usdt
-              amountsToConvert: ["100", "8000"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
@@ -1291,7 +1199,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "1000",
                 totalCollateralAmountOut: "2000"
               }],
-              expectedMainAssetAmounts: ["100", "8000"]
             });
           }
 
@@ -1319,7 +1226,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, usdt],
               indexAsset: 0,
               balances: ["1000", "1500"], // usdc, usdt
-              amountsToConvert: ["0", "1500"], // usdc, usdt
               prices: ["1", "1"], // for simplicity
               liquidationThresholds: ["0", "0"],
               liquidations: [
@@ -1340,7 +1246,6 @@ describe('ConverterStrategyBaseTest', () => {
                 totalDebtAmountOut: "2000",
                 totalCollateralAmountOut: "4000"
               }],
-              expectedMainAssetAmounts: ["0", "1500"]
             });
           }
 
@@ -1370,8 +1275,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, dai, usdt],
               indexAsset: 0,
               balances: ["6000", "2000", "4000"], // usdc, dai, usdt
-              amountsToConvert: ["6000", "2000", "4000"], // usdc, dai, usdt
-              expectedMainAssetAmounts: ["6000", "2000", "4000"],
               prices: ["1", "1", "1"], // for simplicity
               liquidationThresholds: ["0", "0", "0"],
               liquidations: [
@@ -1426,8 +1329,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [dai, usdc, usdt],
               indexAsset: 1,
               balances: ["3000", "97", "5000"], // dai, usdc, usdt
-              amountsToConvert: ["3000", "0", "5000"], // dai, usdc, usdt
-              expectedMainAssetAmounts: ["3000", "0", "5000"],
               prices: ["1", "1", "1"], // for simplicity
               liquidationThresholds: ["0", "0", "0"],
               quoteRepays: [
@@ -1482,8 +1383,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [usdc, dai, usdt],
               indexAsset: 0,
               balances: ["6000", "20000", "400"], // usdc, dai, usdt
-              amountsToConvert: ["6000", "20000", "400"], // usdc, dai, usdt
-              expectedMainAssetAmounts: ["6000", "20000", "400"],
               prices: ["1", "0.1", "10"], // for simplicity
               liquidationThresholds: ["0", "0", "0"],
               liquidations: [
@@ -1538,8 +1437,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [dai, usdc, usdt],
               indexAsset: 1,
               balances: ["30000", "97", "500"], // dai, usdc, usdt
-              amountsToConvert: ["30000", "0", "500"], // dai, usdc, usdt
-              expectedMainAssetAmounts: ["30000", "0", "500"],
               prices: ["0.1", "1", "10"],
               liquidationThresholds: ["0", "0", "0"],
               quoteRepays: [
@@ -1594,8 +1491,6 @@ describe('ConverterStrategyBaseTest', () => {
               tokens: [dai, usdc, usdt],
               indexAsset: 1,
               balances: ["3000", "97", "5000"], // dai, usdc, usdt
-              amountsToConvert: ["3000", "0", "5000"], // dai, usdc, usdt
-              expectedMainAssetAmounts: ["3000", "0", "5000"],
               prices: ["1", "1", "1"], // for simplicity
               liquidationThresholds: ["0", "0", "0"],
               quoteRepays: [

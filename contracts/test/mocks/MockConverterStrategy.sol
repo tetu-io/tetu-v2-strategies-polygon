@@ -15,6 +15,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   string public constant override PLATFORM = "test";
   string public constant override STRATEGY_VERSION = "1.0.0";
 
+  //region ------------------------------------------------------- init
+
   function init(
     address controller_,
     address splitter_,
@@ -44,9 +46,13 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       converter_
     );
   }
-  //////////////////////////////////////////////////////////////////////
-  ///    Provide direct access to internal functions for tests
-  //////////////////////////////////////////////////////////////////////
+
+  function setInvestedAssets(uint investedAssets_) external {
+    _csbs.investedAssets = investedAssets_;
+  }
+  //endregion ------------------------------------------------------- init
+
+  //region ------------------------------------------------------- direct access to internal functions for tests
   function closePositionTestAccess(address collateralAsset, address borrowAsset, uint amountToRepay) external returns (
     uint returnedAssetAmount,
     uint leftover
@@ -61,6 +67,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
   function _doHardWorkAccess(bool reInvest) external returns (uint earned, uint lost) {
     return _doHardWork(reInvest);
   }
+  //endregion ------------------------------------------------------- direct access to internal functions for tests
 
   //region ------------------------------------------------------- Withdraw universal
   struct MockedWithdrawUniversalParams {
@@ -80,6 +87,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint strategyLoss;
     uint amountSentToInsurance;
   }
+
   mapping(bytes32 => MockedWithdrawUniversalParams) internal _mockedWithdrawParams;
 
   function setUpMockedWithdrawUniversal(
@@ -290,7 +298,9 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     uint indexAsset;
     uint[] tokenAmounts;
   }
+
   mapping(bytes32 => BeforeDepositParams) internal _beforeDepositParams;
+
   function setBeforeDeposit(uint amount_, uint indexAsset_, uint[] memory tokenAmounts) external {
     bytes32 key = keccak256(abi.encodePacked(amount_, indexAsset_));
     _beforeDepositParams[key] = BeforeDepositParams({
@@ -335,6 +345,69 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
 
   //region ----------------------------------------------------- Others
 
+  struct MakeRequestedAmountParams {
+    bool useMockedValues;
+    address asset;
+    address assetProvider;
+    int amountToPutOnBalance;
+    uint expectedTotalAssetAmountOut;
+  }
+
+  MakeRequestedAmountParams private _makeRequestedAmountParams;
+
+  function setMakeRequestedAmountParams(
+    address asset,
+    address assetProvider,
+    int amountToPutOnBalance,
+    uint expectedTotalAssetAmountOut
+  ) external {
+    _makeRequestedAmountParams = MakeRequestedAmountParams({
+      useMockedValues: true,
+      asset: asset,
+      assetProvider: assetProvider,
+      amountToPutOnBalance: amountToPutOnBalance,
+      expectedTotalAssetAmountOut: expectedTotalAssetAmountOut
+    });
+  }
+
+  function _makeRequestedAmount(
+    uint amount_,
+    uint investedAssets_,
+    WithdrawUniversalLocal memory v
+  ) internal override returns (
+    uint expectedTotalAssetAmount
+  ) {
+    if (_makeRequestedAmountParams.useMockedValues) {
+      if (_makeRequestedAmountParams.amountToPutOnBalance >= 0) { // add amount on strategy balance
+        IERC20(_makeRequestedAmountParams.asset).transferFrom(_makeRequestedAmountParams.assetProvider, address(this), uint(_makeRequestedAmountParams.amountToPutOnBalance));
+      } else { // reduce strategy balance
+        IERC20(_makeRequestedAmountParams.asset).transfer(_makeRequestedAmountParams.assetProvider, uint(-_makeRequestedAmountParams.amountToPutOnBalance));
+      }
+      return _makeRequestedAmountParams.expectedTotalAssetAmountOut;
+    } else {
+      return super._makeRequestedAmount(amount_, investedAssets_, v);
+    }
+  }
+
+  function _makeRequestedAmountAccess(
+    address[] memory tokens_,
+    uint indexAsset_,
+    ITetuConverter converter_,
+    ITetuLiquidator liquidator_,
+    uint requestedAmount
+  ) external returns (
+    uint expectedTotalAmountMainAsset
+  ) {
+    return ConverterStrategyBaseLib.makeRequestedAmount(
+      tokens_,
+      indexAsset_,
+      converter_,
+      liquidator_,
+      requestedAmount,
+      liquidationThresholds
+    );
+  }  //region ----------------------------------------------------- Others
+
   function _emergencyExitFromPoolAccess() external {
     _emergencyExitFromPool();
   }
@@ -365,24 +438,6 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     );
   }
 
-  function _makeRequestedAmountAccess(
-    address[] memory tokens_,
-    uint indexAsset_,
-    ITetuConverter converter_,
-    ITetuLiquidator liquidator_,
-    uint requestedAmount
-  ) external returns (
-    uint expectedTotalAmountMainAsset
-  ) {
-    return ConverterStrategyBaseLib.makeRequestedAmount(
-      tokens_,
-      indexAsset_,
-      converter_,
-      liquidator_,
-      requestedAmount,
-      liquidationThresholds
-    );
-  }
   //endregion ----------------------------------------------------- Others
 
   function _getTokensAccess(address asset_) external view returns (address[] memory tokens, uint indexAsset) {
