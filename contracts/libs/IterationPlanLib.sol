@@ -208,7 +208,6 @@ library IterationPlanLib {
 
         // reverse debt
         (v.debtReverse, v.collateralReverse) = p.converter.getDebtAmountCurrent(address(this), v.token, v.asset, true);
-
         if (v.debtReverse < AppLib.DUST_AMOUNT_TOKENS) { // there is reverse debt or the reverse debt is dust debt
           // direct debt
           (v.totalDebt, v.totalCollateral) = p.converter.getDebtAmountCurrent(address(this), v.asset, v.token, true);
@@ -298,7 +297,12 @@ library IterationPlanLib {
 
     uint collateralAmount;
     if (amountToRepay >= AppLib.DUST_AMOUNT_TOKENS) {
-      (collateralAmount,) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
+      uint swappedAmountOut;
+      //
+      (collateralAmount, swappedAmountOut) = p.converter.quoteRepay(address(this), p.tokens[idxAB[0]], p.tokens[idxAB[1]], amountToRepay);
+      if (collateralAmount > swappedAmountOut) { // SCB-789
+        collateralAmount -= swappedAmountOut;
+      }
     } else {
       amountToRepay = 0;
     }
