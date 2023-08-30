@@ -958,6 +958,7 @@ library ConverterStrategyBaseLib {
     uint requestedAmount,
     mapping(address => uint) storage liquidationThresholds_
   ) external returns (uint expectedAmount) {
+    console.log("ConverterStrategyBaseLib.makeRequestedAmount.requestedAmount", requestedAmount);
     DataSetLocal memory v = DataSetLocal({
       len: tokens_.length,
       converter: converter_,
@@ -967,12 +968,15 @@ library ConverterStrategyBaseLib {
     });
     uint[] memory _liquidationThresholds = _getLiquidationThresholds(liquidationThresholds_, v.tokens, v.len);
     uint balance = IERC20(v.tokens[v.indexAsset]).balanceOf(address(this));
+    console.log("ConverterStrategyBaseLib.makeRequestedAmount.balance", balance);
     if (requestedAmount != type(uint).max) {
       requestedAmount = requestedAmount > balance
         ? requestedAmount - balance
         : 0;
+      console.log("ConverterStrategyBaseLib.makeRequestedAmount.requestedAmount.fixed", requestedAmount);
     }
-    return _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
+    expectedAmount = _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
+    console.log("ConverterStrategyBaseLib.makeRequestedAmount.expectedAmount", expectedAmount);
   }
   //endregion-------------------------------------------- Make requested amount
 

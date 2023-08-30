@@ -1105,6 +1105,25 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             expect(stateBefore.vault.userShares).gt(0);
             expect(stateAfter.vault.userShares).eq(0);
           });
+          it("should withdraw-all successfully when strategy balance is high", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+            // add high enough amount on strategy balance, keep this amount on balance (don't enter to the pool)
+            await converterStrategyBase.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)).setReinvestThresholdPercent(100_000);
+            await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+            console.log('stateBefore', stateBefore);
+            console.log('stateAfter', stateAfter);
+
+            expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+            expect(stateBefore.vault.userShares).gt(0);
+            expect(stateAfter.vault.userShares).eq(0);
+          });
           it("should revert on rebalance", async () => {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);

@@ -279,6 +279,10 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       v.indexUnderlying
     );
     console.log("_makeRequestedAmount.liquidityAmountToWithdraw", liquidityAmountToWithdraw);
+    console.log("_makeRequestedAmount.amount_", amount_);
+    console.log("_makeRequestedAmount.investedAssets_", investedAssets_);
+    console.log("_makeRequestedAmount.depositorLiquidity", depositorLiquidity);
+    console.log("_makeRequestedAmount.v.balanceBefore", v.balanceBefore);
 
     uint withdrawnAsset;
     if (liquidityAmountToWithdraw != 0) {
@@ -289,24 +293,32 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       // assume that liquidity cannot increase in _depositorExit
       liquidityAmountToWithdraw = depositorLiquidity - _depositorLiquidity();
       emit OnDepositorExit(liquidityAmountToWithdraw, withdrawnAmounts);
+      console.log("_makeRequestedAmount.liquidityAmountToWithdraw", liquidityAmountToWithdraw);
+      console.log("_makeRequestedAmount._depositorLiquidity", _depositorLiquidity());
+      console.log("_makeRequestedAmount.withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1]);
 
       // temporary save balance to withdrawnAsset
       withdrawnAsset = IERC20(v.theAsset).balanceOf(address(this));
+      console.log("_makeRequestedAmount.balanceAfter", withdrawnAsset);
       withdrawnAsset = withdrawnAsset > v.balanceBefore
         ? withdrawnAsset - v.balanceBefore
         : 0;
+      console.log("_makeRequestedAmount.withdrawnAsset", withdrawnAsset);
     }
+    console.log("_makeRequestedAmount.amount_", amount_);
 
     // try to receive at least requested amount of the {v.asset} on the balance
-    return ConverterStrategyBaseLib.makeRequestedAmount(
+    expectedTotalAssetAmount = ConverterStrategyBaseLib.makeRequestedAmount(
       v.tokens,
       v.indexTheAsset,
       v.converter,
       AppLib._getLiquidator(controller()),
       (amount_ == type(uint).max ? amount_ : v.balanceBefore + amount_), // current balance + the amount required to be withdrawn on balance
       liquidationThresholds
-    )
-    + withdrawnAsset; // todo do we need it?
+    );
+    console.log("_makeRequestedAmount.expectedTotalAssetAmount", expectedTotalAssetAmount);
+
+    return expectedTotalAssetAmount + withdrawnAsset;
   }
 
   //endregion -------------------------------------------------------- Get requested amount
