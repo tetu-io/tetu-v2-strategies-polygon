@@ -478,6 +478,7 @@ library ConverterStrategyBaseLib2 {
 
     // calculate prices, decimals
     (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
+    console.log("_calcInvestedAssets.prices", v.prices[0], v.prices[1]);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
@@ -486,6 +487,7 @@ library ConverterStrategyBaseLib2 {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
         console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut,i", depositorQuoteExitAmountsOut[i], i);
+        console.log("_calcInvestedAssets.0.amountOut", amountOut);
       } else {
         v.token = tokens[i];
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
@@ -493,25 +495,34 @@ library ConverterStrategyBaseLib2 {
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), v.token, v.asset, false);
         console.log("_calcInvestedAssets.reverse.toPay,collateral,i", toPay, collateral, i);
         if (amountOut < toPay) {
+          console.log("_calcInvestedAssets.setDebt.toPay", toPay);
           setDebt(v, indexAsset, toPay);
         } else {
           amountOut -= toPay;
+          console.log("_calcInvestedAssets.1.amountOut", amountOut);
         }
 
         // available amount to repay
         uint toRepay = collateral + IERC20(v.token).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
         console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut,i", depositorQuoteExitAmountsOut[i], i);
+        console.log("_calcInvestedAssets.toRepay", toRepay);
+        console.log("_calcInvestedAssets.collateral", collateral);
+        console.log("_calcInvestedAssets.token balance", IERC20(v.token).balanceOf(address(this)));
+        console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut[i]", depositorQuoteExitAmountsOut[i]);
 
         // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (toPay, collateral) = converter_.getDebtAmountCurrent(address(this), v.asset, v.token, false);
         console.log("_calcInvestedAssets.direct.toPay,collateral,i", toPay, collateral, i);
         amountOut += collateral;
+        console.log("_calcInvestedAssets.2.amountOut", amountOut);
 
         if (toRepay >= toPay) {
           console.log("_calcInvestedAssets.swap.to", (toRepay - toPay), (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+          console.log("_calcInvestedAssets.3.amountOut", amountOut);
         } else {
+          console.log("setDebt.1", toPay - toRepay, i);
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           setDebt(v, i, toPay - toRepay);
@@ -530,11 +541,14 @@ library ConverterStrategyBaseLib2 {
         // we will able to count the real output only after withdraw process
         uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
         console.log("_calcInvestedAssets.debtInAsset", debtInAsset, v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
+        console.log("_calcInvestedAssets.debtInAsset.amountOut", amountOut);
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
+          console.log("_calcInvestedAssets.4.amountOut", amountOut);
         } else {
           amountOut -= debtInAsset;
+          console.log("_calcInvestedAssets.5.amountOut", amountOut);
         }
       }
     }
