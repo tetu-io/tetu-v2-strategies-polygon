@@ -1,3 +1,4 @@
+/* tslint:disable:no-any */
 import type { Dispatcher } from 'undici';
 
 import {
@@ -15,6 +16,7 @@ import { sendGetRequest, sendPostRequest } from './undici';
 import { ApiKey, ChainConfig } from './types';
 import { sleep } from './utilities';
 
+// tslint:disable-next-line:interface-name
 interface EtherscanVerifyRequestParams {
   address: string;
   sourceCode: string;
@@ -51,7 +53,7 @@ export class Etherscan {
     url.search = parameters.toString();
 
     const response = await sendGetRequest(url);
-    const json = await response.body.json();
+    const json: any = await response.body.json();
 
     if (json.message !== 'OK') {
       return false;
@@ -170,6 +172,7 @@ export class Etherscan {
   }
 }
 
+// tslint:disable-next-line:max-classes-per-file
 class EtherscanResponse {
   public readonly status: number;
 
