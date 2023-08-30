@@ -1380,19 +1380,24 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     });
   });
 
-  describe("Loop with rebalance, hardwork, deposit and withdraw", () => {
+  describe("Loop with rebalance, hardwork, deposit and withdraw with various compound rates", () => {
     interface IStrategyInfo {
       name: string,
       notUnderlyingToken: string;
+      compoundRatio: number;
     }
 
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
 
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN, compoundRatio: 50_000},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -1417,7 +1422,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         return b;
       }
 
-      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.compoundRatio}`, () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -1426,9 +1431,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await TimeUtils.rollback(snapshot);
         });
 
-        it('should not revert', async () => {
+        it('should change share price in expected way (compoundRate 0 => no changes, > 0 => increase)', async () => {
           const COUNT_CYCLES = 10;
           const b = await loadFixture(prepareStrategy);
+          const states: IStateNum[] = [];
+          const pathOut = `./tmp/${strategyInfo.name}-${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.compoundRatio}-test-loop.csv`;
 
           // Following amount is used as swapAmount for both tokens A and B...
           const swapAssetValueForPriceMove = parseUnits('500000', 6);
@@ -1445,16 +1452,20 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+          const stateBefore = await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `before`);
+          states.push(stateBefore);
 
           const platformVoter = await DeployerUtilsLocal.impersonate(
               await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
           );
-          await converterStrategyBase.connect(platformVoter).setCompoundRatio(50000);
+          await converterStrategyBase.connect(platformVoter).setCompoundRatio(strategyInfo.compoundRatio);
 
           let lastDirectionUp = false
           for (let i = 0; i < COUNT_CYCLES; i++) {
             console.log(`==================== CYCLE ${i} ====================`);
+            // provide some rewards
             await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
+            await TimeUtils.advanceNBlocks(1000);
 
             if (i % 3) {
               const movePricesUp = !lastDirectionUp;
@@ -1477,21 +1488,29 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 5
               );
               lastDirectionUp = !lastDirectionUp
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `p${i}`));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
             if (await b.strategy.needRebalance()) {
               console.log('Rebalance..')
               await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
             if (i % 5) {
               console.log('Hardwork..')
               await converterStrategyBase.connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `h${i}`));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
             if (i % 2) {
               console.log('Deposit..')
               await b.vault.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address, {gasLimit: 19_000_000});
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `d${i}`));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             } else {
               console.log('Withdraw..');
               const toWithdraw = parseUnits('100.111437', 6)
@@ -1500,7 +1519,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               await b.vault.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address, {gasLimit: 19_000_000})
               const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
               console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w${i}`));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
+          }
+
+          const stateAfter = await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `final`);
+          states.push(stateAfter);
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          if (strategyInfo.compoundRatio) {
+            expect(stateAfter.vault.sharePrice).gt(stateBefore.vault.sharePrice, "compoundRatio is not zero - rewards should increase the share price");
+          } else {
+            expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice, "compoundRatio is zero - the share price shouldn't change");
           }
 
           await b.vault.connect(signer3).requestWithdraw();
@@ -1510,9 +1541,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await b.vault.connect(signer).requestWithdraw();
           console.log('withdrawAll...');
           await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+
+          // shouldn't revert up to the end
         });
       });
     });
   });
+
 //endregion Unit tests
 });
