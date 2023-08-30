@@ -321,6 +321,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
         // =============== WITHDRAW =====================
         // make withdraw
         v.withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
+        console.log("_withdrawUniversal.withdrawnAmounts", v.withdrawnAmounts[0], v.withdrawnAmounts[1]);
         // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
         // use what exactly was withdrew instead of the expectation
         // assume that liquidity cannot increase in _depositorExit

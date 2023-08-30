@@ -415,7 +415,7 @@ export class StateUtilsNum {
       univ3: univ3SpecificState,
       univ3Pool,
 
-      events: CaptureEvents.getSummaryFromEventsSet(p?.eventsSet),
+      events: await CaptureEvents.getSummaryFromEventsSet(signer, p?.eventsSet),
     }
 
     // console.log(dest)
@@ -608,6 +608,7 @@ export class StateUtilsNum {
       'events.toInsuranceRecycle',
       'events.coveredByRewardsRebalance',
       'events.profitToCoverRebalance',
+      'events.toForwarderRecycle',
       'events.lossRebalance',
 
       'fixPriceChanges.investedAssetsBefore',
@@ -706,6 +707,7 @@ export class StateUtilsNum {
       item.events?.toInsuranceRecycle,
       item.events?.coveredByRewardsRebalance,
       item.events?.profitToCoverRebalance,
+      item.events?.toForwarderRecycle.join(" "),
       item.events?.lossRebalance,
 
       item.events?.investedAssetsBeforeFixPriceChanges,

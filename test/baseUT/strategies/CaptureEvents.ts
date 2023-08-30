@@ -22,6 +22,7 @@ import {formatUnits} from "ethers/lib/utils";
 import {LossEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2";
 import {LossCoveredEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2";
 import {RecycleEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 
 /**
  * TetuVaultV2
@@ -180,6 +181,7 @@ export interface ISummaryFromEventsSet {
   toInsuranceRecycle: number;
   coveredByRewardsRebalance: number;
   profitToCoverRebalance: number;
+  toForwarderRecycle: number[];
   lossRebalance: number;
   investedAssetsBeforeFixPriceChanges: number;
   investedAssetsAfterFixPriceChanges: number;
@@ -205,6 +207,7 @@ export class CaptureEvents {
     ).decimals();
     const tx = await strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
     const cr = await tx.wait();
+    console.log('REBALANCE gas', cr.gasUsed.toNumber());
 
     return this.handleReceipt(cr, decimals, platform);
   }
@@ -214,36 +217,40 @@ export class CaptureEvents {
     const decimals = await IERC20Metadata__factory.connect(await strategy.asset(), strategy.signer).decimals();
     const tx = await strategy.doHardWork({gasLimit: 19_000_000});
     const cr = await tx.wait();
+    console.log('HARDWORK gas', cr.gasUsed.toNumber());
 
     return this.handleReceipt(cr, decimals, platform);
   }
 
-  static async makeDeposit(vault: TetuVaultV2, platform: string, amount: BigNumber): Promise<IEventsSet> {
+  static async makeDeposit(vault: TetuVaultV2, amount: BigNumber, platform?: string): Promise<IEventsSet> {
     const asset = await StrategySplitterV2__factory.connect(await vault.splitter(), vault.signer).asset();
     const user = await vault.signer.getAddress();
     const decimals = await IERC20Metadata__factory.connect(asset, vault.signer).decimals();
     const tx = await vault.deposit(amount, user, {gasLimit: 19_000_000});
     const cr = await tx.wait();
+    console.log('DEPOSIT gas', cr.gasUsed.toNumber());
 
     return this.handleReceipt(cr, decimals, platform);
   }
 
-  static async makeWithdraw(vault: TetuVaultV2, platform: string, amount: BigNumber): Promise<IEventsSet> {
+  static async makeWithdraw(vault: TetuVaultV2, amount: BigNumber, platform?: string): Promise<IEventsSet> {
     const asset = await StrategySplitterV2__factory.connect(await vault.splitter(), vault.signer).asset();
     const user = await vault.signer.getAddress();
     const decimals = await IERC20Metadata__factory.connect(asset, vault.signer).decimals();
     const tx = await vault.withdraw(amount, user, user,{gasLimit: 19_000_000});
     const cr = await tx.wait();
+    console.log('WITHDRAW gas', cr.gasUsed.toNumber());
 
     return this.handleReceipt(cr, decimals, platform);
   }
 
-  static async makeWithdrawAll(vault: TetuVaultV2, platform: string): Promise<IEventsSet> {
+  static async makeWithdrawAll(vault: TetuVaultV2, platform?: string): Promise<IEventsSet> {
     const asset = await StrategySplitterV2__factory.connect(await vault.splitter(), vault.signer).asset();
     const user = await vault.signer.getAddress();
     const decimals = await IERC20Metadata__factory.connect(asset, vault.signer).decimals();
     const tx = await vault.withdrawAll({gasLimit: 19_000_000});
     const cr = await tx.wait();
+    console.log('WITHDRAW-ALL gas', cr.gasUsed.toNumber());
 
     return this.handleReceipt(cr, decimals, platform);
   }
@@ -254,7 +261,7 @@ export class CaptureEvents {
   static async handleReceipt(
     receipt: ContractReceipt,
     decimals: number,
-    platform: string
+    platform: string = PLATFORM_UNIV3
   ): Promise<IEventsSet> {
     console.log('*** REBALANCE LOGS ***');
     const splitterLibI = StrategySplitterV2__factory.createInterface();
@@ -413,7 +420,7 @@ export class CaptureEvents {
     return ret;
   }
 
-  static getSummaryFromEventsSet(eventsSet?: IEventsSet) : ISummaryFromEventsSet {
+  static async getSummaryFromEventsSet(signer: SignerWithAddress, eventsSet?: IEventsSet) : Promise<ISummaryFromEventsSet> {
     return {
       lossSplitter: eventsSet?.lossEvent
         ? eventsSet.lossEvent.reduce((prev, cur) => prev + cur.amount, 0)
@@ -437,7 +444,16 @@ export class CaptureEvents {
       lossRebalance: eventsSet?.rebalanced?.loss ?? 0,
       investedAssetsBeforeFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsBefore ?? 0,
       investedAssetsAfterFixPriceChanges: eventsSet?.fixPriceChanges?.investedAssetsOut ?? 0,
-
+      toForwarderRecycle: eventsSet?.recycle?.rewardTokens && eventsSet?.recycle?.rewardTokens.length
+        ? await Promise.all(eventsSet?.recycle?.rewardTokens.map(
+          async (token, index) => +formatUnits(
+            eventsSet?.recycle?.amountsToForward && eventsSet?.recycle?.amountsToForward.length > index
+              ? eventsSet?.recycle?.amountsToForward[index]
+              : BigNumber.from(0),
+            await IERC20Metadata__factory.connect(token, signer).decimals()
+          )
+        ))
+        : []
     }
   }
 }

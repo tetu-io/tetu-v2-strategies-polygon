@@ -241,18 +241,22 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
 
       if (i % 3 === 0) {
-        await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
+        const eventsSet = await depositToVault(vault, signer, depositAmount1, decimals, assetCtr, insurance);
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
+
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `d${i}`, {eventsSet}));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
       } else {
-        await depositToVault(vault, signer, depositAmount1.div(2), decimals, assetCtr, insurance);
+        let eventsSet = await depositToVault(vault, signer, depositAmount1.div(2), decimals, assetCtr, insurance);
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `d${i}`, {eventsSet}));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
-        await depositToVault(vault, signer, depositAmount1.div(2), decimals, assetCtr, insurance);
+        eventsSet = await depositToVault(vault, signer, depositAmount1.div(2), decimals, assetCtr, insurance);
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `d+${i}`, {eventsSet}));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
       }
-
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `d${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
       expect(await strategy.investedAssets()).above(0);
 
@@ -279,24 +283,23 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       // we suppose the rebalance happens immediately when it needs
       if (await strategy.needRebalance()) {
-        const rebalanced = await CaptureEvents.makeRebalanceNoSwap(strategy);
+        const eventsSet = await CaptureEvents.makeRebalanceNoSwap(strategy);
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
 
-        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {eventsSet: rebalanced}));
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `r${i}`, {eventsSet}));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
-        console.log("rebalanced", rebalanced);
       }
 
 
       if (i % 2 === 0) {
-        const stateHardworkEvents = await doHardWorkForStrategy(
+        const eventsSet = await doHardWorkForStrategy(
           splitter,
           StrategyBaseV2__factory.connect(strategy.address, signer),
           signer,
           decimals,
         );
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
-        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `h${i}`)); // todo: stateHardworkEvents
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `h${i}`, {eventsSet}));
       }
 
 
@@ -305,17 +308,24 @@ describe('univ3-converter-usdt-usdc-simple', function() {
       ///////////////////////////
 
       if (i % 7 === 0) {
-        await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
-        await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
-      } else {
-        await redeemFromVault(vault, signer, 50, decimals, assetCtr, insurance);
+        const eventsSet = await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
 
-        await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`, {eventsSet}));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+      } else {
+        let eventsSet = await redeemFromVault(vault, signer, 50, decimals, assetCtr, insurance);
         await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
+
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`, {eventsSet}));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
+
+        eventsSet = await redeemFromVault(vault, signer, 100, decimals, assetCtr, insurance);
+        await printVaultState(vault, splitter, strategyBase, assetCtr, decimals);
+
+        states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w+${i}`, {eventsSet}));
+        await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
       }
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
 
       const sharePriceAfter = await vault.sharePrice();
       // zero compound
@@ -323,9 +333,6 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
       // decrease swap amount slowly
       swapAmount = swapAmount.div(2);
-
-      states.push(await StateUtilsNum.getState(signer2, signer, strategy, vault, `w${i}`));
-      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, stateParams, true);
     }
 
     const balanceAfter = +formatUnits(await assetCtr.balanceOf(signer.address), decimals);
