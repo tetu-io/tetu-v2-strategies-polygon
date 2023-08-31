@@ -346,7 +346,7 @@ library PairBasedStrategyLogicLib {
     );
 
     // fix loss / profitToCover
-    if (v.profitToCover > 0) {
+    if (v.profitToCover != 0) {
       uint profitToSend = Math.min(v.profitToCover, IERC20(v.w.tokens[0]).balanceOf(address(this)));
       ConverterStrategyBaseLib2.sendToInsurance(v.w.tokens[0], profitToSend, v.splitter, v.oldTotalAssets);
     }

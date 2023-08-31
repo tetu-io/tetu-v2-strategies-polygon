@@ -17,6 +17,7 @@ import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
 import {StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
+import {CaptureEvents} from "../baseUT/strategies/CaptureEvents";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("SCB-777: withdrawByAgg, TC-29", () => {
@@ -45,7 +46,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
         strategy,
         MaticAddresses.TETU_LIQUIDATOR,
-        true
+          () => true // single iteration
       );
     });
   });
@@ -349,6 +350,108 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'after');
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [stateBefore, stateAfter], {mainAssetSymbol: "uscd"}, true);
+
+      await HardhatUtils.restoreBlockFromEnv();
+    });
+  });
+
+  describe("Rebalance: too high covered loss - kyber", () => {
+    const DELTA = 0;
+    const BLOCK = 46968028 - 1;
+    const STRATEGY = "0x4B8bD2623d7480850E406B9f2960305f44c7aDeb"; // kyber
+    const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+    const pathOut = "./tmp/high-cover-loss-kyber.csv";
+
+    let snapshotBefore: string;
+    before(async function () {
+      snapshotBefore = await TimeUtils.snapshot();
+    });
+
+    after(async function () {
+      await TimeUtils.rollback(snapshotBefore);
+    });
+
+    it("try to rebalance", async () => {
+      await HardhatUtils.switchToBlock(BLOCK - DELTA);
+
+      const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
+      const vault = TetuVaultV2__factory.connect(
+          await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), signer)).vault(),
+          signer
+      );
+
+      // await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+      // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+
+      const state = await PackedData.getDefaultState(strategyAsOperator);
+
+      const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'before');
+      const eventsSet = await CaptureEvents.makeRebalanceNoSwap(strategyAsOperator);
+      const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'after', {eventsSet});
+
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [stateBefore, stateAfter], {mainAssetSymbol: "usdc"}, true);
+
+      await HardhatUtils.restoreBlockFromEnv();
+    });
+  });
+
+  describe("withdrawByAggStep: too high covered loss - univ3", () => {
+    const DELTA = 0;
+    const BLOCK = 46932234 - 1;
+    const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e"; // kyber
+    const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+    const pathOut = "./tmp/high-cover-loss-univ3.csv";
+
+    let snapshotBefore: string;
+    before(async function () {
+      snapshotBefore = await TimeUtils.snapshot();
+    });
+
+    after(async function () {
+      await TimeUtils.rollback(snapshotBefore);
+    });
+
+    it("try withdrawByAgg", async () => {
+      await HardhatUtils.switchToBlock(BLOCK - DELTA);
+
+      const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, signer);
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), signer)).vault(),
+        signer
+      );
+
+      // await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+      // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+
+      const tokenToSwap = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F";
+      const aggregator = "0x1111111254EEB25477B68fb85Ed929f73A960582";
+      const amountToSwap = "258147969684";
+      const swapData = "0x12aa3caf000000000000000000000000ce9cc1fa6df298854f77e92042fd2a3e7fb27eff000000000000000000000000c2132d05d31c914a87c6611c10748aeb04b58e8f0000000000000000000000002791bca1f2de4661ed88a30c99a7a9449aa84174000000000000000000000000ce9cc1fa6df298854f77e92042fd2a3e7fb27eff0000000000000000000000006565e8136cd415f053c81ff3656e72574f726a5e0000000000000000000000000000000000000000000000000000003c1ad16a940000000000000000000000000000000000000000000000000000003bca9545da000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006850000000000000000000000000000000000000000000006670006390005ef00a0c9e75c4800000000001e0d0402010000000000000000000000000000000005c10005720004560004070003b900a0860a32ec0000000000000000000000000000000000000000000000000000000133bc822100039051008c42cf13fbea2ac15b0fe5a5f3cf35eec65d7d7dc2132d05d31c914a87c6611c10748aeb04b58e8f0064c7cd974800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000120000000000000000000000000ce9cc1fa6df298854f77e92042fd2a3e7fb27eff0000000000000000000000000000000000000000000000000000000133bc8221000000000000000000000000000000000000000000000000000000000000000000000000000000000000000067297ee4eb097e072b4ab6f1620268061ae804640000000000000000000000002397d2fde31c5704b02ac1ec9b770f23d70d8ec4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000032000000000000000000000000000000000000000000000000000000000000001490000000000000000000000000000000000000000000000000017f35b29a2e1512008b6c3d07b061a84f790c035c2f6dc11a0be70d5473f6fb73422f416f01e096eefcc5af9894b71ce9cc1fa6df298854f77e92042fd2a3e7fb27eff2791bca1f2de4661ed88a30c99a7a9449aa84174c2132d05d31c914a87c6611c10748aeb04b58e8f0000000000000000000000000000000000000000000000000000000133b032830000000000000000000000000000000000000000000000000000000133bc82210000000000000000000000000000000000000000000000000000000064ef1816ce9cc1fa6df298854f77e92042fd2a3e7fb27eff2231253ee4b44d6ca871473ac74522a08154a765177cc29970aaa3f91668bd33c255fd9e1e6500daa0820afb55ac4237519e380e671b852cabd50766fe14e63feb4f9ff354ba8fd9c53ec5a15539da091b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000041a32bf2fb6f5e5c09934fb932585af2ae8abc1417764cdddf1b85423fef088556484dc9108b71786236bf6c176a81f2eb7d53cd424dabada6eb03cc54566538ce1c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004800cdc878c037625afe3a98e14fcc56e169f0b5b411c2132d05d31c914a87c6611c10748aeb04b58e8fbd6015b4000000000000000000000000ce9cc1fa6df298854f77e92042fd2a3e7fb27eff02a000000000000000000000000000000000000000000000000000000004c26be87dee63c1e5007b925e617aefd7fb3a93abe3a701135d7a1ba710c2132d05d31c914a87c6611c10748aeb04b58e8f4310879664ce5a919727b3ed4035cf12f7f740e8df000000000000000000000000000000000000000000000000000000000f77ae06bc002424b31a0c000000000000000000000000ce9cc1fa6df298854f77e92042fd2a3e7fb27eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffd8963efd1fc6a506488495d951d5263988d2500000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000c2132d05d31c914a87c6611c10748aeb04b58e8f02a000000000000000000000000000000000000000000000000000000023b1c05649ee63c1e500dac8a8e6dbf8c690ec6815e0ff03491b2770255dc2132d05d31c914a87c6611c10748aeb04b58e8f00a0f2fa6b662791bca1f2de4661ed88a30c99a7a9449aa841740000000000000000000000000000000000000000000000000000003c178027550000000000000000000000000098930e80a06c4eca272791bca1f2de4661ed88a30c99a7a9449aa841741111111254eeb25477b68fb85ed929f73a960582000000000000000000000000000000000000000000000000000000b829cf72";
+      const planEntryData = "0x0000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+      console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
+      console.log("quote", quote);
+      console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
+
+      const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'before');
+      const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+        strategyAsOperator,
+        tokenToSwap,
+        aggregator,
+        amountToSwap,
+        swapData,
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED,
+      );
+      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
+      const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, 'after', {eventsSet});
+
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [stateBefore, stateAfter], {mainAssetSymbol: "usdc"}, true);
 
       await HardhatUtils.restoreBlockFromEnv();
     });

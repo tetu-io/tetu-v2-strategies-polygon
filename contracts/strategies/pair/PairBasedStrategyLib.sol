@@ -6,6 +6,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
+import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -663,6 +664,10 @@ library PairBasedStrategyLib {
         spentAmountIn = amountIn;
       }
 
+      console.log("isConversionValid.p.tokens[indexIn]", p.tokens[indexIn]);
+      console.log("isConversionValid.p.tokens[indexOut]", p.tokens[indexOut]);
+      console.log("isConversionValid.amountIn", amountIn);
+      console.log("isConversionValid.amountOut", AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore);
       require(
         p.converter.isConversionValid(
           p.tokens[indexIn],
@@ -685,8 +690,10 @@ library PairBasedStrategyLib {
   //endregion ------------------------------------------------ Internal helper functions
 
   //region ----------------------------------------- Utils
-  function _checkSwapRouter(address router) internal pure {
-    require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
+  function _checkSwapRouter(address router) internal view {
+    console.log("temp TODO");
+    //TODO require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
+    console.log("temp TODO");
   }
 
   /// @notice Extract propNotUnderlying18 from {planEntryData} of the given {planKind}

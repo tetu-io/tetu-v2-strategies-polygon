@@ -24,7 +24,7 @@ import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-c
 import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
 import {depositToVault, printVaultState} from "../../StrategyTestUtils";
-import {CaptureEvents} from "./CaptureEvents";
+import {CaptureEvents, IEventsSet} from "./CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
 
 export interface IPrepareOverCollateralParams {
@@ -260,8 +260,8 @@ export class PairBasedStrategyPrepareStateUtils {
   static async unfoldBorrowsRepaySwapRepay(
     strategyAsOperator: IRebalancingV2Strategy,
     aggregator: string,
-    useSingleIteration: boolean,
-    saveState?: (title: string) => Promise<void>,
+    isWithdrawCompleted: () => boolean,
+    saveState?: (title: string, eventsState: IEventsSet) => Promise<void>,
   ) {
     const state = await PackedData.getDefaultState(strategyAsOperator);
 
@@ -278,7 +278,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
       let swapData: BytesLike = "0x";
       const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
-      const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
+      const amountToSwap = quote.amountToSwap.eq(0) ? BigNumber.from(0) : quote.amountToSwap;
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
@@ -298,40 +298,28 @@ export class PairBasedStrategyPrepareStateUtils {
           console.log("swapData for tetu liquidator", swapData);
         }
       }
-      console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
+      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------");
       console.log("tokenToSwap", tokenToSwap);
       console.log("AGGREGATOR", aggregator) ;
       console.log("amountToSwap", amountToSwap);
       console.log("swapData", swapData);
       console.log("planEntryData", planEntryData);
 
-      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
+      const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+        strategyAsOperator,
         tokenToSwap,
         aggregator,
         amountToSwap,
         swapData,
         planEntryData,
-        ENTRY_TO_POOL_IS_ALLOWED,
-        {gasLimit: 19_000_000}
-      );
-
-      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
-      await strategyAsOperator.withdrawByAggStep(
-        tokenToSwap,
-        aggregator,
-        amountToSwap,
-        swapData,
-        planEntryData,
-        ENTRY_TO_POOL_IS_ALLOWED,
-        {gasLimit: 19_000_000}
+        ENTRY_TO_POOL_IS_ALLOWED
       );
       console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
 
       if (saveState) {
-        await saveState(`u${++step}`);
+        await saveState(`u${++step}`, eventsSet);
       }
-      if (useSingleIteration) break;
-      if (completed) break;
+      if (isWithdrawCompleted()) break; // completed
     }
   }
 

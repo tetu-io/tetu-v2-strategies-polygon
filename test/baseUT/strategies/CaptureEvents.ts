@@ -1,4 +1,4 @@
-import {BigNumber, Event, ContractReceipt} from "ethers";
+import {BigNumber, Event, ContractReceipt, BigNumberish, BytesLike} from "ethers";
 import {
   AlgebraConverterStrategyLogicLib__factory, ConverterStrategyBase,
   ConverterStrategyBase__factory,
@@ -23,6 +23,7 @@ import {LossEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/con
 import {LossCoveredEventObject} from "../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2";
 import {RecycleEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {PromiseOrValue} from "../../../typechain/common";
 
 /**
  * TetuVaultV2
@@ -255,6 +256,24 @@ export class CaptureEvents {
     return this.handleReceipt(cr, decimals, platform);
   }
 
+  static async makeWithdrawByAggStep(
+    strategy: IRebalancingV2Strategy,
+    tokenToSwap: string,
+    aggregator: string,
+    amountToSwap: BigNumberish,
+    swapData: BytesLike,
+    planEntryData: BytesLike,
+    entryToPool: BigNumberish
+  ): Promise<IEventsSet> {
+    const converterStrategyBase = await ConverterStrategyBase__factory.connect(strategy.address, strategy.signer);
+    const asset = await converterStrategyBase.asset();
+    const decimals = await IERC20Metadata__factory.connect(asset, strategy.signer).decimals();
+    const tx = await strategy.withdrawByAggStep(tokenToSwap, aggregator, amountToSwap, swapData, planEntryData, entryToPool, {gasLimit: 19_000_000});
+    const cr = await tx.wait();
+    console.log('WITHDRAW-BY-AGG-STEP gas', cr.gasUsed.toNumber());
+
+    return this.handleReceipt(cr, decimals, await converterStrategyBase.PLATFORM());
+  }
   /**
    * Try to parse all events related to rebalance/hardwork/deposit/withdrawXXX operations
    */

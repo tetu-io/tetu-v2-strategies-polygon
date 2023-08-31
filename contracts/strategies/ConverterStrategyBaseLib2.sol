@@ -258,6 +258,8 @@ library ConverterStrategyBaseLib2 {
   }
 
   /// @notice Register income and cover possible loss after price changing, emit FixPriceChanges
+  /// @param investedAssetsBefore Currently stored value of _csbs.investedAssets
+  /// @param investedAssetsAfter Actual value of invested assets calculated at the current moment
   function coverLossAfterPriceChanging(
     uint investedAssetsBefore,
     uint investedAssetsAfter,

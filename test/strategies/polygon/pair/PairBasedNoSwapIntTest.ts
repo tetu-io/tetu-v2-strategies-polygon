@@ -5,8 +5,8 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
-  ConverterStrategyBase__factory,
-  IERC20__factory,
+  ConverterStrategyBase__factory, IController__factory, IConverterController__factory,
+  IERC20__factory, MockAggregator,
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
@@ -34,6 +34,8 @@ import {
   PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY
 } from "../../../baseUT/AppConstants";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
+import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
+import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -93,6 +95,7 @@ describe('PairBasedNoSwapIntTest', function() {
     planEntryData: string;
     entryToPool: number;
     singleIteration: boolean;
+    useMockAggregator?: boolean;
   }
   async function makeFullWithdraw(b: IBuilderResults, p: IWithdrawParams, pathOut: string, states: IStateNum[]): Promise<IListStates> {
     const state = await PackedData.getDefaultState(b.strategy);
@@ -115,7 +118,7 @@ describe('PairBasedNoSwapIntTest', function() {
             quote.amountToSwap,
             strategyAsOperator.address,
           );
-        } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
+        } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR || p.useMockAggregator) {
           swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
             tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
@@ -125,7 +128,7 @@ describe('PairBasedNoSwapIntTest', function() {
           console.log("swapData for tetu liquidator", swapData);
         }
       }
-      console.log("makeFullWithdraw.withdrawByAggStep.callStatic --------------------------------");
+      console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
       console.log("tokenToSwap", tokenToSwap);
       console.log("AGGREGATOR", p.aggregator);
       console.log("amountToSwap", amountToSwap);
@@ -133,30 +136,28 @@ describe('PairBasedNoSwapIntTest', function() {
       console.log("swapData.length", swapData.length);
       console.log("planEntryData", p.planEntryData);
       console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
+
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
+          tokenToSwap,
+          p.aggregator,
+          amountToSwap,
+          swapData,
+          p.planEntryData,
+          p.entryToPool,
+          {gasLimit: 19_000_000}
+      );
+      const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+        strategyAsOperator,
         tokenToSwap,
         p.aggregator,
         amountToSwap,
         swapData,
         p.planEntryData,
         p.entryToPool,
-        {gasLimit: 10_000_000}
       );
-      console.log("completed", completed);
+      console.log(`unfoldBorrows.withdrawByAggStep.FINISH --------------------------------`);
 
-      console.log("makeFullWithdraw.withdrawByAggStep.execute --------------------------------");
-      await strategyAsOperator.withdrawByAggStep(
-        tokenToSwap,
-        p.aggregator,
-        amountToSwap,
-        swapData,
-        p.planEntryData,
-        p.entryToPool,
-        {gasLimit: 10_000_000}
-      );
-      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
-
-      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `u${++step}`));
+      states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `u${++step}`, {eventsSet}));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
       if (p.singleIteration || completed) break;
@@ -177,6 +178,8 @@ describe('PairBasedNoSwapIntTest', function() {
     countRebalances?: number;
     /** ZERO by default */
     aggregator?: string;
+    /** false by default */
+    useMockAggregator?: boolean;
 
     skipOverCollateralStep?: boolean;
   }
@@ -189,7 +192,9 @@ describe('PairBasedNoSwapIntTest', function() {
         ? "liquidator-as-agg"
         : p.aggregator === MaticAddresses.AGG_ONEINCH_V5
           ? "1inch"
-          : "no";
+          : p.useMockAggregator
+            ? "mock"
+            : "no";
     const pathOut = `./tmp/${platform}-entry${p.entryToPool}-${p.singleIteration ? "single" : "many"}-${p.movePricesUp ? "up" : "down"}-${agg}.csv`;
 
     const states0: IStateNum[] = p.skipOverCollateralStep
@@ -215,7 +220,8 @@ describe('PairBasedNoSwapIntTest', function() {
             ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, p?.propNotUnderlying18 ?? 0])
             : p.planKind === PLAN_SWAP_ONLY
               ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_ONLY, p?.propNotUnderlying18 ?? 0])
-              : "0x"
+              : "0x",
+        useMockAggregator: p.useMockAggregator
       },
       pathOut,
       states0
@@ -240,9 +246,9 @@ describe('PairBasedNoSwapIntTest', function() {
       sharePriceDeviation: number
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-5},
-      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 2e-5},
-      { name: PLATFORM_KYBER, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-8},
+      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 1e-8},
+      { name: PLATFORM_KYBER, sharePriceDeviation: 1e-8},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -792,6 +798,145 @@ describe('PairBasedNoSwapIntTest', function() {
               const amountCollateralPrev = r.states[r.states.length - 2].converterDirect.collaterals[0];
               const amountCollateralFinal = r.states[r.states.length - 1].converterDirect.collaterals[0]
               expect(amountCollateralFinal).lt(amountCollateralPrev);
+            });
+          });
+        });
+      });
+    });
+  });
+  describe('unfold debts using single iteration, Use MockAggregator @skip-on-coverage', function() {
+    let snapshotLocal: string;
+    before(async function() {
+      snapshotLocal = await TimeUtils.snapshot();
+      await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
+
+      // we need to display full objects, so we use util.inspect, see
+      // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
+      require("util").inspect.defaultOptions.depth = null;
+      [signer, signer2] = await ethers.getSigners();
+    })
+
+    after(async function() {
+      await HardhatUtils.restoreBlockFromEnv();
+      await TimeUtils.rollback(snapshotLocal);
+    });
+
+    interface IStrategyInfo {
+      name: string,
+      sharePriceDeviation: number
+    }
+    const strategies: IStrategyInfo[] = [
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_KYBER, sharePriceDeviation: 2e-5},
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const converterStrategyBase = await ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+        const platformVoter = await DeployerUtilsLocal.impersonate(
+          await IController__factory.connect(
+            await converterStrategyBase.controller(),
+            signer
+          ).platformVoter()
+        );
+        await ConverterStrategyBase__factory.connect(b.strategy.address, platformVoter).setCompoundRatio(0);
+
+        // provide $1000 of insurance to compensate possible price decreasing
+        await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits('1000', 6));
+
+        return b;
+      }
+
+      describe(`${strategyInfo.name}`, () => {
+        describe("Move prices up", () => {
+          describe("Liquidator, entry to pool at the end", () => {
+            let snapshot: string;
+            let builderResults: IBuilderResults;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+
+              builderResults = await prepareStrategy();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
+              const mockAggregator: MockAggregator = await MockAggregatorUtils.createMockAggregator(signer, {
+                token0: MaticAddresses.USDC_TOKEN,
+                token1: MaticAddresses.USDT_TOKEN,
+                increaseOutput: true,
+                percentToIncrease: 200,
+                priceOracle: await IConverterController__factory.connect(
+                  await builderResults.converter.controller(),
+                  signer
+                ).priceOracle()
+              });
+
+              return makeWithdrawTest(builderResults, {
+                movePricesUp: true,
+                singleIteration: true,
+                entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
+                planKind: PLAN_REPAY_SWAP_REPAY,
+                aggregator: mockAggregator.address,
+                useMockAggregator: true
+              });
+            }
+
+            it("should not change share price significantly", async () => {
+              const {states} = await loadFixture(callWithdrawSingleIteration);
+              const sharePrice0 = states[0].vault.sharePrice;
+              let sumUncoveredLoss = 0;
+              for (let i = 1; i < states.length; ++i) {
+                sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+                expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
+              }
+            });
+            it("should reduce locked amount significantly", async () => {
+              const {states} = await loadFixture(callWithdrawSingleIteration);
+              const [stateLast, statePrev, ...rest] = [...states].reverse();
+              expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+            });
+            it("should enter to the pool at the end", async () => {
+              const {states} = await loadFixture(callWithdrawSingleIteration);
+              const [stateLast, ...rest] = [...states].reverse();
+              expect(stateLast.strategy.liquidity > 0).eq(true);
+            });
+            it("should put more liquidity to the pool", async () => {
+              const {states} = await loadFixture(callWithdrawSingleIteration);
+              const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
+              const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
+              expect(finalTotalLiquidity).gt(prevTotalLiquidity);
+            });
+            it("should reduce amount-to-repay", async () => {
+              const {states} = await loadFixture(callWithdrawSingleIteration);
+              const prevState = states[states.length - 2];
+              const finalState = states[states.length - 1];
+              const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+              const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+              expect(amountToRepayFinal).lt(amountToRepayPrev);
+            });
+            it("should reduce collateral amount", async () => {
+              const {states} = await loadFixture(callWithdrawSingleIteration);
+              const prevState = states[states.length - 2];
+              const finalState = states[states.length - 1];
+              const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+              const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+              expect(amountCollateralFinal).lt(amountCollateralPrev);
+            });
+
+            it("should not change vault.totalAssets too much", async () => {
+              const {states} = await loadFixture(callWithdrawSingleIteration);
+              const totalAssets0 = states[0].vault.totalAssets;
+              let sumUncoveredLoss = 0;
+              for (let i = 1; i < states.length; ++i) {
+                sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+                const totalAssets = states[i].vault.totalAssets;
+                expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+              }
             });
           });
         });

@@ -858,7 +858,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
           await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
           Misc.ZERO_ADDRESS,
-          true
+            () => true
         );
         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
@@ -1503,6 +1503,18 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               const eventsSet = await CaptureEvents.makeRebalanceNoSwap(b.strategy);
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`, {eventsSet}));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            }
+
+            if (i % 4) {
+              await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+                MaticAddresses.TETU_LIQUIDATOR,
+                  () => true,
+                async (stateTitle, eventsSet) => {
+                  states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
+                  StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+                }
+              );
             }
 
             if (i % 5) {
