@@ -33,6 +33,7 @@ import {
   ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED, FUSE_OFF_1,
   PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY
 } from "../../../baseUT/AppConstants";
+import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -1250,18 +1251,22 @@ describe('PairBasedNoSwapIntTest', function() {
   describe('rebalanceNoSwaps', function() {
     interface IStrategyInfo {
       name: string,
+      priceUp: boolean,
+      countCycles: number,
+      depositAmount: string
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, },
-      { name: PLATFORM_ALGEBRA, },
-      { name: PLATFORM_KYBER, }
+      { name: PLATFORM_UNIV3, priceUp: true, countCycles: 3, depositAmount: "100000" },
+      { name: PLATFORM_UNIV3, priceUp: false, countCycles: 3, depositAmount: "100000" },
+      { name: PLATFORM_ALGEBRA, priceUp: false, countCycles: 2, depositAmount: "1000" },
+      { name: PLATFORM_KYBER, priceUp: false, countCycles: 2, depositAmount: "1000" }
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
       }
 
-      describe(`${strategyInfo.name}`, () => {
+      describe(`${strategyInfo.name}-${strategyInfo.priceUp ? "up" : "down"}`, () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -1270,32 +1275,98 @@ describe('PairBasedNoSwapIntTest', function() {
           await TimeUtils.rollback(snapshot);
         });
 
-        it('should change needRebalance() result to false', async () => {
+        interface IRebalanceResults {
+          needRebalanceBefore: boolean;
+          needRebalanceAfter: boolean;
+          state0: IStateNum;
+          stateFinal: IStateNum;
+        }
+
+        async function makeRebalance() : Promise<IRebalanceResults> {
           const b = await prepareStrategy();
           const defaultState = await PackedData.getDefaultState(b.strategy);
+          const states: IStateNum[] = [];
+          const pathOut = `./tmp/${strategyInfo.name}-${strategyInfo.priceUp ? "up" : "down"}-${strategyInfo.countCycles}-rebalance.csv`;
 
           console.log('deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-          await TokenUtils.getToken(b.asset, signer.address, parseUnits('1000', 6));
-          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+          await TokenUtils.getToken(b.asset, signer.address, parseUnits(strategyInfo.depositAmount, 6));
+          let eventsSet = await CaptureEvents.makeDeposit(b.vault.connect(signer), parseUnits(strategyInfo.depositAmount, 6), strategyInfo.name);
 
-          for (let i = 0; i < 3; ++i) {
-            await UniversalUtils.movePoolPriceDown(
-              signer,
-              defaultState,
-              b.swapper,
-              parseUnits('600000', 6),
-              100001
-            );
+          states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `d`, {eventsSet}));
+          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          for (let i = 0; i < strategyInfo.countCycles; ++i) {
+            // generate some rewards
+            await UniversalUtils.makePoolVolume(signer, defaultState, b.swapper, parseUnits('600000', 6));
+            await TimeUtils.advanceNBlocks(1000);
+
+            if (strategyInfo.priceUp) {
+              await UniversalUtils.movePoolPriceUp(
+                signer,
+                defaultState,
+                b.swapper,
+                parseUnits('600000', 6),
+                100001
+              );
+            } else {
+              await UniversalUtils.movePoolPriceDown(
+                signer,
+                defaultState,
+                b.swapper,
+                parseUnits('600000', 6),
+                100001
+              );
+            }
             if (await b.strategy.needRebalance()) break;
           }
+          states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `p`, {eventsSet}));
+          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
           const needRebalanceBefore = await b.strategy.needRebalance();
-          await b.strategy.rebalanceNoSwaps(true, {gasLimit: 10_000_000});
+          eventsSet = await CaptureEvents.makeRebalanceNoSwap(b.strategy);
+          states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `r`, {eventsSet}));
+          await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
           const needRebalanceAfter = await b.strategy.needRebalance();
 
-          expect(needRebalanceBefore).eq(true);
-          expect(needRebalanceAfter).eq(false);
+          return {
+            needRebalanceBefore,
+            needRebalanceAfter,
+            state0: states[0],
+            stateFinal: states[states.length - 1]
+          }
+        }
+
+        it('should change needRebalance() result to false', async () => {
+          const ret = await loadFixture(makeRebalance);
+
+          expect(ret.needRebalanceBefore).eq(true);
+          expect(ret.needRebalanceAfter).eq(false);
+        });
+
+        it('difference in fixPriceChanges.investedAssets should match to total amount of loss', async () => {
+          const ret = await loadFixture(makeRebalance);
+
+          const totalLoss =
+            (ret.stateFinal.events?.lossCoveredVault ?? 0)
+            + (ret.stateFinal.events?.lossUncoveredCutByMax ?? 0)
+            + (ret.stateFinal.events?.lossUncoveredNotEnoughInsurance ?? 0)
+            - (ret.stateFinal.events?.lossRebalance ?? 0) + (ret.stateFinal.events?.coveredByRewardsRebalance ?? 0);
+          const investedAssetsDiff =
+            (ret.stateFinal.events?.investedAssetsBeforeFixPriceChanges ?? 0)
+            - (ret.stateFinal.events?.investedAssetsAfterFixPriceChanges ?? 0)
+          expect(investedAssetsDiff).approximately(totalLoss, 1e-6); // ignore rounding error: 996.729798-996.9994 gives 0,2696020000000770
+        });
+
+        it('difference in total assets should match to total uncovered loss', async () => {
+          const ret = await loadFixture(makeRebalance);
+
+          const initialTotalAssets = ret.state0.vault.totalAssets;
+          const finalTotalAssets = ret.stateFinal.vault.totalAssets;
+          const uncoveredLoss =
+            + (ret.stateFinal.events?.lossUncoveredCutByMax ?? 0)
+            + (ret.stateFinal.events?.lossUncoveredNotEnoughInsurance ?? 0);
+          expect(initialTotalAssets - finalTotalAssets).approximately(uncoveredLoss, 1e-6);
         });
       });
     });
