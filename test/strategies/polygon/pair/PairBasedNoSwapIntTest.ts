@@ -4,10 +4,7 @@ import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {
-  ConverterStrategyBase__factory, IController__factory, IConverterController__factory,
-  IERC20__factory, ITetuConverter__factory, ITetuLiquidator__factory, MockAggregator, MockSwapper,
-} from "../../../../typechain";
+import {ConverterStrategyBase__factory, IController__factory, IERC20__factory, MockSwapper,} from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
@@ -813,7 +810,7 @@ describe('PairBasedNoSwapIntTest', function() {
       });
     });
   });
-  describe('unfold debts using single iteration, use MockSwapper with changed prices', function() {
+  describe('scb-792: Unfold debts using single iteration, MockSwapper changes prices', function() {
     let snapshotLocal: string;
     before(async function() {
       snapshotLocal = await TimeUtils.snapshot();
@@ -856,13 +853,7 @@ describe('PairBasedNoSwapIntTest', function() {
             percentToIncrease: 200,
             amountToken0: "1000000",
             amountToken1: "1000000",
-            priceOracle: await IConverterController__factory.connect(
-              await ITetuConverter__factory.connect(
-                MaticAddresses.TETU_CONVERTER, // hack: we will know this address only after call of buildPairStrategyUsdtUsdc, but for simplicity we repeat it here
-                signer
-              ).controller(),
-              signer
-            ).priceOracle()
+            converter: MaticAddresses.TETU_CONVERTER, // hack: we will know this address only after call of buildPairStrategyUsdtUsdc, but for simplicity we repeat it here
           }
         );
       })

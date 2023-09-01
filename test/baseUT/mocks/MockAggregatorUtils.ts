@@ -3,7 +3,8 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {
-  IERC20Metadata__factory,
+  IConverterController__factory,
+  IERC20Metadata__factory, ITetuConverter__factory,
   ITetuLiquidator,
   ITetuLiquidator__factory,
   MockAggregator,
@@ -11,12 +12,9 @@ import {
 } from "../../../typechain";
 import {Misc} from "../../../scripts/utils/Misc";
 import {IBuilderResults} from "../strategies/PairBasedStrategyBuilder";
-import {Simulate} from "react-dom/test-utils";
-import pointerOut = Simulate.pointerOut;
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export interface IMockAggregatorParams {
-  priceOracle: string;
+  converter: string;
 
   token0: string;
   token1: string;
@@ -26,8 +24,8 @@ export interface IMockAggregatorParams {
   /** Percent of changing output amount, DENOMINATOR = 100_000, so 1000 = 1% */
   percentToIncrease?: number; // 0.1% by default
 
-  /** Use same increaseOutput for both pairs token0:token1 and token1:token0 */
-  singleDirection?: boolean; // true by default
+  /** Use increaseOutput for both pairs token0:token1 and !increaseOutput for token1:token0, otherwise use increaseOutput for both */
+  reverseDirections?: boolean; // false by default
 
   amountToken0?: string; // 100_000 by default
   amountToken1?: string; // 100_000 by default
@@ -35,7 +33,12 @@ export interface IMockAggregatorParams {
 
 export class MockAggregatorUtils {
   static async createMockAggregator(signer: SignerWithAddress, p: IMockAggregatorParams): Promise<MockAggregator> {
-    const dest = await MockHelper.createMockAggregator(signer, p.priceOracle);
+    const priceOracle = await IConverterController__factory.connect(
+        await ITetuConverter__factory.connect(p.converter, signer).controller(),
+        signer
+    ).priceOracle();
+
+    const dest = await MockHelper.createMockAggregator(signer, priceOracle);
     await dest.setupLiquidate(
       p.token0,
       p.token1,
@@ -45,9 +48,9 @@ export class MockAggregatorUtils {
     await dest.setupLiquidate(
       p.token1,
       p.token0,
-      p.singleDirection
-        ? p.increaseOutput ?? true
-        : !(p.increaseOutput ?? true),
+      p.reverseDirections
+        ? !p.increaseOutput ?? true
+        : (p.increaseOutput ?? true),
       p.percentToIncrease ?? 100 // 0.1% by default
     );
 
@@ -62,7 +65,12 @@ export class MockAggregatorUtils {
   }
 
   static async createMockSwapper(signer: SignerWithAddress, p: IMockAggregatorParams): Promise<MockSwapper> {
-    const dest = await MockHelper.createMockSwapper(signer, p.priceOracle, p.token0, p.token1);
+    const priceOracle = await IConverterController__factory.connect(
+      await ITetuConverter__factory.connect(p.converter, signer).controller(),
+      signer
+    ).priceOracle();
+
+    const dest = await MockHelper.createMockSwapper(signer, priceOracle, p.token0, p.token1);
     await dest.setupSwap(
       p.token0,
       p.token1,
@@ -72,7 +80,7 @@ export class MockAggregatorUtils {
     await dest.setupSwap(
       p.token1,
       p.token0,
-      p.singleDirection
+      p.reverseDirections
         ? p.increaseOutput ?? true
         : !(p.increaseOutput ?? true),
       p.percentToIncrease ?? 100 // 0.1% by default
