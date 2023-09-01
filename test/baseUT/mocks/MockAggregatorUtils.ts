@@ -2,7 +2,7 @@ import {MockHelper} from "../helpers/MockHelper";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
-import {IERC20Metadata__factory, MockAggregator} from "../../../typechain";
+import {IERC20Metadata__factory, MockAggregator, MockSwapper} from "../../../typechain";
 
 export interface IMockAggregatorParams {
   priceOracle: string;
@@ -32,6 +32,33 @@ export class MockAggregatorUtils {
       p.percentToIncrease ?? 100 // 0.1% by default
     );
     await dest.setupLiquidate(
+      p.token1,
+      p.token0,
+      p.singleDirection
+        ? p.increaseOutput ?? true
+        : !(p.increaseOutput ?? true),
+      p.percentToIncrease ?? 100 // 0.1% by default
+    );
+
+    await TokenUtils.getToken(p.token0, dest.address,
+      parseUnits(p?.amountToken0 || "100000", await IERC20Metadata__factory.connect(p.token0, signer).decimals())
+    );
+    await TokenUtils.getToken(p.token1, dest.address,
+      parseUnits(p?.amountToken1 || "100000", await IERC20Metadata__factory.connect(p.token1, signer).decimals())
+    );
+
+    return dest;
+  }
+
+  static async createMockSwapper(signer: SignerWithAddress, p: IMockAggregatorParams): Promise<MockSwapper> {
+    const dest = await MockHelper.createMockSwapper(signer, p.priceOracle);
+    await dest.setupSwap(
+      p.token0,
+      p.token1,
+      p.increaseOutput ?? true,
+      p.percentToIncrease ?? 100 // 0.1% by default
+    );
+    await dest.setupSwap(
       p.token1,
       p.token0,
       p.singleDirection

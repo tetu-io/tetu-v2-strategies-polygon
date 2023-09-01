@@ -6,7 +6,7 @@ import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory, IController__factory, IConverterController__factory,
-  IERC20__factory, MockAggregator,
+  IERC20__factory, ITetuConverter__factory, MockAggregator,
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
@@ -36,6 +36,7 @@ import {
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -95,7 +96,6 @@ describe('PairBasedNoSwapIntTest', function() {
     planEntryData: string;
     entryToPool: number;
     singleIteration: boolean;
-    useMockAggregator?: boolean;
   }
   async function makeFullWithdraw(b: IBuilderResults, p: IWithdrawParams, pathOut: string, states: IStateNum[]): Promise<IListStates> {
     const state = await PackedData.getDefaultState(b.strategy);
@@ -118,7 +118,7 @@ describe('PairBasedNoSwapIntTest', function() {
             quote.amountToSwap,
             strategyAsOperator.address,
           );
-        } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR || p.useMockAggregator) {
+        } else if (p.aggregator === MaticAddresses.TETU_LIQUIDATOR) {
           swapData = AggregatorUtils.buildTxForSwapUsingLiquidatorAsAggregator({
             tokenIn: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
             tokenOut: quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
@@ -179,7 +179,7 @@ describe('PairBasedNoSwapIntTest', function() {
     /** ZERO by default */
     aggregator?: string;
     /** false by default */
-    useMockAggregator?: boolean;
+    useMockSwapper?: boolean;
 
     skipOverCollateralStep?: boolean;
   }
@@ -192,8 +192,8 @@ describe('PairBasedNoSwapIntTest', function() {
         ? "liquidator-as-agg"
         : p.aggregator === MaticAddresses.AGG_ONEINCH_V5
           ? "1inch"
-          : p.useMockAggregator
-            ? "mock"
+          : p.useMockSwapper
+            ? "mock-swapper"
             : "no";
     const pathOut = `./tmp/${platform}-entry${p.entryToPool}-${p.singleIteration ? "single" : "many"}-${p.movePricesUp ? "up" : "down"}-${agg}.csv`;
 
@@ -221,7 +221,6 @@ describe('PairBasedNoSwapIntTest', function() {
             : p.planKind === PLAN_SWAP_ONLY
               ? defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_ONLY, p?.propNotUnderlying18 ?? 0])
               : "0x",
-        useMockAggregator: p.useMockAggregator
       },
       pathOut,
       states0
@@ -804,7 +803,7 @@ describe('PairBasedNoSwapIntTest', function() {
       });
     });
   });
-  describe('unfold debts using single iteration, Use MockAggregator @skip-on-coverage', function() {
+  describe('unfold debts using single iteration, Use MockSwapper @skip-on-coverage', function() {
     let snapshotLocal: string;
     before(async function() {
       snapshotLocal = await TimeUtils.snapshot();
@@ -832,8 +831,24 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
-      async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+      async function prepareStrategy(useMockSwapper?: boolean): Promise<IBuilderResults> {
+        const mockSwapper = await MockAggregatorUtils.createMockSwapper(
+          signer,
+          {
+            token0: MaticAddresses.USDC_TOKEN,
+            token1: MaticAddresses.USDT_TOKEN,
+            increaseOutput: true,
+            percentToIncrease: 200,
+            priceOracle: await IConverterController__factory.connect(
+              await ITetuConverter__factory.connect(
+                MaticAddresses.TETU_CONVERTER, // hack: we will know this address only after call of buildPairStrategyUsdtUsdc, but for simplicity we repeat it here
+                signer
+              ).controller(),
+              signer
+            ).priceOracle()
+          }
+        );
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2, undefined, mockSwapper);
         const converterStrategyBase = await ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const platformVoter = await DeployerUtilsLocal.impersonate(
           await IController__factory.connect(
@@ -857,31 +872,20 @@ describe('PairBasedNoSwapIntTest', function() {
             before(async function () {
               snapshot = await TimeUtils.snapshot();
 
-              builderResults = await prepareStrategy();
+              builderResults = await prepareStrategy(true);
             });
             after(async function () {
               await TimeUtils.rollback(snapshot);
             });
 
             async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-              const mockAggregator: MockAggregator = await MockAggregatorUtils.createMockAggregator(signer, {
-                token0: MaticAddresses.USDC_TOKEN,
-                token1: MaticAddresses.USDT_TOKEN,
-                increaseOutput: true,
-                percentToIncrease: 200,
-                priceOracle: await IConverterController__factory.connect(
-                  await builderResults.converter.controller(),
-                  signer
-                ).priceOracle()
-              });
-
               return makeWithdrawTest(builderResults, {
                 movePricesUp: true,
                 singleIteration: true,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                 planKind: PLAN_REPAY_SWAP_REPAY,
-                aggregator: mockAggregator.address,
-                useMockAggregator: true
+                aggregator: MaticAddresses.TETU_LIQUIDATOR,
+                useMockSwapper: true
               });
             }
 

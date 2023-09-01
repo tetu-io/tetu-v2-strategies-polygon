@@ -3,36 +3,42 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {IBuilderResults, PairBasedStrategyBuilder} from "./PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
+import {MockSwapper} from "../../../typechain";
 
 export class PairStrategyFixtures {
   static async buildPairStrategyUsdtUsdc(
     strategyName: string,
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
-    notUnderlying: string = MaticAddresses.USDT_TOKEN
+    notUnderlying: string = MaticAddresses.USDT_TOKEN,
+    mockSwapper?: MockSwapper
   ): Promise<IBuilderResults> {
     switch (strategyName) {
       case PLATFORM_UNIV3:
         switch (notUnderlying) {
           case MaticAddresses.USDT_TOKEN:
-            return this.buildUniv3UsdtUsdc(signer, signer2);
+            return this.buildUniv3UsdtUsdc(signer, signer2, mockSwapper);
           case MaticAddresses.WETH_TOKEN:
-            return this.buildUniv3UsdcWeth(signer, signer2);
+            return this.buildUniv3UsdcWeth(signer, signer2, mockSwapper);
           case MaticAddresses.WMATIC_TOKEN:
-            return this.buildUniv3WmaticUsdc(signer, signer2);
+            return this.buildUniv3WmaticUsdc(signer, signer2, mockSwapper);
           default:
             throw Error(`univ3-buildStrategy doesn't support ${notUnderlying}`);
         }
       case PLATFORM_ALGEBRA:
-        return this.buildAlgebraUsdtUsdc(signer, signer2);
+        return this.buildAlgebraUsdtUsdc(signer, signer2, mockSwapper);
       case PLATFORM_KYBER:
-        return this.buildKyberUsdtUsdc(signer, signer2);
+        return this.buildKyberUsdtUsdc(signer, signer2, mockSwapper);
       default:
         throw Error(`buildStrategy doesn't support ${strategyName}`);
     }
   }
 
-  static async buildUniv3UsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildUniv3UsdtUsdc(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+    mockSwapper?: MockSwapper
+  ): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildUniv3({
       signer,
       signer2,
@@ -42,7 +48,7 @@ export class PairStrategyFixtures {
       vaultName: 'TetuV2_UniswapV3_USDC-USDT-0.01%',
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+      swapper: mockSwapper?.address || MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
       quoter: MaticAddresses.UNISWAPV3_QUOTER,
 
       liquidatorPools: [{
@@ -55,7 +61,7 @@ export class PairStrategyFixtures {
     });
   }
 
-  static async buildUniv3WmaticUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildUniv3WmaticUsdc(signer: SignerWithAddress, signer2: SignerWithAddress, mockSwapper?: MockSwapper): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildUniv3({
       signer,
       signer2,
@@ -65,7 +71,7 @@ export class PairStrategyFixtures {
       vaultName: 'TetuV2_UniswapV3_WMATIC_USDC-0.05%',
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.WMATIC_TOKEN, MaticAddresses.USDC_TOKEN],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+      swapper: mockSwapper?.address || MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
       quoter: MaticAddresses.UNISWAPV3_QUOTER,
 
       liquidatorPools: [{
@@ -78,7 +84,7 @@ export class PairStrategyFixtures {
     });
   }
 
-  static async buildUniv3UsdcWeth(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildUniv3UsdcWeth(signer: SignerWithAddress, signer2: SignerWithAddress, mockSwapper?: MockSwapper): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildUniv3({
       signer,
       signer2,
@@ -88,7 +94,7 @@ export class PairStrategyFixtures {
       vaultName: 'TetuV2_UniswapV3_USDC-WETH-0.05%',
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.WETH_TOKEN],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
+      swapper: mockSwapper?.address || MaticAddresses.TETU_LIQUIDATOR_UNIV3_SWAPPER,
       quoter: MaticAddresses.UNISWAPV3_QUOTER,
 
       liquidatorPools: [{
@@ -101,7 +107,7 @@ export class PairStrategyFixtures {
     });
   }
 
-  static async buildAlgebraUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildAlgebraUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress, mockSwapper?: MockSwapper): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildAlgebra({
       signer,
       signer2,
@@ -111,7 +117,7 @@ export class PairStrategyFixtures {
       vaultName: 'TetuV2_Algebra_USDC_USDT',
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.dQUICK_TOKEN, MaticAddresses.WMATIC_TOKEN,],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+      swapper: mockSwapper?.address || MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
       quoter: MaticAddresses.ALGEBRA_QUOTER,
       liquidatorPools: [
         // for production
@@ -139,7 +145,7 @@ export class PairStrategyFixtures {
     });
   }
 
-  static async buildKyberUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildKyberUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress, mockSwapper?: MockSwapper): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildKyber({
       signer,
       signer2,
@@ -149,7 +155,7 @@ export class PairStrategyFixtures {
       vaultName: 'TetuV2_Kyber_USDC_USDT',
       converter: MaticAddresses.TETU_CONVERTER,
       profitHolderTokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN, MaticAddresses.KNC_TOKEN,],
-      swapper: MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
+      swapper: mockSwapper?.address || MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
       quoter: MaticAddresses.KYBER_ELASTIC_QUOTER_V2,
       liquidatorPools: [
         {

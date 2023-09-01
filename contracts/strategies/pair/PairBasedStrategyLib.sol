@@ -691,9 +691,7 @@ library PairBasedStrategyLib {
 
   //region ----------------------------------------- Utils
   function _checkSwapRouter(address router) internal view {
-    console.log("temp TODO");
-    //TODO require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
-    console.log("temp TODO");
+    require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
   }
 
   /// @notice Extract propNotUnderlying18 from {planEntryData} of the given {planKind}
