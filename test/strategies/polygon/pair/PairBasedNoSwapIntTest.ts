@@ -839,6 +839,8 @@ describe('PairBasedNoSwapIntTest', function() {
             token1: MaticAddresses.USDT_TOKEN,
             increaseOutput: true,
             percentToIncrease: 200,
+            amountToken0: "1000000",
+            amountToken1: "1000000",
             priceOracle: await IConverterController__factory.connect(
               await ITetuConverter__factory.connect(
                 MaticAddresses.TETU_CONVERTER, // hack: we will know this address only after call of buildPairStrategyUsdtUsdc, but for simplicity we repeat it here

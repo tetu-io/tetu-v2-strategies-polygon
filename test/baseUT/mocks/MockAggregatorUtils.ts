@@ -51,7 +51,7 @@ export class MockAggregatorUtils {
   }
 
   static async createMockSwapper(signer: SignerWithAddress, p: IMockAggregatorParams): Promise<MockSwapper> {
-    const dest = await MockHelper.createMockSwapper(signer, p.priceOracle);
+    const dest = await MockHelper.createMockSwapper(signer, p.priceOracle, p.token0, p.token1);
     await dest.setupSwap(
       p.token0,
       p.token1,
@@ -73,6 +73,8 @@ export class MockAggregatorUtils {
     await TokenUtils.getToken(p.token1, dest.address,
       parseUnits(p?.amountToken1 || "100000", await IERC20Metadata__factory.connect(p.token1, signer).decimals())
     );
+
+    await dest.setupReserves();
 
     return dest;
   }

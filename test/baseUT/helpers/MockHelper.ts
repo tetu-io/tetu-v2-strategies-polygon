@@ -189,7 +189,7 @@ export class MockHelper {
     return (await DeployerUtils.deployContract(signer, 'MockAggregator', priceOracle)) as MockAggregator;
   }
 
-  public static async createMockSwapper(signer: SignerWithAddress, priceOracle: string): Promise<MockSwapper> {
-    return (await DeployerUtils.deployContract(signer, 'MockSwapper', priceOracle)) as MockSwapper;
+  public static async createMockSwapper(signer: SignerWithAddress, priceOracle: string, token0: string, token1: string): Promise<MockSwapper> {
+    return (await DeployerUtils.deployContract(signer, 'MockSwapper', priceOracle, token0, token1)) as MockSwapper;
   }
 }
