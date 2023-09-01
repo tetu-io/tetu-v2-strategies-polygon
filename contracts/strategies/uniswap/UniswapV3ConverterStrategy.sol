@@ -205,7 +205,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
-    (completed, tokenAmounts) = UniswapV3ConverterStrategyLogicLib.withdrawByAggStep(
+    uint profitToCoverSent;
+    (completed, tokenAmounts, profitToCoverSent) = UniswapV3ConverterStrategyLogicLib.withdrawByAggStep(
       [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
       swapData,
@@ -221,6 +222,21 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (completed && _isFuseTriggeredOn()) {
       // full withdraw was completed, we can exclude next calls of withdrawByAggStep
       state.pair.withdrawDone = 1;
+    }
+
+    address _asset = baseState.asset;
+    uint balance = IERC20(_asset).balanceOf(address(this));
+    uint newInvestedAsset = _csbs.investedAssets + balance;
+    if (oldTotalAssets + profitToCover - profitToCoverSent > newInvestedAsset + balance) {
+      // total asset was increased (i.e. because of too profitable swaps)
+      // this increment will increase share price
+      // we should send added amount to insurance to avoid share price change
+      // anyway, it's too expensive to do it here
+      // so, we postpone sending the profit until the next call of fixPriceChange
+      uint increment = newInvestedAsset + balance - (oldTotalAssets + profitToCover - profitToCoverSent);
+      if (newInvestedAsset > increment) {
+        _csbs.investedAssets = newInvestedAsset - increment;
+      }
     }
   }
 
@@ -318,6 +334,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
       _depositorEnter(tokenAmounts);
     }
+    console.log("_rebalanceAfter");
     _updateInvestedAssets();
   }
 

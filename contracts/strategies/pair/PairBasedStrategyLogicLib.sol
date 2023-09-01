@@ -303,7 +303,9 @@ library PairBasedStrategyLogicLib {
   /// @param tokens [underlying, not-underlying] (values been read from pairBase)
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
   /// @return tokenAmounts Amounts to be deposited to pool. If {tokenAmounts} contains zero amount return empty array.
-  /// @return loss Loss to cover
+  /// @return lossAndProfitToCoverSent
+  ///         [0] Loss to cover
+  ///         [1] Amount of profit that was send to the insurance
   function withdrawByAggStep(
     address[5] calldata addr_,
     uint[4] calldata values_,
@@ -314,7 +316,7 @@ library PairBasedStrategyLogicLib {
   ) external returns (
     bool completed,
     uint[] memory tokenAmounts,
-    uint loss
+    uint[2] memory lossAndProfitToCoverSent
   ) {
     WithdrawByAggStepLocal memory v;
 
@@ -347,17 +349,19 @@ library PairBasedStrategyLogicLib {
 
     // fix loss / profitToCover
     if (v.profitToCover != 0) {
-      uint profitToSend = Math.min(v.profitToCover, IERC20(v.w.tokens[0]).balanceOf(address(this)));
-      ConverterStrategyBaseLib2.sendToInsurance(v.w.tokens[0], profitToSend, v.splitter, v.oldTotalAssets);
+      lossAndProfitToCoverSent[1] = Math.min(v.profitToCover, IERC20(v.w.tokens[0]).balanceOf(address(this)));
+      (lossAndProfitToCoverSent[1],) = ConverterStrategyBaseLib2.sendToInsurance(v.w.tokens[0], lossAndProfitToCoverSent[1], v.splitter, v.oldTotalAssets);
     }
 
-    (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(
+    (lossAndProfitToCoverSent[0], tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(
       ITetuConverter(v.converter),
       v.oldTotalAssets,
       v.w.tokens[0],
       v.w.tokens[1],
       [v.w.liquidationThresholds[0], v.w.liquidationThresholds[1]]
     );
+
+    return (completed, tokenAmounts, lossAndProfitToCoverSent);
   }
 
   /// @notice Rebalance asset to proportions {propTokenA}:{1e18-propTokenA}, fix profitToCover

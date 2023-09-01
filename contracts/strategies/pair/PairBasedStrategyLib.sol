@@ -667,7 +667,7 @@ library PairBasedStrategyLib {
       console.log("isConversionValid.p.tokens[indexIn]", p.tokens[indexIn]);
       console.log("isConversionValid.p.tokens[indexOut]", p.tokens[indexOut]);
       console.log("isConversionValid.amountIn", amountIn);
-      console.log("isConversionValid.amountOut", AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore);
+      console.log("isConversionValid.actual.amountOut", AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore);
       require(
         p.converter.isConversionValid(
           p.tokens[indexIn],
@@ -676,6 +676,7 @@ library PairBasedStrategyLib {
           AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
           _ASSET_LIQUIDATION_SLIPPAGE
         ), AppErrors.PRICE_IMPACT);
+      console.log("isConversionValid.expected.amountOut", amountIn * p.prices[indexIn] * p.decs[indexOut] / p.prices[indexOut] / p.decs[indexIn]);
     }
 
     return (

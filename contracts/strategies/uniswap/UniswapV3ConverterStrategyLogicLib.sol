@@ -493,17 +493,17 @@ library UniswapV3ConverterStrategyLogicLib {
     mapping(address => uint) storage liquidationThresholds
   ) external returns (
     bool completed,
-    uint[] memory tokenAmountsOut
+    uint[] memory tokenAmountsOut,
+    uint profitToCoverSent
   ) {
-    address splitter = addr_[4];
     uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
     IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
-    uint loss;
-    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(
+    uint[2] memory lossAndProfitToCoverSent;
+    (completed, tokenAmounts, lossAndProfitToCoverSent) = PairBasedStrategyLogicLib.withdrawByAggStep(
       addr_,
       values_,
       swapData,
@@ -513,8 +513,15 @@ library UniswapV3ConverterStrategyLogicLib {
     );
 
     // cover loss
-    if (loss != 0) {
-      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+    if (lossAndProfitToCoverSent[0] != 0) {
+      _coverLoss(
+        addr_[4], // splitter
+        lossAndProfitToCoverSent[0],
+        pairState.strategyProfitHolder,
+        tokens[0],
+        tokens[1],
+        address(pool)
+      );
     }
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
@@ -529,7 +536,7 @@ library UniswapV3ConverterStrategyLogicLib {
       );
       tokenAmountsOut = tokenAmounts;
     }
-    return (completed, tokenAmountsOut); // hide warning
+    return (completed, tokenAmountsOut, lossAndProfitToCoverSent[1]); // hide warning
   }
   //endregion ------------------------------------------------ WithdrawByAgg
 

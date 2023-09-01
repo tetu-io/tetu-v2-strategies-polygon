@@ -615,12 +615,12 @@ library KyberConverterStrategyLogicLib {
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
-    uint loss;
-    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
+    uint[2] memory lossAndProfitToCoverSent;
+    (completed, tokenAmounts, lossAndProfitToCoverSent) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
     // cover loss
-    if (loss != 0) {
-      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+    if (lossAndProfitToCoverSent[0] != 0) {
+      _coverLoss(splitter, lossAndProfitToCoverSent[0], pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
