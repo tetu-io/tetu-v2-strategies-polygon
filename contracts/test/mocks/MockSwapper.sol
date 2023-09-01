@@ -39,6 +39,8 @@ contract MockSwapper is ISwapper {
   function setupReserves() external {
     reserves0 = IERC20(token0).balanceOf(address(this));
     reserves1 = IERC20(token1).balanceOf(address(this));
+    console.log("setupReserves.reserves0", reserves0);
+    console.log("setupReserves.reserves1", reserves1);
   }
 
   function setupSwap(address tokenIn, address tokenOut, bool increaseOutput, uint percentToIncrease) external {
@@ -55,7 +57,13 @@ contract MockSwapper is ISwapper {
     priceImpactTolerance; //hide warning
     pool; //hide warning
 
-    uint amountIn = IERC20(tokenIn).balanceOf(address(this)) - (tokenIn == token0 ? reserves0 : reserves1);
+    uint reserves = (tokenIn == token0 ? reserves0 : reserves1);
+    console.log("MockSwapper.swap.reserves", reserves);
+    console.log("MockSwapper.swap.reserves0", reserves0);
+    console.log("MockSwapper.swap.reserves1", reserves1);
+    console.log("MockSwapper.swap.balance", IERC20(tokenIn).balanceOf(address(this)));
+    uint amountIn = IERC20(tokenIn).balanceOf(address(this)) - reserves;
+    console.log("MockSwapper.swap.amountIn", amountIn);
 
     SwapParams memory swapParams;
     {
@@ -76,13 +84,10 @@ contract MockSwapper is ISwapper {
       uint decimalsOut = IERC20Metadata(tokenOut).decimals();
 
       uint amountOutByOracle = amountIn * priceIn * decimalsOut / priceOut / decimalsIn;
-      uint delta = amountOutByOracle * (DENOMINATOR + swapParams.percentToIncrease) / DENOMINATOR;
       if (swapParams.increaseOutput) {
-        amountOut += delta;
+        amountOut += amountOutByOracle * (DENOMINATOR + swapParams.percentToIncrease) / DENOMINATOR;
       } else {
-        amountOut = amountOut > delta
-          ? amountOut - delta
-          : 0;
+        amountOut = amountOutByOracle * (DENOMINATOR - swapParams.percentToIncrease) / DENOMINATOR;
       }
     }
 
@@ -92,8 +97,14 @@ contract MockSwapper is ISwapper {
     }
 
     if (amountOut != 0) {
-      IERC20(tokenOut).transfer(msg.sender, amountOut);
+      IERC20(tokenOut).transfer(recipient, amountOut);
+      console.log("MockSwapper.transfer amountOut to recipient", amountOut, recipient);
     }
+
+    reserves0 = IERC20(token0).balanceOf(address(this));
+    reserves1 = IERC20(token1).balanceOf(address(this));
+    console.log("MockSwapper.swap.final.reserves0", reserves0);
+    console.log("MockSwapper.swap.final.reserves1", reserves1);
   }
 
   /// @notice getPrice always return amount calculated by oracle prices

@@ -6,7 +6,7 @@ import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
   ConverterStrategyBase__factory, IController__factory, IConverterController__factory,
-  IERC20__factory, ITetuConverter__factory, MockAggregator,
+  IERC20__factory, ITetuConverter__factory, ITetuLiquidator__factory, MockAggregator, MockSwapper,
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
@@ -36,7 +36,6 @@ import {
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -97,7 +96,7 @@ describe('PairBasedNoSwapIntTest', function() {
     entryToPool: number;
     singleIteration: boolean;
   }
-  async function makeFullWithdraw(b: IBuilderResults, p: IWithdrawParams, pathOut: string, states: IStateNum[]): Promise<IListStates> {
+  async function makeFullWithdraw(b: IBuilderResults, p: IWithdrawParams, pathOut: string, states: IStateNum[], mockSwapper?: MockSwapper): Promise<IListStates> {
     const state = await PackedData.getDefaultState(b.strategy);
     const strategyAsOperator = b.strategy.connect(b.operator);
     
@@ -137,6 +136,11 @@ describe('PairBasedNoSwapIntTest', function() {
       console.log("planEntryData", p.planEntryData);
       console.log("ENTRY_TO_POOL_IS_ALLOWED", p.entryToPool);
 
+      if (mockSwapper) {
+        // temporary replace swappery by mocked one
+        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockSwapper.address);
+      }
+
       const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
           tokenToSwap,
           p.aggregator,
@@ -160,6 +164,12 @@ describe('PairBasedNoSwapIntTest', function() {
       states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `u${++step}`, {eventsSet}));
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
+      if (mockSwapper) {
+        // restore original swapper
+        await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
+      }
+
+
       if (p.singleIteration || completed) break;
     }
 
@@ -178,13 +188,12 @@ describe('PairBasedNoSwapIntTest', function() {
     countRebalances?: number;
     /** ZERO by default */
     aggregator?: string;
-    /** false by default */
-    useMockSwapper?: boolean;
+    mockSwapper?: MockSwapper;
 
     skipOverCollateralStep?: boolean;
   }
 
-  async function makeWithdrawTest(b: IBuilderResults, p: IMakeWithdrawTestParams): Promise<IMakeWithdrawTestResults> {
+  async function makeWithdrawTest(b: IBuilderResults, p: IMakeWithdrawTestParams, fnPostfix?: string): Promise<IMakeWithdrawTestResults> {
     const platform = await ConverterStrategyBase__factory.connect(b.strategy.address, signer).PLATFORM();
     const agg = p.aggregator === Misc.ZERO_ADDRESS
       ? "no"
@@ -192,10 +201,10 @@ describe('PairBasedNoSwapIntTest', function() {
         ? "liquidator-as-agg"
         : p.aggregator === MaticAddresses.AGG_ONEINCH_V5
           ? "1inch"
-          : p.useMockSwapper
+          : p.mockSwapper
             ? "mock-swapper"
             : "no";
-    const pathOut = `./tmp/${platform}-entry${p.entryToPool}-${p.singleIteration ? "single" : "many"}-${p.movePricesUp ? "up" : "down"}-${agg}.csv`;
+    const pathOut = `./tmp/${platform}-entry${p.entryToPool}-${p.singleIteration ? "single" : "many"}-${p.movePricesUp ? "up" : "down"}-${agg}${fnPostfix ? fnPostfix : ""}.csv`;
 
     const states0: IStateNum[] = p.skipOverCollateralStep
       ? []
@@ -223,7 +232,8 @@ describe('PairBasedNoSwapIntTest', function() {
               : "0x",
       },
       pathOut,
-      states0
+      states0,
+      p.mockSwapper
     );
 
     return {states};
@@ -803,7 +813,7 @@ describe('PairBasedNoSwapIntTest', function() {
       });
     });
   });
-  describe('unfold debts using single iteration, Use MockSwapper @skip-on-coverage', function() {
+  describe('unfold debts using single iteration, use MockSwapper with changed prices', function() {
     let snapshotLocal: string;
     before(async function() {
       snapshotLocal = await TimeUtils.snapshot();
@@ -814,7 +824,6 @@ describe('PairBasedNoSwapIntTest', function() {
       require("util").inspect.defaultOptions.depth = null;
       [signer, signer2] = await ethers.getSigners();
     })
-
     after(async function() {
       await HardhatUtils.restoreBlockFromEnv();
       await TimeUtils.rollback(snapshotLocal);
@@ -822,22 +831,28 @@ describe('PairBasedNoSwapIntTest', function() {
 
     interface IStrategyInfo {
       name: string,
-      sharePriceDeviation: number
+      sharePriceDeviation: number;
+      /**
+       * Mock swapper should transfer amount a bit higher or a bit lower than amount calculated by price oracle.
+       */
+      increaseOutput: boolean;
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-5},
-      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 2e-5},
-      { name: PLATFORM_KYBER, sharePriceDeviation: 2e-5},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-10, increaseOutput: true},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 2e-10, increaseOutput: false},
+      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 2e-10, increaseOutput: true},
+      { name: PLATFORM_KYBER, sharePriceDeviation: 2e-10, increaseOutput: true},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
-      async function prepareStrategy(useMockSwapper?: boolean): Promise<IBuilderResults> {
-        const mockSwapper = await MockAggregatorUtils.createMockSwapper(
+      let mockSwapper: MockSwapper;
+      before(async function() {
+        mockSwapper = await MockAggregatorUtils.createMockSwapper(
           signer,
           {
             token0: MaticAddresses.USDC_TOKEN,
             token1: MaticAddresses.USDT_TOKEN,
-            increaseOutput: true,
+            increaseOutput: strategyInfo.increaseOutput,
             percentToIncrease: 200,
             amountToken0: "1000000",
             amountToken1: "1000000",
@@ -850,7 +865,10 @@ describe('PairBasedNoSwapIntTest', function() {
             ).priceOracle()
           }
         );
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2, undefined, mockSwapper);
+      })
+
+      async function prepareStrategy(useMockSwapper?: boolean): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2, undefined);
         const converterStrategyBase = await ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const platformVoter = await DeployerUtilsLocal.impersonate(
           await IController__factory.connect(
@@ -866,84 +884,87 @@ describe('PairBasedNoSwapIntTest', function() {
         return b;
       }
 
-      describe(`${strategyInfo.name}`, () => {
-        describe("Move prices up", () => {
-          describe("Liquidator, entry to pool at the end", () => {
-            let snapshot: string;
-            let builderResults: IBuilderResults;
-            before(async function () {
-              snapshot = await TimeUtils.snapshot();
+      describe(`${strategyInfo.name}-${strategyInfo.increaseOutput ? "amountOutUpper" : "amountOutLower"}`, () => {
+        describe("Liquidator, entry to pool at the end", () => {
+          let snapshot: string;
+          let builderResults: IBuilderResults;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
 
-              builderResults = await prepareStrategy(true);
-            });
-            after(async function () {
-              await TimeUtils.rollback(snapshot);
-            });
+            builderResults = await prepareStrategy(true);
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
-            async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
-              return makeWithdrawTest(builderResults, {
+          async function callWithdrawSingleIteration(): Promise<IMakeWithdrawTestResults> {
+            return makeWithdrawTest(
+              builderResults,
+              {
                 movePricesUp: true,
                 singleIteration: true,
                 entryToPool: ENTRY_TO_POOL_IS_ALLOWED,
                 planKind: PLAN_REPAY_SWAP_REPAY,
                 aggregator: MaticAddresses.TETU_LIQUIDATOR,
-                useMockSwapper: true
-              });
+                countRebalances: 1,
+                mockSwapper
+              },
+              strategyInfo.increaseOutput ? "amountOutUpper" : "amountOutLower"
+            );
+          }
+
+          it("should not change share price significantly", async () => {
+            const {states} = await loadFixture(callWithdrawSingleIteration);
+            const sharePrice0 = states[0].vault.sharePrice;
+            let sumUncoveredLoss = 0;
+            for (let i = 1; i < states.length; ++i) {
+              sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+              const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
+              expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
             }
+          });
+          it("should reduce locked amount significantly", async () => {
+            const {states} = await loadFixture(callWithdrawSingleIteration);
+            const [stateLast, statePrev, ...rest] = [...states].reverse();
+            expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
+          });
+          it("should enter to the pool at the end", async () => {
+            const {states} = await loadFixture(callWithdrawSingleIteration);
+            const [stateLast, ...rest] = [...states].reverse();
+            expect(stateLast.strategy.liquidity > 0).eq(true);
+          });
+          it("should put more liquidity to the pool", async () => {
+            const {states} = await loadFixture(callWithdrawSingleIteration);
+            const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
+            const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
+            expect(finalTotalLiquidity).gt(prevTotalLiquidity);
+          });
+          it("should reduce amount-to-repay", async () => {
+            const {states} = await loadFixture(callWithdrawSingleIteration);
+            const prevState = states[states.length - 2];
+            const finalState = states[states.length - 1];
+            const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
+            const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
+            expect(amountToRepayFinal).lt(amountToRepayPrev);
+          });
+          it("should reduce collateral amount", async () => {
+            const {states} = await loadFixture(callWithdrawSingleIteration);
+            const prevState = states[states.length - 2];
+            const finalState = states[states.length - 1];
+            const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
+            const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
+            expect(amountCollateralFinal).lt(amountCollateralPrev);
+          });
 
-            it("should not change share price significantly", async () => {
-              const {states} = await loadFixture(callWithdrawSingleIteration);
-              const sharePrice0 = states[0].vault.sharePrice;
-              let sumUncoveredLoss = 0;
-              for (let i = 1; i < states.length; ++i) {
-                sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                const adjustedSharePrice = (states[i].vault.totalAssets + sumUncoveredLoss) / states[i].vault.totalSupply;
-                expect(sharePrice0).approximately(adjustedSharePrice, strategyInfo.sharePriceDeviation, states[i].title);
-              }
-            });
-            it("should reduce locked amount significantly", async () => {
-              const {states} = await loadFixture(callWithdrawSingleIteration);
-              const [stateLast, statePrev, ...rest] = [...states].reverse();
-              expect(statePrev.lockedInConverter / stateLast.lockedInConverter).gt(1.2);
-            });
-            it("should enter to the pool at the end", async () => {
-              const {states} = await loadFixture(callWithdrawSingleIteration);
-              const [stateLast, ...rest] = [...states].reverse();
-              expect(stateLast.strategy.liquidity > 0).eq(true);
-            });
-            it("should put more liquidity to the pool", async () => {
-              const {states} = await loadFixture(callWithdrawSingleIteration);
-              const prevTotalLiquidity = states[states.length - 2].strategy.liquidity;
-              const finalTotalLiquidity = states[states.length - 1].strategy.liquidity;
-              expect(finalTotalLiquidity).gt(prevTotalLiquidity);
-            });
-            it("should reduce amount-to-repay", async () => {
-              const {states} = await loadFixture(callWithdrawSingleIteration);
-              const prevState = states[states.length - 2];
-              const finalState = states[states.length - 1];
-              const amountToRepayPrev = Math.max(prevState.converterDirect.amountsToRepay[0], prevState.converterReverse.amountsToRepay[0]);
-              const amountToRepayFinal = Math.max(finalState.converterDirect.amountsToRepay[0], finalState.converterReverse.amountsToRepay[0]);
-              expect(amountToRepayFinal).lt(amountToRepayPrev);
-            });
-            it("should reduce collateral amount", async () => {
-              const {states} = await loadFixture(callWithdrawSingleIteration);
-              const prevState = states[states.length - 2];
-              const finalState = states[states.length - 1];
-              const amountCollateralPrev = Math.max(prevState.converterDirect.collaterals[0], prevState.converterReverse.collaterals[0]);
-              const amountCollateralFinal = Math.max(finalState.converterDirect.collaterals[0], finalState.converterReverse.collaterals[0]);
-              expect(amountCollateralFinal).lt(amountCollateralPrev);
-            });
-
-            it("should not change vault.totalAssets too much", async () => {
-              const {states} = await loadFixture(callWithdrawSingleIteration);
-              const totalAssets0 = states[0].vault.totalAssets;
-              let sumUncoveredLoss = 0;
-              for (let i = 1; i < states.length; ++i) {
-                sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
-                const totalAssets = states[i].vault.totalAssets;
-                expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
-              }
-            });
+          it("should not change vault.totalAssets too much", async () => {
+            const {states} = await loadFixture(callWithdrawSingleIteration);
+            const totalAssets0 = states[0].vault.totalAssets;
+            let sumUncoveredLoss = 0;
+            for (let i = 1; i < states.length; ++i) {
+              sumUncoveredLoss += (states[i].events?.lossUncoveredCutByMax ?? 0) + (states[i].events?.lossUncoveredNotEnoughInsurance ?? 0);
+              const totalAssets = states[i].vault.totalAssets;
+              expect(differenceInPercentsNumLessThan(totalAssets0, totalAssets + sumUncoveredLoss, 0.01)).eq(true);
+            }
           });
         });
       });
