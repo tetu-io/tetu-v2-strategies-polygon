@@ -171,6 +171,7 @@ export class PairBasedStrategyPrepareStateUtils {
     const governance = await controller.governance();
     const controllerAsGov = controller.connect(await Misc.impersonate(governance));
 
+    await controllerAsGov.removeProxyAnnounce(strategyProxy);
     await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
     await controllerAsGov.upgradeProxy([strategyProxy]);

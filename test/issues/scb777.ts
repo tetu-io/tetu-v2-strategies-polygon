@@ -382,7 +382,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
           signer
       );
 
-      // await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
@@ -424,7 +424,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
         signer
       );
 
-      // await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       const tokenToSwap = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F";

@@ -26,6 +26,9 @@ library KyberConverterStrategyLogicLib {
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event KyberFeesClaimed(uint fee0, uint fee1);
   event KyberRewardsClaimed(uint reward);
+  /// @param loss Total amount of loss
+  /// @param coveredByRewards Part of the loss covered by rewards
+  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -556,6 +559,7 @@ library KyberConverterStrategyLogicLib {
       if (notCovered != 0) {
         ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
+      emit CoverLoss(loss, coveredByRewards);
     }
 
     return coveredByRewards;
@@ -615,12 +619,12 @@ library KyberConverterStrategyLogicLib {
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
-    uint[2] memory lossAndProfitToCoverSent;
-    (completed, tokenAmounts, lossAndProfitToCoverSent) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
+    uint loss;
+    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
     // cover loss
-    if (lossAndProfitToCoverSent[0] != 0) {
-      _coverLoss(splitter, lossAndProfitToCoverSent[0], pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+    if (loss != 0) {
+      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED

@@ -133,6 +133,7 @@ library PairBasedStrategyLib {
   //region ------------------------------------------------ Events
   event FuseStatusChanged(uint fuseStatus);
   event NewFuseThresholds(uint[4] newFuseThresholds);
+  event SwapByAgg(uint amountToSwap, uint amountIn, uint amountOut, uint expectedAmountOut, address aggregator);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ External withdraw functions
@@ -677,6 +678,14 @@ library PairBasedStrategyLib {
           _ASSET_LIQUIDATION_SLIPPAGE
         ), AppErrors.PRICE_IMPACT);
       console.log("isConversionValid.expected.amountOut", amountIn * p.prices[indexIn] * p.decs[indexOut] / p.prices[indexOut] / p.decs[indexIn]);
+
+      emit SwapByAgg(
+        aggParams.amountToSwap,
+        amountIn,
+        AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
+        amountIn * p.prices[indexIn] * p.decs[indexOut] / p.prices[indexOut] / p.decs[indexIn],
+        aggregator
+      );
     }
 
     return (
@@ -691,7 +700,7 @@ library PairBasedStrategyLib {
   //endregion ------------------------------------------------ Internal helper functions
 
   //region ----------------------------------------- Utils
-  function _checkSwapRouter(address router) internal view {
+  function _checkSwapRouter(address router) internal pure {
     require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
   }
 

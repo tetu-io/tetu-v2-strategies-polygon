@@ -174,7 +174,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // send earned-by-prices to the insurance, ignore dust values
     if (earnedByPrices_ > AppLib._getLiquidationThreshold(liquidationThresholds[_asset])) {
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
-        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
+        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
+          _asset,
+          earnedByPrices_,
+          baseState.splitter,
+          investedAssets_ + balanceBefore,
+          balanceBefore
+        );
       } else {
         // needToDeposit is false and we don't have enough amount to cover earned-by-prices, we need to withdraw
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
@@ -371,7 +377,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
           v.asset,
           earnedByPrices_,
           baseState.splitter,
-          investedAssets_ + v.balanceBefore
+          investedAssets_ + v.balanceBefore,
+          AppLib.balance(v.asset)
         );
       }
 

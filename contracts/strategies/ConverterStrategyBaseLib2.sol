@@ -51,10 +51,9 @@ library ConverterStrategyBaseLib2 {
   event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
   /// @notice Compensation of losses is not carried out completely
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
-  /// @notice Payment to insurance was carried out only partially
-  event UnsentAmountToInsurance(uint sentAmount, uint unsentAmount, uint balance, uint totalAssets);
   /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
   event NotEnoughInsurance(uint lossUncovered);
+  event SendToInsurance(uint amount, uint unsentAmount);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -215,15 +214,15 @@ library ConverterStrategyBaseLib2 {
 //endregion ----------------------------------------- MAIN LOGIC
 
 //region -------------------------------------------- Cover loss, send profit to insurance
-  /// @notice Send given amount of underlying to the insurance
+  /// @notice Send given {amount} of {asset} (== underlying) to the insurance
   /// @param totalAssets_ Total strategy balance = balance of underlying + current invested assets amount
+  /// @param balance Current balance of the underlying
   /// @return sentAmount Amount of underlying sent to the insurance
   /// @return unsentAmount Missed part of the {amount} that were not sent to the insurance
-  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_) external returns (
+  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_, uint balance) external returns (
     uint sentAmount,
     uint unsentAmount
   ) {
-    uint balance = IERC20(asset).balanceOf(address(this));
     uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
@@ -243,9 +242,7 @@ library ConverterStrategyBaseLib2 {
       ? amount - amountToSend
       : 0;
 
-    if (unsentAmount != 0) {
-      emit UnsentAmountToInsurance(sentAmount, unsentAmount, balance, totalAssets_);
-    }
+    emit SendToInsurance(sentAmount, unsentAmount);
   }
 
   function _registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {

@@ -19,6 +19,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -32,6 +33,9 @@ library UniswapV3ConverterStrategyLogicLib {
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event UniV3FeesClaimed(uint fee0, uint fee1);
+  /// @param loss Total amount of loss
+  /// @param coveredByRewards Part of the loss covered by rewards
+  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -426,7 +430,7 @@ library UniswapV3ConverterStrategyLogicLib {
       if (loss != 0) {
         coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
-      emit Rebalanced(loss, profitToCover, coveredByRewards);
+      emit Rebalanced(loss, profitToCover);
     }
 
     return tokenAmounts;
@@ -436,12 +440,17 @@ library UniswapV3ConverterStrategyLogicLib {
   function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
     uint coveredByRewards
   ) {
+    console.log("_coverLoss.loss", loss);
     if (loss != 0) {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
+      console.log("_coverLoss.coveredByRewards", coveredByRewards);
       uint notCovered = loss - coveredByRewards;
+      console.log("_coverLoss.notCovered", notCovered);
       if (notCovered != 0) {
         ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
+
+      emit CoverLoss(loss, coveredByRewards);
     }
 
     return coveredByRewards;
@@ -493,17 +502,17 @@ library UniswapV3ConverterStrategyLogicLib {
     mapping(address => uint) storage liquidationThresholds
   ) external returns (
     bool completed,
-    uint[] memory tokenAmountsOut,
-    uint profitToCoverSent
+    uint[] memory tokenAmountsOut
   ) {
+    address splitter = addr_[4];
     uint entryToPool = values_[3];
     address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
     IUniswapV3Pool pool = IUniswapV3Pool(pairState.pool);
 
     // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
     uint[] memory tokenAmounts;
-    uint[2] memory lossAndProfitToCoverSent;
-    (completed, tokenAmounts, lossAndProfitToCoverSent) = PairBasedStrategyLogicLib.withdrawByAggStep(
+    uint loss;
+    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(
       addr_,
       values_,
       swapData,
@@ -513,15 +522,8 @@ library UniswapV3ConverterStrategyLogicLib {
     );
 
     // cover loss
-    if (lossAndProfitToCoverSent[0] != 0) {
-      _coverLoss(
-        addr_[4], // splitter
-        lossAndProfitToCoverSent[0],
-        pairState.strategyProfitHolder,
-        tokens[0],
-        tokens[1],
-        address(pool)
-      );
+    if (loss != 0) {
+      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
@@ -536,7 +538,7 @@ library UniswapV3ConverterStrategyLogicLib {
       );
       tokenAmountsOut = tokenAmounts;
     }
-    return (completed, tokenAmountsOut, lossAndProfitToCoverSent[1]); // hide warning
+    return (completed, tokenAmountsOut); // hide warning
   }
   //endregion ------------------------------------------------ WithdrawByAgg
 
