@@ -1514,7 +1514,7 @@ describe('PairBasedNoSwapIntTest', function() {
             (ret.stateFinal.events?.lossCoveredVault ?? 0)
             + (ret.stateFinal.events?.lossUncoveredCutByMax ?? 0)
             + (ret.stateFinal.events?.lossUncoveredNotEnoughInsurance ?? 0)
-            - (ret.stateFinal.events?.lossRebalance ?? 0) + (ret.stateFinal.events?.coveredByRewardsRebalance ?? 0);
+            - (ret.stateFinal.events?.lossRebalance ?? 0) + (ret.stateFinal.events?.coveredByRewards ?? 0);
           const investedAssetsDiff =
             (ret.stateFinal.events?.investedAssetsBeforeFixPriceChanges ?? 0)
             - (ret.stateFinal.events?.investedAssetsAfterFixPriceChanges ?? 0)

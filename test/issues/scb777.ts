@@ -460,7 +460,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   });
 
   describe("withdrawByAggStep: loss don't match to profit", () => {
-    const BLOCK = 47003428;
+    const BLOCK = 47029602;
     const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";
     const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
     const pathOut = "./tmp/profitable-swap.csv";

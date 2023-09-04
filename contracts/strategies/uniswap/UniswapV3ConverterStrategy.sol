@@ -231,19 +231,17 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     console.log("withdrawByAggStep.profitToCover", profitToCover);
     console.log("withdrawByAggStep.oldTotalAssets", oldTotalAssets);
     uint newTotalAssets = _csbs.investedAssets + balance;
-    console.log("withdrawByAggStep.newInvestedAsset", newTotalAssets);
+    console.log("withdrawByAggStep.newTotalAssets", newTotalAssets);
     if (oldTotalAssets < newTotalAssets) {
       // total asset was increased (i.e. because of too profitable swaps)
       // this increment will increase share price
       // we should send added amount to insurance to avoid share price change
       // anyway, it's too expensive to do it here
       // so, we postpone sending the profit until the next call of fixPriceChange
-      console.log("withdrawByAggStep.newTotalAssets", newTotalAssets);
       console.log("withdrawByAggStep.(oldTotalAssets + profitToCover - profitToCoverSent)", oldTotalAssets);
-      uint increment = newTotalAssets - oldTotalAssets;
-      console.log("withdrawByAggStep.increment", increment);
-      if (newTotalAssets > increment) {
-        _csbs.investedAssets = newTotalAssets - increment;
+      if (oldTotalAssets > balance) {
+        _csbs.investedAssets = oldTotalAssets - balance;
+        console.log("withdrawByAggStep._csbs.investedAssets.updated", _csbs.investedAssets);
       }
     }
   }
