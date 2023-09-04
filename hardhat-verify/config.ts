@@ -1,7 +1,7 @@
-import type LodashCloneDeepT from "lodash.clonedeep";
 import chalk from "chalk";
 import { HardhatConfig, HardhatUserConfig } from "hardhat/types";
 import { EtherscanConfig } from "./types";
+import _ from 'lodash';
 
 export function etherscanConfigExtender(
   config: HardhatConfig,
@@ -13,8 +13,8 @@ export function etherscanConfigExtender(
   };
 
   if (userConfig.etherscan !== undefined) {
-    const cloneDeep = require("lodash.clonedeep") as typeof LodashCloneDeepT;
-    const customConfig = cloneDeep(userConfig.etherscan);
+
+    const customConfig = _.cloneDeep(userConfig.etherscan);
 
     config.etherscan = { ...defaultConfig, ...customConfig };
   } else {

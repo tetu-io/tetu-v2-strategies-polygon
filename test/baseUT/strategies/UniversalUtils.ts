@@ -227,9 +227,14 @@ export class UniversalUtils {
     allowedDeep: number = 2,
   ) {
     console.log("safeTransferAndSwap", swapAmount);
-    await IERC20__factory.connect(tokenIn, signer).approve(swapHelper.address, swapAmount);
+    const token = IERC20__factory.connect(tokenIn, signer);
+    const signerBalance = await token.balanceOf(signer.address);
+    if (signerBalance.lt(swapAmount)) {
+      await TokenUtils.transfer(token.address, signer, signer.address, swapAmount.sub(signerBalance).toString(), false);
+    }
+    await token.approve(swapHelper.address, swapAmount);
     try {
-      await swapHelper.transferAndSwap(
+      await swapHelper.connect(signer).transferAndSwap(
         swapper.address,
         swapAmount,
         pool,

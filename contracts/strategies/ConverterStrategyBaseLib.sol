@@ -1364,19 +1364,32 @@ library ConverterStrategyBaseLib {
             uint indexBorrow = v.idxToRepay1 - 1;
             uint indexCollateral = indexBorrow == d_.indexAsset ? i : d_.indexAsset;
             uint amountToRepay = IERC20(d_.tokens[indexBorrow]).balanceOf(address(this));
-            (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
-              d_.converter,
-              d_.tokens[indexCollateral],
-              d_.tokens[indexBorrow],
-              amountToRepay
-            );
-            if (indexCollateral == d_.indexAsset) {
-              require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
-              if (repaidAmountOut < amountSendToRepay) {
-                // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
-                expectedAmount += expectedAmountOut * repaidAmountOut / amountSendToRepay - spentAmountIn;
-              } else {
-                expectedAmount += expectedAmountOut - spentAmountIn;
+
+            // repay can be made only if we haven't received requested amount after swap
+            // we cannot relay on amount that was planned to get after swap, so idxToRepay1 != 0 here
+            // but if swapped amount actually was enough, we should avoid additional repay to avoid high gas consumption
+            // in the cases like SCB-787
+
+            if (
+              (indexBorrow != d_.indexAsset)
+              || ( // received amount of asset is not enough, we need next swap-repay cycle
+                (amountToRepay > v.balanceAsset ? amountToRepay - v.balanceAsset : 0) < requestedAmount
+              )
+            ) {
+              (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
+                d_.converter,
+                d_.tokens[indexCollateral],
+                d_.tokens[indexBorrow],
+                amountToRepay
+              );
+              if (indexCollateral == d_.indexAsset) {
+                require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
+                if (repaidAmountOut < amountSendToRepay) {
+                  // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
+                  expectedAmount += expectedAmountOut * repaidAmountOut / amountSendToRepay - spentAmountIn;
+                } else {
+                  expectedAmount += expectedAmountOut - spentAmountIn;
+                }
               }
             }
           }
@@ -1434,7 +1447,7 @@ library ConverterStrategyBaseLib {
     (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountSendToRepay);
 
     if (expectedAmountOut > swappedAmountOut) {
-      // Following situation is possible
+      // SCB-789 Following situation is possible
       //    needToRepay = 100, needToRepayExact = 90 (debt gap is 10)
       //    1) amountRepay = 80
       //       expectedAmountOut is calculated for 80, no problems
