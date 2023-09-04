@@ -25,7 +25,10 @@ import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-import {UniversalUtils} from "../../../UniversalUtils";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {PackedData} from "../../../baseUT/utils/PackedData";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import {KYBER_PID, KYBER_USDC_DAI_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 
 
 dotEnvConfig();
@@ -53,7 +56,8 @@ describe('KyberConverterStrategyUniversalTest', async () => {
 
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, number][] = [
-    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, 5],
+    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, KYBER_PID],
+    [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_DAI, 0, 0, KYBER_USDC_DAI_PID],
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();
@@ -63,18 +67,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
   const statesParams: {[poolId: string]: IStateParams} = {}
 
   before(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 44366000,
-          },
-        },
-      ],
-    });
-
+    await HardhatUtils.switchToMostCurrentBlock();
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
 
     const [signer] = await ethers.getSigners();
@@ -113,17 +106,7 @@ describe('KyberConverterStrategyUniversalTest', async () => {
       await StateUtils.saveListStatesToCSVColumns(pathOut, states[poolId], statesParams[poolId])
       await StateUtils.outputProfit(states[poolId])
     }
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
   });
 
   targets.forEach(t => {
@@ -166,30 +149,26 @@ describe('KyberConverterStrategyUniversalTest', async () => {
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const kyberStrategy = strategy as unknown as KyberConverterStrategy
-        const state = await kyberStrategy.getState()
+        const state = await PackedData.getDefaultState(kyberStrategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.movePoolPriceUp(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount,
         );
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const kyberStrategy = strategy as unknown as KyberConverterStrategy
-        const state = await kyberStrategy.getState()
+        const state = await PackedData.getDefaultState(kyberStrategy);
         const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('100000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
         await UniversalUtils.movePoolPriceDown(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount,
         );
@@ -197,15 +176,13 @@ describe('KyberConverterStrategyUniversalTest', async () => {
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const kyberStrategy = strategy as unknown as KyberConverterStrategy
-        const state = await kyberStrategy.getState()
+        const state = await PackedData.getDefaultState(kyberStrategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniversalUtils.makePoolVolume(
           swapUser,
-          state.pool,
-          state.tokenA,
-          state.tokenB,
+          state,
           MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           swapAmount
         )
@@ -228,16 +205,18 @@ describe('KyberConverterStrategyUniversalTest', async () => {
           t[2],
           t[3],
           true,
-          t[4]
+          t[4],
+            [0, 0, Misc.MAX_UINT, 0],
+            [0, 0, Misc.MAX_UINT, 0],
         );
         const mainAssetSymbol = await IERC20Metadata__factory.connect(asset, signer).symbol()
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
-        const state = await strategy.getState()
+        const state = await PackedData.getDefaultState(strategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB, MaticAddresses.KNC_TOKEN])
         await strategy.setStrategyProfitHolder(profitHolder.address)
-        await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
+        // await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
         return strategy as unknown as IStrategyV2;
       },
       {

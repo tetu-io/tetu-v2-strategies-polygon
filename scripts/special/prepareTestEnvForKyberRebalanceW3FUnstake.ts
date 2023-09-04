@@ -62,7 +62,9 @@ async function main() {
         0,
         0,
         true,
-        21
+        21,
+          [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
       );
 
       return _strategy as unknown as IStrategyV2;

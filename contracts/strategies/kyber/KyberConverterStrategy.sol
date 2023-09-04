@@ -5,24 +5,21 @@ import "../ConverterStrategyBase.sol";
 import "./KyberDepositor.sol";
 import "./KyberConverterStrategyLogicLib.sol";
 import "../../libs/AppPlatforms.sol";
-import "../../interfaces/IRebalancingStrategy.sol";
+import "../../interfaces/IRebalancingV2Strategy.sol";
 import "../../interfaces/IFarmingStrategy.sol";
 import "./KyberStrategyErrors.sol";
+import "../pair/PairBasedStrategyLogicLib.sol";
 
+contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebalancingV2Strategy, IFarmingStrategy {
 
-contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebalancingStrategy, IFarmingStrategy {
-
-  /////////////////////////////////////////////////////////////////////
-  ///                CONSTANTS
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------- Constants
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "1.0.2";
+  string public constant override STRATEGY_VERSION = "2.0.1";
+  //endregion ------------------------------------------------- Constants
 
-  /////////////////////////////////////////////////////////////////////
-  ///                INIT
-  /////////////////////////////////////////////////////////////////////
+  //region ------------------------------------------------- INIT
 
   /// @notice Initialize the strategy with the given parameters.
   /// @param controller_ The address of the controller.
@@ -31,6 +28,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @param pool_ The address of the pool.
   /// @param tickRange_ The tick range for the liquidity position.
   /// @param rebalanceTickRange_ The tick range for rebalancing.
+  /// @param fuseThresholdsA Price thresholds for token A [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  /// @param fuseThresholdsB Price thresholds for token B [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
   function init(
     address controller_,
     address splitter_,
@@ -39,83 +38,110 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     int24 tickRange_,
     int24 rebalanceTickRange_,
     bool isStablePool,
-    uint pId
+    uint pId,
+    uint[4] calldata fuseThresholdsA,
+    uint[4] calldata fuseThresholdsB
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     KyberConverterStrategyLogicLib.initStrategyState(
       state,
-      controller_,
-      converter_,
-      pool_,
+      [controller_, pool_],
       tickRange_,
       rebalanceTickRange_,
       ISplitter(splitter_).asset(),
-      isStablePool
+      isStablePool,
+      fuseThresholdsA,
+      fuseThresholdsB
     );
 
     state.pId = pId;
 
     // setup specific name for UI
-    strategySpecificName = KyberConverterStrategyLogicLib.createSpecificName(state);
-    emit StrategyLib.StrategySpecificNameChanged(strategySpecificName);
+    StrategyLib2._changeStrategySpecificName(baseState, KyberConverterStrategyLogicLib.createSpecificName(state.pair));
+  }
+  //endregion ------------------------------------------------- INIT
+
+  //region --------------------------------------------- OPERATOR ACTIONS
+
+  /// @notice Manually set status of the fuse
+  /// @param status See PairBasedStrategyLib.FuseStatus enum for possile values
+  /// @param index01 0 - token A, 1 - token B
+  function setFuseStatus(uint index01, uint status) external {
+    StrategyLib2.onlyOperators(controller());
+    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
   }
 
-  /////////////////////////////////////////////////////////////////////
-  ///                OPERATOR ACTIONS
-  /////////////////////////////////////////////////////////////////////
-
-  /// @notice Disable fuse for the strategy.
-  function disableFuse() external {
-    StrategyLib.onlyOperators(controller());
-    state.isFuseTriggered = false;
-    state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, state.tokenA, state.tokenB);
-
-    KyberConverterStrategyLogicLib.emitDisableFuse();
+  /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  ///         Decimals 18. The thresholds are compared with prices from TetuConverter's price oracle.
+  ///         Example: [0.9, 0.92, 1.08, 1.1]
+  ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.
+  ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
+  /// @param values Price thresholds: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  /// @param index01 0 - token A, 1 - token B
+  function setFuseThresholds(uint index01, uint[4] memory values) external {
+    StrategyLib2.onlyOperators(controller());
+    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB[index01], values);
   }
 
   function changePId(uint pId) external {
-    StrategyLib.onlyOperators(controller());
+    StrategyLib2.onlyOperators(controller());
     require(!state.staked, KyberStrategyErrors.NOT_UNSTAKED);
     state.pId = pId;
   }
 
-  /// @notice Set the fuse threshold for the strategy.
-  /// @param newFuseThreshold The new fuse threshold value.
-  function setFuseThreshold(uint newFuseThreshold) external {
-    StrategyLib.onlyOperators(controller());
-    state.fuseThreshold = newFuseThreshold;
-
-    KyberConverterStrategyLogicLib.emitNewFuseThreshold(newFuseThreshold);
-  }
-
   function setStrategyProfitHolder(address strategyProfitHolder) external {
-    StrategyLib.onlyOperators(controller());
-    state.strategyProfitHolder = strategyProfitHolder;
+    StrategyLib2.onlyOperators(controller());
+    state.pair.strategyProfitHolder = strategyProfitHolder;
   }
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   METRIC VIEWS
-  /////////////////////////////////////////////////////////////////////
+  /// @notice Set withdrawDone value.
+  ///         When a fuse was triggered ON, all debts should be closed and asset should be converted to underlying.
+  ///         After completion of the conversion withdrawDone can be set to 1.
+  ///         So, {getFuseStatus} will return  withdrawDone=1 and you will know, that withdraw is not required
+  /// @param done 0 - full withdraw required, 1 - full withdraw was done
+  function setWithdrawDone(uint done) external {
+    StrategyLib2.onlyOperators(controller());
+    state.pair.withdrawDone = done;
+  }
+  //endregion --------------------------------------------- OPERATOR ACTIONS
+
+  //region --------------------------------------------- METRIC VIEWS
+
+  /// @notice Check if the strategy is ready for hard work.
+  /// @return A boolean indicating if the strategy is ready for hard work.
+  function isReadyToHardWork() override external virtual view returns (bool) {
+    // for simplicity of implementation this function doesn't calculate fees and just returns true
+    return !needRebalance() && !_isFuseTriggeredOn();
+  }
 
   /// @notice Check if the strategy needs rebalancing.
   /// @return A boolean indicating if the strategy needs rebalancing.
   function needRebalance() public view returns (bool) {
     (bool needStake, bool needUnstake) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
-    return KyberConverterStrategyLogicLib.needRebalance(state) || needStake || needUnstake;
-  }
-
-  /// @return swapAtoB, swapAmount
-  function quoteRebalanceSwap() external returns (bool, uint) {
-    return KyberConverterStrategyLogicLib.quoteRebalanceSwap(state, converter);
+    return KyberConverterStrategyLogicLib.needStrategyRebalance(state.pair, _csbs.converter) || needStake || needUnstake;
   }
 
   function canFarm() external view returns (bool) {
     return !KyberConverterStrategyLogicLib.isFarmEnded(state.pId);
   }
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   CALLBACKS
-  /////////////////////////////////////////////////////////////////////
+  /// @notice Returns the current state of the contract
+  /// @return addr [tokenA, tokenB, pool, profitHolder]
+  /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
+  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B]
+  /// @return boolValues [isStablePool, depositorSwapTokens]
+  function getDefaultState() external override view returns (
+    address[] memory addr,
+    int24[] memory tickData,
+    uint[] memory nums,
+    bool[] memory boolValues
+  ) {
+    return PairBasedStrategyLogicLib.getDefaultState(state.pair);
+  }
+
+  //endregion ---------------------------------------------- METRIC VIEWS
+
+  //region --------------------------------------------- CALLBACKS
 
   function onERC721Received(
     address,
@@ -125,81 +151,113 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   ) external pure returns (bytes4) {
     return this.onERC721Received.selector;
   }
+  //endregion --------------------------------------------- CALLBACKS
 
-  /////////////////////////////////////////////////////////////////////
-  ///                   REBALANCE
-  /////////////////////////////////////////////////////////////////////
+  //region--------------------------------------------- REBALANCE
 
-  /// @dev The rebalancing functionality is the core of this strategy.
-  ///      Swap method is used.
-  function rebalance() external {
-    (uint profitToCover, uint oldTotalAssets, address _controller) = _startRebalance();
+  /// @notice Rebalance using borrow/repay only, no swaps
+  /// @param checkNeedRebalance Revert if rebalance is not needed. Pass false to deposit after withdrawByAgg-iterations
+  function rebalanceNoSwaps(bool checkNeedRebalance) external {
+    address _controller = controller();
+    StrategyLib2.onlyOperators(_controller);
 
-    // _depositorEnter(tokenAmounts) if length == 2
-    uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalance(
-      state,
-      converter,
-      _controller,
+    (bool needStake, bool needUnstake) = KyberConverterStrategyLogicLib.needRebalanceStaking(state);
+    if (needStake || needUnstake) {
+      checkNeedRebalance = false;
+    }
+
+    (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
+    uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalanceNoSwaps(
+      state.pair,
+      [address(_csbs.converter), address(AppLib._getLiquidator(_controller))],
       oldTotalAssets,
       profitToCover,
-      splitter
+      baseState.splitter,
+      checkNeedRebalance,
+      liquidationThresholds,
+      needStake || needUnstake
+    );
+    _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = block.timestamp;
+  }
+  //endregion--------------------------------------------- REBALANCE
+
+  //region --------------------------------------------- Withdraw by iterations
+
+  /// @notice Get info about a swap required by next call of {withdrawByAggStep} within the given plan
+  function quoteWithdrawByAgg(bytes memory planEntryData) external returns (address tokenToSwap, uint amountToSwap) {
+    // restriction "operator only" is checked inside {initWithdrawLocal} in {quoteWithdrawStep}
+
+    // estimate amounts to be withdrawn from the pool
+    uint totalLiquidity = state.pair.totalLiquidity;
+    uint[] memory amountsOut = (totalLiquidity == 0)
+      ? new uint[](2)
+      : _depositorQuoteExit(totalLiquidity);
+
+    return PairBasedStrategyLogicLib.quoteWithdrawByAgg(
+      state.pair,
+      planEntryData,
+      amountsOut,
+      controller(),
+      _csbs.converter,
+      liquidationThresholds
+    );
+  }
+
+  /// @notice Make withdraw iteration: [exit from the pool], [make 1 swap], [repay a debt], [enter to the pool]
+  ///         Typical sequence of the actions is: exit from the pool, make 1 swap, repay 1 debt.
+  ///         You can enter to the pool if you are sure that you won't have borrow + repay on AAVE3 in the same block.
+  /// @dev All swap-by-agg data should be prepared using {quoteWithdrawByAgg} off-chain
+  /// @param tokenToSwap_ What token should be swapped to other
+  /// @param aggregator_ Aggregator that should be used on next swap. 0 - use liquidator
+  /// @param amountToSwap_ Amount that should be swapped. 0 - no swap
+  /// @param swapData Swap rote that was prepared off-chain.
+  /// @param planEntryData PLAN_XXX + additional data, see IterationPlanKinds
+  /// @param entryToPool Allow to enter to the pool at the end. Use false if you are going to make several iterations.
+  ///                    It's possible to enter back to the pool by calling {rebalanceNoSwaps} at any moment
+  ///                    0 - not allowed, 1 - allowed, 2 - allowed only if completed
+  /// @return completed All debts were closed, leftovers were swapped to the required proportions.
+  function withdrawByAggStep(
+    address tokenToSwap_,
+    address aggregator_,
+    uint amountToSwap_,
+    bytes memory swapData,
+    bytes memory planEntryData,
+    uint entryToPool
+  ) external returns (bool completed) {
+    // restriction "operator only" is checked inside UniswapV3ConverterStrategyLogicLib.withdrawByAggStep
+
+    // fix price changes, exit from the pool
+    (uint profitToCover, uint oldTotalAssets) = _rebalanceBefore();
+
+    // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
+    uint[] memory tokenAmounts;
+    (completed, tokenAmounts) = KyberConverterStrategyLogicLib.withdrawByAggStep(
+      [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
+      [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
+      swapData,
+      planEntryData,
+      state.pair,
+      liquidationThresholds
     );
 
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
+    // enter to the pool
+    _rebalanceAfter(tokenAmounts);
+    state.pair.lastRebalanceNoSwap = 0;
 
-    //updating investedAssets based on new baseAmounts
-    _updateInvestedAssets();
-  }
-
-  function rebalanceSwapByAgg(bool direction, uint amount, address agg, bytes memory swapData) external {
-    (uint profitToCover, uint oldTotalAssets,) = _startRebalance();
-
-    // _depositorEnter(tokenAmounts) if length == 2
-    uint[] memory tokenAmounts = KyberConverterStrategyLogicLib.rebalanceSwapByAgg(
-      state,
-      converter,
-      oldTotalAssets,
-      KyberConverterStrategyLogicLib.RebalanceSwapByAggParams(
-        direction,
-        amount,
-        agg,
-        swapData
-      ),
-      profitToCover,
-      splitter
-    );
-
-    if (tokenAmounts.length == 2) {
-      _depositorEnter(tokenAmounts);
-    }
-
-    //updating investedAssets based on new baseAmounts
-    _updateInvestedAssets();
-  }
-
-  /////////////////////////////////////////////////////////////////////
-  ///                   INTERNAL LOGIC
-  /////////////////////////////////////////////////////////////////////
-
-  function _startRebalance() internal returns(uint profitToCover, uint oldTotalAssets,  address _controller) {
-    _controller = controller();
-    StrategyLib.onlyOperators(_controller);
-
-    require(needRebalance(), KyberStrategyErrors.NO_REBALANCE_NEEDED);
-
-    (, profitToCover) = _fixPriceChanges(true);
-    oldTotalAssets = totalAssets() - profitToCover;
-
-    KyberConverterStrategyLogicLib.claimRewardsBeforeExitIfRequired(state);
-
-    /// withdraw all liquidity from pool with adding calculated fees to rebalanceEarned0, rebalanceEarned1
-    /// after disableFuse() liquidity is zero
-    if (state.totalLiquidity > 0) {
-      _depositorEmergencyExit();
+    if (completed && _isFuseTriggeredOn()) {
+      // full withdraw was completed, we can exclude next calls of withdrawByAggStep
+      state.pair.withdrawDone = 1;
     }
   }
+
+  function getPropNotUnderlying18() external view returns (uint) {
+    return KyberConverterStrategyLogicLib.getPropNotUnderlying18(state.pair);
+  }
+
+  //endregion ------------------------------------ Withdraw by iterations
+
+  //region--------------------------------------------- INTERNAL LOGIC
 
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
@@ -210,28 +268,20 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
     uint[] memory tokenAmounts
   ) {
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
-
-    tokenAmounts = new uint[](2);
-    uint spentCollateral;
-
     bytes memory entryData = KyberConverterStrategyLogicLib.getEntryData(
-      state.pool,
-      state.lowerTick,
-      state.upperTick,
-      state.depositorSwapTokens
+      IPool(state.pair.pool),
+      state.pair.lowerTick,
+      state.pair.upperTick,
+      state.pair.depositorSwapTokens
     );
-
-    AppLib.approveIfNeeded(state.tokenA, amount_, address(tetuConverter_));
-    (spentCollateral, tokenAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+    return PairBasedStrategyLogicLib._beforeDeposit(
       tetuConverter_,
-      entryData,
-      state.tokenA,
-      state.tokenB,
       amount_,
-      0
+      state.pair.tokenA,
+      state.pair.tokenB,
+      entryData,
+      liquidationThresholds
     );
-
-    tokenAmounts[0] = amount_ - spentCollateral;
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts
@@ -239,8 +289,9 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   /// @return lost The amount of lost rewards.
   /// @return assetBalanceAfterClaim The asset balance after claiming rewards.
   function _handleRewards() override internal virtual returns (uint earned, uint lost, uint assetBalanceAfterClaim) {
+    address asset = baseState.asset;
     (address[] memory rewardTokens, uint[] memory amounts) = _claim();
-    earned = KyberConverterStrategyLogicLib.calcEarned(state.tokenA, controller(), rewardTokens, amounts);
+    earned = KyberConverterStrategyLogicLib.calcEarned(asset, controller(), rewardTokens, amounts);
     _rewardsLiquidation(rewardTokens, amounts);
     return (earned, lost, AppLib.balance(asset));
   }
@@ -252,7 +303,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   function _depositToPool(uint amount_, bool updateTotalAssetsBeforeInvest_) override internal virtual returns (
     uint strategyLoss
   ) {
-    if (state.isFuseTriggered) {
+    if (_isFuseTriggeredOn()) {
       uint[] memory tokenAmounts = new uint[](2);
       tokenAmounts[0] = amount_;
       emit OnDepositorEnter(tokenAmounts, tokenAmounts);
@@ -265,4 +316,42 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   function _beforeWithdraw(uint /*amount*/) internal view override {
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
   }
+
+  /// @notice Check need-rebalance and fuse-ON
+  /// @return True if the hardwork should be skipped
+  function _preHardWork(bool reInvest) internal view override returns (bool) {
+    reInvest; // hide warning
+    require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
+    require(!_isFuseTriggeredOn(), KyberStrategyErrors.FUSE_IS_ACTIVE);
+    return false;
+  }
+
+  /// @notice Prepare to rebalance: check operator-only, fix price changes, call depositor exit
+  function _rebalanceBefore() internal returns (uint profitToCover, uint oldTotalAssets) {
+    (, profitToCover) = _fixPriceChanges(true);
+    oldTotalAssets = totalAssets() - profitToCover;
+
+    KyberConverterStrategyLogicLib.claimRewardsBeforeExitIfRequired(state);
+
+    // withdraw all liquidity from pool
+    // after disableFuse() liquidity is zero
+    if (state.pair.totalLiquidity > 0) {
+      _depositorEmergencyExit();
+    }
+  }
+
+  /// @notice Make actions after rebalance: depositor enter, add fillup if necessary, update invested assets
+  function _rebalanceAfter(uint[] memory tokenAmounts) internal {
+    if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
+      _depositorEnter(tokenAmounts);
+    }
+
+    _updateInvestedAssets();
+  }
+
+  function _isFuseTriggeredOn() internal view returns (bool) {
+    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
+      || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
+  }
+  //endregion--------------------------------------- INTERNAL LOGIC
 }

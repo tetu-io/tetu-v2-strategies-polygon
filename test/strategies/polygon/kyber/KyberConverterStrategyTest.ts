@@ -20,7 +20,10 @@ import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {UniversalUtils} from "../../../UniversalUtils";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {PackedData} from "../../../baseUT/utils/PackedData";
+import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -49,21 +52,11 @@ describe('KyberConverterStrategyTest', function() {
   let asset: IERC20;
   let vault: TetuVaultV2;
   let strategy: KyberConverterStrategy;
-  const pId = 21
+  const pId = KYBER_PID;
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 44479520,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -98,7 +91,19 @@ describe('KyberConverterStrategyTest', function() {
           0,
           0,
           true,
-          pId
+          pId,
+          [
+            parseUnits('0.997'),
+            parseUnits('0.998'),
+            parseUnits('1.003'),
+            parseUnits('1.002')
+          ],
+          [
+            parseUnits('0.997'),
+            parseUnits('0.998'),
+            parseUnits('1.003'),
+            parseUnits('1.002')
+          ]
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -138,18 +143,8 @@ describe('KyberConverterStrategyTest', function() {
   })
 
   after(async function() {
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
   });
 
   beforeEach(async function() {
@@ -164,23 +159,25 @@ describe('KyberConverterStrategyTest', function() {
     it('Farm end', async () => {
       const s = strategy
 
-      let state = await s.getState()
-      expect(state.flags[1]).eq(false)
-      expect(state.flags[2]).eq(false)
-      expect(state.flags[3]).eq(false)
+      let state = await PackedData.getDefaultState(s);
+      let stateSpecific = await PackedData.getSpecificStateKyber(s);
+      expect(stateSpecific.flags.staked).eq(false)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
       await TokenUtils.getToken(asset.address, signer.address, parseUnits('2000', 6));
       await vault.deposit(parseUnits('1000', 6), signer.address);
 
-      state = await s.getState()
-      expect(state.flags[1]).eq(true)
-      expect(state.flags[2]).eq(false)
-      expect(state.flags[3]).eq(false)
+      state = await PackedData.getDefaultState(s);
+      stateSpecific = await PackedData.getSpecificStateKyber(s);
+      expect(stateSpecific.flags.staked).eq(true)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       const farmingContract = IKyberSwapElasticLM__factory.connect('0x7D5ba536ab244aAA1EA42aB88428847F25E3E676', signer)
       const poolInfo = await farmingContract.getPoolInfo(pId)
@@ -193,59 +190,73 @@ describe('KyberConverterStrategyTest', function() {
       console.log('Rebalance for unstake')
       expect(await s.needRebalance()).eq(true)
 
-      state = await s.getState()
-      expect(state.flags[1]).eq(true)
-      expect(state.flags[2]).eq(false)
-      expect(state.flags[3]).eq(true)
+      state = await PackedData.getDefaultState(s);
+      stateSpecific = await PackedData.getSpecificStateKyber(s);
+      expect(stateSpecific.flags.staked).eq(true)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(true)
 
-      await s.rebalance()
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       expect(await s.needRebalance()).eq(false)
-      state = await s.getState()
-      expect(state.flags[1]).eq(false)
-      expect(state.flags[2]).eq(false)
-      expect(state.flags[3]).eq(false)
-      expect(state.totalLiquidity).gt(0)
 
-      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
+      state = await PackedData.getDefaultState(s);
+      stateSpecific = await PackedData.getSpecificStateKyber(s);
+      expect(stateSpecific.flags.staked).eq(false)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
+      expect(state.totalLiquidity).gt(0)
+      expect(await IERC20__factory.connect(MaticAddresses.KNC_TOKEN, signer).balanceOf(strategy.address)).eq(0)
+
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
 
       console.log('Rebalance without stake')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalance()
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000,})
       expect(await s.needRebalance()).eq(false)
-      state = await s.getState()
-      expect(state.flags[1]).eq(false)
-      expect(state.flags[2]).eq(false)
-      expect(state.flags[3]).eq(false)
+
+      state = await PackedData.getDefaultState(s);
+      stateSpecific = await PackedData.getSpecificStateKyber(s);
+      expect(stateSpecific.flags.staked).eq(false)
+      expect(stateSpecific.flags.needStake).eq(false)
+      expect(stateSpecific.flags.needUnstake).eq(false)
       expect(state.totalLiquidity).gt(0)
 
       const admin = await Misc.impersonate(await farmingContract.admin())
 
       // addPool
       now = (await ethers.provider.getBlock(await ethers.provider.getBlockNumber())).timestamp
-      await farmingContract.connect(admin).addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
+      await farmingContract.connect(admin).updateOperator(signer.address, true)
+      await farmingContract.addPool(MaticAddresses.KYBER_USDC_USDT, now + 10, now + 86400 * 30, [MaticAddresses.KNC_TOKEN], [parseUnits('1000')], 8)
       const newPid = (await farmingContract.poolLength()).toNumber() - 1
       await s.connect(operator).changePId(newPid)
 
-      state = await s.getState()
-      expect(state.flags[1]).eq(false)
-      expect(state.flags[2]).eq(true)
-      expect(state.flags[3]).eq(false)
+      state = await PackedData.getDefaultState(s);
+      stateSpecific = await PackedData.getSpecificStateKyber(s);
+
+      expect(stateSpecific.flags.staked).eq(false);
+      expect(stateSpecific.flags.needStake).eq(true);
+      expect(stateSpecific.flags.needUnstake).eq(false);
+
+      await TimeUtils.advanceBlocksOnTs(10)
 
       console.log('Rebalance for stake')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalance()
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000,})
       expect(await s.needRebalance()).eq(false)
-      state = await s.getState()
-      expect(state.flags[1]).eq(true)
-      expect(state.flags[2]).eq(false)
-      expect(state.flags[3]).eq(false)
+
+      state = await PackedData.getDefaultState(s);
+      stateSpecific = await PackedData.getSpecificStateKyber(s);
+      expect(stateSpecific.flags.staked).eq(true);
+      expect(stateSpecific.flags.needStake).eq(false);
+      expect(stateSpecific.flags.needUnstake).eq(false);
+
       expect(state.totalLiquidity).gt(0)
     })
 
 
     it('Rebalance, hardwork', async() => {
       const s = strategy
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       console.log('deposit...');
       await asset.approve(vault.address, Misc.MAX_UINT);
@@ -254,11 +265,11 @@ describe('KyberConverterStrategyTest', function() {
 
       expect(await s.needRebalance()).eq(false)
 
-      await UniversalUtils.movePoolPriceUp(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-      const tx = await s.rebalance()
+      const tx = await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       const txReceipt = await tx.wait();
       const fees = UniversalUtils.extractClaimedFees(txReceipt, 'KyberFeesClaimed', 'event KyberFeesClaimed(uint fee0, uint fee1)')
       console.log('fees', fees)
@@ -274,7 +285,7 @@ describe('KyberConverterStrategyTest', function() {
     })
     it('Deposit, hardwork, withdraw', async() => {
       const s = strategy
-      const state = await s.getState()
+      const state = await PackedData.getDefaultState(s);
 
       console.log('deposit 1...');
       await asset.approve(vault.address, Misc.MAX_UINT);
@@ -288,7 +299,7 @@ describe('KyberConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
@@ -303,7 +314,7 @@ describe('KyberConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       console.log('withdraw')
       const tx = await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
@@ -315,10 +326,10 @@ describe('KyberConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400); // 1 day
 
       console.log('Make pool volume')
-      await UniversalUtils.makePoolVolume(signer, state.pool, state.tokenA, state.tokenB, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('10000', 6));
 
       if (await s.needRebalance()) {
-        await s.rebalance()
+        await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       }
 
       console.log('withdrawAll')

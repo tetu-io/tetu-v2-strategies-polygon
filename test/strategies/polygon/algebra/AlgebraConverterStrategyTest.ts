@@ -21,9 +21,12 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {UniversalUtils} from "../../../UniversalUtils";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
+import {BigNumber} from "ethers";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -54,17 +57,7 @@ describe('AlgebraConverterStrategyTest', function() {
 
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 43620959,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -105,7 +98,9 @@ describe('AlgebraConverterStrategyTest', function() {
             pool: MaticAddresses.ALGEBRA_USDC_USDT,
             startTime: 1663631794,
             endTime: 4104559500
-          }
+          },
+            [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -148,21 +143,26 @@ describe('AlgebraConverterStrategyTest', function() {
 
     // prevent 'TC-4 zero price' because real oracles have a limited price lifetime
     await PriceOracleImitatorUtils.uniswapV3(signer, MaticAddresses.UNISWAPV3_USDC_USDT_100, MaticAddresses.USDC_TOKEN)
+
+    await StrategyTestUtils.setThresholds(
+      strategy as unknown as IStrategyV2,
+      signer,
+      { rewardLiquidationThresholds: [
+          {
+            asset: MaticAddresses.dQUICK_TOKEN,
+            threshold: BigNumber.from('1000'),
+          },
+          {
+            asset: MaticAddresses.USDT_TOKEN,
+            threshold: BigNumber.from('1000'),
+          },
+        ] },
+    );
   })
 
   after(async function() {
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
   });
 
   beforeEach(async function() {
@@ -189,8 +189,9 @@ describe('AlgebraConverterStrategyTest', function() {
 
       await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6))
 
+      console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
-      await s.rebalance()
+      await s.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
       expect(await s.needRebalance()).eq(false)
 
       console.log('Hardwork')

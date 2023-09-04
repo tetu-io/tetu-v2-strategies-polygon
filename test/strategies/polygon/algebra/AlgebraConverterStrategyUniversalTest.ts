@@ -12,7 +12,7 @@ import hre, {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 import {
-  AlgebraConverterStrategy, AlgebraConverterStrategy__factory,
+  AlgebraConverterStrategy, AlgebraConverterStrategy__factory, ConverterStrategyBase,
   IERC20Metadata__factory,
   IStrategyV2,
   TetuVaultV2,
@@ -22,11 +22,14 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {BigNumber, Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {PackedData} from "../../../baseUT/utils/PackedData";
+import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 
 dotEnvConfig();
@@ -69,6 +72,14 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       startTime: 1663631794,
       endTime: 4104559500
     }],
+    // todo implement 3 ticks logic
+    /*[MaticAddresses.USDC_TOKEN, MaticAddresses.ALGEBRA_USDC_DAI, 60, 60, {
+      rewardToken: MaticAddresses.dQUICK_TOKEN,
+      bonusRewardToken: MaticAddresses.WMATIC_TOKEN,
+      pool: MaticAddresses.ALGEBRA_USDC_DAI,
+      startTime: 1665192929,
+      endTime: 4104559500
+    }],*/
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();
@@ -78,18 +89,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
   const statesParams: {[poolId: string]: IStateParams} = {}
 
   before(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: 43620959,
-          },
-        },
-      ],
-    });
-
+    await HardhatUtils.switchToMostCurrentBlock();
     await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
 
     const [signer] = await ethers.getSigners();
@@ -134,17 +134,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       await StateUtils.saveListStatesToCSVColumns(pathOut, states[poolId], statesParams[poolId])
       await StateUtils.outputProfit(states[poolId])
     }
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
   });
 
   targets.forEach(t => {
@@ -171,7 +161,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         states[poolId].push(await StateUtils.getState(
           h.signer,
           h.user,
-          strategy,
+          strategy as unknown as ConverterStrategyBase,
           h.vault,
           title,
         ));
@@ -180,18 +170,30 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
         await StrategyTestUtils.setThresholds(
           strategy as unknown as IStrategyV2,
           user,
-          { reinvestThresholdPercent },
+          {
+            reinvestThresholdPercent,
+            rewardLiquidationThresholds: [
+              {
+                asset: MaticAddresses.dQUICK_TOKEN,
+                threshold: BigNumber.from('1000'),
+              },
+              {
+                asset: MaticAddresses.USDT_TOKEN,
+                threshold: BigNumber.from('1000'),
+              },
+            ],
+          },
         );
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
         await PriceOracleImitatorUtils.algebra(user, t[1], t[0])
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
-        const state = await algebraStrategy.getState()
-        const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
-        const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('1050000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniswapV3StrategyUtils.movePriceUp(
+        const state = await PackedData.getDefaultState(algebraStrategy);
+        const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
+        const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
+        const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
+        await UniswapV3StrategyUtils.movePriceDown(
           swapUser,
           strategy.address,
           MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
@@ -200,30 +202,20 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
-        const state = await algebraStrategy.getState()
-        const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
-        const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('1050000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
-        await UniswapV3StrategyUtils.movePriceDown(
-          swapUser,
-          strategy.address,
-          MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-          swapAmount,
-        );
+        const state = await PackedData.getDefaultState(algebraStrategy);
+        const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
+        const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
+        const swapAmount = BigNumber.from(parseUnits('30000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+        await UniversalUtils.movePoolPriceUp(swapUser, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const algebraStrategy = strategy as unknown as AlgebraConverterStrategy
-        const state = await algebraStrategy.getState()
+        const state = await PackedData.getDefaultState(algebraStrategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('5000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
-        await UniswapV3StrategyUtils.makeVolume(
-          swapUser,
-          strategy.address,
-          MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
-          swapAmount
-        )
+        await UniversalUtils.makePoolVolume(swapUser, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, swapAmount);
       },
     };
 
@@ -243,16 +235,18 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
           t[2],
           t[3],
           true,
-          t[4]
+          t[4],
+          [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
         );
         const mainAssetSymbol = await IERC20Metadata__factory.connect(asset, signer).symbol()
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
-        const state = await strategy.getState()
+        const state = await PackedData.getDefaultState(strategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB, t[4].rewardToken, t[4].bonusRewardToken])
         await strategy.setStrategyProfitHolder(profitHolder.address)
-        await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
+        // await strategy.setFuseThreshold(parseUnits('5', 16)); // 5%
         return strategy as unknown as IStrategyV2;
       },
       {

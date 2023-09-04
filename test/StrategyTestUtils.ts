@@ -1,16 +1,16 @@
 import {
-  ControllerV2__factory,
-  ForwarderV3__factory,
-  IERC20__factory,
-  IERC20Metadata,
-  StrategyBaseV2, StrategyLib__factory,
-  StrategySplitterV2,
-  StrategySplitterV2__factory,
-  TetuVaultV2,
-  TetuVaultV2__factory,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
-  UniswapV3ConverterStrategyLogicLib__factory, VaultFactory__factory,
+    ControllerV2__factory,
+    ForwarderV3__factory,
+    IERC20__factory,
+    IERC20Metadata, IStrategyV2__factory, PairBasedStrategyLib__factory,
+    StrategyBaseV2, StrategyLib__factory,
+    StrategySplitterV2,
+    StrategySplitterV2__factory,
+    TetuVaultV2,
+    TetuVaultV2__factory,
+    UniswapV3ConverterStrategy,
+    UniswapV3ConverterStrategy__factory,
+    UniswapV3ConverterStrategyLogicLib__factory, VaultFactory__factory,
 } from '../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber, ContractReceipt } from 'ethers';
@@ -34,14 +34,14 @@ import {
 } from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
 import { Misc } from '../scripts/utils/Misc';
-import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
-import {DeployerUtils} from "../scripts/utils/DeployerUtils";
-import {DeployerUtilsLocal} from "../scripts/utils/DeployerUtilsLocal";
+import {IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
+import {PackedData} from "./baseUT/utils/PackedData";
 import {
   IHardworkEventInfo,
   IStateHardworkEvents,
   IUniV3FeesClaimedInfo
-} from "./strategies/polygon/uniswapv3/utils/Uniswapv3StateUtils";
+} from "./baseUT/strategies/UniswapV3StrategyUtils";
+import {IEventsSet, CaptureEvents} from "./baseUT/strategies/CaptureEvents";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
@@ -102,41 +102,38 @@ export async function doHardWorkForStrategy(
 
 const { expect } = chai;
 
-export async function rebalanceUniv3Strategy(
+/**
+ * Make rebalance using rebalanceNoSwaps
+ */
+export async function rebalancePairBasedStrategyNoSwaps(
   strategy: UniswapV3ConverterStrategy,
   signer: SignerWithAddress,
   decimals: number,
-) {
+  checkNeedRebalance: boolean = true
+) : Promise<IEventsSet> {
   console.log('### REBALANCE CALL ###');
-  const stateBefore = await strategy.getState();
+  const stateBefore = await PackedData.getSpecificStateUniv3(strategy);
 
-  const tx = await strategy.connect(signer).rebalance({ gasLimit: 10_000_000 });
+  const tx = await strategy.connect(signer).rebalanceNoSwaps(checkNeedRebalance, {gasLimit: 10_000_000});
   const receipt = await tx.wait();
-  await handleReceiptRebalance(receipt, decimals);
+  const ret = await handleReceiptRebalance(
+    receipt,
+    decimals,
+    await strategy.PLATFORM()
+  );
 
-  const stateAfter = await strategy.getState();
+  const stateAfter = await PackedData.getSpecificStateUniv3(strategy);
 
   await printStateDifference(decimals, stateBefore, stateAfter);
 
   // todo check that balance on the strategy is empty after rebalance call
+  return ret;
 }
 
-export async function printStateDifference(
-  decimals: number,
-  stateBefore: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; isFuseTriggered: boolean; fuseThreshold: BigNumber; rebalanceResults: BigNumber[] },
-  stateAfter: { tokenA: string; tokenB: string; pool: string; tickSpacing: number; lowerTick: number; upperTick: number; rebalanceTickRange: number; totalLiquidity: BigNumber; isFuseTriggered: boolean; fuseThreshold: BigNumber; rebalanceResults: BigNumber[] },
-) {
-  const rebalanceEarned0Before = stateBefore.rebalanceResults[0];
-  const rebalanceEarned1Before = stateBefore.rebalanceResults[1];
-  const rebalanceLostBefore = stateBefore.rebalanceResults[2];
 
-  const rebalanceEarned0After = stateAfter.rebalanceResults[0];
-  const rebalanceEarned1After = stateAfter.rebalanceResults[1];
-  const rebalanceLostAfter = stateAfter.rebalanceResults[2];
-
-  console.log('rebalanceEarned0', formatUnits(rebalanceEarned0After.sub(rebalanceEarned0Before), decimals));
-  console.log('rebalanceEarned1', formatUnits(rebalanceEarned1After.sub(rebalanceEarned1Before), decimals));
-  console.log('rebalanceLost', formatUnits(rebalanceLostAfter.sub(rebalanceLostBefore), decimals));
+export async function printStateDifference(decimals: number, stateBefore: IUniv3SpecificState, stateAfter: IUniv3SpecificState) {
+  console.log('rebalanceEarned0', formatUnits(stateAfter.rebalanceEarned0.sub(stateBefore.rebalanceEarned0), decimals));
+  console.log('rebalanceEarned1', formatUnits(stateAfter.rebalanceEarned1.sub(stateBefore.rebalanceEarned1), decimals));
 }
 
 export async function depositToVault(
@@ -303,18 +300,14 @@ export async function handleReceiptRedeem(receipt: ContractReceipt, decimals: nu
   console.log('*************');
 }
 
-export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number) {
-  console.log('*** REBALANCE LOGS ***');
-  const univ3LogicLibI = UniswapV3ConverterStrategyLogicLib__factory.createInterface();
-  for (const event of (receipt.events ?? [])) {
-    if (event.topics[0].toLowerCase() === univ3LogicLibI.getEventTopic('FuseTriggered').toLowerCase()) {
-      console.log('>>> !!!!!!!!!!!!!!!!!!!!!!!!! FuseTriggered !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    }
-    if (event.topics[0].toLowerCase() === univ3LogicLibI.getEventTopic('Rebalanced').toLowerCase()) {
-      console.log('/// Strategy rebalanced');
-    }
-  }
-  console.log('*************');
+/**
+ *
+ * @param receipt
+ * @param decimals
+ * @param platform One of PLATFORM_XXX, i.e. PLATFORM_UNIV3
+ */
+export async function handleReceiptRebalance(receipt: ContractReceipt, decimals: number, platform: string): Promise<IEventsSet> {
+  return CaptureEvents.handleReceipt(receipt, decimals, platform);
 }
 
 export async function handleReceiptDoHardWork(receipt: ContractReceipt, decimals: number) : Promise<IStateHardworkEvents> {

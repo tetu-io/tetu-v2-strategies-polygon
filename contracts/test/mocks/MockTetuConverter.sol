@@ -14,9 +14,7 @@ import "hardhat/console.sol";
 /// @dev We assume, that in each test only single function is called, so we can setup behavior before the call
 ///      and check results after the call on the side of the script
 contract MockTetuConverter is ITetuConverter {
-  //////////////////////////////////////////////////////////
-  ///  Controller
-  //////////////////////////////////////////////////////////
+  //region -------------------------------------------  Controller
   address public _controller;
 
   function controller() external view returns (address) {
@@ -26,11 +24,9 @@ contract MockTetuConverter is ITetuConverter {
   function setController(address controller_) external {
     _controller = controller_;
   }
+  //endregion -------------------------------------------  Controller
 
-
-  //////////////////////////////////////////////////////////
-  ///  findBorrowStrategy
-  //////////////////////////////////////////////////////////
+  //region -------------------------------------------  findBorrowStrategy
   struct FindBorrowStrategyOutputParams {
     bytes entryData;
     address[] converters;
@@ -59,16 +55,19 @@ contract MockTetuConverter is ITetuConverter {
     int[] memory aprs18
   ) {
     periodInBlocks_;
-    console.log("MockTetuConverter.findBorrowStrategies token,amountIn", sourceToken_, amountIn_);
+    console.log("MockTetuConverter.findBorrowStrategies source token,amountIn", _tokenName(sourceToken_), amountIn_);
+    console.log("MockTetuConverter.findBorrowStrategies target token", _tokenName(targetToken_));
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
+    console.log("MockTetuConverter.findBorrowStrategies.key", uint(key));
     FindBorrowStrategyOutputParams memory p = findBorrowStrategyOutputParams[key];
-    console.log("MockTetuConverter.p.sourceToken", p.sourceToken);
+    require(p.sourceToken != address(0), "findBorrowStrategies key not found");
+    console.log("MockTetuConverter.p.sourceToken", _tokenName(p.sourceToken));
     if (sourceToken_ == p.sourceToken) {
       return (
-      p.converters,
-      p.collateralAmountsOut,
-      p.amountsToBorrowOut,
-      p.aprs18
+        p.converters,
+        p.collateralAmountsOut,
+        p.amountsToBorrowOut,
+        p.aprs18
       );
     } else {
       console.log("findBorrowStrategy.missed", _tokenName(sourceToken_), amountIn_, _tokenName(targetToken_));
@@ -87,24 +86,24 @@ contract MockTetuConverter is ITetuConverter {
     address targetToken_,
     uint periodInBlocks_
   ) external {
-    console.log("setFindBorrowStrategyOutputParams", sourceToken_, sourceAmount_, targetToken_);
+    console.log("setFindBorrowStrategyOutputParams source token, source amount, target token", _tokenName(sourceToken_), sourceAmount_, _tokenName(targetToken_));
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
+    console.log("setFindBorrowStrategyOutputParams.key", uint(key));
     findBorrowStrategyOutputParams[key] = FindBorrowStrategyOutputParams({
-    entryData : entryData_,
-    converters : converters_,
-    collateralAmountsOut : collateralAmountsOut_,
-    amountsToBorrowOut : amountToBorrowsOut_,
-    aprs18 : aprs18_,
-    sourceAmount : sourceAmount_,
-    sourceToken : sourceToken_,
-    targetToken : targetToken_,
-    periodInBlocks : periodInBlocks_
+      entryData: entryData_,
+      converters: converters_,
+      collateralAmountsOut: collateralAmountsOut_,
+      amountsToBorrowOut: amountToBorrowsOut_,
+      aprs18: aprs18_,
+      sourceAmount: sourceAmount_,
+      sourceToken: sourceToken_,
+      targetToken: targetToken_,
+      periodInBlocks: periodInBlocks_
     });
   }
+  //endregion -------------------------------------------  findBorrowStrategy
 
-  //////////////////////////////////////////////////////////
-  ///  findSwapStrategy
-  //////////////////////////////////////////////////////////
+  //region -------------------------------------------  findSwapStrategy
   struct FindSwapStrategyOutputParams {
     bytes entryData;
     address converter;
@@ -154,20 +153,19 @@ contract MockTetuConverter is ITetuConverter {
     console.log("setFindSwapStrategyOutputParams", sourceToken_, sourceAmount_, targetToken_);
     bytes32 key = keccak256(abi.encodePacked(sourceToken_, targetToken_));
     findSwapStrategyOutputParams[key] = FindSwapStrategyOutputParams({
-    entryData : entryData_,
-    converter : converter_,
-    sourceAmountOut : sourceAmountOut_,
-    targetAmountOut : targetAmountOut_,
-    apr18 : apr18_,
-    sourceToken : sourceToken_,
-    sourceAmount : sourceAmount_,
-    targetToken : targetToken_
+      entryData: entryData_,
+      converter: converter_,
+      sourceAmountOut: sourceAmountOut_,
+      targetAmountOut: targetAmountOut_,
+      apr18: apr18_,
+      sourceToken: sourceToken_,
+      sourceAmount: sourceAmount_,
+      targetToken: targetToken_
     });
   }
+  //endregion -------------------------------------------  findSwapStrategy
 
-  //////////////////////////////////////////////////////////
-  ///  findConversionStrategy
-  //////////////////////////////////////////////////////////
+  //region -------------------------------------------  findConversionStrategy
   struct FindConversionStrategyOutputParams {
     bytes entryData;
     address converter;
@@ -222,21 +220,20 @@ contract MockTetuConverter is ITetuConverter {
     console.log("setFindConversionStrategyOutputParams", sourceToken_, sourceAmount_, targetToken_);
     bytes32 key = keccak256(abi.encodePacked(entryData_, sourceToken_, targetToken_));
     findConversionStrategyOutputParams[key] = FindConversionStrategyOutputParams({
-    entryData : entryData_,
-    converter : converter_,
-    collateralAmountOut : collateralAmountOut_,
-    amountToBorrowOut : amountToBorrowOut_,
-    apr18 : apr18_,
-    sourceAmount : sourceAmount_,
-    sourceToken : sourceToken_,
-    targetToken : targetToken_,
-    periodInBlocks : periodInBlocks_
+      entryData: entryData_,
+      converter: converter_,
+      collateralAmountOut: collateralAmountOut_,
+      amountToBorrowOut: amountToBorrowOut_,
+      apr18: apr18_,
+      sourceAmount: sourceAmount_,
+      sourceToken: sourceToken_,
+      targetToken: targetToken_,
+      periodInBlocks: periodInBlocks_
     });
   }
+  //endregion -------------------------------------------  findConversionStrategy
 
-  //////////////////////////////////////////////////////////
-  ///  borrow
-  //////////////////////////////////////////////////////////
+  //region -------------------------------------------  borrow
   struct BorrowParams {
     uint borrowedAmountOut;
 
@@ -294,22 +291,23 @@ contract MockTetuConverter is ITetuConverter {
     address receiver_,
     uint borrowedAmountOut_
   ) external {
-    console.log("setBorrowParams", collateralAsset_, collateralAmount_, borrowAsset_);
+    console.log("setBorrowParams.collateralAsset_", collateralAsset_, collateralAmount_);
+    console.log("setBorrowParams.borrowAsset_", borrowAsset_, amountToBorrow_);
+    console.log("setBorrowParams.receiver_", receiver_);
     bytes32 key = keccak256(abi.encodePacked(converter_, collateralAsset_, collateralAmount_, borrowAsset_));
     borrowParams[key] = BorrowParams({
-    converter : converter_,
-    collateralAsset : collateralAsset_,
-    collateralAmount : collateralAmount_,
-    borrowAsset : borrowAsset_,
-    amountToBorrow : amountToBorrow_,
-    receiver : receiver_,
-    borrowedAmountOut : borrowedAmountOut_
+      converter: converter_,
+      collateralAsset: collateralAsset_,
+      collateralAmount: collateralAmount_,
+      borrowAsset: borrowAsset_,
+      amountToBorrow: amountToBorrow_,
+      receiver: receiver_,
+      borrowedAmountOut: borrowedAmountOut_
     });
   }
+  //endregion -------------------------------------------  borrow
 
-  //////////////////////////////////////////////////////////
-  ///  repay
-  //////////////////////////////////////////////////////////
+  //region -------------------------------------------  repay
   struct RepayParams {
     address collateralAsset;
     address borrowAsset;
@@ -337,7 +335,7 @@ contract MockTetuConverter is ITetuConverter {
   ) {
     console.log("MockTetuConverter.repay collateral,borrow,amount", _tokenName(collateralAsset_), _tokenName(borrowAsset_), amountToRepay_);
 
-    require(IERC20Metadata(borrowAsset_).balanceOf(address(this)) == amountToRepay_, "MockTetuConverter.repay.amountToRepay_");
+    require(IERC20Metadata(borrowAsset_).balanceOf(address(this)) >= amountToRepay_, "MockTetuConverter.repay.amountToRepay_");
 
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     RepayParams memory p = repayParams[key];
@@ -362,6 +360,19 @@ contract MockTetuConverter is ITetuConverter {
         require(balanceBorrow >= p.returnedBorrowAmountOut, "MockTetuConverter.repay.returnedBorrowAmountOut");
         IERC20Metadata(borrowAsset_).transfer(receiver_, p.returnedBorrowAmountOut);
       }
+
+      // clear debt info
+      key = keccak256(abi.encodePacked(receiver_, collateralAsset_, borrowAsset_, true));
+      getDebtAmountCurrentParams[key] = getDebtAmountCurrentParamsQueue[key];
+      delete getDebtAmountCurrentParamsQueue[key];
+      getDebtAmountStoredParams[key] = getDebtAmountStoredParamsQueue[key];
+      delete getDebtAmountStoredParamsQueue[key];
+
+      key = keccak256(abi.encodePacked(receiver_, collateralAsset_, borrowAsset_, false));
+      getDebtAmountCurrentParams[key] = getDebtAmountCurrentParamsQueue[key];
+      delete getDebtAmountCurrentParamsQueue[key];
+      getDebtAmountStoredParams[key] = getDebtAmountStoredParamsQueue[key];
+      delete getDebtAmountStoredParamsQueue[key];
 
       return (
         p.collateralAmountOut,
@@ -399,10 +410,9 @@ contract MockTetuConverter is ITetuConverter {
       debtGapValue: debtGapValue
     });
   }
+  //endregion -------------------------------------------  repay
 
-  //////////////////////////////////////////////////////////
-  ///  quoteRepay
-  //////////////////////////////////////////////////////////
+  //region -------------------------------------------  quoteRepay
   struct QuoteRepayParams {
     address user;
     address collateralAsset;
@@ -425,7 +435,7 @@ contract MockTetuConverter is ITetuConverter {
   ) {
     user_;
     // hide warning
-    console.log("MockTetuConverter.quoteRepay collateral,borrow,amount", _tokenName(collateralAsset_), _tokenName(borrowAsset_), amountToRepay_);
+    console.log("MockTetuConverter.quoteRepay collateral,borrow,amountToRepay", _tokenName(collateralAsset_), _tokenName(borrowAsset_), amountToRepay_);
 
     bytes32 key = keccak256(abi.encodePacked(collateralAsset_, borrowAsset_, amountToRepay_));
     QuoteRepayParams memory p = quoteRepayParams[key];
@@ -455,10 +465,9 @@ contract MockTetuConverter is ITetuConverter {
       swappedAmountOut: swappedAmountOut
     });
   }
+  //endregion -------------------------------------------  quoteRepay
 
-  //////////////////////////////////////////////////////////
-  ///  getDebtAmountCurrent
-  //////////////////////////////////////////////////////////
+  //region----------------------------------------------------  getDebtAmountCurrent
   struct GetDebtAmountParams {
     address user;
     address collateralAsset;
@@ -470,6 +479,7 @@ contract MockTetuConverter is ITetuConverter {
 
   /// @notice keccak256(user_, collateralAsset_, borrowAsset_, useDebtGap_) => results
   mapping(bytes32 => GetDebtAmountParams) public getDebtAmountCurrentParams;
+  mapping(bytes32 => GetDebtAmountParams) public getDebtAmountCurrentParamsQueue;
 
   function getDebtAmountCurrent(
     address user_,
@@ -510,10 +520,13 @@ contract MockTetuConverter is ITetuConverter {
     address borrowAsset_,
     uint totalDebtAmountOut,
     uint totalCollateralAmountOut,
-    bool useDebtGap
+    bool useDebtGap,
+    bool addToQueue
   ) external {
+    console.log("setGetDebtAmountCurrent, user, collateral asset, borrow asset", user_, _tokenName(collateralAsset_), _tokenName(borrowAsset_));
+    console.log("setGetDebtAmountCurrent, totalDebtAmountOut, totalCollateralAmountOut, useDebtGap", totalDebtAmountOut, totalCollateralAmountOut, useDebtGap);
     bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap));
-    getDebtAmountCurrentParams[key] = GetDebtAmountParams({
+    GetDebtAmountParams memory data = GetDebtAmountParams({
       user: user_,
       collateralAsset: collateralAsset_,
       borrowAsset: borrowAsset_,
@@ -521,13 +534,18 @@ contract MockTetuConverter is ITetuConverter {
       totalDebtAmountOut: totalDebtAmountOut,
       useDebtGap: useDebtGap
     });
+    if (addToQueue) {
+      getDebtAmountCurrentParamsQueue[key] = data;
+    } else {
+      getDebtAmountCurrentParams[key] = data;
+    }
   }
+  //endregion----------------------------------------------------  getDebtAmountCurrent
 
-  //////////////////////////////////////////////////////////
-  ///  getDebtAmountStored
-  //////////////////////////////////////////////////////////
+  //region----------------------------------------------------  getDebtAmountStored
   /// @notice keccak256(user_, collateralAsset_, borrowAsset_, useDebtGap_) => results
   mapping(bytes32 => GetDebtAmountParams) public getDebtAmountStoredParams;
+  mapping(bytes32 => GetDebtAmountParams) public getDebtAmountStoredParamsQueue;
 
   function getDebtAmountStored(
     address user_,
@@ -541,7 +559,7 @@ contract MockTetuConverter is ITetuConverter {
     console.log("MockTetuConverter.getDebtAmountStored user,collateral,borrow", user_, _tokenName(collateralAsset_), _tokenName(borrowAsset_));
 
     bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap_));
-    GetDebtAmountParams memory p = getDebtAmountCurrentParams[key];
+    GetDebtAmountParams memory p = getDebtAmountStoredParams[key];
     if (p.user == user_) {
       console.log("MockTetuConverter.getDebtAmountStored totalDebtAmountOut,totalCollateralAmountOut,useDebtGap_",
         p.totalDebtAmountOut,
@@ -565,10 +583,13 @@ contract MockTetuConverter is ITetuConverter {
     address borrowAsset_,
     uint totalDebtAmountOut,
     uint totalCollateralAmountOut,
-    bool useDebtGap
+    bool useDebtGap,
+    bool addToQueue
   ) external {
+    console.log("setGetDebtAmountStored, user, collateral asset, borrow asset", user_,  _tokenName(collateralAsset_), _tokenName(borrowAsset_));
+    console.log("setGetDebtAmountStored, totalDebtAmountOut, totalCollateralAmountOut, useDebtGap", totalDebtAmountOut, totalCollateralAmountOut, useDebtGap);
     bytes32 key = keccak256(abi.encodePacked(user_, collateralAsset_, borrowAsset_, useDebtGap));
-    getDebtAmountStoredParams[key] = GetDebtAmountParams({
+    GetDebtAmountParams memory data = GetDebtAmountParams({
       user: user_,
       collateralAsset: collateralAsset_,
       borrowAsset: borrowAsset_,
@@ -576,11 +597,15 @@ contract MockTetuConverter is ITetuConverter {
       totalDebtAmountOut: totalDebtAmountOut,
       useDebtGap: useDebtGap
     });
+    if (addToQueue) {
+      getDebtAmountStoredParamsQueue[key] = data;
+    } else {
+      getDebtAmountStoredParams[key] = data;
+    }
   }
+  //endregion----------------------------------------------------  getDebtAmountStored
 
-  //////////////////////////////////////////////////////////
-  ///  estimateRepay
-  //////////////////////////////////////////////////////////
+  //region----------------------------------------------------  estimateRepay
   function estimateRepay(
     address user_,
     address collateralAsset_,
@@ -598,10 +623,9 @@ contract MockTetuConverter is ITetuConverter {
     unobtainableCollateralAssetAmount;
     revert ("estimateRepay is not implemented");
   }
+  //endregion----------------------------------------------------  estimateRepay
 
-  //////////////////////////////////////////////////////////
-  ///  claimRewards
-  //////////////////////////////////////////////////////////
+  //region----------------------------------------------------  claimRewards
   struct ClaimRewardsParams {
     address[] rewardTokensOut;
     uint[] amountsOut;
@@ -623,14 +647,13 @@ contract MockTetuConverter is ITetuConverter {
 
   function setClaimRewards(address[] memory rewardTokensOut, uint[] memory amountsOut) external {
     claimRewardsParams = ClaimRewardsParams({
-    rewardTokensOut : rewardTokensOut,
-    amountsOut : amountsOut
+      rewardTokensOut: rewardTokensOut,
+      amountsOut: amountsOut
     });
   }
+  //endregion----------------------------------------------------  claimRewards
 
-  //////////////////////////////////////////////////////////
-  ///  Safe liquidation
-  //////////////////////////////////////////////////////////
+  //region----------------------------------------------------  safeLiquidate
   function safeLiquidate(
     address assetIn_,
     uint amountIn_,
@@ -650,6 +673,7 @@ contract MockTetuConverter is ITetuConverter {
     amountOut;
     revert("safeLiquidate is not implemented");
   }
+  //endregion----------------------------------------------------  safeLiquidate
 
   //region ----------------------------------------------  isConversionValid
   enum SetIsConversionValidResult {
@@ -687,12 +711,26 @@ contract MockTetuConverter is ITetuConverter {
         revert(AppErrors.ZERO_PRICE);
       }
     } else {
-      console.log("isConversionValid assetIn", _tokenName(assetIn_), amountIn_);
-      console.log("isConversionValid assetOut", _tokenName(assetOut_), amountOut_);
-      revert("isConversionValid is missed");
+      // we also support variant with arbitrary (unknown before hand) amount-out
+      key = keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_));
+      p = isConversionValidParams[key];
+      if (p.assetIn == assetIn_) {
+        if (p.result == SetIsConversionValidResult.FAILED_0) {
+          return false;
+        } else if (p.result == SetIsConversionValidResult.SUCCESS_1) {
+          return true;
+        } else {
+          revert(AppErrors.ZERO_PRICE);
+        }
+      } else {
+        console.log("isConversionValid assetIn", _tokenName(assetIn_), amountIn_);
+        console.log("isConversionValid assetOut", _tokenName(assetOut_), amountOut_);
+        revert("isConversionValid is missed");
+      }
     }
   }
 
+  /// @param amountOut_ 0 - to set up isConversionValid for arbitrary (unknown before hand) amount-out
   function setIsConversionValid(
     address assetIn_,
     uint amountIn_,
@@ -702,7 +740,9 @@ contract MockTetuConverter is ITetuConverter {
   ) external {
     console.log("setIsConversionValid assetIn", assetIn_, amountIn_);
     console.log("setIsConversionValid assetOut", assetOut_, amountOut_);
-    bytes32 key = keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_, amountOut_));
+    bytes32 key = amountOut_ == 0
+      ? keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_))
+      : keccak256(abi.encodePacked(assetIn_, amountIn_, assetOut_, amountOut_));
     isConversionValidParams[key] = IsConversionValidParams({
       assetIn: assetIn_,
       amountIn: amountIn_,
@@ -713,7 +753,7 @@ contract MockTetuConverter is ITetuConverter {
   }
   //endregion ----------------------------------------------  isConversionValid
 
-
+  //region Others
   function repayTheBorrow(address poolAdapter_, bool closePosition) external pure returns (
     uint collateralAmountOut,
     uint repaidAmountOut
@@ -743,5 +783,5 @@ contract MockTetuConverter is ITetuConverter {
     amount;
     // not implemented
   }
-
+  //endregion Others
 }

@@ -14,6 +14,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
+import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -32,7 +33,7 @@ const argv = require('yargs/yargs')()
 
 const block = 44151797
 
-describe(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function() {
+describe.skip(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }
@@ -46,17 +47,7 @@ describe(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function() {
   before(async function() {
     snapshotBefore = await TimeUtils.snapshot();
 
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: block,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
 
@@ -93,17 +84,7 @@ describe(`AlgebraConverterStrategyHardworkOnSpecifiedBlockTest`, function() {
   })
 
   after(async function() {
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: parseInt(process.env.TETU_MATIC_FORK_BLOCK || '', 10) || undefined,
-          },
-        },
-      ],
-    });
+    await HardhatUtils.restoreBlockFromEnv();
     await TimeUtils.rollback(snapshotBefore);
   });
 

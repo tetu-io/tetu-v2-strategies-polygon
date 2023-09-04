@@ -17,6 +17,11 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @dev Version of this contract. Adjust manually on each code modification.
   string public constant ALGEBRA_DEPOSITOR_VERSION = "1.0.0";
 
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A = 0;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B = 1;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_RT = 2;
+  uint internal constant IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_BRT = 3;
+
   /////////////////////////////////////////////////////////////////////
   ///                VARIABLES
   /////////////////////////////////////////////////////////////////////
@@ -28,37 +33,16 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   ///                       View
   /////////////////////////////////////////////////////////////////////
 
-  /// @notice Returns the current state of the contract.
-  function getState() external view returns (
-    address tokenA,
-    address tokenB,
-    IAlgebraPool pool,
-    int24 tickSpacing,
-    int24 lowerTick,
-    int24 upperTick,
-    int24 rebalanceTickRange,
-    uint128 totalLiquidity,
-    bool isFuseTriggered,
-    uint fuseThreshold,
-    address profitHolder,
-    uint[] memory profitHolderBalances
+  /// @return nums Balances of [tokenA, tokenB, rewardToken, bonusRewardToken] for profit holder
+  function getSpecificState() external view returns (
+    uint[] memory nums
   ) {
-    tokenA = state.tokenA;
-    tokenB = state.tokenB;
-    pool = state.pool;
-    tickSpacing = state.tickSpacing;
-    lowerTick = state.lowerTick;
-    upperTick = state.upperTick;
-    rebalanceTickRange = state.rebalanceTickRange;
-    totalLiquidity = state.totalLiquidity;
-    isFuseTriggered = state.isFuseTriggered;
-    fuseThreshold = state.fuseThreshold;
-    profitHolder = state.strategyProfitHolder;
-    profitHolderBalances = new uint[](4);
-    profitHolderBalances[0] = IERC20(tokenA).balanceOf(profitHolder);
-    profitHolderBalances[1] = IERC20(tokenB).balanceOf(profitHolder);
-    profitHolderBalances[2] = IERC20(state.rewardToken).balanceOf(profitHolder);
-    profitHolderBalances[3] = IERC20(state.bonusRewardToken).balanceOf(profitHolder);
+    address profitHolder = state.pair.strategyProfitHolder;
+    nums = new uint[](4);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_A] = IERC20(state.pair.tokenA).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_B] = IERC20(state.pair.tokenB).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_RT] = IERC20(state.rewardToken).balanceOf(profitHolder);
+    nums[IDX_SS_NUMS_PROFIT_HOLDER_BALANCE_BRT] = IERC20(state.bonusRewardToken).balanceOf(profitHolder);
   }
 
   /// @notice Returns the fees for the current state.
@@ -71,8 +55,8 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @return poolAssets An array containing the addresses of the pool assets.
   function _depositorPoolAssets() override internal virtual view returns (address[] memory poolAssets) {
     poolAssets = new address[](2);
-    poolAssets[0] = state.tokenA;
-    poolAssets[1] = state.tokenB;
+    poolAssets[0] = state.pair.tokenA;
+    poolAssets[1] = state.pair.tokenB;
   }
 
   /// @notice Returns the pool weights and the total weight.
@@ -87,19 +71,19 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @notice Returns the pool reserves.
   /// @return reserves An array containing the reserves of the pool assets.
   function _depositorPoolReserves() override internal virtual view returns (uint[] memory reserves) {
-    return AlgebraConverterStrategyLogicLib.getPoolReserves(state);
+    return AlgebraConverterStrategyLogicLib.getPoolReserves(state.pair);
   }
 
   /// @notice Returns the current liquidity of the depositor.
   /// @return The current liquidity of the depositor.
   function _depositorLiquidity() override internal virtual view returns (uint) {
-    return uint(state.totalLiquidity);
+    return uint(state.pair.totalLiquidity);
   }
 
   /// @notice Returns the total supply of the depositor.
   /// @return In UniV3 we can not calculate the total supply of the wgole pool. Return only ourself value.
   function _depositorTotalSupply() override internal view virtual returns (uint) {
-    return uint(state.totalLiquidity);
+    return uint(state.pair.totalLiquidity);
   }
 
   /////////////////////////////////////////////////////////////////////
@@ -122,7 +106,7 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @param liquidityAmount The amount of liquidity to quote the withdrawal for.
   /// @return amountsOut The amounts of the tokens that would be withdrawn.
   function _depositorQuoteExit(uint liquidityAmount) override internal virtual returns (uint[] memory amountsOut) {
-    amountsOut = AlgebraConverterStrategyLogicLib.quoteExit(state, uint128(liquidityAmount));
+    amountsOut = AlgebraConverterStrategyLogicLib.quoteExit(state.pair, uint128(liquidityAmount));
   }
 
   /////////////////////////////////////////////////////////////////////

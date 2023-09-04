@@ -17,7 +17,8 @@ import { deployAddresses } from './scripts/addresses/deploy-addresses';
 import '@gelatonetwork/web3-functions-sdk/hardhat-plugin';
 import path from 'path';
 import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from 'hardhat/builtin-tasks/task-names';
-import './scripts/hardhat-verify/verify1-task';
+import { exec } from 'child_process';
+import './hardhat-verify/verify1-task';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -40,7 +41,7 @@ const argv = require('yargs/yargs')()
     },
     maticForkBlock: {
       type: 'number',
-      default: 43620959,
+      default: 46320827,
     },
     hardhatLogsEnabled: {
       type: 'boolean',
@@ -115,8 +116,10 @@ export default {
       accounts: [argv.privateKey],
       url: 'http://127.0.0.1:8545',
     },
-    localhost: {
-      timeout: 9999999999,
+    foundry: {
+      chainId: 31337,
+      url: 'http://127.0.0.1:8545',
+      // accounts: [argv.privateKey], do not use it, impersonate will be broken
     },
     eth: {
       url: argv.ethRpcUrl || '',

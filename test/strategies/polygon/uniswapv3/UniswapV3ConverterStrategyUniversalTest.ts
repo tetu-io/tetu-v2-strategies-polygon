@@ -5,7 +5,7 @@ import chaiAsPromised from "chai-as-promised";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
-import {getConverterAddress, getDForcePlatformAdapter} from "../../../../scripts/utils/Misc";
+import {getConverterAddress, getDForcePlatformAdapter, Misc} from "../../../../scripts/utils/Misc";
 import {IState, IStateParams, StateUtils} from "../../../StateUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {ethers} from "hardhat";
@@ -23,11 +23,12 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {BigNumber, Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {startDefaultStrategyTest} from "../../base/DefaultSingleTokenStrategyTest";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {PackedData} from "../../../baseUT/utils/PackedData";
 
 
 dotEnvConfig();
@@ -118,20 +119,35 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         ));
       },
       strategyInit: async(strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
+        const state = await PackedData.getDefaultState(strategy)
+        const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, user).decimals()
+        const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, user).decimals()
         await StrategyTestUtils.setThresholds(
           strategy as unknown as IStrategyV2,
           user,
-          { reinvestThresholdPercent },
+          {
+            reinvestThresholdPercent,
+            rewardLiquidationThresholds: [
+              {
+                asset: state.tokenA,
+                threshold: parseUnits('0.0001', tokenADecimals),
+              },
+              {
+                asset: state.tokenB,
+                threshold: parseUnits('0.0001', tokenBDecimals),
+              },
+            ]
+          },
         );
         await ConverterUtils.addToWhitelist(user, tetuConverterAddress, strategy.address);
         await PriceOracleImitatorUtils.uniswapV3(user, t[1], t[0])
       },
       swap1: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
-        const state = await univ3Strategy.getState()
+        const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
+        const swapAmount = BigNumber.from(parseUnits('600000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
         await UniswapV3StrategyUtils.movePriceUp(
           swapUser,
           strategy.address,
@@ -141,10 +157,10 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       },
       swap2: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
-        const state = await univ3Strategy.getState()
+        const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenBPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenB)
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, swapUser).decimals()
-        const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
+        const swapAmount = BigNumber.from(parseUnits('600000', 8)).div(tokenBPrice).mul(parseUnits('1', tokenBDecimals))
         await UniswapV3StrategyUtils.movePriceDown(
           swapUser,
           strategy.address,
@@ -155,7 +171,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       rebalancingStrategy: true,
       makeVolume: async(strategy: IStrategyV2, swapUser: SignerWithAddress) => {
         const univ3Strategy = strategy as unknown as UniswapV3ConverterStrategy
-        const state = await univ3Strategy.getState()
+        const state = await PackedData.getDefaultState(univ3Strategy);
         const tokenAPrice = await PriceOracleImitatorUtils.getPrice(swapUser, state.tokenA)
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, swapUser).decimals()
         const swapAmount = BigNumber.from(parseUnits('500000', 8)).div(tokenAPrice).mul(parseUnits('1', tokenADecimals))
@@ -176,12 +192,12 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       strategyName,
       async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
         const strategy = UniswapV3ConverterStrategy__factory.connect(strategyProxy, signer);
-        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1], t[2], t[3]);
+        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1], t[2], t[3], [0, 0, Misc.MAX_UINT, 0], [0, 0, Misc.MAX_UINT, 0]);
         const mainAssetSymbol = await IERC20Metadata__factory.connect(asset, signer).symbol()
         statesParams[t[1]] = {
           mainAssetSymbol,
         }
-        const state = await strategy.getState()
+        const state = await PackedData.getDefaultState(strategy);
         const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', strategy.address, [state.tokenA, state.tokenB])
         await strategy.setStrategyProfitHolder(profitHolder.address)
         return strategy as unknown as IStrategyV2;

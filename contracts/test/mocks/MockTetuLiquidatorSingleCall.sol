@@ -161,7 +161,7 @@ contract MockTetuLiquidatorSingleCall is ITetuLiquidator {
       IERC20(route[0].tokenOut).transfer(msg.sender, p.amountOut);
 
     } else {
-      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.missed");
+      console.log("MockTetuLiquidatorSingleCall.liquidateWithRoute.missed.amount", amount);
     }
   }
 

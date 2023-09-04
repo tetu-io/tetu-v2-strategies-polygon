@@ -21,7 +21,7 @@ import {parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 
 dotEnvConfig();
@@ -80,6 +80,8 @@ describe.skip('UniswapV3ConverterStrategyOutOfRangeTest', function() {
           MaticAddresses.UNISWAPV3_WMATIC_MaticX_100,
           0,
           0,
+          [0, 0, Misc.MAX_UINT, 0],
+          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;

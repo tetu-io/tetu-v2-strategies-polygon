@@ -1,7 +1,12 @@
 /* tslint:disable:no-trailing-whitespace */
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
-import { IERC20__factory, IRebalancingStrategy, IStrategyV2, TetuVaultV2 } from '../../../typechain';
+import {
+  IERC20__factory,
+  IRebalancingV2Strategy,
+  IStrategyV2,
+  TetuVaultV2
+} from '../../../typechain';
 import { IToolsContractsWrapper } from '../../ToolsContractsWrapper';
 import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import { BigNumber, utils } from 'ethers';
@@ -279,10 +284,10 @@ export class DoHardWorkLoopBase {
 
       // *********** REBALANCE **************
       if (rebalancingStrategy) {
-        const rebalancingStrategyContract = this.strategy as unknown as IRebalancingStrategy;
+        const rebalancingStrategyContract = this.strategy as unknown as IRebalancingV2Strategy;
         if (await rebalancingStrategyContract.needRebalance()) {
-          console.log('Rebalance..');
-          await rebalancingStrategyContract.rebalance({gasLimit: 19_000_000});
+          console.log('RebalanceNoSwaps..');
+          await rebalancingStrategyContract.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
         }
       }
 

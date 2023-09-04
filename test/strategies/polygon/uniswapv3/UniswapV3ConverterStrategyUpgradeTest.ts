@@ -11,7 +11,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {parseUnits} from "ethers/lib/utils";
-import {UniswapV3StrategyUtils} from "../../../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 
@@ -32,7 +32,12 @@ const argv = require('yargs/yargs')()
     },
   }).argv;
 
-describe('UniswapV3ConverterStrategyUpgradeTests', function() {
+/**
+ * todo
+ * We are going to move from rebalance()-strategy to rebalanceNoSwap()-strategies
+ * This test should be enabled back when first rebalanceNoSwap()-strategies will be deployed
+ */
+describe.skip('UniswapV3ConverterStrategyUpgradeTests', function() {
   if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
     return;
   }

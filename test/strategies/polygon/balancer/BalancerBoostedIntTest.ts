@@ -45,7 +45,7 @@ import { MaticHolders } from '../../../../scripts/addresses/MaticHolders';
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} from "../../../StateUtils";
 import {Provider} from "@ethersproject/providers";
-import {BalancerStrategyUtils} from "../../../BalancerStrategyUtils";
+import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 
 chai.use(chaiAsPromised);
@@ -892,7 +892,8 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
       });
     });
 
-    describe("requirePayAmountBack", () => {
+    // todo enable after SCB-718
+    describe.skip("requirePayAmountBack", () => {
 
       /**
        * Make deposit: make two borrows

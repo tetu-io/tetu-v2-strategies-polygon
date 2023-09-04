@@ -4,54 +4,36 @@ pragma solidity 0.8.17;
 import "./AlgebraLib.sol";
 import "./AlgebraDebtLib.sol";
 import "./AlgebraStrategyErrors.sol";
+import "../../libs/AppLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/lib/StringLib.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/openzeppelin/SafeERC20.sol";
+import "@tetu_io/tetu-converter/contracts/interfaces/IPriceOracle.sol";
+import "../pair/PairBasedStrategyLogicLib.sol";
 
 library AlgebraConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
 
-  //////////////////////////////////////////
-  //            CONSTANTS
-  //////////////////////////////////////////
-
+  //region ------------------------------------------------ Constants
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_STABLE = 300;
   uint internal constant LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE = 500;
   uint internal constant HARD_WORK_USD_FEE_THRESHOLD = 100;
-  /// @dev 0.5% by default
-  uint internal constant DEFAULT_FUSE_THRESHOLD = 5e15;
+
   INonfungiblePositionManager internal constant ALGEBRA_NFT = INonfungiblePositionManager(0x8eF88E4c7CfbbaC1C163f7eddd4B578792201de6);
   IFarmingCenter internal constant FARMING_CENTER = IFarmingCenter(0x7F281A8cdF66eF5e9db8434Ec6D97acc1bc01E78);
+  //endregion ------------------------------------------------ Constants
 
-  //////////////////////////////////////////
-  //            EVENTS
-  //////////////////////////////////////////
-
-  event FuseTriggered();
-  event Rebalanced(uint loss, uint coveredByRewards);
-  event DisableFuse();
-  event NewFuseThreshold(uint newFuseThreshold);
+  //region ------------------------------------------------ Events
+  event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
   event AlgebraRewardsClaimed(uint reward, uint bonusReward);
+  //endregion ------------------------------------------------ Data types
 
-  //////////////////////////////////////////
-  //            STRUCTURES
-  //////////////////////////////////////////
+  //region ------------------------------------------------ Data types
 
   struct State {
-    address strategyProfitHolder;
-    address tokenA;
-    address tokenB;
-    IAlgebraPool pool;
-    int24 tickSpacing;
-    bool isStablePool;
-    int24 lowerTick;
-    int24 upperTick;
-    int24 rebalanceTickRange;
-    bool depositorSwapTokens;
-    uint128 totalLiquidity;
-    bool isFuseTriggered;
-    uint fuseThreshold;
-    uint lastPrice;
+    PairBasedStrategyLogicLib.PairState pair;
+    // additional (specific) state
+
     uint tokenId;
     // farming
     address rewardToken;
@@ -60,29 +42,18 @@ library AlgebraConverterStrategyLogicLib {
     uint256 endTime;
   }
 
-  struct RebalanceSwapByAggParams {
-    bool direction;
-    uint amount;
-    address agg;
-    bytes swapData;
-  }
-
-  struct RebalanceLocalVariables {
-    int24 upperTick;
-    int24 lowerTick;
-    int24 tickSpacing;
+  struct RebalanceLocal {
+    /// @notice Fuse for token A and token B
+    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
+    ITetuConverter converter;
     IAlgebraPool pool;
     address tokenA;
     address tokenB;
-    uint lastPrice;
-    uint fuseThreshold;
-    bool depositorSwapTokens;
-    uint notCoveredLoss;
-    int24 newLowerTick;
-    int24 newUpperTick;
     bool isStablePool;
-    uint newPrice;
-    uint newTotalAssets;
+    uint[2] liquidationThresholdsAB;
+
+    bool[2] fuseStatusChangedAB;
+    PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
   }
 
   struct EnterLocalVariables {
@@ -93,66 +64,61 @@ library AlgebraConverterStrategyLogicLib {
     int24 upperTick;
   }
 
-  //////////////////////////////////////////
-  //            HELPERS
-  //////////////////////////////////////////
-
-  function emitDisableFuse() external {
-    emit DisableFuse();
+  struct IsReadyToHardWorkLocal {
+    address tokenA;
+    address tokenB;
+    uint rewardInTermOfTokenA;
+    uint bonusRewardInTermOfTokenA;
+    uint fee0;
+    uint fee1;
   }
+  //endregion ------------------------------------------------ Data types
 
-  function emitNewFuseThreshold(uint value) external {
-    emit NewFuseThreshold(value);
-  }
+  //region ------------------------------------------------ Helpers
 
-  /// @notice Check if the fuse is enabled based on the price difference and fuse threshold.
-  /// @param oldPrice The old price.
-  /// @param newPrice The new price.
-  /// @param fuseThreshold The fuse threshold.
-  /// @return A boolean indicating if the fuse is enabled.
-  function isEnableFuse(uint oldPrice, uint newPrice, uint fuseThreshold) internal pure returns (bool) {
-    return oldPrice > newPrice ? (oldPrice - newPrice) > fuseThreshold : (newPrice - oldPrice) > fuseThreshold;
-  }
-
+  /// @param controllerPool [controller, pool]
+  /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
+  /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
   function initStrategyState(
     State storage state,
-    address controller_,
-    address converter,
-    address pool,
+    address[2] calldata controllerPool,
     int24 tickRange,
     int24 rebalanceTickRange,
     address asset_,
-    bool isStablePool
+    bool isStablePool,
+    uint[4] calldata fuseThresholdsA,
+    uint[4] calldata fuseThresholdsB
   ) external {
-    require(pool != address(0), AppErrors.ZERO_ADDRESS);
-    state.pool = IAlgebraPool(pool);
+    require(controllerPool[1] != address(0), AppErrors.ZERO_ADDRESS);
+    address token0 = IAlgebraPool(controllerPool[1]).token0();
+    address token1 = IAlgebraPool(controllerPool[1]).token1();
 
-    state.isStablePool = isStablePool;
+    int24[4] memory tickData;
+    {
+      int24 tickSpacing = AlgebraLib.tickSpacing();
+      if (tickRange != 0) {
+        require(tickRange == tickRange / tickSpacing * tickSpacing, AlgebraStrategyErrors.INCORRECT_TICK_RANGE);
+        require(rebalanceTickRange == rebalanceTickRange / tickSpacing * tickSpacing, AlgebraStrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
+      }
+      tickData[0] = tickSpacing;
+      (tickData[1], tickData[2]) = AlgebraDebtLib.calcTickRange(IAlgebraPool(controllerPool[1]), tickRange, tickSpacing);
+      tickData[3] = rebalanceTickRange;
+    }
 
-    state.rebalanceTickRange = rebalanceTickRange;
-
-    _setInitialDepositorValues(
-      state,
-      IAlgebraPool(pool),
-      tickRange,
-      rebalanceTickRange,
-      asset_
+    PairBasedStrategyLogicLib.setInitialDepositorValues(
+      state.pair,
+      [controllerPool[1], asset_, token0, token1],
+      tickData,
+      isStablePool,
+      fuseThresholdsA,
+      fuseThresholdsB
     );
 
-    address liquidator = IController(controller_).liquidator();
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    IERC20(tokenA).approve(liquidator, type(uint).max);
-    IERC20(tokenB).approve(liquidator, type(uint).max);
-    IERC20(tokenA).approve(address(ALGEBRA_NFT), type(uint).max);
-    IERC20(tokenB).approve(address(ALGEBRA_NFT), type(uint).max);
-
-    if (isStablePool) {
-      /// for stable pools fuse can be enabled
-      state.fuseThreshold = DEFAULT_FUSE_THRESHOLD;
-      emit NewFuseThreshold(DEFAULT_FUSE_THRESHOLD);
-      state.lastPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(ITetuConverter(converter), tokenA, tokenB);
-    }
+    address liquidator = IController(controllerPool[0]).liquidator();
+    IERC20(token0).approve(liquidator, type(uint).max);
+    IERC20(token1).approve(liquidator, type(uint).max);
+    IERC20(token0).approve(address(ALGEBRA_NFT), type(uint).max);
+    IERC20(token1).approve(address(ALGEBRA_NFT), type(uint).max);
   }
 
   function initFarmingState(
@@ -165,30 +131,32 @@ library AlgebraConverterStrategyLogicLib {
     state.endTime = key.endTime;
   }
 
-  function createSpecificName(State storage state) external view returns (string memory) {
-    return string(abi.encodePacked("Algebra ", IERC20Metadata(state.tokenA).symbol(), "/", IERC20Metadata(state.tokenB).symbol()));
+  function createSpecificName(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (string memory) {
+    return string(abi.encodePacked("Algebra ", IERC20Metadata(pairState.tokenA).symbol(), "/", IERC20Metadata(pairState.tokenB).symbol()));
   }
 
   function getIncentiveKey(State storage state) internal view returns (IncentiveKey memory) {
-    return IncentiveKey(state.rewardToken, state.bonusRewardToken, address(state.pool), state.startTime, state.endTime);
+    return IncentiveKey(state.rewardToken, state.bonusRewardToken, state.pair.pool, state.startTime, state.endTime);
   }
 
   function getFees(State storage state) public view returns (uint fee0, uint fee1) {
-    (fee0, fee1) = AlgebraLib.getFees(state.pool, ALGEBRA_NFT, state.tokenId);
+    (fee0, fee1) = AlgebraLib.getFees(IAlgebraPool(state.pair.pool), ALGEBRA_NFT, state.tokenId);
   }
 
-  function getPoolReserves(State storage state) external view returns (uint[] memory reserves) {
+  function getPoolReserves(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (
+    uint[] memory reserves
+  ) {
     reserves = new uint[](2);
-    (uint160 sqrtRatioX96, , , , , ,) = state.pool.globalState();
+    (uint160 sqrtRatioX96, , , , , ,) = IAlgebraPool(pairState.pool).globalState();
 
     (reserves[0], reserves[1]) = AlgebraLib.getAmountsForLiquidity(
       sqrtRatioX96,
-      state.lowerTick,
-      state.upperTick,
-      state.totalLiquidity
+      pairState.lowerTick,
+      pairState.upperTick,
+      pairState.totalLiquidity
     );
 
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (reserves[0], reserves[1]) = (reserves[1], reserves[0]);
     }
   }
@@ -198,11 +166,9 @@ library AlgebraConverterStrategyLogicLib {
   function _getLiquidatorSwapSlippage(bool isStablePool) internal pure returns (uint) {
     return isStablePool ? LIQUIDATOR_SWAP_SLIPPAGE_STABLE : LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE;
   }
+  //endregion ------------------------------------------------ Helpers
 
-  //////////////////////////////////////////
-  //            Pool info
-  //////////////////////////////////////////
-
+  //region ------------------------------------------------ Pool info
   function getEntryData(
     IAlgebraPool pool,
     int24 lowerTick,
@@ -211,60 +177,25 @@ library AlgebraConverterStrategyLogicLib {
   ) public view returns (bytes memory entryData) {
     return AlgebraDebtLib.getEntryData(pool, lowerTick, upperTick, depositorSwapTokens);
   }
+  //endregion ------------------------------------------------ Helpers
 
-  //////////////////////////////////////////
-  //            CALCULATIONS
-  //////////////////////////////////////////
-
-  /// @notice Calculate and set the initial values for a QuickSwap V3 pool Depositor.
-  /// @param state Depositor storage state struct
-  /// @param pool The QuickSwap V3 pool to get the initial values from.
-  /// @param tickRange_ The tick range for the pool.
-  /// @param rebalanceTickRange_ The rebalance tick range for the pool.
-  /// @param asset_ Underlying asset of the depositor.
-  function _setInitialDepositorValues(
-    State storage state,
-    IAlgebraPool pool,
-    int24 tickRange_,
-    int24 rebalanceTickRange_,
-    address asset_
-  ) internal {
-    int24 tickSpacing = AlgebraLib.tickSpacing();
-    if (tickRange_ != 0) {
-      require(tickRange_ == tickRange_ / tickSpacing * tickSpacing, AlgebraStrategyErrors.INCORRECT_TICK_RANGE);
-      require(rebalanceTickRange_ == rebalanceTickRange_ / tickSpacing * tickSpacing, AlgebraStrategyErrors.INCORRECT_REBALANCE_TICK_RANGE);
-    }
-    state.tickSpacing = tickSpacing;
-    (state.lowerTick, state.upperTick) = AlgebraDebtLib.calcTickRange(pool, tickRange_, tickSpacing);
-    require(asset_ == pool.token0() || asset_ == pool.token1(), AlgebraStrategyErrors.INCORRECT_ASSET);
-    if (asset_ == pool.token0()) {
-      state.tokenA = pool.token0();
-      state.tokenB = pool.token1();
-      state.depositorSwapTokens = false;
-    } else {
-      state.tokenA = pool.token1();
-      state.tokenB = pool.token0();
-      state.depositorSwapTokens = true;
-    }
-  }
-
-  //////////////////////////////////////////
-  //            Joins to the pool
-  //////////////////////////////////////////
+  //region ------------------------------------------------ Join the pool
 
   function enter(
     State storage state,
     uint[] memory amountsDesired_
   ) external returns (uint[] memory amountsConsumed, uint liquidityOut) {
     EnterLocalVariables memory vars = EnterLocalVariables({
-      depositorSwapTokens : state.depositorSwapTokens,
+      depositorSwapTokens : state.pair.depositorSwapTokens,
       liquidity : 0,
       tokenId : state.tokenId,
-      lowerTick : state.lowerTick,
-      upperTick : state.upperTick
+      lowerTick : state.pair.lowerTick,
+      upperTick : state.pair.upperTick
     });
 
-    (address token0, address token1) = vars.depositorSwapTokens ? (state.tokenB, state.tokenA) : (state.tokenA, state.tokenB);
+    (address token0, address token1) = vars.depositorSwapTokens
+      ? (state.pair.tokenB, state.pair.tokenA)
+      : (state.pair.tokenA, state.pair.tokenB);
     if (vars.depositorSwapTokens) {
       (amountsDesired_[0], amountsDesired_[1]) = (amountsDesired_[1], amountsDesired_[0]);
     }
@@ -308,8 +239,7 @@ library AlgebraConverterStrategyLogicLib {
         block.timestamp
       ));
 
-      if (state.totalLiquidity > 0) {
-
+      if (state.pair.totalLiquidity > 0) {
         // get reward amounts
         (uint reward, uint bonusReward) = FARMING_CENTER.collectRewards(key, vars.tokenId);
 
@@ -318,7 +248,7 @@ library AlgebraConverterStrategyLogicLib {
 
         // claim rewards and send to profit holder
         {
-          address strategyProfitHolder = state.strategyProfitHolder;
+          address strategyProfitHolder = state.pair.strategyProfitHolder;
 
           if (reward > 0) {
             address token = state.rewardToken;
@@ -338,26 +268,26 @@ library AlgebraConverterStrategyLogicLib {
 
     FARMING_CENTER.enterFarming(key, vars.tokenId, 0, false);
 
-    state.totalLiquidity += vars.liquidity;
+    state.pair.totalLiquidity += vars.liquidity;
     liquidityOut = uint(vars.liquidity);
   }
+  //endregion ------------------------------------------------ Join the pool
 
-  //////////////////////////////////////////
-  //            Exit from the pool
-  //////////////////////////////////////////
+  //region ------------------------------------------------ Exit the pool
 
   function exit(
     State storage state,
     uint128 liquidityAmountToExit
   ) external returns (uint[] memory amountsOut) {
     amountsOut = new uint[](2);
-    address strategyProfitHolder = state.strategyProfitHolder;
+    address strategyProfitHolder = state.pair.strategyProfitHolder;
     IncentiveKey memory key = getIncentiveKey(state);
 
-    uint128 liquidity = state.totalLiquidity;
+    uint128 liquidity = state.pair.totalLiquidity;
 
     require(liquidity >= liquidityAmountToExit, AlgebraStrategyErrors.WRONG_LIQUIDITY);
 
+    // we assume here, that liquidity is not zero (otherwise it doesn't worth to call exit)
     uint tokenId = state.tokenId;
 
     // get reward amounts
@@ -395,22 +325,22 @@ library AlgebraConverterStrategyLogicLib {
 
       emit AlgebraFeesClaimed(fee0, fee1);
 
-      if (state.depositorSwapTokens) {
+      if (state.pair.depositorSwapTokens) {
         (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
         (fee0, fee1) = (fee1, fee0);
       }
 
       // send fees to profit holder
       if (fee0 > 0) {
-        IERC20(state.tokenA).safeTransfer(strategyProfitHolder, fee0);
+        IERC20(state.pair.tokenA).safeTransfer(strategyProfitHolder, fee0);
       }
       if (fee1 > 0) {
-        IERC20(state.tokenB).safeTransfer(strategyProfitHolder, fee1);
+        IERC20(state.pair.tokenB).safeTransfer(strategyProfitHolder, fee1);
       }
     }
 
     liquidity -= liquidityAmountToExit;
-    state.totalLiquidity = liquidity;
+    state.pair.totalLiquidity = liquidity;
 
     if (liquidity > 0) {
       ALGEBRA_NFT.safeTransferFrom(address(this), address(FARMING_CENTER), tokenId);
@@ -419,33 +349,32 @@ library AlgebraConverterStrategyLogicLib {
   }
 
   function quoteExit(
-    State storage state,
+    PairBasedStrategyLogicLib.PairState storage pairState,
     uint128 liquidityAmountToExit
   ) public view returns (uint[] memory amountsOut) {
-    (uint160 sqrtRatioX96, , , , , ,) = state.pool.globalState();
+    (uint160 sqrtRatioX96, , , , , ,) = IAlgebraPool(pairState.pool).globalState();
     amountsOut = new uint[](2);
     (amountsOut[0], amountsOut[1]) = AlgebraLib.getAmountsForLiquidity(
       sqrtRatioX96,
-      state.lowerTick,
-      state.upperTick,
+      pairState.lowerTick,
+      pairState.upperTick,
       liquidityAmountToExit
     );
-    if (state.depositorSwapTokens) {
+    if (pairState.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
   }
+  //endregion ------------------------------------------------ Exit the pool
 
-  //////////////////////////////////////////
-  //            Rewards
-  //////////////////////////////////////////
+  //region ------------------------------------------------ Rewards
 
   function isReadyToHardWork(State storage state, ITetuConverter converter, address controller) external view returns (bool isReady) {
-    address tokenA = state.tokenA;
-    uint rewardInTermOfTokenA;
-    uint bonusRewardInTermOfTokenA;
-    address h = state.strategyProfitHolder;
+    IsReadyToHardWorkLocal memory v;
+    v.tokenA = state.pair.tokenA;
+    v.tokenB = state.pair.tokenB;
+    address h = state.pair.strategyProfitHolder;
 
-    {
+    if (state.pair.totalLiquidity != 0) {
       address rewardToken = state.rewardToken;
       address bonusRewardToken = state.bonusRewardToken;
       IncentiveKey memory key = getIncentiveKey(state);
@@ -454,37 +383,34 @@ library AlgebraConverterStrategyLogicLib {
       bonusReward += IERC20(bonusRewardToken).balanceOf(h);
       ITetuLiquidator liquidator = ITetuLiquidator(IController(controller).liquidator());
       if (reward > 0) {
-        rewardInTermOfTokenA = liquidator.getPrice(rewardToken, tokenA, reward);
+        v.rewardInTermOfTokenA = liquidator.getPrice(rewardToken, v.tokenA, reward);
       }
-      if (bonusRewardInTermOfTokenA > 0) {
-        bonusRewardInTermOfTokenA = liquidator.getPrice(bonusRewardToken, tokenA, bonusReward);
+      if (v.bonusRewardInTermOfTokenA > 0) {
+        v.bonusRewardInTermOfTokenA = liquidator.getPrice(bonusRewardToken, v.tokenA, bonusReward);
       }
+      (v.fee0, v.fee1) = getFees(state);
     }
-
-    address tokenB = state.tokenB;
 
     // check claimable amounts and compare with thresholds
-    (uint fee0, uint fee1) = getFees(state);
-
-    if (state.depositorSwapTokens) {
-      (fee0, fee1) = (fee1, fee0);
+    if (state.pair.depositorSwapTokens) {
+      (v.fee0, v.fee1) = (v.fee1, v.fee0);
     }
 
-    fee0 += IERC20(tokenA).balanceOf(h);
-    fee1 += IERC20(tokenB).balanceOf(h);
+    v.fee0 += IERC20(v.tokenA).balanceOf(h);
+    v.fee1 += IERC20(v.tokenB).balanceOf(h);
 
-    IPriceOracle oracle = IPriceOracle(IConverterController(converter.controller()).priceOracle());
-    uint priceA = oracle.getAssetPrice(tokenA);
-    uint priceB = oracle.getAssetPrice(tokenB);
+    IPriceOracle oracle = AppLib._getPriceOracle(converter);
+    uint priceA = oracle.getAssetPrice(v.tokenA);
+    uint priceB = oracle.getAssetPrice(v.tokenB);
 
-    uint fee0USD = fee0 * priceA / 1e18;
-    uint fee1USD = fee1 * priceB / 1e18;
+    uint fee0USD = v.fee0 * priceA / 1e18;
+    uint fee1USD = v.fee1 * priceB / 1e18;
 
     return
       fee0USD > HARD_WORK_USD_FEE_THRESHOLD
       || fee1USD > HARD_WORK_USD_FEE_THRESHOLD
-      || rewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
-      || bonusRewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
+      || v.rewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
+      || v.bonusRewardInTermOfTokenA * priceA / 1e18 > HARD_WORK_USD_FEE_THRESHOLD
     ;
   }
 
@@ -493,11 +419,11 @@ library AlgebraConverterStrategyLogicLib {
     uint[] memory amountsOut,
     uint[] memory balancesBefore
   ) {
-    address strategyProfitHolder = state.strategyProfitHolder;
+    address strategyProfitHolder = state.pair.strategyProfitHolder;
     uint tokenId = state.tokenId;
     tokensOut = new address[](4);
-    tokensOut[0] = state.tokenA;
-    tokensOut[1] = state.tokenB;
+    tokensOut[0] = state.pair.tokenA;
+    tokensOut[1] = state.pair.tokenB;
     tokensOut[2] = state.rewardToken;
     tokensOut[3] = state.bonusRewardToken;
 
@@ -507,12 +433,12 @@ library AlgebraConverterStrategyLogicLib {
     }
 
     amountsOut = new uint[](4);
-    if (tokenId > 0 && state.totalLiquidity > 0) {
+    if (tokenId > 0 && state.pair.totalLiquidity > 0) {
       (amountsOut[0], amountsOut[1]) = FARMING_CENTER.collect(INonfungiblePositionManager.CollectParams(tokenId, address(this), type(uint128).max, type(uint128).max));
 
       emit AlgebraFeesClaimed(amountsOut[0], amountsOut[1]);
 
-      if (state.depositorSwapTokens) {
+      if (state.pair.depositorSwapTokens) {
         (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
       }
 
@@ -553,255 +479,162 @@ library AlgebraConverterStrategyLogicLib {
 
     return earned;
   }
+  //endregion ------------------------------------------------ Rewards
 
-  //////////////////////////////////////////
-  //            Rebalance
-  //////////////////////////////////////////
+  //region ------------------------------------------------ Rebalance
 
-  function needRebalance(State storage state) public view returns (bool) {
-    if (state.isFuseTriggered) {
-      return false;
-    }
-
-    (, int24 tick, , , , ,) = state.pool.globalState();
-    int24 upperTick = state.upperTick;
-    int24 lowerTick = state.lowerTick;
-    if (upperTick - lowerTick == state.tickSpacing) {
-      return tick < lowerTick || tick >= upperTick;
-    } else {
-      int24 halfRange = (upperTick - lowerTick) / 2;
-      int24 oldMedianTick = lowerTick + halfRange;
-      if (tick > oldMedianTick) {
-        return tick - oldMedianTick >= state.rebalanceTickRange;
-      }
-      return oldMedianTick - tick > state.rebalanceTickRange;
-    }
+  /// @notice Determine if the strategy needs to be rebalanced.
+  /// @return needRebalance A boolean indicating if {rebalanceNoSwaps} should be called
+  function needStrategyRebalance(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter_) external view returns (
+    bool needRebalance
+  ) {
+    (needRebalance, , ) = PairBasedStrategyLogicLib.needStrategyRebalance(
+      pairState,
+      converter_,
+      AlgebraDebtLib.getCurrentTick(IAlgebraPool(pairState.pool))
+    );
   }
 
-  function quoteRebalanceSwap(State storage state, ITetuConverter converter) external returns (bool, uint) {
-    address tokenA = state.tokenA;
-    address tokenB = state.tokenB;
-    uint debtAmount = AlgebraDebtLib.getDebtTotalDebtAmountOut(converter, tokenA, tokenB);
+  /// @notice Make rebalance without swaps (using borrowing only).
+  /// @param converterLiquidator [TetuConverter, TetuLiquidator]
+  /// @param checkNeedRebalance_ True if the function should ensure that the rebalance is required
+  /// @param totalAssets_ Current value of totalAssets()
+  /// @return tokenAmounts Token amounts for deposit. If length == 0 - rebalance wasn't made and no deposit is required.
+  function rebalanceNoSwaps(
+    PairBasedStrategyLogicLib.PairState storage pairState,
+    address[2] calldata converterLiquidator,
+    uint totalAssets_,
+    uint profitToCover,
+    address splitter,
+    bool checkNeedRebalance_,
+    mapping(address => uint) storage liquidityThresholds_
+  ) external returns (
+    uint[] memory tokenAmounts
+  ) {
+    RebalanceLocal memory v;
+    _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState, liquidityThresholds_);
 
-    if (
-      !needRebalance(state)
-      || !AlgebraDebtLib.needCloseDebt(debtAmount, converter, tokenB)
+    bool needRebalance;
+    int24 tick = AlgebraDebtLib.getCurrentTick(IAlgebraPool(pairState.pool));
+    (needRebalance, v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(
+      pairState,
+      v.converter,
+      tick
+    );
+
+    // update fuse status if necessary
+    if (needRebalance) {
+      // we assume here, that needRebalance is true if any fuse has changed state, see needStrategyRebalance impl
+      PairBasedStrategyLogicLib.updateFuseStatus(pairState, v.fuseStatusChangedAB, v.fuseStatusAB);
+    }
+
+    require(!checkNeedRebalance_ || needRebalance, AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
+
+    // rebalancing debt, setting new tick range
+    if (needRebalance) {
+      uint coveredByRewards;
+      AlgebraDebtLib.rebalanceNoSwaps(converterLiquidator, pairState, profitToCover, totalAssets_, splitter, v.liquidationThresholdsAB, tick);
+
+      uint loss;
+      (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(v.converter, totalAssets_, v.tokenA, v.tokenB, v.liquidationThresholdsAB);
+
+      if (loss != 0) {
+        coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
+      }
+      emit Rebalanced(loss, profitToCover, coveredByRewards);
+    }
+
+    return tokenAmounts;
+  }
+
+  /// @notice Try to cover loss from rewards then cover remain loss from insurance.
+  function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
+    uint coveredByRewards
+  ) {
+    if (loss != 0) {
+      coveredByRewards = AlgebraDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
+      uint notCovered = loss - coveredByRewards;
+      if (notCovered != 0) {
+        ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
+      }
+    }
+
+    return coveredByRewards;
+  }
+
+  /// @notice Initialize {v} by state values
+  function _initLocalVars(
+    RebalanceLocal memory v,
+    ITetuConverter converter_,
+    PairBasedStrategyLogicLib.PairState storage pairState,
+    mapping(address => uint) storage liquidityThresholds_
+  ) internal view {
+    v.pool = IAlgebraPool(pairState.pool);
+    v.fuseAB = pairState.fuseAB;
+    v.converter = converter_;
+    v.tokenA = pairState.tokenA;
+    v.tokenB = pairState.tokenB;
+    v.isStablePool = pairState.isStablePool;
+    v.liquidationThresholdsAB[0] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenA]);
+    v.liquidationThresholdsAB[1] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenB]);
+  }
+
+  /// @notice Get proportion of not-underlying in the pool, [0...1e18]
+  ///         prop.underlying : prop.not.underlying = 1e18 - PropNotUnderlying18 : propNotUnderlying18
+  function getPropNotUnderlying18(PairBasedStrategyLogicLib.PairState storage pairState) view external returns (uint) {
+    // get pool proportions
+    IAlgebraPool pool = IAlgebraPool(pairState.pool);
+    bool depositorSwapTokens = pairState.depositorSwapTokens;
+    (int24 newLowerTick, int24 newUpperTick) = AlgebraDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+    (uint consumed0, uint consumed1) = AlgebraDebtLib.getEntryDataProportions(pool, newLowerTick, newUpperTick, depositorSwapTokens);
+
+    require(consumed0 + consumed1 > 0, AppErrors.ZERO_VALUE);
+    return consumed1 * 1e18 / (consumed0 + consumed1);
+  }
+  //endregion ------------------------------------------------ Rebalance
+
+  //region ------------------------------------------------ WithdrawByAgg
+  /// @param addr_ [tokenToSwap, aggregator, controller, converter, splitter]
+  /// @param values_ [amountToSwap_, profitToCover, oldTotalAssets, entryToPool]
+  /// @return completed All debts were closed, leftovers were swapped to proper proportions
+  /// @return tokenAmountsOut Amounts to be deposited to pool. This array is empty if no deposit allowed/required.
+  function withdrawByAggStep(
+    address[5] calldata addr_,
+    uint[4] calldata values_,
+    bytes memory swapData,
+    bytes memory planEntryData,
+    PairBasedStrategyLogicLib.PairState storage pairState,
+    mapping(address => uint) storage liquidationThresholds
+  ) external returns (
+    bool completed,
+    uint[] memory tokenAmountsOut
+  ) {
+    address splitter = addr_[4];
+    uint entryToPool = values_[3];
+    address[2] memory tokens = [pairState.tokenA, pairState.tokenB];
+    IAlgebraPool pool = IAlgebraPool(pairState.pool);
+
+    // Calculate amounts to be deposited to pool, calculate loss, fix profitToCover
+    uint[] memory tokenAmounts;
+    uint loss;
+    (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
+
+    // cover loss
+    if (loss != 0) {
+      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+    }
+
+    if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
+      || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)
     ) {
-      return (false, 0);
+      // We are going to enter to the pool: update lowerTick and upperTick, initialize tokenAmountsOut
+      (pairState.lowerTick, pairState.upperTick) = AlgebraDebtLib._calcNewTickRange(pool, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
+      tokenAmountsOut = tokenAmounts;
     }
 
-    uint[] memory amountsOut = quoteExit(state, state.totalLiquidity);
-    amountsOut[0] += AppLib.balance(tokenA);
-    amountsOut[1] += AppLib.balance(tokenB);
-
-    if (amountsOut[1] < debtAmount) {
-      uint tokenBprice = AlgebraLib.getPrice(address(state.pool), tokenB);
-      uint needToSellTokenA = tokenBprice * (debtAmount - amountsOut[1]) / 10 ** IERC20Metadata(tokenB).decimals();
-      // add 1% gap for price impact
-      needToSellTokenA += needToSellTokenA / AlgebraDebtLib.SELL_GAP;
-      if (amountsOut[0] > 0) {
-        needToSellTokenA = Math.min(needToSellTokenA, amountsOut[0] - 1);
-      } else {
-        needToSellTokenA = 0;
-      }
-      return (true, needToSellTokenA);
-    } else {
-      return (false, amountsOut[1] - debtAmount);
-    }
+    return (completed, tokenAmountsOut); // hide warning
   }
+  //endregion ------------------------------------------------ WithdrawByAgg
 
-  function rebalance(
-    State storage state,
-    ITetuConverter converter,
-    address controller,
-    uint oldTotalAssets,
-    uint profitToCover,
-    address splitter
-  ) external returns (
-    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
-  ) {
-    uint loss;
-    tokenAmounts = new uint[](0);
-
-    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      upperTick: state.upperTick,
-      lowerTick: state.lowerTick,
-      tickSpacing: state.tickSpacing,
-      pool: state.pool,
-      tokenA: state.tokenA,
-      tokenB: state.tokenB,
-      lastPrice: state.lastPrice,
-      fuseThreshold: state.fuseThreshold,
-      depositorSwapTokens: state.depositorSwapTokens,
-    // setup initial values
-      notCoveredLoss: 0,
-      newLowerTick: 0,
-      newUpperTick: 0,
-      isStablePool: state.isStablePool,
-      newPrice: 0,
-      newTotalAssets: 0
-    });
-
-    require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
-
-    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
-
-    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
-      /// enabling fuse: close debt and stop providing liquidity
-      state.isFuseTriggered = true;
-      emit FuseTriggered();
-
-      AlgebraDebtLib.closeDebt(
-        converter,
-        controller,
-        vars.pool,
-        vars.tokenA,
-        vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-    } else {
-      /// rebalancing debt
-      /// setting new tick range
-      AlgebraDebtLib.rebalanceDebt(
-        converter,
-        controller,
-        state,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-
-      tokenAmounts = new uint[](2);
-      tokenAmounts[0] = AppLib.balance(vars.tokenA);
-      tokenAmounts[1] = AppLib.balance(vars.tokenB);
-
-      address[] memory tokens = new address[](2);
-      tokens[0] = vars.tokenA;
-      tokens[1] = vars.tokenB;
-      uint[] memory amounts = new uint[](2);
-      amounts[0] = tokenAmounts[0];
-      vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
-      if (vars.newTotalAssets < oldTotalAssets) {
-        loss = oldTotalAssets - vars.newTotalAssets;
-      }
-    }
-
-    // need to update last price only for stables coz only stables have fuse mechanic
-    if (vars.isStablePool) {
-      state.lastPrice = vars.newPrice;
-    }
-
-    uint covered;
-    if (loss > 0) {
-      covered = AlgebraDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-      uint notCovered = loss - covered;
-      if (notCovered > 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-      }
-    }
-
-    emit Rebalanced(loss, covered);
-  }
-
-  function rebalanceSwapByAgg(
-    State storage state,
-    ITetuConverter converter,
-    uint oldTotalAssets,
-    RebalanceSwapByAggParams memory aggParams,
-    uint profitToCover,
-    address splitter
-  ) external returns (
-    uint[] memory tokenAmounts // _depositorEnter(tokenAmounts) if length == 2
-  ) {
-    uint loss;
-    tokenAmounts = new uint[](0);
-
-    RebalanceLocalVariables memory vars = RebalanceLocalVariables({
-      upperTick: state.upperTick,
-      lowerTick: state.lowerTick,
-      tickSpacing: state.tickSpacing,
-      pool: state.pool,
-      tokenA: state.tokenA,
-      tokenB: state.tokenB,
-      lastPrice: state.lastPrice,
-      fuseThreshold: state.fuseThreshold,
-      depositorSwapTokens: state.depositorSwapTokens,
-    // setup initial values
-      notCoveredLoss: 0,
-      newLowerTick: 0,
-      newUpperTick: 0,
-      isStablePool: state.isStablePool,
-      newPrice: 0,
-      newTotalAssets: 0
-    });
-
-    require(needRebalance(state), AlgebraStrategyErrors.NO_REBALANCE_NEEDED);
-
-    vars.newPrice = ConverterStrategyBaseLib.getOracleAssetsPrice(converter, vars.tokenA, vars.tokenB);
-
-    if (vars.isStablePool && isEnableFuse(vars.lastPrice, vars.newPrice, vars.fuseThreshold)) {
-      /// enabling fuse: close debt and stop providing liquidity
-      state.isFuseTriggered = true;
-      emit FuseTriggered();
-
-      AlgebraDebtLib.closeDebtByAgg(
-        converter,
-        vars.tokenA,
-        vars.tokenB,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        aggParams,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-    } else {
-      /// rebalancing debt
-      /// setting new tick range
-      AlgebraDebtLib.rebalanceDebtSwapByAgg(
-        converter,
-        state,
-        _getLiquidatorSwapSlippage(vars.isStablePool),
-        aggParams,
-        profitToCover,
-        oldTotalAssets,
-        splitter
-      );
-
-      if (oldTotalAssets > 0) {
-        tokenAmounts = new uint[](2);
-        tokenAmounts[0] = AppLib.balance(vars.tokenA);
-        tokenAmounts[1] = AppLib.balance(vars.tokenB);
-
-        address[] memory tokens = new address[](2);
-        tokens[0] = vars.tokenA;
-        tokens[1] = vars.tokenB;
-        uint[] memory amounts = new uint[](2);
-        amounts[0] = tokenAmounts[0];
-        vars.newTotalAssets = ConverterStrategyBaseLib.calcInvestedAssets(tokens, amounts, 0, converter);
-        if (vars.newTotalAssets < oldTotalAssets) {
-          loss = oldTotalAssets - vars.newTotalAssets;
-        }
-      }
-    }
-
-    // need to update last price only for stables coz only stables have fuse mechanic
-    if (vars.isStablePool) {
-      state.lastPrice = vars.newPrice;
-    }
-
-    uint covered;
-    if (loss > 0) {
-      covered = AlgebraDebtLib.coverLossFromRewards(loss, state.strategyProfitHolder, vars.tokenA, vars.tokenB, address(vars.pool));
-      uint notCovered = loss - covered;
-      if (notCovered > 0) {
-        ISplitter(splitter).coverPossibleStrategyLoss(0, notCovered);
-      }
-    }
-
-    emit Rebalanced(loss, covered);
-  }
 }
+

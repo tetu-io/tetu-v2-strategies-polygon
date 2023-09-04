@@ -31,7 +31,7 @@ import {ICoreContractsWrapper} from "../../../CoreContractsWrapper";
 import {IToolsContractsWrapper} from "../../../ToolsContractsWrapper";
 import {IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
-import {BalancerStrategyUtils} from "../../../BalancerStrategyUtils";
+import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {LiquidatorUtils} from "./utils/LiquidatorUtils";
 

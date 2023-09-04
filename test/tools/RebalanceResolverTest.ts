@@ -21,7 +21,7 @@ import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {TokenUtils} from "../../scripts/utils/TokenUtils";
 import {parseUnits} from "ethers/lib/utils";
 import {ConverterUtils} from "../baseUT/utils/ConverterUtils";
-import {UniswapV3StrategyUtils} from "../UniswapV3StrategyUtils";
+import {UniswapV3StrategyUtils} from "../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 
 const {expect} = chai;
@@ -73,8 +73,8 @@ describe('RebalanceResolver tests', function () {
       const poolAddress = MaticAddresses.UNISWAPV3_USDC_WETH_500;
       // +-10% price (1 tick == 0.01% price change)
       const range = 1000;
-      // +-1% price - rebalance
-      const rebalanceRange = 100;
+      // +-0.4% price - rebalance
+      const rebalanceRange = 40;
 
       await _strategy.init(
         core.controller,
@@ -83,6 +83,8 @@ describe('RebalanceResolver tests', function () {
         poolAddress,
         range,
         rebalanceRange,
+        [0, 0, Misc.MAX_UINT, 0],
+        [0, 0, Misc.MAX_UINT, 0],
       );
 
       return _strategy as unknown as IStrategyV2;

@@ -62,6 +62,10 @@ export class Misc {
     return ts.toNumber();
   }
 
+  public static getChainId() {
+    return hre.network.config.chainId;
+  }
+
   public static async getChainConfig() {
     const net = await ethers.provider.getNetwork();
     switch (net.chainId) {
@@ -148,6 +152,10 @@ export async function getAaveTwoPlatformAdapter(signer: SignerWithAddress): Prom
 
 export async function getAaveThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
   return (await getPlatformAdapter(signer, LendingPlatformKinds.AAVE3_3)).address;
+}
+
+export async function getCompoundThreePlatformAdapter(signer: SignerWithAddress): Promise<string> {
+  return (await getPlatformAdapter(signer, LendingPlatformKinds.COMPOUND3_5)).address;
 }
 
 async function getPlatformAdapter(signer: SignerWithAddress, lendingPlatformKind: LendingPlatformKinds): Promise<IPlatformAdapter> {

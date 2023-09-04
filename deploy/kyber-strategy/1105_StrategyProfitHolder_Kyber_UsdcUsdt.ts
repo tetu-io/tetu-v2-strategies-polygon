@@ -8,14 +8,14 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
   const { KNC_ADDRESS} = await getNamedAccounts();
   const strategyAddress = (await deployments.get('Strategy_KyberConverterStrategy_UsdcUsdt')).address
   const strategy = await ethers.getContractAt('KyberConverterStrategy', strategyAddress)
-  const state = await strategy.getState()
+  const state = await strategy.getDefaultState()
   await hardhatDeploy(
     hre,
     'StrategyProfitHolder',
     true,
     undefined,
     'StrategyProfitHolder_Kyber_UsdcUsdt',
-    [strategyAddress, [state.tokenA, state.tokenB, KNC_ADDRESS]],
+    [strategyAddress, [state[0][0], state[0][1], KNC_ADDRESS]],
     true
   )
 };

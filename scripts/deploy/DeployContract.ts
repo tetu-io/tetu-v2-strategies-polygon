@@ -12,37 +12,48 @@ export const WAIT_BLOCKS_BETWEEN_DEPLOY = 50;
 
 const libraries = new Map<string, string[]>([
   ['VeTetu', ['VeTetuLogo']],
-  ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib']],
+  ['MockConverterStrategy', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2']],
+  // common
+  ['ConverterStrategyBaseLib', ['IterationPlanLib']],
   ['ConverterStrategyBaseLib2', ['StrategyLib']],
-  ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
+  ['BorrowLib', ['ConverterStrategyBaseLib']],
+  ['BorrowLibFacade', ['BorrowLib', 'ConverterStrategyBaseLib']],
+  ['ConverterStrategyBaseLibFacade', ['ConverterStrategyBaseLib']],
+  ['ConverterStrategyBaseLibFacade2', ['ConverterStrategyBaseLib2']],
   // Balancer
   [
     'BalancerBoostedStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'BalancerLogicLib', 'StrategyLib2'],
   ],
   ['BalancerBoostedDepositorFacade', ['BalancerLogicLib']],
+  // Pair
+  ['PairBasedStrategyLib', ['ConverterStrategyBaseLib', 'IterationPlanLib']],
+  ['PairBasedStrategyLibFacade', ['PairBasedStrategyLib', 'ConverterStrategyBaseLib']],
+  ['PairBasedStrategyLogicLib', ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLib', 'StrategyLib2']],
+  ['PairBasedStrategyLogicLibFacade', ['StrategyLib2', 'PairBasedStrategyLogicLib']],
   // Uniswap V3
   [
     'UniswapV3ConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'UniswapV3ConverterStrategyLogicLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'UniswapV3ConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
-  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib']],
-  ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
+  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib']],
+  ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
+  ['UniswapV3ConverterStrategyLogicLibFacade', ['UniswapV3ConverterStrategyLogicLib']],
   // Algebra
   [
     'AlgebraConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'AlgebraConverterStrategyLogicLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'AlgebraConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
-  ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib']],
-  ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
+  ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib']],
+  ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   // Kyber
   [
     'KyberConverterStrategy',
-    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib', 'KyberConverterStrategyLogicLib'],
+    ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
-  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib']],
-  ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2']],
+  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib']],
+  ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
 ]);
 
 export async function deployContract<T extends ContractFactory>(
@@ -53,7 +64,7 @@ export async function deployContract<T extends ContractFactory>(
   // tslint:disable-next-line:no-any
   ...args: any[]
 ) {
-  if (hre.network.name !== 'hardhat') {
+  if (hre.network.name !== 'hardhat' && hre.network.name !== 'foundry') {
     await hre.run('compile');
   }
   const web3 = hre.web3;
@@ -99,7 +110,7 @@ export async function deployContract<T extends ContractFactory>(
   const receipt = await ethers.provider.getTransactionReceipt(instance.deployTransaction.hash);
   console.log('DEPLOYED: ', name, receipt.contractAddress);
 
-  if (hre.network.name !== 'hardhat' && hre.network.name !== 'zktest') {
+  if (hre.network.name !== 'hardhat' && hre.network.name !== 'foundry' && hre.network.name !== 'zktest') {
     await wait(hre, 10);
     if (args.length === 0) {
       await verify(hre, receipt.contractAddress);
@@ -162,6 +173,10 @@ export async function txParams(hre: HardhatRuntimeEnvironment, provider: provide
     return {
       maxPriorityFeePerGas: parseUnits('1', 9).toHexString(),
       maxFeePerGas: maxFee,
+    };
+  } else if (hre.network.name === 'foundry') {
+    return {
+      gasPrice: '0x' + Math.floor(gasPrice * 1.1).toString(16),
     };
   } else if (hre.network.config.chainId === 137) {
     return {
