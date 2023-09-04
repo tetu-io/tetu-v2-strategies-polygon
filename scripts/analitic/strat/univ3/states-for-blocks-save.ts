@@ -26,6 +26,32 @@ const STRATEGY = '0x6565e8136cd415f053c81ff3656e72574f726a5e'; // usdt
 const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
 
 const blocks = [
+  47089726,
+  47089686,
+  47089646,
+  47089606,
+  47087555,
+  47087515,
+  47087481,
+  47062075,
+  47061669,
+  47058424,
+  47057851,
+  47057810,
+  47057709,
+  47031633,
+  47030602,
+  47030562,
+  47030523,
+  47030483,
+  47030384,
+  47029602,
+  47024554,
+  47024513,
+  47022552,
+  47022512,
+  47011068,
+
   47011068,
   47011028,
   47003428,
@@ -128,8 +154,8 @@ async function main() {
         strategyAsOperator.address,
       );
 
-      const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, `b${i}`);
-      states.push(stateBefore);
+      // const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, `b${i}`);
+      // states.push(stateBefore);
 
       const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
         strategyAsOperator,

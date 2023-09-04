@@ -49,11 +49,11 @@ library ConverterStrategyBaseLib2 {
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
   event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
-  /// @notice Compensation of losses is not carried out completely
+  /// @notice Compensation of losses is not carried out completely because loss amount exceeds allowed max
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
   /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
   event NotEnoughInsurance(uint lossUncovered);
-  event SendToInsurance(uint amount, uint unsentAmount);
+  event SendToInsurance(uint sentAmount, uint unsentAmount);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -273,6 +273,7 @@ library ConverterStrategyBaseLib2 {
 
       if (lossUncovered != 0) {
         emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
+        console.log("coverLossAfterPriceChanging.lossUncovered", lossUncovered);
       }
     }
     emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter);
@@ -281,15 +282,20 @@ library ConverterStrategyBaseLib2 {
   /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
   ///         If the loss were covered only partially, emit {NotEnoughInsurance}
   function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) internal {
+    console.log("_coverLossAndCheckResults.lossToCover", lossToCover);
     address asset = ISplitter(splitter).asset();
     address vault = ISplitter(splitter).vault();
     uint balanceBefore = IERC20(asset).balanceOf(vault);
+    console.log("_coverLossAndCheckResults.balanceBefore", balanceBefore);
     ISplitter(splitter).coverPossibleStrategyLoss(earned, lossToCover);
-    uint delta = IERC20(asset).balanceOf(vault); // temporary save balance-after to delta
-    delta = delta > balanceBefore
-      ? delta - balanceBefore
+    uint balanceAfter = IERC20(asset).balanceOf(vault);
+    console.log("_coverLossAndCheckResults.balanceAfter", balanceAfter);
+    uint delta = balanceAfter > balanceBefore
+      ? balanceAfter - balanceBefore
       : 0;
+    console.log("_coverLossAndCheckResults.balance.delta.covered", delta);
     if (delta < lossToCover) {
+      console.log("_coverLossAndCheckResults.NotEnoughInsurance", lossToCover - delta);
       emit NotEnoughInsurance(lossToCover - delta);
     }
   }

@@ -230,20 +230,20 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     console.log("withdrawByAggStep._csbs.investedAssets", _csbs.investedAssets);
     console.log("withdrawByAggStep.profitToCover", profitToCover);
     console.log("withdrawByAggStep.oldTotalAssets", oldTotalAssets);
-    uint newInvestedAsset = _csbs.investedAssets + balance;
-    console.log("withdrawByAggStep.newInvestedAsset", newInvestedAsset);
-    if (oldTotalAssets < newInvestedAsset + balance) {
+    uint newTotalAssets = _csbs.investedAssets + balance;
+    console.log("withdrawByAggStep.newInvestedAsset", newTotalAssets);
+    if (oldTotalAssets < newTotalAssets) {
       // total asset was increased (i.e. because of too profitable swaps)
       // this increment will increase share price
       // we should send added amount to insurance to avoid share price change
       // anyway, it's too expensive to do it here
       // so, we postpone sending the profit until the next call of fixPriceChange
-      console.log("withdrawByAggStep.newInvestedAsset + balance", newInvestedAsset + balance);
+      console.log("withdrawByAggStep.newTotalAssets", newTotalAssets);
       console.log("withdrawByAggStep.(oldTotalAssets + profitToCover - profitToCoverSent)", oldTotalAssets);
-      uint increment = newInvestedAsset + balance - oldTotalAssets;
+      uint increment = newTotalAssets - oldTotalAssets;
       console.log("withdrawByAggStep.increment", increment);
-      if (newInvestedAsset > increment) {
-        _csbs.investedAssets = newInvestedAsset - increment;
+      if (newTotalAssets > increment) {
+        _csbs.investedAssets = newTotalAssets - increment;
       }
     }
   }

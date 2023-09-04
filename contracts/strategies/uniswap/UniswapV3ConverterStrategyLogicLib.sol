@@ -430,7 +430,7 @@ library UniswapV3ConverterStrategyLogicLib {
       if (loss != 0) {
         coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, v.tokenA, v.tokenB, address(v.pool));
       }
-      emit Rebalanced(loss, profitToCover);
+      emit Rebalanced(loss, profitToCover, coveredByRewards);
     }
 
     return tokenAmounts;

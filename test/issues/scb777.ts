@@ -3,7 +3,7 @@ import {
   ConverterStrategyBase__factory,
   IRebalancingV2Strategy__factory,
   StrategySplitterV2__factory,
-  TetuVaultV2__factory
+  TetuVaultV2__factory, UniswapV3ConverterStrategy__factory
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
@@ -15,9 +15,10 @@ import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
-import {StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
+import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
 import {CaptureEvents} from "../baseUT/strategies/CaptureEvents";
+import fs from "fs";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("SCB-777: withdrawByAgg, TC-29", () => {
@@ -453,7 +454,89 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, [stateBefore, stateAfter], {mainAssetSymbol: "usdc"}, true);
 
+      console.log(stateAfter);
       await HardhatUtils.restoreBlockFromEnv();
+    });
+  });
+
+  describe("withdrawByAggStep: loss don't match to profit", () => {
+    const BLOCK = 47003428;
+    const STRATEGY = "0x6565e8136cd415f053c81ff3656e72574f726a5e";
+    const SENDER = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+    const pathOut = "./tmp/profitable-swap.csv";
+
+    let snapshotBefore: string;
+    before(async function () {
+      snapshotBefore = await TimeUtils.snapshot();
+    });
+
+    after(async function () {
+      await TimeUtils.rollback(snapshotBefore);
+    });
+
+    it("try withdrawByAgg", async () => {
+      // const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const signer = (await ethers.getSigners())[0];
+
+      const states: IStateNum[] = [];
+
+      await HardhatUtils.switchToBlock(BLOCK - 2);
+
+      const strategy = UniswapV3ConverterStrategy__factory.connect(STRATEGY, signer);
+      console.log("strategy", strategy.address);
+
+      const state = await PackedData.getDefaultState(strategy);
+      const operator = await DeployerUtilsLocal.impersonate(SENDER);
+
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, operator);
+      const vault = TetuVaultV2__factory.connect(
+          await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), operator)).vault(),
+          signer
+      );
+
+      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+
+      const aggregator = "0x1111111254EEB25477B68fb85Ed929f73A960582";
+      const planEntryData = "0x0000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+      console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
+      console.log("quote", quote);
+      console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
+
+      const swapData = await AggregatorUtils.buildSwapTransactionData(
+          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+          quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+          quote.amountToSwap,
+          strategyAsOperator.address,
+      );
+
+      const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, `b`);
+      states.push(stateBefore);
+
+      const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+          strategyAsOperator,
+          quote.tokenToSwap,
+          aggregator,
+          quote.amountToSwap,
+          swapData,
+          planEntryData,
+          ENTRY_TO_POOL_IS_ALLOWED,
+      );
+      console.log("eventsSet", eventsSet);
+      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
+      const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, `a`, {eventsSet});
+      states.push(stateAfter);
+
+      console.log(stateAfter);
+
+      if (fs.existsSync(pathOut)) {
+        fs.rmSync(pathOut);
+      }
+      await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
+
     });
   });
 });
