@@ -1,11 +1,11 @@
-/* tslint:disable:no-trailing-whitespace */
+/* tslint:disable */
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {
   IERC20Metadata__factory, IUniswapV3Pool__factory, PairBasedStrategyReader,
   TetuVaultV2,
   UniswapV3Callee,
   UniswapV3ConverterStrategy,
-  UniswapV3Lib
+  UniswapV3Lib, UniswapV3Pool
 } from "../../typechain";
 import {IPoolLiquiditySnapshot, TransactionType, UniswapV3Utils} from "../utils/UniswapV3Utils";
 import {defaultAbiCoder, formatUnits, getAddress, parseUnits} from "ethers/lib/utils";
@@ -13,7 +13,7 @@ import {BigNumber} from "ethers";
 import {Misc} from "../utils/Misc";
 import {expect} from "chai";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
-import {IBacktestResult} from "./types";
+import {IBacktestResult, IRebalanceDebtSwapPoolParams} from "./types";
 import {UniswapV3StrategyUtils} from "../../test/baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {MaticAddresses} from "../addresses/MaticAddresses";
@@ -36,13 +36,15 @@ export async function strategyBacktest(
   reader: PairBasedStrategyReader|undefined,
   allowedLockedPercent: number = 25,
   forceRebalanceDebtLockedPercent: number = 70,
-  rebalanceDebtDelay: number = 3600
+  rebalanceDebtDelay: number = 3600,
+  rebalanceDebtSwapPool: UniswapV3Pool|undefined
 ): Promise<IBacktestResult> {
   const state = await strategy.getDefaultState();
   const startTimestampLocal = Math.floor(Date.now() / 1000);
   const tokenA = IERC20Metadata__factory.connect(state[0][0], signer);
   const tokenADecimals = await tokenA.decimals();
   const tokenB = IERC20Metadata__factory.connect(state[0][1], signer);
+  const tokenBDecimals = await tokenB.decimals()
   const pool = IUniswapV3Pool__factory.connect(state[0][2], signer);
   const token0 = IERC20Metadata__factory.connect(await pool.token0(), signer);
   const token1 = IERC20Metadata__factory.connect(await pool.token1(), signer);
@@ -272,6 +274,116 @@ export async function strategyBacktest(
         const needDelayedRebalanceDebt = !isFuseTriggered && percent > allowedLockedPercent && poolTx.timestamp - lastNSRTimestamp > rebalanceDebtDelay
 
         if ((isFuseTriggered && !isWithdrawDone) || needDelayedRebalanceDebt || needForcedRebalanceDebt) {
+          // sync price in rebalanceDebtSwapPool if needs
+          if (rebalanceDebtSwapPool) {
+            const price1InPool = await uniswapV3Helper.getPrice(pool.address, tokenB.address)
+            console.log(`___ Price in pool                  : ${formatUnits(price1InPool, tokenBDecimals)}`)
+            console.log(`___ Price in rebalanceDebtSwap pool: ${formatUnits(await uniswapV3Helper.getPrice(rebalanceDebtSwapPool.address, tokenB.address), tokenBDecimals)}`)
+
+            // sync ticks
+            const poolSlot0 = await pool.slot0()
+            const targetTick = poolSlot0.tick
+            let rdsPoolSlot0 = await rebalanceDebtSwapPool.slot0()
+            const rdsTick = rdsPoolSlot0.tick
+            if (targetTick !== rdsTick) {
+              console.log('sync pools..')
+              // console.log(`Rebalance debt swap pool tick: ${rdsTick}. Target tick: ${targetTick}, `)
+
+              const targetTickMoreThanRdsTick  = targetTick > rdsTick
+
+
+              for (let tickI = rdsTick; targetTickMoreThanRdsTick ? tickI < targetTick : tickI > targetTick; targetTickMoreThanRdsTick ? tickI++ : tickI--) {
+                // console.log(`Tick I = ${tickI}`)
+                const liquidityInTick = await rebalanceDebtSwapPool.liquidity()
+                // console.log(`Liquidity in tick: ${liquidityInTick.toString()}`)
+                rdsPoolSlot0 = await rebalanceDebtSwapPool.slot0()
+                const liquidityAmountsRdsTick = await uniswapV3Helper.getAmountsForLiquidity(rdsPoolSlot0.sqrtPriceX96, tickI, tickI + 1, liquidityInTick)
+                // console.log(`Amounts in tick: ${formatUnits(liquidityAmountsRdsTick.amount0, token0Decimals)} ${token0Symbol}, ${formatUnits(liquidityAmountsRdsTick.amount1, token1Decimals)} ${token1Symbol}`)
+
+                if (targetTickMoreThanRdsTick) {
+                  // console.log('need to buy token0')
+                } else {
+                  // console.log('need to buy token1')
+                }
+
+                const tokenIn = targetTickMoreThanRdsTick ? token1.address : token0.address;
+
+                const amountIn = (targetTickMoreThanRdsTick ? liquidityAmountsRdsTick.amount0 : liquidityAmountsRdsTick.amount1).mul(130).div(100)
+
+                // console.log('amountIn', amountIn.toString())
+
+                await uniswapV3Calee.swap(rebalanceDebtSwapPool.address, signer.address, tokenIn, amountIn, {gasLimit: 19_000_000});
+
+                const newTickInRds = (await rebalanceDebtSwapPool.slot0()).tick
+                if (newTickInRds == tickI) {
+                  await uniswapV3Calee.swap(rebalanceDebtSwapPool.address, signer.address, tokenIn, 10, {gasLimit: 19_000_000});
+                }
+              }
+            }
+
+            // console.log(`Tick in RDS ${(await rebalanceDebtSwapPool.slot0()).tick}`)
+            expect((await rebalanceDebtSwapPool.slot0()).tick, targetTick)
+
+            // sync price
+            rdsPoolSlot0 = await rebalanceDebtSwapPool.slot0()
+            // const liquidityInTickStrategyPool = await pool.liquidity()
+            // console.log(`Liquidity in tick strategy pool: ${liquidityInTickStrategyPool.toString()}`)
+            // const liquidityAmountsStrategyPool = await uniswapV3Helper.getAmountsForLiquidity(poolSlot0.sqrtPriceX96, targetTick, targetTick + 1, liquidityInTickStrategyPool)
+            // console.log(`Amounts in tick strategy pool  : ${formatUnits(liquidityAmountsStrategyPool.amount0, token0Decimals)} ${token0Symbol}, ${formatUnits(liquidityAmountsStrategyPool.amount1, token1Decimals)} ${token1Symbol}`)
+
+            const liquidityInTickRDSPool = await rebalanceDebtSwapPool.liquidity()
+            // console.log(`Liquidity in tick RDS      pool: ${liquidityInTickRDSPool.toString()}`)
+            const liquidityAmountsRDSPool = await uniswapV3Helper.getAmountsForLiquidity(rdsPoolSlot0.sqrtPriceX96, targetTick, targetTick + 1, liquidityInTickRDSPool)
+            // console.log(`Amounts in tick RDS        pool: ${formatUnits(liquidityAmountsRDSPool.amount0, token0Decimals)} ${token0Symbol}, ${formatUnits(liquidityAmountsRDSPool.amount1, token1Decimals)} ${token1Symbol}`)
+
+            const onePreviewStrategyPool = await uniswapV3Helper.addLiquidityPreview(pool.address, targetTick, targetTick+1, price1InPool, parseUnits('1', token1Decimals))
+            let consumed0 = parseUnits('1').mul(onePreviewStrategyPool.amount0Consumed)
+            let consumed1 = parseUnits('1').mul(onePreviewStrategyPool.amount1Consumed).mul(price1InPool).div(parseUnits('1', token1Decimals))
+            const prop0to1StrategyPool = consumed0.mul(parseUnits('1')).div(consumed0.add(consumed1))
+
+            const price1InRDSPool = await uniswapV3Helper.getPrice(rebalanceDebtSwapPool.address, tokenB.address)
+            const onePreviewRDSPool = await uniswapV3Helper.addLiquidityPreview(rebalanceDebtSwapPool.address, targetTick, targetTick+1, price1InRDSPool, parseUnits('1', token1Decimals))
+            consumed0 = parseUnits('1').mul(onePreviewRDSPool.amount0Consumed)
+            consumed1 = parseUnits('1').mul(onePreviewRDSPool.amount1Consumed).mul(price1InRDSPool).div(parseUnits('1', token1Decimals))
+            const prop0to1RDSPool = consumed0.mul(parseUnits('1')).div(consumed0.add(consumed1))
+
+            // console.log(' prop0to1StrategyPool', formatUnits(prop0to1StrategyPool))
+            // console.log('      prop0to1RDSPool', formatUnits(prop0to1RDSPool))
+
+            if (prop0to1RDSPool.gt(prop0to1StrategyPool)) {
+              // console.log('extra token0 in RDS pool')
+              // rds prop 0.2: amount0 2, amount1 8
+              // str prop 0.1: amount0 100, amount1 900
+
+              const extraToken0Amount = liquidityAmountsRDSPool.amount0.sub(liquidityAmountsRDSPool.amount1.mul(parseUnits('1')).div(parseUnits('1').sub(prop0to1StrategyPool)).mul(prop0to1RDSPool).div(parseUnits('1')))
+              // console.log('extraToken0Amount', extraToken0Amount.toString())
+              // extraToken0Amount = 2 - 8/(1-0.1)*0.1 = 1,111111111
+
+              const toSwapToken0 = extraToken0Amount.sub(extraToken0Amount.mul(prop0to1StrategyPool).div(parseUnits('1')))
+              // toSwapToken0 - 1,111111111 - 1,111111111*0.1 = 1
+              // console.log('toSwapToken0', toSwapToken0.toString())
+
+              await uniswapV3Calee.swap(rebalanceDebtSwapPool.address, signer.address, token1.address, toSwapToken0, {gasLimit: 19_000_000});
+            } else {
+              // console.log('extra token1 in RDS pool')
+              // rds prop 0.1: amount0 1, amount1 9
+              // str prop 0.2: amount0 200, amount1 800
+
+              // rds prop 0.782143354362560987: 5.928448 USDC, 1.652325 USDT
+              // str prop 0.996477452206450198: 384996.7343 USDC, 1361.654253 USDT
+
+              const extraToken1Amount = liquidityAmountsRDSPool.amount1.sub(liquidityAmountsRDSPool.amount0.mul(parseUnits('1')).div(prop0to1StrategyPool).mul(parseUnits('1').sub(prop0to1StrategyPool)).div(parseUnits('1')))
+              // extraToken1Amount - 9 - 1/0.2*(1-0.2) == 5
+              // console.log('extraToken1Amount', extraToken1Amount.toString())
+              const toSwapToken1 = extraToken1Amount.sub(extraToken1Amount.mul(parseUnits('1').sub(prop0to1StrategyPool)).div(parseUnits('1')))
+              // toSwapToken1 - 5 - 5*(1-0.2) = 1
+              // console.log('toSwapToken1', toSwapToken1.toString())
+              await uniswapV3Calee.swap(rebalanceDebtSwapPool.address, signer.address, token0.address, toSwapToken1, {gasLimit: 19_000_000});
+            }
+
+            console.log(`___ Price in rebalanceDebtSwap pool after sync: ${formatUnits(await uniswapV3Helper.getPrice(rebalanceDebtSwapPool.address, tokenB.address), tokenBDecimals)}`)
+          }
+
           rebalancesDebt++
           if (needDelayedRebalanceDebt || needForcedRebalanceDebt) {
             process.stdout.write(`Rebalance debt ${rebalancesDebt} (${needDelayedRebalanceDebt ? 'delayed' : 'forced'}).. `)
@@ -365,7 +477,6 @@ export async function strategyBacktest(
   const earned = tokenA.address === token0.address ? fee0.add(fee1.mul(endPrice).div(parseUnits('1', token1Decimals))) : fee1.add(fee0.mul(endPrice).div(parseUnits('1', token0Decimals)));
 
   const strategyTokenBBalance = await tokenB.balanceOf(strategy.address)
-  const tokenBDecimals = await tokenB.decimals()
 
   return {
     vaultName: await vault.name(),
@@ -419,10 +530,13 @@ export function getApr(earned: BigNumber, investAmount: BigNumber, startTimestam
   return +formatUnits(apr, 3)
 }
 
-export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = [], startBlock: number, endBlock: number) {
+export function showBacktestResult(r: IBacktestResult, fuseThresholds: [] = [], startBlock: number, endBlock: number, RDSPoolParams: IRebalanceDebtSwapPoolParams) {
   console.log(`Strategy ${r.vaultName}. Tick range: ${r.tickRange} (+-${r.tickRange /
   100}% price). Rebalance tick range: ${r.rebalanceTickRange} (+-${r.rebalanceTickRange / 100}% price).`);
   console.log(`Allowed locked: ${r.allowedLockedPercent}%. Forced rebalance debt locked: ${r.forceRebalanceDebtLockedPercent}%. Rebalance debt delay: ${r.rebalanceDebtDelay} secs. Fuse thresholds: [${fuseThresholds[0].join(',')}], [${fuseThresholds[1].join(',')}].`)
+
+  // depositorSwapTokens == false, todo for true
+  console.log(`Rebalance debt swap pool params: tickLower ${RDSPoolParams.tickLower}, tickLower ${RDSPoolParams.tickUpper}, amount0Desired ${formatUnits(RDSPoolParams.amount0Desired, r.vaultAssetDecimals)}, amount1Desired ${formatUnits(RDSPoolParams.amount1Desired, r.tokenBDecimals)}.`)
 
   // real APR revenue
   const realApr = getApr(r.earned.add(r.totalProfitCovered).sub(r.totalLossCovered).sub(r.totalLossCoveredFromRewards), r.vaultTotalAssetsBefore, r.startTimestamp, r.endTimestamp)

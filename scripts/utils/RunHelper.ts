@@ -96,6 +96,7 @@ export class RunHelper {
     callback: () => Promise<ContractTransaction | TransactionResponse>,
     stopOnError = true,
     wait = true,
+    silent = false
   ) {
     if (!silent) {
       console.log('Start on-chain transaction')

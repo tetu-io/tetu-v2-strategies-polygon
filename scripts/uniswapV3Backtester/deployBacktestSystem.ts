@@ -33,7 +33,7 @@ import {
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
   UniswapV3Factory,
-  UniswapV3Lib,
+  UniswapV3Lib, UniswapV3Pool,
   UniswapV3Pool__factory,
   VaultFactory,
   VeDistributor,
@@ -50,7 +50,7 @@ import {generateAssetPairs} from "../utils/ConverterUtils";
 import {BigNumber, BigNumberish} from "ethers";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {RunHelper} from "../utils/RunHelper";
-import {IContracts, IVaultUniswapV3StrategyInfo} from "./types";
+import {IContracts, IRebalanceDebtSwapPoolParams, IVaultUniswapV3StrategyInfo} from "./types";
 
 export async function deployBacktestSystem(
   signer: SignerWithAddress,
@@ -60,7 +60,8 @@ export async function deployBacktestSystem(
   token1: string,
   poolFee: number,
   tickRange: number,
-  rebalanceTickRange: number
+  rebalanceTickRange: number,
+  rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams
 ): Promise<IContracts> {
   console.log('Deploying backtest system..')
   // deploy tokens
@@ -94,6 +95,22 @@ export async function deployBacktestSystem(
   ), signer)
   await pool.initialize(currentSqrtPriceX96);
 
+  // deploy rebalanceDebtSwapPool
+  let rebalanceDebtSwapPool: UniswapV3Pool|undefined
+  const useRebalanceDebtSwapPool = rebalanceDebtSwapPoolParams.amount0Desired.gt(0) || rebalanceDebtSwapPoolParams.amount1Desired.gt(0)
+  if (useRebalanceDebtSwapPool) {
+    const uniswapV3Factory2 = await DeployerUtils.deployContractSilent(signer, 'UniswapV3Factory') as UniswapV3Factory;
+    await (await uniswapV3Factory2.createPool(tokens[token0].address, tokens[token1].address, poolFee)).wait();
+    rebalanceDebtSwapPool = UniswapV3Pool__factory.connect(await uniswapV3Factory2.getPool(
+      tokens[token0].address,
+      tokens[token1].address,
+      poolFee,
+    ), signer)
+    await rebalanceDebtSwapPool.initialize(currentSqrtPriceX96);
+    const preview = await uniswapV3Helper.addLiquidityPreview(rebalanceDebtSwapPool.address, rebalanceDebtSwapPoolParams.tickLower, rebalanceDebtSwapPoolParams.tickUpper, rebalanceDebtSwapPoolParams.amount0Desired, rebalanceDebtSwapPoolParams.amount1Desired)
+    await uniswapV3Calee.mint(rebalanceDebtSwapPool.address, signer.address, rebalanceDebtSwapPoolParams.tickLower, rebalanceDebtSwapPoolParams.tickUpper, preview.liquidityOut)
+  }
+
   // deploy tetu liquidator and setup
   let tx
   const liquidatorController = await DeployerUtils.deployContractSilent(
@@ -121,27 +138,26 @@ export async function deployBacktestSystem(
   tx = await uni3swapper.init(liquidatorController.address);
   await tx.wait();
 
-  const liquidatorPools: {
+  const liquidatorPoolsForStrategy: {
     pool: string,
     swapper: string,
     tokenIn: string,
     tokenOut: string,
   }[] = []
-
-  liquidatorPools.push({
-    pool: pool.address,
+  liquidatorPoolsForStrategy.push({
+    pool: useRebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
     swapper: uni3swapper.address,
     tokenIn: await pool.token0(),
     tokenOut: await pool.token1(),
   })
-  liquidatorPools.push({
-    pool: pool.address,
+  liquidatorPoolsForStrategy.push({
+    pool: useRebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
     swapper: uni3swapper.address,
     tokenIn: await pool.token1(),
     tokenOut: await pool.token0(),
   })
 
-  await liquidator.addLargestPools(liquidatorPools, true);
+  await liquidator.addLargestPools(liquidatorPoolsForStrategy, true);
 
   // deploy Compound and put liquidity
   const compPriceOracleImitator = await DeployerUtils.deployContractSilent(
@@ -186,12 +202,44 @@ export async function deployBacktestSystem(
     // console.log(`Comp oracle ${await token.symbol()} price: ${await compPriceOracleImitator.getUnderlyingPrice(cToken.address)}`)
   }
 
+
+
   // deploy price oracle for converter
+  const liquidatorProxyForOracle = await DeployerUtils.deployContractSilent(
+    signer,
+    '@tetu_io/tetu-liquidator/contracts/proxy/ProxyControlled.sol:ProxyControlled',
+  ) as ProxyControlled_1_0_0;
+  tx = await liquidatorProxyForOracle.initProxy(liquidatorLogic.address);
+  await tx.wait();
+  const liquidatorForOracle = TetuLiquidator__factory.connect(liquidatorProxyForOracle.address, signer);
+  tx = await liquidatorForOracle.init(liquidatorController.address);
+  await tx.wait();
+  const liquidatorPoolsForOracle: {
+    pool: string,
+    swapper: string,
+    tokenIn: string,
+    tokenOut: string,
+  }[] = []
+  liquidatorPoolsForOracle.push({
+    pool: pool.address,
+    swapper: uni3swapper.address,
+    tokenIn: await pool.token0(),
+    tokenOut: await pool.token1(),
+  })
+  liquidatorPoolsForOracle.push({
+    pool: pool.address,
+    swapper: uni3swapper.address,
+    tokenIn: await pool.token1(),
+    tokenOut: await pool.token0(),
+  })
+
+  await liquidatorForOracle.addLargestPools(liquidatorPoolsForOracle, true);
+
   const priceOracleImitator = await DeployerUtils.deployContractSilent(
     signer,
     'PriceOracleImitator',
     tokens[vaultAsset].address,
-    liquidator.address,
+    liquidatorForOracle.address,
   ) as PriceOracleImitator;
 
 
@@ -414,6 +462,7 @@ export async function deployBacktestSystem(
     gauge,
     vaultFactory,
     reader,
+    rebalanceDebtSwapPool,
   }
 }
 

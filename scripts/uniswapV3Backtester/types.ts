@@ -9,6 +9,7 @@ import {
   UniswapV3Lib, UniswapV3Pool, VaultFactory
 } from "../../typechain";
 import {BigNumber} from "ethers";
+import {parseUnits} from "ethers/lib/utils";
 
 export interface IConfig {
   liquiditySnapshotSurroundingTickSpacings: number
@@ -63,6 +64,7 @@ export interface IContracts {
   vaultFactory: VaultFactory
 
   reader: PairBasedStrategyReader
+  rebalanceDebtSwapPool: UniswapV3Pool
 }
 
 export interface IVaultUniswapV3StrategyInfo {
@@ -112,4 +114,11 @@ export interface IBacktestResult {
   timeOnFuse: number;
   poolTxs: number;
   strategyTokenBBalance: BigNumber;
+}
+
+export interface IRebalanceDebtSwapPoolParams {
+  tickLower: number
+  tickUpper: number
+  amount0Desired: BigNumber
+  amount1Desired: BigNumber
 }

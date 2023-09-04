@@ -1,5 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
-import hre, { ethers } from 'hardhat';
+import { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import {getAddress, parseUnits} from 'ethers/lib/utils';
@@ -9,8 +9,13 @@ import { config as dotEnvConfig } from 'dotenv';
 import {
   deployBacktestSystem,
 } from "../../../../scripts/uniswapV3Backtester/deployBacktestSystem";
-import {IBacktestResult, IContracts} from "../../../../scripts/uniswapV3Backtester/types";
+import {
+  IBacktestResult,
+  IContracts,
+  IRebalanceDebtSwapPoolParams
+} from "../../../../scripts/uniswapV3Backtester/types";
 import {showBacktestResult, strategyBacktest} from "../../../../scripts/uniswapV3Backtester/strategyBacktest";
+import {BigNumber} from "ethers";
 
 
 // How to
@@ -33,16 +38,17 @@ const argv = require('yargs/yargs')()
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
-  const backtestStartBlock = 45764000; // Aug-01-2023 02:55:08 AM +UTC // 45700000; // 7/30/2023 3:31:06 PM
-  const backtestEndBlock = 45825000; // 8/2/2023 7:02:34 PM
-  const investAmountUnits: string = '100' // 1k USDC, 1k WMATIC etc
+  const backtestStartBlock = 46760000; // Aug-26-2023 02:31:23 AM +UTC
+  // const backtestEndBlock = 46900000; // Aug-29-2023 02:49:50 PM +UTC - fuse on hardhwork
+  const backtestEndBlock = 46880000; // Aug-27-2023 02:36:58 PM +UTC
+  const investAmountUnits: string = '100'
   const txLimit = 0; // 0 - unlimited
-  const disableBurns = false; // backtest is 5x slower with enabled burns for volatile pools
+  const disableBurns = false;
   const disableMints = false;
   const rebalanceDebt = true;
-  const allowedLockedPercent = 5;
-  const forceRebalanceDebtLockedPercent = 20;
-  const rebalanceDebtDelay = 360;
+  const allowedLockedPercent = 25;
+  const forceRebalanceDebtLockedPercent = 70;
+  const rebalanceDebtDelay = 7200;
   const fuseThresholds = [
     ['0.999', '0.9991', '1.001', '1.0009',],
     ['0.999', '0.9991', '1.001', '1.0009',],
@@ -182,6 +188,13 @@ describe('UmiswapV3 converter strategy backtester', function() {
     tickRange: 0, // 1 tick spacing
     rebalanceTickRange: 0, // 1 tick spacing
   },*/
+
+  const rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams = {
+    tickLower: -60,
+    tickUpper: 60,
+    amount0Desired: parseUnits('500', 6),
+    amount1Desired: parseUnits('500', 6),
+  }
   // =========================
 
   let contracts: IContracts
@@ -225,7 +238,8 @@ describe('UmiswapV3 converter strategy backtester', function() {
       getAddress(params.token1),
       params.poolFee,
       params.tickRange,
-      params.rebalanceTickRange
+      params.rebalanceTickRange,
+      rebalanceDebtSwapPoolParams
     )
 
     await contracts.strategy.setFuseThresholds(0, fuseThresholds[0].map(a => parseUnits(a)))
@@ -243,7 +257,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       console.log('');
       console.log(`=== Uniswap V3 NSR strategy backtester ===`);
       console.log('');
-      showBacktestResult(backtestResult, fuseThresholds, backtestStartBlock, backtestEndBlock);
+      showBacktestResult(backtestResult, fuseThresholds, backtestStartBlock, backtestEndBlock, rebalanceDebtSwapPoolParams);
     }
   });
 
@@ -275,6 +289,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
       allowedLockedPercent,
       forceRebalanceDebtLockedPercent,
       rebalanceDebtDelay,
+      contracts.rebalanceDebtSwapPool,
     )
   })
 });
