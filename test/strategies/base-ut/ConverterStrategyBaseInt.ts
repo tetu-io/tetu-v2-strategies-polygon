@@ -18,6 +18,7 @@ import {depositToVault} from "../../StrategyTestUtils";
 import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 
 /**
  * Tests of ConverterStrategyBase on the base of real strategies
@@ -449,6 +450,9 @@ describe("ConverterStrategyBaseInt", () => {
     async function makeRepayTheBorrow(p: IMakeRepayTheBorrowParams): Promise<IMakeRepayTheBorrowResults> {
       const cc = await prepareUniv3ConverterStrategyUsdcUsdt();
       await cc.vault.setDoHardWorkOnInvest(false);
+
+      // possibility to view debug messages of converter
+      await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       // make deposits
       await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));

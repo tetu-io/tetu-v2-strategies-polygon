@@ -704,7 +704,7 @@ describe('ConverterStrategyBaseTest', () => {
           tokens: p.tokens.map(x => x.address),
           indexTheAsset: p.indexTheAsset,
           balanceBefore: parseUnits(p.balances ? p.balances[p.indexTheAsset] : "0", decimals[p.indexTheAsset]),
-          indexUnderlying: p.indexUnderlying ?? p.indexTheAsset
+          indexUnderlying: p.indexUnderlying ?? p.indexTheAsset,
         }
       );
 

@@ -34,8 +34,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     /// @notice Initial balance of the [asset}
     uint balanceBefore;
     uint indexUnderlying;
-
-    uint balanceAfterWithdraw;
   }
   //endregion -------------------------------------------------------- DATA TYPES
 
@@ -373,7 +371,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.theAsset);
       expectedWithdrewUSD = _makeRequestedAmount(amount, investedAssets_, v) * assetPrice / 1e18;
 
-      v.balanceAfterWithdraw = AppLib.balance(v.theAsset);
+      uint balanceAfterWithdraw = AppLib.balance(v.theAsset);
 
       // we need to compensate difference if during withdraw we lost some assets
       // also we should send earned amounts to the insurance
@@ -388,7 +386,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         investedAssets_ + v.balanceBefore > earnedByPrices_
             ? investedAssets_ + v.balanceBefore - earnedByPrices_
             : 0,
-        _updateInvestedAssets() + v.balanceAfterWithdraw
+        _updateInvestedAssets() + balanceAfterWithdraw
       );
 
       if (earned != 0) {
@@ -397,7 +395,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
           earned,
           baseState.splitter,
           investedAssets_ + v.balanceBefore,
-          v.balanceAfterWithdraw
+          balanceAfterWithdraw
         );
       }
     }
@@ -645,7 +643,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       // so, we cannot send anything to converter in this call
       // try to receive requested amount to balance
       // we should receive amount with extra gap, where gap is in the range (GAP_WITHDRAW, 2 * GAP_WITHDRAW]
-      // The caller will be able to claim received amount (w/o extra gap) in the next call
+      // The caller will be able to claim requested amount (w/o extra gap) in the next call
       if (_investedAssets == 0) {
         // there are no invested amounts, we can use amount on balance only
         // but we cannot send all amount, we should keep not zero amount on balance
