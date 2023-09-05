@@ -434,4 +434,8 @@ export class PairBasedStrategyPrepareStateUtils {
     }
   }
 
+  static async prepareInsurance(b: IBuilderResults, amount: string = "1000") {
+    const decimals = await IERC20Metadata__factory.connect(b.asset, b.vault.signer).decimals();
+    await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits(amount, decimals));
+  }
 }

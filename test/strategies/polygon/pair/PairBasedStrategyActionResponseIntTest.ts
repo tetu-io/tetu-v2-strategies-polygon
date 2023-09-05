@@ -1579,9 +1579,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     interface IStrategyInfo {
       name: string,
       notUnderlyingToken: string;
+      movePricesUpBeforeWithdraw?: boolean;
     }
 
     const strategies: IStrategyInfo[] = [
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, movePricesUpBeforeWithdraw: true},
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
@@ -1604,15 +1606,21 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         console.log('deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
-        await TokenUtils.getToken(b.asset, signer.address, parseUnits('15000', 6));
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits('35000', 6));
         await b.vault.connect(signer).deposit(parseUnits('10000', 6), signer.address);
 
         amountToWithdraw = (await b.vault.maxWithdraw(signer.address)).sub(parseUnits("1", 6));
 
+        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
+
+        if (strategyInfo.movePricesUpBeforeWithdraw) {
+          const state = await PackedData.getDefaultState(b.strategy);
+          await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, parseUnits("12000", 6));
+        }
         return b;
       }
 
-      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}:${strategyInfo.movePricesUpBeforeWithdraw ? "MovePricesUp" : ""}`, () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -1628,6 +1636,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
           await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
           const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          console.log("stateBefore", stateBefore);
+          console.log("stateAfter", stateAfter);
 
           expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
         });

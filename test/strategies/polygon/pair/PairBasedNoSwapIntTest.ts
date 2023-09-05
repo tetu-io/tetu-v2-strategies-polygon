@@ -262,7 +262,7 @@ describe('PairBasedNoSwapIntTest', function() {
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
 
         // provide $1000 of insurance to compensate possible price decreasing
-        await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits('1000', 6));
+        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
 
         return b;
       }
@@ -750,7 +750,7 @@ describe('PairBasedNoSwapIntTest', function() {
         const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
 
         // provide $1000 of insurance to compensate possible price decreasing
-        await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits('1000', 6));
+        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
 
         return b;
       }
@@ -870,7 +870,7 @@ describe('PairBasedNoSwapIntTest', function() {
         await ConverterStrategyBase__factory.connect(b.strategy.address, platformVoter).setCompoundRatio(0);
 
         // provide $1000 of insurance to compensate possible price decreasing
-        await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits('1000', 6));
+        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
 
         return b;
       }

@@ -360,24 +360,34 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         liquidationThresholds
       );
 
-      if (earnedByPrices_ != 0) {
-        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
-          v.asset,
-          earnedByPrices_,
-          baseState.splitter,
-          investedAssets_ + v.balanceBefore,
-          AppLib.balance(v.asset)
-        );
-      }
-
       v.investedAssetsAfterWithdraw = _updateInvestedAssets();
       v.balanceAfterWithdraw = AppLib.balance(v.asset);
 
       // we need to compensate difference if during withdraw we lost some assets
-      (, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssets_ + v.balanceBefore,
-        v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw + amountSentToInsurance
+      // also we should send earned amounts to the insurance
+      // it's too dangerous to earn money on withdraw, we can move share price
+      // in the case of "withdraw almost all" share price can be changed significantly
+      // so, it's safer to transfer earned amount to the insurance
+      // earned can exceeds earnedByPrices_
+      // but if earned < earnedByPrices_ it means that we compensate a part of losses from earned-by-prices.
+
+      uint earned;
+      (earned, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
+        investedAssets_ + v.balanceBefore > earnedByPrices_
+            ? investedAssets_ + v.balanceBefore - earnedByPrices_
+            : 0,
+        v.investedAssetsAfterWithdraw + v.balanceAfterWithdraw
       );
+
+      if (earned != 0) {
+        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
+          v.asset,
+          earned,
+          baseState.splitter,
+          investedAssets_ + v.balanceBefore,
+          v.balanceAfterWithdraw
+        );
+      }
 
       return (
         v.expectedTotalMainAssetAmount * v.assetPrice / 1e18,
