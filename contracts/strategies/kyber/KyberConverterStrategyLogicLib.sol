@@ -53,6 +53,9 @@ library KyberConverterStrategyLogicLib {
     bool[2] fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
     uint coveredByRewards;
+
+    uint poolPrice;
+    uint poolPriceAdjustment;
   }
 
   struct EnterLocalVariables {
@@ -476,10 +479,15 @@ library KyberConverterStrategyLogicLib {
   function needStrategyRebalance(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter_) external view returns (
     bool needRebalance
   ) {
+    address pool = pairState.pool;
+    uint poolPriceDecimals = IERC20Metadata(pairState.tokenA).decimals();
+    uint poolPriceAdjustment = poolPriceDecimals < 18 ? 10 ** (18 - poolPriceDecimals) : 1;
+    uint poolPrice = KyberLib.getPrice(pool, pairState.tokenB) * poolPriceAdjustment;
     (needRebalance, , ) = PairBasedStrategyLogicLib.needStrategyRebalance(
       pairState,
       converter_,
-      KyberDebtLib.getCurrentTick(IPool(pairState.pool))
+      KyberDebtLib.getCurrentTick(IPool(pool)),
+      poolPrice
     );
   }
 
@@ -515,13 +523,14 @@ library KyberConverterStrategyLogicLib {
   ) {
     RebalanceLocal memory v;
     _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState, liquidityThresholds_);
-
+    v.poolPrice = KyberLib.getPrice(address(v.pool), pairState.tokenB) * v.poolPriceAdjustment;
     bool needRebalance;
-    int24 tick = KyberDebtLib.getCurrentTick(IPool(pairState.pool));
+    int24 tick = KyberDebtLib.getCurrentTick(v.pool);
     (needRebalance, v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(
       pairState,
       v.converter,
-      tick
+      tick,
+      v.poolPrice
     );
 
     // update fuse status if necessary
@@ -577,6 +586,8 @@ library KyberConverterStrategyLogicLib {
     v.isStablePool = pairState.isStablePool;
     v.liquidationThresholdsAB[0] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenA]);
     v.liquidationThresholdsAB[1] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenB]);
+    uint poolPriceDecimals = IERC20Metadata(v.tokenA).decimals();
+    v.poolPriceAdjustment = poolPriceDecimals < 18 ? 10 ** (18 - poolPriceDecimals) : 1;
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]

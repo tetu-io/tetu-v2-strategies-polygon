@@ -141,7 +141,7 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     bool needToChange,
     PairBasedStrategyLib.FuseStatus status
   ) {
-    return PairBasedStrategyLib.needChangeFuseStatus(fuse_, price);
+    return PairBasedStrategyLib.needChangeFuseStatus(fuse_, price, price);
   }
   //endregion ------------------------------------------------ Fuse functions
 }
