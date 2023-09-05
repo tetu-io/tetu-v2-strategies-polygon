@@ -15,6 +15,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+import "../interfaces/IConverterStrategyBase.sol";
 import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
@@ -610,5 +611,44 @@ library ConverterStrategyBaseLib2 {
     );
   }
 //endregion------------------------------------- calcInvestedAssets
+
+
+  /// @notice Swap can give us more amount out than expected, so we will receive increasing of share price.
+  ///         To prevent it, we need to send exceeded amount to insurance,
+  ///         but it's too expensive to make such transfer at the end of withdrawAggByStep.
+  ///         So, we postpone sending the profit until the next call of fixPriceChange
+  ///         by manually setting investedAssets equal to the oldTotalAssets
+  /// @dev If profitToCover was sent only partly, we will postpone sending of remain amount up to the next call
+  ///      of fixPriceChange in same manner
+  /// @param oldTotalAssets Total asset at the moment after last call of fixPriceChange,
+  ///                       decreased on the value of profitToCover.
+  function fixTooHighInvestedAssets(
+    address asset_,
+    uint oldTotalAssets,
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs_
+  ) external {
+    uint balance = IERC20(asset_).balanceOf(address(this));
+    uint newTotalAssets = csbs_.investedAssets + balance;
+
+    console.log("withdrawByAggStep.balance", balance);
+    console.log("withdrawByAggStep._csbs.investedAssets", csbs_.investedAssets);
+    console.log("withdrawByAggStep.oldTotalAssets", oldTotalAssets);
+    console.log("withdrawByAggStep.newTotalAssets", newTotalAssets);
+
+    if (oldTotalAssets < newTotalAssets) {
+      // total asset was increased (i.e. because of too profitable swaps)
+      // this increment will increase share price
+      // we should send added amount to insurance to avoid share price change
+      // anyway, it's too expensive to do it here
+      // so, we postpone sending the profit until the next call of fixPriceChange
+      if (oldTotalAssets > balance) {
+        csbs_.investedAssets = oldTotalAssets - balance;
+        console.log("withdrawByAggStep._csbs.investedAssets.updated", csbs_.investedAssets);
+      }
+    }
+  }
+
+
+
 }
 

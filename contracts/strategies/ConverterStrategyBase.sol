@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+import "../interfaces/IConverterStrategyBase.sol";
 import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
@@ -17,23 +18,10 @@ import "hardhat/console.sol";
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
 /// @author bogdoslav, dvpublic, a17
-abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV3 {
+abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverterCallback, DepositorBase, StrategyBaseV3 {
   using SafeERC20 for IERC20;
 
   //region -------------------------------------------------------- DATA TYPES
-  struct ConverterStrategyBaseState {
-    /// @dev Amount of underlying assets invested to the pool.
-    uint investedAssets;
-
-    /// @dev Linked Tetu Converter
-    ITetuConverter converter;
-
-    /// @notice Percent of asset amount that can be not invested, it's allowed to just keep it on balance
-    ///         decimals = {DENOMINATOR}
-    /// @dev We need this threshold to avoid numerous conversions of small amounts
-    uint reinvestThresholdPercent;
-  }
-
   struct WithdrawUniversalLocal {
     bool all;
     uint[] reservesBeforeWithdraw;

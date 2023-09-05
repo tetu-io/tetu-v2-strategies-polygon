@@ -233,6 +233,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       // full withdraw was completed, we can exclude next calls of withdrawByAggStep
       state.pair.withdrawDone = 1;
     }
+
+    ConverterStrategyBaseLib2.fixTooHighInvestedAssets(baseState.asset, oldTotalAssets, _csbs);
   }
 
   function getPropNotUnderlying18() external view returns (uint) {
