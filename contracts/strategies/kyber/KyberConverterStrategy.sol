@@ -16,7 +16,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "2.0.0";
+  string public constant override STRATEGY_VERSION = "2.0.1";
   //endregion ------------------------------------------------- Constants
 
   //region ------------------------------------------------- INIT
@@ -249,6 +249,8 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
       // full withdraw was completed, we can exclude next calls of withdrawByAggStep
       state.pair.withdrawDone = 1;
     }
+
+    ConverterStrategyBaseLib2.fixTooHighInvestedAssets(baseState.asset, oldTotalAssets, _csbs);
   }
 
   function getPropNotUnderlying18() external view returns (uint) {

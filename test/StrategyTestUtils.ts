@@ -2,7 +2,7 @@ import {
     ControllerV2__factory,
     ForwarderV3__factory,
     IERC20__factory,
-    IERC20Metadata, IStrategyV2__factory, PairBasedStrategyLib__factory,
+    IERC20Metadata, IERC20Metadata__factory, IStrategyV2__factory, PairBasedStrategyLib__factory,
     StrategyBaseV2, StrategyLib__factory,
     StrategySplitterV2,
     StrategySplitterV2__factory,
@@ -42,13 +42,14 @@ import {
   IUniV3FeesClaimedInfo
 } from "./baseUT/strategies/UniswapV3StrategyUtils";
 import {IEventsSet, CaptureEvents} from "./baseUT/strategies/CaptureEvents";
+import {PLATFORM_UNIV3} from "./baseUT/strategies/AppPlatforms";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,
   strategy: StrategyBaseV2,
   signer: SignerWithAddress,
   decimals: number,
-) : Promise<IStateHardworkEvents> {
+) : Promise<IEventsSet> {
   // const asset = await strategy.asset();
   const controller = await splitter.controller();
   const platformVoter = await ControllerV2__factory.connect(controller, splitter.provider).platformVoter();
@@ -97,7 +98,7 @@ export async function doHardWorkForStrategy(
     }
   }
 
-  return dest;
+  return CaptureEvents.handleReceipt(receipt, decimals, PLATFORM_UNIV3);
 }
 
 const { expect } = chai;
@@ -143,7 +144,7 @@ export async function depositToVault(
   decimals: number,
   assetCtr: IERC20Metadata,
   insurance: string,
-) {
+): Promise<IEventsSet> {
   expect(await assetCtr.balanceOf(signer.address)).greaterThanOrEqual(amount, 'not enough balance for deposit');
   console.log('### DEPOSIT CALL ###');
 
@@ -165,6 +166,8 @@ export async function depositToVault(
   console.log('insuranceAfter', insuranceAfter);
   expect(insuranceBefore - insuranceAfter).below(100);
   expect(sharesBefore.add(expectedShares)).eq(await vault.balanceOf(signer.address));
+
+  return CaptureEvents.handleReceipt(receiptDeposit, decimals, PLATFORM_UNIV3);
 }
 
 
@@ -173,7 +176,7 @@ export async function redeemFromVault(
   decimals: number,
   assetCtr: IERC20Metadata,
   insurance: string,
-) {
+): Promise<IEventsSet> {
   console.log('### REDEEM CALL ###');
   const insuranceBefore = +formatUnits(await assetCtr.balanceOf(insurance), decimals);
   console.log('insuranceBefore', insuranceBefore);
@@ -201,6 +204,8 @@ export async function redeemFromVault(
   console.log('insuranceAfter', insuranceAfter);
   expect(insuranceBefore - insuranceAfter).below(100);
   expect(assetsBefore.add(expectedAssets)).eq(await assetCtr.balanceOf(signer.address));
+
+  return CaptureEvents.handleReceipt(receipt, decimals, PLATFORM_UNIV3);
 }
 
 export async function handleReceiptDeposit(receipt: ContractReceipt, decimals: number): Promise<void> {

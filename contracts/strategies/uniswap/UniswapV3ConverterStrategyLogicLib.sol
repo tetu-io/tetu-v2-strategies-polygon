@@ -19,6 +19,7 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
+import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -32,6 +33,9 @@ library UniswapV3ConverterStrategyLogicLib {
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event UniV3FeesClaimed(uint fee0, uint fee1);
+  /// @param loss Total amount of loss
+  /// @param coveredByRewards Part of the loss covered by rewards
+  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -436,12 +440,17 @@ library UniswapV3ConverterStrategyLogicLib {
   function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
     uint coveredByRewards
   ) {
+    console.log("_coverLoss.loss", loss);
     if (loss != 0) {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
+      console.log("_coverLoss.coveredByRewards", coveredByRewards);
       uint notCovered = loss - coveredByRewards;
+      console.log("_coverLoss.notCovered", notCovered);
       if (notCovered != 0) {
         ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
+
+      emit CoverLoss(loss, coveredByRewards);
     }
 
     return coveredByRewards;

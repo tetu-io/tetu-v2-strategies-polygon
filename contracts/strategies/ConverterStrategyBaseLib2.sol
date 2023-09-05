@@ -15,6 +15,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+import "../interfaces/IConverterStrategyBase.sol";
 import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
@@ -49,12 +50,11 @@ library ConverterStrategyBaseLib2 {
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
   event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
-  /// @notice Compensation of losses is not carried out completely
+  /// @notice Compensation of losses is not carried out completely because loss amount exceeds allowed max
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
-  /// @notice Payment to insurance was carried out only partially
-  event UnsentAmountToInsurance(uint sentAmount, uint unsentAmount, uint balance, uint totalAssets);
   /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
   event NotEnoughInsurance(uint lossUncovered);
+  event SendToInsurance(uint sentAmount, uint unsentAmount);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -218,15 +218,15 @@ library ConverterStrategyBaseLib2 {
 //endregion ----------------------------------------- MAIN LOGIC
 
 //region -------------------------------------------- Cover loss, send profit to insurance
-  /// @notice Send given amount of underlying to the insurance
+  /// @notice Send given {amount} of {asset} (== underlying) to the insurance
   /// @param totalAssets_ Total strategy balance = balance of underlying + current invested assets amount
+  /// @param balance Current balance of the underlying
   /// @return sentAmount Amount of underlying sent to the insurance
   /// @return unsentAmount Missed part of the {amount} that were not sent to the insurance
-  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_) external returns (
+  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_, uint balance) external returns (
     uint sentAmount,
     uint unsentAmount
   ) {
-    uint balance = IERC20(asset).balanceOf(address(this));
     uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
@@ -246,9 +246,7 @@ library ConverterStrategyBaseLib2 {
       ? amount - amountToSend
       : 0;
 
-    if (unsentAmount != 0) {
-      emit UnsentAmountToInsurance(sentAmount, unsentAmount, balance, totalAssets_);
-    }
+    emit SendToInsurance(sentAmount, unsentAmount);
   }
 
   function _registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
@@ -261,6 +259,8 @@ library ConverterStrategyBaseLib2 {
   }
 
   /// @notice Register income and cover possible loss after price changing, emit FixPriceChanges
+  /// @param investedAssetsBefore Currently stored value of _csbs.investedAssets
+  /// @param investedAssetsAfter Actual value of invested assets calculated at the current moment
   function coverLossAfterPriceChanging(
     uint investedAssetsBefore,
     uint investedAssetsAfter,
@@ -277,6 +277,7 @@ library ConverterStrategyBaseLib2 {
 
       if (lossUncovered != 0) {
         emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
+        console.log("coverLossAfterPriceChanging.lossUncovered", lossUncovered);
       }
     }
     emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter);
@@ -285,15 +286,20 @@ library ConverterStrategyBaseLib2 {
   /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
   ///         If the loss were covered only partially, emit {NotEnoughInsurance}
   function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) internal {
+    console.log("_coverLossAndCheckResults.lossToCover", lossToCover);
     address asset = ISplitter(splitter).asset();
     address vault = ISplitter(splitter).vault();
     uint balanceBefore = IERC20(asset).balanceOf(vault);
+    console.log("_coverLossAndCheckResults.balanceBefore", balanceBefore);
     ISplitter(splitter).coverPossibleStrategyLoss(earned, lossToCover);
-    uint delta = IERC20(asset).balanceOf(vault); // temporary save balance-after to delta
-    delta = delta > balanceBefore
-      ? delta - balanceBefore
+    uint balanceAfter = IERC20(asset).balanceOf(vault);
+    console.log("_coverLossAndCheckResults.balanceAfter", balanceAfter);
+    uint delta = balanceAfter > balanceBefore
+      ? balanceAfter - balanceBefore
       : 0;
+    console.log("_coverLossAndCheckResults.balance.delta.covered", delta);
     if (delta < lossToCover) {
+      console.log("_coverLossAndCheckResults.NotEnoughInsurance", lossToCover - delta);
       emit NotEnoughInsurance(lossToCover - delta);
     }
   }
@@ -482,8 +488,7 @@ library ConverterStrategyBaseLib2 {
 
     // calculate prices, decimals
     (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
-    console.log("_calcInvestedAssets.prices.length", v.prices.length);
-    console.log("_calcInvestedAssets.decs.length", v.decs.length);
+    console.log("_calcInvestedAssets.prices", v.prices[0], v.prices[1]);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
@@ -491,28 +496,43 @@ library ConverterStrategyBaseLib2 {
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
+        console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut,i", depositorQuoteExitAmountsOut[i], i);
+        console.log("_calcInvestedAssets.0.amountOut", amountOut);
       } else {
         v.token = tokens[i];
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), v.token, v.asset, false);
+        console.log("_calcInvestedAssets.reverse.toPay,collateral,i", toPay, collateral, i);
         if (amountOut < toPay) {
+          console.log("_calcInvestedAssets.setDebt.toPay", toPay);
           setDebt(v, indexAsset, toPay);
         } else {
           amountOut -= toPay;
+          console.log("_calcInvestedAssets.1.amountOut", amountOut);
         }
 
         // available amount to repay
         uint toRepay = collateral + IERC20(v.token).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
+        console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut,i", depositorQuoteExitAmountsOut[i], i);
+        console.log("_calcInvestedAssets.toRepay", toRepay);
+        console.log("_calcInvestedAssets.collateral", collateral);
+        console.log("_calcInvestedAssets.token balance", IERC20(v.token).balanceOf(address(this)));
+        console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut[i]", depositorQuoteExitAmountsOut[i]);
 
         // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (toPay, collateral) = converter_.getDebtAmountCurrent(address(this), v.asset, v.token, false);
+        console.log("_calcInvestedAssets.direct.toPay,collateral,i", toPay, collateral, i);
         amountOut += collateral;
+        console.log("_calcInvestedAssets.2.amountOut", amountOut);
 
         if (toRepay >= toPay) {
+          console.log("_calcInvestedAssets.swap.to", (toRepay - toPay), (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+          console.log("_calcInvestedAssets.3.amountOut", amountOut);
         } else {
+          console.log("setDebt.1", toPay - toRepay, i);
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           setDebt(v, i, toPay - toRepay);
@@ -530,15 +550,20 @@ library ConverterStrategyBaseLib2 {
         // this estimation is approx and do not count price impact on the liquidation
         // we will able to count the real output only after withdraw process
         uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
+        console.log("_calcInvestedAssets.debtInAsset", debtInAsset, v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
+        console.log("_calcInvestedAssets.debtInAsset.amountOut", amountOut);
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
+          console.log("_calcInvestedAssets.4.amountOut", amountOut);
         } else {
           amountOut -= debtInAsset;
+          console.log("_calcInvestedAssets.5.amountOut", amountOut);
         }
       }
     }
 
+    console.log("_calcInvestedAssets.amountOut", amountOut);
     return amountOut;
   }
 
@@ -590,5 +615,44 @@ library ConverterStrategyBaseLib2 {
     );
   }
 //endregion------------------------------------- calcInvestedAssets
+
+
+  /// @notice Swap can give us more amount out than expected, so we will receive increasing of share price.
+  ///         To prevent it, we need to send exceeded amount to insurance,
+  ///         but it's too expensive to make such transfer at the end of withdrawAggByStep.
+  ///         So, we postpone sending the profit until the next call of fixPriceChange
+  ///         by manually setting investedAssets equal to the oldTotalAssets
+  /// @dev If profitToCover was sent only partly, we will postpone sending of remain amount up to the next call
+  ///      of fixPriceChange in same manner
+  /// @param oldTotalAssets Total asset at the moment after last call of fixPriceChange,
+  ///                       decreased on the value of profitToCover.
+  function fixTooHighInvestedAssets(
+    address asset_,
+    uint oldTotalAssets,
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs_
+  ) external {
+    uint balance = IERC20(asset_).balanceOf(address(this));
+    uint newTotalAssets = csbs_.investedAssets + balance;
+
+    console.log("withdrawByAggStep.balance", balance);
+    console.log("withdrawByAggStep._csbs.investedAssets", csbs_.investedAssets);
+    console.log("withdrawByAggStep.oldTotalAssets", oldTotalAssets);
+    console.log("withdrawByAggStep.newTotalAssets", newTotalAssets);
+
+    if (oldTotalAssets < newTotalAssets) {
+      // total asset was increased (i.e. because of too profitable swaps)
+      // this increment will increase share price
+      // we should send added amount to insurance to avoid share price change
+      // anyway, it's too expensive to do it here
+      // so, we postpone sending the profit until the next call of fixPriceChange
+      if (oldTotalAssets > balance) {
+        csbs_.investedAssets = oldTotalAssets - balance;
+        console.log("withdrawByAggStep._csbs.investedAssets.updated", csbs_.investedAssets);
+      }
+    }
+  }
+
+
+
 }
 

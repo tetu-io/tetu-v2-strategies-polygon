@@ -6,6 +6,7 @@ import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverterCallback.sol"
 import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
+import "../interfaces/IConverterStrategyBase.sol";
 import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
@@ -17,23 +18,10 @@ import "hardhat/console.sol";
 /// @title Abstract contract for base Converter strategy functionality
 /// @notice All depositor assets must be correlated (ie USDC/USDT/DAI)
 /// @author bogdoslav, dvpublic, a17
-abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase, StrategyBaseV3 {
+abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverterCallback, DepositorBase, StrategyBaseV3 {
   using SafeERC20 for IERC20;
 
   //region -------------------------------------------------------- DATA TYPES
-  struct ConverterStrategyBaseState {
-    /// @dev Amount of underlying assets invested to the pool.
-    uint investedAssets;
-
-    /// @dev Linked Tetu Converter
-    ITetuConverter converter;
-
-    /// @notice Percent of asset amount that can be not invested, it's allowed to just keep it on balance
-    ///         decimals = {DENOMINATOR}
-    /// @dev We need this threshold to avoid numerous conversions of small amounts
-    uint reinvestThresholdPercent;
-  }
-
   struct WithdrawUniversalLocal {
     ITetuConverter converter;
     /// @notice Target asset that should be received on balance.
@@ -46,13 +34,15 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     /// @notice Initial balance of the [asset}
     uint balanceBefore;
     uint indexUnderlying;
+
+    uint balanceAfterWithdraw;
   }
   //endregion -------------------------------------------------------- DATA TYPES
 
   //region -------------------------------------------------------- CONSTANTS
 
   /// @dev Version of this contract. Adjust manually on each code modification.
-  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.1";
+  string public constant CONVERTER_STRATEGY_BASE_VERSION = "2.0.3";
 
   /// @notice 1% gap to cover possible liquidation inefficiency
   /// @dev We assume that: conversion-result-calculated-by-prices - liquidation-result <= the-gap
@@ -174,7 +164,13 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     // send earned-by-prices to the insurance, ignore dust values
     if (earnedByPrices_ > AppLib._getLiquidationThreshold(liquidationThresholds[_asset])) {
       if (needToDeposit || balanceBefore >= earnedByPrices_) {
-        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(_asset, earnedByPrices_, baseState.splitter, investedAssets_ + balanceBefore);
+        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
+          _asset,
+          earnedByPrices_,
+          baseState.splitter,
+          investedAssets_ + balanceBefore,
+          balanceBefore
+        );
       } else {
         // needToDeposit is false and we don't have enough amount to cover earned-by-prices, we need to withdraw
         (/* expectedWithdrewUSD */,, strategyLoss, amountSentToInsurance) = _withdrawUniversal(0, earnedByPrices_, investedAssets_);
@@ -380,24 +376,38 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       WithdrawUniversalLocal memory v;
       _initWithdrawUniversalLocal(baseState.asset, v, true);
 
+
       // get at least requested amount of the underlying on the balance
       assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.theAsset);
       expectedWithdrewUSD = _makeRequestedAmount(amount, investedAssets_, v) * assetPrice / 1e18;
 
-      if (earnedByPrices_ != 0) {
-        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
-          v.theAsset,
-          earnedByPrices_,
-          baseState.splitter,
-          investedAssets_ + v.balanceBefore
-        );
-      }
+      v.balanceAfterWithdraw = AppLib.balance(v.theAsset);
 
       // we need to compensate difference if during withdraw we lost some assets
-      (, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
-        investedAssets_ + v.balanceBefore,
-        _updateInvestedAssets() + AppLib.balance(v.theAsset) + amountSentToInsurance
+      // also we should send earned amounts to the insurance
+      // it's too dangerous to earn money on withdraw, we can move share price
+      // in the case of "withdraw almost all" share price can be changed significantly
+      // so, it's safer to transfer earned amount to the insurance
+      // earned can exceeds earnedByPrices_
+      // but if earned < earnedByPrices_ it means that we compensate a part of losses from earned-by-prices.
+
+      uint earned;
+      (earned, strategyLoss) = ConverterStrategyBaseLib2._registerIncome(
+        investedAssets_ + v.balanceBefore > earnedByPrices_
+            ? investedAssets_ + v.balanceBefore - earnedByPrices_
+            : 0,
+        _updateInvestedAssets() + v.balanceAfterWithdraw
       );
+
+      if (earned != 0) {
+        (amountSentToInsurance,) = ConverterStrategyBaseLib2.sendToInsurance(
+          v.theAsset,
+          earned,
+          baseState.splitter,
+          investedAssets_ + v.balanceBefore,
+          v.balanceAfterWithdraw
+        );
+      }
     }
 
     return (
@@ -531,6 +541,7 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
     investedAssetsOut = _calcInvestedAssets();
     _csbs.investedAssets = investedAssetsOut;
+    console.log("_updateInvestedAssets.investedAssetsOut", investedAssetsOut);
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
@@ -573,6 +584,8 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
       investedAssetsOut = _updateInvestedAssets();
       console.log("_fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
       earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsOut, baseState);
+      console.log("_fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
+      console.log("_fixPriceChanges.investedAssetsOut", investedAssetsOut);
     } else {
       investedAssetsOut = _csbs.investedAssets;
       earnedOut = 0;
@@ -609,12 +622,16 @@ abstract contract ConverterStrategyBase is ITetuConverterCallback, DepositorBase
     if (earnedByPrices != 0) {
       console.log("requirePayAmountBack.3");
       address underlying = baseState.asset;
-      ConverterStrategyBaseLib2.sendToInsurance(
-        underlying,
-        earnedByPrices,
-        baseState.splitter,
-        _investedAssets + (theAsset_ == underlying ? v.balanceBefore : AppLib.balance(underlying))
-      );
+      uint balanceUnderlying = theAsset_ == underlying
+        ? v.balanceBefore
+        : AppLib.balance(underlying);
+      console.log("requirePayAmountBack.3.v.balanceBefore", v.balanceBefore);
+      console.log("requirePayAmountBack.3.balanceUnderlying", balanceUnderlying);
+      ConverterStrategyBaseLib2.sendToInsurance(underlying, earnedByPrices, baseState.splitter, _investedAssets + balanceUnderlying, balanceUnderlying);
+      if (theAsset_ == underlying) {
+        v.balanceBefore = AppLib.balance(theAsset_);
+        console.log("requirePayAmountBack.3.v.balanceBefore.fixed", v.balanceBefore);
+      }
     }
     console.log("requirePayAmountBack.4");
 

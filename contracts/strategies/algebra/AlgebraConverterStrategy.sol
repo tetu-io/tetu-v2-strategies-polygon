@@ -16,7 +16,7 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   string public constant override NAME = "Algebra Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.ALGEBRA;
-  string public constant override STRATEGY_VERSION = "2.0.0";
+  string public constant override STRATEGY_VERSION = "2.0.1";
 
   //endregion ------------------------------------------------- Constants
 
@@ -233,6 +233,8 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
       // full withdraw was completed, we can exclude next calls of withdrawByAggStep
       state.pair.withdrawDone = 1;
     }
+
+    ConverterStrategyBaseLib2.fixTooHighInvestedAssets(baseState.asset, oldTotalAssets, _csbs);
   }
 
   function getPropNotUnderlying18() external view returns (uint) {

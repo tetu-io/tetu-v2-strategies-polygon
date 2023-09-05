@@ -1,6 +1,7 @@
 /* tslint:disable:interface-name */
 
 // Main task args
+import _ from 'lodash';
 import {
   ContractInformation,
   ExtendedContractInformation,
@@ -423,7 +424,7 @@ subtask(TASK_VERIFY_ETHERSCAN_GET_MINIMAL_INPUT)
   .setAction(async({ sourceName }: GetMinimalInputArgs, { run }) => {
     // console.log('Run ', TASK_VERIFY_ETHERSCAN_GET_MINIMAL_INPUT);
 
-    const cloneDeep = require('lodash.clonedeep') as typeof LodashCloneDeepT;
+
     const dependencyGraph: DependencyGraph = await run(
       TASK_COMPILE_SOLIDITY_GET_DEPENDENCY_GRAPH,
       { sourceNames: [sourceName] },
@@ -452,7 +453,7 @@ subtask(TASK_VERIFY_ETHERSCAN_GET_MINIMAL_INPUT)
       },
     );
 
-    return cloneDeep(minimalInput);
+    return _.cloneDeep(minimalInput);
   });
 
 subtask(TASK_VERIFY_ETHERSCAN_ATTEMPT_VERIFICATION)

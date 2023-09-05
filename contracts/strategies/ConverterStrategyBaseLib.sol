@@ -1009,6 +1009,13 @@ library ConverterStrategyBaseLib {
     );
   }
 
+  ///////////////////////// temp console.log
+  function show_prices(IPriceOracle priceOracle, address[] memory tokens) internal view {
+    (uint[] memory prices,) = AppLib._getPricesAndDecs(priceOracle, tokens, tokens.length);
+    console.log("actual prices", prices[0], prices[1]);
+  }
+  ///////////////////////// temp console.log
+
   /// @dev Implements {IterationPlanLib.PLAN_SWAP_REPAY} only
   ///      Note: AAVE3 allows to make two repays in a single block, see Aave3SingleBlockTest in TetuConverter
   ///      but it doesn't allow to make borrow and repay in a single block.
@@ -1019,6 +1026,7 @@ library ConverterStrategyBaseLib {
   ) internal returns (
     uint expectedAmount
   ) {
+    console.log("_closePositionsToGetAmount.requestedAmount", requestedAmount);
     if (requestedAmount != 0) {
       CloseDebtsForRequiredAmountLocal memory v;
       v.asset = d_.tokens[d_.indexAsset];
@@ -1027,12 +1035,16 @@ library ConverterStrategyBaseLib {
       v.balanceAdditions = new uint[](d_.len);
 
       (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(d_.converter), d_.tokens, d_.len);
+      console.log("_closePositionsToGetAmount.v.prices", v.prices[0], v.prices[1]);
 
       for (uint i; i < d_.len; i = AppLib.uncheckedInc(i)) {
         if (i == d_.indexAsset) continue;
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
+        console.log("_closePositionsToGetAmount.v.balanceAsset", IERC20(v.asset).balanceOf(address(this)), i);
+        console.log("_closePositionsToGetAmount.v.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
+        show_prices(AppLib._getPriceOracle(d_.converter), d_.tokens);
 
         // Make one or several iterations. Do single swap and single repaying (both are optional) on each iteration.
         // Calculate expectedAmount of received underlying. Swap leftovers at the end even if requestedAmount is 0 at that moment.
@@ -1048,6 +1060,8 @@ library ConverterStrategyBaseLib {
             [0, IterationPlanLib.PLAN_SWAP_REPAY, 0, requestedAmount, d_.indexAsset, i]
           );
           if (v.idxToSwap1 == 0 && v.idxToRepay1 == 0) break;
+          console.log("_closePositionsToGetAmount.v.amountToSwap", v.amountToSwap);
+          show_prices(AppLib._getPriceOracle(d_.converter), d_.tokens);
 
           // make swap if necessary
           uint spentAmountIn;
@@ -1064,6 +1078,8 @@ library ConverterStrategyBaseLib {
               liquidationThresholds_[indexIn],
               false
             );
+            console.log("_closePositionsToGetAmount.after.swap.balanceAsset", IERC20(v.asset).balanceOf(address(this)), i);
+            console.log("_closePositionsToGetAmount.after.swap.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
 
             if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
               // spentAmountIn can be zero if token balance is less than liquidationThreshold
@@ -1090,12 +1106,16 @@ library ConverterStrategyBaseLib {
                 (amountToRepay > v.balanceAsset ? amountToRepay - v.balanceAsset : 0) < requestedAmount
               )
             ) {
+              console.log("_closePositionsToGetAmount.amountToRepay", amountToRepay);
               (uint expectedAmountOut, uint repaidAmountOut, uint amountSendToRepay) = _repayDebt(
                 d_.converter,
                 d_.tokens[indexCollateral],
                 d_.tokens[indexBorrow],
                 amountToRepay
               );
+              console.log("_closePositionsToGetAmount.after.repqy.balanceAsset", IERC20(v.asset).balanceOf(address(this)), i);
+              console.log("_closePositionsToGetAmount.after.repay.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
+
               if (indexCollateral == d_.indexAsset) {
                 require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
                 if (repaidAmountOut < amountSendToRepay) {
@@ -1111,6 +1131,8 @@ library ConverterStrategyBaseLib {
           // update balances and requestedAmount
           v.newBalanceAsset = IERC20(v.asset).balanceOf(address(this));
           v.newBalanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
+          console.log("_closePositionsToGetAmount.end.balanceAsset", IERC20(v.asset).balanceOf(address(this)), i);
+          console.log("_closePositionsToGetAmount.end.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
 
           if (v.newBalanceAsset > v.balanceAsset) {
             if (requestedAmount != type(uint).max) {
@@ -1124,6 +1146,9 @@ library ConverterStrategyBaseLib {
           v.balanceAsset = v.newBalanceAsset;
           v.balanceToken = v.newBalanceToken;
         } while (!v.exitLoop);
+
+        console.log("_closePositionsToGetAmount.final.balanceAsset", IERC20(v.asset).balanceOf(address(this)));
+        console.log("_closePositionsToGetAmount.final.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)));
 
         if (requestedAmount < liquidationThresholds_[d_.indexAsset]) break;
       }
@@ -1161,7 +1186,7 @@ library ConverterStrategyBaseLib {
     (expectedAmountOut, swappedAmountOut) = converter.quoteRepay(address(this), collateralAsset, borrowAsset, amountSendToRepay);
 
     if (expectedAmountOut > swappedAmountOut) {
-      // Following situation is possible
+      // SCB-789 Following situation is possible
       //    needToRepay = 100, needToRepayExact = 90 (debt gap is 10)
       //    1) amountRepay = 80
       //       expectedAmountOut is calculated for 80, no problems
