@@ -355,7 +355,7 @@ export async function strategyBacktest(
               // rds prop 0.2: amount0 2, amount1 8
               // str prop 0.1: amount0 100, amount1 900
 
-              const extraToken0Amount = liquidityAmountsRDSPool.amount0.sub(liquidityAmountsRDSPool.amount1.mul(parseUnits('1')).div(parseUnits('1').sub(prop0to1StrategyPool)).mul(prop0to1RDSPool).div(parseUnits('1')))
+              const extraToken0Amount = liquidityAmountsRDSPool.amount0.sub(liquidityAmountsRDSPool.amount1.mul(parseUnits('1')).div(parseUnits('1').sub(prop0to1StrategyPool)).mul(prop0to1StrategyPool).div(parseUnits('1')))
               // console.log('extraToken0Amount', extraToken0Amount.toString())
               // extraToken0Amount = 2 - 8/(1-0.1)*0.1 = 1,111111111
 
