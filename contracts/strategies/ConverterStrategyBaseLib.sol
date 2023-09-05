@@ -1084,9 +1084,16 @@ library ConverterStrategyBaseLib {
             console.log("_closePositionsToGetAmount.after.swap.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
 
             if (indexIn == d_.indexAsset) {
-              expectedBalance -= spentAmountIn;
+              console.log("_closePositionsToGetAmount.expectedBalance.1", expectedBalance);
+              console.log("_closePositionsToGetAmount.spentAmountIn", spentAmountIn);
+              expectedBalance = expectedBalance > spentAmountIn
+                ? expectedBalance - spentAmountIn
+                : 0;
+              console.log("_closePositionsToGetAmount.expectedBalance.1.fixed", expectedBalance);
             } else if (indexOut == d_.indexAsset) {
+              console.log("_closePositionsToGetAmount.expectedBalance.2", expectedBalance);
               expectedBalance += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
+              console.log("_closePositionsToGetAmount.expectedBalance.2.fixed", expectedBalance);
             }
           }
 
@@ -1118,15 +1125,27 @@ library ConverterStrategyBaseLib {
               console.log("_closePositionsToGetAmount.after.repay.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
 
               if (indexBorrow == d_.indexAsset) {
-                expectedBalance -= amountSendToRepay;
+                console.log("_closePositionsToGetAmount.expectedBalance.3", expectedBalance);
+                console.log("_closePositionsToGetAmount.spentAmountIn", spentAmountIn);
+                expectedBalance = expectedBalance > amountSendToRepay
+                  ? expectedBalance - amountSendToRepay
+                  : 0;
+                console.log("_closePositionsToGetAmount.expectedBalance.3.fixed", expectedBalance);
               } else if (indexCollateral == d_.indexAsset) {
                 require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
+                console.log("_closePositionsToGetAmount.expectedBalance.4", expectedBalance);
+                console.log("_closePositionsToGetAmount.expectedAmountOut", expectedAmountOut);
                 if (repaidAmountOut < amountSendToRepay) {
+                  console.log("_closePositionsToGetAmount.expectedBalance.4.1.repaidAmountOut", repaidAmountOut);
+                  console.log("_closePositionsToGetAmount.expectedBalance.4.1.amountSendToRepay", amountSendToRepay);
+                  console.log("_closePositionsToGetAmount.expectedBalance.4.1.spentAmountIn", spentAmountIn);
                   // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
-                  expectedBalance += expectedAmountOut * repaidAmountOut / amountSendToRepay - spentAmountIn;
+                  expectedBalance += expectedAmountOut * repaidAmountOut / amountSendToRepay;
                 } else {
-                  expectedBalance += expectedAmountOut - spentAmountIn;
+                  console.log("_closePositionsToGetAmount.expectedBalance.4.2.spentAmountIn", spentAmountIn);
+                  expectedBalance += expectedAmountOut;
                 }
+                console.log("_closePositionsToGetAmount.expectedBalance.4.fixed", expectedBalance);
               }
             }
           }
