@@ -280,7 +280,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     console.log("_makeRequestedAmount.depositorLiquidity", depositorLiquidity);
     console.log("_makeRequestedAmount.v.balanceBefore", v.balanceBefore);
 
-    uint withdrawnAsset;
     if (liquidityAmountToWithdraw != 0) {
       uint[] memory withdrawnAmounts = _depositorExit(liquidityAmountToWithdraw);
       console.log("_makeRequestedAmount.withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1]);
@@ -292,19 +291,11 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       console.log("_makeRequestedAmount.liquidityAmountToWithdraw", liquidityAmountToWithdraw);
       console.log("_makeRequestedAmount._depositorLiquidity", _depositorLiquidity());
       console.log("_makeRequestedAmount.withdrawnAmounts", withdrawnAmounts[0], withdrawnAmounts[1]);
-
-      // temporary save balance to withdrawnAsset
-      withdrawnAsset = IERC20(v.theAsset).balanceOf(address(this));
-      console.log("_makeRequestedAmount.balanceAfter", withdrawnAsset);
-      withdrawnAsset = withdrawnAsset > v.balanceBefore
-        ? withdrawnAsset - v.balanceBefore
-        : 0;
-      console.log("_makeRequestedAmount.withdrawnAsset", withdrawnAsset);
     }
     console.log("_makeRequestedAmount.amount_", amount_);
 
     // try to receive at least requested amount of the {v.asset} on the balance
-    expectedTotalAssetAmount = ConverterStrategyBaseLib.makeRequestedAmount(
+    uint expectedBalance = ConverterStrategyBaseLib.makeRequestedAmount(
       v.tokens,
       v.indexTheAsset,
       v.converter,
@@ -314,7 +305,8 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     );
     console.log("_makeRequestedAmount.expectedTotalAssetAmount", expectedTotalAssetAmount);
 
-    return expectedTotalAssetAmount + withdrawnAsset;
+    require(expectedBalance >= v.balanceBefore, AppErrors.BALANCE_DECREASE);
+    return expectedBalance - v.balanceBefore;
   }
 
   //endregion -------------------------------------------------------- Get requested amount

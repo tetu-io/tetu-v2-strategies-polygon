@@ -949,7 +949,7 @@ library ConverterStrategyBaseLib {
   /// @param indexAsset_ Index of the given {asset} in {tokens}
   /// @param requestedAmount Total amount of the given asset that we need to have on balance at the end.
   ///                        Max uint means attempt to withdraw all possible amount.
-  /// @return expectedAmount Expected total amount of given asset after all conversions, swaps and repays
+  /// @return expectedBalance Expected asset balance after all swaps and repays
   function makeRequestedAmount(
     address[] memory tokens_,
     uint indexAsset_,
@@ -957,7 +957,7 @@ library ConverterStrategyBaseLib {
     ITetuLiquidator liquidator_,
     uint requestedAmount,
     mapping(address => uint) storage liquidationThresholds_
-  ) external returns (uint expectedAmount) {
+  ) external returns (uint expectedBalance) {
     console.log("ConverterStrategyBaseLib.makeRequestedAmount.requestedAmount", requestedAmount);
     DataSetLocal memory v = DataSetLocal({
       len: tokens_.length,
@@ -975,8 +975,8 @@ library ConverterStrategyBaseLib {
         : 0;
       console.log("ConverterStrategyBaseLib.makeRequestedAmount.requestedAmount.fixed", requestedAmount);
     }
-    expectedAmount = _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
-    console.log("ConverterStrategyBaseLib.makeRequestedAmount.expectedAmount", expectedAmount);
+    expectedBalance = _closePositionsToGetAmount(v, _liquidationThresholds, requestedAmount);
+    console.log("ConverterStrategyBaseLib.makeRequestedAmount.expectedBalance", expectedBalance);
   }
   //endregion-------------------------------------------- Make requested amount
 
@@ -986,7 +986,7 @@ library ConverterStrategyBaseLib {
   /// @param liquidationThresholds Min allowed amounts-out for liquidations
   /// @param requestedAmount Requested amount of main asset that should be added to the current balance.
   ///                        Pass type(uint).max to request all.
-  /// @return expectedAmount Main asset amount expected to be received on balance after all conversions and swaps
+  /// @return expectedBalance Expected asset balance after all swaps and repays
   function closePositionsToGetAmount(
     ITetuConverter converter_,
     ITetuLiquidator liquidator,
@@ -994,7 +994,7 @@ library ConverterStrategyBaseLib {
     mapping(address => uint) storage liquidationThresholds,
     uint requestedAmount,
     address[] memory tokens
-  ) external returns (uint expectedAmount) {
+  ) external returns (uint expectedBalance) {
     uint len = tokens.length;
     return _closePositionsToGetAmount(
       DataSetLocal({
@@ -1024,7 +1024,7 @@ library ConverterStrategyBaseLib {
     uint[] memory liquidationThresholds_,
     uint requestedAmount
   ) internal returns (
-    uint expectedAmount
+    uint expectedBalance
   ) {
     console.log("_closePositionsToGetAmount.requestedAmount", requestedAmount);
     if (requestedAmount != 0) {
@@ -1033,6 +1033,7 @@ library ConverterStrategyBaseLib {
 
       // v.planKind = IterationPlanLib.PLAN_SWAP_REPAY; // PLAN_SWAP_REPAY == 0, so we don't need this line
       v.balanceAdditions = new uint[](d_.len);
+      expectedBalance = IERC20(v.asset).balanceOf(address(this));
 
       (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(d_.converter), d_.tokens, d_.len);
       console.log("_closePositionsToGetAmount.v.prices", v.prices[0], v.prices[1]);
@@ -1042,6 +1043,7 @@ library ConverterStrategyBaseLib {
 
         v.balanceAsset = IERC20(v.asset).balanceOf(address(this));
         v.balanceToken = IERC20(d_.tokens[i]).balanceOf(address(this));
+
         console.log("_closePositionsToGetAmount.v.balanceAsset", IERC20(v.asset).balanceOf(address(this)), i);
         console.log("_closePositionsToGetAmount.v.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
         show_prices(AppLib._getPriceOracle(d_.converter), d_.tokens);
@@ -1081,11 +1083,10 @@ library ConverterStrategyBaseLib {
             console.log("_closePositionsToGetAmount.after.swap.balanceAsset", IERC20(v.asset).balanceOf(address(this)), i);
             console.log("_closePositionsToGetAmount.after.swap.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
 
-            if (spentAmountIn != 0 && indexIn == i && v.idxToRepay1 == 0) {
-              // spentAmountIn can be zero if token balance is less than liquidationThreshold
-              // we need to calculate expectedAmount only if not-underlying-leftovers are swapped to underlying
-              // we don't need to take into account conversion to get toSell amount
-              expectedAmount += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
+            if (indexIn == d_.indexAsset) {
+              expectedBalance -= spentAmountIn;
+            } else if (indexOut == d_.indexAsset) {
+              expectedBalance += spentAmountIn * v.prices[i] * v.decs[d_.indexAsset] / v.prices[d_.indexAsset] / v.decs[i];
             }
           }
 
@@ -1116,13 +1117,15 @@ library ConverterStrategyBaseLib {
               console.log("_closePositionsToGetAmount.after.repqy.balanceAsset", IERC20(v.asset).balanceOf(address(this)), i);
               console.log("_closePositionsToGetAmount.after.repay.balanceToken", IERC20(d_.tokens[i]).balanceOf(address(this)), i);
 
-              if (indexCollateral == d_.indexAsset) {
+              if (indexBorrow == d_.indexAsset) {
+                expectedBalance -= amountSendToRepay;
+              } else if (indexCollateral == d_.indexAsset) {
                 require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
                 if (repaidAmountOut < amountSendToRepay) {
                   // SCB-779: expectedAmountOut was estimated for amountToRepay, but we have paid repaidAmountOut only
-                  expectedAmount += expectedAmountOut * repaidAmountOut / amountSendToRepay - spentAmountIn;
+                  expectedBalance += expectedAmountOut * repaidAmountOut / amountSendToRepay - spentAmountIn;
                 } else {
-                  expectedAmount += expectedAmountOut - spentAmountIn;
+                  expectedBalance += expectedAmountOut - spentAmountIn;
                 }
               }
             }
@@ -1154,7 +1157,7 @@ library ConverterStrategyBaseLib {
       }
     }
 
-    return expectedAmount;
+    return expectedBalance;
   }
 //endregion ------------------------------------------------ Close position
 
