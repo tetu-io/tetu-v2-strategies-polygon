@@ -5,8 +5,10 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
-  ConverterStrategyBase__factory, IController__factory,
-  IERC20__factory, StrategyBaseV2__factory,
+  BorrowManager__factory,
+  ConverterController__factory,
+  ConverterStrategyBase__factory, DebtMonitor__factory, IController__factory, IDebtMonitor__factory,
+  IERC20__factory, IKeeperCallback__factory, StrategyBaseV2__factory,
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
 import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
@@ -668,7 +670,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     });
   });
 
-  describe("Empty strategy", () => {
+  describe("State: empty strategy", () => {
     describe("No deposits", () => {
       interface IStrategyInfo {
         name: string,
@@ -820,7 +822,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       });
     });
   });
-  describe("Large user has just exit the strategy @skip-on-coverage", () => {
+  describe("State: large user has just exit the strategy @skip-on-coverage", () => {
     interface IStrategyInfo {
       name: string,
     }
@@ -1015,7 +1017,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     });
   });
 
-  describe("Twisted debts", () => {
+  describe("State: twisted debts", () => {
     interface IStrategyInfo {
       name: string,
     }
@@ -1036,7 +1038,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
 
           const state = await PackedData.getDefaultState(b.strategy);
-          await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits("50000", 6));
+
+          await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
           console.log('Deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -1190,9 +1193,93 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             expect(stateAfter.strategy.investedAssets).lt(10);
           });
-          describe("withdraw various amounts", () => {
 
+          describe("withdraw various amounts", () => {
+            let snapshot2: string;
+            before(async function () {
+              snapshot2 = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot2);
+            });
+
+            const withdrawAmountPercents = [1, 3, 7, 23, 41, 67, 77, 83, 91, 99];
+            withdrawAmountPercents.forEach(function (percentToWithdraw: number) {
+              it(`should withdraw ${percentToWithdraw}% successfully`, async () => {
+                const b = await loadFixture(prepareStrategy);
+                const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+                const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                const vault = b.vault.connect(signer);
+                const maxAmountToWithdraw = await vault.maxWithdraw(signer.address);
+                const amountToWithdraw = maxAmountToWithdraw.mul(percentToWithdraw).div(100);
+                await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+                const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+                expect(stateAfter.user.assetBalance).approximately(
+                  stateBefore.user.assetBalance + +formatUnits(amountToWithdraw, b.assetDecimals),
+                  1
+                );
+              });
+            });
           })
+
+          it("should requirePayAmountBack successfully", async () => {
+            const b = await loadFixture(prepareStrategy);
+            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+            const defaultState = await PackedData.getDefaultState(b.strategy);
+
+            // increase health factors to break "health"
+            const addon = 50;
+            const converterController = ConverterController__factory.connect(await b.converter.controller(), signer);
+            const converterGovernance = await Misc.impersonate(await converterController.governance());
+            const minHealthFactor = await converterController.minHealthFactor2();
+            const targetHealthFactor = await converterController.targetHealthFactor2();
+            await converterController.connect(converterGovernance).setTargetHealthFactor2(targetHealthFactor + addon);
+            await converterController.connect(converterGovernance).setMinHealthFactor2(minHealthFactor + addon);
+            const debtMonitor = IDebtMonitor__factory.connect(await converterController.debtMonitor(), signer);
+
+            // we need to clean custom target factors for the assets in use
+            const borrowManager = BorrowManager__factory.connect(await converterController.borrowManager(), converterGovernance);
+            await borrowManager.setTargetHealthFactors(
+              [defaultState.tokenA, defaultState.tokenB],
+              [targetHealthFactor + addon, targetHealthFactor + addon]
+            );
+
+            // calculate amounts required to restore health
+            const checkBefore = await debtMonitor.checkHealth(0, 100, 1);
+            if (checkBefore.outPoolAdapters.length === 0) {
+              throw Error("Health wasn't broken");
+            }
+            const keeperCallback = IKeeperCallback__factory.connect(
+              b.converter.address,
+              await Misc.impersonate(await converterController.keeper())
+            );
+
+            // call requireRepay on converter, requirePayAmountBack is called inside
+            await keeperCallback.requireRepay(
+              checkBefore.outAmountBorrowAsset[0],
+              checkBefore.outAmountCollateralAsset[0],
+              checkBefore.outPoolAdapters[0]
+            );
+
+            // ensure that health is restored
+            const checkAfter = await debtMonitor.checkHealth(0, 1, 1);
+            expect(checkAfter.outPoolAdapters.length).eq(0, "health wasn't restored");
+
+            // withdraw all and receive expected amount back
+            await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+            console.log('stateBefore', stateBefore);
+            console.log('stateAfter', stateAfter);
+
+            expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+            expect(stateBefore.vault.userShares).gt(0);
+            expect(stateAfter.vault.userShares).eq(0);
+          });
         });
       });
     });
@@ -1343,6 +1430,120 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
             expect(stateAfter.strategy.investedAssets).lt(10);
           });
+
+          describe("withdraw various amounts", () => {
+            let snapshot2: string;
+            before(async function () {
+              snapshot2 = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot2);
+            });
+
+            const withdrawAmountPercents = [1, 3, 7, 23, 41, 67, 77, 83, 91, 99];
+            withdrawAmountPercents.forEach(function (percentToWithdraw: number) {
+              it(`should withdraw ${percentToWithdraw}% successfully`, async () => {
+                const b = await loadFixture(prepareStrategy);
+                const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+                const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                const vault = b.vault.connect(signer);
+                const maxAmountToWithdraw = await vault.maxWithdraw(signer.address);
+                const amountToWithdraw = maxAmountToWithdraw.mul(percentToWithdraw).div(100);
+                await vault.withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+                const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+                expect(stateAfter.user.assetBalance).approximately(
+                  stateBefore.user.assetBalance + +formatUnits(amountToWithdraw, b.assetDecimals),
+                  1
+                );
+              });
+            });
+          })
+        });
+      });
+    });
+  });
+
+  describe.skip("State: emergency exit made (no pool, no debts)", () => {
+    interface IStrategyInfo {
+      name: string,
+      notUnderlyingToken: string;
+    }
+
+    const strategies: IStrategyInfo[] = [
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+          strategyInfo.name,
+          signer,
+          signer2,
+          strategyInfo.notUnderlyingToken
+        );
+
+        console.log('deposit...');
+
+        // make deposit and enter to the pool
+        await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits('5000', 6));
+        await b.vault.connect(signer).deposit(parseUnits('3000', 6), signer.address);
+
+        const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, b.operator);
+        await converterStrategyBase.emergencyExit();
+
+        return b;
+      }
+
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should deposit successfully", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address, {gasLimit: 19_000_000});
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets);
+        });
+        it("should withdraw successfully", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await b.vault.connect(signer).withdraw(parseUnits('300', 6), signer.address, signer.address, {gasLimit: 19_000_000});
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          expect(stateAfter.user.assetBalance).eq(stateBefore.user.assetBalance + 300);
+        });
+        it("should withdraw-all successfully", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          console.log('stateBefore', stateBefore);
+          console.log('stateAfter', stateAfter);
+
+          expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+          expect(stateBefore.vault.userShares).gt(0);
+          expect(stateAfter.vault.userShares).eq(0);
         });
       });
     });

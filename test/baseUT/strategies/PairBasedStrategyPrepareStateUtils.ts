@@ -1,10 +1,10 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
   AlgebraLib,
-  ControllerV2__factory,
+  ControllerV2__factory, ConverterController__factory,
   ConverterStrategyBase__factory,
   IRebalancingV2Strategy, KyberLib,
-  StrategyBaseV2__factory,
+  StrategyBaseV2__factory, TetuConverter__factory,
   UniswapV3Lib
 } from "../../../typechain";
 import {IDefaultState, PackedData} from "../utils/PackedData";
@@ -144,15 +144,23 @@ export class PairBasedStrategyPrepareStateUtils {
   static async injectTetuConverter(signer: SignerWithAddress) {
     const core = await DeployerUtilsLocal.getCoreAddresses();
     const tetuConverter = getConverterAddress();
+    const debtMonitor = await ConverterController__factory.connect(
+      await TetuConverter__factory.connect(tetuConverter, signer).controller(),
+      signer
+    ).debtMonitor();
 
     const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
+    const debtMonitorLogic = await DeployerUtils.deployContract(signer, "DebtMonitor");
     const controller = ControllerV2__factory.connect(core.controller, signer);
     const governance = await controller.governance();
     const controllerAsGov = controller.connect(await Misc.impersonate(governance));
 
-    await controllerAsGov.announceProxyUpgrade([tetuConverter], [converterLogic.address]);
+    await controllerAsGov.announceProxyUpgrade(
+      [tetuConverter, debtMonitor],
+      [converterLogic.address, debtMonitorLogic.address]
+    );
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([tetuConverter]);
+    await controllerAsGov.upgradeProxy([tetuConverter, debtMonitor]);
   }
 
   /**

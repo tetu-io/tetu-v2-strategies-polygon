@@ -436,7 +436,7 @@ describe("ConverterStrategyBaseInt", () => {
     });
   });
 
-  describe("requirePayAmountBack", () => {
+  describe("repayTheBorrow", () => {
     interface IMakeRepayTheBorrowResults {
       afterDeposit: IStateNum;
       afterRepay: IStateNum;
@@ -499,7 +499,7 @@ describe("ConverterStrategyBaseInt", () => {
       return {afterDeposit, afterRepay, afterExit};
     }
 
-    describe("Deposit 10000, withdraw 9000", () => {
+    describe("Deposit 10000, repay all borrows, withdraw 9000", () => {
       let snapshot: string;
       before(async function () {
         snapshot = await TimeUtils.snapshot();
