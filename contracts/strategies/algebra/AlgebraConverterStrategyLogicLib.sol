@@ -27,6 +27,9 @@ library AlgebraConverterStrategyLogicLib {
   event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
   event AlgebraRewardsClaimed(uint reward, uint bonusReward);
+  /// @param loss Total amount of loss
+  /// @param coveredByRewards Part of the loss covered by rewards
+  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Data types
@@ -567,6 +570,7 @@ library AlgebraConverterStrategyLogicLib {
       if (notCovered != 0) {
         ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
+      emit CoverLoss(loss, coveredByRewards);
     }
 
     return coveredByRewards;

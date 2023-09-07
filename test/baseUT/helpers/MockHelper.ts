@@ -19,7 +19,7 @@ import {
   UniswapV3LibFacade,
   PairBasedStrategyReader,
   UniswapV3ConverterStrategyLogicLibFacade,
-  MockUniswapV3Pool, PairBasedStrategyLogicLibFacade, AppLibFacade, SwapHelper,
+  MockUniswapV3Pool, PairBasedStrategyLogicLibFacade, AppLibFacade, SwapHelper, MockAggregator, MockSwapper,
 } from '../../../typechain';
 import { DeployerUtils } from '../../../scripts/utils/DeployerUtils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -183,5 +183,13 @@ export class MockHelper {
 
   public static async createSwapperHelper(signer: SignerWithAddress): Promise<SwapHelper> {
     return (await DeployerUtils.deployContract(signer, 'SwapHelper')) as SwapHelper;
+  }
+
+  public static async createMockAggregator(signer: SignerWithAddress, priceOracle: string): Promise<MockAggregator> {
+    return (await DeployerUtils.deployContract(signer, 'MockAggregator', priceOracle)) as MockAggregator;
+  }
+
+  public static async createMockSwapper(signer: SignerWithAddress, priceOracle: string, token0: string, token1: string): Promise<MockSwapper> {
+    return (await DeployerUtils.deployContract(signer, 'MockSwapper', priceOracle, token0, token1)) as MockSwapper;
   }
 }

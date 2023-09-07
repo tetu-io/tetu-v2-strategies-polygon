@@ -130,7 +130,13 @@ contract ConverterStrategyBaseLibFacade2 {
     uint sentAmount,
     uint unsentAmount
   ) {
-    return ConverterStrategyBaseLib2.sendToInsurance(asset, amount, splitter, strategyBalance);
+    return ConverterStrategyBaseLib2.sendToInsurance(
+      asset,
+      amount,
+      splitter,
+      strategyBalance,
+      IERC20(asset).balanceOf(address(this))
+    );
   }
 
   function getSafeLossToCover(uint loss, uint totalAssets_) external pure returns (

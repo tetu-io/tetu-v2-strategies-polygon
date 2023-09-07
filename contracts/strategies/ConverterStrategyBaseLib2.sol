@@ -15,6 +15,7 @@ import "../libs/AppErrors.sol";
 import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
+import "../interfaces/IConverterStrategyBase.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -48,12 +49,11 @@ library ConverterStrategyBaseLib2 {
   event LiquidationThresholdChanged(address token, uint amount);
   event ReinvestThresholdPercentChanged(uint amount);
   event FixPriceChanges(uint investedAssetsBefore, uint investedAssetsOut);
-  /// @notice Compensation of losses is not carried out completely
+  /// @notice Compensation of losses is not carried out completely because loss amount exceeds allowed max
   event UncoveredLoss(uint lossCovered, uint lossUncovered, uint investedAssetsBefore, uint investedAssetsAfter);
-  /// @notice Payment to insurance was carried out only partially
-  event UnsentAmountToInsurance(uint sentAmount, uint unsentAmount, uint balance, uint totalAssets);
   /// @notice Insurance balance were not enough to cover the loss, {lossUncovered} was uncovered
   event NotEnoughInsurance(uint lossUncovered);
+  event SendToInsurance(uint sentAmount, uint unsentAmount);
 //endregion----------------------------------------- EVENTS
 
 //region----------------------------------------- MAIN LOGIC
@@ -214,15 +214,15 @@ library ConverterStrategyBaseLib2 {
 //endregion ----------------------------------------- MAIN LOGIC
 
 //region -------------------------------------------- Cover loss, send profit to insurance
-  /// @notice Send given amount of underlying to the insurance
+  /// @notice Send given {amount} of {asset} (== underlying) to the insurance
   /// @param totalAssets_ Total strategy balance = balance of underlying + current invested assets amount
+  /// @param balance Current balance of the underlying
   /// @return sentAmount Amount of underlying sent to the insurance
   /// @return unsentAmount Missed part of the {amount} that were not sent to the insurance
-  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_) external returns (
+  function sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_, uint balance) external returns (
     uint sentAmount,
     uint unsentAmount
   ) {
-    uint balance = IERC20(asset).balanceOf(address(this));
     uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
@@ -242,9 +242,7 @@ library ConverterStrategyBaseLib2 {
       ? amount - amountToSend
       : 0;
 
-    if (unsentAmount != 0) {
-      emit UnsentAmountToInsurance(sentAmount, unsentAmount, balance, totalAssets_);
-    }
+    emit SendToInsurance(sentAmount, unsentAmount);
   }
 
   function _registerIncome(uint assetBefore, uint assetAfter) internal pure returns (uint earned, uint lost) {
@@ -257,6 +255,8 @@ library ConverterStrategyBaseLib2 {
   }
 
   /// @notice Register income and cover possible loss after price changing, emit FixPriceChanges
+  /// @param investedAssetsBefore Currently stored value of _csbs.investedAssets
+  /// @param investedAssetsAfter Actual value of invested assets calculated at the current moment
   function coverLossAfterPriceChanging(
     uint investedAssetsBefore,
     uint investedAssetsAfter,
@@ -285,9 +285,9 @@ library ConverterStrategyBaseLib2 {
     address vault = ISplitter(splitter).vault();
     uint balanceBefore = IERC20(asset).balanceOf(vault);
     ISplitter(splitter).coverPossibleStrategyLoss(earned, lossToCover);
-    uint delta = IERC20(asset).balanceOf(vault); // temporary save balance-after to delta
-    delta = delta > balanceBefore
-      ? delta - balanceBefore
+    uint balanceAfter = IERC20(asset).balanceOf(vault);
+    uint delta = balanceAfter > balanceBefore
+      ? balanceAfter - balanceBefore
       : 0;
     if (delta < lossToCover) {
       emit NotEnoughInsurance(lossToCover - delta);
@@ -583,5 +583,38 @@ library ConverterStrategyBaseLib2 {
     );
   }
 //endregion------------------------------------- calcInvestedAssets
+
+
+  /// @notice Swap can give us more amount out than expected, so we will receive increasing of share price.
+  ///         To prevent it, we need to send exceeded amount to insurance,
+  ///         but it's too expensive to make such transfer at the end of withdrawAggByStep.
+  ///         So, we postpone sending the profit until the next call of fixPriceChange
+  ///         by manually setting investedAssets equal to the oldTotalAssets
+  /// @dev If profitToCover was sent only partly, we will postpone sending of remain amount up to the next call
+  ///      of fixPriceChange in same manner
+  /// @param oldTotalAssets Total asset at the moment after last call of fixPriceChange,
+  ///                       decreased on the value of profitToCover.
+  function fixTooHighInvestedAssets(
+    address asset_,
+    uint oldTotalAssets,
+    IConverterStrategyBase.ConverterStrategyBaseState storage csbs_
+  ) external {
+    uint balance = IERC20(asset_).balanceOf(address(this));
+    uint newTotalAssets = csbs_.investedAssets + balance;
+
+    if (oldTotalAssets < newTotalAssets) {
+      // total asset was increased (i.e. because of too profitable swaps)
+      // this increment will increase share price
+      // we should send added amount to insurance to avoid share price change
+      // anyway, it's too expensive to do it here
+      // so, we postpone sending the profit until the next call of fixPriceChange
+      if (oldTotalAssets > balance) {
+        csbs_.investedAssets = oldTotalAssets - balance;
+      }
+    }
+  }
+
+
+
 }
 

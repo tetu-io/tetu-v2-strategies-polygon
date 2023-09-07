@@ -132,6 +132,7 @@ library PairBasedStrategyLib {
   //region ------------------------------------------------ Events
   event FuseStatusChanged(uint fuseStatus);
   event NewFuseThresholds(uint[4] newFuseThresholds);
+  event SwapByAgg(uint amountToSwap, uint amountIn, uint amountOut, uint expectedAmountOut, address aggregator);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ External withdraw functions
@@ -671,6 +672,14 @@ library PairBasedStrategyLib {
           AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
           _ASSET_LIQUIDATION_SLIPPAGE
         ), AppErrors.PRICE_IMPACT);
+
+      emit SwapByAgg(
+        aggParams.amountToSwap,
+        amountIn,
+        AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
+        amountIn * p.prices[indexIn] * p.decs[indexOut] / p.prices[indexOut] / p.decs[indexIn],
+        aggregator
+      );
     }
 
     return (
