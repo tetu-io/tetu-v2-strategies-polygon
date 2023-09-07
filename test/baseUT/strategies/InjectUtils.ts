@@ -2,6 +2,8 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
 import {
+  BorrowManager,
+  BorrowManager__factory,
   ControllerV2__factory,
   ConverterController__factory,
   ConverterStrategyBase__factory,
@@ -9,7 +11,11 @@ import {
 } from "../../../typechain";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {ConverterUtils} from "../utils/ConverterUtils";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {CustomConverterDeployHelper} from "../converter/CustomConverterDeployHelper";
 
+/** Utils to replace currently deployed implementation of contracts by most recent versions */
 export class InjectUtils {
   /**
    * Deploy new implementation of TetuConverter-contract and upgrade proxy
@@ -56,5 +62,47 @@ export class InjectUtils {
     await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
     await controllerAsGov.upgradeProxy([strategyProxy]);
+  }
+
+  /** Disable currently deployed pool/platform adapters for AAVE3, deploy and register new versions */
+  static async redeployAave3PoolAdapters(signer: SignerWithAddress) {
+    const tetuConverter = getConverterAddress();
+    const controller = await TetuConverter__factory.connect(tetuConverter, signer).controller();
+    const converterGovernance = await Misc.impersonate(
+      await ConverterController__factory.connect(controller, signer).governance()
+    );
+    const borrowManager = BorrowManager__factory.connect(
+      await ConverterController__factory.connect(controller, signer).borrowManager(),
+      converterGovernance
+    );
+
+    // freeze current version of AAVE3 pool adapter
+    const oldPlatformAdapterAave3 = await ConverterUtils.disableAaveV3(signer);
+
+    // unregister all asset pairs for AAVE3 pool adapter
+    const countPairs = (await borrowManager.platformAdapterPairsLength(oldPlatformAdapterAave3)).toNumber();
+    const pairs: BorrowManager.AssetPairStructOutput[] = [];
+    for (let i = 0; i < countPairs; ++i) {
+      const pair = await borrowManager.platformAdapterPairsAt(oldPlatformAdapterAave3, i);
+      pairs.push(pair);
+    }
+
+    // create new platform adapter for AAVE3
+    const converterNormal = await CustomConverterDeployHelper.createAave3PoolAdapter(signer);
+    const converterEMode = await CustomConverterDeployHelper.createAave3PoolAdapterEMode(signer);
+    const platformAdapter = await CustomConverterDeployHelper.createAave3PlatformAdapter(
+      signer,
+      controller,
+      MaticAddresses.AAVE3_POOL,
+      converterNormal.address,
+      converterEMode.address,
+    );
+
+    // register all pairs with new platform adapter
+    await borrowManager.addAssetPairs(
+      platformAdapter.address,
+      pairs.map(x => x.assetLeft),
+      pairs.map(x => x.assetRight)
+    );
   }
 }

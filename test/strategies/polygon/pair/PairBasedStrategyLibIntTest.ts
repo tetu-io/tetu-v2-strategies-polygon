@@ -27,6 +27,7 @@ import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {PLAN_REPAY_SWAP_REPAY, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
 
@@ -542,6 +543,7 @@ describe('PairBasedStrategyLibIntTest', () => {
       const decimalsY = await tokenY.decimals();
       const signerFacade = await DeployerUtilsLocal.impersonate(facade.address);
 
+      // we need only AAVE3 adapter, disable others
       await InjectUtils.injectTetuConverter(signer);
 
       // set up current balances

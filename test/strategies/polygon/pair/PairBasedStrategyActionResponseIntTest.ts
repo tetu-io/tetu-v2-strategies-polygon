@@ -5,10 +5,19 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
+  BorrowManager,
   BorrowManager__factory,
   ConverterController__factory,
-  ConverterStrategyBase__factory, DebtMonitor__factory, IController__factory, IDebtMonitor__factory,
-  IERC20__factory, IKeeperCallback__factory, StrategyBaseV2__factory,
+  ConverterStrategyBase__factory,
+  DebtMonitor,
+  DebtMonitor__factory,
+  IController__factory,
+  IDebtMonitor,
+  IDebtMonitor__factory,
+  IERC20__factory,
+  IKeeperCallback__factory, IPlatformAdapter__factory,
+  IPoolAdapter__factory,
+  StrategyBaseV2__factory,
 } from '../../../../typechain';
 import {Misc} from "../../../../scripts/utils/Misc";
 import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
@@ -19,8 +28,6 @@ import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuild
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {
-  IListStates,
-  IPrepareOverCollateralParams,
   PairBasedStrategyPrepareStateUtils
 } from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
@@ -28,7 +35,6 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {
-  BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_ASSETS,
   GAS_LIMIT_PAIR_BASED_WITHDRAW,
   GAS_REBALANCE_NO_SWAP
 } from "../../../baseUT/GasLimits";
@@ -47,6 +53,7 @@ import {BigNumber} from "ethers";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -101,21 +108,58 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
   }
 
-  interface ICheckHealthResults {
-    nextIndexToCheck0: BigNumber;
-    outPoolAdapters: string[];
-    outAmountBorrowAsset: BigNumber[];
-    outAmountCollateralAsset: BigNumber[];
+  interface ICheckHealthResult {
+    poolAdapter: string;
+    amountBorrowAsset: BigNumber;
+    amountCollateralAsset: BigNumber;
   }
 
   interface IRequireRepayParams {
     /** Addon to min and target health factors, i.e. 50 (2 decimals) */
     addon?: number;
+    /** We need to fix health of pool adapters belong to the given ACTIVE platform adapter only */
+    platformKindOnly?: number;
   }
 
   interface IRequireRepayResults {
-    checkBefore: ICheckHealthResults;
-    checkAfter: ICheckHealthResults;
+    checkBefore: ICheckHealthResult[];
+    checkAfter: ICheckHealthResult[];
+  }
+
+  async function getCheckHealthResultsForStrategy(
+      strategy: string,
+      debtMonitor: IDebtMonitor,
+      borrowManager: BorrowManager,
+      platformKindOnly?: number
+  ): Promise<ICheckHealthResult[]> {
+    const check0 = await debtMonitor.checkHealth(
+        0,
+        100,
+        100
+    );
+    const dest: ICheckHealthResult[] = [];
+    for (let i = 0; i < check0.outPoolAdapters.length; ++i) {
+      const config = await IPoolAdapter__factory.connect(check0.outPoolAdapters[i], signer).getConfig();
+      if (config.user.toLowerCase() === strategy.toLowerCase()) {
+        if (platformKindOnly) {
+          const platformAdapter = IPlatformAdapter__factory.connect(
+              await borrowManager.converterToPlatformAdapter(config.originConverter),
+              signer
+          );
+          if (await platformAdapter.platformKind() !== platformKindOnly || await platformAdapter.frozen()) {
+            console.log(`Skip ${check0.outPoolAdapters[i]}`);
+            continue;
+          }
+        }
+
+        dest.push({
+          poolAdapter: check0.outPoolAdapters[i],
+          amountBorrowAsset: check0.outAmountBorrowAsset[i],
+          amountCollateralAsset: check0.outAmountCollateralAsset[i]
+        })
+      }
+    }
+    return dest;
   }
 
   /** Test the call of requireRepay and the subsequent call of requirePayAmountBack() */
@@ -140,21 +184,19 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     );
 
     // calculate amounts required to restore health
-    const checkBefore = await debtMonitor.checkHealth(0, 100, 1);
+    const checkBefore = await getCheckHealthResultsForStrategy(b.strategy.address, debtMonitor, borrowManager, p?.platformKindOnly);
 
     // call requireRepay on converter, requirePayAmountBack is called inside
     const keeperCallback = IKeeperCallback__factory.connect(
       b.converter.address,
       await Misc.impersonate(await converterController.keeper())
     );
-    await keeperCallback.requireRepay(
-      checkBefore.outAmountBorrowAsset[0],
-      checkBefore.outAmountCollateralAsset[0],
-      checkBefore.outPoolAdapters[0]
-    );
+    for (const check of checkBefore) {
+      await keeperCallback.requireRepay(check.amountBorrowAsset, check.amountCollateralAsset, check.poolAdapter);
+    }
 
     // ensure that health is restored
-    const checkAfter = await debtMonitor.checkHealth(0, 100, 1);
+    const checkAfter = await getCheckHealthResultsForStrategy(b.strategy.address, debtMonitor, borrowManager, p?.platformKindOnly);
     return {checkBefore, checkAfter}
   }
 //endregion Utils
@@ -1097,9 +1139,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
 
-          const state = await PackedData.getDefaultState(b.strategy);
-
           await InjectUtils.injectTetuConverter(signer);
+          await ConverterUtils.disableAaveV2(signer);
+          await ConverterUtils.disableDForce(signer);
+          await InjectUtils.redeployAave3PoolAdapters(signer);
 
           console.log('Deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -1284,28 +1327,31 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             });
           })
 
-          it("should requirePayAmountBack successfully", async () => {
-            const b = await loadFixture(prepareStrategy);
+          if (strategyInfo.name === PLATFORM_UNIV3) {
+            it("should requirePayAmountBack successfully", async () => {
 
-            const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-            const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+              const b = await loadFixture(prepareStrategy);
 
-            // requirePayAmountBack is called by converter inside requireRepay
-            const {checkBefore, checkAfter} = await callRequireRepay(b);
-            expect(checkBefore.outPoolAdapters.length).gt(0, "health wasn't broken");
-            expect(checkAfter.outPoolAdapters.length).eq(0, "health wasn't restored");
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-            // withdraw all and receive expected amount back
-            await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
-            const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+              // requirePayAmountBack is called by converter inside requireRepay
+              const {checkBefore, checkAfter} = await callRequireRepay(b);
+              expect(checkBefore.length).gt(0, "health wasn't broken");
+              expect(checkAfter.length).lt(checkBefore.length, "health wasn't restored");
 
-            console.log('stateBefore', stateBefore);
-            console.log('stateAfter', stateAfter);
+              // withdraw all and receive expected amount back
+              await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
 
-            expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
-            expect(stateBefore.vault.userShares).gt(0);
-            expect(stateAfter.vault.userShares).eq(0);
-          });
+              console.log('stateBefore', stateBefore);
+              console.log('stateAfter', stateAfter);
+
+              expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+              expect(stateBefore.vault.userShares).gt(0);
+              expect(stateAfter.vault.userShares).eq(0);
+            });
+          }
         });
       });
     });

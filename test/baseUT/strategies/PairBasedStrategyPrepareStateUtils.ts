@@ -1,11 +1,7 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
-  AlgebraLib,
-  ControllerV2__factory, ConverterController__factory,
   ConverterStrategyBase__factory,
-  IRebalancingV2Strategy, KyberLib,
-  StrategyBaseV2__factory, TetuConverter__factory,
-  UniswapV3Lib
+  IRebalancingV2Strategy, StrategyBaseV2__factory
 } from "../../../typechain";
 import {IDefaultState, PackedData} from "../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
@@ -15,9 +11,7 @@ import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {IPriceChanges, UniversalUtils} from "./UniversalUtils";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
-import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
-import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {Misc} from "../../../scripts/utils/Misc";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
@@ -36,9 +30,7 @@ export interface IListStates {
   states: IStateNum[];
 }
 
-/**
- * Utils to set up "current state of pair strategy" in tests
- */
+/** Utils to set up "current state of pair strategy" in tests */
 export class PairBasedStrategyPrepareStateUtils {
 
   /** Set up "neeRebalance = true" */

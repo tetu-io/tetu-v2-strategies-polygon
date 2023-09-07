@@ -39,35 +39,39 @@ export class ConverterUtils {
    * The mocked version returns not-zero prices after block advance.
    * @param signer
    */
-  public static async disableDForce(signer: SignerWithAddress) {
+  public static async disableDForce(signer: SignerWithAddress): Promise<string> {
     console.log('disableDForce...');
-    await this.disablePlatformAdapter(signer, await getDForcePlatformAdapter(signer));
+    const platformAdapterAddress = await getDForcePlatformAdapter(signer);
+    await this.disablePlatformAdapter(signer, platformAdapterAddress);
     console.log('disableDForce done.\n\n');
+    return platformAdapterAddress;
   }
 
-  public static async disableAaveV3(signer: SignerWithAddress) {
+  public static async disableAaveV3(signer: SignerWithAddress): Promise<string> {
     console.log('disableAaveV3...');
-    await this.disablePlatformAdapter(signer, await getAaveThreePlatformAdapter(signer));
+    const platformAdapterAddress = await getAaveThreePlatformAdapter(signer);
+    await this.disablePlatformAdapter(signer, platformAdapterAddress);
     console.log('disableAaveV3 done.\n\n');
+    return platformAdapterAddress;
   }
 
-  public static async disableAaveV2(signer: SignerWithAddress) {
+  public static async disableAaveV2(signer: SignerWithAddress): Promise<string> {
     console.log('disableAaveV2...');
-    await this.disablePlatformAdapter(signer, await getAaveTwoPlatformAdapter(signer));
+    const platformAdapterAddress = await getAaveTwoPlatformAdapter(signer);
+    await this.disablePlatformAdapter(signer, platformAdapterAddress);
     console.log('disableAaveV2 done.\n\n');
+    return platformAdapterAddress;
   }
 
-  public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapter: string, converterAddress?: string) {
-    console.log(`disable ${platformAdapter}`);
-    const tools = Addresses.getTools();
+  public static async disablePlatformAdapter(signer: SignerWithAddress, platformAdapterAddr: string, converterAddress?: string) {
+    console.log(`disable ${platformAdapterAddr}`);
     const converter = TetuConverter__factory.connect(converterAddress || getConverterAddress(), signer);
     const converterControllerAddr = await converter.controller();
     const converterController = IConverterController__factory.connect(converterControllerAddr, signer);
-    const converterControllerGovernanceAddr = await converterController.governance();
-    const converterControllerGovernance = await DeployerUtilsLocal.impersonate(converterControllerGovernanceAddr);
-    const platformAdapterDForce = IPlatformAdapter__factory.connect(platformAdapter, converterControllerGovernance);
-    await platformAdapterDForce.setFrozen(true);
-    console.log(`disable ${platformAdapter} done.\n\n`);
+    const governance = await DeployerUtilsLocal.impersonate(await converterController.governance());
+    const platformAdapter = IPlatformAdapter__factory.connect(platformAdapterAddr, governance);
+    await platformAdapter.setFrozen(true);
+    console.log(`disable ${platformAdapterAddr} done.\n\n`);
   }
 
   /**
