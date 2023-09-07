@@ -32,6 +32,9 @@ library UniswapV3ConverterStrategyLogicLib {
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
   event UniV3FeesClaimed(uint fee0, uint fee1);
+  /// @param loss Total amount of loss
+  /// @param coveredByRewards Part of the loss covered by rewards
+  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ Data types
@@ -442,6 +445,8 @@ library UniswapV3ConverterStrategyLogicLib {
       if (notCovered != 0) {
         ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
+
+      emit CoverLoss(loss, coveredByRewards);
     }
 
     return coveredByRewards;

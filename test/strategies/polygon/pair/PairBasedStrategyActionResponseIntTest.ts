@@ -32,6 +32,9 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {
   ISwapper__factory
 } from "../../../../typechain/factories/contracts/test/aave/Aave3PriceSourceBalancerBoosted.sol";
+import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
+import {BigNumber} from "ethers";
+import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -857,7 +860,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
           await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
           Misc.ZERO_ADDRESS,
-          true
+            () => true
         );
         states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "unfold"));
         await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
@@ -1380,19 +1383,27 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     });
   });
 
-  describe("Loop with rebalance, hardwork, deposit and withdraw", () => {
+  describe("Loop with rebalance, hardwork, deposit and withdraw with various compound rates", () => {
     interface IStrategyInfo {
       name: string,
       notUnderlyingToken: string;
+      compoundRatio: number;
     }
 
     const strategies: IStrategyInfo[] = [
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
-      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 10_000},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 100_000},
 
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
+
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WMATIC_TOKEN, compoundRatio: 50_000},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.WETH_TOKEN, compoundRatio: 50_000},
     ];
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -1417,7 +1428,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         return b;
       }
 
-      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}`, () => {
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.compoundRatio}`, () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -1426,9 +1437,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await TimeUtils.rollback(snapshot);
         });
 
-        it('should not revert', async () => {
+        it('should change share price in expected way (compoundRate 0 => no changes, > 0 => increase)', async () => {
           const COUNT_CYCLES = 10;
           const b = await loadFixture(prepareStrategy);
+          const states: IStateNum[] = [];
+          const pathOut = `./tmp/${strategyInfo.name}-${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.compoundRatio}-test-loop.csv`;
 
           // Following amount is used as swapAmount for both tokens A and B...
           const swapAssetValueForPriceMove = parseUnits('500000', 6);
@@ -1445,16 +1458,22 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const splitterSigner = await DeployerUtilsLocal.impersonate(await b.splitter.address);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+          const platform = await converterStrategyBase.PLATFORM();
+
+          const stateBefore = await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `before`);
+          states.push(stateBefore);
 
           const platformVoter = await DeployerUtilsLocal.impersonate(
               await IController__factory.connect(await b.vault.controller(), signer).platformVoter()
           );
-          await converterStrategyBase.connect(platformVoter).setCompoundRatio(50000);
+          await converterStrategyBase.connect(platformVoter).setCompoundRatio(strategyInfo.compoundRatio);
 
           let lastDirectionUp = false
           for (let i = 0; i < COUNT_CYCLES; i++) {
             console.log(`==================== CYCLE ${i} ====================`);
+            // provide some rewards
             await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits('100000', 6));
+            await TimeUtils.advanceNBlocks(1000);
 
             if (i % 3) {
               const movePricesUp = !lastDirectionUp;
@@ -1477,40 +1496,239 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                 5
               );
               lastDirectionUp = !lastDirectionUp
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `p${i}`));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
             if (await b.strategy.needRebalance()) {
               console.log('Rebalance..')
-              await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+              const eventsSet = await CaptureEvents.makeRebalanceNoSwap(b.strategy);
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `r${i}`, {eventsSet}));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            }
+
+            if (i % 4) {
+              await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
+                await b.strategy.connect(await UniversalTestUtils.getAnOperator(b.strategy.address, signer)),
+                MaticAddresses.TETU_LIQUIDATOR,
+                  () => true,
+                async (stateTitle, eventsSet) => {
+                  states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
+                  StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+                }
+              );
             }
 
             if (i % 5) {
               console.log('Hardwork..')
-              await converterStrategyBase.connect(splitterSigner).doHardWork({gasLimit: 19_000_000});
+              const eventsSet = await CaptureEvents.makeHardwork(converterStrategyBase.connect(splitterSigner));
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `h${i}`, {eventsSet}));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
 
             if (i % 2) {
               console.log('Deposit..')
-              await b.vault.connect(signer3).deposit(parseUnits('100.496467', 6), signer3.address, {gasLimit: 19_000_000});
+              const eventsSet = await CaptureEvents.makeDeposit(b.vault.connect(signer3), parseUnits('100.496467', 6), platform);
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `d${i}`, {eventsSet}));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             } else {
               console.log('Withdraw..');
               const toWithdraw = parseUnits('100.111437', 6)
               const balBefore = await TokenUtils.balanceOf(state.tokenA, signer3.address)
               await b.vault.connect(signer3).requestWithdraw()
-              await b.vault.connect(signer3).withdraw(toWithdraw, signer3.address, signer3.address, {gasLimit: 19_000_000})
+
+              const eventsSet = await CaptureEvents.makeWithdraw(b.vault.connect(signer3), toWithdraw, platform);
               const balAfter = await TokenUtils.balanceOf(state.tokenA, signer3.address)
               console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
+              states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w${i}`, {eventsSet}));
+              StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             }
           }
 
-          await b.vault.connect(signer3).requestWithdraw();
-          console.log('withdrawAll as signer3...');
-          await b.vault.connect(signer3).withdrawAll({gasLimit: 19_000_000});
+          const stateAfter = await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `final`);
+          states.push(stateAfter);
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
+          if (strategyInfo.compoundRatio) {
+            expect(stateAfter.vault.sharePrice).gt(stateBefore.vault.sharePrice, "compoundRatio is not zero - rewards should increase the share price");
+          } else {
+            expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice, "compoundRatio is zero - the share price shouldn't change");
+          }
+
+          console.log('withdrawAll as signer3...');
+          await b.vault.connect(signer3).requestWithdraw();
+          const eventsSet3 = await CaptureEvents.makeWithdrawAll(b.vault.connect(signer3), platform);
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w-all-s3`, {eventsSet: eventsSet3}));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          console.log('withdrawAll as signer...');
           await b.vault.connect(signer).requestWithdraw();
-          console.log('withdrawAll...');
-          await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+          const eventsSet1 = await CaptureEvents.makeWithdrawAll(b.vault.connect(signer), platform);
+          states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w-all-s1`, {eventsSet: eventsSet1}));
+          StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+
+          // shouldn't revert up to the end
         });
+      });
+    });
+  });
+
+  describe("SCB-791: withdraw almost-all shouldn't change share prices", () => {
+    let amountToWithdraw: BigNumber;
+
+    interface IStrategyInfo {
+      name: string,
+      notUnderlyingToken: string;
+      movePricesUpBeforeWithdraw?: boolean;
+    }
+
+    const strategies: IStrategyInfo[] = [
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, movePricesUpBeforeWithdraw: true},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+    ];
+
+    strategies.forEach(function (strategyInfo: IStrategyInfo) {
+
+      /**
+       * Initially signer deposits 1000 USDC, also he has additional 1000 USDC on the balance.
+       * Fuse OFF by default, rebalance is not needed
+       */
+      async function prepareStrategy(): Promise<IBuilderResults> {
+        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+          strategyInfo.name,
+          signer,
+          signer2,
+          strategyInfo.notUnderlyingToken,
+        );
+        await b.vault.connect(b.gov).setFees(0, 0);
+
+        console.log('deposit...');
+        await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
+        await TokenUtils.getToken(b.asset, signer.address, parseUnits('35000', 6));
+        await b.vault.connect(signer).deposit(parseUnits('10000', 6), signer.address);
+
+        amountToWithdraw = (await b.vault.maxWithdraw(signer.address)).sub(parseUnits("1", 6));
+
+        await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
+
+        if (strategyInfo.movePricesUpBeforeWithdraw) {
+          const state = await PackedData.getDefaultState(b.strategy);
+          await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, parseUnits("12000", 6));
+        }
+        return b;
+      }
+
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}:${strategyInfo.movePricesUpBeforeWithdraw ? "MovePricesUp" : ""}`, () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        it("should withdraw almost all successfully, use standard swapper", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          console.log("stateBefore", stateBefore);
+          console.log("stateAfter", stateAfter);
+
+          expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+        });
+
+        it("should withdraw almost all successfully, mocked swapper returns higher amount  for any swap", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const state = await PackedData.getDefaultState(b.strategy);
+          const mockedSwapper = await MockAggregatorUtils.createMockSwapper(signer, {
+            converter: b.converter.address,
+            token0: state.tokenA,
+            token1: state.tokenB,
+            increaseOutput: true
+          });
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
+          await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+        });
+
+        it("should withdraw almost all successfully, mocked swapper returns smaller amount for any swap", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const state = await PackedData.getDefaultState(b.strategy);
+          const mockedSwapper = await MockAggregatorUtils.createMockSwapper(signer, {
+            converter: b.converter.address,
+            token0: state.tokenA,
+            token1: state.tokenB,
+            increaseOutput: false
+          });
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
+          await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+        });
+
+        it("should withdraw almost all successfully, token0=>token1 swap amount higher, token0=>token1 swap amount lower", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const state = await PackedData.getDefaultState(b.strategy);
+          const mockedSwapper = await MockAggregatorUtils.createMockSwapper(signer, {
+            converter: b.converter.address,
+            token0: state.tokenA,
+            token1: state.tokenB,
+            increaseOutput: true,
+            reverseDirections: true,
+          });
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
+          await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+        });
+
+        it("should withdraw almost all successfully, token0=>token1 swap amount lower, token0=>token1 swap amount higher", async () => {
+          const b = await loadFixture(prepareStrategy);
+          const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+          const state = await PackedData.getDefaultState(b.strategy);
+          const mockedSwapper = await MockAggregatorUtils.createMockSwapper(signer, {
+            converter: b.converter.address,
+            token0: state.tokenA,
+            token1: state.tokenB,
+            increaseOutput: false,
+            reverseDirections: true,
+          });
+
+          const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, mockedSwapper.address);
+          await b.vault.connect(signer).withdraw(amountToWithdraw, signer.address, signer.address, {gasLimit: 19_000_000});
+          await MockAggregatorUtils.injectSwapperToLiquidator(MaticAddresses.TETU_LIQUIDATOR, b, b.swapper);
+          const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+          expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice);
+        });
+
       });
     });
   });

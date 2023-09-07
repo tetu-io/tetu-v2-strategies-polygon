@@ -84,6 +84,7 @@ export interface IBuilderResults extends IStrategyBasicInfo {
   converter: ITetuConverter;
 
   facadeLib2: ConverterStrategyBaseLibFacade2;
+  liquidatorPools: ITetuLiquidator.PoolDataStruct[]
 }
 
 export class PairBasedStrategyBuilder {
@@ -170,7 +171,8 @@ export class PairBasedStrategyBuilder {
       quoter: p.quoter,
 
       lib,
-      swapHelper: await MockHelper.createSwapperHelper(signer)
+      swapHelper: await MockHelper.createSwapperHelper(signer),
+      liquidatorPools: p.liquidatorPools
     }
   }
 

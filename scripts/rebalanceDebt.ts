@@ -65,6 +65,7 @@ async function main() {
   const configAddress = await getDeployedContractByName('RebalanceDebtConfig');
   const readerAddress = await getDeployedContractByName('PairBasedStrategyReader');
   console.log('Config: ', configAddress);
+  console.log('Reader: ', readerAddress);
 
 
   const agg = argv.rebalanceDebtAgg;

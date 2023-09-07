@@ -1,12 +1,12 @@
-import {ContractTransaction, providers} from 'ethers';
+import { ContractTransaction, providers } from 'ethers';
 import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
 import { Misc } from './Misc';
-import {TransactionResponse} from "@ethersproject/abstract-provider/src.ts";
-import {SpeedUp} from "./SpeedUp";
-import {StaticJsonRpcProvider} from "@ethersproject/providers/src.ts/url-json-rpc-provider";
-import {sendMessageToTelegram} from "../telegram/tg-sender";
-import {ethers} from "hardhat";
+import { TransactionResponse } from '@ethersproject/abstract-provider/src.ts';
+import { SpeedUp } from './SpeedUp';
+import { StaticJsonRpcProvider } from '@ethersproject/providers/src.ts/url-json-rpc-provider';
+import { sendMessageToTelegram } from '../telegram/tg-sender';
+import { ethers } from 'hardhat';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -26,12 +26,12 @@ export class RunHelper {
   }
 
   public static async waitAndSpeedUp(provider: StaticJsonRpcProvider, hash: string, speedUp = true): Promise<string> {
-    console.log('waitAndSpeedUp', hash);
+    console.log('wait And SpeedUp', hash);
     let receipt;
     let count = 0;
     while (true) {
       receipt = await provider.getTransactionReceipt(hash);
-      if (!!receipt) {
+      if (!!receipt && receipt.status) {
         break;
       }
       console.log('not yet complete', count, hash);
@@ -40,17 +40,26 @@ export class RunHelper {
       if (count > SpeedUp.waitCycles() && speedUp) {
         const newHash = await SpeedUp.speedUp(hash, provider);
         if (!newHash || newHash === 'error') {
-          throw Error("Wrong speedup! " + hash);
+          throw Error('Wrong speedup! ' + hash);
         }
         return this.waitAndSpeedUp(provider, newHash, true);
       }
     }
+
+    // sometimes a node returns zero receipt even if just had normal
+    await Misc.delay(5000);
+
     return hash;
   }
 
-  public static async runAndWaitAndSpeedUp(provider: StaticJsonRpcProvider, callback: () => Promise<ContractTransaction|TransactionResponse>, stopOnError = true, wait = true) {
+  public static async runAndWaitAndSpeedUp(
+    provider: StaticJsonRpcProvider,
+    callback: () => Promise<ContractTransaction | TransactionResponse>,
+    stopOnError = true,
+    wait = true,
+  ) {
     try {
-      console.log('Start on-chain transaction')
+      console.log('Start on-chain transaction');
       const start = Date.now();
       const tr = await callback();
       if (!wait) {
@@ -63,15 +72,15 @@ export class RunHelper {
 
       const hash = await this.waitAndSpeedUp(provider, tr.hash);
       if (!hash || hash === 'error') {
-        throw Error("Wrong hash! " + hash);
+        throw Error('Wrong hash! ' + hash);
       }
       const receipt = await provider.getTransactionReceipt(hash);
       console.log('transaction result', hash, receipt?.status);
       if (receipt?.status !== 1 && stopOnError) {
-        throw Error("Wrong status!");
+        throw Error('Wrong status!');
       } else {
         if (receipt?.status !== 1) {
-          console.log('WRONG STATUS!', hash)
+          console.log('WRONG STATUS!', hash);
         }
       }
     } catch (e) {
@@ -79,13 +88,17 @@ export class RunHelper {
         throw e;
       } else {
         await sendMessageToTelegram(`Run and wait error: ${e}`);
-        log.error('Run and wait error: ', e)
+        log.error('Run and wait error: ', e);
       }
     }
   }
 
-  public static async runAndWait(callback: () => Promise<ContractTransaction|TransactionResponse>, stopOnError = true, wait = true) {
-    console.log('Start on-chain transaction')
+  public static async runAndWait(
+    callback: () => Promise<ContractTransaction | TransactionResponse>,
+    stopOnError = true,
+    wait = true,
+  ) {
+    console.log('Start on-chain transaction');
     const start = Date.now();
     const tr = await callback();
     if (!wait) {
@@ -109,7 +122,7 @@ export class RunHelper {
     log.info('transaction result', tr.hash, receipt?.status);
     log.info('gas used', receipt.gasUsed.toString());
     if (receipt?.status !== 1 && stopOnError) {
-      throw Error("Wrong status!");
+      throw Error('Wrong status!');
     }
     Misc.printDuration('runAndWait completed', start);
     return receipt;
