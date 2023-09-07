@@ -7,7 +7,6 @@ import "./ConverterStrategyBaseLib.sol";
 import "./ConverterStrategyBaseLib2.sol";
 import "./DepositorBase.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////////////////////
 ///                        TERMS
@@ -316,7 +315,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
         // =============== WITHDRAW =====================
         // make withdraw
         v.withdrawnAmounts = _depositorExit(v.liquidityAmountToWithdraw);
-        console.log("_withdrawUniversal.withdrawnAmounts", v.withdrawnAmounts[0], v.withdrawnAmounts[1]);
         // the depositor is able to use less liquidity than it was asked, i.e. Balancer-depositor leaves some BPT unused
         // use what exactly was withdrew instead of the expectation
         // assume that liquidity cannot increase in _depositorExit
@@ -522,7 +520,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   function _updateInvestedAssets() internal returns (uint investedAssetsOut) {
     investedAssetsOut = _calcInvestedAssets();
     _csbs.investedAssets = investedAssetsOut;
-    console.log("_updateInvestedAssets.investedAssetsOut", investedAssetsOut);
   }
 
   /// @notice Calculate amount we will receive when we withdraw all from pool
@@ -557,8 +554,6 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       uint investedAssetsBefore = _csbs.investedAssets;
       investedAssetsOut = _updateInvestedAssets();
       earnedOut = ConverterStrategyBaseLib2.coverLossAfterPriceChanging(investedAssetsBefore, investedAssetsOut, baseState);
-      console.log("_fixPriceChanges.investedAssetsBefore", investedAssetsBefore);
-      console.log("_fixPriceChanges.investedAssetsOut", investedAssetsOut);
     } else {
       investedAssetsOut = _csbs.investedAssets;
       earnedOut = 0;

@@ -16,7 +16,6 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../interfaces/IConverterStrategyBase.sol";
-import "hardhat/console.sol";
 
 /// @notice Continuation of ConverterStrategyBaseLib (workaround for size limits)
 library ConverterStrategyBaseLib2 {
@@ -274,7 +273,6 @@ library ConverterStrategyBaseLib2 {
 
       if (lossUncovered != 0) {
         emit UncoveredLoss(lossToCover, lossUncovered, investedAssetsBefore, investedAssetsAfter);
-        console.log("coverLossAfterPriceChanging.lossUncovered", lossUncovered);
       }
     }
     emit FixPriceChanges(investedAssetsBefore, investedAssetsAfter);
@@ -283,20 +281,15 @@ library ConverterStrategyBaseLib2 {
   /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
   ///         If the loss were covered only partially, emit {NotEnoughInsurance}
   function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) internal {
-    console.log("_coverLossAndCheckResults.lossToCover", lossToCover);
     address asset = ISplitter(splitter).asset();
     address vault = ISplitter(splitter).vault();
     uint balanceBefore = IERC20(asset).balanceOf(vault);
-    console.log("_coverLossAndCheckResults.balanceBefore", balanceBefore);
     ISplitter(splitter).coverPossibleStrategyLoss(earned, lossToCover);
     uint balanceAfter = IERC20(asset).balanceOf(vault);
-    console.log("_coverLossAndCheckResults.balanceAfter", balanceAfter);
     uint delta = balanceAfter > balanceBefore
       ? balanceAfter - balanceBefore
       : 0;
-    console.log("_coverLossAndCheckResults.balance.delta.covered", delta);
     if (delta < lossToCover) {
-      console.log("_coverLossAndCheckResults.NotEnoughInsurance", lossToCover - delta);
       emit NotEnoughInsurance(lossToCover - delta);
     }
   }
@@ -484,7 +477,6 @@ library ConverterStrategyBaseLib2 {
 
     // calculate prices, decimals
     (v.prices, v.decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter_), tokens, v.len);
-    console.log("_calcInvestedAssets.prices", v.prices[0], v.prices[1]);
 
     // A debt is registered below if we have X amount of asset, need to pay Y amount of the asset and X < Y
     // In this case: debt = Y - X, the order of tokens is the same as in {tokens} array
@@ -492,43 +484,28 @@ library ConverterStrategyBaseLib2 {
       if (i == indexAsset) {
         // Current strategy balance of main asset is not taken into account here because it's add by splitter
         amountOut += depositorQuoteExitAmountsOut[i];
-        console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut,i", depositorQuoteExitAmountsOut[i], i);
-        console.log("_calcInvestedAssets.0.amountOut", amountOut);
       } else {
         v.token = tokens[i];
         // possible reverse debt: collateralAsset = tokens[i], borrowAsset = underlying
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (uint toPay, uint collateral) = converter_.getDebtAmountCurrent(address(this), v.token, v.asset, false);
-        console.log("_calcInvestedAssets.reverse.toPay,collateral,i", toPay, collateral, i);
         if (amountOut < toPay) {
-          console.log("_calcInvestedAssets.setDebt.toPay", toPay);
           setDebt(v, indexAsset, toPay);
         } else {
           amountOut -= toPay;
-          console.log("_calcInvestedAssets.1.amountOut", amountOut);
         }
 
         // available amount to repay
         uint toRepay = collateral + IERC20(v.token).balanceOf(address(this)) + depositorQuoteExitAmountsOut[i];
-        console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut,i", depositorQuoteExitAmountsOut[i], i);
-        console.log("_calcInvestedAssets.toRepay", toRepay);
-        console.log("_calcInvestedAssets.collateral", collateral);
-        console.log("_calcInvestedAssets.token balance", IERC20(v.token).balanceOf(address(this)));
-        console.log("_calcInvestedAssets.depositorQuoteExitAmountsOut[i]", depositorQuoteExitAmountsOut[i]);
 
         // direct debt: collateralAsset = underlying, borrowAsset = tokens[i]
         // investedAssets is calculated using exact debts, debt-gaps are not taken into account
         (toPay, collateral) = converter_.getDebtAmountCurrent(address(this), v.asset, v.token, false);
-        console.log("_calcInvestedAssets.direct.toPay,collateral,i", toPay, collateral, i);
         amountOut += collateral;
-        console.log("_calcInvestedAssets.2.amountOut", amountOut);
 
         if (toRepay >= toPay) {
-          console.log("_calcInvestedAssets.swap.to", (toRepay - toPay), (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
           amountOut += (toRepay - toPay) * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
-          console.log("_calcInvestedAssets.3.amountOut", amountOut);
         } else {
-          console.log("setDebt.1", toPay - toRepay, i);
           // there is not enough amount to pay the debt
           // let's register a debt and try to resolve it later below
           setDebt(v, i, toPay - toRepay);
@@ -546,20 +523,15 @@ library ConverterStrategyBaseLib2 {
         // this estimation is approx and do not count price impact on the liquidation
         // we will able to count the real output only after withdraw process
         uint debtInAsset = v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i];
-        console.log("_calcInvestedAssets.debtInAsset", debtInAsset, v.debts[i] * v.prices[i] * v.decs[indexAsset] / v.prices[indexAsset] / v.decs[i]);
-        console.log("_calcInvestedAssets.debtInAsset.amountOut", amountOut);
         if (debtInAsset > amountOut) {
           // The debt is greater than we can pay. We shouldn't try to pay the debt in this case
           amountOut = 0;
-          console.log("_calcInvestedAssets.4.amountOut", amountOut);
         } else {
           amountOut -= debtInAsset;
-          console.log("_calcInvestedAssets.5.amountOut", amountOut);
         }
       }
     }
 
-    console.log("_calcInvestedAssets.amountOut", amountOut);
     return amountOut;
   }
 
@@ -630,11 +602,6 @@ library ConverterStrategyBaseLib2 {
     uint balance = IERC20(asset_).balanceOf(address(this));
     uint newTotalAssets = csbs_.investedAssets + balance;
 
-    console.log("withdrawByAggStep.balance", balance);
-    console.log("withdrawByAggStep._csbs.investedAssets", csbs_.investedAssets);
-    console.log("withdrawByAggStep.oldTotalAssets", oldTotalAssets);
-    console.log("withdrawByAggStep.newTotalAssets", newTotalAssets);
-
     if (oldTotalAssets < newTotalAssets) {
       // total asset was increased (i.e. because of too profitable swaps)
       // this increment will increase share price
@@ -643,7 +610,6 @@ library ConverterStrategyBaseLib2 {
       // so, we postpone sending the profit until the next call of fixPriceChange
       if (oldTotalAssets > balance) {
         csbs_.investedAssets = oldTotalAssets - balance;
-        console.log("withdrawByAggStep._csbs.investedAssets.updated", csbs_.investedAssets);
       }
     }
   }

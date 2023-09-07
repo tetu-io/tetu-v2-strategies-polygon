@@ -321,7 +321,6 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
       _depositorEnter(tokenAmounts);
     }
-    console.log("_rebalanceAfter");
     _updateInvestedAssets();
   }
 
