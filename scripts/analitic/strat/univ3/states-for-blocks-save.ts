@@ -20,6 +20,7 @@ import {HardhatUtils} from "../../../../test/baseUT/utils/HardhatUtils";
 import {
   PairBasedStrategyPrepareStateUtils
 } from "../../../../test/baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../../../test/baseUT/strategies/InjectUtils";
 
 // const STRATEGY = '0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1'; // dai
 const STRATEGY = '0x6565e8136cd415f053c81ff3656e72574f726a5e'; // usdt
@@ -134,7 +135,7 @@ async function main() {
         signer
       );
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       const aggregator = "0x1111111254EEB25477B68fb85Ed929f73A960582";

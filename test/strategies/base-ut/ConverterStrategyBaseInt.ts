@@ -19,6 +19,7 @@ import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 
 /**
  * Tests of ConverterStrategyBase on the base of real strategies
@@ -452,7 +453,7 @@ describe("ConverterStrategyBaseInt", () => {
       await cc.vault.setDoHardWorkOnInvest(false);
 
       // possibility to view debug messages of converter
-      await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+      await InjectUtils.injectTetuConverter(signer);
 
       // make deposits
       await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));

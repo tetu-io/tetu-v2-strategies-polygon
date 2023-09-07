@@ -139,53 +139,6 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /**
-   * Deploy new implementation of TetuConverter-contract and upgrade proxy
-   */
-  static async injectTetuConverter(signer: SignerWithAddress) {
-    const core = await DeployerUtilsLocal.getCoreAddresses();
-    const tetuConverter = getConverterAddress();
-    const debtMonitor = await ConverterController__factory.connect(
-      await TetuConverter__factory.connect(tetuConverter, signer).controller(),
-      signer
-    ).debtMonitor();
-
-    const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
-    const debtMonitorLogic = await DeployerUtils.deployContract(signer, "DebtMonitor");
-    const controller = ControllerV2__factory.connect(core.controller, signer);
-    const governance = await controller.governance();
-    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-
-    await controllerAsGov.announceProxyUpgrade(
-      [tetuConverter, debtMonitor],
-      [converterLogic.address, debtMonitorLogic.address]
-    );
-    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([tetuConverter, debtMonitor]);
-  }
-
-  /**
-   * Deploy new implementation of the given strategy and upgrade proxy
-   */
-  static async injectStrategy(
-    signer: SignerWithAddress,
-    strategyProxy: string,
-    contractName: string
-  ) {
-    const strategyLogic = await DeployerUtils.deployContract(signer, contractName);
-    const controller = ControllerV2__factory.connect(
-      await ConverterStrategyBase__factory.connect(strategyProxy, signer).controller(),
-      signer
-    );
-    const governance = await controller.governance();
-    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-
-    await controllerAsGov.removeProxyAnnounce(strategyProxy);
-    await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
-    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([strategyProxy]);
-  }
-
-  /**
    * Get swap amount to move price up/down in the pool
    * @param signer
    * @param b
@@ -440,6 +393,7 @@ export class PairBasedStrategyPrepareStateUtils {
     }
   }
 
+  /** Add given amount to insurance */
   static async prepareInsurance(b: IBuilderResults, amount: string = "1000") {
     const decimals = await IERC20Metadata__factory.connect(b.asset, b.vault.signer).decimals();
     await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits(amount, decimals));

@@ -19,6 +19,7 @@ import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
 import {CaptureEvents} from "../baseUT/strategies/CaptureEvents";
 import fs from "fs";
+import {InjectUtils} from "../baseUT/strategies/InjectUtils";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("SCB-777: withdrawByAgg, TC-29", () => {
@@ -41,8 +42,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const signer = await DeployerUtilsLocal.impersonate(SENDER);
       const strategy = IRebalancingV2Strategy__factory.connect(STRATEGY, signer);
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
-      await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+      await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectTetuConverter(signer);
 
       await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
         strategy,
@@ -79,8 +80,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       );
       const pathOut = "./tmp/scb-779.csv";
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
-      await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
+      await InjectUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectTetuConverter(splitterSigner);
 
       const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, splitterSigner);
       // await converterStrategyBase.withdrawToSplitter(parseUnits(AMOUNT, 6));
@@ -212,7 +213,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       );
       const pathOut = "./tmp/scb-779.csv";
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectStrategy(splitterSigner, STRATEGY, "UniswapV3ConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
 
       const converterStrategyBase = ConverterStrategyBase__factory.connect(strategy.address, splitterSigner);
@@ -358,7 +359,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       const splitter = StrategySplitterV2__factory.connect(SPLITTER, sender);
       await splitter.doHardWork();
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(sender, SPLITTER, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectStrategy(sender, SPLITTER, "UniswapV3ConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(splitterSigner);
     });
   });
@@ -401,8 +402,8 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
         signer
       );
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
-      await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+      await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectTetuConverter(signer);
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
 
@@ -494,7 +495,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
           signer
       );
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+      await InjectUtils.injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       const state = await PackedData.getDefaultState(strategyAsOperator);
@@ -536,7 +537,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
         signer
       );
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       const tokenToSwap = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F";
@@ -606,7 +607,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
           signer
       );
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       const aggregator = "0x1111111254EEB25477B68fb85Ed929f73A960582";

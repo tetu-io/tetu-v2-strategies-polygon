@@ -46,6 +46,7 @@ import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {BigNumber} from "ethers";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -89,6 +90,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
   });
 //endregion before, after
 
+//region Utils
   function tokenName(token: string): string {
     switch (token) {
       case MaticAddresses.USDC_TOKEN: return "USDC";
@@ -98,6 +100,64 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       default: return token;
     }
   }
+
+  interface ICheckHealthResults {
+    nextIndexToCheck0: BigNumber;
+    outPoolAdapters: string[];
+    outAmountBorrowAsset: BigNumber[];
+    outAmountCollateralAsset: BigNumber[];
+  }
+
+  interface IRequireRepayParams {
+    /** Addon to min and target health factors, i.e. 50 (2 decimals) */
+    addon?: number;
+  }
+
+  interface IRequireRepayResults {
+    checkBefore: ICheckHealthResults;
+    checkAfter: ICheckHealthResults;
+  }
+
+  /** Test the call of requireRepay and the subsequent call of requirePayAmountBack() */
+  async function callRequireRepay(b: IBuilderResults, p?: IRequireRepayParams): Promise<IRequireRepayResults> {
+    const defaultState = await PackedData.getDefaultState(b.strategy);
+
+    // increase health factors to break "health"
+    const addon = p?.addon ?? 50;
+    const converterController = ConverterController__factory.connect(await b.converter.controller(), signer);
+    const converterGovernance = await Misc.impersonate(await converterController.governance());
+    const minHealthFactor = await converterController.minHealthFactor2();
+    const targetHealthFactor = await converterController.targetHealthFactor2();
+    await converterController.connect(converterGovernance).setTargetHealthFactor2(targetHealthFactor + addon);
+    await converterController.connect(converterGovernance).setMinHealthFactor2(minHealthFactor + addon);
+    const debtMonitor = IDebtMonitor__factory.connect(await converterController.debtMonitor(), signer);
+
+    // we need to clean custom target factors for the assets in use
+    const borrowManager = BorrowManager__factory.connect(await converterController.borrowManager(), converterGovernance);
+    await borrowManager.setTargetHealthFactors(
+      [defaultState.tokenA, defaultState.tokenB],
+      [targetHealthFactor + addon, targetHealthFactor + addon]
+    );
+
+    // calculate amounts required to restore health
+    const checkBefore = await debtMonitor.checkHealth(0, 100, 1);
+
+    // call requireRepay on converter, requirePayAmountBack is called inside
+    const keeperCallback = IKeeperCallback__factory.connect(
+      b.converter.address,
+      await Misc.impersonate(await converterController.keeper())
+    );
+    await keeperCallback.requireRepay(
+      checkBefore.outAmountBorrowAsset[0],
+      checkBefore.outAmountCollateralAsset[0],
+      checkBefore.outPoolAdapters[0]
+    );
+
+    // ensure that health is restored
+    const checkAfter = await debtMonitor.checkHealth(0, 100, 1);
+    return {checkBefore, checkAfter}
+  }
+//endregion Utils
 
 //region Unit tests
   /**
@@ -1039,7 +1099,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           const state = await PackedData.getDefaultState(b.strategy);
 
-          await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
+          await InjectUtils.injectTetuConverter(signer);
 
           console.log('Deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -1226,47 +1286,13 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
           it("should requirePayAmountBack successfully", async () => {
             const b = await loadFixture(prepareStrategy);
+
             const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-
             const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
-            const defaultState = await PackedData.getDefaultState(b.strategy);
 
-            // increase health factors to break "health"
-            const addon = 50;
-            const converterController = ConverterController__factory.connect(await b.converter.controller(), signer);
-            const converterGovernance = await Misc.impersonate(await converterController.governance());
-            const minHealthFactor = await converterController.minHealthFactor2();
-            const targetHealthFactor = await converterController.targetHealthFactor2();
-            await converterController.connect(converterGovernance).setTargetHealthFactor2(targetHealthFactor + addon);
-            await converterController.connect(converterGovernance).setMinHealthFactor2(minHealthFactor + addon);
-            const debtMonitor = IDebtMonitor__factory.connect(await converterController.debtMonitor(), signer);
-
-            // we need to clean custom target factors for the assets in use
-            const borrowManager = BorrowManager__factory.connect(await converterController.borrowManager(), converterGovernance);
-            await borrowManager.setTargetHealthFactors(
-              [defaultState.tokenA, defaultState.tokenB],
-              [targetHealthFactor + addon, targetHealthFactor + addon]
-            );
-
-            // calculate amounts required to restore health
-            const checkBefore = await debtMonitor.checkHealth(0, 100, 1);
-            if (checkBefore.outPoolAdapters.length === 0) {
-              throw Error("Health wasn't broken");
-            }
-            const keeperCallback = IKeeperCallback__factory.connect(
-              b.converter.address,
-              await Misc.impersonate(await converterController.keeper())
-            );
-
-            // call requireRepay on converter, requirePayAmountBack is called inside
-            await keeperCallback.requireRepay(
-              checkBefore.outAmountBorrowAsset[0],
-              checkBefore.outAmountCollateralAsset[0],
-              checkBefore.outPoolAdapters[0]
-            );
-
-            // ensure that health is restored
-            const checkAfter = await debtMonitor.checkHealth(0, 1, 1);
+            // requirePayAmountBack is called by converter inside requireRepay
+            const {checkBefore, checkAfter} = await callRequireRepay(b);
+            expect(checkBefore.outPoolAdapters.length).gt(0, "health wasn't broken");
             expect(checkAfter.outPoolAdapters.length).eq(0, "health wasn't restored");
 
             // withdraw all and receive expected amount back
