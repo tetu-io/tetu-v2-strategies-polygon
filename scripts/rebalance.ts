@@ -27,6 +27,7 @@ import { subscribeTgBot } from './telegram/tg-subscribe';
 const MAX_ERROR_LENGTH = 1000;
 const DELAY_BETWEEN_NSRS = 60
 const DELAY_AFTER_NSR = 10
+const DELAY_NEED_NSR_CONFIRM = 300
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -80,6 +81,7 @@ async function main() {
   const signer = (await ethers.getSigners())[0];
 
   let lastNSR: number = 0
+  const needNSRTimestamp: {[addr:string]:number} = {}
 
   // noinspection InfiniteLoopJS
   while (true) {
@@ -113,7 +115,13 @@ async function main() {
             const isPausedStrategy = await splitterContract.pausedStrategies(strategyAddress)
             const delayPassed = lastNSR + DELAY_BETWEEN_NSRS < now
             const needNSR = await strategy.needRebalance()
-            if (!isPausedStrategy && delayPassed && needNSR) {
+            if (needNSR && !needNSRTimestamp[strategyAddress]) {
+              needNSRTimestamp[strategyAddress] = now
+            }
+            if (!needNSR) {
+              needNSRTimestamp[strategyAddress] = 0
+            }
+            if (!isPausedStrategy && delayPassed && needNSR && now - needNSRTimestamp[strategyAddress] > DELAY_NEED_NSR_CONFIRM) {
               const tp = await txParams2();
               try {
                 await RunHelper.runAndWaitAndSpeedUp(
