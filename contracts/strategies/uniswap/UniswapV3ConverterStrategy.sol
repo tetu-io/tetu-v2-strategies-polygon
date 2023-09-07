@@ -205,6 +205,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
     // check "operator only", make withdraw step, cover-loss, send profit to cover, prepare to enter to the pool
     uint[] memory tokenAmounts;
+
     (completed, tokenAmounts) = UniswapV3ConverterStrategyLogicLib.withdrawByAggStep(
       [tokenToSwap_, aggregator_, controller(), address(_csbs.converter), baseState.splitter],
       [amountToSwap_, profitToCover, oldTotalAssets, entryToPool],
@@ -222,6 +223,8 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       // full withdraw was completed, we can exclude next calls of withdrawByAggStep
       state.pair.withdrawDone = 1;
     }
+
+    ConverterStrategyBaseLib2.fixTooHighInvestedAssets(baseState.asset, oldTotalAssets, _csbs);
   }
 
   /// @notice Calculate proportions of [underlying, not-underlying] required by the internal pool of the strategy
@@ -318,6 +321,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     if (tokenAmounts.length == 2 && !_isFuseTriggeredOn()) {
       _depositorEnter(tokenAmounts);
     }
+    console.log("_rebalanceAfter");
     _updateInvestedAssets();
   }
 

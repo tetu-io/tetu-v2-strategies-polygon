@@ -26,24 +26,23 @@ contract ConverterStrategyBaseLibFacade2 {
 
   function getLiquidityAmount(
     uint targetAmount_,
-    address strategy_,
     address[] memory tokens,
     uint indexAsset,
     ITetuConverter converter,
     uint investedAssets,
-    uint depositorLiquidity
-  ) external returns (
-    uint resultAmount,
-    uint[] memory amountsToConvertOut
+    uint depositorLiquidity,
+    uint indexUnderlying
+  ) external view returns (
+    uint resultAmount
   ) {
     return ConverterStrategyBaseLib2.getLiquidityAmount(
       targetAmount_,
-      strategy_,
       tokens,
       indexAsset,
       converter,
       investedAssets,
-      depositorLiquidity
+      depositorLiquidity,
+      indexUnderlying
     );
   }
 
@@ -130,7 +129,13 @@ contract ConverterStrategyBaseLibFacade2 {
     uint sentAmount,
     uint unsentAmount
   ) {
-    return ConverterStrategyBaseLib2.sendToInsurance(asset, amount, splitter, strategyBalance);
+    return ConverterStrategyBaseLib2.sendToInsurance(
+      asset,
+      amount,
+      splitter,
+      strategyBalance,
+      IERC20(asset).balanceOf(address(this))
+    );
   }
 
   function getSafeLossToCover(uint loss, uint totalAssets_) external pure returns (

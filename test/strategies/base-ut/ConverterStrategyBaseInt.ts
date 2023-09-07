@@ -18,6 +18,8 @@ import {depositToVault} from "../../StrategyTestUtils";
 import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
 
 /**
  * Tests of ConverterStrategyBase on the base of real strategies
@@ -435,8 +437,7 @@ describe("ConverterStrategyBaseInt", () => {
     });
   });
 
-  // todo enable after SCB-718
-  describe.skip("requirePayAmountBack", () => {
+  describe("repayTheBorrow", () => {
     interface IMakeRepayTheBorrowResults {
       afterDeposit: IStateNum;
       afterRepay: IStateNum;
@@ -450,6 +451,9 @@ describe("ConverterStrategyBaseInt", () => {
     async function makeRepayTheBorrow(p: IMakeRepayTheBorrowParams): Promise<IMakeRepayTheBorrowResults> {
       const cc = await prepareUniv3ConverterStrategyUsdcUsdt();
       await cc.vault.setDoHardWorkOnInvest(false);
+
+      // possibility to view debug messages of converter
+      await InjectUtils.injectTetuConverter(signer);
 
       // make deposits
       await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -496,7 +500,7 @@ describe("ConverterStrategyBaseInt", () => {
       return {afterDeposit, afterRepay, afterExit};
     }
 
-    describe("Deposit 10000, withdraw 9000", () => {
+    describe("Deposit 10000, repay all borrows, withdraw 9000", () => {
       let snapshot: string;
       before(async function () {
         snapshot = await TimeUtils.snapshot();

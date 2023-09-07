@@ -1,11 +1,7 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
-  AlgebraLib,
-  ControllerV2__factory,
   ConverterStrategyBase__factory,
-  IRebalancingV2Strategy, KyberLib,
-  StrategyBaseV2__factory,
-  UniswapV3Lib
+  IRebalancingV2Strategy, StrategyBaseV2__factory
 } from "../../../typechain";
 import {IDefaultState, PackedData} from "../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
@@ -15,16 +11,14 @@ import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {IPriceChanges, UniversalUtils} from "./UniversalUtils";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
-import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
-import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {Misc} from "../../../scripts/utils/Misc";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
 import {depositToVault, printVaultState} from "../../StrategyTestUtils";
-import {CaptureEvents} from "./CaptureEvents";
+import {CaptureEvents, IEventsSet} from "./CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
 
 export interface IPrepareOverCollateralParams {
@@ -36,9 +30,7 @@ export interface IListStates {
   states: IStateNum[];
 }
 
-/**
- * Utils to set up "current state of pair strategy" in tests
- */
+/** Utils to set up "current state of pair strategy" in tests */
 export class PairBasedStrategyPrepareStateUtils {
 
   /** Set up "neeRebalance = true" */
@@ -139,44 +131,6 @@ export class PairBasedStrategyPrepareStateUtils {
   }
 
   /**
-   * Deploy new implementation of TetuConverter-contract and upgrade proxy
-   */
-  static async injectTetuConverter(signer: SignerWithAddress) {
-    const core = await DeployerUtilsLocal.getCoreAddresses();
-    const tetuConverter = getConverterAddress();
-
-    const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
-    const controller = ControllerV2__factory.connect(core.controller, signer);
-    const governance = await controller.governance();
-    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-
-    await controllerAsGov.announceProxyUpgrade([tetuConverter], [converterLogic.address]);
-    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([tetuConverter]);
-  }
-
-  /**
-   * Deploy new implementation of the given strategy and upgrade proxy
-   */
-  static async injectStrategy(
-    signer: SignerWithAddress,
-    strategyProxy: string,
-    contractName: string
-  ) {
-    const strategyLogic = await DeployerUtils.deployContract(signer, contractName);
-    const controller = ControllerV2__factory.connect(
-      await ConverterStrategyBase__factory.connect(strategyProxy, signer).controller(),
-      signer
-    );
-    const governance = await controller.governance();
-    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-
-    await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
-    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([strategyProxy]);
-  }
-
-  /**
    * Get swap amount to move price up/down in the pool
    * @param signer
    * @param b
@@ -260,8 +214,8 @@ export class PairBasedStrategyPrepareStateUtils {
   static async unfoldBorrowsRepaySwapRepay(
     strategyAsOperator: IRebalancingV2Strategy,
     aggregator: string,
-    useSingleIteration: boolean,
-    saveState?: (title: string) => Promise<void>,
+    isWithdrawCompleted: () => boolean,
+    saveState?: (title: string, eventsState: IEventsSet) => Promise<void>,
   ) {
     const state = await PackedData.getDefaultState(strategyAsOperator);
 
@@ -278,7 +232,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
       let swapData: BytesLike = "0x";
       const tokenToSwap = quote.amountToSwap.eq(0) ? Misc.ZERO_ADDRESS : quote.tokenToSwap;
-      const amountToSwap = quote.amountToSwap.eq(0) ? 0 : quote.amountToSwap;
+      const amountToSwap = quote.amountToSwap.eq(0) ? BigNumber.from(0) : quote.amountToSwap;
 
       if (tokenToSwap !== Misc.ZERO_ADDRESS) {
         if (aggregator === MaticAddresses.AGG_ONEINCH_V5) {
@@ -298,40 +252,28 @@ export class PairBasedStrategyPrepareStateUtils {
           console.log("swapData for tetu liquidator", swapData);
         }
       }
-      console.log("unfoldBorrows.withdrawByAggStep.callStatic --------------------------------", quote);
+      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------");
       console.log("tokenToSwap", tokenToSwap);
       console.log("AGGREGATOR", aggregator) ;
       console.log("amountToSwap", amountToSwap);
       console.log("swapData", swapData);
       console.log("planEntryData", planEntryData);
 
-      const completed = await strategyAsOperator.callStatic.withdrawByAggStep(
+      const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+        strategyAsOperator,
         tokenToSwap,
         aggregator,
         amountToSwap,
         swapData,
         planEntryData,
-        ENTRY_TO_POOL_IS_ALLOWED,
-        {gasLimit: 19_000_000}
-      );
-
-      console.log("unfoldBorrows.withdrawByAggStep.execute --------------------------------", quote);
-      await strategyAsOperator.withdrawByAggStep(
-        tokenToSwap,
-        aggregator,
-        amountToSwap,
-        swapData,
-        planEntryData,
-        ENTRY_TO_POOL_IS_ALLOWED,
-        {gasLimit: 19_000_000}
+        ENTRY_TO_POOL_IS_ALLOWED
       );
       console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
 
       if (saveState) {
-        await saveState(`u${++step}`);
+        await saveState(`u${++step}`, eventsSet);
       }
-      if (useSingleIteration) break;
-      if (completed) break;
+      if (isWithdrawCompleted()) break; // completed
     }
   }
 
@@ -424,12 +366,10 @@ export class PairBasedStrategyPrepareStateUtils {
     const countSteps = countIterations ?? 1;
     const totalAmountToSwap = movePricesUpDown
       ? totalSwapAmount
-      : totalSwapAmountForDown || totalSwapAmount;
+      : (totalSwapAmountForDown || totalSwapAmount);
 
     for (let i = 0; i < countSteps; ++i) {
       const swapAmount = totalAmountToSwap.div(countSteps ?? 5);
-
-      await UniversalUtils.makePoolVolume(signer, state, b.swapper, swapAmount, b.swapHelper);
 
       let pricesWereChanged: IPriceChanges;
       if (movePricesUpDown) {
@@ -445,4 +385,9 @@ export class PairBasedStrategyPrepareStateUtils {
     }
   }
 
+  /** Add given amount to insurance */
+  static async prepareInsurance(b: IBuilderResults, amount: string = "1000") {
+    const decimals = await IERC20Metadata__factory.connect(b.asset, b.vault.signer).decimals();
+    await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits(amount, decimals));
+  }
 }

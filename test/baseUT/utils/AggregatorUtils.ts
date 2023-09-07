@@ -35,6 +35,8 @@ export class AggregatorUtils {
   /**
    * Build tx.data for the call of ITetuLiquidator.liquidate()
    * For simplicity we use liquidate, but it's possible to prepare liquidateWithRoute call
+   *
+   * We can use this function to set up swap through MockAggregator because it has liquidate() with exactly same set of params
    * @param p
    */
   static buildTxForSwapUsingLiquidatorAsAggregator(p: ILiquidatorInputData): BytesLike {
