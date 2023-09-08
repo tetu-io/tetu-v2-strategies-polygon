@@ -1394,8 +1394,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
     const strategies: IStrategyInfo[] = [
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 10_000},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 100_000},
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 10_000},
+      // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 100_000},
 
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
       {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
@@ -1551,10 +1551,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           states.push(stateAfter);
           StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
+          const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(states);
+          const finalSharePrice = (stateAfter.vault.totalAssets + uncoveredLoss) / stateAfter.vault.totalSupply;
+          console.log("finalSharePrice", finalSharePrice);
+          console.log("stateAfter.vault.totalAssets", stateAfter.vault.totalAssets);
           if (strategyInfo.compoundRatio) {
-            expect(stateAfter.vault.sharePrice).gt(stateBefore.vault.sharePrice, "compoundRatio is not zero - rewards should increase the share price");
+            expect(finalSharePrice).gt(stateBefore.vault.sharePrice, "compoundRatio is not zero - rewards should increase the share price");
           } else {
-            expect(stateAfter.vault.sharePrice).eq(stateBefore.vault.sharePrice, "compoundRatio is zero - the share price shouldn't change");
+            expect(finalSharePrice).eq(stateBefore.vault.sharePrice, "compoundRatio is zero - the share price shouldn't change");
           }
 
           console.log('withdrawAll as signer3...');

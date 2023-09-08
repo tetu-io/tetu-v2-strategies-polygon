@@ -235,14 +235,6 @@ describe('PairBasedNoSwapIntTest', function() {
 
     return {states};
   }
-
-  function getTotalUncoveredLoss(states: IStateNum[]) : number {
-    let dest = 0;
-    for (const state of states) {
-      dest += (state.events?.lossUncoveredCutByMax ?? 0) + (state.events?.lossUncoveredNotEnoughInsurance ?? 0);
-    }
-    return dest;
-  }
 //endregion Withdraw-with-iterations impl
 
 //region Unit tests
@@ -1067,7 +1059,7 @@ describe('PairBasedNoSwapIntTest', function() {
             });
             it("should set expected totalAssets", async () => {
               const ret = await loadFixture(makeWithdrawAll);
-              const uncoveredLoss = getTotalUncoveredLoss(ret.states);
+              const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
               const stateFirst = ret.states[0];
               const stateLast = ret.states[ret.states.length - 1];
               expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
@@ -1182,7 +1174,7 @@ describe('PairBasedNoSwapIntTest', function() {
             });
             it("should set expected totalAssets", async () => {
               const ret = await loadFixture(makeWithdrawAll);
-              const uncoveredLoss = getTotalUncoveredLoss(ret.states);
+              const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
               const stateFirst = ret.states[0];
               const stateLast = ret.states[ret.states.length - 1];
               expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);
@@ -1312,7 +1304,7 @@ describe('PairBasedNoSwapIntTest', function() {
             });
             it("should set expected totalAssets", async () => {
               const ret = await loadFixture(makeWithdrawAll);
-              const uncoveredLoss = getTotalUncoveredLoss(ret.states);
+              const uncoveredLoss = StateUtilsNum.getTotalUncoveredLoss(ret.states);
               const stateFirst = ret.states[0];
               const stateLast = ret.states[ret.states.length - 1];
               expect(stateLast.vault.totalAssets + uncoveredLoss).approximately(stateFirst.vault.totalAssets, 100);

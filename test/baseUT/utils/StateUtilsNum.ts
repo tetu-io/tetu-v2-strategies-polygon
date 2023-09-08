@@ -793,4 +793,12 @@ export class StateUtilsNum {
   public static getBalancerPoolAddress(poolId: string) {
     return poolId.substring(0, 42)
   }
+
+  public static getTotalUncoveredLoss(states: IStateNum[]) : number {
+    let dest = 0;
+    for (const state of states) {
+      dest += (state.events?.lossUncoveredCutByMax ?? 0) + (state.events?.lossUncoveredNotEnoughInsurance ?? 0);
+    }
+    return dest;
+  }
 }
