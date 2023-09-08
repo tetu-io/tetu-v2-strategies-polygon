@@ -6,7 +6,7 @@ import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {MockSwapper} from "../../../typechain";
 
 export class PairStrategyFixtures {
-  static async buildPairStrategyUsdtUsdc(
+  static async buildPairStrategyUsdcXXX(
     strategyName: string,
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
