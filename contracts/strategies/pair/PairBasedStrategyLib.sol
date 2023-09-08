@@ -279,26 +279,26 @@ library PairBasedStrategyLib {
   /// @param price Current price
   /// @return needToChange A boolean indicating if the fuse status should be changed
   /// @return status Exist fuse status or new fuse status (if needToChange is true)
-  function needChangeFuseStatus(FuseStateParams memory fuse, uint price) internal pure returns (
+  function needChangeFuseStatus(FuseStateParams memory fuse, uint price, uint poolPrice) internal pure returns (
     bool needToChange,
     FuseStatus status
   ) {
     if (fuse.status != FuseStatus.FUSE_DISABLED_0) {
       if (fuse.status == FuseStatus.FUSE_OFF_1) {
         // currently fuse is OFF
-        if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
+        if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON] || poolPrice <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
           needToChange = true;
           status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
-        } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+        } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON] || poolPrice >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
           needToChange = true;
           status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
         }
       } else {
         if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2) {
           // currently fuse is triggered ON by lower limit
-          if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+          if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF] && poolPrice >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
             needToChange = true;
-            if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+            if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON] || poolPrice >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
               status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
             } else {
               status = FuseStatus.FUSE_OFF_1;
@@ -306,9 +306,9 @@ library PairBasedStrategyLib {
           }
         } else {
           // currently fuse is triggered ON by upper limit
-          if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
+          if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF] && poolPrice <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
             needToChange = true;
-            if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+            if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF] || poolPrice <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
               status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
             } else {
               status = FuseStatus.FUSE_OFF_1;

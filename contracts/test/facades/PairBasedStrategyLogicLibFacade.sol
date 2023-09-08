@@ -115,13 +115,14 @@ contract PairBasedStrategyLogicLibFacade {
 
   function needStrategyRebalance(
     ITetuConverter converter_,
-    int24 tick
+    int24 tick,
+    uint poolPrice
   ) external view returns (
     bool needRebalance,
     bool[2] memory fuseStatusChangedAB,
     PairBasedStrategyLib.FuseStatus[2] memory fuseStatusAB
   ) {
-    return PairBasedStrategyLogicLib.needStrategyRebalance(pairState, converter_, tick);
+    return PairBasedStrategyLogicLib.needStrategyRebalance(pairState, converter_, tick, poolPrice);
   }
 
   function setInitialDepositorValues(

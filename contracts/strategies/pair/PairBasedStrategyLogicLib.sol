@@ -402,7 +402,8 @@ library PairBasedStrategyLogicLib {
   function needStrategyRebalance(
     PairBasedStrategyLogicLib.PairState storage pairState,
     ITetuConverter converter_,
-    int24 tick
+    int24 tick,
+    uint poolPrice
   ) external view returns (
     bool needRebalance,
     bool[2] memory fuseStatusChangedAB,
@@ -412,7 +413,7 @@ library PairBasedStrategyLogicLib {
       uint[2] memory prices;
       (prices[0], prices[1]) = ConverterStrategyBaseLib2.getOracleAssetsPrices(converter_, pairState.tokenA, pairState.tokenB);
       for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
-        (fuseStatusChangedAB[i], fuseStatusAB[i]) = PairBasedStrategyLib.needChangeFuseStatus(pairState.fuseAB[i], prices[i]);
+        (fuseStatusChangedAB[i], fuseStatusAB[i]) = PairBasedStrategyLib.needChangeFuseStatus(pairState.fuseAB[i], prices[i], poolPrice);
       }
       needRebalance = fuseStatusChangedAB[0]
         || fuseStatusChangedAB[1]

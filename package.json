@@ -21,7 +21,7 @@
     "deploy-local": "hardhat deploy --write true --reset",
     "solhint": "solhint \"contracts/**/*.sol\"",
     "sporalyzer": "node sporalyzer.js --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\"",
-    "rebalance-debt:matic": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=4096\" hardhat run scripts/rebalanceDebt.ts --network matic --max-memory 4096"
+    "rebalance:matic": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=4096\" hardhat run scripts/rebalance.ts --network matic --max-memory 4096"
   },
   "keywords": [
     "solidity",
