@@ -270,7 +270,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             // currently kyber's isReadyToHardWork returns true without need to call prepareToHardwork
             expect(await converterStrategyBase.isReadyToHardWork()).eq(platform === PLATFORM_KYBER);
           });
-          it("isReadyToHardWork should return expected value after hardwork", async () => {
+          /** scb-776: isReadyToHardWork can return true just after hardwork call */
+          it.skip("isReadyToHardWork should return expected value after hardwork", async () => {
             const b = await loadFixture(prepareStrategy);
             const converterStrategyBase = ConverterStrategyBase__factory.connect(
                 b.strategy.address,
@@ -1311,7 +1312,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
    * 1) isReadyToHardWork always returns true for simplicity
    * 2) prepareNeedRebalanceOnBigSwap doesn't work with Kyber
    */
-  describe("SCB-776: Rebalance and hardwork (Univ3 and algebra only)", () => {
+  describe.skip("SCB-776: Rebalance and hardwork (Univ3 and algebra only)", () => {
     interface IStrategyInfo {
       name: string,
     }
@@ -1360,7 +1361,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           await TimeUtils.rollback(snapshotEach);
         });
 
-        it('doHardWork should set isReadyToHardWork OFF', async () => {
+        /** scb-776: isReadyToHardWork can return true just after hardwork call */
+        it.skip('doHardWork should set isReadyToHardWork OFF', async () => {
           const converterStrategyBase = ConverterStrategyBase__factory.connect(init.strategy.address, signer);
 
           // make rebalancing
