@@ -257,7 +257,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
@@ -745,7 +745,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
@@ -857,7 +857,7 @@ describe('PairBasedNoSwapIntTest', function() {
       })
 
       async function prepareStrategy(useMockSwapper?: boolean): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2, undefined);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2, undefined);
         const converterStrategyBase = await ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const platformVoter = await DeployerUtilsLocal.impersonate(
           await IController__factory.connect(
@@ -1017,7 +1017,7 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
       }
 
       describe(`${strategyInfo.name}`, () => {
@@ -1470,7 +1470,7 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
       }
 
       describe(`${strategyInfo.name}-${strategyInfo.priceUp ? "up" : "down"}`, () => {

@@ -112,7 +112,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
        * Fuse OFF by default, rebalance is not needed
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;
       }
@@ -227,7 +227,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
      * Prepare initial balances of both users.
      */
     async function prepareStrategy(): Promise<IPrepareResults> {
-      const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(PLATFORM_UNIV3, signer, signer2);
+      const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(PLATFORM_UNIV3, signer, signer2);
 
       const defaultState = await PackedData.getDefaultState(b.strategy);
 

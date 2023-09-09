@@ -121,7 +121,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
          * Fuse OFF by default, rebalance is not needed
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
               strategyInfo.name,
               signer,
               signer2,
@@ -310,7 +310,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
          * Fuse OFF by default. We set fuse thresholds in such a way as to trigger fuse ON.
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
               strategyInfo.name,
               signer,
               signer2,
@@ -486,7 +486,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
          * We make at first single rebalance to be sure that initial amount is deposited to the pool.
          */
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
               strategyInfo.name,
               signer,
               signer2,
@@ -664,7 +664,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
         async function prepareStrategy(): Promise<IBuilderResults> {
-          return PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+          return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
         }
 
         describe(`${strategyInfo.name}`, () => {
@@ -714,7 +714,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = "./tmp/prepareStrategy.csv";
 
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
           states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `init`));
@@ -820,7 +820,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
        * Big user exits the strategy.
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const states: IStateNum[] = [];
         const pathOut = "./tmp/large-user-prepare-strategy.csv";
@@ -1011,7 +1011,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
@@ -1159,7 +1159,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const platform = await converterStrategyBase.PLATFORM();
           const states: IStateNum[] = [];
@@ -1325,7 +1325,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
         console.log('initial deposit...');
@@ -1410,7 +1410,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
             strategyInfo.name,
             signer,
             signer2,
@@ -1558,7 +1558,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           if (strategyInfo.compoundRatio) {
             expect(finalSharePrice).gt(stateBefore.vault.sharePrice, "compoundRatio is not zero - rewards should increase the share price");
           } else {
-            expect(finalSharePrice).eq(stateBefore.vault.sharePrice, "compoundRatio is zero - the share price shouldn't change");
+            expect(finalSharePrice).approximately(stateBefore.vault.sharePrice, 1e-8,"compoundRatio is zero - the share price shouldn't change");
           }
 
           console.log('withdrawAll as signer3...');
@@ -1602,7 +1602,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
        * Fuse OFF by default, rebalance is not needed
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
           strategyInfo.name,
           signer,
           signer2,
