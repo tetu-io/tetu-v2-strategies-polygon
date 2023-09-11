@@ -42,8 +42,8 @@ export class DeployerUtils {
     return deployContract(hre, signer, name, ...args);
   }
 
-  public static async deployMockToken(signer: SignerWithAddress, name = 'MOCK', decimals = 18, mintAmount = '1000000', silent: false) {
-    let token
+  public static async deployMockToken(signer: SignerWithAddress, name = 'MOCK', decimals = 18, mintAmount = '1000000', silent: boolean = false) {
+    let token: MockToken;
     if (!silent) {
       token = await DeployerUtils.deployContract(signer, 'MockToken', name + '_MOCK_TOKEN', name, decimals) as MockToken;
       await RunHelper.runAndWait(() => token.mint(signer.address, parseUnits(mintAmount, decimals)));
@@ -55,7 +55,7 @@ export class DeployerUtils {
     return token;
   }
 
-  public static async deployProxy(signer: SignerWithAddress, contract: string, silent: false) {
+  public static async deployProxy(signer: SignerWithAddress, contract: string, silent: boolean = false) {
     if (!silent) {
       const logic = await DeployerUtils.deployContract(signer, contract);
       const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
