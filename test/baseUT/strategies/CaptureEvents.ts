@@ -14,6 +14,7 @@ import {
 } from "../../../typechain/contracts/strategies/pair/PairBasedStrategyLib";
 import {
   CoverLossEventObject,
+  RebalancedDebtEventObject,
   RebalancedEventObject
 } from "../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib";
 import {PLATFORM_ALGEBRA, PLATFORM_UNIV3} from "./AppPlatforms";
@@ -114,6 +115,12 @@ interface IRebalancedEvent {
   coveredByRewards: number;
 }
 
+interface IRebalancedDebtEvent {
+  loss: number;
+  profitToCover: number;
+  coveredByRewards: number;
+}
+
 interface ISendToInsurance {
   sentAmount: number;
   unsentAmount: number;
@@ -179,6 +186,7 @@ export interface IEventsSet {
   coverLoss?: ICoverLoss[];
 
   rebalanced?: IRebalancedEvent;
+  rebalancedDebt?: IRebalancedDebtEvent;
   fixPriceChanges?: IFixPriceChanges;
   fuseStatusChanged?: IFuseStatusChanged;
   recycle?: IRecycle;
@@ -352,6 +360,21 @@ export class CaptureEvents {
         ) as unknown) as RebalancedEventObject;
 
         ret.rebalanced = {
+          loss: +formatUnits(log.loss, decimals),
+          coveredByRewards: +formatUnits(log.coveredByRewards, decimals),
+          profitToCover: +formatUnits(log.profitToCover, decimals),
+        }
+      }
+
+      if (event.topics[0].toLowerCase() === logicLibI.getEventTopic('RebalancedDebt').toLowerCase()) {
+        console.log('/// Strategy rebalanced debt');
+        const log = (logicLibI.decodeEventLog(
+          logicLibI.getEvent('RebalancedDebt'),
+          event.data,
+          event.topics,
+        ) as unknown) as RebalancedDebtEventObject;
+
+        ret.rebalancedDebt = {
           loss: +formatUnits(log.loss, decimals),
           coveredByRewards: +formatUnits(log.coveredByRewards, decimals),
           profitToCover: +formatUnits(log.profitToCover, decimals),

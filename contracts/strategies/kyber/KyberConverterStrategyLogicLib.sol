@@ -483,8 +483,8 @@ library KyberConverterStrategyLogicLib {
     bool needRebalance
   ) {
     address pool = pairState.pool;
-    uint poolPriceDecimals = IERC20Metadata(pairState.tokenA).decimals();
-    uint poolPriceAdjustment = poolPriceDecimals < 18 ? 10 ** (18 - poolPriceDecimals) : 1;
+    // poolPrice should have same decimals as a price from oracle == 18
+    uint poolPriceAdjustment = PairBasedStrategyLib.getPoolPriceAdjustment(IERC20Metadata(pairState.tokenA).decimals());
     uint poolPrice = KyberLib.getPrice(pool, pairState.tokenB) * poolPriceAdjustment;
     (needRebalance, , ) = PairBasedStrategyLogicLib.needStrategyRebalance(
       pairState,

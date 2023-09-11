@@ -276,7 +276,8 @@ library PairBasedStrategyLib {
   }
 
   /// @notice Check if the fuse should be turned ON/OFF
-  /// @param price Current price
+  /// @param price Current price in the oracle
+  /// @param poolPrice Current price in the pool
   /// @return needToChange A boolean indicating if the fuse status should be changed
   /// @return status Exist fuse status or new fuse status (if needToChange is true)
   function needChangeFuseStatus(FuseStateParams memory fuse, uint price, uint poolPrice) internal pure returns (
@@ -694,6 +695,11 @@ library PairBasedStrategyLib {
   //endregion ------------------------------------------------ Internal helper functions
 
   //region ----------------------------------------- Utils
+  function getPoolPriceAdjustment(uint poolPriceDecimals) external pure returns (uint adjustment) {
+    // we assume that decimals never higher than 18
+    adjustment = poolPriceDecimals < 18 ? 10 ** (18 - poolPriceDecimals) : 1;
+  }
+
   function _checkSwapRouter(address router) internal pure {
     require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
   }
