@@ -16,6 +16,7 @@ import {
 import { config as dotEnvConfig } from 'dotenv';
 import { subscribeTgBot } from './telegram/tg-subscribe';
 import {Misc} from "./utils/Misc";
+import {NSRUtils} from "./utils/NSRUtils";
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -101,7 +102,7 @@ async function main() {
 
           try {
 
-            if (!(await isStrategyEligibleForNSR(strategyAddress))) {
+            if (!(await NSRUtils.isStrategyEligibleForNSR(strategyAddress))) {
               continue;
             }
 
@@ -221,19 +222,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-async function isStrategyEligibleForNSR(strategyAdr: string) {
-  const version = await IStrategyV2__factory.connect(strategyAdr, ethers.provider).STRATEGY_VERSION();
-  const name = await IStrategyV2__factory.connect(strategyAdr, ethers.provider).NAME();
-
-  const names = new Set<string>([
-    'UniswapV3 Converter Strategy',
-    'Kyber Converter Strategy',
-    'Algebra Converter Strategy',
-  ]);
-
-  return Number(version.charAt(0)) > 1 && names.has(name);
 }
 
 main().catch((error) => {
