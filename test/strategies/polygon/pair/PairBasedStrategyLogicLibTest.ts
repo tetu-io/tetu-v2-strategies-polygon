@@ -2,15 +2,12 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers} from "hardhat";
 import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {
-  MockForwarder,
   MockTetuConverter,
-  MockTetuLiquidatorSingleCall,
   MockToken,
   PriceOracleMock,
   PairBasedStrategyLogicLibFacade, MockController, IERC20Metadata__factory, IPairBasedDefaultStateProvider
 } from "../../../../typechain";
 import {expect} from "chai";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
@@ -28,7 +25,7 @@ import {
   PLAN_REPAY_SWAP_REPAY,
   PLAN_SWAP_REPAY
 } from "../../../baseUT/AppConstants";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../../baseUT/utils/HardhatUtils';
 
 describe('PairBasedStrategyLogicLibTest', () => {
 //region Constants and variables
@@ -36,7 +33,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
   const SUM_PROPORTIONS = 100_000;
 
   let snapshotBefore: string;
-  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let usdc: MockToken;
   let dai: MockToken;
@@ -44,8 +40,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
   let bal: MockToken;
   let usdt: MockToken;
   let weth: MockToken;
-  let liquidator: MockTetuLiquidatorSingleCall;
-  let forwarder: MockForwarder;
   let facade: PairBasedStrategyLogicLibFacade;
   let converter: MockTetuConverter;
   let priceOracleMock: PriceOracleMock;
@@ -54,10 +48,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
   //region before, after
   before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
-
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     snapshotBefore = await TimeUtils.snapshot();
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
@@ -67,8 +59,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
     weth = await DeployerUtils.deployMockToken(signer, 'WETH', 8);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
 
-    liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-    forwarder = await MockHelper.createMockForwarder(signer);
     facade = await MockHelper.createPairBasedStrategyLogicLibFacade(signer);
 
     controller = await MockHelper.createMockController(signer);

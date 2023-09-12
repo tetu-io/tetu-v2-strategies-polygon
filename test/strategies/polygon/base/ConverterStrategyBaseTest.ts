@@ -14,31 +14,31 @@ import {
   StrategySplitterV2,
   StrategySplitterV2__factory,
   TetuVaultV2,
-} from '../../../typechain';
+} from '../../../../typechain';
 import {ethers} from 'hardhat';
-import {TimeUtils} from '../../../scripts/utils/TimeUtils';
-import {MockHelper} from '../../baseUT/helpers/MockHelper';
-import {DeployerUtils} from '../../../scripts/utils/DeployerUtils';
-import {DeployerUtilsLocal} from '../../../scripts/utils/DeployerUtilsLocal';
+import {TimeUtils} from '../../../../scripts/utils/TimeUtils';
+import {MockHelper} from '../../../baseUT/helpers/MockHelper';
+import {DeployerUtils} from '../../../../scripts/utils/DeployerUtils';
+import {DeployerUtilsLocal} from '../../../../scripts/utils/DeployerUtilsLocal';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {BigNumber} from 'ethers';
 import {expect} from 'chai';
-import {Misc} from "../../../scripts/utils/Misc";
-import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
+import {Misc} from "../../../../scripts/utils/Misc";
+import {setupIsConversionValid, setupMockedLiquidation} from "../../../baseUT/mocks/MockLiquidationUtils";
 import {
   ILiquidationParams,
   IQuoteRepayParams,
   IRepayParams,
   ITokenAmount,
   ITokenAmountNum
-} from "../../baseUT/mocks/TestDataTypes";
+} from "../../../baseUT/mocks/TestDataTypes";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {setupMockedQuoteRepay, setupMockedRepay, setupPrices} from "../../baseUT/mocks/MockRepayUtils";
-import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
-import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
-import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
-import {GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST} from "../../baseUT/GasLimits";
-import { HARDHAT_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {setupMockedQuoteRepay, setupMockedRepay, setupPrices} from "../../../baseUT/mocks/MockRepayUtils";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
+import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
+import {GAS_CONVERTER_STRATEGY_BASE_CONVERT_PREPARE_REWARDS_LIST} from "../../../baseUT/GasLimits";
+import { HARDHAT_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBase

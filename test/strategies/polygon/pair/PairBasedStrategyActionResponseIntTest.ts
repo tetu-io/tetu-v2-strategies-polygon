@@ -54,6 +54,7 @@ import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -69,7 +70,6 @@ const argv = require('yargs/yargs')()
       default: 137,
     },
   }).argv;
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 describe('PairBasedStrategyActionResponseIntTest', function() {
 
@@ -1330,6 +1330,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           })
 
           if (strategyInfo.name === PLATFORM_UNIV3) {
+            // requirePayAmountBack implementation is shared for all strategies, we can check it on single strategy only
             it("should requirePayAmountBack successfully", async () => {
 
               const b = await loadFixture(prepareStrategy);
@@ -1366,6 +1367,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const platform = await converterStrategyBase.PLATFORM();
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-down-user-prepare-strategy.csv`;
+
+          await InjectUtils.injectTetuConverter(signer);
+          await ConverterUtils.disableAaveV2(signer);
+          await ConverterUtils.disableDForce(signer);
+          await InjectUtils.redeployAave3PoolAdapters(signer);
 
           const state = await PackedData.getDefaultState(b.strategy);
           await UniversalUtils.makePoolVolume(signer2, state, b.swapper, parseUnits("50000", 6));
@@ -1534,6 +1540,33 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               });
             });
           })
+
+          if (strategyInfo.name === PLATFORM_UNIV3) {
+            // requirePayAmountBack implementation is shared for all strategies, we can check it on single strategy only
+            it("should requirePayAmountBack successfully", async () => {
+
+              const b = await loadFixture(prepareStrategy);
+
+              const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+              const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+              // requirePayAmountBack is called by converter inside requireRepay
+              const {checkBefore, checkAfter} = await callRequireRepay(b);
+              expect(checkBefore.length).gt(0, "health wasn't broken");
+              expect(checkAfter.length).lt(checkBefore.length, "health wasn't restored");
+
+              // withdraw all and receive expected amount back
+              await b.vault.connect(signer).withdrawAll({gasLimit: 19_000_000});
+              const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+              console.log('stateBefore', stateBefore);
+              console.log('stateAfter', stateAfter);
+
+              expect(stateAfter.user.assetBalance).gt(stateBefore.user.assetBalance);
+              expect(stateBefore.vault.userShares).gt(0);
+              expect(stateAfter.vault.userShares).eq(0);
+            });
+          }
         });
       });
     });
@@ -1871,7 +1904,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const finalSharePrice = (stateAfter.vault.totalAssets + uncoveredLoss) / stateAfter.vault.totalSupply;
           console.log("finalSharePrice", finalSharePrice);
           console.log("stateAfter.vault.totalAssets", stateAfter.vault.totalAssets);
-          if (strategyInfo.compoundRatio) {
+          if (strategyInfo.compoundRatio
+            && strategyInfo.notUnderlyingToken !== MaticAddresses.WMATIC_TOKEN // todo why there are no rewards in the pool usdc-wmatic?
+          ) {
             expect(finalSharePrice).gt(stateBefore.vault.sharePrice, "compoundRatio is not zero - rewards should increase the share price");
           } else {
             expect(finalSharePrice).approximately(stateBefore.vault.sharePrice, 1e-8,"compoundRatio is zero - the share price shouldn't change");

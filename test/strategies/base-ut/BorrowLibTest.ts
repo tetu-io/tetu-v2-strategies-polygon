@@ -14,23 +14,19 @@ import {
   Misc
 } from "../../../scripts/utils/Misc";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../baseUT/utils/HardhatUtils';
 
 describe('BorrowLibTest', () => {
   /** prop0 + prop1 */
   const SUM_PROPORTIONS = 100_000;
   //region Variables
   let snapshotBefore: string;
-  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let usdc: MockToken;
-  let dai: MockToken;
   let tetu: MockToken;
-  let bal: MockToken;
   let usdt: MockToken;
   let weth: MockToken;
   let liquidator: MockTetuLiquidatorSingleCall;
-  let forwarder: MockForwarder;
   let facade: BorrowLibFacade;
   let converter: MockTetuConverter;
   let priceOracleMock: PriceOracleMock;
@@ -38,21 +34,16 @@ describe('BorrowLibTest', () => {
 
   //region before, after
   before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
-
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     snapshotBefore = await TimeUtils.snapshot();
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
     tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
-    bal = await DeployerUtils.deployMockToken(signer, 'BAL');
-    dai = await DeployerUtils.deployMockToken(signer, 'DAI');
     weth = await DeployerUtils.deployMockToken(signer, 'WETH', 8);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);
 
     liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-    forwarder = await MockHelper.createMockForwarder(signer);
     facade = await MockHelper.createBorrowLibFacade(signer);
     converter = await MockHelper.createMockTetuConverter(signer);
     priceOracleMock = await MockHelper.createPriceOracle(

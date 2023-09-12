@@ -3,26 +3,26 @@ import {
   BorrowLibFacade, ConverterController__factory, IConverterController__factory,
   IERC20Metadata, IPriceOracle, IPriceOracle__factory,
   ITetuConverter, ITetuConverter__factory, MockToken,
-} from "../../../typechain";
+} from "../../../../typechain";
 import {ethers} from "hardhat";
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
-import {TimeUtils} from "../../../scripts/utils/TimeUtils";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {
   getAaveTwoPlatformAdapter,
   getCompoundThreePlatformAdapter,
   getDForcePlatformAdapter,
   Misc
-} from "../../../scripts/utils/Misc";
+} from "../../../../scripts/utils/Misc";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {expect} from "chai";
-import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
-import {MockHelper} from "../../baseUT/helpers/MockHelper";
-import {MaticHolders} from "../../../scripts/addresses/MaticHolders";
-import {ConverterUtils} from "../../baseUT/utils/ConverterUtils";
-import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
+import {IERC20Metadata__factory} from "../../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
+import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
+import {controlGasLimitsEx} from "../../../../scripts/utils/GasLimitUtils";
 import {
   GAS_BORROW_LIB_01,
   GAS_BORROW_LIB_02,
@@ -32,9 +32,9 @@ import {
   GAS_BORROW_LIB_06,
   GAS_BORROW_LIB_07,
   GAS_BORROW_LIB_08
-} from "../../baseUT/GasLimits";
+} from "../../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 describe('BorrowLibIntTest', () => {
   /** prop0 + prop1 */

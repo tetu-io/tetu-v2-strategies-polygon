@@ -46,6 +46,7 @@ import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {IBorrowParams, IBorrowParamsNum, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
 import {setupMockedBorrow, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 /**
  * Study noSwap-rebalance.
@@ -55,7 +56,6 @@ describe('PairBasedStrategyReaderTest', function() {
 //region Constants and variables
 
   let snapshotBefore: string;
-  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let converter: MockTetuConverter;
   let usdc: MockToken;
@@ -69,9 +69,9 @@ describe('PairBasedStrategyReaderTest', function() {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
     wmatic = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);

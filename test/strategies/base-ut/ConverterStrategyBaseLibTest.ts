@@ -24,8 +24,7 @@ import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {
   setupMockedBorrow,
   setupMockedQuoteRepay,
-  setupMockedRepay,
-  setupPrices
+  setupMockedRepay
 } from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
@@ -35,7 +34,7 @@ import {
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, HARDHAT_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -60,7 +59,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
   //region before, after
   before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);

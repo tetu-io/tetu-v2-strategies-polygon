@@ -1,26 +1,26 @@
-import {TimeUtils} from "../../../scripts/utils/TimeUtils";
+import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {ethers} from "hardhat";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
-import {Misc} from "../../../scripts/utils/Misc";
-import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
+import {Misc} from "../../../../scripts/utils/Misc";
+import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
   ConverterStrategyBaseContracts,
   IConverterStrategyBaseContractsParams
-} from "./utils/ConverterStrategyBaseContracts";
+} from "../../base-ut/utils/ConverterStrategyBaseContracts";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {TokenUtils} from "../../../scripts/utils/TokenUtils";
+import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {BigNumber} from "ethers";
 import {parseUnits} from "ethers/lib/utils";
-import {IConverterController__factory, IERC20Metadata__factory, ITetuConverter__factory} from "../../../typechain";
-import {depositToVault} from "../../StrategyTestUtils";
+import {IConverterController__factory, IERC20Metadata__factory, ITetuConverter__factory} from "../../../../typechain";
+import {depositToVault} from "../../../StrategyTestUtils";
 import {expect} from "chai";
-import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
-import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
-import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
+import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 /**
  * Tests of ConverterStrategyBase on the base of real strategies
