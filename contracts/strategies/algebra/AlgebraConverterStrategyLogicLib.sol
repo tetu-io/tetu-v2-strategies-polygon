@@ -24,8 +24,12 @@ library AlgebraConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
+  event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event AlgebraFeesClaimed(uint fee0, uint fee1);
   event AlgebraRewardsClaimed(uint reward, uint bonusReward);
+  /// @param loss Total amount of loss
+  /// @param coveredByRewards Part of the loss covered by rewards
+  event CoverLoss(uint loss, uint coveredByRewards);
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Data types
@@ -54,6 +58,9 @@ library AlgebraConverterStrategyLogicLib {
 
     bool[2] fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
+
+    uint poolPrice;
+    uint poolPriceAdjustment;
   }
 
   struct EnterLocalVariables {
@@ -488,10 +495,15 @@ library AlgebraConverterStrategyLogicLib {
   function needStrategyRebalance(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter_) external view returns (
     bool needRebalance
   ) {
+    address pool = pairState.pool;
+    // poolPrice should have same decimals as a price from oracle == 18
+    uint poolPriceAdjustment = PairBasedStrategyLib.getPoolPriceAdjustment(IERC20Metadata(pairState.tokenA).decimals());
+    uint poolPrice = AlgebraLib.getPrice(pool, pairState.tokenB) * poolPriceAdjustment;
     (needRebalance, , ) = PairBasedStrategyLogicLib.needStrategyRebalance(
       pairState,
       converter_,
-      AlgebraDebtLib.getCurrentTick(IAlgebraPool(pairState.pool))
+      AlgebraDebtLib.getCurrentTick(IAlgebraPool(pool)),
+      poolPrice
     );
   }
 
@@ -513,13 +525,14 @@ library AlgebraConverterStrategyLogicLib {
   ) {
     RebalanceLocal memory v;
     _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState, liquidityThresholds_);
-
+    v.poolPrice = AlgebraLib.getPrice(address(v.pool), pairState.tokenB) * v.poolPriceAdjustment;
     bool needRebalance;
-    int24 tick = AlgebraDebtLib.getCurrentTick(IAlgebraPool(pairState.pool));
+    int24 tick = AlgebraDebtLib.getCurrentTick(v.pool);
     (needRebalance, v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(
       pairState,
       v.converter,
-      tick
+      tick,
+      v.poolPrice
     );
 
     // update fuse status if necessary
@@ -557,6 +570,7 @@ library AlgebraConverterStrategyLogicLib {
       if (notCovered != 0) {
         ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
+      emit CoverLoss(loss, coveredByRewards);
     }
 
     return coveredByRewards;
@@ -577,6 +591,8 @@ library AlgebraConverterStrategyLogicLib {
     v.isStablePool = pairState.isStablePool;
     v.liquidationThresholdsAB[0] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenA]);
     v.liquidationThresholdsAB[1] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenB]);
+    uint poolPriceDecimals = IERC20Metadata(v.tokenA).decimals();
+    v.poolPriceAdjustment = poolPriceDecimals < 18 ? 10**(18 - poolPriceDecimals) : 1;
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]
@@ -620,9 +636,11 @@ library AlgebraConverterStrategyLogicLib {
     (completed, tokenAmounts, loss) = PairBasedStrategyLogicLib.withdrawByAggStep(addr_, values_, swapData, planEntryData, tokens, liquidationThresholds);
 
     // cover loss
+    uint coveredByRewards;
     if (loss != 0) {
-      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+      coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
+    emit RebalancedDebt(loss, values_[1], coveredByRewards);
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)

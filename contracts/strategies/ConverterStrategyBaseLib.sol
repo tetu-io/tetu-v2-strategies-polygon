@@ -1382,6 +1382,7 @@ library ConverterStrategyBaseLib {
                 d_.tokens[indexBorrow],
                 amountToRepay
               );
+
               if (indexCollateral == d_.indexAsset) {
                 require(expectedAmountOut >= spentAmountIn, AppErrors.BALANCE_DECREASE);
                 if (repaidAmountOut < amountSendToRepay) {

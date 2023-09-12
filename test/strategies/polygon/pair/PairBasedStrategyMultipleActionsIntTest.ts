@@ -112,7 +112,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
        * Fuse OFF by default, rebalance is not needed
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;
       }
@@ -227,7 +227,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
      * Prepare initial balances of both users.
      */
     async function prepareStrategy(): Promise<IPrepareResults> {
-      const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(PLATFORM_UNIV3, signer, signer2);
+      const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(PLATFORM_UNIV3, signer, signer2);
 
       const defaultState = await PackedData.getDefaultState(b.strategy);
 
@@ -348,7 +348,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
               const amountToDeposit = i % 2 === (iuser === 0 ? 0 : 2)
                 ? amountOnBalance.div(2)
                 : amountOnBalance.mul(5).div(6);
-              const eventsSet = await CaptureEvents.makeDeposit(b.vault.connect(users[iuser]), PLATFORM_UNIV3, amountToDeposit);
+              const eventsSet = await CaptureEvents.makeDeposit(b.vault.connect(users[iuser]), amountToDeposit, PLATFORM_UNIV3);
               // await b.vault.connect(users[iuser]).deposit(amountToDeposit, users[iuser].address, {gasLimit: 19_000_000});
               await registerStates(`d${iuser}`, {eventsSet});
               break;
@@ -362,7 +362,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
               const balBefore = await TokenUtils.balanceOf(state.tokenA, users[iuser].address);
               await b.vault.connect(users[iuser]).requestWithdraw();
               // await b.vault.connect(users[iuser]).withdraw(amountToWithdraw, users[iuser].address, users[iuser].address, {gasLimit: 19_000_000})
-              const eventsSet = await CaptureEvents.makeWithdraw(b.vault.connect(users[iuser]), PLATFORM_UNIV3, amountToWithdraw);
+              const eventsSet = await CaptureEvents.makeWithdraw(b.vault.connect(users[iuser]), amountToWithdraw, PLATFORM_UNIV3);
               const balAfter = await TokenUtils.balanceOf(state.tokenA, users[iuser].address)
               console.log(`To withdraw: ${amountToWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
               await registerStates(`w${iuser}`, {eventsSet});

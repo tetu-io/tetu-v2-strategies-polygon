@@ -241,6 +241,7 @@ library KyberLib {
   }
 
   /// @notice Calculates price in pool
+  /// @return price with decimals of paired token
   function getPrice(address pool_, address tokenIn) public view returns (uint) {
     IPool pool = IPool(pool_);
     address token0 = address(pool.token0());

@@ -3,13 +3,14 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {IBuilderResults, PairBasedStrategyBuilder} from "./PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
+import {MockSwapper} from "../../../typechain";
 
 export class PairStrategyFixtures {
-  static async buildPairStrategyUsdtUsdc(
+  static async buildPairStrategyUsdcXXX(
     strategyName: string,
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
-    notUnderlying: string = MaticAddresses.USDT_TOKEN
+    notUnderlying: string = MaticAddresses.USDT_TOKEN,
   ): Promise<IBuilderResults> {
     switch (strategyName) {
       case PLATFORM_UNIV3:
@@ -32,7 +33,10 @@ export class PairStrategyFixtures {
     }
   }
 
-  static async buildUniv3UsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildUniv3UsdtUsdc(
+    signer: SignerWithAddress,
+    signer2: SignerWithAddress,
+  ): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildUniv3({
       signer,
       signer2,

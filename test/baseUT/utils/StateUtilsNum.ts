@@ -12,6 +12,7 @@ import {PackedData} from "./PackedData";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../strategies/AppPlatforms";
 import {PairStrategyLiquidityUtils} from "../strategies/PairStrategyLiquidityUtils";
 import {CaptureEvents, IEventsSet, ISummaryFromEventsSet} from "../strategies/CaptureEvents";
+import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 
 export interface ILiquidityAmountInTick {
   amountTokenA: number;
@@ -415,7 +416,7 @@ export class StateUtilsNum {
       univ3: univ3SpecificState,
       univ3Pool,
 
-      events: CaptureEvents.getSummaryFromEventsSet(p?.eventsSet),
+      events: await CaptureEvents.getSummaryFromEventsSet(signer, p?.eventsSet),
     }
 
     // console.log(dest)
@@ -602,13 +603,20 @@ export class StateUtilsNum {
       'events.lossSplitter',
       'events.lossCoveredVault',
       'events.lossUncoveredCutByMax',
-      'events.unsentAmountToInsurance',
+      'events.sentToInsurance',
+      'events.unsentToInsurance',
+      'events.coveredByRewards',
       'events.lossUncoveredNotEnoughInsurance',
       'events.toPerfRecycle',
       'events.toInsuranceRecycle',
-      'events.coveredByRewardsRebalance',
-      'events.profitToCoverRebalance',
+      'events.toForwarderRecycle',
       'events.lossRebalance',
+
+      'swapByAgg.amountToSwap',
+      'swapByAgg.amountIn',
+      'swapByAgg.amountOut',
+      'swapByAgg.amountOutExpected',
+      'swapByAgg.aggregator',
 
       'fixPriceChanges.investedAssetsBefore',
       'fixPriceChanges.investedAssetsAfter',
@@ -700,13 +708,28 @@ export class StateUtilsNum {
       item.events?.lossSplitter,
       item.events?.lossCoveredVault,
       item.events?.lossUncoveredCutByMax,
-      item.events?.unsentAmountToInsurance,
+      item.events?.sentToInsurance,
+      item.events?.unsentToInsurance,
+      item.events?.coveredByRewards,
       item.events?.lossUncoveredNotEnoughInsurance,
       item.events?.toPerfRecycle,
       item.events?.toInsuranceRecycle,
-      item.events?.coveredByRewardsRebalance,
-      item.events?.profitToCoverRebalance,
+      item.events?.toForwarderRecycle.join(" "),
       item.events?.lossRebalance,
+
+      item.events?.swapByAgg?.amountToSwap,
+      item.events?.swapByAgg?.amountIn,
+      item.events?.swapByAgg?.amountOut,
+      item.events?.swapByAgg?.amountOutExpected,
+      !item.events?.swapByAgg?.aggregator
+        ? ""
+        : item.events?.swapByAgg?.aggregator.toLowerCase() === MaticAddresses.AGG_ONEINCH_V5
+          ? "1inch"
+          : item.events?.swapByAgg?.aggregator.toLowerCase() === MaticAddresses.TETU_LIQUIDATOR
+              ? "liquidator"
+              : item.events?.swapByAgg?.aggregator.toLowerCase() === MaticAddresses.AGG_OPENOCEAN
+                ? "OpenOcean"
+                : "???",
 
       item.events?.investedAssetsBeforeFixPriceChanges,
       item.events?.investedAssetsAfterFixPriceChanges,
@@ -769,5 +792,13 @@ export class StateUtilsNum {
 
   public static getBalancerPoolAddress(poolId: string) {
     return poolId.substring(0, 42)
+  }
+
+  public static getTotalUncoveredLoss(states: IStateNum[]) : number {
+    let dest = 0;
+    for (const state of states) {
+      dest += (state.events?.lossUncoveredCutByMax ?? 0) + (state.events?.lossUncoveredNotEnoughInsurance ?? 0);
+    }
+    return dest;
   }
 }

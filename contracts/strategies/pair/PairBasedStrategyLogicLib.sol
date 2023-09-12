@@ -75,7 +75,6 @@ library PairBasedStrategyLogicLib {
   //endregion ------------------------------------------------------- Data types
 
   //region ------------------------------------------------------- Events
-  event ProfitToCoverNotEnough(uint profitToCoverRequired, uint profitToCoverSent);
   //endregion ------------------------------------------------------- Events
 
   //region ------------------------------------------------------- Helpers
@@ -303,7 +302,6 @@ library PairBasedStrategyLogicLib {
   /// @param tokens [underlying, not-underlying] (values been read from pairBase)
   /// @return completed All debts were closed, leftovers were swapped to proper proportions
   /// @return tokenAmounts Amounts to be deposited to pool. If {tokenAmounts} contains zero amount return empty array.
-  /// @return loss Loss to cover
   function withdrawByAggStep(
     address[5] calldata addr_,
     uint[4] calldata values_,
@@ -346,9 +344,14 @@ library PairBasedStrategyLogicLib {
     );
 
     // fix loss / profitToCover
-    if (v.profitToCover > 0) {
-      uint profitToSend = Math.min(v.profitToCover, IERC20(v.w.tokens[0]).balanceOf(address(this)));
-      ConverterStrategyBaseLib2.sendToInsurance(v.w.tokens[0], profitToSend, v.splitter, v.oldTotalAssets);
+    if (v.profitToCover != 0) {
+      ConverterStrategyBaseLib2.sendToInsurance(
+        v.w.tokens[0],
+        v.profitToCover,
+        v.splitter,
+        v.oldTotalAssets,
+        IERC20(v.w.tokens[0]).balanceOf(address(this))
+      );
     }
 
     (loss, tokenAmounts) = ConverterStrategyBaseLib2.getTokenAmountsPair(
@@ -388,11 +391,7 @@ library PairBasedStrategyLogicLib {
 
     // we assume here, that rebalanceAssets provides profitToCover on balance and set leftovers to right proportions
     if (profitToCover != 0) {
-      uint profitToSend = Math.min(profitToCover, IERC20(tokenA).balanceOf(address(this)));
-      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToSend, splitter, totalAssets);
-      if (profitToSend != profitToCover) {
-        emit ProfitToCoverNotEnough(profitToCover, profitToSend);
-      }
+      ConverterStrategyBaseLib2.sendToInsurance(tokenA, profitToCover, splitter, totalAssets, IERC20(tokenA).balanceOf(address(this)));
     }
   }
   //endregion ------------------------------------------------------- PairState-helpers
@@ -403,7 +402,8 @@ library PairBasedStrategyLogicLib {
   function needStrategyRebalance(
     PairBasedStrategyLogicLib.PairState storage pairState,
     ITetuConverter converter_,
-    int24 tick
+    int24 tick,
+    uint poolPrice
   ) external view returns (
     bool needRebalance,
     bool[2] memory fuseStatusChangedAB,
@@ -413,7 +413,7 @@ library PairBasedStrategyLogicLib {
       uint[2] memory prices;
       (prices[0], prices[1]) = ConverterStrategyBaseLib2.getOracleAssetsPrices(converter_, pairState.tokenA, pairState.tokenB);
       for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
-        (fuseStatusChangedAB[i], fuseStatusAB[i]) = PairBasedStrategyLib.needChangeFuseStatus(pairState.fuseAB[i], prices[i]);
+        (fuseStatusChangedAB[i], fuseStatusAB[i]) = PairBasedStrategyLib.needChangeFuseStatus(pairState.fuseAB[i], prices[i], poolPrice);
       }
       needRebalance = fuseStatusChangedAB[0]
         || fuseStatusChangedAB[1]

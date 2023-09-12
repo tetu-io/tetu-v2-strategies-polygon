@@ -18,7 +18,7 @@ import {
   MockToken,
   MultiBribe__factory,
   MultiGauge,
-  MultiGauge__factory,
+  MultiGauge__factory, PairBasedStrategyReader,
   PlatformVoter__factory,
   PriceOracleImitator,
   ProxyControlled,
@@ -33,7 +33,7 @@ import {
   UniswapV3ConverterStrategy,
   UniswapV3ConverterStrategy__factory,
   UniswapV3Factory,
-  UniswapV3Lib,
+  UniswapV3Lib, UniswapV3Pool,
   UniswapV3Pool__factory,
   VaultFactory,
   VeDistributor,
@@ -50,7 +50,7 @@ import {generateAssetPairs} from "../utils/ConverterUtils";
 import {BigNumber, BigNumberish} from "ethers";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {RunHelper} from "../utils/RunHelper";
-import {IContracts, IVaultUniswapV3StrategyInfo} from "./types";
+import {IContracts, IRebalanceDebtSwapPoolParams, IVaultUniswapV3StrategyInfo} from "./types";
 
 export async function deployBacktestSystem(
   signer: SignerWithAddress,
@@ -60,26 +60,28 @@ export async function deployBacktestSystem(
   token1: string,
   poolFee: number,
   tickRange: number,
-  rebalanceTickRange: number
+  rebalanceTickRange: number,
+  rebalanceDebtSwapPoolParams: IRebalanceDebtSwapPoolParams
 ): Promise<IContracts> {
+  console.log('Deploying backtest system..')
   // deploy tokens
   const tokens: {[realAddress: string]: MockToken} = {}
   const mintAmount = '100000000000'; // 100b
-  tokens[getAddress(MaticAddresses.USDC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'USDC', 6, mintAmount);
-  tokens[getAddress(MaticAddresses.WETH_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WETH', 18, mintAmount);
-  tokens[getAddress(MaticAddresses.WMATIC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18, mintAmount);
-  tokens[getAddress(MaticAddresses.DAI_TOKEN)] =  await DeployerUtils.deployMockToken(signer, 'DAI', 18, mintAmount);
-  tokens[getAddress(MaticAddresses.USDT_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'USDT', 6, mintAmount);
-  tokens[getAddress(MaticAddresses.miMATIC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'miMATIC', 18, mintAmount);
-  tokens[getAddress(MaticAddresses.WBTC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WBTC', 8, mintAmount);
-  tokens[getAddress(MaticAddresses.wstETH_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'wstETH', 18, mintAmount);
-  tokens[getAddress(MaticAddresses.MaticX_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'MaticX', 18, mintAmount);
-  const tetu = await DeployerUtils.deployMockToken(signer, 'TETU');
+  tokens[getAddress(MaticAddresses.USDC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'USDC', 6, mintAmount, true);
+  tokens[getAddress(MaticAddresses.WETH_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WETH', 18, mintAmount, true);
+  tokens[getAddress(MaticAddresses.WMATIC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18, mintAmount, true);
+  tokens[getAddress(MaticAddresses.DAI_TOKEN)] =  await DeployerUtils.deployMockToken(signer, 'DAI', 18, mintAmount, true);
+  tokens[getAddress(MaticAddresses.USDT_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'USDT', 6, mintAmount, true);
+  tokens[getAddress(MaticAddresses.miMATIC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'miMATIC', 18, mintAmount, true);
+  tokens[getAddress(MaticAddresses.WBTC_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'WBTC', 8, mintAmount, true);
+  tokens[getAddress(MaticAddresses.wstETH_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'wstETH', 18, mintAmount, true);
+  tokens[getAddress(MaticAddresses.MaticX_TOKEN)] = await DeployerUtils.deployMockToken(signer, 'MaticX', 18, mintAmount, true);
+  const tetu = await DeployerUtils.deployMockToken(signer, 'TETU', 18, '1000000', true);
 
   // deploy uniswap v3 and periphery
-  const uniswapV3Factory = await DeployerUtils.deployContract(signer, 'UniswapV3Factory') as UniswapV3Factory;
-  const uniswapV3Helper = await DeployerUtils.deployContract(signer, 'UniswapV3Lib') as UniswapV3Lib;
-  const uniswapV3Calee = await DeployerUtils.deployContract(signer, 'UniswapV3Callee') as UniswapV3Callee;
+  const uniswapV3Factory = await DeployerUtils.deployContractSilent(signer, 'UniswapV3Factory') as UniswapV3Factory;
+  const uniswapV3Helper = await DeployerUtils.deployContractSilent(signer, 'UniswapV3Lib') as UniswapV3Lib;
+  const uniswapV3Calee = await DeployerUtils.deployContractSilent(signer, 'UniswapV3Callee') as UniswapV3Callee;
   for (const [, token] of Object.entries(tokens)) {
     await token.approve(uniswapV3Calee.address, Misc.MAX_UINT)
   }
@@ -93,14 +95,30 @@ export async function deployBacktestSystem(
   ), signer)
   await pool.initialize(currentSqrtPriceX96);
 
+  // deploy rebalanceDebtSwapPool
+  let rebalanceDebtSwapPool: UniswapV3Pool|undefined
+  const useRebalanceDebtSwapPool = rebalanceDebtSwapPoolParams.amount0Desired.gt(0) || rebalanceDebtSwapPoolParams.amount1Desired.gt(0)
+  if (useRebalanceDebtSwapPool) {
+    const uniswapV3Factory2 = await DeployerUtils.deployContractSilent(signer, 'UniswapV3Factory') as UniswapV3Factory;
+    await (await uniswapV3Factory2.createPool(tokens[token0].address, tokens[token1].address, poolFee)).wait();
+    rebalanceDebtSwapPool = UniswapV3Pool__factory.connect(await uniswapV3Factory2.getPool(
+      tokens[token0].address,
+      tokens[token1].address,
+      poolFee,
+    ), signer)
+    await rebalanceDebtSwapPool.initialize(currentSqrtPriceX96);
+    const preview = await uniswapV3Helper.addLiquidityPreview(rebalanceDebtSwapPool.address, rebalanceDebtSwapPoolParams.tickLower, rebalanceDebtSwapPoolParams.tickUpper, rebalanceDebtSwapPoolParams.amount0Desired, rebalanceDebtSwapPoolParams.amount1Desired)
+    await uniswapV3Calee.mint(rebalanceDebtSwapPool.address, signer.address, rebalanceDebtSwapPoolParams.tickLower, rebalanceDebtSwapPoolParams.tickUpper, preview.liquidityOut)
+  }
+
   // deploy tetu liquidator and setup
   let tx
-  const liquidatorController = await DeployerUtils.deployContract(
+  const liquidatorController = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-liquidator/contracts/Controller.sol:Controller',
   ) as LiquidatorController;
-  const liquidatorLogic = await DeployerUtils.deployContract(signer, 'TetuLiquidator');
-  const liquidatorProxy = await DeployerUtils.deployContract(
+  const liquidatorLogic = await DeployerUtils.deployContractSilent(signer, 'TetuLiquidator');
+  const liquidatorProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-liquidator/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled_1_0_0;
@@ -109,8 +127,8 @@ export async function deployBacktestSystem(
   const liquidator = TetuLiquidator__factory.connect(liquidatorProxy.address, signer);
   tx = await liquidator.init(liquidatorController.address);
   await tx.wait();
-  const uni3swapperLogic = await DeployerUtils.deployContract(signer, 'Uni3Swapper');
-  const uni3swapperProxy = await DeployerUtils.deployContract(
+  const uni3swapperLogic = await DeployerUtils.deployContractSilent(signer, 'Uni3Swapper');
+  const uni3swapperProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-liquidator/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled_1_0_0;
@@ -120,39 +138,38 @@ export async function deployBacktestSystem(
   tx = await uni3swapper.init(liquidatorController.address);
   await tx.wait();
 
-  const liquidatorPools: {
+  const liquidatorPoolsForStrategy: {
     pool: string,
     swapper: string,
     tokenIn: string,
     tokenOut: string,
   }[] = []
-
-  liquidatorPools.push({
-    pool: pool.address,
+  liquidatorPoolsForStrategy.push({
+    pool: useRebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
     swapper: uni3swapper.address,
     tokenIn: await pool.token0(),
     tokenOut: await pool.token1(),
   })
-  liquidatorPools.push({
-    pool: pool.address,
+  liquidatorPoolsForStrategy.push({
+    pool: useRebalanceDebtSwapPool ? rebalanceDebtSwapPool.address : pool.address,
     swapper: uni3swapper.address,
     tokenIn: await pool.token1(),
     tokenOut: await pool.token0(),
   })
 
-  await liquidator.addLargestPools(liquidatorPools, true);
+  await liquidator.addLargestPools(liquidatorPoolsForStrategy, true);
 
   // deploy Compound and put liquidity
-  const compPriceOracleImitator = await DeployerUtils.deployContract(
+  const compPriceOracleImitator = await DeployerUtils.deployContractSilent(
     signer,
     'CompPriceOracleImitator',
     tokens[vaultAsset].address,
     liquidator.address,
   ) as CompPriceOracleImitator;
-  const comptroller = await DeployerUtils.deployContract(signer, 'Comptroller') as Comptroller;
+  const comptroller = await DeployerUtils.deployContractSilent(signer, 'Comptroller') as Comptroller;
   await comptroller._setPriceOracle(compPriceOracleImitator.address);
   // baseRatePerYear, multiplierPerYear, jumpMultiplierPerYear, kink_, owner_
-  const compInterestRateModel = await DeployerUtils.deployContract(
+  const compInterestRateModel = await DeployerUtils.deployContractSilent(
     signer,
     'JumpRateModelV2',
     '1'/*'9512937595'*/,
@@ -164,7 +181,7 @@ export async function deployBacktestSystem(
 
   const cTokens: {[realUnderlyingAddress: string]: CErc20Immutable} = {}
   for (const [realTokenAddress, token] of Object.entries(tokens)) {
-    const cToken = await DeployerUtils.deployContract(
+    const cToken = await DeployerUtils.deployContractSilent(
       signer,
       'CErc20Immutable',
       token.address,
@@ -182,15 +199,47 @@ export async function deployBacktestSystem(
     await token.approve(cToken.address, Misc.MAX_UINT)
     await comptroller.enterMarkets([cToken.address])
     await cToken.mint(parseUnits('500000', await token.decimals()));
-    console.log(`Comp oracle ${await token.symbol()} price: ${await compPriceOracleImitator.getUnderlyingPrice(cToken.address)}`)
+    // console.log(`Comp oracle ${await token.symbol()} price: ${await compPriceOracleImitator.getUnderlyingPrice(cToken.address)}`)
   }
 
+
+
   // deploy price oracle for converter
-  const priceOracleImitator = await DeployerUtils.deployContract(
+  const liquidatorProxyForOracle = await DeployerUtils.deployContractSilent(
+    signer,
+    '@tetu_io/tetu-liquidator/contracts/proxy/ProxyControlled.sol:ProxyControlled',
+  ) as ProxyControlled_1_0_0;
+  tx = await liquidatorProxyForOracle.initProxy(liquidatorLogic.address);
+  await tx.wait();
+  const liquidatorForOracle = TetuLiquidator__factory.connect(liquidatorProxyForOracle.address, signer);
+  tx = await liquidatorForOracle.init(liquidatorController.address);
+  await tx.wait();
+  const liquidatorPoolsForOracle: {
+    pool: string,
+    swapper: string,
+    tokenIn: string,
+    tokenOut: string,
+  }[] = []
+  liquidatorPoolsForOracle.push({
+    pool: pool.address,
+    swapper: uni3swapper.address,
+    tokenIn: await pool.token0(),
+    tokenOut: await pool.token1(),
+  })
+  liquidatorPoolsForOracle.push({
+    pool: pool.address,
+    swapper: uni3swapper.address,
+    tokenIn: await pool.token1(),
+    tokenOut: await pool.token0(),
+  })
+
+  await liquidatorForOracle.addLargestPools(liquidatorPoolsForOracle, true);
+
+  const priceOracleImitator = await DeployerUtils.deployContractSilent(
     signer,
     'PriceOracleImitator',
     tokens[vaultAsset].address,
-    liquidator.address,
+    liquidatorForOracle.address,
   ) as PriceOracleImitator;
 
 
@@ -201,7 +250,7 @@ export async function deployBacktestSystem(
   const swapManager = SwapManager__factory.connect(await deployConverterProxy(signer, 'SwapManager'), signer)
   const debtMonitor = DebtMonitor__factory.connect(await deployConverterProxy(signer, 'DebtMonitor'), signer)
   const tetuConverter = TetuConverter__factory.connect(await deployConverterProxy(signer, "TetuConverter"), signer)
-  const keeperCaller = await DeployerUtils.deployContract(signer, 'KeeperCaller');
+  const keeperCaller = await DeployerUtils.deployContractSilent(signer, 'KeeperCaller');
   await converterController.init(
     signer.address,
     signer.address,
@@ -223,8 +272,8 @@ export async function deployBacktestSystem(
   await debtMonitor.init(converterController.address)
   await swapManager.init(converterController.address)
 
-  const poolAdapter = await DeployerUtils.deployContract(signer, 'HfPoolAdapter') as HfPoolAdapter;
-  const platformAdapter = await DeployerUtils.deployContract(
+  const poolAdapter = await DeployerUtils.deployContractSilent(signer, 'HfPoolAdapter') as HfPoolAdapter;
+  const platformAdapter = await DeployerUtils.deployContractSilent(
     signer,
     'HfPlatformAdapter',
     converterController.address,
@@ -238,8 +287,8 @@ export async function deployBacktestSystem(
   await tx.wait();
 
   // deploy Tetu V2 system
-  const controllerLogic = await DeployerUtils.deployContract(signer, 'ControllerV2') as ControllerV2;
-  const controllerProxy = await DeployerUtils.deployContract(
+  const controllerLogic = await DeployerUtils.deployContractSilent(signer, 'ControllerV2') as ControllerV2;
+  const controllerProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -248,8 +297,8 @@ export async function deployBacktestSystem(
   const controller = ControllerV2__factory.connect(controllerProxy.address, signer);
   tx = await controller.init(signer.address);
   await tx.wait();
-  const veTetuLogic = await DeployerUtils.deployContract(signer, 'VeTetu') as VeTetu;
-  const veTetuProxy = await DeployerUtils.deployContract(
+  const veTetuLogic = await DeployerUtils.deployContractSilent(signer, 'VeTetu') as VeTetu;
+  const veTetuProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -258,8 +307,8 @@ export async function deployBacktestSystem(
   const veTetu = VeTetu__factory.connect(veTetuProxy.address, signer);
   tx = await veTetu.init(tetu.address, BigNumber.from(1000), controller.address);
   await tx.wait();
-  const veDistLogic = await DeployerUtils.deployContract(signer, 'VeDistributor') as VeDistributor;
-  const veDistProxy = await DeployerUtils.deployContract(
+  const veDistLogic = await DeployerUtils.deployContractSilent(signer, 'VeDistributor') as VeDistributor;
+  const veDistProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -268,8 +317,8 @@ export async function deployBacktestSystem(
   const veDist = VeDistributor__factory.connect(veDistProxy.address, signer);
   tx = await veDist.init(controller.address, veTetu.address, tetu.address);
   await tx.wait();
-  const gaugeLogic = await DeployerUtils.deployContract(signer, 'MultiGauge');
-  const gaugeProxy = await DeployerUtils.deployContract(
+  const gaugeLogic = await DeployerUtils.deployContractSilent(signer, 'MultiGauge');
+  const gaugeProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -278,8 +327,8 @@ export async function deployBacktestSystem(
   const gauge = MultiGauge__factory.connect(gaugeProxy.address, signer);
   tx = await gauge.init(controller.address, veTetu.address, tetu.address);
   await tx.wait();
-  const bribeLogic = await DeployerUtils.deployContract(signer, 'MultiBribe');
-  const bribeProxy = await DeployerUtils.deployContract(
+  const bribeLogic = await DeployerUtils.deployContractSilent(signer, 'MultiBribe');
+  const bribeProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -288,8 +337,8 @@ export async function deployBacktestSystem(
   const bribe = MultiBribe__factory.connect(bribeProxy.address, signer);
   tx = await bribe.init(controller.address, veTetu.address, tetu.address);
   await tx.wait();
-  const tetuVoterLogic = await DeployerUtils.deployContract(signer, 'TetuVoter');
-  const tetuVoterProxy = await DeployerUtils.deployContract(
+  const tetuVoterLogic = await DeployerUtils.deployContractSilent(signer, 'TetuVoter');
+  const tetuVoterProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -298,8 +347,8 @@ export async function deployBacktestSystem(
   const tetuVoter = TetuVoter__factory.connect(tetuVoterProxy.address, signer);
   tx = await tetuVoter.init(controller.address, veTetu.address, tetu.address, gauge.address, bribe.address);
   await tx.wait();
-  const platformVoterLogic = await DeployerUtils.deployContract(signer, 'PlatformVoter');
-  const platformVoterProxy = await DeployerUtils.deployContract(
+  const platformVoterLogic = await DeployerUtils.deployContractSilent(signer, 'PlatformVoter');
+  const platformVoterProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -308,8 +357,8 @@ export async function deployBacktestSystem(
   const platformVoter = PlatformVoter__factory.connect(platformVoterProxy.address, signer);
   tx = await platformVoter.init(controller.address, veTetu.address);
   await tx.wait();
-  const forwarderLogic = await DeployerUtils.deployContract(signer, 'ForwarderV3');
-  const forwarderProxy = await DeployerUtils.deployContract(
+  const forwarderLogic = await DeployerUtils.deployContractSilent(signer, 'ForwarderV3');
+  const forwarderProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -318,8 +367,8 @@ export async function deployBacktestSystem(
   const forwarder = ForwarderV3__factory.connect(forwarderProxy.address, signer);
   tx = await forwarder.init(controller.address, tetu.address, bribe.address);
   await tx.wait();
-  const investFundLogic = await DeployerUtils.deployContract(signer, 'InvestFundV2');
-  const investFundProxy = await DeployerUtils.deployContract(
+  const investFundLogic = await DeployerUtils.deployContractSilent(signer, 'InvestFundV2');
+  const investFundProxy = await DeployerUtils.deployContractSilent(
     signer,
     '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled',
   ) as ProxyControlled;
@@ -328,10 +377,10 @@ export async function deployBacktestSystem(
   const investFund = InvestFundV2__factory.connect(investFundProxy.address, signer);
   tx = await investFund.init(controller.address);
   await tx.wait();
-  const vaultImpl = await DeployerUtils.deployContract(signer, 'TetuVaultV2');
-  const vaultInsuranceImpl = await DeployerUtils.deployContract(signer, 'VaultInsurance');
-  const splitterImpl = await DeployerUtils.deployContract(signer, 'StrategySplitterV2');
-  const vaultFactory = await DeployerUtils.deployContract(
+  const vaultImpl = await DeployerUtils.deployContractSilent(signer, 'TetuVaultV2');
+  const vaultInsuranceImpl = await DeployerUtils.deployContractSilent(signer, 'VaultInsurance');
+  const splitterImpl = await DeployerUtils.deployContractSilent(signer, 'StrategySplitterV2');
+  const vaultFactory = await DeployerUtils.deployContractSilent(
     signer,
     'VaultFactory',
     controller.address,
@@ -365,7 +414,7 @@ export async function deployBacktestSystem(
   await tx.wait();
 
   // deploy strategy
-  const platformVoterSigner = await DeployerUtilsLocal.impersonate(await controller.platformVoter());
+  const platformVoterSigner = await DeployerUtilsLocal.impersonate(await controller.platformVoter(), true);
   const poolToken0 = IERC20Metadata__factory.connect(await pool.token0(), signer);
   const poolToken1 = IERC20Metadata__factory.connect(await pool.token1(), signer);
   const vaultAssetAddress = tokens[vaultAsset].address
@@ -383,12 +432,15 @@ export async function deployBacktestSystem(
   );
 
   await vaultStrategyInfo.strategy.connect(platformVoterSigner).setCompoundRatio(100000); // 100%
+  await vaultStrategyInfo.strategy.setReinvestThresholdPercent(0); // 0%
   await converterController.setWhitelistValues([vaultStrategyInfo.strategy.address,], true)
 
-  const profitHolder = await DeployerUtils.deployContract(signer, 'StrategyProfitHolder', vaultStrategyInfo.strategy.address, [poolToken0.address, poolToken1.address])
+  const profitHolder = await DeployerUtils.deployContractSilent(signer, 'StrategyProfitHolder', vaultStrategyInfo.strategy.address, [poolToken0.address, poolToken1.address])
   await vaultStrategyInfo.strategy.setStrategyProfitHolder(profitHolder.address)
 
   await tokens[vaultAsset].transfer(await vaultStrategyInfo.vault.insurance(), parseUnits('1000000', await tokens[vaultAsset].decimals()))
+
+  const reader = await DeployerUtils.deployContractSilent(signer, 'PairBasedStrategyReader') as PairBasedStrategyReader
 
   return {
     tokens,
@@ -409,6 +461,8 @@ export async function deployBacktestSystem(
     controller,
     gauge,
     vaultFactory,
+    reader,
+    rebalanceDebtSwapPool,
   }
 }
 
@@ -428,7 +482,7 @@ export async function deployAndInitVaultAndUniswapV3Strategy<T>(
   withdrawFee = 0,
   wait = false,
 ): Promise<IVaultUniswapV3StrategyInfo> {
-  console.log('deployAndInitVaultAndUniswapV3Strategy', vaultName);
+  // console.log('deployAndInitVaultAndUniswapV3Strategy', vaultName);
 
   await RunHelper.runAndWait(() => vaultFactory.createVault(
     asset,
@@ -436,31 +490,31 @@ export async function deployAndInitVaultAndUniswapV3Strategy<T>(
     vaultName,
     gauge.address,
     buffer,
-  ), true, wait);
+  ), true, wait, true);
   const l = (await vaultFactory.deployedVaultsLength()).toNumber();
   const vaultAddress = await vaultFactory.deployedVaults(l - 1);
-  console.log(l, 'VAULT: ', vaultAddress);
+  // console.log(l, 'VAULT: ', vaultAddress);
   const vault = TetuVaultV2__factory.connect(vaultAddress, signer);
 
-  console.log('setFees', depositFee, withdrawFee);
+  // console.log('setFees', depositFee, withdrawFee);
   await RunHelper.runAndWait(() =>
       vault.setFees(depositFee, withdrawFee),
-    true, wait,
+    true, wait, true
   );
 
-  console.log('registerVault');
+  // console.log('registerVault');
   await RunHelper.runAndWait(() =>
       controller.registerVault(vaultAddress),
-    true, wait,
+    true, wait, true
   );
 
-  console.log('addStakingToken');
+  // console.log('addStakingToken');
   await RunHelper.runAndWait(() =>
       gauge.addStakingToken(vaultAddress),
-    true, wait,
+    true, wait, true
   );
 
-  console.log('+Vault Deployed');
+  // console.log('+Vault Deployed');
 
   const splitterAddress = await vault.splitter();
   const splitter = StrategySplitterV2__factory.connect(splitterAddress, signer);
@@ -469,7 +523,7 @@ export async function deployAndInitVaultAndUniswapV3Strategy<T>(
 
   // ADD STRATEGY
   const strategy = UniswapV3ConverterStrategy__factory.connect(
-    await DeployerUtils.deployProxy(signer, 'UniswapV3ConverterStrategy'),
+    await DeployerUtils.deployProxy(signer, 'UniswapV3ConverterStrategy', true),
     signer, // gov
   );
   await strategy.init(
@@ -489,8 +543,8 @@ export async function deployAndInitVaultAndUniswapV3Strategy<T>(
 }
 
 async function deployConverterProxy(signer: SignerWithAddress, contract: string) {
-  const logic = await DeployerUtils.deployContract(signer, contract);
-  const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-converter/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
-  await RunHelper.runAndWait(() => proxy.initProxy(logic.address));
+  const logic = await DeployerUtils.deployContractSilent(signer, contract);
+  const proxy = await DeployerUtils.deployContractSilent(signer, '@tetu_io/tetu-converter/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
+  await RunHelper.runAndWait(() => proxy.initProxy(logic.address), true, true, true);
   return proxy.address;
 }

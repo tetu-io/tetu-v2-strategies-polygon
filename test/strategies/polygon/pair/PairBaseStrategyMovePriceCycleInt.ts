@@ -150,9 +150,9 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
           await PairBasedStrategyPrepareStateUtils.unfoldBorrowsRepaySwapRepay(
             strategyAsOperator,
             p.aggregator,
-            true, // use single iteration
-            async stateTitle => {
-              states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle));
+              () => true, // use single iteration
+            async (stateTitle, eventsSet) => {
+              states.push(await StateUtilsNum.getState(signer2, signer, converterStrategyBase, b.vault, stateTitle, {eventsSet}));
               await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
             },
           );
@@ -224,7 +224,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
   strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
     async function prepareStrategy(): Promise<IBuilderResults> {
-      const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(strategyInfo.name, signer, signer2);
+      const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
 
       await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
       return b;
