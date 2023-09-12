@@ -17,6 +17,7 @@ import { Misc } from '../../../../scripts/utils/Misc';
 import { expect } from 'chai';
 import { MockHelper } from '../../../baseUT/helpers/MockHelper';
 import { BigNumber } from 'ethers';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 /**
  * Test internal functions of ConverterStrategyBase using mocks
@@ -38,6 +39,7 @@ describe('ConverterStrategyBaseInternalTests', function() {
 
   //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer, signer1, signer2] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
 

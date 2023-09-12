@@ -35,28 +35,10 @@ import {
   FUSE_ON_UPPER_LIMIT_3
 } from "../../../baseUT/AppConstants";
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 /**
  * Check how fuse triggered ON/OFF because of price changing.
  */
 describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 //region Constants
   const DEFAULT_SWAP_AMOUNT_RATIO = 1.01;
 //endregion Constants

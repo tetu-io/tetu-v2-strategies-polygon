@@ -21,6 +21,7 @@ import {IStateNum, IStateParams, StateUtilsNum} from "../../../baseUT/utils/Stat
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 
 const { expect } = chai;
@@ -49,6 +50,7 @@ describe('univ3-converter-usdt-usdc-simple', function() {
 
 //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;

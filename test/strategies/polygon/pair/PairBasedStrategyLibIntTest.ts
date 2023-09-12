@@ -22,7 +22,7 @@ import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
 import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {PLAN_REPAY_SWAP_REPAY, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
@@ -41,6 +41,7 @@ describe('PairBasedStrategyLibIntTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 

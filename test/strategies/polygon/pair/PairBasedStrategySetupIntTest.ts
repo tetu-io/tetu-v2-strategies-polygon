@@ -15,6 +15,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 describe('PairBasedStrategySetupIntTest', () => {
   //region Variables
@@ -28,6 +29,7 @@ describe('PairBasedStrategySetupIntTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
 

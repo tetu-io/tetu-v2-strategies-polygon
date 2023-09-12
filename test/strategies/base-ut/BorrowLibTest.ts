@@ -14,6 +14,7 @@ import {
   Misc
 } from "../../../scripts/utils/Misc";
 import {setupIsConversionValid, setupMockedLiquidation} from "../../baseUT/mocks/MockLiquidationUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 describe('BorrowLibTest', () => {
   /** prop0 + prop1 */
@@ -37,6 +38,7 @@ describe('BorrowLibTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
     governance = await DeployerUtilsLocal.getControllerGovernance(signer);

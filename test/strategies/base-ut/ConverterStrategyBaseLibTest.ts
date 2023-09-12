@@ -32,6 +32,7 @@ import {
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -56,6 +57,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);

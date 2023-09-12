@@ -27,33 +27,13 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {KYBER_PID, KYBER_USDC_DAI_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
-
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
 describe('KyberConverterStrategyUniversalTest', async () => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
-
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, number][] = [
     [MaticAddresses.USDC_TOKEN, MaticAddresses.KYBER_USDC_USDT, 0, 0, KYBER_PID],
@@ -67,8 +47,8 @@ describe('KyberConverterStrategyUniversalTest', async () => {
   const statesParams: {[poolId: string]: IStateParams} = {}
 
   before(async function() {
-    await HardhatUtils.switchToMostCurrentBlock();
-    await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
+    await StrategyTestUtils.deployCoreAndInit(deployInfo);
 
     const [signer] = await ethers.getSigners();
 

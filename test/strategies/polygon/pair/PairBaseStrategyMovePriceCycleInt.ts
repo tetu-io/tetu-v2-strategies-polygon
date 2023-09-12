@@ -22,7 +22,7 @@ import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtu
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 const { expect } = chai;
 
@@ -36,6 +36,7 @@ describe('PairBaseStrategyMovePriceCycleInt @skip-on-coverage', function() {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock();
 

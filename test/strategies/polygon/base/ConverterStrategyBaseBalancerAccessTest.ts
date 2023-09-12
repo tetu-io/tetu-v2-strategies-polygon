@@ -38,6 +38,7 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { expect } from 'chai';
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {StateUtils, IState, IPutInitialAmountsBalancesResults} from "../../../StateUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBase using direct access to internal functions
@@ -59,6 +60,7 @@ describe.skip('ConverterStrategyBaseBalancerAccessTest', function() {
 
   //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     signer = await DeployerUtilsLocal.impersonate(); // governance by default
     user = (await ethers.getSigners())[1];
     console.log('signer', signer.address);

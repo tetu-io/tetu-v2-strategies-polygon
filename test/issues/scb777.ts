@@ -8,7 +8,7 @@ import {
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
-import {HardhatUtils} from "../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../baseUT/utils/HardhatUtils';
 import {defaultAbiCoder, parseUnits} from "ethers/lib/utils";
 import {PackedData} from "../baseUT/utils/PackedData";
 import {Misc} from "../../scripts/utils/Misc";
@@ -28,6 +28,7 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
 
     let snapshotBefore: string;
     before(async function () {
+      await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
       snapshotBefore = await TimeUtils.snapshot();
       await HardhatUtils.switchToBlock(BLOCK);
     });

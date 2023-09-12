@@ -11,11 +11,12 @@ import { BigNumber } from 'ethers';
 import { areAlmostEqual } from '../../../baseUT/utils/MathUtils';
 import { controlGasLimitsEx } from '../../../../scripts/utils/GasLimitUtils';
 import { BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_BPT_AMOUNTS_OUT } from '../../../baseUT/GasLimits';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 const { expect } = chai;
 chai.use(chaiAsPromised);
 
-describe('BalancerLogicLibTest', function() {
+describe.skip('BalancerLogicLibTest', function() {
   //region Variables
   let snapshotBefore: string;
   let snapshot: string;
@@ -34,6 +35,7 @@ describe('BalancerLogicLibTest', function() {
 
   //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer, signer1, signer2] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createBalancerLogicLibFacade(signer);

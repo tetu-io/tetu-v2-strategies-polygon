@@ -16,25 +16,16 @@ import {ConverterUtils} from "../../test/baseUT/utils/ConverterUtils";
 import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {TokenUtils} from "../utils/TokenUtils";
 import {TimeUtils} from "../utils/TimeUtils";
+import { reset } from '@nomicfoundation/hardhat-network-helpers';
+import { EnvSetup } from '../utils/EnvSetup';
 
 async function main() {
-  const chainId = (await ethers.provider.getNetwork()).chainId
+  const chainId = Misc.getChainId()
   if (chainId !== 137) {
     console.error(`Incorrect hardhat chainId ${chainId}. Need 137.`)
     process.exit(-1)
   }
-
-  await hre.network.provider.request({
-    method: "hardhat_reset",
-    params: [
-      {
-        forking: {
-          jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-          blockNumber: undefined,
-        },
-      },
-    ],
-  });
+  await reset(EnvSetup.getEnv().maticRpcUrl)
 
   const signer = (await ethers.getSigners())[0];
 

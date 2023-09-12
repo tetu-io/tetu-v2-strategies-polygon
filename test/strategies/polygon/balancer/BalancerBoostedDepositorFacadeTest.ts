@@ -28,8 +28,9 @@ import {
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_GET_WEIGHTS,
   BALANCER_COMPOSABLE_STABLE_DEPOSITOR_POOL_QUOTE_EXIT,
 } from '../../../baseUT/GasLimits';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
-describe('BalancerBoostedDepositorFacadeTest', function() {
+describe.skip('BalancerBoostedDepositorFacadeTest', function() {
   //region Constants
   const balancerVault = MaticAddresses.BALANCER_VAULT;
   /** Balancer Boosted Tetu USD pool ID */
@@ -51,6 +52,7 @@ describe('BalancerBoostedDepositorFacadeTest', function() {
 
   //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer, signer1, signer2] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
   });

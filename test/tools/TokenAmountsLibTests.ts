@@ -12,6 +12,7 @@ import {
   GAS_FILTER_2_SECOND_AMOUNT_ZERO,
 } from '../baseUT/GasLimits';
 import { controlGasLimitsEx } from '../../scripts/utils/GasLimitUtils';
+import { HARDHAT_NETWORK_ID, HardhatUtils } from '../baseUT/utils/HardhatUtils';
 
 
 const { expect } = chai;
@@ -24,6 +25,7 @@ describe('TokenAmountsLib tests', function() {
   const _addr = utils.getAddress;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
     lib = await DeployerUtils.deployContract(signer, 'TokenAmountsLibTest') as TokenAmountsLibTest;
@@ -161,9 +163,9 @@ describe('TokenAmountsLib tests', function() {
     });
   });
 
-  describe("combineArrays", () => {
-    describe("Good paths", () => {
-      it("should return empty array if all arrays are empty", async () => {
+  describe('combineArrays', () => {
+    describe('Good paths', () => {
+      it('should return empty array if all arrays are empty', async() => {
         const r = await lib.combineArrays(
           [], [],
           [], [],
@@ -175,88 +177,88 @@ describe('TokenAmountsLib tests', function() {
 
         expect(ret.toLowerCase()).eq(expected.toLowerCase());
       });
-      it("should return all items if first array is empty", async () => {
+      it('should return all items if first array is empty', async() => {
         const r = await lib.combineArrays(
           [], [],
           [PA.DAI_TOKEN], [2],
           [PA.TETU_TOKEN], [3],
         );
 
-        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join('\n');
         const expected = [
           [PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
-          [2, 3].join()
-        ].join("\n");
+          [2, 3].join(),
+        ].join('\n');
         expect(ret.toLowerCase()).eq(expected.toLowerCase());
       });
-      it("should return all items if second array is empty", async () => {
+      it('should return all items if second array is empty', async() => {
         const r = await lib.combineArrays(
           [PA.DAI_TOKEN], [2],
           [], [],
           [PA.TETU_TOKEN], [3],
         );
 
-        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join('\n');
         const expected = [
           [PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
-          [2, 3].join()
-        ].join("\n");
+          [2, 3].join(),
+        ].join('\n');
         expect(ret.toLowerCase()).eq(expected.toLowerCase());
       });
-      it("should return all items if third array is empty", async () => {
+      it('should return all items if third array is empty', async() => {
         const r = await lib.combineArrays(
           [PA.DAI_TOKEN], [2],
           [PA.TETU_TOKEN], [3],
           [], [],
         );
 
-        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join('\n');
         const expected = [
           [PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
-          [2, 3].join()
-        ].join("\n");
+          [2, 3].join(),
+        ].join('\n');
         expect(ret.toLowerCase()).eq(expected.toLowerCase());
       });
-      it("should return all items if no duplicates in input arrays", async () => {
+      it('should return all items if no duplicates in input arrays', async() => {
         const r = await lib.combineArrays(
           [PA.USDC_TOKEN], [1],
           [PA.DAI_TOKEN], [2],
           [PA.TETU_TOKEN], [3],
         );
 
-        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join('\n');
         const expected = [
           [PA.USDC_TOKEN, PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
-          [1, 2, 3].join()
-        ].join("\n");
+          [1, 2, 3].join(),
+        ].join('\n');
 
         expect(ret.toLowerCase()).eq(expected.toLowerCase());
       });
-      it("should return single item if all input arrays contain same token", async () => {
+      it('should return single item if all input arrays contain same token', async() => {
         const r = await lib.combineArrays(
           [PA.USDC_TOKEN, PA.USDC_TOKEN], [1, 2],
           [PA.USDC_TOKEN], [3],
           [PA.USDC_TOKEN, PA.USDC_TOKEN, PA.USDC_TOKEN], [4, 5, 6],
         );
 
-        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
-        const expected = [PA.USDC_TOKEN, 21].join("\n");
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join('\n');
+        const expected = [PA.USDC_TOKEN, 21].join('\n');
 
         expect(ret.toLowerCase()).eq(expected.toLowerCase());
       });
 
-      it("should return all items if duplicates exist in input arrays", async () => {
+      it('should return all items if duplicates exist in input arrays', async() => {
         const r = await lib.combineArrays(
           [PA.USDC_TOKEN, PA.DAI_TOKEN], [1, 2],
           [PA.DAI_TOKEN], [3],
           [PA.TETU_TOKEN, PA.DAI_TOKEN, PA.USDC_TOKEN], [4, 5, 6],
         );
 
-        const ret = [r.allTokens.join(), r.allAmounts.join()].join("\n");
+        const ret = [r.allTokens.join(), r.allAmounts.join()].join('\n');
         const expected = [
           [PA.USDC_TOKEN, PA.DAI_TOKEN, PA.TETU_TOKEN].join(),
-          [7, 10, 4].join()
-        ].join("\n");
+          [7, 10, 4].join(),
+        ].join('\n');
 
         expect(ret.toLowerCase()).eq(expected.toLowerCase());
       });
@@ -274,8 +276,8 @@ describe('TokenAmountsLib tests', function() {
           lib.combineArrays(
             tokens1, amounts1,
             tokens2, amounts2,
-            tokens3, amounts3
-          )
+            tokens3, amounts3,
+          ),
         ).revertedWith('TS-19 lengths'); // AppErrors.INCORRECT_LENGTHS
       });
       it('array mismatch 2', async() => {
@@ -290,8 +292,8 @@ describe('TokenAmountsLib tests', function() {
           lib.combineArrays(
             tokens1, amounts1,
             tokens2, amounts2,
-            tokens3, amounts3
-          )
+            tokens3, amounts3,
+          ),
         ).revertedWith('TS-19 lengths'); // AppErrors.INCORRECT_LENGTHS
       });
       it('array mismatch 3', async() => {
@@ -306,15 +308,15 @@ describe('TokenAmountsLib tests', function() {
           lib.combineArrays(
             tokens1, amounts1,
             tokens2, amounts2,
-            tokens3, amounts3
-          )
+            tokens3, amounts3,
+          ),
         ).revertedWith('TS-19 lengths'); // AppErrors.INCORRECT_LENGTHS
       });
     });
   });
 
-  describe("uncheckedInc", () => {
-    it("should return incremented value", async () => {
+  describe('uncheckedInc', () => {
+    it('should return incremented value', async() => {
       expect((await lib.uncheckedInc(10)).toNumber()).eq(11);
     });
   });

@@ -17,6 +17,7 @@ import {expect} from "chai";
 import {Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY} from "../../baseUT/AppConstants";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 describe('IterationPlanLibTest', () => {
   //region Variables
@@ -39,6 +40,7 @@ describe('IterationPlanLibTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
     governance = await DeployerUtilsLocal.getControllerGovernance(signer);
