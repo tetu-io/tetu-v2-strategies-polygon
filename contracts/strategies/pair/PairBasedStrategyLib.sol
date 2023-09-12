@@ -415,7 +415,7 @@ library PairBasedStrategyLib {
           );
 
           if (borrowInsteadRepay) {
-            borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
+            _borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
 
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
             _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
@@ -474,7 +474,7 @@ library PairBasedStrategyLib {
         // more repays are required
         _secondRepay(p, indexCollateral, indexBorrow, amountToRepay - repaidAmount, needToRepay);
       } else {
-        borrowToProportions(p, indexBorrow, indexCollateral, false);
+        _borrowToProportions(p, indexBorrow, indexCollateral, false);
       }
     }
   }
@@ -500,7 +500,7 @@ library PairBasedStrategyLib {
   }
 
   /// @notice borrow borrow-asset under collateral-asset, result balances should match to propNotUnderlying18
-  function borrowToProportions(
+  function _borrowToProportions(
     IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow,

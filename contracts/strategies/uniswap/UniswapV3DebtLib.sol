@@ -143,7 +143,7 @@ library UniswapV3DebtLib {
   ) external {
     (int24 newLowerTick, int24 newUpperTick) = _calcNewTickRangeForTick(tick, pairState.lowerTick, pairState.upperTick, pairState.tickSpacing);
     (uint prop0, uint prop1) = getEntryDataProportions(IUniswapV3Pool(pairState.pool), newLowerTick, newUpperTick, pairState.depositorSwapTokens);
-    PairBasedStrategyLogicLib.rebalanceNoSwaps(
+    PairBasedStrategyLogicLib._rebalanceNoSwaps(
       converterLiquidator,
       pairState,
       profitToCover,

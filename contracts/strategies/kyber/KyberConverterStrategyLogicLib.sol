@@ -567,7 +567,7 @@ library KyberConverterStrategyLogicLib {
       coveredByRewards = KyberDebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
       uint notCovered = loss - coveredByRewards;
       if (notCovered != 0) {
-        ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, notCovered);
       }
       emit CoverLoss(loss, coveredByRewards);
     }

@@ -213,6 +213,13 @@ library ConverterStrategyBaseLib2 {
     uint sentAmount,
     uint unsentAmount
   ) {
+    return _sendToInsurance(asset, amount, splitter, totalAssets_, balance);
+  }
+
+  function _sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_, uint balance) internal returns (
+    uint sentAmount,
+    uint unsentAmount
+  ) {
     uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
@@ -270,6 +277,12 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
   ///         If the loss were covered only partially, emit {NotEnoughInsurance}
+  function coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) external {
+    _coverLossAndCheckResults(splitter, earned, lossToCover);
+  }
+
+  /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
+  ///         If the loss were covered only partially, emit {NotEnoughInsurance}
   function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) internal {
     address asset = ISplitter(splitter).asset();
     address vault = ISplitter(splitter).vault();
@@ -294,6 +307,37 @@ library ConverterStrategyBaseLib2 {
     lossUncovered = loss > lossToCover
       ? loss - lossToCover
       : 0;
+  }
+
+  /// @notice Send ProfitToCover to insurance - code fragment of the requirePayAmountBack()
+  ///         moved here to reduce size of requirePayAmountBack()
+  /// @param theAsset_ The asset passed from Converter
+  /// @param balanceTheAsset_ Current balance of {theAsset_}
+  /// @param investedAssets_ Value of investedAssets after call fixPriceChange()
+  /// @param earnedByPrices_ ProfitToCover received from fixPriceChange()
+  /// @return balanceTheAssetOut Final balance of {theAsset_} (after sending profit-to-cover to the insurance)
+  function sendProfitGetAssetBalance(
+    address theAsset_,
+    uint balanceTheAsset_,
+    uint investedAssets_,
+    uint earnedByPrices_,
+    IStrategyV3.BaseState storage baseState_
+  ) external returns (
+    uint balanceTheAssetOut
+  ) {
+    balanceTheAssetOut = balanceTheAsset_;
+    if (earnedByPrices_ != 0) {
+      address underlying = baseState_.asset;
+      uint balanceUnderlying = theAsset_ == underlying
+        ? balanceTheAsset_
+        : AppLib.balance(underlying);
+
+      _sendToInsurance(underlying, earnedByPrices_, baseState_.splitter, investedAssets_ + balanceUnderlying, balanceUnderlying);
+
+      if (theAsset_ == underlying) {
+        balanceTheAssetOut = AppLib.balance(theAsset_);
+      }
+    }
   }
 //endregion -------------------------------------------- Cover loss, send profit to insurance
 

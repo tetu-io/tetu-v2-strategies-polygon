@@ -582,16 +582,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
     require(v.indexTheAsset != type(uint).max, AppErrors.WRONG_ASSET);
 
     (uint _investedAssets, uint earnedByPrices) = _fixPriceChanges(true);
-    if (earnedByPrices != 0) {
-      address underlying = baseState.asset;
-      uint balanceUnderlying = theAsset_ == underlying
-        ? v.balanceBefore
-        : AppLib.balance(underlying);
-      ConverterStrategyBaseLib2.sendToInsurance(underlying, earnedByPrices, baseState.splitter, _investedAssets + balanceUnderlying, balanceUnderlying);
-      if (theAsset_ == underlying) {
-        v.balanceBefore = AppLib.balance(theAsset_);
-      }
-    }
+    v.balanceBefore = ConverterStrategyBaseLib2.sendProfitGetAssetBalance(theAsset_, v.balanceBefore, _investedAssets, earnedByPrices, baseState);
 
     // amount to withdraw; we add a little gap to avoid situation "opened debts, no liquidity to pay"
     // At first we add only 1 gap.

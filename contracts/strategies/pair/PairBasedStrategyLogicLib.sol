@@ -366,7 +366,7 @@ library PairBasedStrategyLogicLib {
   /// @notice Rebalance asset to proportions {propTokenA}:{1e18-propTokenA}, fix profitToCover
   /// @param propTokenA Proportion of {tokenA}, > 0. Proportion of {tokenB} is calculates as 1e18 - prop0
   /// @param liquidationThresholdsAB [liquidityThreshold of token A, liquidityThreshold of tokenB]
-  function rebalanceNoSwaps(
+  function _rebalanceNoSwaps(
     address[2] calldata converterLiquidator,
     PairBasedStrategyLogicLib.PairState storage pairState,
     uint profitToCover,

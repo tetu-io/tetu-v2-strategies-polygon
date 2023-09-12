@@ -1678,6 +1678,175 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
+  describe("sendProfitGetAssetBalance", () => {
+    interface ISendProfitGetAssetBalanceParams {
+      theAsset: MockToken;
+      balanceTheAsset: string;
+      investedAssets: string;
+      earnedByPrices: string;
+
+      underlying?: {
+        balance: string;
+        token: MockToken;
+      }
+    }
+    interface ISendProfitGetAssetBalanceResults {
+      insuranceBalance: number;
+      balanceTheAsset: number;
+      balanceUnderlying: number;
+      balanceTheAssetOut: number;
+    }
+    async function callSendProfitGetAssetBalance(p: ISendProfitGetAssetBalanceParams): Promise<ISendProfitGetAssetBalanceResults> {
+      const decimalsTheAsset = await p.theAsset.decimals();
+      const underlyingToken = p.underlying ? p.underlying.token : p.theAsset;
+      const decimalsUnderlying = await underlyingToken.decimals();
+      await p.theAsset.mint(facade.address, parseUnits(p.balanceTheAsset, decimalsTheAsset));
+
+      if (p.underlying) {
+        await p.underlying.token.mint(facade.address, parseUnits(p.underlying.balance, decimalsUnderlying));
+      }
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      const vault = await MockHelper.createMockVault(signer);
+      await splitter.setAsset(underlyingToken.address);
+      await splitter.setVault(vault.address);
+      const insurance = ethers.Wallet.createRandom().address;
+
+      await vault.setInsurance(insurance);
+
+      await facade.setBaseState(
+        underlyingToken.address,
+        splitter.address,
+        ethers.Wallet.createRandom().address,
+        0,
+        0,
+        0,
+        "strategy name",
+      );
+
+      const ret = await facade.callStatic.sendProfitGetAssetBalance(
+        p.theAsset.address,
+        parseUnits(p.balanceTheAsset, decimalsTheAsset),
+        parseUnits(p.investedAssets, decimalsUnderlying),
+        parseUnits(p.earnedByPrices, decimalsUnderlying)
+      );
+      await facade.sendProfitGetAssetBalance(
+        p.theAsset.address,
+        parseUnits(p.balanceTheAsset, decimalsTheAsset),
+        parseUnits(p.investedAssets, decimalsUnderlying),
+        parseUnits(p.earnedByPrices, decimalsUnderlying)
+      );
+
+      return {
+        insuranceBalance: +formatUnits(await underlyingToken.balanceOf(insurance), decimalsUnderlying),
+        balanceTheAsset: +formatUnits(await p.theAsset.balanceOf(facade.address), decimalsTheAsset),
+        balanceUnderlying: +formatUnits(await underlyingToken.balanceOf(facade.address), decimalsUnderlying),
+        balanceTheAssetOut: +formatUnits(ret, decimalsTheAsset)
+      }
+    }
+    describe("The asset is underlying", () => {
+      describe("earnedByPrices is 0", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function sendProfitGetAssetBalanceTest(): Promise<ISendProfitGetAssetBalanceResults> {
+          return callSendProfitGetAssetBalance({
+            theAsset: usdc,
+            balanceTheAsset: "1",
+            earnedByPrices: "0",
+            investedAssets: "100"
+          });
+        }
+
+        it("should return unchanged balanceTheAsset", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAssetOut).eq(1);
+        });
+        it("should not change underlying balance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAsset).eq(1);
+          expect(ret.balanceUnderlying).eq(1);
+        });
+      })
+
+      describe("earnedByPrices > 0", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function sendProfitGetAssetBalanceTest(): Promise<ISendProfitGetAssetBalanceResults> {
+          return callSendProfitGetAssetBalance({
+            theAsset: usdc,
+            balanceTheAsset: "5",
+            earnedByPrices: "2",
+            investedAssets: "1000000"
+          });
+        }
+
+        it("should return expected balanceTheAssetOut", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAssetOut).eq(3);
+        });
+        it("should send expected amount to insurance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.insuranceBalance).eq(2);
+        });
+        it("should return expected underlying balance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAsset).eq(3);
+          expect(ret.balanceUnderlying).eq(3);
+        });
+      })
+    });
+    describe("The asset is NOT underlying", () => {
+      describe("earnedByPrices > 0", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function sendProfitGetAssetBalanceTest(): Promise<ISendProfitGetAssetBalanceResults> {
+          return callSendProfitGetAssetBalance({
+            theAsset: weth,
+            underlying: {
+              token: usdc,
+              balance: "59",
+            },
+            balanceTheAsset: "5",
+            earnedByPrices: "2",
+            investedAssets: "1000000"
+          });
+        }
+
+        it("should return expected balanceTheAssetOut", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAssetOut).eq(5);
+        });
+        it("should send expected amount to insurance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.insuranceBalance).eq(2);
+        });
+        it("should return expected balances", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAsset).eq(5);
+          expect(ret.balanceUnderlying).eq(57);
+        });
+      })
+    });
+  });
+
 
   describe('getExpectedWithdrawnAmounts', () => {
     let snapshot: string;
