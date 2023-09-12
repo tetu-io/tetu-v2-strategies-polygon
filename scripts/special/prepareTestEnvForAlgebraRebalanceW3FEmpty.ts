@@ -20,7 +20,7 @@ import {UniversalTestUtils} from "../../test/baseUT/utils/UniversalTestUtils";
 import {TokenUtils} from "../utils/TokenUtils";
 
 async function main() {
-  const chainId = (await ethers.provider.getNetwork()).chainId
+  const chainId = Misc.getChainId();
   if (chainId !== 137) {
     console.error(`Incorrect hardhat chainId ${chainId}. Need 137.`)
     process.exit(-1)

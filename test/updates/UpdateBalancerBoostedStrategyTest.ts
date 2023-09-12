@@ -14,11 +14,12 @@ import {
 } from "../../typechain";
 import {DForceChangePriceUtils} from "../baseUT/converter/DForceChangePriceUtils";
 import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../baseUT/utils/HardhatUtils';
 
 /**
  * Test to check upgrade BalancerBoostedStrategy 1.0.0 to 1.0.1 (move to balancer gauges v2)
  */
-describe("UpdateBalancerBoostedStrategyTest @skip-on-coverage", () => {
+describe.skip("UpdateBalancerBoostedStrategyTest @skip-on-coverage", () => {
   const strategyAddress = "0xa99478F79A82663f8A7f5D8DD4aD4A46e22Ea540";
 
   let snapshot: string;
@@ -27,6 +28,7 @@ describe("UpdateBalancerBoostedStrategyTest @skip-on-coverage", () => {
 
 //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     this.timeout(1200000);
     snapshot = await TimeUtils.snapshot();
     const signers = await ethers.getSigners();

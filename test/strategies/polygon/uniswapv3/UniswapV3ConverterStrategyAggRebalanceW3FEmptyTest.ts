@@ -9,27 +9,14 @@ import {
 } from "../../../../typechain";
 import {Web3FunctionHardhat} from "@gelatonetwork/web3-functions-sdk/hardhat-plugin";
 import {Web3FunctionResultV2, Web3FunctionUserArgs} from "@gelatonetwork/web3-functions-sdk";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 const { w3f } = hre;
 
 // How to:
 // npx hardhat run scripts/special/prepareTestEnvForUniswapV3RebalanceW3FEmpty.ts
 // npx hardhat test test/strategies/polygon/uniswapv3/UniswapV3ConverterStrategyAggRebalanceW3FEmptyTest.ts --network localhost
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 describe('UniswapV3ConverterStrategyAggRebalanceW3FTest', function() {
-  if (argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let signer: SignerWithAddress;
   let strategy: UniswapV3ConverterStrategy;
@@ -38,6 +25,7 @@ describe('UniswapV3ConverterStrategyAggRebalanceW3FTest', function() {
   let userArgs: Web3FunctionUserArgs;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
     strategy = UniswapV3ConverterStrategy__factory.connect('0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1', signer)

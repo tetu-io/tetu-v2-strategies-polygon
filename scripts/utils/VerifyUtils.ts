@@ -3,21 +3,11 @@ import axios from 'axios';
 import { config as dotEnvConfig } from 'dotenv';
 import logSettings from '../../log_settings';
 import { Logger } from 'tslog';
+import { Misc } from './Misc';
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
 const log: Logger<undefined> = new Logger(logSettings);
-
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    networkScanKey: {
-      type: "string",
-    },
-  }).argv;
 
 
 const VERIFY= 'verify1';
@@ -69,38 +59,39 @@ export class VerifyUtils {
     }
   }
 
-  public static async verifyProxy(adr: string) {
-    try {
-
-      const resp =
-        await axios.post(
-          (await VerifyUtils.getNetworkScanUrl()) +
-          `?module=contract&action=verifyproxycontract&apikey=${argv.networkScanKey}`,
-          `address=${adr}`);
-      // log.info("proxy verify resp", resp.data);
-    } catch (e) {
-      log.error('error proxy verify ' + adr + e);
-    }
-  }
+  // public static async verifyProxy(adr: string) {
+  //   try {
+  //
+  //     const resp =
+  //       await axios.post(
+  //         (await VerifyUtils.getNetworkScanUrl()) +
+  //         `?module=contract&action=verifyproxycontract&apikey=${argv.networkScanKey}`,
+  //         `address=${adr}`);
+  //     // log.info("proxy verify resp", resp.data);
+  //   } catch (e) {
+  //     log.error('error proxy verify ' + adr + e);
+  //   }
+  // }
 
   public static async getNetworkScanUrl(): Promise<string> {
-    const net = (await ethers.provider.getNetwork());
-    if (net.name === 'ropsten') {
+    const chainName = Misc.getChainName();
+    const chainId = Misc.getChainId();
+    if (chainName === 'ropsten') {
       return 'https://api-ropsten.etherscan.io/api';
-    } else if (net.name === 'kovan') {
+    } else if (chainName === 'kovan') {
       return 'https://api-kovan.etherscan.io/api';
-    } else if (net.name === 'rinkeby') {
+    } else if (chainName === 'rinkeby') {
       return 'https://api-rinkeby.etherscan.io/api';
-    } else if (net.name === 'ethereum') {
+    } else if (chainName === 'ethereum') {
       return 'https://api.etherscan.io/api';
-    } else if (net.name === 'matic') {
-      return 'https://api.polygonscan.com/api'
-    } else if (net.chainId === 80001) {
-      return 'https://api-testnet.polygonscan.com/api'
-    } else if (net.chainId === 250) {
-      return 'https://api.ftmscan.com//api'
+    } else if (chainName === 'matic') {
+      return 'https://api.polygonscan.com/api';
+    } else if (chainId === 80001) {
+      return 'https://api-testnet.polygonscan.com/api';
+    } else if (chainId === 250) {
+      return 'https://api.ftmscan.com//api';
     } else {
-      throw Error('network not found ' + net);
+      throw Error('network not found ' + chainName + ' ' + chainId);
     }
   }
 

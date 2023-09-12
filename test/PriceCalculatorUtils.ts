@@ -9,6 +9,7 @@ import { parseUnits } from 'ethers/lib/utils';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 import { DeployerUtilsLocal } from '../scripts/utils/DeployerUtilsLocal';
+import { Misc } from '../scripts/utils/Misc';
 
 const log: Logger<undefined> = new Logger(logSettings);
 
@@ -33,12 +34,12 @@ export class PriceCalculatorUtils {
   public static async getPriceCached(token: string, liquidator: ITetuLiquidator | null = null): Promise<BigNumber> {
     console.log('getPriceCached token', token);
 
-    const net = await ethers.provider.getNetwork();
+    const chainId = Misc.getChainId();
     let network = '';
-    if (net.chainId === 137) {
+    if (chainId === 137) {
       network = 'MATIC';
     } else {
-      throw Error('Wrong network ' + net.chainId);
+      throw Error('Wrong network ' + chainId);
     }
     // if (network !== '') {
     //   const response = await axios.get(`https://api.tetu.io/api/v1/price/longTTL/?token=${token}&network=${network}`);
@@ -52,7 +53,7 @@ export class PriceCalculatorUtils {
       const liquidatorAddress = await controller.liquidator();
       liquidator = ITetuLiquidator__factory.connect(liquidatorAddress, ethers.provider);
     }
-    if (net.chainId === 137) {
+    if (chainId === 137) {
       const defaultToken = PolygonAddresses.USDC_TOKEN;
       // const decimals = await TokenUtils.decimals(token);
       const one = parseUnits('1'/*, decimals.toString()*/);
@@ -62,7 +63,7 @@ export class PriceCalculatorUtils {
 
       return liquidator.getPrice(token, defaultToken, one);
     } else {
-      throw Error('No config for ' + net.chainId);
+      throw Error('No config for ' + chainId);
     }
   }
 

@@ -32,6 +32,7 @@ import {
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
+import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
 
 describe('AppLibTest', () => {
   //region Variables
@@ -50,6 +51,7 @@ describe('AppLibTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createAppLibFacade(signer);

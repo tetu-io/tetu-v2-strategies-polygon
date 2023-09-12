@@ -25,22 +25,7 @@ const { w3f } = hre;
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForKyberReduceDebtW3F.ts
 // TEST_STRATEGY=<address> READER=<address> CONFIG=<address> npx hardhat test test/strategies/polygon/W3FReduceDebtTest.ts --network localhost
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 describe('Strategy reduce debt by Web3 Function tests', function() {
-  if (argv.hardhatChainId !== 137) {
-    return;
-  }
-
   let signer: SignerWithAddress;
   let strategy: UniswapV3ConverterStrategy;
 
