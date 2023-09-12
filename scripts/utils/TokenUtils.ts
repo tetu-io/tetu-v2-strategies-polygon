@@ -103,11 +103,6 @@ export class TokenUtils {
     return IERC20__factory.connect(tokenAddress, signer).transfer(destination, BigNumber.from(amount), {gasLimit: 19_000_000})
   }
 
-  public static async wrapNetworkToken(signer: SignerWithAddress, amount: string) {
-    const token = IWmatic__factory.connect(await DeployerUtilsLocal.getNetworkTokenAddress(), signer);
-    return token.deposit({value: parseUnits(amount), from: signer.address});
-  }
-
   public static async decimals(tokenAddress: string): Promise<number> {
     return IERC20Metadata__factory.connect(tokenAddress, ethers.provider).decimals();
   }

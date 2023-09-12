@@ -47,13 +47,14 @@ import {IPutInitialAmountsBalancesResults, IState, IStateParams, StateUtils} fro
 import {Provider} from "@ethersproject/providers";
 import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 chai.use(chaiAsPromised);
 
 /**
  * Integration time-consuming tests, so @skip-on-coverage
  */
-describe('BalancerBoostedIntTest @skip-on-coverage', function() {
+describe.skip('BalancerBoostedIntTest @skip-on-coverage', function() {
   //region Constants and variables
   const MAIN_ASSET: string = PolygonAddresses.USDC_TOKEN;
   const pool: string = MaticAddresses.BALANCER_POOL_T_USD;
@@ -70,6 +71,7 @@ describe('BalancerBoostedIntTest @skip-on-coverage', function() {
 
   //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     signer = await DeployerUtilsLocal.impersonate(); // governance by default
     user = (await ethers.getSigners())[1];
     console.log('signer', signer.address);

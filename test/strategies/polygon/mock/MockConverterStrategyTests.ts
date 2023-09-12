@@ -23,6 +23,7 @@ import {
 } from '../../../../typechain';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { parseUnits } from 'ethers/lib/utils';
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 
 const { expect } = chai;
@@ -46,6 +47,7 @@ describe.skip('Mock Converter Strategy tests', function() {
   let mockGauge: MockGauge;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer, signer1, signer2] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
 

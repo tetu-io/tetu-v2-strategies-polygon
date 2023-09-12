@@ -10,6 +10,8 @@ import {Web3Utils} from "./Web3Utils";
 import {BigNumber, utils} from "ethers";
 import {UniswapV3Utils} from "./UniswapV3Utils";
 import {formatUnits} from "ethers/lib/utils";
+import { Misc } from './Misc';
+import { EnvSetup } from './EnvSetup';
 
 const trackSplitters = [
   deployAddresses.SPLITTER_USDC_ADDRESS.matic,
@@ -18,7 +20,7 @@ const trackSplitters = [
 const startBlock = 41300000
 
 async function main() {
-  if ((await ethers.provider.getNetwork()).chainId !== 137) {
+  if (Misc.getChainId() !== 137) {
     console.log('Tracker works only in polygon network [137]')
     process.exit(1)
   }
@@ -27,7 +29,7 @@ async function main() {
   const uniswapV3StrategyRebalanceTopic = UniswapV3ConverterStrategyLogicLib__factory.createInterface().getEventTopic(UniswapV3ConverterStrategyLogicLib__factory.createInterface().getEvent('Rebalanced'))
   const splitterHardworkTopic = StrategySplitterV2__factory.createInterface().getEventTopic(StrategySplitterV2__factory.createInterface().getEvent('HardWork'))
 
-  const rpc = process.env.TETU_MATIC_RPC_URL
+  const rpc = EnvSetup.getEnv().maticRpcUrl
   const provider = new ethers.providers.JsonRpcProvider(rpc)
 
   const curBlock = await ethers.provider.getBlockNumber()

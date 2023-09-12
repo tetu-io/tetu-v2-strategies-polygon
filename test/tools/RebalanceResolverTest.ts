@@ -27,21 +27,7 @@ import {UniversalTestUtils} from "../baseUT/utils/UniversalTestUtils";
 const {expect} = chai;
 chai.use(chaiAsPromised);
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 describe('RebalanceResolver tests', function () {
-  if (argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let signer: SignerWithAddress;
   let controller: ControllerV2;

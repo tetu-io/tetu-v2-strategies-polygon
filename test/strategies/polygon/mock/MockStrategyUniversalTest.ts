@@ -10,34 +10,15 @@ import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/add
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
 // todo fix
 describe.skip('Universal tests', async() => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
-
 
   const deployInfo: DeployInfo = new DeployInfo();
   before(async function() {
-    await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+    await StrategyTestUtils.deployCoreAndInit(deployInfo);
   });
 
   const strategyName = 'MockStrategySimple';

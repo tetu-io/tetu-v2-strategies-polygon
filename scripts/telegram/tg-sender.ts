@@ -4,24 +4,9 @@ import {isExcludedMessage} from "./excluded-messages";
 import {ethers} from "hardhat";
 import logSettings from "../../log_settings";
 import {Misc} from "../utils/Misc";
+import { EnvSetup } from '../utils/EnvSetup';
 
-// tslint:disable-next-line:no-var-requires
-require('dotenv').config();
 const log: Logger<undefined> = new Logger(logSettings);
-
-
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    tgChatKey: {
-      type: "string"
-    },
-    tgChatId: {
-      type: "string",
-      default: "-1001897996203"
-    },
-  }).argv;
 
 
 // tslint:disable-next-line:interface-name
@@ -39,11 +24,12 @@ export async function sendMessageToTelegram(msg: string) {
   if (isExcludedMessage(msg)) {
     return;
   }
-  if (!argv.tgChatKey) {
+  const env = EnvSetup.getEnv();
+  if (!env.tgChatKey) {
     log.error('Telegram key not set');
     return;
   }
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${argv.tgChatKey}`;
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${env.tgChatKey}`;
 
   let block = -1;
   try {
@@ -53,7 +39,7 @@ export async function sendMessageToTelegram(msg: string) {
   msg = `CHAIN ${Misc.getChainId()} | BLOCK ${block} : ${msg}`;
 
   const params: SendMessageParams = {
-    chat_id: argv.tgChatId,
+    chat_id: env.tgChatId,
     text: msg,
   };
 

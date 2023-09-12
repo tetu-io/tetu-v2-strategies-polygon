@@ -23,7 +23,7 @@ import {
   IListStates,
   PairBasedStrategyPrepareStateUtils
 } from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {
   ENTRY_TO_POOL_DISABLED,
   ENTRY_TO_POOL_IS_ALLOWED,
@@ -33,21 +33,6 @@ import {
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
 
 /**
  * There are two kind of tests here:
@@ -60,10 +45,6 @@ describe('PairBasedNoSwapIntTest', function() {
   const DEFAULT_SWAP_AMOUNT_RATIO = 0.3;
 //endregion Constants
 
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
-
 //region Variables
   let snapshotBefore: string;
 
@@ -73,6 +54,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
 //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
 
     // we need to display full objects, so we use util.inspect, see

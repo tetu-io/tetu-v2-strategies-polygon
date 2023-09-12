@@ -72,6 +72,7 @@
     "graphql": "^16.6.0",
     "hardhat": "2.14.1",
     "hardhat-abi-exporter": "^2.10.1",
+    "hardhat-change-network": "^0.0.7",
     "hardhat-contract-sizer": "^2.8.0",
     "hardhat-deploy": "^0.11.25",
     "hardhat-deploy-ethers": "^0.3.0-beta.13",
@@ -99,6 +100,6 @@
     "yargs": "^17.7.1"
   },
   "engines": {
-    "node": "^18.0.0"
+    "node": "^18.x.x"
   }
 }

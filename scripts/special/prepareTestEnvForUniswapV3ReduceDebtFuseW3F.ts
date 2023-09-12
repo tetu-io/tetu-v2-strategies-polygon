@@ -28,25 +28,16 @@ import {PairStrategyLiquidityUtils} from "../../test/baseUT/strategies/PairStrat
 import {PriceOracleImitatorUtils} from "../../test/baseUT/converter/PriceOracleImitatorUtils";
 import {BigNumber} from "ethers";
 import {PackedData} from "../../test/baseUT/utils/PackedData";
+import { reset } from '@nomicfoundation/hardhat-network-helpers';
+import { EnvSetup } from '../utils/EnvSetup';
 
 async function main() {
-  const chainId = (await ethers.provider.getNetwork()).chainId
+  const chainId = Misc.getChainId()
   if (chainId !== 137) {
     console.error(`Incorrect hardhat chainId ${chainId}. Need 137.`)
     process.exit(-1)
   }
-
-  await hre.network.provider.request({
-    method: "hardhat_reset",
-    params: [
-      {
-        forking: {
-          jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-          blockNumber: undefined,
-        },
-      },
-    ],
-  });
+  await reset(EnvSetup.getEnv().maticRpcUrl)
 
   const signer = (await ethers.getSigners())[0];
 

@@ -24,6 +24,7 @@ import { MaticAddresses } from '../../../scripts/addresses/MaticAddresses';
 import { ConverterUtils } from '../../baseUT/utils/ConverterUtils';
 import { MaticHolders } from '../../../scripts/addresses/MaticHolders';
 import { areAlmostEqual } from '../../baseUT/utils/MathUtils';
+import { HARDHAT_NETWORK_ID, HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade,
@@ -40,6 +41,7 @@ describe.skip('ConverterStrategyBaseLibIntTest', () => {
 
   //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);

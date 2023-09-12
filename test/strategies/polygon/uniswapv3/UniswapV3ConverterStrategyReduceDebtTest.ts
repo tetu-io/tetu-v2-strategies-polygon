@@ -24,29 +24,10 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniswapV3LiquidityUtils} from "../../../baseUT/strategies/univ3/UniswapV3LiquidityUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
-
   const PLAN_SWAP_REPAY = 0;
   const PLAN_REPAY_SWAP_REPAY = 1;
   const PLAN_SWAP_ONLY = 2;
@@ -61,8 +42,8 @@ describe('UniswapV3ConverterStrategy reduce debt by agg test', function() {
   let lib: UniswapV3Lib;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);

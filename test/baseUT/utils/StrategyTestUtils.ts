@@ -127,7 +127,7 @@ export class StrategyTestUtils {
      }*/
   }
 
-  public static async deployCoreAndInit(deployInfo: DeployInfo, deploy: boolean) {
+  public static async deployCoreAndInit(deployInfo: DeployInfo) {
     const signer = await DeployerUtilsLocal.impersonate();
     deployInfo.core = await DeployerUtilsLocal.getCoreAddressesWrapper(signer);
     deployInfo.tools = await DeployerUtilsLocal.getToolsAddressesWrapper(signer);

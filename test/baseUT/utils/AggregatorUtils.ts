@@ -3,6 +3,7 @@ import {BigNumber, BytesLike} from "ethers";
 import {defaultAbiCoder} from "ethers/lib/utils";
 import {ITetuLiquidator} from "../../../typechain";
 import { config as dotEnvConfig } from 'dotenv';
+import { EnvSetup } from '../../../scripts/utils/EnvSetup';
 
 /**
  *   function liquidate(
@@ -19,16 +20,7 @@ export interface ILiquidatorInputData {
   slippage: BigNumber;
 }
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    oneInchApiKey: {
-      type: 'string',
-      default: ''
-    },
-  }).argv;
+const argv = EnvSetup.getEnv();
 
 export class AggregatorUtils {
 
