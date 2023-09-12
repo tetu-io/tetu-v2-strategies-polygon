@@ -28,6 +28,7 @@ import {
   PLAN_REPAY_SWAP_REPAY,
   PLAN_SWAP_REPAY
 } from "../../../baseUT/AppConstants";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 describe('PairBasedStrategyLogicLibTest', () => {
 //region Constants and variables
@@ -53,6 +54,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
     governance = await DeployerUtilsLocal.getControllerGovernance(signer);

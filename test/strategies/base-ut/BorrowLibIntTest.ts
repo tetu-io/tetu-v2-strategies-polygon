@@ -34,6 +34,7 @@ import {
   GAS_BORROW_LIB_08
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 describe('BorrowLibIntTest', () => {
   /** prop0 + prop1 */
@@ -53,6 +54,7 @@ describe('BorrowLibIntTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
     snapshotBefore = await TimeUtils.snapshot();

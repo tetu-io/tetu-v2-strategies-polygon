@@ -34,29 +34,12 @@ import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
 import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {LiquidatorUtils} from "./utils/LiquidatorUtils";
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
-describe('BalancerBoostedUniversalTest', async () => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
+describe.skip('BalancerBoostedUniversalTest', async () => {
 
   // [asset, pool]
   const targets = [
@@ -70,7 +53,8 @@ describe('BalancerBoostedUniversalTest', async () => {
   const statesParams: {[poolId: string]: IStateParams} = {}
 
   before(async function() {
-    await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await StrategyTestUtils.deployCoreAndInit(deployInfo);
 
     const [signer] = await ethers.getSigners();
 

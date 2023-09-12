@@ -23,29 +23,11 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {KyberLiquidityUtils} from "../../../baseUT/strategies/kyber/KyberLiquidityUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 describe('KyberConverterStrategy reduce debt by agg test', function() {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -57,6 +39,7 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
   let lib: KyberLib;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock();
 

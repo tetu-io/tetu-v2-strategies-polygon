@@ -69,9 +69,9 @@ const argv = require('yargs/yargs')()
       default: 137,
     },
   }).argv;
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 describe('PairBasedStrategyActionResponseIntTest', function() {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) return;
 
 //region Variables
   let snapshotBefore: string;
@@ -83,6 +83,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
 //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
 
     // we need to display full objects, so we use util.inspect, see

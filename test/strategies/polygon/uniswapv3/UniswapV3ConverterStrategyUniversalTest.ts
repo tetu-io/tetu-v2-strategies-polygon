@@ -12,12 +12,12 @@ import {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 import {
-  IERC20Metadata__factory, IRebalancingStrategy__factory, IRebalancingV2Strategy__factory,
+  IERC20Metadata__factory, IPairBasedDefaultStateProvider, IPairBasedDefaultStateProvider__factory,
   IStrategyV2,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory
-} from "../../../../typechain";
+  UniswapV3ConverterStrategy__factory,
+} from '../../../../typechain';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {BigNumber, Signer} from "ethers";
@@ -29,31 +29,14 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
 
 
 describe('UniswapV3ConverterStrategyUniversalTest', async () => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   // [asset, pool, tickRange, rebalanceTickRange]
   const targets: [string, string, number, number][] = [
@@ -62,15 +45,17 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
   ]
 
   const deployInfo: DeployInfo = new DeployInfo();
-  const core = Addresses.getCore();
+  let core: CoreAddresses;
   const tetuConverterAddress = getConverterAddress();
   const states: {[poolId: string]: IState[]} = {};
   const statesParams: {[poolId: string]: IStateParams} = {}
   let snapshotBefore: string;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
-    await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+    await StrategyTestUtils.deployCoreAndInit(deployInfo);
+    core = Addresses.CORE.get(Misc.getChainId()) as CoreAddresses;
 
     const [signer] = await ethers.getSigners();
 
@@ -119,11 +104,11 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         ));
       },
       strategyInit: async(strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
-        const state = await PackedData.getDefaultState(IRebalancingV2Strategy__factory.connect(strategy.address, strategy.signer))
+        const state = await PackedData.getDefaultState(IPairBasedDefaultStateProvider__factory.connect(strategy.address, strategy.provider))
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, user).decimals()
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, user).decimals()
         await StrategyTestUtils.setThresholds(
-          strategy as unknown as IStrategyV2,
+          strategy,
           user,
           {
             reinvestThresholdPercent,

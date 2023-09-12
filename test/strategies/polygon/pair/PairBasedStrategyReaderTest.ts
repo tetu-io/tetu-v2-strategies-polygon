@@ -47,30 +47,12 @@ import {IBorrowParams, IBorrowParamsNum, IRepayParams} from "../../../baseUT/moc
 import {setupMockedBorrow, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 /**
  * Study noSwap-rebalance.
  * Try to change price step by step and check how strategy params are changed
  */
 describe('PairBasedStrategyReaderTest', function() {
 //region Constants and variables
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let snapshotBefore: string;
   let governance: SignerWithAddress;

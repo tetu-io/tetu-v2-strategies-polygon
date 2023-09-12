@@ -6,6 +6,8 @@ import {sendMessageToTelegram} from "../telegram/tg-sender";
 import {BigNumber, providers} from "ethers";
 import {formatUnits} from "ethers/lib/utils";
 import {Misc} from "./Misc";
+import { EnvSetup } from './EnvSetup';
+import hre from 'hardhat';
 // import {Transaction as EthereumTx} from '@ethereumjs/tx'
 
 const log: Logger<undefined> = new Logger(logSettings);
@@ -22,7 +24,7 @@ export class SpeedUp {
   }
 
   public static getRpcUrl() {
-    return process.env.TETU_MATIC_RPC_URL || ''
+    return EnvSetup.getEnv().maticRpcUrl || ''
   }
 
   public static async getBlockGasLimit(provider: providers.Provider) {
@@ -42,7 +44,7 @@ export class SpeedUp {
   public static async speedUp(txHash: string, provider: providers.Provider): Promise<string> {
     log.debug('SPEEDUP', txHash)
 
-    const url = SpeedUp.getRpcUrl();
+    const url = hre.config.networks.hardhat.forking?.url || '';
 
     const web3Provider = new Web3(new Web3.providers.HttpProvider(url, {
       timeout: 120000,
@@ -114,7 +116,7 @@ export class SpeedUp {
       {common: chain});
 
 
-    tx.sign(Buffer.from(process.env.TETU_PRIVATE_KEY || '', 'hex'));
+    tx.sign(Buffer.from(EnvSetup.getEnv().privateKey, 'hex'));
 
     const txRaw = '0x' + tx.serialize().toString('hex');
 

@@ -5,12 +5,13 @@ import fs from "fs";
 import { createClient } from 'urql'
 import 'isomorphic-unfetch';
 import {Misc} from "./Misc";
+import { EnvSetup } from './EnvSetup';
 
 export class UniswapV3Utils {
   static SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-polygon'
 
   public static async getPoolPrice(poolAddr: string): Promise<BigNumber> {
-    const rpc = process.env.TETU_MATIC_RPC_URL
+    const rpc = EnvSetup.getEnv().maticRpcUrl
     const provider = new ethers.providers.JsonRpcProvider(rpc)
     const pool = UniswapV3Pool__factory.connect(poolAddr, provider)
     const slot0 = await pool.slot0()
@@ -18,7 +19,7 @@ export class UniswapV3Utils {
   }
 
   public static async getPoolData(poolAddr: string): Promise<IPoolData> {
-    const rpc = process.env.TETU_MATIC_RPC_URL
+    const rpc = EnvSetup.getEnv().maticRpcUrl
     const provider = new ethers.providers.JsonRpcProvider(rpc)
     const pool = UniswapV3Pool__factory.connect(poolAddr, provider)
     const token0 = IERC20Metadata__factory.connect(await pool.token0(), provider)
@@ -47,7 +48,7 @@ export class UniswapV3Utils {
       r = JSON.parse(fsContent.toString())
       console.log(`Got from cache (${r.length} txs).`)
     } else {
-      const rpc = process.env.TETU_MATIC_RPC_URL
+      const rpc = EnvSetup.getEnv().maticRpcUrl
       const provider = new ethers.providers.JsonRpcProvider(rpc)
       const startTimestamp = (await provider.getBlock(startBlock)).timestamp;
       const endTimestamp = (await provider.getBlock(endBlock)).timestamp;
@@ -219,7 +220,7 @@ export class UniswapV3Utils {
       r = JSON.parse(fsContent.toString())
       console.log(`Got from cache.`)
     } else {
-      const rpc = process.env.TETU_MATIC_RPC_URL
+      const rpc = EnvSetup.getEnv().maticRpcUrl
       const provider = new ethers.providers.JsonRpcProvider(rpc)
       const pool = UniswapV3Pool__factory.connect(poolAddr, provider)
       const tickSpacing = this.getTickSpacing(await pool.fee())
@@ -333,7 +334,7 @@ export class UniswapV3Utils {
   }
 
   public static async getFees(pool: string, lowerTick: number, upperTick: number, owner: string, block: number = 0): Promise<[BigNumber, BigNumber]> {
-    const provider = new ethers.providers.JsonRpcProvider(process.env.TETU_MATIC_RPC_URL)
+    const provider = new ethers.providers.JsonRpcProvider(EnvSetup.getEnv().maticRpcUrl)
     const overrides = block === 0 ? {} : {blockTag: block,}
     const positionId = ethers.utils.keccak256(ethers.utils.solidityPack(["address", "int24", "int24"], [owner, lowerTick, upperTick]))
     const univ3pool = UniswapV3Pool__factory.connect(pool, provider)

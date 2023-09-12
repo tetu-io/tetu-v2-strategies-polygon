@@ -27,28 +27,12 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {IGetStateParams, IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 /**
  * Try to make several actions one by one
  */
 describe('PairBasedStrategyMultipleActionsIntTest', function() {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) return;
-
 
 //region Variables
   let snapshotBefore: string;
@@ -62,6 +46,7 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
 
 //region before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;

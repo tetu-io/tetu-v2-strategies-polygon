@@ -28,33 +28,15 @@ import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
+import { EnvSetup } from '../../../../scripts/utils/EnvSetup';
 /**
  * Study noSwap-rebalance.
  * Try to change price step by step and check how strategy params are changed
  */
 describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function() {
 //region Constants and variables
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -69,24 +51,13 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
 
 //region before after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
 
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;
 
-    await hre.network.provider.request({
-      method: "hardhat_reset",
-      params: [
-        {
-          forking: {
-            jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-            blockNumber: undefined,
-          },
-        },
-      ],
-    });
 
     [signer, user] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);

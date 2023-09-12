@@ -11,21 +11,6 @@ import BalancerVaultABI from '../../../../scripts/abis/BalancerVault.json';
 import LinearPoolABI from '../../../../scripts/abis/LinearPool.json';
 import LinearPoolRebalancerABI from '../../../../scripts/abis/LinearPoolRebalancer.json';
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 chai.use(chaiAsPromised);
 
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
@@ -50,9 +35,6 @@ async function simulateRewards(strategy: TetuV1SingleTokenStrictStrategy, reward
 }
 
 describe.skip('TetuV1 Single Token Strict Strategy tests', async() => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   async function deployContracts() {
 

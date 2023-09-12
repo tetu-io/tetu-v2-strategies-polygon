@@ -26,28 +26,10 @@ import {AlgebraLiquidityUtils} from "../../../baseUT/strategies/algebra/AlgebraL
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
 
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
-
 describe('AlgebraConverterStrategy reduce debt by agg test', function() {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -59,6 +41,7 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
   let lib: AlgebraLib;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock(); // 1inch works on current block only
 

@@ -8,25 +8,17 @@ import {
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
 import {formatUnits} from "ethers/lib/utils";
+import { Misc } from '../utils/Misc';
+import { reset } from '@nomicfoundation/hardhat-network-helpers';
+import { EnvSetup } from '../utils/EnvSetup';
 
 async function main() {
-  const chainId = (await ethers.provider.getNetwork()).chainId
+  const chainId = Misc.getChainId()
   if (chainId !== 137) {
     console.error(`Incorrect hardhat chainId ${chainId}. Need 137.`)
     process.exit(-1)
   }
-
-  await hre.network.provider.request({
-    method: "hardhat_reset",
-    params: [
-      {
-        forking: {
-          jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-          blockNumber: 44905000,
-        },
-      },
-    ],
-  });
+  await reset(EnvSetup.getEnv().maticRpcUrl, 44905000)
 
   const signer = (await ethers.getSigners())[0];
 

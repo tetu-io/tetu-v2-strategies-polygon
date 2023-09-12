@@ -30,6 +30,7 @@ import {
   UncoveredLossEventObject
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {Misc} from "../../../scripts/utils/Misc";
+import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -37,7 +38,7 @@ import {Misc} from "../../../scripts/utils/Misc";
  *
  * Following tests are created using fixtures, not snapshots
  */
-describe('ConverterStrategyBaseLibTest', () => {
+describe('ConverterStrategyBaseLibTest2', () => {
   //region Variables
   let snapshotBefore: string;
   let signer: SignerWithAddress;
@@ -54,6 +55,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createConverterStrategyBaseLibFacade2(signer);

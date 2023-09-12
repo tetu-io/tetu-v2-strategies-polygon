@@ -29,23 +29,7 @@ import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
-
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 // const {expect} = chai;
 chai.use(chaiAsPromised);
@@ -59,9 +43,6 @@ interface IIncentiveKey {
 }
 
 describe('AlgebraConverterStrategyUniversalTest', async () => {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   // [asset, pool, tickRange, rebalanceTickRange, incentiveKey]
   const targets: [string, string, number, number, IIncentiveKey][] = [
@@ -89,8 +70,9 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
   const statesParams: {[poolId: string]: IStateParams} = {}
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     await HardhatUtils.switchToMostCurrentBlock();
-    await StrategyTestUtils.deployCoreAndInit(deployInfo, argv.deployCoreContracts);
+    await StrategyTestUtils.deployCoreAndInit(deployInfo);
 
     const [signer] = await ethers.getSigners();
 

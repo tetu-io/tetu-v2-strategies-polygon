@@ -9,6 +9,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     PairBasedStrategyLogicLib: (await deployments.get('PairBasedStrategyLogicLib')).address,
     UniswapV3DebtLib: (await deployments.get('UniswapV3DebtLib')).address,
     ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
+    PairBasedStrategyLib: (await deployments.get('PairBasedStrategyLib')).address,
   });
 };
 export default func;

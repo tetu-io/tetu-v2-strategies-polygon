@@ -5,18 +5,14 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import {getAddress, parseUnits} from 'ethers/lib/utils';
 import { IPoolLiquiditySnapshot, UniswapV3Utils } from '../../../../scripts/utils/UniswapV3Utils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
-import { config as dotEnvConfig } from 'dotenv';
-import {
-  deployBacktestSystem,
-} from "../../../../scripts/uniswapV3Backtester/deployBacktestSystem";
+import { deployBacktestSystem } from '../../../../scripts/uniswapV3Backtester/deployBacktestSystem';
 import {
   IBacktestResult,
   IContracts,
-  IRebalanceDebtSwapPoolParams
-} from "../../../../scripts/uniswapV3Backtester/types";
-import {showBacktestResult, strategyBacktest} from "../../../../scripts/uniswapV3Backtester/strategyBacktest";
-import {BigNumber} from "ethers";
-
+  IRebalanceDebtSwapPoolParams,
+} from '../../../../scripts/uniswapV3Backtester/types';
+import { showBacktestResult, strategyBacktest } from '../../../../scripts/uniswapV3Backtester/strategyBacktest';
+import { EnvSetup } from '../../../../scripts/utils/EnvSetup';
 
 // How to
 // anvil --prune-history
@@ -24,17 +20,6 @@ import {BigNumber} from "ethers";
 
 // tslint:disable-next-line:no-var-requires
 const hre = require("hardhat");
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-  }).argv;
 
 describe('UmiswapV3 converter strategy backtester', function() {
   // ==== backtest config ====
@@ -210,7 +195,7 @@ describe('UmiswapV3 converter strategy backtester', function() {
   
   let backtestResult: IBacktestResult;
 
-  if (argv.disableStrategyTests) {
+  if (EnvSetup.getEnv().disableBacktesting) {
     return;
   }
 

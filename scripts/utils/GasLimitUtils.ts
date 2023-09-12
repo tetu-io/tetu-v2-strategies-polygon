@@ -7,14 +7,6 @@ export async function getGasUsed(p: Promise<ContractTransaction>): Promise<BigNu
   return rec.gasUsed;
 }
 
-export function controlGasLimits(f: () => void) {
-  if (process.env.TETU_DISABLE_GAS_LIMITS_CONTROL) {
-    console.log("Gas control is skipped: gas used{}");
-  } else {
-    f();
-  }
-}
-
 /**
  * Call f() to check gas limit
  * but only if env settings allows

@@ -9,6 +9,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     KyberDebtLib: (await deployments.get('KyberDebtLib')).address,
     ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
     PairBasedStrategyLogicLib: (await deployments.get('PairBasedStrategyLogicLib')).address,
+    PairBasedStrategyLib: (await deployments.get('PairBasedStrategyLib')).address,
   });
 };
 export default func;

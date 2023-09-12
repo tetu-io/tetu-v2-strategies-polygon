@@ -26,27 +26,9 @@ import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImi
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {BigNumber} from "ethers";
-import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
-
-dotEnvConfig();
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    disableStrategyTests: {
-      type: 'boolean',
-      default: false,
-    },
-    hardhatChainId: {
-      type: 'number',
-      default: 137,
-    },
-  }).argv;
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 describe('AlgebraConverterStrategyTest', function() {
-  if (argv.disableStrategyTests || argv.hardhatChainId !== 137) {
-    return;
-  }
 
   let snapshotBefore: string;
   let snapshot: string;
@@ -56,6 +38,7 @@ describe('AlgebraConverterStrategyTest', function() {
   let strategy: AlgebraConverterStrategy;
 
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock();
 

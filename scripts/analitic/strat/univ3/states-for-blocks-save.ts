@@ -11,16 +11,18 @@ import fs from "fs";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {IStateNum, StateUtilsNum} from "../../../../test/baseUT/utils/StateUtilsNum";
 import {MaticAddresses} from "../../../addresses/MaticAddresses";
-import {DeployerUtilsLocal} from "../../../utils/DeployerUtilsLocal";
-import {CaptureEvents} from "../../../../test/baseUT/strategies/CaptureEvents";
-import {ENTRY_TO_POOL_IS_ALLOWED} from "../../../../test/baseUT/AppConstants";
-import {AggregatorUtils} from "../../../../test/baseUT/utils/AggregatorUtils";
-import {PackedData} from "../../../../test/baseUT/utils/PackedData";
-import {HardhatUtils} from "../../../../test/baseUT/utils/HardhatUtils";
+import { reset } from '@nomicfoundation/hardhat-network-helpers';
+import { EnvSetup } from '../../../utils/EnvSetup';
+import { HardhatUtils } from '../../../../test/baseUT/utils/HardhatUtils';
+import { PackedData } from '../../../../test/baseUT/utils/PackedData';
+import { DeployerUtilsLocal } from '../../../utils/DeployerUtilsLocal';
 import {
   PairBasedStrategyPrepareStateUtils
 } from "../../../../test/baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../../../test/baseUT/strategies/InjectUtils";
+import { AggregatorUtils } from '../../../../test/baseUT/utils/AggregatorUtils';
+import { CaptureEvents } from '../../../../test/baseUT/strategies/CaptureEvents';
+import { ENTRY_TO_POOL_IS_ALLOWED } from '../../../../test/baseUT/AppConstants';
 
 // const STRATEGY = '0x29ce0ca8d0A625Ebe1d0A2F94a2aC9Cc0f9948F1'; // dai
 const STRATEGY = '0x6565e8136cd415f053c81ff3656e72574f726a5e'; // usdt
@@ -86,17 +88,7 @@ async function getStateForBlock(
   vault: string,
   prefix: string
 ) : Promise<IStateNum> {
-  await hre.network.provider.request({
-    method: "hardhat_reset",
-    params: [
-      {
-        forking: {
-          jsonRpcUrl: process.env.TETU_MATIC_RPC_URL,
-          blockNumber: Number(block),
-        },
-      },
-    ],
-  });
+  await reset(EnvSetup.getEnv().maticRpcUrl, block)
 
   return StateUtilsNum.getState(
     signer,

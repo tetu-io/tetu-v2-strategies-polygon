@@ -20,6 +20,7 @@ import {IStateNum, StateUtilsNum} from "../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../baseUT/utils/UniversalTestUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../baseUT/strategies/InjectUtils";
+import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 /**
  * Tests of ConverterStrategyBase on the base of real strategies
@@ -34,6 +35,7 @@ describe("ConverterStrategyBaseInt", () => {
 
 //region Before, after
   before(async function() {
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     // we need to display full objects, so we use util.inspect, see
     // https://stackoverflow.com/questions/10729276/how-can-i-get-the-full-object-in-node-jss-console-log-rather-than-object
     require("util").inspect.defaultOptions.depth = null;

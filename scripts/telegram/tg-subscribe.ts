@@ -4,31 +4,22 @@ import { Logger } from 'tslog';
 import logSettings from '../../log_settings';
 import { channelPost } from 'telegraf/filters';
 import { Telegraf } from 'telegraf';
+import { EnvSetup } from '../utils/EnvSetup';
 
 // tslint:disable-next-line:no-var-requires
 require('dotenv').config();
 const log: Logger<undefined> = new Logger(logSettings);
 
-// tslint:disable-next-line:no-var-requires
-const argv = require('yargs/yargs')()
-  .env('TETU')
-  .options({
-    hardhatChainId: {
-      type: "number",
-      default: 137
-    },
-    tgChatKey: {
-      type: "string"
-    },
-  }).argv;
+
 
 export function subscribeTgBot() {
+  const env = EnvSetup.getEnv();
   try {
-    if (!argv.tgChatKey) {
+    if (!env.tgChatKey) {
       log.error('Telegram key not set');
       return;
     }
-    const bot = new Telegraf(argv.tgChatKey);
+    const bot = new Telegraf(env.tgChatKey);
 
     bot.start(async (ctx) => {
       const chatId = ctx.chat?.id;
