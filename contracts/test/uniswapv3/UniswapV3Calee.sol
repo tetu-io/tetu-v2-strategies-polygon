@@ -5,12 +5,19 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IERC20.sol";
 import "../../integrations/uniswap/IUniswapV3Pool.sol";
 import "../../integrations/uniswap/IUniswapV3MintCallback.sol";
 import "../../integrations/uniswap/IUniswapV3SwapCallback.sol";
+import "hardhat/console.sol";
 
 contract UniswapV3Callee is IUniswapV3MintCallback, IUniswapV3SwapCallback {
   /// @dev The minimum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MIN_TICK)
   uint160 internal constant MIN_SQRT_RATIO = 4295128739 + 1;
   /// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
   uint160 internal constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342 - 1;
+
+  bool public noRevert;
+
+  function toggleNoRevert() external {
+    noRevert = !noRevert;
+  }
 
   function swap(
     address pool,
@@ -19,13 +26,25 @@ contract UniswapV3Callee is IUniswapV3MintCallback, IUniswapV3SwapCallback {
     uint amount
   ) external {
     address token0 = IUniswapV3Pool(pool).token0();
-    IUniswapV3Pool(pool).swap(
-      recipient,
-      tokenIn == token0,
-      int(amount),
-      tokenIn == token0 ? MIN_SQRT_RATIO : MAX_SQRT_RATIO,
-      abi.encode(msg.sender)
-    );
+    if (noRevert) {
+      try IUniswapV3Pool(pool).swap(
+        recipient,
+        tokenIn == token0,
+        int(amount),
+        tokenIn == token0 ? MIN_SQRT_RATIO : MAX_SQRT_RATIO,
+        abi.encode(msg.sender)
+      ) {} catch {
+        console.log('Swap failed');
+      }
+    } else {
+      IUniswapV3Pool(pool).swap(
+        recipient,
+        tokenIn == token0,
+        int(amount),
+        tokenIn == token0 ? MIN_SQRT_RATIO : MAX_SQRT_RATIO,
+        abi.encode(msg.sender)
+      );
+    }
   }
 
   function mint(

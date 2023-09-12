@@ -8,13 +8,15 @@ import { Web3FunctionResultCallData } from '@gelatonetwork/web3-functions-sdk';
 import { sendMessageToTelegram } from './telegram/tg-sender';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import {
-  ControllerV2__factory,
+  ControllerV2__factory, IRebalancingV2Strategy__factory,
   IStrategyV2__factory,
   StrategySplitterV2__factory,
   TetuVaultV2__factory,
 } from '../typechain';
 import { config as dotEnvConfig } from 'dotenv';
 import { subscribeTgBot } from './telegram/tg-subscribe';
+import {Misc} from "./utils/Misc";
+import {NSRUtils} from "./utils/NSRUtils";
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -25,12 +27,19 @@ import { subscribeTgBot } from './telegram/tg-subscribe';
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
 const MAX_ERROR_LENGTH = 1000;
+const DELAY_BETWEEN_NSRS = 60
+const DELAY_AFTER_NSR = 10
+const DELAY_NEED_NSR_CONFIRM = 300
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
 const argv = require('yargs/yargs')()
   .env('TETU')
   .options({
+    nsrMsgSuccess: {
+      type: 'boolean',
+      default: false,
+    },
     rebalanceDebtAgg: {
       type: 'string',
       default: '',
@@ -50,7 +59,7 @@ const argv = require('yargs/yargs')()
   }).argv;
 
 async function main() {
-  console.log('Strategies debt rebalancer');
+  console.log('Strategies NSR and debt rebalancer');
 
   if (!['localhost', 'matic'].includes(hre.network.name)) {
     console.log('Unsupported network', hre.network.name);
@@ -67,12 +76,14 @@ async function main() {
   console.log('Config: ', configAddress);
   console.log('Reader: ', readerAddress);
 
-
   const agg = argv.rebalanceDebtAgg;
   const oneInchProtocols = argv.rebalanceDebt1InchProtocols;
 
   const provider = ethers.provider;
   const signer = (await ethers.getSigners())[0];
+
+  let lastNSR: number = 0
+  const needNSRTimestamp: {[addr:string]:number} = {}
 
   // noinspection InfiniteLoopJS
   while (true) {
@@ -83,19 +94,58 @@ async function main() {
 
       for (const vault of vaults) {
         const splitter = await TetuVaultV2__factory.connect(vault, ethers.provider).splitter();
-        const strategies = await StrategySplitterV2__factory.connect(splitter, ethers.provider).allStrategies();
+        const splitterContract = StrategySplitterV2__factory.connect(splitter, ethers.provider)
+        const strategies = await splitterContract.allStrategies();
         console.log('strategies', strategies.length);
 
         for (const strategyAddress of strategies) {
 
           try {
 
-            if (!(await isStrategyEligibleForNSR(strategyAddress))) {
+            if (!(await NSRUtils.isStrategyEligibleForNSR(strategyAddress))) {
               continue;
             }
+
+            const strategy = IRebalancingV2Strategy__factory.connect(strategyAddress, signer)
             const strategyName = await IStrategyV2__factory.connect(strategyAddress, ethers.provider).strategySpecificName();
             console.log('Processing strategy', strategyName, strategyAddress);
 
+            let now = await Misc.getBlockTsFromChain()
+
+            // NSR
+            const isPausedStrategy = await splitterContract.pausedStrategies(strategyAddress)
+            const delayPassed = lastNSR + DELAY_BETWEEN_NSRS < now
+            const needNSR = await strategy.needRebalance()
+            if (needNSR && !needNSRTimestamp[strategyAddress]) {
+              needNSRTimestamp[strategyAddress] = now
+            }
+            if (!needNSR) {
+              needNSRTimestamp[strategyAddress] = 0
+            }
+            if (!isPausedStrategy && delayPassed && needNSR && now - needNSRTimestamp[strategyAddress] > DELAY_NEED_NSR_CONFIRM) {
+              const tp = await txParams2();
+              try {
+                await RunHelper.runAndWaitAndSpeedUp(
+                  provider,
+                  () => strategy.rebalanceNoSwaps(true, { ...tp }),
+                  true,
+                  true,
+                );
+                console.log('NSR success!', strategyName, strategyAddress);
+                if (argv.nsrMsgSuccess) {
+                  await sendMessageToTelegram(`NSR success! ${strategyName} ${strategyAddress}`);
+                }
+
+                now = await Misc.getBlockTsFromChain()
+                lastNSR = now
+                await sleep(DELAY_AFTER_NSR * 1000)
+              } catch (e) {
+                console.log('Error NSR',strategyName, strategyAddress, e);
+                await sendMessageToTelegram(`Error NSR ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
+              }
+            }
+
+            // Rebalance debt
             const result = await runResolver(
               provider,
               strategyAddress,
@@ -172,19 +222,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-async function isStrategyEligibleForNSR(strategyAdr: string) {
-  const version = await IStrategyV2__factory.connect(strategyAdr, ethers.provider).STRATEGY_VERSION();
-  const name = await IStrategyV2__factory.connect(strategyAdr, ethers.provider).NAME();
-
-  const names = new Set<string>([
-    'UniswapV3 Converter Strategy',
-    'Kyber Converter Strategy',
-    'Algebra Converter Strategy',
-  ]);
-
-  return Number(version.charAt(0)) > 1 && names.has(name);
 }
 
 main().catch((error) => {

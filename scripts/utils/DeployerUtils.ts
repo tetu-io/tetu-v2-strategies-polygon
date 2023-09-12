@@ -12,7 +12,7 @@ import {
   VaultInsurance,
 } from '../../typechain';
 import { RunHelper } from './RunHelper';
-import { deployContract } from '../deploy/DeployContract';
+import {deployContract, deployContractSilently} from '../deploy/DeployContract';
 import { ethers } from 'hardhat';
 
 // tslint:disable-next-line:no-var-requires
@@ -24,6 +24,15 @@ export class DeployerUtils {
 
   // ************ CONTRACT DEPLOY **************************
 
+  public static async deployContractSilent<T extends ContractFactory>(
+    signer: SignerWithAddress,
+    name: string,
+    // tslint:disable-next-line:no-any
+    ...args: any[]
+  ) {
+    return deployContractSilently(hre, signer, name, ...args);
+  }
+
   public static async deployContract<T extends ContractFactory>(
     signer: SignerWithAddress,
     name: string,
@@ -33,17 +42,31 @@ export class DeployerUtils {
     return deployContract(hre, signer, name, ...args);
   }
 
-  public static async deployMockToken(signer: SignerWithAddress, name = 'MOCK', decimals = 18, mintAmount = '1000000') {
-    const token = await DeployerUtils.deployContract(signer, 'MockToken', name + '_MOCK_TOKEN', name, decimals) as MockToken;
-    await RunHelper.runAndWait(() => token.mint(signer.address, parseUnits(mintAmount, decimals)));
+  public static async deployMockToken(signer: SignerWithAddress, name = 'MOCK', decimals = 18, mintAmount = '1000000', silent: boolean = false) {
+    let token: MockToken;
+    if (!silent) {
+      token = await DeployerUtils.deployContract(signer, 'MockToken', name + '_MOCK_TOKEN', name, decimals) as MockToken;
+      await RunHelper.runAndWait(() => token.mint(signer.address, parseUnits(mintAmount, decimals)));
+    } else {
+      token = await DeployerUtils.deployContractSilent(signer, 'MockToken', name + '_MOCK_TOKEN', name, decimals) as MockToken;
+      await RunHelper.runAndWait(() => token.mint(signer.address, parseUnits(mintAmount, decimals)), true, true, silent);
+    }
+
     return token;
   }
 
-  public static async deployProxy(signer: SignerWithAddress, contract: string) {
-    const logic = await DeployerUtils.deployContract(signer, contract);
-    const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
-    await RunHelper.runAndWait(() => proxy.initProxy(logic.address));
-    return proxy.address;
+  public static async deployProxy(signer: SignerWithAddress, contract: string, silent: boolean = false) {
+    if (!silent) {
+      const logic = await DeployerUtils.deployContract(signer, contract);
+      const proxy = await DeployerUtils.deployContract(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
+      await RunHelper.runAndWait(() => proxy.initProxy(logic.address));
+      return proxy.address;
+    } else {
+      const logic = await DeployerUtils.deployContractSilent(signer, contract);
+      const proxy = await DeployerUtils.deployContractSilent(signer, '@tetu_io/tetu-contracts-v2/contracts/proxy/ProxyControlled.sol:ProxyControlled') as ProxyControlled;
+      await RunHelper.runAndWait(() => proxy.initProxy(logic.address), true, true, true);
+      return proxy.address;
+    }
   }
 
   public static async deployMockController(signer: SignerWithAddress) {

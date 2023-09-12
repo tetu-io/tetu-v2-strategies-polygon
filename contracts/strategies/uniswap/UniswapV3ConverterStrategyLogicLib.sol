@@ -19,7 +19,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ISplitter.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/IController.sol";
 import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../pair/PairBasedStrategyLogicLib.sol";
-import "hardhat/console.sol";
 
 library UniswapV3ConverterStrategyLogicLib {
   using SafeERC20 for IERC20;
@@ -32,6 +31,7 @@ library UniswapV3ConverterStrategyLogicLib {
 
   //region ------------------------------------------------ Events
   event Rebalanced(uint loss, uint profitToCover, uint coveredByRewards);
+  event RebalancedDebt(uint loss, uint profitToCover, uint coveredByRewards);
   event UniV3FeesClaimed(uint fee0, uint fee1);
   /// @param loss Total amount of loss
   /// @param coveredByRewards Part of the loss covered by rewards
@@ -57,6 +57,9 @@ library UniswapV3ConverterStrategyLogicLib {
 
     bool[2] fuseStatusChangedAB;
     PairBasedStrategyLib.FuseStatus[2] fuseStatusAB;
+
+    uint poolPrice;
+    uint poolPriceAdjustment;
   }
   //endregion ------------------------------------------------ Data types
 
@@ -382,10 +385,15 @@ library UniswapV3ConverterStrategyLogicLib {
   function needStrategyRebalance(PairBasedStrategyLogicLib.PairState storage pairState, ITetuConverter converter_) external view returns (
     bool needRebalance
   ) {
+    address pool = pairState.pool;
+    // poolPrice should have same decimals as a price from oracle == 18
+    uint poolPriceAdjustment = PairBasedStrategyLib.getPoolPriceAdjustment(IERC20Metadata(pairState.tokenA).decimals());
+    uint poolPrice = UniswapV3Lib.getPrice(pool, pairState.tokenB) * poolPriceAdjustment;
     (needRebalance, , ) = PairBasedStrategyLogicLib.needStrategyRebalance(
       pairState,
       converter_,
-      UniswapV3DebtLib.getCurrentTick(IUniswapV3Pool(pairState.pool))
+      UniswapV3DebtLib.getCurrentTick(IUniswapV3Pool(pool)),
+      poolPrice
     );
   }
 
@@ -407,10 +415,10 @@ library UniswapV3ConverterStrategyLogicLib {
   ) {
     RebalanceLocal memory v;
     _initLocalVars(v, ITetuConverter(converterLiquidator[0]), pairState, liquidityThresholds_);
-
+    v.poolPrice = UniswapV3Lib.getPrice(address(v.pool), pairState.tokenB) * v.poolPriceAdjustment;
     bool needRebalance;
-    int24 tick = UniswapV3DebtLib.getCurrentTick(IUniswapV3Pool(pairState.pool));
-    (needRebalance,v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(pairState, v.converter, tick);
+    int24 tick = UniswapV3DebtLib.getCurrentTick(v.pool);
+    (needRebalance,v.fuseStatusChangedAB, v.fuseStatusAB) = PairBasedStrategyLogicLib.needStrategyRebalance(pairState, v.converter, tick, v.poolPrice);
 
     // update fuse status if necessary
     if (needRebalance) {
@@ -440,12 +448,9 @@ library UniswapV3ConverterStrategyLogicLib {
   function _coverLoss(address splitter, uint loss, address profitHolder, address tokenA, address tokenB, address pool) internal returns (
     uint coveredByRewards
   ) {
-    console.log("_coverLoss.loss", loss);
     if (loss != 0) {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
-      console.log("_coverLoss.coveredByRewards", coveredByRewards);
       uint notCovered = loss - coveredByRewards;
-      console.log("_coverLoss.notCovered", notCovered);
       if (notCovered != 0) {
         ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
       }
@@ -471,6 +476,8 @@ library UniswapV3ConverterStrategyLogicLib {
     v.isStablePool = pairState.isStablePool;
     v.liquidationThresholdsAB[0] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenA]);
     v.liquidationThresholdsAB[1] = AppLib._getLiquidationThreshold(liquidityThresholds_[v.tokenB]);
+    uint poolPriceDecimals = IERC20Metadata(v.tokenA).decimals();
+    v.poolPriceAdjustment = poolPriceDecimals < 18 ? 10 ** (18 - poolPriceDecimals) : 1;
   }
 
   /// @notice Get proportion of not-underlying in the pool, [0...1e18]
@@ -522,9 +529,11 @@ library UniswapV3ConverterStrategyLogicLib {
     );
 
     // cover loss
+    uint coveredByRewards;
     if (loss != 0) {
-      _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
+      coveredByRewards = _coverLoss(splitter, loss, pairState.strategyProfitHolder, tokens[0], tokens[1], address(pool));
     }
+    emit RebalancedDebt(loss, values_[1], coveredByRewards);
 
     if (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED
       || (entryToPool == PairBasedStrategyLib.ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED && completed)

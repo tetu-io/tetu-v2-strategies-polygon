@@ -6,7 +6,6 @@ import "@tetu_io/tetu-contracts-v2/contracts/interfaces/ITetuLiquidator.sol";
 import "../ConverterStrategyBaseLib.sol";
 import "../../interfaces/IPoolProportionsProvider.sol";
 import "../../libs/BorrowLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Library for the UniV3-like strategies with two tokens in the pool
 /// @dev The library contains quoteWithdrawStep/withdrawStep-related logic
@@ -277,29 +276,30 @@ library PairBasedStrategyLib {
   }
 
   /// @notice Check if the fuse should be turned ON/OFF
-  /// @param price Current price
+  /// @param price Current price in the oracle
+  /// @param poolPrice Current price in the pool
   /// @return needToChange A boolean indicating if the fuse status should be changed
   /// @return status Exist fuse status or new fuse status (if needToChange is true)
-  function needChangeFuseStatus(FuseStateParams memory fuse, uint price) internal pure returns (
+  function needChangeFuseStatus(FuseStateParams memory fuse, uint price, uint poolPrice) internal pure returns (
     bool needToChange,
     FuseStatus status
   ) {
     if (fuse.status != FuseStatus.FUSE_DISABLED_0) {
       if (fuse.status == FuseStatus.FUSE_OFF_1) {
         // currently fuse is OFF
-        if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
+        if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON] || poolPrice <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_ON]) {
           needToChange = true;
           status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
-        } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+        } else if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON] || poolPrice >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
           needToChange = true;
           status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
         }
       } else {
         if (fuse.status == FuseStatus.FUSE_ON_LOWER_LIMIT_2) {
           // currently fuse is triggered ON by lower limit
-          if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+          if (price >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF] && poolPrice >= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
             needToChange = true;
-            if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
+            if (price >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON] || poolPrice >= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_ON]) {
               status = FuseStatus.FUSE_ON_UPPER_LIMIT_3;
             } else {
               status = FuseStatus.FUSE_OFF_1;
@@ -307,9 +307,9 @@ library PairBasedStrategyLib {
           }
         } else {
           // currently fuse is triggered ON by upper limit
-          if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
+          if (price <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF] && poolPrice <= fuse.thresholds[FUSE_IDX_UPPER_LIMIT_OFF]) {
             needToChange = true;
-            if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
+            if (price <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF] || poolPrice <= fuse.thresholds[FUSE_IDX_LOWER_LIMIT_OFF]) {
               status = FuseStatus.FUSE_ON_LOWER_LIMIT_2;
             } else {
               status = FuseStatus.FUSE_OFF_1;
@@ -665,10 +665,6 @@ library PairBasedStrategyLib {
         spentAmountIn = amountIn;
       }
 
-      console.log("isConversionValid.p.tokens[indexIn]", p.tokens[indexIn]);
-      console.log("isConversionValid.p.tokens[indexOut]", p.tokens[indexOut]);
-      console.log("isConversionValid.amountIn", amountIn);
-      console.log("isConversionValid.actual.amountOut", AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore);
       require(
         p.converter.isConversionValid(
           p.tokens[indexIn],
@@ -677,7 +673,6 @@ library PairBasedStrategyLib {
           AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
           _ASSET_LIQUIDATION_SLIPPAGE
         ), AppErrors.PRICE_IMPACT);
-      console.log("isConversionValid.expected.amountOut", amountIn * p.prices[indexIn] * p.decs[indexOut] / p.prices[indexOut] / p.decs[indexIn]);
 
       emit SwapByAgg(
         aggParams.amountToSwap,
@@ -700,6 +695,11 @@ library PairBasedStrategyLib {
   //endregion ------------------------------------------------ Internal helper functions
 
   //region ----------------------------------------- Utils
+  function getPoolPriceAdjustment(uint poolPriceDecimals) external pure returns (uint adjustment) {
+    // we assume that decimals never higher than 18
+    adjustment = poolPriceDecimals < 18 ? 10 ** (18 - poolPriceDecimals) : 1;
+  }
+
   function _checkSwapRouter(address router) internal pure {
     require(router == ONEINCH || router == OPENOCEAN, UNKNOWN_SWAP_ROUTER);
   }

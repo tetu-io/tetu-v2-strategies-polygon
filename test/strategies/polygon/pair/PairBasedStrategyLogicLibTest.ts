@@ -113,6 +113,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
       state: IUniv3State;
       pricesAB: string[];
       poolNeedsRebalance: boolean;
+      /** Price of the token A in the pool, decimals 18. pricesAB[0] by default */
+      poolPriceA?: string;
     }
     interface INeedStrategyRebalanceResults {
       needRebalance: boolean;
@@ -164,7 +166,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
       );
       const ret = await facade.needStrategyRebalance(
         converter.address,
-        tick
+        tick,
+        parseUnits(p?.poolPriceA || p.pricesAB[0], 18)
       );
       return {
         needRebalance: ret.needRebalance,

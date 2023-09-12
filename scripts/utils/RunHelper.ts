@@ -25,7 +25,7 @@ export class RunHelper {
     }
   }
 
-  public static async waitAndSpeedUp(provider: StaticJsonRpcProvider, hash: string, speedUp = true): Promise<string> {
+  public static async waitAndSpeedUp(provider: StaticJsonRpcProvider, hash: string, speedUp: boolean = true): Promise<string> {
     console.log('wait And SpeedUp', hash);
     let receipt;
     let count = 0;
@@ -55,8 +55,8 @@ export class RunHelper {
   public static async runAndWaitAndSpeedUp(
     provider: StaticJsonRpcProvider,
     callback: () => Promise<ContractTransaction | TransactionResponse>,
-    stopOnError = true,
-    wait = true,
+    stopOnError: boolean = true,
+    wait: boolean = true,
   ) {
     try {
       console.log('Start on-chain transaction');
@@ -92,23 +92,29 @@ export class RunHelper {
       }
     }
   }
-
   public static async runAndWait(
     callback: () => Promise<ContractTransaction | TransactionResponse>,
-    stopOnError = true,
-    wait = true,
+    stopOnError: boolean = true,
+    wait: boolean = true,
+    silent: boolean = false
   ) {
-    console.log('Start on-chain transaction');
+    if (!silent) {
+      console.log('Start on-chain transaction')
+    }
     const start = Date.now();
     const tr = await callback();
     if (!wait) {
-      Misc.printDuration('runAndWait completed', start);
+      if (!silent) {
+        Misc.printDuration('runAndWait completed', start);
+      }
       return;
     }
     // const r0 = await tr.wait(WAIT_BLOCKS_BETWEEN_DEPLOY); // hardhat stucks on runAndWait()
     const r0 = await tr.wait(); // TODO why (and when) WAIT_BLOCKS_BETWEEN_DEPLOY needed?
 
-    log.info('tx sent', tr.hash, 'gas used:', r0.gasUsed.toString());
+    if (!silent) {
+      log.info('tx sent', tr.hash, 'gas used:', r0.gasUsed.toString());
+    }
 
     let receipt;
     while (true) {
@@ -116,15 +122,21 @@ export class RunHelper {
       if (!!receipt) {
         break;
       }
-      log.info('not yet complete', tr.hash);
+      if (!silent) {
+        log.info('not yet complete', tr.hash);
+      }
       await Misc.delay(10000);
     }
-    log.info('transaction result', tr.hash, receipt?.status);
-    log.info('gas used', receipt.gasUsed.toString());
+    if (!silent) {
+      log.info('transaction result', tr.hash, receipt?.status);
+      log.info('gas used', receipt.gasUsed.toString());
+    }
     if (receipt?.status !== 1 && stopOnError) {
       throw Error('Wrong status!');
     }
-    Misc.printDuration('runAndWait completed', start);
+    if (!silent) {
+      Misc.printDuration('runAndWait completed', start);
+    }
     return receipt;
   }
 

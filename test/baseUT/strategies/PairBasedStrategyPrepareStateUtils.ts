@@ -363,6 +363,7 @@ export class PairBasedStrategyPrepareStateUtils {
     totalSwapAmountForDown?: BigNumber,
     countIterations?: number
   ) {
+    console.log("move prices by steps...");
     const countSteps = countIterations ?? 1;
     const totalAmountToSwap = movePricesUpDown
       ? totalSwapAmount
@@ -370,7 +371,6 @@ export class PairBasedStrategyPrepareStateUtils {
 
     for (let i = 0; i < countSteps; ++i) {
       const swapAmount = totalAmountToSwap.div(countSteps ?? 5);
-
       let pricesWereChanged: IPriceChanges;
       if (movePricesUpDown) {
         pricesWereChanged = await UniversalUtils.movePoolPriceUp(signer, state, b.swapper, swapAmount, 40000, b.swapHelper);

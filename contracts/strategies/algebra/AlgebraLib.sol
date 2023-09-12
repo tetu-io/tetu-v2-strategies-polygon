@@ -214,6 +214,7 @@ library AlgebraLib {
   }
 
   /// @notice Calculates price in pool
+  /// @return price with decimals of paired token
   function getPrice(address pool_, address tokenIn) public view returns (uint) {
     IAlgebraPool pool = IAlgebraPool(pool_);
     address token0 = pool.token0();
