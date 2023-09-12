@@ -171,8 +171,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     const pathOut = p.pathOut;
     let rebalanceFuseOn: IPriceFuseStatus | undefined;
     let rebalanceFuseOff: IPriceFuseStatus | undefined;
-    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-    const platform = await converterStrategyBase.PLATFORM();
 
     console.log('deposit...');
     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -309,8 +307,10 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
    * This test is excluded from coverage because it doesn't pass for Univ3:
    * 1) There are some problems with swapping dust-amounts in liquidator
    * 2) Price moving is too slow because of the dust amounts, it's not able to set fuse ON / OFF
+   *
+   * skipped, it's necessary to study only
    */
-  describe('Increase price N steps, decrease price N steps, swapAmountRatio = 1 @skip-on-coverage', function () {
+  describe.skip('Increase price N steps, decrease price N steps, swapAmountRatio = 1 @skip-on-coverage', function () {
     interface IStrategyInfo {
       name: string,
     }

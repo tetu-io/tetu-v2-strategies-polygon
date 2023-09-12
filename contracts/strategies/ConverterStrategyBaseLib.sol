@@ -989,7 +989,9 @@ library ConverterStrategyBaseLib {
     mapping(address => uint) storage liquidationThresholds,
     uint requestedAmount,
     address[] memory tokens
-  ) external returns (uint expectedBalance) {
+  ) external returns (
+    uint expectedBalance
+  ) {
     uint len = tokens.length;
     return _closePositionsToGetAmount(
       DataSetLocal({

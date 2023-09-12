@@ -12,7 +12,7 @@ import {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
 import {
-  IERC20Metadata__factory,
+  IERC20Metadata__factory, IRebalancingStrategy__factory, IRebalancingV2Strategy__factory,
   IStrategyV2,
   TetuVaultV2,
   UniswapV3ConverterStrategy,
@@ -119,7 +119,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
         ));
       },
       strategyInit: async(strategy: IStrategyV2, vault: TetuVaultV2, user: SignerWithAddress) => {
-        const state = await PackedData.getDefaultState(strategy)
+        const state = await PackedData.getDefaultState(IRebalancingV2Strategy__factory.connect(strategy.address, strategy.signer))
         const tokenADecimals = await IERC20Metadata__factory.connect(state.tokenA, user).decimals()
         const tokenBDecimals = await IERC20Metadata__factory.connect(state.tokenB, user).decimals()
         await StrategyTestUtils.setThresholds(

@@ -1554,7 +1554,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdtUsdc(
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
           strategyInfo.name,
           signer,
           signer2,

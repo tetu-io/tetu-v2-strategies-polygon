@@ -8,7 +8,6 @@ import {
   IPlatformAdapter, IPlatformAdapter__factory,
   ITetuConverter,
   ITetuConverter__factory,
-  MockToken,
   PairBasedStrategyLibFacade
 } from "../../../../typechain";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
@@ -24,10 +23,8 @@ import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
 import {IterationPlanLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLibFacade";
 import {HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {PLAN_REPAY_SWAP_REPAY, PLATFORM_KIND_AAVE2_2, PLATFORM_KIND_AAVE3_3} from "../../../baseUT/AppConstants";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 describe('PairBasedStrategyLibIntTest', () => {
 
@@ -138,12 +135,12 @@ describe('PairBasedStrategyLibIntTest', () => {
             )
           )),
           usePoolProportions: false,
+          prices: [parseUnits("1", 18), parseUnits("1", 18)],
+          decs: [6, 6],
 
           // not used by _swap()
 
-          prices: [0, 0],
           propNotUnderlying18: 0,
-          decs: [0, 0],
           balanceAdditions: [0, 0],
           planKind: 0
         };
@@ -544,7 +541,7 @@ describe('PairBasedStrategyLibIntTest', () => {
       const signerFacade = await DeployerUtilsLocal.impersonate(facade.address);
 
       // we need only AAVE3 adapter, disable others
-      await InjectUtils.injectTetuConverter(signer);
+      // await InjectUtils.injectTetuConverter(signer);
 
       // set up current balances
       await TokenUtils.getToken(p.tokenX, facade.address, parseUnits(p.balanceX, decimalsX));

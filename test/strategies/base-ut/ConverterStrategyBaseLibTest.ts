@@ -397,7 +397,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
   describe("closePositionsToGetAmount", () => {
     interface IClosePositionToGetRequestedAmountResults {
-      expectedAmountMainAssetOut: number;
+      expectedBalance: number;
       gasUsed: BigNumber;
       balances: number[];
     }
@@ -483,7 +483,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
-        expectedAmountMainAssetOut: +formatUnits(ret, decimals[p.indexAsset]),
+        expectedBalance: +formatUnits(ret, decimals[p.indexAsset]),
         gasUsed,
         balances: await Promise.all(
           p.tokens.map(
@@ -537,7 +537,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(1870); // 2880 - 1010
+            expect(r.expectedBalance).eq(2000 + 1870); // 2000 + 2880 - 1010
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -586,7 +586,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(150); // 450-300
+            expect(r.expectedBalance).eq(300 + 150); // 450
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -640,15 +640,10 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
           }
 
-          /**
-           * We should have 1000 in result because balance was changed on 1000
-           * But mocks are not ideal... so better to skip this test here
-           * and use integration tests, i.e. "Twisted debts"
-           */
-          it.skip("should return expected expectedAmountMainAssetOut", async () => {
+          it("should return expected expectedBalance", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
             // see SCB-779 fix inside _closePositionsToGetAmount for details of calculations
-            expect(r.expectedAmountMainAssetOut).eq(950.297029); // 3000*2000/2020 - 2020 // + 20
+            expect(r.expectedBalance).eq(6000);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -697,7 +692,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(780); // 2800 - 2020
+            expect(r.expectedBalance).eq(5000 + 2800 - 2020);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -746,7 +741,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(780); // 2800 - 2020
+            expect(r.expectedBalance).eq(5000 + 2800 - 2020);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -795,7 +790,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(980); // 3000 - 2020
+            expect(r.expectedBalance).eq(5000 + 3000 - 2020);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -856,9 +851,9 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
           }
 
-          it("should return expected expectedAmountMainAssetOut", async () => {
+          it("should return expected expectedBalance", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(2115);
+            expect(r.expectedBalance).eq(2115);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -933,7 +928,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
         it("should return zero expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(0);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -961,7 +956,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             quoteRepays: [],
             repays: [],
           });
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(0);
         });
       });
       describe("There are no debts", () => {
@@ -999,9 +994,9 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
         }
 
-        it("should return zero expected amount", async () => {
+        it("should return expected value", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(5000);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1048,9 +1043,9 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
         }
 
-        it("should return zero expected amount", async () => {
+        it("should return expected value", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(2100);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1085,9 +1080,9 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
         }
 
-        it("should return zero expected amount", async () => {
+        it("should return expected value", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(8000);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
