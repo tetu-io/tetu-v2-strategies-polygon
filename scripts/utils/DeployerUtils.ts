@@ -42,7 +42,7 @@ export class DeployerUtils {
     return deployContract(hre, signer, name, ...args);
   }
 
-  public static async deployMockToken(signer: SignerWithAddress, name = 'MOCK', decimals = 18, mintAmount = '1000000', silent: false) {
+  public static async deployMockToken(signer: SignerWithAddress, name = 'MOCK', decimals = 18, mintAmount = '1000000', silent: boolean = false) {
     let token: MockToken;
     if (!silent) {
       token = await DeployerUtils.deployContract(signer, 'MockToken', name + '_MOCK_TOKEN', name, decimals) as MockToken;

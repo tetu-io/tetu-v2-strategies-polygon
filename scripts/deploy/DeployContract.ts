@@ -36,7 +36,7 @@ const libraries = new Map<string, string[]>([
     'UniswapV3ConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'UniswapV3ConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
-  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib']],
+  ['UniswapV3ConverterStrategyLogicLib', ['UniswapV3Lib', 'UniswapV3DebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
   ['UniswapV3DebtLib', ['UniswapV3Lib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   ['UniswapV3LibFacade', ['UniswapV3Lib']],
   ['UniswapV3ConverterStrategyLogicLibFacade', ['UniswapV3ConverterStrategyLogicLib']],
@@ -45,14 +45,14 @@ const libraries = new Map<string, string[]>([
     'AlgebraConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'AlgebraConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
-  ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib']],
+  ['AlgebraConverterStrategyLogicLib', ['AlgebraLib', 'AlgebraDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
   ['AlgebraDebtLib', ['AlgebraLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
   // Kyber
   [
     'KyberConverterStrategy',
     ['ConverterStrategyBaseLib', 'ConverterStrategyBaseLib2', 'StrategyLib2', 'KyberConverterStrategyLogicLib', 'PairBasedStrategyLib', 'PairBasedStrategyLogicLib'],
   ],
-  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib']],
+  ['KyberConverterStrategyLogicLib', ['KyberLib', 'KyberDebtLib', 'ConverterStrategyBaseLib2', 'PairBasedStrategyLogicLib', 'PairBasedStrategyLib']],
   ['KyberDebtLib', ['KyberLib', 'ConverterStrategyBaseLib2', 'BorrowLib', 'PairBasedStrategyLogicLib']],
 ]);
 
