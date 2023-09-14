@@ -37,7 +37,7 @@ dotEnvConfig();
 const argv = require('yargs/yargs')()
   .env('TETU')
   .options({
-    nsrMsgSuccess: {
+    nsrMsgSuccess: { //
       type: 'boolean',
       default: false,
     },

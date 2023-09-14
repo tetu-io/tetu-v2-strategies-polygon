@@ -151,7 +151,7 @@ export class DeployerUtilsLocal {
 
   public static async getCoreAddresses(): Promise<CoreAddresses> {
     const net = Misc.getChainId();
-    log.info('network ' + net);
+    // log.info('network ' + net);
     const core = Addresses.CORE.get(net);
     if (!core) {
       throw Error('No config for ' + net);
@@ -198,7 +198,7 @@ export class DeployerUtilsLocal {
 
   public static async getCoreAddressesWrapper(signer: SignerWithAddress): Promise<ICoreContractsWrapper> {
     const chainId = Misc.getChainId();
-    log.info('network ' + chainId);
+    // log.info('network ' + chainId);
     const core = Addresses.CORE.get(chainId);
     if (!core) {
       throw Error('No config for ' + chainId);
@@ -221,7 +221,7 @@ export class DeployerUtilsLocal {
 
   public static async getToolsAddressesWrapper(signer: SignerWithAddress): Promise<IToolsContractsWrapper> {
     const chainId = Misc.getChainId();
-    log.info('network ' + chainId);
+    // log.info('network ' + chainId);
     const tools = Addresses.TOOLS.get(chainId);
     if (!tools) {
       throw Error('No config for ' + chainId);
@@ -236,7 +236,7 @@ export class DeployerUtilsLocal {
 
   public static async getToolsAddresses(): Promise<ToolsAddresses> {
     const chainId = Misc.getChainId();
-    log.info('network ' + chainId);
+    // log.info('network ' + chainId);
     const tools = Addresses.TOOLS.get(chainId);
     if (!tools) {
       throw Error('No config for ' + chainId);
