@@ -38,7 +38,10 @@ async function main() {
   console.log('lowestStratApr', lowestStratApr);
 
   const txParam = await txParams2();
-  await RunHelper.runAndWaitAndSpeedUp(ethers.provider, () => splitter.rebalance(rebalancePerc, 10, { ...txParam }));
+  await RunHelper.runAndWaitAndSpeedUp(
+    ethers.provider,
+    () => splitter.rebalance(rebalancePerc, 10, { ...txParam, gasLimit: 15_000_000 }),
+  );
 
 
   const totalAfter = await IStrategyV2__factory.connect(lowestStrat, signer).totalAssets();

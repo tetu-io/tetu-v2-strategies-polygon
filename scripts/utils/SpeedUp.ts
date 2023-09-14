@@ -20,7 +20,7 @@ export class SpeedUp {
   }
 
   public static waitCycles() {
-    return 100
+    return 20
   }
 
   public static getRpcUrl() {

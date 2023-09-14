@@ -8,15 +8,16 @@ import { Web3FunctionResultCallData } from '@gelatonetwork/web3-functions-sdk';
 import { sendMessageToTelegram } from './telegram/tg-sender';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import {
-  ControllerV2__factory, IRebalancingV2Strategy__factory,
+  ControllerV2__factory,
+  IRebalancingV2Strategy__factory,
   IStrategyV2__factory,
   StrategySplitterV2__factory,
   TetuVaultV2__factory,
 } from '../typechain';
 import { config as dotEnvConfig } from 'dotenv';
 import { subscribeTgBot } from './telegram/tg-subscribe';
-import {Misc} from "./utils/Misc";
-import {NSRUtils} from "./utils/NSRUtils";
+import { Misc } from './utils/Misc';
+import { NSRUtils } from './utils/NSRUtils';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -27,9 +28,9 @@ import {NSRUtils} from "./utils/NSRUtils";
 // TETU_REBALANCE_DEBT_STRATEGIES=<address> TETU_PAIR_BASED_STRATEGY_READER=<address> TETU_REBALANCE_DEBT_CONFIG=<address> hardhat run scripts/rebalanceDebt.ts --network localhost
 
 const MAX_ERROR_LENGTH = 1000;
-const DELAY_BETWEEN_NSRS = 60
-const DELAY_AFTER_NSR = 10
-const DELAY_NEED_NSR_CONFIRM = 300
+const DELAY_BETWEEN_NSRS = 60;
+const DELAY_AFTER_NSR = 10;
+const DELAY_NEED_NSR_CONFIRM = 300;
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -82,8 +83,8 @@ async function main() {
   const provider = ethers.provider;
   const signer = (await ethers.getSigners())[0];
 
-  let lastNSR: number = 0
-  const needNSRTimestamp: {[addr:string]:number} = {}
+  let lastNSR: number = 0;
+  const needNSRTimestamp: { [addr: string]: number } = {};
 
   // noinspection InfiniteLoopJS
   while (true) {
@@ -94,7 +95,7 @@ async function main() {
 
       for (const vault of vaults) {
         const splitter = await TetuVaultV2__factory.connect(vault, ethers.provider).splitter();
-        const splitterContract = StrategySplitterV2__factory.connect(splitter, ethers.provider)
+        const splitterContract = StrategySplitterV2__factory.connect(splitter, ethers.provider);
         const strategies = await splitterContract.allStrategies();
         console.log('strategies', strategies.length);
 
@@ -106,23 +107,28 @@ async function main() {
               continue;
             }
 
-            const strategy = IRebalancingV2Strategy__factory.connect(strategyAddress, signer)
-            const strategyName = await IStrategyV2__factory.connect(strategyAddress, ethers.provider).strategySpecificName();
+            const strategy = IRebalancingV2Strategy__factory.connect(strategyAddress, signer);
+            const strategyName = await IStrategyV2__factory.connect(strategyAddress, ethers.provider)
+              .strategySpecificName();
             console.log('Processing strategy', strategyName, strategyAddress);
 
-            let now = await Misc.getBlockTsFromChain()
+            let now = await Misc.getBlockTsFromChain();
 
             // NSR
-            const isPausedStrategy = await splitterContract.pausedStrategies(strategyAddress)
-            const delayPassed = lastNSR + DELAY_BETWEEN_NSRS < now
-            const needNSR = await strategy.needRebalance()
+            const isPausedStrategy = await splitterContract.pausedStrategies(strategyAddress);
+            const delayPassed = lastNSR + DELAY_BETWEEN_NSRS < now;
+            const needNSR = await strategy.needRebalance();
             if (needNSR && !needNSRTimestamp[strategyAddress]) {
-              needNSRTimestamp[strategyAddress] = now
+              console.log('update needNSRTimestamp for', strategyName);
+              needNSRTimestamp[strategyAddress] = now;
             }
             if (!needNSR) {
-              needNSRTimestamp[strategyAddress] = 0
+              console.log('NO needNSR, remove needNSRTimestamp for', strategyName);
+              needNSRTimestamp[strategyAddress] = 0;
             }
-            if (!isPausedStrategy && delayPassed && needNSR && now - needNSRTimestamp[strategyAddress] > DELAY_NEED_NSR_CONFIRM) {
+            if (!isPausedStrategy && delayPassed && needNSR && now - needNSRTimestamp[strategyAddress] >
+              DELAY_NEED_NSR_CONFIRM) {
+              console.log('PASSED needNSR, call NSR for', strategyName);
               const tp = await txParams2();
               try {
                 await RunHelper.runAndWaitAndSpeedUp(
@@ -136,12 +142,13 @@ async function main() {
                   await sendMessageToTelegram(`NSR success! ${strategyName} ${strategyAddress}`);
                 }
 
-                now = await Misc.getBlockTsFromChain()
-                lastNSR = now
-                await sleep(DELAY_AFTER_NSR * 1000)
+                now = await Misc.getBlockTsFromChain();
+                lastNSR = now;
+                await sleep(DELAY_AFTER_NSR * 1000);
               } catch (e) {
-                console.log('Error NSR',strategyName, strategyAddress, e);
-                await sendMessageToTelegram(`Error NSR ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
+                console.log('Error NSR', strategyName, strategyAddress, e);
+                await sendMessageToTelegram(`Error NSR ${strategyName} ${strategyAddress} ${(e as string).toString()
+                  .substring(0, MAX_ERROR_LENGTH)}`);
               }
             }
 
@@ -177,9 +184,10 @@ async function main() {
                   if (argv.rebalanceDebtMsgSuccess) {
                     await sendMessageToTelegram(`Rebalance success! ${strategyName} ${strategyAddress}`);
                   }
-                }catch (e) {
-                  console.log('Error EXECUTE',strategyName, strategyAddress, e);
-                  await sendMessageToTelegram(`Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
+                } catch (e) {
+                  console.log('Error EXECUTE', strategyName, strategyAddress, e);
+                  await sendMessageToTelegram(`Error EXECUTE ${strategyName} ${strategyAddress} ${(e as string).toString()
+                    .substring(0, MAX_ERROR_LENGTH)}`);
                 }
               } else {
                 console.log('Result can not be executed:', strategyName, result.message);
@@ -190,13 +198,15 @@ async function main() {
             }
           } catch (e) {
             console.log('Error inside strategy processing', strategyAddress, e);
-            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
+            await sendMessageToTelegram(`Error inside strategy processing ${strategyAddress} ${(e as string).toString()
+              .substring(0, MAX_ERROR_LENGTH)}`);
           }
         }
       }
     } catch (e) {
       console.log('error in debt rebalance loop', e);
-      await sendMessageToTelegram(`error in debt rebalance loop ${(e as string).toString().substring(0, MAX_ERROR_LENGTH)}`);
+      await sendMessageToTelegram(`error in debt rebalance loop ${(e as string).toString()
+        .substring(0, MAX_ERROR_LENGTH)}`);
     }
 
     await sleep(argv.rebalanceDebtLoopDelay);

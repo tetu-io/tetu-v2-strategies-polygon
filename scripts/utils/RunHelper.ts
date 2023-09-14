@@ -25,17 +25,22 @@ export class RunHelper {
     }
   }
 
-  public static async waitAndSpeedUp(provider: StaticJsonRpcProvider, hash: string, speedUp: boolean = true): Promise<string> {
+  public static async waitAndSpeedUp(
+    provider: StaticJsonRpcProvider,
+    hash: string,
+    speedUp: boolean = true,
+  ): Promise<string> {
     console.log('wait And SpeedUp', hash);
     let receipt;
     let count = 0;
     while (true) {
       receipt = await provider.getTransactionReceipt(hash);
-      if (!!receipt && receipt.status) {
+      if (!!receipt) {
+        console.log('tx receipt.status', receipt.status);
         break;
       }
       console.log('not yet complete', count, hash);
-      await Misc.delay(1000);
+      await Misc.delay(10_000);
       count++;
       if (count > SpeedUp.waitCycles() && speedUp) {
         const newHash = await SpeedUp.speedUp(hash, provider);
@@ -92,14 +97,15 @@ export class RunHelper {
       }
     }
   }
+
   public static async runAndWait(
     callback: () => Promise<ContractTransaction | TransactionResponse>,
     stopOnError: boolean = true,
     wait: boolean = true,
-    silent: boolean = false
+    silent: boolean = false,
   ) {
     if (!silent) {
-      console.log('Start on-chain transaction')
+      console.log('Start on-chain transaction');
     }
     const start = Date.now();
     const tr = await callback();
