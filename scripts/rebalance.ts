@@ -123,17 +123,22 @@ async function main() {
               needNSRTimestamp[strategyAddress] = now;
             }
             if (!needNSR) {
-              console.log('NO needNSR, remove needNSRTimestamp for', strategyName);
+              if (!needNSRTimestamp[strategyAddress]) {
+                console.log('NO needNSR, remove needNSRTimestamp for', strategyName);
+              }
               needNSRTimestamp[strategyAddress] = 0;
             }
-            if (!isPausedStrategy && delayPassed && needNSR && now - needNSRTimestamp[strategyAddress] >
-              DELAY_NEED_NSR_CONFIRM) {
-              console.log('PASSED needNSR, call NSR for', strategyName);
+            if (!isPausedStrategy
+              && delayPassed
+              && needNSR
+              && now - needNSRTimestamp[strategyAddress] > DELAY_NEED_NSR_CONFIRM
+            ) {
+              console.log(strategyName, ' ----- PASSED needNSR, call NSR for');
               const tp = await txParams2();
               try {
                 await RunHelper.runAndWaitAndSpeedUp(
                   provider,
-                  () => strategy.rebalanceNoSwaps(true, { ...tp }),
+                  () => strategy.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 }),
                   true,
                   true,
                 );
@@ -149,6 +154,14 @@ async function main() {
                 console.log('Error NSR', strategyName, strategyAddress, e);
                 await sendMessageToTelegram(`Error NSR ${strategyName} ${strategyAddress} ${(e as string).toString()
                   .substring(0, MAX_ERROR_LENGTH)}`);
+              }
+            } else {
+              if (needNSRTimestamp[strategyAddress] !== 0) {
+                console.log(
+                  strategyName,
+                  ' ---- Not yet, Until NSR seconds:',
+                  DELAY_NEED_NSR_CONFIRM - (now - needNSRTimestamp[strategyAddress]),
+                );
               }
             }
 
@@ -177,6 +190,7 @@ async function main() {
                         to: callData[0].to,
                         data: callData[0].data,
                         ...tp,
+                        gasLimit: 15_000_000,
                       }),
                     true, true,
                   );
