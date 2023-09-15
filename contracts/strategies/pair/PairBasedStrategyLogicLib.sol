@@ -48,6 +48,9 @@ library PairBasedStrategyLogicLib {
 
     /// @notice Timestamp of last call of rebalanceNoSwaps() or zero if withdrawByAggStep() was called last
     uint lastRebalanceNoSwap;
+
+    // Attention: this struct is IMMUTABLE, you are not allowed to add new fields here
+    // because this struct is used inside State structs. If you add new field, you will broke State (if it's not empty).
   }
 
   struct RebalanceNoSwapsLocal {

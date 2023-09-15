@@ -126,6 +126,9 @@ library PairBasedStrategyLib {
     /// @notice Price thresholds [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
     /// @dev see PairBasedStrategyLib.FUSE_IDX_XXX
     uint[4] thresholds;
+
+    // Attention: this struct is IMMUTABLE, you are not allowed to add new fields here
+    // because this struct is used inside PairState. If you add new field, you will broke PairState.
   }
   //endregion ------------------------------------------------ Data types
 
