@@ -22,7 +22,7 @@
     "solhint": "solhint \"contracts/**/*.sol\"",
     "sporalyzer": "node sporalyzer.js --outputType listing --contract \"contracts/strategies/uniswap/UniswapV3ConverterStrategy.sol:UniswapV3ConverterStrategy\"",
     "rebalance:matic": "npx cross-env NODE_OPTIONS=\"--max_old_space_size=4096\" hardhat run scripts/rebalance.ts --network matic --max-memory 4096",
-    "set-rebalance-debt-settings:matic": "hardhat run scripts/set-settings.ts --network matic"
+    "set-settings:matic": "hardhat run scripts/set-settings.ts --network matic"
   },
   "keywords": [
     "solidity",

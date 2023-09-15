@@ -24,6 +24,6 @@ Twitter: https://twitter.com/tetu_io
 * [operator] rebalanceDebtConfig.setConfig(strategyAddr, lockedPercentForDelayedRebalance, lockedPercentForForcedRebalance, rebalanceDebtDelay)
 * [tetu governance] Register RebalanceResolver as operator
 * [operator] add task for NSR with RebalanceResolver address, register task executer in the resolver
-* * [operator] run locally ```set-rebalance-debt-settings:matic```
+* * [operator] run locally ```set-settings:matic```
 * [operator] run on server ```npm run rebalance:matic``` with env vars set
 * [operator] after 18h add strategy to splitter
