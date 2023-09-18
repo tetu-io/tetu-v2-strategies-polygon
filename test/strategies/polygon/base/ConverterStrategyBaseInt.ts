@@ -12,8 +12,13 @@ import {
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {BigNumber} from "ethers";
-import {parseUnits} from "ethers/lib/utils";
-import {IConverterController__factory, IERC20Metadata__factory, ITetuConverter__factory} from "../../../../typechain";
+import {formatUnits, parseUnits} from "ethers/lib/utils";
+import {
+  IConverterController__factory,
+  IERC20Metadata__factory, IPoolAdapter__factory,
+  ITetuConverter__factory,
+  MockToken
+} from "../../../../typechain";
 import {depositToVault} from "../../../StrategyTestUtils";
 import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
@@ -21,6 +26,15 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
+import {BalanceUtils} from "../../../baseUT/utils/BalanceUtils";
+import {
+  BorrowRepayDataTypeUtils,
+  IPoolAdapterStatus,
+  IPoolAdapterStatusNum
+} from "../../../baseUT/converter/BorrowRepayDataTypeUtils";
+import {MaticHolders} from "../../../../scripts/addresses/MaticHolders";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 /**
  * Tests of ConverterStrategyBase on the base of real strategies
@@ -707,6 +721,126 @@ describe("ConverterStrategyBaseInt", () => {
           await expect(r.afterDeposit0.strategy.investedAssets).lt(r.afterDeposit1.strategy.investedAssets);
         });
       });
+    });
+  });
+
+  describe("_repayDebt study error 35 @skip-on-coverage", () => {
+    interface IRepayDebtParams {
+      collateralAsset: string;
+      collateralAssetHolder: string;
+      borrowAsset: string;
+      borrowAssetHolder: string;
+      amountIn: string;
+      initialBorrowBalance?: string; // default 0
+      countBlocksToWait?: number; // default 100
+    }
+
+    interface IRepayDebtResults {
+      borrowedAmount: number;
+      expectedAmount: number;
+      repaidAmount: number;
+      amountSendToRepay: number;
+      statusBeforeRepay: IPoolAdapterStatusNum;
+      statusAfterRepay: IPoolAdapterStatusNum;
+    }
+
+    async function repayDebt(p: IRepayDebtParams): Promise<IRepayDebtResults> {
+      const facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
+      const collateralAsset = IERC20Metadata__factory.connect(p.collateralAsset, signer);
+      const decimalsCollateral = await collateralAsset.decimals();
+      const borrowAsset = IERC20Metadata__factory.connect(p.borrowAsset, signer);
+      const decimalsBorrow = await borrowAsset.decimals();
+
+      const tetuConverter = await ITetuConverter__factory.connect(MaticAddresses.TETU_CONVERTER, signer);
+      await ConverterUtils.whitelist([facade.address]);
+
+      await ConverterUtils.disableAaveV2(signer);
+      await ConverterUtils.disableDForce(signer);
+
+      const amountIn = parseUnits(p.amountIn, decimalsCollateral);
+
+      // prepare collateral
+      await BalanceUtils.getAmountFromHolder(p.collateralAsset, p.collateralAssetHolder, facade.address, amountIn);
+      if (p.initialBorrowBalance) {
+        await BalanceUtils.getAmountFromHolder(p.borrowAsset, p.borrowAssetHolder, facade.address, parseUnits(p.initialBorrowBalance, decimalsBorrow));
+      }
+
+      // make borrow
+      await collateralAsset.connect(await Misc.impersonate(facade.address)).approve(MaticAddresses.TETU_CONVERTER, amountIn);
+      await facade.openPosition(MaticAddresses.TETU_CONVERTER, "0x", p.collateralAsset, p.borrowAsset, amountIn,0);
+
+      // wait until the amount of debt increases
+      await TimeUtils.advanceNBlocks(p.countBlocksToWait ?? 100);
+
+      const positions = await tetuConverter.getPositions(facade.address, p.collateralAsset, p.borrowAsset);
+      const statusBefore: IPoolAdapterStatus = await IPoolAdapter__factory.connect(positions[0], signer).getStatus();
+
+      // try to repay the debt using amount available on the balance
+      const ret = await facade.callStatic._repayDebt(
+        MaticAddresses.TETU_CONVERTER,
+        p.collateralAsset,
+        p.borrowAsset,
+        await borrowAsset.balanceOf(facade.address)
+      );
+      const borrowedAmount = await borrowAsset.balanceOf(facade.address);
+      await borrowAsset.connect(await Misc.impersonate(facade.address)).approve(MaticAddresses.TETU_CONVERTER, borrowedAmount);
+      await facade._repayDebt(MaticAddresses.TETU_CONVERTER, p.collateralAsset, p.borrowAsset, borrowedAmount);
+
+      const statusAfter: IPoolAdapterStatus = await IPoolAdapter__factory.connect(positions[0], signer).getStatus();
+
+      return {
+        borrowedAmount: +formatUnits(borrowedAmount, decimalsBorrow),
+        expectedAmount: +formatUnits(ret.expectedAmountOut, decimalsBorrow),
+        repaidAmount: +formatUnits(ret.repaidAmountOut, decimalsBorrow),
+        amountSendToRepay: +formatUnits(ret.amountSendToRepay, decimalsBorrow),
+        statusBeforeRepay: BorrowRepayDataTypeUtils.getPoolAdapterStatusNum(statusBefore, decimalsCollateral, decimalsBorrow),
+        statusAfterRepay: BorrowRepayDataTypeUtils.getPoolAdapterStatusNum(statusAfter, decimalsCollateral, decimalsBorrow),
+      }
+    }
+
+    describe("search error 35 conditions - repay amount is a little less than amount to repay", () => {
+      let snapshotRoot: string;
+      // Block 46320827. Problem amounts: 100.087, 100.093, 100.102, 100.113, 100.121, 100.129,...
+      before(async function () {
+        snapshotRoot = await TimeUtils.snapshot();
+        await InjectUtils.injectTetuConverter(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
+      });
+      after(async function () {
+        await TimeUtils.rollback(snapshotRoot);
+      });
+
+      for (let i = 0; i < 100; ++i) {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        const amount = 100.08 + i / 1000;
+        describe(amount.toString(), () => {
+          async function repayDebtTest(): Promise<IRepayDebtResults> {
+            return repayDebt({
+              collateralAsset: MaticAddresses.USDC_TOKEN,
+              borrowAsset: MaticAddresses.USDT_TOKEN,
+              amountIn: amount.toString(),
+              collateralAssetHolder: MaticHolders.HOLDER_USDC,
+              borrowAssetHolder: MaticHolders.HOLDER_USDT,
+              countBlocksToWait: 10,
+              initialBorrowBalance: "0.000003"
+            });
+          }
+
+          it("should repay debt successfully", async () => {
+            const ret = await loadFixture(repayDebtTest);
+            console.log("ret", ret);
+            // expect(ret.statusAfterRepay.amountToPay !== 0).eq(true);
+            expect(ret.statusAfterRepay.healthFactor18).gt(1.0);
+          });
+        });
+      }
     });
   });
 //endregion Unit tests

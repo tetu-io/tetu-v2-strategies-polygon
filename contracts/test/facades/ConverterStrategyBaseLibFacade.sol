@@ -268,4 +268,17 @@ contract ConverterStrategyBaseLibFacade {
       liquidationThresholds
     );
   }
+
+  function _repayDebt(
+    ITetuConverter converter,
+    address collateralAsset,
+    address borrowAsset,
+    uint amountToRepay
+  ) external returns (
+    uint expectedAmountOut,
+    uint repaidAmountOut,
+    uint amountSendToRepay
+  ) {
+    return ConverterStrategyBaseLib._repayDebt(converter, collateralAsset, borrowAsset, amountToRepay);
+  }
 }
