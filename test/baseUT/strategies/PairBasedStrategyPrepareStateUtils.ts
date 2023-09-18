@@ -356,7 +356,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
   static async movePriceBySteps(
     signer: SignerWithAddress,
-    b: IBuilderResults,
+    b: IStrategyBasicInfo,
     movePricesUpDown: boolean,
     state: IDefaultState,
     totalSwapAmount: BigNumber,

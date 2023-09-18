@@ -37,8 +37,8 @@ import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {MockHelper} from "../helpers/MockHelper";
 
-export const KYBER_PID = 40; // previous value was 21, new one is 40
-export const KYBER_USDC_DAI_PID = 42;
+export const KYBER_PID = 54; // 40; // previous value was 21, new one is 40
+export const KYBER_USDC_DAI_PID = 55; // 42;
 
 export interface IBuilderParams {
   gov: string;

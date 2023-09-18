@@ -341,7 +341,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy2.needRebalance()).eq(false);
       expect(await strategy2.isReadyToHardWork()).eq(true);
       await strategy2.connect(splitterSigner).doHardWork();
-      expect(await strategy2.isReadyToHardWork()).eq(false);
+
+      // SCB-776: now we allow isReadyToHardWork() returns true just after calling hardwork()
+      // expect(await strategy2.isReadyToHardWork()).eq(false);
 
       console.log('Vault totalAssets', await vault2.totalAssets());
       console.log('Strategy totalAssets', await strategy2.totalAssets());
