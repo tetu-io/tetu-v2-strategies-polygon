@@ -242,6 +242,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               strategyInfo.notUnderlyingToken
           );
 
+          await InjectUtils.injectTetuConverter(signer);
+          await ConverterUtils.disableAaveV3(signer);
+          await InjectUtils.redeployAave3PoolAdapters(signer);
+
           console.log('deposit...');
           // make deposit and enter to the pool
           for (let i = 0; i < 5; ++i) {
@@ -441,6 +445,9 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               signer2,
               strategyInfo.notUnderlyingToken
           );
+          await InjectUtils.injectTetuConverter(signer);
+          await ConverterUtils.disableAaveV3(signer);
+          await InjectUtils.redeployAave3PoolAdapters(signer);
 
           console.log('deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -617,6 +624,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               signer2,
               strategyInfo.notUnderlyingToken
           );
+          await InjectUtils.injectTetuConverter(signer);
+          await ConverterUtils.disableAaveV3(signer);
+          await InjectUtils.redeployAave3PoolAdapters(signer);
+
 
           console.log('deposit...');
           await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
@@ -1677,6 +1688,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
+
         console.log('initial deposit...');
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await TokenUtils.getToken(b.asset, signer.address, parseUnits('100000', b.assetDecimals));
@@ -1765,6 +1780,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             signer2,
             strategyInfo.notUnderlyingToken
         );
+
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
 
         await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
         await IERC20__factory.connect(b.asset, signer3).approve(b.vault.address, Misc.MAX_UINT);
@@ -1962,6 +1981,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           signer2,
           strategyInfo.notUnderlyingToken,
         );
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
+
         await b.vault.connect(b.gov).setFees(0, 0);
 
         console.log('deposit...');

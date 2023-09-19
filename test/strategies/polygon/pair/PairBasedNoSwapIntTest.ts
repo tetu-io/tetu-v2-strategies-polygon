@@ -33,6 +33,8 @@ import {
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 /**
  * There are two kind of tests here:
@@ -240,6 +242,10 @@ describe('PairBasedNoSwapIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
@@ -999,6 +1005,10 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
+
         return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
       }
 
@@ -1452,6 +1462,10 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
+
         return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
       }
 

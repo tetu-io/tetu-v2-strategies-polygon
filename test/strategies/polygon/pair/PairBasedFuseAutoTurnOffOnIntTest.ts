@@ -27,6 +27,8 @@ import {
   FUSE_OFF_1, FUSE_ON_LOWER_LIMIT_2,
   FUSE_ON_UPPER_LIMIT_3
 } from "../../../baseUT/AppConstants";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 /**
  * Check how fuse triggered ON/OFF because of price changing.
@@ -317,6 +319,10 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
 
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;
