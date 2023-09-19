@@ -14,7 +14,7 @@ import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
@@ -241,7 +241,12 @@ describe('PairBasedNoSwapIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
 
         await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV3(signer);
@@ -733,7 +738,12 @@ describe('PairBasedNoSwapIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
@@ -845,7 +855,12 @@ describe('PairBasedNoSwapIntTest', function() {
       })
 
       async function prepareStrategy(useMockSwapper?: boolean): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2, undefined);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
         const converterStrategyBase = await ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const platformVoter = await DeployerUtilsLocal.impersonate(
           await IController__factory.connect(
@@ -1009,7 +1024,12 @@ describe('PairBasedNoSwapIntTest', function() {
         await ConverterUtils.disableAaveV3(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
-        return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        return PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
       }
 
       describe(`${strategyInfo.name}`, () => {
@@ -1466,7 +1486,12 @@ describe('PairBasedNoSwapIntTest', function() {
         await ConverterUtils.disableAaveV3(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
-        return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        return PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
       }
 
       describe(`${strategyInfo.name}-${strategyInfo.priceUp ? "up" : "down"}`, () => {

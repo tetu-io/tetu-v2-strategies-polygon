@@ -37,8 +37,24 @@ import {parseUnits} from "ethers/lib/utils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {MockHelper} from "../helpers/MockHelper";
 
+/**
+ * Kyber PID for most current block
+ */
 export const KYBER_PID = 54; // 40; // previous value was 21, new one is 40
+/**
+ * Kyber PID for most current block
+ */
 export const KYBER_USDC_DAI_PID = 55; // 42;
+
+/**
+ * Kyber PID for default block
+ */
+export const KYBER_PID_DEFAULT_BLOCK = 40;
+/**
+ * Kyber PID for default block
+ */
+export const KYBER_USDC_DAI_PID_DEFAULT_BLOCK = 42;
+
 
 export interface IBuilderParams {
   gov: string;
@@ -263,8 +279,8 @@ export class PairBasedStrategyBuilder {
     return this.build(p, controller, core, data, lib);
   }
 
-  static async buildKyber(p: IBuilderParams): Promise<IBuilderResults> {
-    const pId = KYBER_PID;
+  static async buildKyber(p: IBuilderParams, pid?: number): Promise<IBuilderResults> {
+    const pId = pid ?? KYBER_PID;
 
     const signer = p.signer;
     const gov = await Misc.impersonate(p.gov);

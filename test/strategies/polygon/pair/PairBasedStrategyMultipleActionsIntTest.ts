@@ -12,7 +12,7 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
@@ -97,7 +97,14 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
        * Fuse OFF by default, rebalance is not needed
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+          }
+        );
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
 
         if (await b.strategy.needRebalance()) {

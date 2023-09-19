@@ -5,13 +5,19 @@ import {IBuilderResults, PairBasedStrategyBuilder} from "./PairBasedStrategyBuil
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "./AppPlatforms";
 import {MockSwapper} from "../../../typechain";
 
+interface IBuildPairStrategyParams {
+  notUnderlying?: string; // default is MaticAddresses.USDT_TOKEN
+  kyberPid?: number; // default is undefined
+}
+
 export class PairStrategyFixtures {
   static async buildPairStrategyUsdcXXX(
     strategyName: string,
     signer: SignerWithAddress,
     signer2: SignerWithAddress,
-    notUnderlying: string = MaticAddresses.USDT_TOKEN,
+    p?: IBuildPairStrategyParams
   ): Promise<IBuilderResults> {
+    const notUnderlying = p?.notUnderlying ?? MaticAddresses.USDT_TOKEN;
     switch (strategyName) {
       case PLATFORM_UNIV3:
         switch (notUnderlying) {
@@ -27,7 +33,7 @@ export class PairStrategyFixtures {
       case PLATFORM_ALGEBRA:
         return this.buildAlgebraUsdtUsdc(signer, signer2);
       case PLATFORM_KYBER:
-        return this.buildKyberUsdtUsdc(signer, signer2);
+        return this.buildKyberUsdtUsdc(signer, signer2, p?.kyberPid);
       default:
         throw Error(`buildStrategy doesn't support ${strategyName}`);
     }
@@ -143,7 +149,7 @@ export class PairStrategyFixtures {
     });
   }
 
-  static async buildKyberUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress): Promise<IBuilderResults> {
+  static async buildKyberUsdtUsdc(signer: SignerWithAddress, signer2: SignerWithAddress, pid?: number): Promise<IBuilderResults> {
     return PairBasedStrategyBuilder.buildKyber({
       signer,
       signer2,
@@ -169,6 +175,6 @@ export class PairStrategyFixtures {
           tokenOut: MaticAddresses.USDC_TOKEN,
         },
       ]
-    });
+    }, pid);
   }
 }

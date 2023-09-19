@@ -24,7 +24,7 @@ import {defaultAbiCoder, formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {
@@ -239,7 +239,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               strategyInfo.name,
               signer,
               signer2,
-              strategyInfo.notUnderlyingToken
+          {
+                kyberPid: KYBER_PID_DEFAULT_BLOCK,
+                notUnderlying: strategyInfo.notUnderlyingToken
+              }
           );
 
           await InjectUtils.injectTetuConverter(signer);
@@ -443,7 +446,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               strategyInfo.name,
               signer,
               signer2,
-              strategyInfo.notUnderlyingToken
+              {
+                kyberPid: KYBER_PID_DEFAULT_BLOCK,
+                notUnderlying: strategyInfo.notUnderlyingToken
+              }
           );
           await InjectUtils.injectTetuConverter(signer);
           await ConverterUtils.disableAaveV3(signer);
@@ -622,7 +628,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               strategyInfo.name,
               signer,
               signer2,
-              strategyInfo.notUnderlyingToken
+              {
+                kyberPid: KYBER_PID_DEFAULT_BLOCK,
+                notUnderlying: strategyInfo.notUnderlyingToken
+              }
           );
           await InjectUtils.injectTetuConverter(signer);
           await ConverterUtils.disableAaveV3(signer);
@@ -800,7 +809,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
         async function prepareStrategy(): Promise<IBuilderResults> {
-          return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+          return PairStrategyFixtures.buildPairStrategyUsdcXXX(
+            strategyInfo.name,
+            signer,
+            signer2,
+            {
+              kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            }
+          );
         }
 
         describe(`${strategyInfo.name}`, () => {
@@ -850,7 +866,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = "./tmp/prepareStrategy.csv";
 
-          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+            strategyInfo.name,
+            signer,
+            signer2,
+            {
+              kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            }
+          );
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
           states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `init`));
@@ -956,7 +979,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
        * Big user exits the strategy.
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const states: IStateNum[] = [];
         const pathOut = "./tmp/large-user-prepare-strategy.csv";
@@ -1147,7 +1175,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+            strategyInfo.name,
+            signer,
+            signer2,
+            {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+          );
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
@@ -1373,7 +1406,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
       strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
         async function prepareStrategy(): Promise<IBuilderResults> {
-          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+          const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+            strategyInfo.name,
+            signer,
+            signer2,
+            {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+          );
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const platform = await converterStrategyBase.PLATFORM();
           const states: IStateNum[] = [];
@@ -1603,7 +1641,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           strategyInfo.name,
           signer,
           signer2,
-          strategyInfo.notUnderlyingToken
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            notUnderlying: strategyInfo.notUnderlyingToken
+          }
         );
 
         console.log('deposit...');
@@ -1685,7 +1726,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+          }
+        );
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
         await InjectUtils.injectTetuConverter(signer);
@@ -1778,7 +1826,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             strategyInfo.name,
             signer,
             signer2,
-            strategyInfo.notUnderlyingToken
+            {
+              kyberPid: KYBER_PID_DEFAULT_BLOCK,
+              notUnderlying: strategyInfo.notUnderlyingToken
+            }
         );
 
         await InjectUtils.injectTetuConverter(signer);
@@ -1979,7 +2030,10 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           strategyInfo.name,
           signer,
           signer2,
-          strategyInfo.notUnderlyingToken,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+            notUnderlying: strategyInfo.notUnderlyingToken
+          }
         );
         await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV3(signer);
