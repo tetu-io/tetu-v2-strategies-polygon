@@ -249,7 +249,7 @@ describe('PairBasedNoSwapIntTest', function() {
         );
 
         await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV3(signer);
+        await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
         // provide $1000 of insurance to compensate possible price decreasing
@@ -1021,7 +1021,7 @@ describe('PairBasedNoSwapIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV3(signer);
+        await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
         return PairStrategyFixtures.buildPairStrategyUsdcXXX(
@@ -1483,7 +1483,7 @@ describe('PairBasedNoSwapIntTest', function() {
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
         await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV3(signer);
+        await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
         return PairStrategyFixtures.buildPairStrategyUsdcXXX(

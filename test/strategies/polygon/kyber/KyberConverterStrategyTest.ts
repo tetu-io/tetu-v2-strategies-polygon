@@ -30,7 +30,7 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {KYBER_PID, KYBER_PID_DEFAULT_BLOCK} from '../../../baseUT/strategies/PairBasedStrategyBuilder';
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
@@ -44,12 +44,11 @@ describe('KyberConverterStrategyTest', function() {
   let asset: IERC20;
   let vault: TetuVaultV2;
   let strategy: KyberConverterStrategy;
-  const pId = KYBER_PID;
+  const pId = KYBER_PID_DEFAULT_BLOCK;
 
   before(async function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);

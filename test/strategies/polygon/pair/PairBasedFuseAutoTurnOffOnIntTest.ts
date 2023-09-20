@@ -47,7 +47,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   //region before, after
   before(async function () {
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
     [signer, signer2] = await ethers.getSigners();
   })
 
@@ -321,7 +320,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
 
         await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV3(signer);
+        await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);

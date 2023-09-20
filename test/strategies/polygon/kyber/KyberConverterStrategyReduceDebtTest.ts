@@ -39,7 +39,7 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
   let lib: KyberLib;
 
   before(async function() {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock();
 

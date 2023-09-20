@@ -62,7 +62,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let FEE_DENOMINATOR: BigNumber;
 
   before(async function() {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
 
     [signer, signer2, signer3] = await ethers.getSigners();
