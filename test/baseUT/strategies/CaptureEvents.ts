@@ -343,10 +343,10 @@ export class CaptureEvents {
           event.topics,
         ) as unknown) as SwapByAggEventObject;
         ret.swapByAgg = {
-          amountIn: +formatUnits(log.amountIn, decimals),
-          amountToSwap: +formatUnits(log.amountToSwap, decimals),
-          amountOut: +formatUnits(log.amountOut, decimals),
-          amountOutExpected: +formatUnits(log.expectedAmountOut, decimals),
+          amountIn: +formatUnits(log.amountIn, decimals), // todo take correct decimals from the event
+          amountToSwap: +formatUnits(log.amountToSwap, decimals), // todo take correct decimals from the event
+          amountOut: +formatUnits(log.amountOut, decimals), // todo take correct decimals from the event
+          amountOutExpected: +formatUnits(log.expectedAmountOut, decimals), // todo take correct decimals from the event
           aggregator: log.aggregator
         }
       }
