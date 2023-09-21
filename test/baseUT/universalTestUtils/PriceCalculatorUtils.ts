@@ -1,15 +1,15 @@
 import { BigNumber, utils } from 'ethers';
-import { TokenUtils } from '../scripts/utils/TokenUtils';
+import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { Logger } from 'tslog';
-import logSettings from '../log_settings';
-import { IController__factory, ITetuLiquidator, ITetuLiquidator__factory } from '../typechain';
+import logSettings from '../../../log_settings';
+import { IController__factory, ITetuLiquidator, ITetuLiquidator__factory } from '../../../typechain';
 import { parseUnits } from 'ethers/lib/utils';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { PolygonAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon';
-import { DeployerUtilsLocal } from '../scripts/utils/DeployerUtilsLocal';
-import { Misc } from '../scripts/utils/Misc';
+import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
+import { Misc } from '../../../scripts/utils/Misc';
 
 const log: Logger<undefined> = new Logger(logSettings);
 

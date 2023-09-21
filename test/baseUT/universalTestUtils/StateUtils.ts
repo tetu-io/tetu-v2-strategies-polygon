@@ -7,13 +7,13 @@ import {
   ConverterStrategyBase, IBalancerGauge__factory,
   IERC20__factory, ISplitter__factory, ITetuConverter__factory, KyberConverterStrategy__factory,
   TetuVaultV2, UniswapV3ConverterStrategy__factory
-} from "../typechain";
+} from "../../../typechain";
 import hre from "hardhat";
-import {MockHelper} from "./baseUT/helpers/MockHelper";
+import {MockHelper} from "../helpers/MockHelper";
 import {formatUnits} from "ethers/lib/utils";
-import {writeFileSyncRestoreFolder} from "./baseUT/utils/FileUtils";
+import {writeFileSyncRestoreFolder} from "../utils/FileUtils";
 import {writeFileSync} from "fs";
-import {PackedData} from "./baseUT/utils/PackedData";
+import {PackedData} from "../utils/PackedData";
 
 
 export interface IState {

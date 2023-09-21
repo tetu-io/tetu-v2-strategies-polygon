@@ -29,8 +29,8 @@ import {
   VaultFactory__factory,
 } from '../../typechain';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
-import { ICoreContractsWrapper } from '../../test/CoreContractsWrapper';
-import { IToolsContractsWrapper } from '../../test/ToolsContractsWrapper';
+import { ICoreContractsWrapper } from '../../test/baseUT/universalTestUtils/CoreContractsWrapper';
+import { IToolsContractsWrapper } from '../../test/baseUT/universalTestUtils/ToolsContractsWrapper';
 import { RunHelper } from './RunHelper';
 import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses';
 import { ToolsAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/ToolsAddresses';

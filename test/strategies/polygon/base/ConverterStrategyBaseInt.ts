@@ -19,7 +19,7 @@ import {
   ITetuConverter__factory,
   MockToken
 } from "../../../../typechain";
-import {depositToVault} from "../../../StrategyTestUtils";
+import {depositToVault} from "../../../baseUT/universalTestUtils/StrategyTestUtils";
 import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";

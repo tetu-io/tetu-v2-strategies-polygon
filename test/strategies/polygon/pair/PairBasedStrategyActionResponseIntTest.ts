@@ -55,6 +55,7 @@ import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 
 dotEnvConfig();
 // tslint:disable-next-line:no-var-requires
@@ -1860,9 +1861,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
         it('should change share price in expected way (compoundRate 0 => no changes, > 0 => increase)', async () => {
           const COUNT_CYCLES = 10;
+          const maxLockedPercent = 15;
           const b = await loadFixture(prepareStrategy);
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-${tokenName(strategyInfo.notUnderlyingToken)}-${strategyInfo.compoundRatio}-test-loop.csv`;
+
+          const reader = await MockHelper.createPairBasedStrategyReader(signer);
 
           // Following amount is used as swapAmount for both tokens A and B...
           const swapAssetValueForPriceMove = parseUnits('500000', 6);
@@ -1963,6 +1967,26 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               console.log(`To withdraw: ${toWithdraw.toString()}. Withdrawn: ${balAfter.sub(balBefore).toString()}`)
               states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `w${i}`, {eventsSet}));
               StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
+            }
+
+            const readerResults = await reader.getLockedUnderlyingAmount(b.strategy.address);
+            const locketAmount = +formatUnits(readerResults.estimatedUnderlyingAmount, b.assetDecimals);
+            const totalAsset = +formatUnits(readerResults.totalAssets, b.assetDecimals);
+            const lockedPercent = 100 * locketAmount / totalAsset;
+            console.log(`locketAmount=${locketAmount} totalAsset=${totalAsset} lockedPercent=${lockedPercent}`);
+            if (lockedPercent > maxLockedPercent) {
+              console.log("Rebalance debts");
+              const planEntryData = defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_REPAY_SWAP_REPAY, Misc.MAX_UINT]);
+              const quote = await b.strategy.callStatic.quoteWithdrawByAgg(planEntryData);
+              await b.strategy.withdrawByAggStep(
+                quote.tokenToSwap,
+                Misc.ZERO_ADDRESS,
+                quote.amountToSwap,
+                "0x",
+                planEntryData,
+                ENTRY_TO_POOL_IS_ALLOWED,
+                {gasLimit: 19_000_000}
+              );
             }
           }
 

@@ -11,38 +11,38 @@ import {
     UniswapV3ConverterStrategy,
     UniswapV3ConverterStrategy__factory,
     UniswapV3ConverterStrategyLogicLib__factory, VaultFactory__factory,
-} from '../typechain';
+} from '../../../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { BigNumber, ContractReceipt } from 'ethers';
 import { formatUnits } from 'ethers/lib/utils';
-import { LossCoveredEventObject } from '../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2';
+import { LossCoveredEventObject } from '../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/TetuVaultV2';
 import {
   HardWorkEventObject,
   InvestedEventObject,
   LossEventObject,
-} from '../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2';
+} from '../../../typechain/@tetu_io/tetu-contracts-v2/contracts/vault/StrategySplitterV2';
 import {
   InvestAllEventObject,
   WithdrawToSplitterEventObject,
-} from '../typechain/@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib';
+} from '../../../typechain/@tetu_io/tetu-contracts-v2/contracts/strategy/StrategyLib';
 import {
   OnDepositorEnterEventObject,
   OnDepositorExitEventObject,
-} from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategy';
+} from '../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategy';
 import {
   UniV3FeesClaimedEventObject,
-} from '../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
+} from '../../../typechain/contracts/strategies/uniswap/UniswapV3ConverterStrategyLogicLib';
 import chai from 'chai';
-import { Misc } from '../scripts/utils/Misc';
-import {IUniv3SpecificState} from "./baseUT/utils/StateUtilsNum";
-import {PackedData} from "./baseUT/utils/PackedData";
+import { Misc } from '../../../scripts/utils/Misc';
+import {IUniv3SpecificState} from "../utils/StateUtilsNum";
+import {PackedData} from "../utils/PackedData";
 import {
   IHardworkEventInfo,
   IStateHardworkEvents,
   IUniV3FeesClaimedInfo
-} from "./baseUT/strategies/UniswapV3StrategyUtils";
-import {IEventsSet, CaptureEvents} from "./baseUT/strategies/CaptureEvents";
-import {PLATFORM_UNIV3} from "./baseUT/strategies/AppPlatforms";
+} from "../strategies/UniswapV3StrategyUtils";
+import {IEventsSet, CaptureEvents} from "../strategies/CaptureEvents";
+import {PLATFORM_UNIV3} from "../strategies/AppPlatforms";
 
 export async function doHardWorkForStrategy(
   splitter: StrategySplitterV2,

@@ -11,7 +11,7 @@ import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
-import {depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault,} from '../../../StrategyTestUtils';
+import {depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault,} from '../../../baseUT/universalTestUtils/StrategyTestUtils';
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";

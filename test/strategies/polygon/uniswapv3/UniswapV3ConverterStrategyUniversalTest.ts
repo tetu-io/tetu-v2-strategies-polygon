@@ -6,7 +6,7 @@ import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {getConverterAddress, getDForcePlatformAdapter, Misc} from "../../../../scripts/utils/Misc";
-import {IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {IState, IStateParams, StateUtils} from "../../../baseUT/universalTestUtils/StateUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";

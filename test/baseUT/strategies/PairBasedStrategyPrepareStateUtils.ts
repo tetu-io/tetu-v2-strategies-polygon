@@ -17,7 +17,7 @@ import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
-import {depositToVault, printVaultState} from "../../StrategyTestUtils";
+import {depositToVault, printVaultState} from "../universalTestUtils/StrategyTestUtils";
 import {CaptureEvents, IEventsSet} from "./CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
 

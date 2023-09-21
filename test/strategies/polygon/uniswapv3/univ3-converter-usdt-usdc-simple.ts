@@ -12,7 +12,7 @@ import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { Misc } from '../../../../scripts/utils/Misc';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
-import {depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault,} from '../../../StrategyTestUtils';
+import {depositToVault, doHardWorkForStrategy, printVaultState, redeemFromVault,} from '../../../baseUT/universalTestUtils/StrategyTestUtils';
 import { BigNumber } from 'ethers';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";

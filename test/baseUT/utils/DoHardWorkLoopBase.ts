@@ -1,20 +1,20 @@
 /* tslint:disable:no-trailing-whitespace */
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { ICoreContractsWrapper } from '../../CoreContractsWrapper';
+import { ICoreContractsWrapper } from '../universalTestUtils/CoreContractsWrapper';
 import {
   IERC20__factory,
   IRebalancingV2Strategy,
   IStrategyV2,
   TetuVaultV2
 } from '../../../typechain';
-import { IToolsContractsWrapper } from '../../ToolsContractsWrapper';
+import { IToolsContractsWrapper } from '../universalTestUtils/ToolsContractsWrapper';
 import { TokenUtils } from '../../../scripts/utils/TokenUtils';
 import { BigNumber, utils } from 'ethers';
 import { Misc } from '../../../scripts/utils/Misc';
-import { PPFS_NO_INCREASE, VaultUtils } from '../../VaultUtils';
+import { PPFS_NO_INCREASE, VaultUtils } from '../universalTestUtils/VaultUtils';
 import { TimeUtils } from '../../../scripts/utils/TimeUtils';
 import { expect } from 'chai';
-import { PriceCalculatorUtils } from '../../PriceCalculatorUtils';
+import { PriceCalculatorUtils } from '../universalTestUtils/PriceCalculatorUtils';
 import { UniversalTestUtils } from './UniversalTestUtils';
 import { DeployerUtilsLocal } from '../../../scripts/utils/DeployerUtilsLocal';
 import {formatUnits, parseUnits} from "ethers/lib/utils";
