@@ -148,10 +148,20 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     let rebalanceFuseOn: IPriceFuseStatus | undefined;
     let rebalanceFuseOff: IPriceFuseStatus | undefined;
 
+    if ((await b.strategy.needRebalance())) {
+      console.log("movePriceToChangeFuseStatus.rebalanceNoSwaps");
+      await b.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
+    }
+
     console.log('deposit...');
     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
     await TokenUtils.getToken(b.asset, signer.address, parseUnits('1000', 6));
     await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+
+    if ((await b.strategy.needRebalance())) {
+      console.log("movePriceToChangeFuseStatus.rebalanceNoSwaps");
+      await b.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
+    }
 
     const state = await PackedData.getDefaultState(b.strategy);
     console.log("=========================== there");
