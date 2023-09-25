@@ -1,7 +1,8 @@
-import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {IListStates, PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {
-  ConverterStrategyBase__factory,
-  IRebalancingV2Strategy__factory,
+  ControllerV2__factory,
+  ConverterStrategyBase__factory, IRebalancingV2Strategy,
+  IRebalancingV2Strategy__factory, KyberConverterStrategy__factory, MockSwapper,
   StrategySplitterV2__factory,
   TetuVaultV2__factory, UniswapV3ConverterStrategy__factory
 } from "../../typechain";
@@ -14,11 +15,21 @@ import {PackedData} from "../baseUT/utils/PackedData";
 import {Misc} from "../../scripts/utils/Misc";
 import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../baseUT/utils/AggregatorUtils";
-import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../baseUT/AppConstants";
+import {
+  ENTRY_TO_POOL_DISABLED,
+  ENTRY_TO_POOL_IS_ALLOWED, ENTRY_TO_POOL_IS_ALLOWED_IF_COMPLETED,
+  PLAN_REPAY_SWAP_REPAY,
+  PLAN_SWAP_REPAY
+} from "../baseUT/AppConstants";
 import {IStateNum, StateUtilsNum} from "../baseUT/utils/StateUtilsNum";
 import {ethers} from "hardhat";
-import {CaptureEvents} from "../baseUT/strategies/CaptureEvents";
+import {CaptureEvents, IEventsSet} from "../baseUT/strategies/CaptureEvents";
 import fs from "fs";
+import {DeployerUtils} from "../../scripts/utils/DeployerUtils";
+import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
+import {IBuilderResults} from "../baseUT/strategies/PairBasedStrategyBuilder";
+import {MockAggregatorUtils} from "../baseUT/mocks/MockAggregatorUtils";
+import {makeFullWithdraw} from "../../scripts/utils/WithdrawAllByAggUtils";
 
 describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
   describe("SCB-777: withdrawByAgg, TC-29", () => {
@@ -538,6 +549,117 @@ describe("Scb777, scb779-reproduce @skip-on-coverage", () => {
       }
       await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
 
+    });
+  });
+
+  describe("SCB-807: rebalanceNoSwaps, TS-23", () => {
+    const BLOCK = 47962547;
+    const STRATEGY = "0x4b8bd2623d7480850e406b9f2960305f44c7adeb";
+    const SENDER = "0xddddd5541d5d8c5725765352793c8651a06f5b09";
+    const pathOut = "./tmp/ts23-rebalanceNoSwaps.csv";
+    const OPERATOR = "0xbbbbb8c4364ec2ce52c59d2ed3e56f307e529a94";
+    const aggregator = "0x1111111254EEB25477B68fb85Ed929f73A960582";
+
+    let snapshotBefore: string;
+    before(async function () {
+      snapshotBefore = await TimeUtils.snapshot();
+    });
+
+    after(async function () {
+      await TimeUtils.rollback(snapshotBefore);
+    });
+
+    async function injectStrategy(signer: SignerWithAddress, strategyProxy: string, contractName: string) {
+      const strategyLogic = await DeployerUtils.deployContract(signer, contractName);
+      const controller = ControllerV2__factory.connect(
+        await ConverterStrategyBase__factory.connect(strategyProxy, signer).controller(),
+        signer
+      );
+      const governance = await controller.governance();
+      const controllerAsGov = controller.connect(await Misc.impersonate(governance));
+
+      await controllerAsGov.removeProxyAnnounce(strategyProxy);
+      await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
+      await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
+      await controllerAsGov.upgradeProxy([strategyProxy]);
+    }
+
+    async function tryWithdrawByAgg(
+      signer: SignerWithAddress,
+      strategy: IRebalancingV2Strategy,
+      saveStates: (title: string, eventsSet?: IEventsSet) => void,
+    ) {
+      const state = await PackedData.getDefaultState(strategy);
+      const operator = await DeployerUtilsLocal.impersonate(OPERATOR);
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
+      const planEntryData = "0x0000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+      console.log("unfoldBorrows.quoteWithdrawByAgg.callStatic --------------------------------");
+      const quote = await strategyAsOperator.callStatic.quoteWithdrawByAgg(planEntryData);
+      console.log("quote", quote);
+      console.log("unfoldBorrows.quoteWithdrawByAgg.FINISH --------------------------------", quote);
+
+      const swapData = await AggregatorUtils.buildSwapTransactionData(
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenA : state.tokenB,
+        quote.tokenToSwap.toLowerCase() === state.tokenA.toLowerCase() ? state.tokenB : state.tokenA,
+        quote.amountToSwap,
+        strategyAsOperator.address,
+      );
+
+      const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+        strategyAsOperator,
+        quote.tokenToSwap,
+        aggregator,
+        quote.amountToSwap,
+        swapData,
+        planEntryData,
+        ENTRY_TO_POOL_IS_ALLOWED,
+      );
+      console.log("unfoldBorrows.withdrawByAggStep.FINISH --------------------------------");
+      saveStates("w", eventsSet);
+    }
+
+    it("try rebalanceNoSwaps", async () => {
+
+      const states: IStateNum[] = [];
+
+      if (fs.existsSync(pathOut)) {
+        fs.rmSync(pathOut);
+      }
+
+      const saver = async (title: string, e?: IEventsSet) => {
+        const state = await StateUtilsNum.getState(signer, signer, converterStrategyBase, vault, title, {eventsSet: e});
+        states.push(state);
+        StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, {mainAssetSymbol: MaticAddresses.USDC_TOKEN});
+      };
+
+      // const signer = await DeployerUtilsLocal.impersonate(SENDER);
+      const signer = (await ethers.getSigners())[0];
+      // await HardhatUtils.switchToBlock(BLOCK - 2);
+      await HardhatUtils.switchToMostCurrentBlock();
+
+      const operator = await DeployerUtilsLocal.impersonate(SENDER);
+
+      const strategyAsOperator = IRebalancingV2Strategy__factory.connect(STRATEGY, operator);
+      const converterStrategyBase = ConverterStrategyBase__factory.connect(STRATEGY, operator);
+      const vault = TetuVaultV2__factory.connect(
+        await (await StrategySplitterV2__factory.connect(await converterStrategyBase.splitter(), operator)).vault(),
+        signer
+      );
+
+      await injectStrategy(signer, STRATEGY, "KyberConverterStrategy");
+
+      await saver("b");
+
+      await makeFullWithdraw(strategyAsOperator, {
+        entryToPool: ENTRY_TO_POOL_DISABLED,
+        planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
+        saveStates: saver
+      })
+      // await tryWithdrawByAgg(signer, strategy, saver);
+
+      const eventsSet = await CaptureEvents.makeRebalanceNoSwap(strategyAsOperator);
+      await saver("a", eventsSet);
     });
   });
 });
