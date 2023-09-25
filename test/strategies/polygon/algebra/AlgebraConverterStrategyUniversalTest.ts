@@ -71,7 +71,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
 
   before(async function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
-    await HardhatUtils.switchToMostCurrentBlock();
+    // await HardhatUtils.switchToMostCurrentBlock(); // there are no swaps in this test, we don't need current block
     await StrategyTestUtils.deployCoreAndInit(deployInfo);
 
     const [signer] = await ethers.getSigners();

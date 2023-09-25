@@ -43,7 +43,7 @@ describe('AlgebraConverterStrategyTest', function() {
   before(async function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
+    // await HardhatUtils.switchToMostCurrentBlock(); // there are no swaps in this test, we don't need current block
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
