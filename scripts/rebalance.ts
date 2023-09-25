@@ -18,6 +18,7 @@ import { config as dotEnvConfig } from 'dotenv';
 import { subscribeTgBot } from './telegram/tg-subscribe';
 import { Misc } from './utils/Misc';
 import { NSRUtils } from './utils/NSRUtils';
+import { formatUnits } from 'ethers/lib/utils';
 
 // test rebalance debt
 // NODE_OPTIONS=--max_old_space_size=4096 hardhat run scripts/special/prepareTestEnvForUniswapV3ReduceDebtW3F.ts
@@ -136,6 +137,10 @@ async function main() {
               console.log(strategyName, ' ----- PASSED needNSR, call NSR for');
               const tp = await txParams2();
               try {
+
+                const gas = await strategy.estimateGas.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 });
+                console.log('estimated gas', formatUnits(gas, 9));
+
                 await RunHelper.runAndWaitAndSpeedUp(
                   provider,
                   () => strategy.rebalanceNoSwaps(true, { ...tp, gasLimit: 15_000_000 }),
@@ -184,7 +189,17 @@ async function main() {
                 }
                 const tp = await txParams2();
                 const callData = result.callData as unknown as Web3FunctionResultCallData[];
+
                 try {
+                  const gas = await signer.estimateGas({
+                    to: callData[0].to,
+                    data: callData[0].data,
+                    ...tp,
+                    gasLimit: 15_000_000,
+                  });
+
+                  console.log('estimated gas', formatUnits(gas, 9));
+
                   await RunHelper.runAndWaitAndSpeedUp(provider, () =>
                       signer.sendTransaction({
                         to: callData[0].to,

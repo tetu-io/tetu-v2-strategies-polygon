@@ -37,10 +37,12 @@ async function main() {
   console.log('lowestStrat', lowestStrat);
   console.log('lowestStratApr', lowestStratApr);
 
+  const gas = await splitter.estimateGas.rebalance(rebalancePerc, 10)
+
   const txParam = await txParams2();
   await RunHelper.runAndWaitAndSpeedUp(
     ethers.provider,
-    () => splitter.rebalance(rebalancePerc, 10, { ...txParam, gasLimit: 15_000_000 }),
+    () => splitter.rebalance(rebalancePerc, 10, { ...txParam, gasLimit: gas.mul(2) }),
   );
 
 
