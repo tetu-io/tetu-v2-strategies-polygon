@@ -9,7 +9,7 @@ import {AggregatorUtils} from "../../test/baseUT/utils/AggregatorUtils";
 import {IERC20Metadata__factory} from "../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {PLAN_SWAP_REPAY} from "../../test/baseUT/AppConstants";
 
-export interface IMakeFullWithdraw{
+export interface IMakeFullWithdraw {
   entryToPool: number;
 
   planEntryDataGetter?: () => Promise<string>;
@@ -18,6 +18,7 @@ export interface IMakeFullWithdraw{
   saveStates?: (title: string, eventsSet?: IEventsSet) => Promise<void>;
   maxAmountToSwap?: string; // 30000 by default
   swapSlippage?: number; // 5000 by default
+  isCompleted?: (completed: boolean) => Promise<boolean>;
 }
 
 /**
@@ -96,6 +97,11 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
       await p?.saveStates(`w${step++}`, eventsSet);
     }
 
-    if (p?.singleIteration || completed) break;
+    if (p?.singleIteration) break;
+    if (p.isCompleted) {
+      if (await p.isCompleted(completed)) break;
+    } else {
+      if (completed) break;
+    }
   }
 }
