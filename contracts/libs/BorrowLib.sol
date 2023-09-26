@@ -126,6 +126,71 @@ library BorrowLib {
 
     _refreshRebalance(v, ConverterLiquidator(converter_, liquidator_), true);
   }
+
+  /// @notice Convert {amount_} of underlying to two amounts: A0 (underlying) and A1 (not-underlying)
+  ///         Result proportions of A0 and A1 should match to {prop0} : 1e18-{prop0}
+  ///         The function is able to make new borrowing and/or close exist debts.
+  /// @param amount_ Amount of underlying that is going to be deposited
+  ///                We assume here, that current balance >= the {amount_}
+  /// @param tokens_ [Underlying, not underlying]
+  /// @param thresholds_ Thresholds for the given {tokens_}. Debts with amount-to-repay < threshold are ignored.
+  /// @param prop0 Required proportion of underlying, > 0. Proportion of not-underlying is calculates as 1e18 - {prop0}
+  /// @return tokenAmounts Result amounts [A0 (underlying), A1 (not-underlying)]
+  function prepareToDeposit(ITetuConverter converter_,
+    uint amount_,
+    address[2] memory tokens_,
+    address[2] memory thresholds_,
+    uint prop0
+  ) external returns (
+    uint[2] memory tokenAmounts
+  ) {
+    IPriceOracle priceOracle = AppLib._getPriceOracle(converter_);
+    address[] memory tokens = new address[](2);
+    tokens[0] = tokens_[0];
+    tokens[1] = tokens_[1];
+    (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(priceOracle, tokens, 2);
+    uint[2] memory balances = [AppLib.balance(tokens_[0]), AppLib.balance(tokens_[1])];
+
+    // we assume here, that either direct OR reverse debts (amount > threshold) are possible but not both at the same time
+    (uint debtReverse, uint collateral) = converterLiquidator.converter.getDebtAmountCurrent(address(this), tokens_[1], tokens_[0], true);
+    if (debtReverse > thresholds_[0]) {
+      // case 1: reverse debt exists
+      if (amount_ > debtReverse) {
+        // case 1.1: amount to deposit exceeds exist debt.
+        // Close the debt completely and than make either new direct OR reverse debt
+        ConverterStrategyBaseLib.closePosition(converter_, tokens_[1], tokens_[0], debtReverse);
+        uint[2] memory amountToDeposit = [
+          AppLib.sub0(AppLib.balance(tokens_[0]), balances[0]),
+          AppLib.sub0(AppLib.balance(tokens_[1]), balances[1])
+        ];
+      } else {
+        // case 1.2: amount to deposit is less than the exist debt. Close the debt partially and make new reverse debt
+        ConverterStrategyBaseLib.closePosition(converter_, tokens_[1], tokens_[0], amount_);
+        AppLib.approveIfNeeded(tokens_[1], amountToDeposit, address(converter_));
+        bytes memory entryData = abi.encode(1, 1e8 - prop0, prop0); // ENTRY_KIND_EXACT_PROPORTION_1
+        (spentCollateral, tokenAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+          converter_,
+          entryData,
+          tokens_[1],
+          tokens_[0],
+          amountToDeposit,
+          thresholds_[1]
+        );
+      }
+    } else {
+      // case 2: no debts OR direct debt exists
+      AppLib.approveIfNeeded(tokens_[0], amount_, address(converter_));
+      bytes memory entryData = abi.encode(1, prop0, 1e8 - prop0); // ENTRY_KIND_EXACT_PROPORTION_1
+      (spentCollateral, tokenAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+        converter_,
+        entryData,
+        tokens_[0],
+        tokens_[1],
+        amount_,
+        thresholds_[0]
+      );
+    }
+  }
   //endregion -------------------------------------------------- External functions
 
   //region -------------------------------------------------- Internal helper functions
