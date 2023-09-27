@@ -245,28 +245,36 @@ contract AlgebraConverterStrategy is AlgebraDepositor, ConverterStrategyBase, IR
 
   //region--------------------------------------------- INTERNAL LOGIC
   function _beforeDeposit(
-    ITetuConverter tetuConverter_,
+    ITetuConverter converter_,
     uint amount_,
-    address[] memory /*tokens_*/, // todo tokenAmounts should match to tokens_
+    address[] memory tokens_,
     uint /*indexAsset_*/
   ) override internal virtual returns (
     uint[] memory tokenAmounts
   ) {
     require(!needRebalance(), AlgebraStrategyErrors.NEED_REBALANCE);
-    bytes memory entryData = AlgebraConverterStrategyLogicLib.getEntryData(
+    (uint prop0, uint prop1) = AlgebraConverterStrategyLogicLib.getEntryDataProportions(
       IAlgebraPool(state.pair.pool),
       state.pair.lowerTick,
       state.pair.upperTick,
       state.pair.depositorSwapTokens
     );
-    return PairBasedStrategyLogicLib._beforeDeposit(
-      tetuConverter_,
+
+    // get token amounts for token A, token B
+    address tokenA = state.pair.tokenA;
+    tokenAmounts = PairBasedStrategyLogicLib._beforeDeposit(
+      converter_,
       amount_,
-      state.pair.tokenA,
+      tokenA,
       state.pair.tokenB,
-      entryData,
+      prop0 * 1e18 / (prop0 + prop1),
       liquidationThresholds
     );
+
+    // take into account a possibility that tokens_ can contain [B, A]
+    if (tokens_[0] != tokenA) {
+      (tokenAmounts[0], tokenAmounts[1]) = (tokenAmounts[1], tokenAmounts[0]);
+    }
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts

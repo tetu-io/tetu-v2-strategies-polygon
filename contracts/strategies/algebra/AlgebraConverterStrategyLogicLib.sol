@@ -173,16 +173,16 @@ library AlgebraConverterStrategyLogicLib {
   function _getLiquidatorSwapSlippage(bool isStablePool) internal pure returns (uint) {
     return isStablePool ? LIQUIDATOR_SWAP_SLIPPAGE_STABLE : LIQUIDATOR_SWAP_SLIPPAGE_VOLATILE;
   }
-  //endregion ------------------------------------------------ Helpers
 
-  //region ------------------------------------------------ Pool info
-  function getEntryData(
-    IAlgebraPool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    bool depositorSwapTokens
-  ) public view returns (bytes memory entryData) {
-    return AlgebraDebtLib.getEntryData(pool, lowerTick, upperTick, depositorSwapTokens);
+  /// @notice Calculate proportions of the tokens for entry kind 1
+  /// @param pool Pool instance.
+  /// @param lowerTick The lower tick of the pool's main range.
+  /// @param upperTick The upper tick of the pool's main range.
+  /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
+  /// @return prop0 Proportion onf token A. Any decimals are allowed, prop[0 or 1]/(prop0 + prop1) are important only
+  /// @return prop1 Proportion onf token B. Any decimals are allowed, prop[0 or 1]/(prop0 + prop1) are important only
+  function getEntryDataProportions(IAlgebraPool pool, int24 lowerTick, int24 upperTick, bool depositorSwapTokens) external view returns (uint, uint) {
+    return AlgebraDebtLib.getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
   }
   //endregion ------------------------------------------------ Helpers
 

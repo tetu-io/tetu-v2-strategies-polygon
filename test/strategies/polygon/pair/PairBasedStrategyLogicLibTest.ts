@@ -15,8 +15,8 @@ import {BigNumber} from "ethers";
 import {PairBasedStrategyLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLogicLibFacade";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {Misc} from "../../../../scripts/utils/Misc";
-import {IBorrowParamsNum} from "../../../baseUT/mocks/TestDataTypes";
-import {setupMockedBorrowEntryKind1} from "../../../baseUT/mocks/MockRepayUtils";
+import {IBorrowParamsNum, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
+import {setupMockedBorrowEntryKind1, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
 import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
 import {
   FUSE_DISABLED_0,
@@ -1029,112 +1029,260 @@ describe('PairBasedStrategyLogicLibTest', () => {
       tokenB: MockToken;
       amountA: string;
       propNotUnderlying18: string;
-      liquidationThresholdA: string;
+      balancesAB: string[];
 
+      thresholds?: string[]; // 0 by defaults
       borrows?: IBorrowParamsNum[];
+      repays?: IRepayParams[];
     }
 
     interface IBeforeDepositResults {
+      balances: number[];
       tokenAmounts: number[];
     }
 
-    async function callBeforeDeposit(p: IBeforeDepositParams): Promise<IBeforeDepositResults> {
+    async function beforeDeposit(p: IBeforeDepositParams): Promise<IBeforeDepositResults> {
       // prepare collateral on balance
-      const decimalsA = await p.tokenA.decimals();
-      await p.tokenA.mint(facade.address, parseUnits(p.amountA, decimalsA));
+      const decimals: number[] = [];
+      const tokens = [p.tokenA, p.tokenB];
+      for (let i = 0; i < tokens.length; ++i) {
+        const token = tokens[i];
+        decimals.push(await token.decimals());
+        await token.mint(facade.address, parseUnits(p.balancesAB[i], decimals[i]));
+      }
 
       // setup liquidation thresholds
-      await facade.setLiquidationThreshold(p.tokenA.address, parseUnits(p.liquidationThresholdA, decimalsA));
+      if (p.thresholds) {
+        for (let i = 0; i < tokens.length; ++i) {
+          await facade.setLiquidationThreshold(tokens[i].address, parseUnits(p.thresholds[i], decimals[i]));
+        }
+      }
 
       // setup borrows
       const prop0 = parseUnits((1 - +p.propNotUnderlying18).toString(), 18);
       const prop1 = parseUnits((+p.propNotUnderlying18).toString(), 18);
-      const entryData1 = defaultAbiCoder.encode(
-        ['uint256', 'uint256', 'uint256'],
-        [1, prop0, prop1]
-      );
 
+      // prepare borrows and repays
       if (p.borrows) {
-        for (const b of p.borrows) {
-          await setupMockedBorrowEntryKind1(converter, facade.address, b, prop0, prop1);
-          await b.collateralAsset.connect(await Misc.impersonate(facade.address)).approve(converter.address, Misc.MAX_UINT);
+        for (const borrow of p.borrows) {
+          await setupMockedBorrowEntryKind1(
+            converter,
+            facade.address,
+            borrow,
+            borrow.collateralAsset === tokens[0] ? prop0 : prop1,
+            borrow.collateralAsset === tokens[0] ? prop1 : prop0,
+          );
+          await borrow.collateralAsset.connect(await Misc.impersonate(facade.address)).approve(converter.address, Misc.MAX_UINT);
+        }
+      }
+
+      if (p.repays) {
+        for (const repay of p.repays) {
+          await setupMockedRepay(converter, facade.address, repay);
         }
       }
 
       const tokenAmounts = await facade.callStatic._beforeDeposit(
         converter.address,
-        parseUnits(p.amountA, decimalsA),
+        parseUnits(p.amountA, decimals[0]),
         p.tokenA.address,
         p.tokenB.address,
-        entryData1
+        prop0
+      );
+      await facade._beforeDeposit(
+        converter.address,
+        parseUnits(p.amountA, decimals[0]),
+        p.tokenA.address,
+        p.tokenB.address,
+        prop0
       );
 
       return {
         tokenAmounts: [
-          +formatUnits(tokenAmounts[0], decimalsA),
-          +formatUnits(tokenAmounts[1], await p.tokenB.decimals())
+          +formatUnits(tokenAmounts[0], decimals[0]),
+          +formatUnits(tokenAmounts[1], decimals[1])
+        ],
+        balances: [
+          +formatUnits(await tokens[0].balanceOf(facade.address), decimals[0]),
+          +formatUnits(await tokens[1].balanceOf(facade.address), decimals[1])
         ]
       }
     }
 
     describe("Good paths", () => {
-      let snapshot: string;
-      beforeEach(async function () {
-        snapshot = await TimeUtils.snapshot();
-      });
-      afterEach(async function () {
-        await TimeUtils.rollback(snapshot);
-      });
-
-      it("should return expected token amounts", async () => {
-        const ret = await callBeforeDeposit({
-          tokenA: weth,
-          tokenB: tetu,
-          amountA: "3000",
-          borrows: [{
-            collateralAsset: weth,
-            borrowAsset: tetu,
-            converter: converter.address,
-            collateralAmount: "3000",
-            maxTargetAmount: "2000",
-            collateralAmountOut: "1800",
-            borrowAmountOut: "1200",
-          }],
-          propNotUnderlying18: "0.5",
-          liquidationThresholdA: "1"
+      describe("There is exist reverse debt", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
         });
 
-        expect(ret.tokenAmounts.join()).eq([1200, 1200].join());
+        async function beforeDepositTest(): Promise<IBeforeDepositResults> {
+          return beforeDeposit({
+            tokenA: usdc,
+            tokenB: weth,
+            balancesAB: ["1300", "123"],
+            amountA: "1200",
+            propNotUnderlying18: "0.5",
+            borrows: [{
+              collateralAsset: usdc,
+              borrowAsset: weth,
+              collateralAmount: "900",
+              maxTargetAmount: "450",
+              collateralAmountOut: "600",
+              borrowAmountOut: "300",
+              converter: converter.address,
+            }],
+            repays: [{
+              collateralAsset: weth,
+              borrowAsset: usdc,
+              totalCollateralAmountOut: "200",
+              totalDebtAmountOut: "100",
+            }]
+          });
+        }
+
+        it("should set expected balances", async () => {
+          const ret = await loadFixture(beforeDepositTest);
+          expect(ret.balances.join()).eq([100 + 200 + 300, 123 + 200 + 300].join());
+        });
+        it("should return expected token amounts", async () => {
+          const ret = await loadFixture(beforeDepositTest);
+          expect(ret.tokenAmounts.join()).eq([500, 500].join());
+        });
+      });
+      describe("There is no reverse debt", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function beforeDepositTest(): Promise<IBeforeDepositResults> {
+          return beforeDeposit({
+            tokenA: usdc,
+            tokenB: weth,
+            balancesAB: ["1000", "123"],
+            amountA: "900",
+            borrows: [{
+              collateralAsset: usdc,
+              borrowAsset: weth,
+              collateralAmount: "900",
+              maxTargetAmount: "450",
+              collateralAmountOut: "600",
+              borrowAmountOut: "300",
+              converter: converter.address,
+            }],
+            propNotUnderlying18: "0.5",
+          });
+        }
+
+        it("should set expected balances", async () => {
+          const ret = await loadFixture(beforeDepositTest);
+          expect(ret.balances.join()).eq([100 + 300, 123 + 300].join());
+        });
+        it("should return expected token amounts", async () => {
+          const ret = await loadFixture(beforeDepositTest);
+          expect(ret.tokenAmounts.join()).eq([300, 300].join());
+        });
       });
     });
     describe("Bad paths", () => {
       let snapshot: string;
-      beforeEach(async function () {
+      before(async function () {
         snapshot = await TimeUtils.snapshot();
       });
-      afterEach(async function () {
+      after(async function () {
         await TimeUtils.rollback(snapshot);
       });
 
-      it("should return expected token amounts if amount is less than the threshold ", async () => {
-        const ret = await callBeforeDeposit({
-          tokenA: weth,
-          tokenB: tetu,
-          amountA: "3000",
-          borrows: [{
-            collateralAsset: weth,
-            borrowAsset: tetu,
-            converter: converter.address,
-            collateralAmount: "3000",
-            maxTargetAmount: "2000",
-            collateralAmountOut: "1800",
-            borrowAmountOut: "1200",
-          }],
-          propNotUnderlying18: "0.5",
-          liquidationThresholdA: "3001"
-        });
+      describe("Too high thresholds", () => {
+        describe("There is exist reverse debt", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
-        expect(ret.tokenAmounts.join()).eq([3000, 0].join());
+          async function beforeDepositTest(): Promise<IBeforeDepositResults> {
+            return beforeDeposit({
+              tokenA: usdc,
+              tokenB: weth,
+              propNotUnderlying18: "0.5",
+              thresholds: ["101", "0"],
+              balancesAB: ["1000", "123"],
+              amountA: "900",
+              borrows: [{
+                collateralAsset: usdc,
+                borrowAsset: weth,
+                collateralAmount: "900",
+                maxTargetAmount: "450",
+                collateralAmountOut: "600",
+                borrowAmountOut: "300",
+                converter: converter.address,
+              }],
+              repays: [{
+                collateralAsset: weth,
+                borrowAsset: usdc,
+                totalCollateralAmountOut: "200",
+                totalDebtAmountOut: "100",
+              }],
+            });
+          }
+
+          it("should set expected balances", async () => {
+            const ret = await loadFixture(beforeDepositTest);
+            expect(ret.balances.join()).eq([100 + 300, 123 + 300].join());
+          });
+          it("should return expected token amounts", async () => {
+            const ret = await loadFixture(beforeDepositTest);
+            expect(ret.tokenAmounts.join()).eq([300, 300].join());
+          });
+        });
+        describe("There is no reverse debt", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function beforeDepositTest(): Promise<IBeforeDepositResults> {
+            return beforeDeposit({
+              tokenA: usdc,
+              tokenB: weth,
+              balancesAB: ["1000", "123"],
+              amountA: "900",
+              thresholds: ["901", "0"],
+              borrows: [{
+                collateralAsset: usdc,
+                borrowAsset: weth,
+                collateralAmount: "900",
+                maxTargetAmount: "450",
+                collateralAmountOut: "600",
+                borrowAmountOut: "300",
+                converter: converter.address,
+              }],
+              propNotUnderlying18: "0.5",
+            });
+          }
+
+          it("should set expected balances", async () => {
+            const ret = await loadFixture(beforeDepositTest);
+            expect(ret.balances.join()).eq([1000, 123].join());
+          });
+          it("should return expected token amounts", async () => {
+            const ret = await loadFixture(beforeDepositTest);
+            expect(ret.tokenAmounts.join()).eq([900, 0].join());
+          });
+        });
       });
     });
   });

@@ -67,7 +67,7 @@ contract BorrowLibFacade {
     uint[2] memory thresholds_,
     uint prop0
   ) external returns (
-    uint[2] memory tokenAmounts
+    uint[] memory tokenAmounts
   ) {
     return BorrowLib.prepareToDeposit(converter_, amount_, tokens_, thresholds_, prop0);
   }

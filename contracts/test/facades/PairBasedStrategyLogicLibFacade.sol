@@ -87,9 +87,9 @@ contract PairBasedStrategyLogicLibFacade {
     uint amount_,
     address tokenA,
     address tokenB,
-    bytes memory entryData
+    uint prop0
   ) external returns (uint[] memory tokenAmounts) {
-    return PairBasedStrategyLogicLib._beforeDeposit(tetuConverter_, amount_, tokenA, tokenB, entryData, liquidationThresholds);
+    return PairBasedStrategyLogicLib._beforeDeposit(tetuConverter_, amount_, tokenA, tokenB, prop0, liquidationThresholds);
   }
 
   function initWithdrawLocal(

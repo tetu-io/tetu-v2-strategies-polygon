@@ -3,7 +3,6 @@ pragma solidity 0.8.17;
 
 import "@tetu_io/tetu-converter/contracts/interfaces/ITetuConverter.sol";
 import "../strategies/ConverterStrategyBaseLib.sol";
-import "hardhat/console.sol";
 
 /// @notice Library to make new borrow, extend/reduce exist borrows and repay to keep proper assets proportions
 /// @dev Swap through liquidator is still allowed to be able to get required profitToCover, but this amount is small
@@ -118,7 +117,7 @@ library BorrowLib {
     // pool always have TWO assets, it's not allowed ot have only one asset
     // so, we assume that the proportions are in the range (0...1e18)
     require(prop0 != 0, AppErrors.ZERO_VALUE);
-    require(prop0 < 1e18, AppErrors.TOO_HIGH);
+    require(prop0 < SUM_PROPORTIONS, AppErrors.TOO_HIGH);
 
     RebalanceAssetsLocal memory v;
     v.asset0 = asset0;
@@ -153,7 +152,7 @@ library BorrowLib {
     uint[2] memory thresholds_,
     uint prop0
   ) external returns (
-    uint[2] memory tokenAmounts
+    uint[] memory tokenAmounts
   ) {
     uint[2] memory amountsToDeposit;
     uint[2] memory balances = [
@@ -182,10 +181,9 @@ library BorrowLib {
 
     _makeBorrowToDeposit(converter_, amountsToDeposit, tokens_, thresholds_, prop0);
 
-    return [
-      AppLib.sub0(AppLib.balance(tokens_[0]), balances[0]),
-      AppLib.sub0(AppLib.balance(tokens_[1]), balances[1])
-    ];
+    tokenAmounts = new uint[](2);
+    tokenAmounts[0] = AppLib.sub0(AppLib.balance(tokens_[0]), balances[0]);
+    tokenAmounts[1] = AppLib.sub0(AppLib.balance(tokens_[1]), balances[1]);
   }
   //endregion -------------------------------------------------- External functions
 
@@ -209,7 +207,6 @@ library BorrowLib {
     uint[2] memory thresholds_,
     uint prop0
   ) internal {
-    console.log("_makeBorrowToDeposit.amounts_", amounts_[0], amounts_[1]);
     MakeBorrowToDepositLocal memory v;
 
     {
@@ -219,23 +216,16 @@ library BorrowLib {
       tokens[1] = tokens_[1];
       (v.prices, v.decs) = AppLib._getPricesAndDecs(priceOracle, tokens, 2);
     }
-    console.log("_makeBorrowToDeposit.prices", v.prices[0], v.prices[1]);
-    console.log("_makeBorrowToDeposit.decs", v.decs[0], v.decs[1]);
 
     v.cost0 = amounts_[0] * v.prices[0] / v.decs[0];
     v.cost1 = amounts_[1] * v.prices[1] / v.decs[1];
-    console.log("_makeBorrowToDeposit.costs", v.cost0, v.cost1);
-    console.log("_makeBorrowToDeposit.v.cost0 * v.prop1", v.cost0 * v.prop1);
-    console.log("_makeBorrowToDeposit.v.cost1 * prop0", v.cost1 * prop0);
-
     // we need: cost0/cost1 = prop0/prop1, and so cost0 * prop1 = cost1 * prop0
-    v.prop1 = 1e18 - prop0;
+    v.prop1 = SUM_PROPORTIONS - prop0;
+
     if (v.cost0 * v.prop1 > v.cost1 * prop0) {
       // we need to make direct borrow
       uint cost0for1 = v.cost1 * prop0 / v.prop1; // a part of cost0 that is matched to cost1
       uint amountIn = (v.cost0 - cost0for1) * v.decs[0] / v.prices[0];
-      console.log("_makeBorrowToDeposit.cost0for1", cost0for1);
-      console.log("_makeBorrowToDeposit.amountIn", amountIn);
 
       AppLib.approveIfNeeded(tokens_[0], amountIn, address(converter_));
       v.entryData = abi.encode(1, prop0, v.prop1); // ENTRY_KIND_EXACT_PROPORTION_1
@@ -244,8 +234,6 @@ library BorrowLib {
       // we need to make reverse borrow
       uint cost1for0 = v.cost0 * v.prop1 / prop0; // a part of cost1 that is matched to cost0
       uint amountIn = (v.cost1 - cost1for0) * v.decs[1] / v.prices[1];
-      console.log("_makeBorrowToDeposit.cost1for0", cost1for0);
-      console.log("_makeBorrowToDeposit.amountIn", amountIn);
 
       AppLib.approveIfNeeded(tokens_[1], amountIn, address(converter_));
       v.entryData = abi.encode(1, v.prop1, prop0); // ENTRY_KIND_EXACT_PROPORTION_1

@@ -49,12 +49,18 @@ library AlgebraDebtLib {
 
 //region  -------------------------------------------- Entry data
   /// @notice Calculate proportions of the tokens for entry kind 1
+  /// @param pool Pool instance.
+  /// @param lowerTick The lower tick of the pool's main range.
+  /// @param upperTick The upper tick of the pool's main range.
+  /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
+  /// @return prop0 Proportion onf token A. Any decimals are allowed, prop[0 or 1]/(prop0 + prop1) are important only
+  /// @return prop1 Proportion onf token B. Any decimals are allowed, prop[0 or 1]/(prop0 + prop1) are important only
   function getEntryDataProportions(
     IAlgebraPool pool,
     int24 lowerTick,
     int24 upperTick,
     bool depositorSwapTokens
-  ) public view returns (uint, uint) {
+  ) internal view returns (uint, uint) {
     address token1 = pool.token1();
     uint token1Price = AlgebraLib.getPrice(address(pool), token1);
 
@@ -71,15 +77,6 @@ library AlgebraDebtLib {
       : (1e18*consumed0, 1e18*consumed1 * token1Price / token1Desired);
   }
 
-  function getEntryData(
-    IAlgebraPool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    bool depositorSwapTokens
-  ) public view returns (bytes memory entryData) {
-    (uint prop0, uint prop1) = getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
-    entryData = abi.encode(1, prop0, prop1);
-  }
 //endregion  -------------------------------------------- Entry data
 
 //region  -------------------------------------------- Calc tick range
