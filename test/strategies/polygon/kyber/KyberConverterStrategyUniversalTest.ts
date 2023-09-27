@@ -1,5 +1,4 @@
 /* tslint:disable:no-trailing-whitespace */
-import {config as dotEnvConfig} from "dotenv";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
@@ -11,11 +10,7 @@ import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import hre, {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
-import {
-  IERC20Metadata__factory,
-  IStrategyV2, KyberConverterStrategy, KyberConverterStrategy__factory,
-  TetuVaultV2,
-} from "../../../../typechain";
+import {IERC20Metadata__factory, IStrategyV2, KyberConverterStrategy, KyberConverterStrategy__factory, TetuVaultV2,} from "../../../../typechain";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {BigNumber, Signer} from "ethers";
@@ -29,9 +24,8 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {
-  KYBER_PID,
   KYBER_PID_DEFAULT_BLOCK,
-  KYBER_USDC_DAI_PID, KYBER_USDC_DAI_PID_DEFAULT_BLOCK
+  KYBER_USDC_DAI_PID_DEFAULT_BLOCK
 } from '../../../baseUT/strategies/PairBasedStrategyBuilder';
 
 // const {expect} = chai;

@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
@@ -20,7 +19,6 @@ import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/StateUtilsNum';
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
@@ -30,7 +28,7 @@ import {PackedData} from "../../../baseUT/utils/PackedData";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../../../baseUT/AppConstants";
-import { EnvSetup } from '../../../../scripts/utils/EnvSetup';
+
 /**
  * Study noSwap-rebalance.
  * Try to change price step by step and check how strategy params are changed

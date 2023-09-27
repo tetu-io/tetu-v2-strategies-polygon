@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
@@ -8,7 +7,6 @@ import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
   AlgebraConverterStrategy__factory,
-  AlgebraLib,
   IERC20,
   IERC20__factory,
   IKyberSwapElasticLM__factory,

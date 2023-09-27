@@ -1,5 +1,4 @@
 /* tslint:disable:no-trailing-whitespace */
-import {config as dotEnvConfig} from "dotenv";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";

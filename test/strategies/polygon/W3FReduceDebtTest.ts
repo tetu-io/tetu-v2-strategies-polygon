@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {
