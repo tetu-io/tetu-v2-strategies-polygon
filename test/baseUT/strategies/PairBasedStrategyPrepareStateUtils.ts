@@ -24,6 +24,9 @@ import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
 export interface IPrepareOverCollateralParams {
   countRebalances: number;
   movePricesUp: boolean;
+  swapAmountRatio: number;
+  amountToDepositBySigner2?: string; // default 0
+  amountToDepositBySigner?: string; // default 0
 }
 
 export interface IListStates {
@@ -286,8 +289,7 @@ export class PairBasedStrategyPrepareStateUtils {
       p: IPrepareOverCollateralParams,
       pathOut: string,
       signer: SignerWithAddress,
-      signer2: SignerWithAddress,
-      swapAmountRatio: number
+      signer2: SignerWithAddress
   ) : Promise<IListStates> {
   const states: IStateNum[] = [];
 
@@ -296,12 +298,16 @@ export class PairBasedStrategyPrepareStateUtils {
 
   console.log('deposit...');
   await b.vault.setDoHardWorkOnInvest(false);
-  await TokenUtils.getToken(b.asset, signer2.address, parseUnits('1000', 6));
-  await b.vault.connect(signer2).deposit(parseUnits('1000', 6), signer2.address, { gasLimit: 19_000_000 });
+  if (p.amountToDepositBySigner2) {
+    await TokenUtils.getToken(b.asset, signer2.address, parseUnits(p.amountToDepositBySigner2, 6));
+    await b.vault.connect(signer2).deposit(parseUnits(p.amountToDepositBySigner2, 6), signer2.address, {gasLimit: 19_000_000});
+  }
 
-  const depositAmount1 = parseUnits('10000', b.assetDecimals);
-  await TokenUtils.getToken(b.asset, signer.address, depositAmount1);
-  await depositToVault(b.vault, signer, depositAmount1, b.assetDecimals, b.assetCtr, b.insurance);
+  if (p.amountToDepositBySigner) {
+    const depositAmount1 = parseUnits(p.amountToDepositBySigner, b.assetDecimals);
+    await TokenUtils.getToken(b.asset, signer.address, depositAmount1);
+    await depositToVault(b.vault, signer, depositAmount1, b.assetDecimals, b.assetCtr, b.insurance);
+  }
   states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `init`));
   await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -321,7 +327,7 @@ export class PairBasedStrategyPrepareStateUtils {
           state.tokenA,
           state.tokenB,
           p.movePricesUp,
-          swapAmountRatio
+          p.swapAmountRatio
       );
       upperTick = state.upperTick;
     }

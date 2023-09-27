@@ -13,6 +13,7 @@ import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategi
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {
+  IPrepareOverCollateralParams,
   PairBasedStrategyPrepareStateUtils
 } from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
@@ -1148,18 +1149,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d0"));
           await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-          await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
-            b,
-            {
-              countRebalances: 2,
-              movePricesUp: true
-            },
-            pathOut,
-            signer,
-            signer2,
-            1.1
-          )
-
+          const p: IPrepareOverCollateralParams = {
+            countRebalances: 2,
+            movePricesUp: true,
+            swapAmountRatio: 1.1,
+            amountToDepositBySigner2: "100",
+            amountToDepositBySigner: "10000"
+          }
+          await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(b, p, pathOut, signer, signer2);
           return b;
         }
 
@@ -1324,6 +1321,39 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             });
           })
 
+          describe("deposit various amounts", () => {
+            let snapshot2: string;
+            before(async function () {
+              snapshot2 = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot2);
+            });
+
+            const amountsToDeposit = ["100", "8000", "11000", "15000"]; // < total assets, ~ total assets, > total assets
+            amountsToDeposit.forEach(function (amountToDeposit: string) {
+
+              it(`should deposit ${amountToDeposit} successfully`, async () => {
+                const b = await loadFixture(prepareStrategy);
+                const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+                const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                await TokenUtils.getToken(b.asset, signer.address, parseUnits(amountToDeposit, 6));
+                await b.vault.connect(signer).deposit(parseUnits(amountToDeposit, 6), signer.address, {gasLimit: 19_000_000});
+                const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+
+                console.log("stateBefore", stateBefore);
+                console.log("stateAfter", stateAfter);
+
+                expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets, "totalAssets should increase");
+
+                const directDebtExist = stateAfter.converterDirect.amountsToRepay.findIndex(x => x !== 0) !== -1;
+                const reverseDebtExist = stateAfter.converterReverse.amountsToRepay.findIndex(x => x !== 0) !== -1;
+                expect(!(directDebtExist && reverseDebtExist)).eq(true, "scb-807: direct and revers borrows are not allowed at the same time");
+              });
+            });
+          })
+
           if (strategyInfo.name === PLATFORM_UNIV3) {
             // requirePayAmountBack implementation is shared for all strategies, we can check it on single strategy only
             it("should requirePayAmountBack successfully", async () => {
@@ -1383,19 +1413,14 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, "d0"));
           await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
-          await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
-            b,
-            {
-              countRebalances: 2,
-              movePricesUp: false
-            },
-            pathOut,
-            signer,
-            signer2,
-            platform === PLATFORM_UNIV3
-              ? 1.1
-              : 0.3
-          )
+          const p: IPrepareOverCollateralParams = {
+            countRebalances: 2,
+            movePricesUp: false,
+            swapAmountRatio: platform === PLATFORM_UNIV3 ? 1.1 : 0.3,
+            amountToDepositBySigner2: "100",
+            amountToDepositBySigner: "10000"
+          }
+          await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(b, p, pathOut, signer, signer2);
 
           return b;
         }
@@ -1537,6 +1562,39 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
                   stateBefore.user.assetBalance + +formatUnits(amountToWithdraw, b.assetDecimals),
                   1
                 );
+              });
+            });
+          })
+
+          describe("deposit various amounts", () => {
+            let snapshot2: string;
+            before(async function () {
+              snapshot2 = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot2);
+            });
+
+            // borrow-direction is changed on largest amount
+            const amountsToDeposit = ["100", "8000", "11000", "40000"]; // < total assets, ~ total assets, > total assets
+            amountsToDeposit.forEach(function (amountToDeposit: string) {
+
+              it(`should deposit ${amountToDeposit} successfully`, async () => {
+                const b = await loadFixture(prepareStrategy);
+                const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
+
+                const stateBefore = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                await TokenUtils.getToken(b.asset, signer.address, parseUnits(amountToDeposit, 6));
+                await b.vault.connect(signer).deposit(parseUnits(amountToDeposit, 6), signer.address, {gasLimit: 19_000_000});
+                const stateAfter = await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault);
+                StateUtilsNum.saveListStatesToCSVColumns(`./tmp/${strategyInfo.name}-deposit-${amountToDeposit}.csv`, [stateBefore, stateAfter], b.stateParams, true);
+
+                expect(stateAfter.vault.totalAssets).gt(stateBefore.vault.totalAssets, "totalAssets should increase");
+
+                const directDebtExist = stateAfter.converterDirect.amountsToRepay.findIndex(x => x !== 0) !== -1;
+                const reverseDebtExist = stateAfter.converterReverse.amountsToRepay.findIndex(x => x !== 0) !== -1;
+                expect(!(directDebtExist && reverseDebtExist)).eq(true, "scb-807: direct and revers borrows are not allowed at the same time");
+
               });
             });
           })
