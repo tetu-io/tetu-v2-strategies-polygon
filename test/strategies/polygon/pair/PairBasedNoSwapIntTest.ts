@@ -190,11 +190,16 @@ describe('PairBasedNoSwapIntTest', function() {
       ? []
       : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
           b,
-          { countRebalances: p.countRebalances ?? 2, movePricesUp: p.movePricesUp},
+          {
+            countRebalances: p.countRebalances ?? 2,
+            movePricesUp: p.movePricesUp,
+            swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+            amountToDepositBySigner2: "100",
+            amountToDepositBySigner: "10000"
+          },
           pathOut,
           signer,
           signer2,
-          DEFAULT_SWAP_AMOUNT_RATIO
       )).states;
 
     const {states} = await makeFullWithdraw(
@@ -1268,12 +1273,14 @@ describe('PairBasedNoSwapIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
                 b, {
                     movePricesUp: true,
-                    countRebalances: 2
+                    countRebalances: 2,
+                    swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+                    amountToDepositBySigner2: "100",
+                    amountToDepositBySigner: "10000"
                   },
                   pathOut,
                   signer,
                   signer2,
-                  DEFAULT_SWAP_AMOUNT_RATIO
               );
               // prepare fuse
               await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
