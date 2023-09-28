@@ -131,6 +131,17 @@ library UniswapV3ConverterStrategyLogicLib {
       StringLib._toString(IUniswapV3Pool(pairState.pool).fee()))
     );
   }
+
+  /// @notice Calculate proportions of the tokens for entry kind 1
+  /// @param pool Pool instance.
+  /// @param lowerTick The lower tick of the pool's main range.
+  /// @param upperTick The upper tick of the pool's main range.
+  /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
+  /// @return prop0 Proportion onf token A. Any decimals are allowed, prop[0 or 1]/(prop0 + prop1) are important only
+  /// @return prop1 Proportion onf token B. Any decimals are allowed, prop[0 or 1]/(prop0 + prop1) are important only
+  function getEntryDataProportions(IUniswapV3Pool pool, int24 lowerTick, int24 upperTick, bool depositorSwapTokens) external view returns (uint, uint) {
+    return UniswapV3DebtLib.getEntryDataProportions(pool, lowerTick, upperTick, depositorSwapTokens);
+  }
   //endregion ------------------------------------------------ Helpers
 
   //region ------------------------------------------------ Pool info
@@ -184,21 +195,6 @@ library UniswapV3ConverterStrategyLogicLib {
     if (pairState.depositorSwapTokens) {
       (amountsOut[0], amountsOut[1]) = (amountsOut[1], amountsOut[0]);
     }
-  }
-
-  /// @notice Get entry data for a Uniswap V3 pool.
-  /// @param pool The Uniswap V3 pool instance.
-  /// @param lowerTick The lower tick of the pool's main range.
-  /// @param upperTick The upper tick of the pool's main range.
-  /// @param depositorSwapTokens A boolean indicating if need to use token B instead of token A.
-  /// @return entryData A byte array containing the entry data for the pool.
-  function getEntryData(
-    IUniswapV3Pool pool,
-    int24 lowerTick,
-    int24 upperTick,
-    bool depositorSwapTokens
-  ) public view returns (bytes memory entryData) {
-    return UniswapV3DebtLib.getEntryData(pool, lowerTick, upperTick, depositorSwapTokens);
   }
   //endregion ------------------------------------------------ Pool info
 
@@ -452,7 +448,7 @@ library UniswapV3ConverterStrategyLogicLib {
       coveredByRewards = UniswapV3DebtLib.coverLossFromRewards(loss, profitHolder, tokenA, tokenB, pool);
       uint notCovered = loss - coveredByRewards;
       if (notCovered != 0) {
-        ConverterStrategyBaseLib2._coverLossAndCheckResults(splitter, 0, notCovered);
+        ConverterStrategyBaseLib2.coverLossAndCheckResults(splitter, 0, notCovered);
       }
 
       emit CoverLoss(loss, coveredByRewards);

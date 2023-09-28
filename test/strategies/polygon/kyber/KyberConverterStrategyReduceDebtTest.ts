@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
@@ -39,7 +38,7 @@ describe('KyberConverterStrategy reduce debt by agg test', function() {
   let lib: KyberLib;
 
   before(async function() {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
     snapshotBefore = await TimeUtils.snapshot();
     await HardhatUtils.switchToMostCurrentBlock();
 

@@ -49,4 +49,26 @@ contract BorrowLibFacade {
   ) {
     return BorrowLib._openPosition(c, balanceA_, balanceB_);
   }
+
+  function _makeBorrowToDeposit(
+    ITetuConverter converter_,
+    uint[2] memory amounts_,
+    address[2] memory tokens_,
+    uint[2] memory thresholds_,
+    uint prop0
+  ) external {
+    BorrowLib._makeBorrowToDeposit(converter_, amounts_, tokens_, thresholds_, prop0);
+  }
+
+  function prepareToDeposit(
+    ITetuConverter converter_,
+    uint amount_,
+    address[2] memory tokens_,
+    uint[2] memory thresholds_,
+    uint prop0
+  ) external returns (
+    uint[] memory tokenAmounts
+  ) {
+    return BorrowLib.prepareToDeposit(converter_, amount_, tokens_, thresholds_, prop0);
+  }
 }

@@ -1,7 +1,6 @@
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { config as dotEnvConfig } from 'dotenv';
 import { ExternalRateProvider } from '../../../../typechain'
 import { ethers } from 'hardhat';
 import { BigNumber } from 'ethers';

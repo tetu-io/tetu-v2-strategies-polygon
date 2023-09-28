@@ -1,15 +1,21 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
+  AlgebraConverterStrategy__factory,
   IERC20,
-  IERC20__factory, IKyberSwapElasticLM__factory, IStrategyV2, KyberConverterStrategy, KyberConverterStrategy__factory,
-  TetuVaultV2, VaultFactory__factory,
+  IERC20__factory,
+  IKyberSwapElasticLM__factory,
+  IStrategyV2,
+  KyberConverterStrategy,
+  KyberConverterStrategy__factory,
+  KyberLib,
+  TetuVaultV2,
+  VaultFactory__factory,
 } from "../../../../typechain";
 import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
 import {getConverterAddress, Misc} from "../../../../scripts/utils/Misc";
@@ -22,8 +28,10 @@ import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {KYBER_PID} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {KYBER_PID, KYBER_PID_DEFAULT_BLOCK} from '../../../baseUT/strategies/PairBasedStrategyBuilder';
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 
 describe('KyberConverterStrategyTest', function() {
 
@@ -34,12 +42,11 @@ describe('KyberConverterStrategyTest', function() {
   let asset: IERC20;
   let vault: TetuVaultV2;
   let strategy: KyberConverterStrategy;
-  const pId = KYBER_PID;
+  const pId = KYBER_PID_DEFAULT_BLOCK;
 
   before(async function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -190,7 +197,22 @@ describe('KyberConverterStrategyTest', function() {
       expect(state.totalLiquidity).gt(0)
       expect(await IERC20__factory.connect(MaticAddresses.KNC_TOKEN, signer).balanceOf(strategy.address)).eq(0)
 
-      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
+      await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
+        signer,
+        {
+          strategy: AlgebraConverterStrategy__factory.connect(strategy.address, signer),
+          swapper: MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
+          quoter: MaticAddresses.KYBER_ELASTIC_QUOTER_V2,
+          lib: await DeployerUtils.deployContract(signer, "KyberLib") as KyberLib,
+          pool: MaticAddresses.KYBER_USDC_USDT,
+          swapHelper: await MockHelper.createSwapperHelper(signer)
+        },
+        true,
+        state,
+        parseUnits('100000', 6),
+        undefined,
+        5
+      );
 
       console.log('Rebalance without stake')
       expect(await s.needRebalance()).eq(true)

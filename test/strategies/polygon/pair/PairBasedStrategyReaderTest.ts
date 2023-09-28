@@ -1,51 +1,21 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
-import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
-  ConverterController__factory,
-  IERC20,
-  IERC20__factory,
-  IERC20Metadata,
-  IERC20Metadata__factory,
-  IStrategyV2,
-  ISwapper,
-  ISwapper__factory,
-  ITetuConverter,
-  ITetuConverter__factory,
-  MockSplitter, MockSplitterVault, MockTetuConverter,
+  MockSplitterVault, MockTetuConverter,
   MockToken, PriceOracleMock,
-  TetuVaultV2,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
   PairBasedStrategyReaderAccessMock,
   PairBasedStrategyReader,
 } from '../../../../typechain';
-import {PolygonAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/polygon";
-import {
-  getAaveTwoPlatformAdapter, getCompoundThreePlatformAdapter,
-  getConverterAddress,
-  getDForcePlatformAdapter,
-  Misc
-} from "../../../../scripts/utils/Misc";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
-import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
-import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
-import {UniswapV3StrategyUtils} from "../../../baseUT/strategies/UniswapV3StrategyUtils";
-import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {IStateNum, IStateParams, StateUtilsNum} from '../../../baseUT/utils/StateUtilsNum';
-import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {BigNumber} from "ethers";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
-import {IBorrowParams, IBorrowParamsNum, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
-import {setupMockedBorrow, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
+import {IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
+import {setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
+import {HARDHAT_NETWORK_ID, HardhatUtils} from "../../../baseUT/utils/HardhatUtils";
 
 /**
  * Study noSwap-rebalance.
@@ -55,7 +25,6 @@ describe('PairBasedStrategyReaderTest', function() {
 //region Constants and variables
 
   let snapshotBefore: string;
-  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let converter: MockTetuConverter;
   let usdc: MockToken;
@@ -69,9 +38,9 @@ describe('PairBasedStrategyReaderTest', function() {
 
   //region before, after
   before(async function () {
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
 
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);
     wmatic = await DeployerUtils.deployMockToken(signer, 'WMATIC', 18);
     usdt = await DeployerUtils.deployMockToken(signer, 'USDT', 6);

@@ -10,7 +10,7 @@ import {
   IVeTetu,
   IVoter,
   VaultFactory,
-} from '../typechain';
+} from '../../../typechain';
 
 export interface ICoreContractsWrapper {
   tetu: IERC20;

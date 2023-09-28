@@ -21,18 +21,20 @@ import {
   setupMockedLiquidation
 } from "../../baseUT/mocks/MockLiquidationUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {setupMockedBorrow, setupMockedQuoteRepay, setupMockedRepay} from "../../baseUT/mocks/MockRepayUtils";
+import {
+  setupMockedBorrow,
+  setupMockedQuoteRepay,
+  setupMockedRepay
+} from "../../baseUT/mocks/MockRepayUtils";
 import {controlGasLimitsEx} from "../../../scripts/utils/GasLimitUtils";
 import {
-  GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW,
   GAS_OPEN_POSITION,
-  GET_GET_COLLATERALS,
-  GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT
+  GET_GET_COLLATERALS
 } from "../../baseUT/GasLimits";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {BalanceUtils} from "../../baseUT/utils/BalanceUtils";
 import {areAlmostEqual} from "../../baseUT/utils/MathUtils";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import { HardhatUtils, HARDHAT_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
 
 /**
  * Test of ConverterStrategyBaseLib using ConverterStrategyBaseLibFacade
@@ -57,7 +59,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
   //region before, after
   before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
     snapshotBefore = await TimeUtils.snapshot();
     facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
@@ -394,369 +396,9 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
-  describe('convertAfterWithdraw', () => {
-    interface IConvertAfterWithdrawResults {
-      collateralOut: number;
-      repaidAmountsOut: number[];
-      gasUsed: BigNumber;
-      balances: number[];
-    }
-
-    interface IConvertAfterWithdrawParams {
-      tokens: MockToken[];
-      indexAsset: number;
-      liquidationThresholds?: string[];
-      amountsToConvert: string[];
-      balances: string[];
-      prices: string[];
-      liquidations: ILiquidationParams[];
-      repays: IRepayParams[];
-      isConversionValid?: boolean;
-    }
-
-    async function makeConvertAfterWithdraw(p: IConvertAfterWithdrawParams): Promise<IConvertAfterWithdrawResults> {
-      // set up balances
-      const decimals: number[] = [];
-      for (let i = 0; i < p.tokens.length; ++i) {
-        const d = await p.tokens[i].decimals()
-        decimals.push(d);
-
-        // set up current balances
-        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
-        console.log("mint", i, p.balances[i]);
-      }
-
-      // set up TetuConverter
-      const converter = await MockHelper.createMockTetuConverter(signer);
-      const priceOracle = (await DeployerUtils.deployContract(
-        signer,
-        'PriceOracleMock',
-        p.tokens.map(x => x.address),
-        p.prices.map(x => parseUnits(x, 18))
-      )) as PriceOracleMock;
-      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
-      await converter.setController(tetuConverterController.address);
-
-      // set up repay
-      for (const repay of p.repays) {
-        await setupMockedRepay(converter, facade.address, repay);
-      }
-
-      // set up expected liquidations
-      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      for (const liquidation of p.liquidations) {
-        await setupMockedLiquidation(liquidator, liquidation);
-        await setupIsConversionValid(
-          converter,
-          liquidation,
-          p.isConversionValid === undefined
-            ? true
-            : p.isConversionValid
-        )
-      }
-
-      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
-        ? await Promise.all(p.liquidationThresholds.map(
-          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
-        ))
-        : p.tokens.map(x => BigNumber.from(0));
-
-      // make test
-      const ret = await facade.callStatic.convertAfterWithdraw(
-        converter.address,
-        liquidator.address,
-        p.indexAsset,
-        liquidationThresholds,
-        p.tokens.map(x => x.address),
-        p.amountsToConvert.map(
-          (x, index) => parseUnits(x, decimals[index])
-        )
-      );
-
-      const tx = await facade.convertAfterWithdraw(
-        converter.address,
-        liquidator.address,
-        p.indexAsset,
-        liquidationThresholds,
-        p.tokens.map(x => x.address),
-        p.amountsToConvert.map(
-          (x, index) => parseUnits(x, decimals[index])
-        )
-      );
-      const gasUsed = (await tx.wait()).gasUsed;
-      return {
-        collateralOut: +formatUnits(ret.collateralOut, decimals[p.indexAsset]),
-        repaidAmountsOut: ret.repaidAmountsOut.map(
-          (amount, index) => +formatUnits(amount, decimals[index])
-        ),
-        gasUsed,
-        balances: await Promise.all(
-          p.tokens.map(
-            async (token, index) => +formatUnits(await token.balanceOf(facade.address), decimals[index])
-          )
-        )
-      }
-    }
-
-    describe('Good paths', () => {
-      describe('Repay only, no liquidation (amountsToConvert == repaidAmountsOut)', () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        async function makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
-          return makeConvertAfterWithdraw({
-            tokens: [dai, usdc, usdt],
-            indexAsset: 1, // usdc
-            amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
-            balances: ["200", "91", "900"], // dai, usdc, usdt
-            liquidationThresholds: ["0", "0", "0"],
-            repays: [
-              {
-                collateralAsset: usdc,
-                borrowAsset: dai,
-                amountRepay: "200",
-                collateralAmountOut: "401",
-                totalDebtAmountOut: "400",
-                totalCollateralAmountOut: "802"
-              },
-              {
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                amountRepay: "500",
-                collateralAmountOut: "1003",
-                totalDebtAmountOut: "1800",
-                totalCollateralAmountOut: "2006"
-              },
-            ],
-            liquidations: [],
-            prices: ["1", "1", "1"] // for simplicity
-          });
-        }
-
-        it('should return expected collateralOut', async () => {
-          const r = await loadFixture(makeConvertAfterWithdrawFixture);
-          expect(r.collateralOut).eq(1404); // 401 + 1003
-        });
-        it('should return expected repaidAmountsOut', async () => {
-          const r = await loadFixture(makeConvertAfterWithdrawFixture);
-          expect(r.repaidAmountsOut.join()).eq(["200", "0", "500"].join());
-        });
-        it('should set expected balances', async () => {
-          const r = await loadFixture(makeConvertAfterWithdrawFixture);
-          expect(r.balances.join()).eq(["0", "1495", "400"].join()); // 200-200, 91 + 401 + 1003, 900 - 500
-        });
-        it('should not exceed gas limits @skip-on-coverage', async () => {
-          const r = await loadFixture(makeConvertAfterWithdrawFixture);
-          controlGasLimitsEx(r.gasUsed, GAS_CONVERTER_STRATEGY_BASE_CONVERT_AFTER_WITHDRAW, (u, t) => {
-            expect(u).to.be.below(t + 1);
-          });
-        });
-      });
-      describe('Repay + liquidation of leftovers (amountsToConvert > repaidAmountsOut)', () => {
-        describe("Leftovers > liquidation threshold", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
-            return makeConvertAfterWithdraw({
-              tokens: [dai, usdc, usdt],
-              indexAsset: 1, // usdc
-              amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
-              balances: ["200", "91", "900"], // dai, usdc, usdt
-              liquidationThresholds: ["0", "0", "0"],
-              repays: [
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  amountRepay: "150",
-                  collateralAmountOut: "200",
-                  totalDebtAmountOut: "150",
-                  totalCollateralAmountOut: "200"
-                },
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: usdt,
-                  amountRepay: "270",
-                  collateralAmountOut: "370",
-                  totalDebtAmountOut: "270",
-                  totalCollateralAmountOut: "370"
-                },
-              ],
-              liquidations: [
-                {tokenIn: dai, tokenOut: usdc, amountIn: "50", amountOut: "90"}, // 200 - 150
-                {tokenIn: usdt, tokenOut: usdc, amountIn: "230", amountOut: "311"}, // 500 - 270
-              ],
-              prices: ["1", "1", "1"] // for simplicity
-            });
-          }
-
-          it('should return expected collateralOut', async () => {
-            const r = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(r.collateralOut).eq(971); // 200 + 370 + 90 + 311
-          });
-          it('should return expected repaidAmountsOut', async () => {
-            const r = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(r.repaidAmountsOut.join()).eq(["200", "0", "500"].join());
-          });
-          it('should set expected balances', async () => {
-            const r = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(r.balances.join()).eq(["0", "1062", "400"].join()); // 200-200, 91 + 200 + 370 + 90 + 311, 900 - 500
-          });
-        });
-        describe("Leftovers < liquidation threshold", () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
-            return makeConvertAfterWithdraw({
-              tokens: [dai, usdc, usdt],
-              indexAsset: 1, // usdc
-              amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
-              balances: ["200", "91", "900"], // dai, usdc, usdt
-              liquidationThresholds: ["51", "0", "231"], // (!) these thresholds are greater than liquidation in-amounts
-              repays: [
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: dai,
-                  amountRepay: "150",
-                  collateralAmountOut: "200",
-                  totalDebtAmountOut: "150",
-                  totalCollateralAmountOut: "200"
-                },
-                {
-                  collateralAsset: usdc,
-                  borrowAsset: usdt,
-                  amountRepay: "270",
-                  collateralAmountOut: "370",
-                  totalDebtAmountOut: "270",
-                  totalCollateralAmountOut: "370"
-                },
-              ],
-              liquidations: [
-                // we need to register these liquidation, but actually they don't happen because of the high threshold
-                {tokenIn: dai, tokenOut: usdc, amountIn: "50", amountOut: "90"}, // 200 - 150
-                {tokenIn: usdt, tokenOut: usdc, amountIn: "230", amountOut: "311"}, // 500 - 270
-              ],
-              prices: ["1", "1", "1"] // for simplicity
-            });
-          }
-
-          it('should return expected collateralOut', async () => {
-            const r = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(r.collateralOut).eq(570); // 200 + 370
-          });
-          it('should return expected repaidAmountsOut', async () => {
-            const r = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(r.repaidAmountsOut.join()).eq(["150", "0", "270"].join());
-          });
-          it('should set expected balances', async () => {
-            const r = await loadFixture(makeConvertAfterWithdrawFixture);
-            expect(r.balances.join()).eq(["50", "661", "630"].join()); // 200-150, 91 + 200 + 370, 900 - 270
-          });
-        });
-      });
-      describe('usdc + usdt, amountsToConvert is zero for usdt', () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        async function makeConvertAfterWithdrawFixture(): Promise<IConvertAfterWithdrawResults> {
-          return makeConvertAfterWithdraw({
-            tokens: [usdc, usdt],
-            indexAsset: 0, // usdc
-            amountsToConvert: ["91", "0"], // usdc, usdt
-            balances: ["91", "0"], // usdc, usdt
-            liquidationThresholds: ["0", "0"],
-            repays: [],
-            liquidations: [],
-            prices: ["1", "1"] // for simplicity
-          });
-        }
-
-        it('should return expected collateralOut', async () => {
-          const r = await loadFixture(makeConvertAfterWithdrawFixture);
-          expect(r.collateralOut).eq(0);
-        });
-        it('should return expected repaidAmountsOut', async () => {
-          const r = await loadFixture(makeConvertAfterWithdrawFixture);
-          expect(r.repaidAmountsOut.join()).eq(["0", "0"].join());
-        });
-        it('should set expected balances', async () => {
-          const r = await loadFixture(makeConvertAfterWithdrawFixture);
-          expect(r.balances.join()).eq(["91", "0"].join());
-        });
-      });
-    });
-    describe('Bad paths', () => {
-      describe('Liquidation of leftovers happens with too high price impact', () => {
-        let snapshot: string;
-        before(async function () {
-          snapshot = await TimeUtils.snapshot();
-        });
-        after(async function () {
-          await TimeUtils.rollback(snapshot);
-        });
-
-        it('should revert', async () => {
-          const p: IConvertAfterWithdrawParams = {
-            tokens: [dai, usdc, usdt],
-            indexAsset: 1, // usdc
-            amountsToConvert: ["200", "91", "500"], // dai, usdc, usdt
-            balances: ["200", "91", "900"], // dai, usdc, usdt
-            liquidationThresholds: ["0", "0", "0"],
-            repays: [
-              {
-                collateralAsset: usdc,
-                borrowAsset: dai,
-                amountRepay: "150",
-                collateralAmountOut: "200",
-                totalDebtAmountOut: "150",
-                totalCollateralAmountOut: "200",
-              },
-              {
-                collateralAsset: usdc,
-                borrowAsset: usdt,
-                amountRepay: "270",
-                collateralAmountOut: "370",
-                totalDebtAmountOut: "270",
-                totalCollateralAmountOut: "370"
-              },
-            ],
-            liquidations: [
-              {tokenIn: dai, tokenOut: usdc, amountIn: "50", amountOut: "90"}, // 200 - 150
-              {tokenIn: usdt, tokenOut: usdc, amountIn: "230", amountOut: "311"}, // 500 - 270
-            ],
-            prices: ["1", "1", "1"], // for simplicity
-            isConversionValid: false // (!)
-          };
-          await expect(makeConvertAfterWithdraw(p)).revertedWith('TS-16 price impact'); // PRICE_IMPACT
-        });
-      });
-    });
-  });
-
   describe("closePositionsToGetAmount", () => {
     interface IClosePositionToGetRequestedAmountResults {
-      expectedAmountMainAssetOut: number;
+      expectedBalance: number;
       gasUsed: BigNumber;
       balances: number[];
     }
@@ -842,7 +484,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
-        expectedAmountMainAssetOut: +formatUnits(ret, decimals[p.indexAsset]),
+        expectedBalance: +formatUnits(ret, decimals[p.indexAsset]),
         gasUsed,
         balances: await Promise.all(
           p.tokens.map(
@@ -896,7 +538,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(1870); // 2880 - 1010
+            expect(r.expectedBalance).eq(2000 + 1870); // 2000 + 2880 - 1010
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -945,7 +587,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(150); // 450-300
+            expect(r.expectedBalance).eq(300 + 150); // 450
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -999,15 +641,10 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
           }
 
-          /**
-           * We should have 1000 in result because balance was changed on 1000
-           * But mocks are not ideal... so better to skip this test here
-           * and use integration tests, i.e. "Twisted debts"
-           */
-          it.skip("should return expected expectedAmountMainAssetOut", async () => {
+          it("should return expected expectedBalance", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
             // see SCB-779 fix inside _closePositionsToGetAmount for details of calculations
-            expect(r.expectedAmountMainAssetOut).eq(950.297029); // 3000*2000/2020 - 2020 // + 20
+            expect(r.expectedBalance).eq(6000);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1056,7 +693,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(780); // 2800 - 2020
+            expect(r.expectedBalance).eq(5000 + 2800 - 2020);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1105,7 +742,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(780); // 2800 - 2020
+            expect(r.expectedBalance).eq(5000 + 2800 - 2020);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1154,7 +791,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
           it("should return expected amount", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(980); // 3000 - 2020
+            expect(r.expectedBalance).eq(5000 + 3000 - 2020);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1215,9 +852,9 @@ describe('ConverterStrategyBaseLibTest', () => {
             });
           }
 
-          it("should return expected expectedAmountMainAssetOut", async () => {
+          it("should return expected expectedBalance", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-            expect(r.expectedAmountMainAssetOut).eq(2115);
+            expect(r.expectedBalance).eq(2115);
           });
           it("should set expected balances", async () => {
             const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1292,7 +929,7 @@ describe('ConverterStrategyBaseLibTest', () => {
 
         it("should return zero expected amount", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(0);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1320,7 +957,7 @@ describe('ConverterStrategyBaseLibTest', () => {
             quoteRepays: [],
             repays: [],
           });
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(0);
         });
       });
       describe("There are no debts", () => {
@@ -1358,9 +995,9 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
         }
 
-        it("should return zero expected amount", async () => {
+        it("should return expected value", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(5000);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1407,9 +1044,9 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
         }
 
-        it("should return zero expected amount", async () => {
+        it("should return expected value", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(2100);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1444,9 +1081,9 @@ describe('ConverterStrategyBaseLibTest', () => {
           });
         }
 
-        it("should return zero expected amount", async () => {
+        it("should return expected value", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
-          expect(r.expectedAmountMainAssetOut).eq(0);
+          expect(r.expectedBalance).eq(8000);
         });
         it("should not change balances", async () => {
           const r = await loadFixture(makeClosePositionToGetRequestedAmountFixture);
@@ -1847,202 +1484,6 @@ describe('ConverterStrategyBaseLibTest', () => {
           balanceBorrowAsset: "0"
         });
         expect(r.amountOut).eq(0);
-      });
-    });
-  });
-
-  describe("swapToGivenAmount", () => {
-    interface ISwapToGivenAmountParams {
-      targetAmount: string;
-      tokens: MockToken[];
-      indexTargetAsset: number;
-      underlying: MockToken;
-      liquidationThresholds?: string[];
-      overswap: number;
-
-      amounts: string[];
-      prices: string[];
-      liquidations: ILiquidationParams[];
-      balances: string[];
-    }
-
-    interface ISwapToGivenAmountResults {
-      spentAmounts: number[];
-      receivedAmounts: number[];
-      balances: number[];
-      gasUsed: BigNumber;
-    }
-
-    async function makeSwapToGivenAmountTest(p: ISwapToGivenAmountParams): Promise<ISwapToGivenAmountResults> {
-      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      const decimals: number[] = [];
-      for (let i = 0; i < p.tokens.length; ++i) {
-        const d = await p.tokens[i].decimals()
-        decimals.push(d);
-
-        // withdrawn amounts
-        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
-        console.log("mint", i, p.amounts[i]);
-
-        // balances
-        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
-        console.log("mint", i, p.balances[i]);
-      }
-
-      // set up TetuConverter
-      const converter = await MockHelper.createMockTetuConverter(signer);
-      const priceOracle = (await DeployerUtils.deployContract(
-        signer,
-        'PriceOracleMock',
-        p.tokens.map(x => x.address),
-        p.prices.map(x => parseUnits(x, 18))
-      )) as PriceOracleMock;
-      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
-      await converter.setController(tetuConverterController.address);
-
-      // set up expected liquidations
-      for (const liquidation of p.liquidations) {
-        await setupMockedLiquidation(liquidator, liquidation);
-        await setupIsConversionValid(converter, liquidation, true);
-      }
-
-      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
-        ? await Promise.all(p.liquidationThresholds.map(
-          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
-        ))
-        : p.tokens.map(x => BigNumber.from(0));
-
-
-
-      const r = await facade.callStatic.swapToGivenAmountAccess(
-        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
-        p.tokens.map(x => x.address),
-        p.indexTargetAsset,
-        p.underlying.address,
-        converter.address,
-        liquidator.address,
-        liquidationThresholds,
-        p.overswap
-      );
-      console.log("r", r);
-      const tx = await facade.swapToGivenAmountAccess(
-        parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
-        p.tokens.map(x => x.address),
-        p.indexTargetAsset,
-        p.underlying.address,
-        converter.address,
-        liquidator.address,
-        liquidationThresholds,
-        p.overswap
-      );
-      const gasUsed = (await tx.wait()).gasUsed;
-      return {
-        spentAmounts: r.spentAmounts.map((x, index) => +formatUnits(x, decimals[index])),
-        receivedAmounts: r.receivedAmounts.map((x, index) => +formatUnits(x, decimals[index])),
-        balances: await Promise.all(
-          p.tokens.map(
-            async (token, index) => +formatUnits(await token.balanceOf(facade.address), decimals[index])
-          )
-        ),
-        gasUsed
-      }
-    }
-
-    describe("single liquidation is required", () => {
-      let snapshot: string;
-      before(async function () {
-        snapshot = await TimeUtils.snapshot();
-      });
-      after(async function () {
-        await TimeUtils.rollback(snapshot);
-      });
-
-      async function makeSwapToGivenAmountFixture(): Promise<ISwapToGivenAmountResults> {
-        return makeSwapToGivenAmountTest({
-          targetAmount: "10",
-          tokens: [tetu, usdc, usdt, dai],
-          indexTargetAsset: 0, // TETU
-          underlying: usdc,
-          liquidationThresholds: ["0", "0", "0", "0"],
-          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-          amounts: ["1000", "2000", "4000", "5000"], // == $100, $400, $1600, $2500
-          prices: ["0.1", "0.2", "0.4", "0.5"],
-          liquidations: [{
-            amountIn: "3.75",
-            amountOut: "15",// 10 tetu + 50% of overswap
-            tokenIn: usdt,
-            tokenOut: tetu
-          }],
-          // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
-          balances: ["100", "200", "400", "500"],
-        });
-      }
-
-      it("should return expected spentAmounts", async () => {
-        const r = await loadFixture(makeSwapToGivenAmountFixture);
-        expect(r.spentAmounts.join()).eq([0, 0, 3.75, 0].join());
-      });
-      it("should return expected receivedAmounts", async () => {
-        const r = await loadFixture(makeSwapToGivenAmountFixture);
-        expect(r.receivedAmounts.join()).eq([15, 0, 0, 0].join());
-      });
-      it("should return expected balances", async () => {
-        const r = await loadFixture(makeSwapToGivenAmountFixture);
-        // initial balances + amounts (withdrawn) +/- liquidation amounts
-        expect(r.balances.join()).eq([1115, 2200, 4396.25, 5500].join());
-      });
-    });
-    describe("two liquidations are required", () => {
-      let snapshot: string;
-      before(async function () {
-        snapshot = await TimeUtils.snapshot();
-      });
-      after(async function () {
-        await TimeUtils.rollback(snapshot);
-      });
-
-      async function makeSwapToGivenAmountFixture(): Promise<ISwapToGivenAmountResults> {
-        return makeSwapToGivenAmountTest({
-          targetAmount: "16010",
-          tokens: [tetu, usdc, usdt, dai],
-          indexTargetAsset: 0, // TETU
-          underlying: usdc,
-          liquidationThresholds: ["0", "0", "0", "0"],
-          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-          amounts: ["900", "1800", "3600", "4500"], // == $100, $400, $1600, $2500
-          prices: ["0.1", "0.2", "0.4", "0.5"],
-          liquidations: [
-            {
-              amountIn: "4000",
-              amountOut: "16000",
-              tokenIn: usdt,
-              tokenOut: tetu
-            },
-            {
-              amountIn: "3",
-              amountOut: "15",
-              tokenIn: dai,
-              tokenOut: tetu
-            },
-          ],
-          // we assume, that balance of target asset < targetAmount, see requirePayAmountBack implementation
-          balances: ["100", "200", "400", "500"],
-        });
-      }
-
-      it("should return expected spentAmounts", async () => {
-        const r = await loadFixture(makeSwapToGivenAmountFixture);
-        expect(r.spentAmounts.join()).eq([0, 0, 4000, 3].join());
-      });
-      it("should return expected receivedAmounts", async () => {
-        const r = await loadFixture(makeSwapToGivenAmountFixture);
-        expect(r.receivedAmounts.join()).eq([16015, 0, 0, 0].join()); // 16000 + 15
-      });
-      it("should return expected balances", async () => {
-        const r = await loadFixture(makeSwapToGivenAmountFixture);
-        expect(r.balances.join()).eq([17015, 2000, 0, 4997].join());
       });
     });
   });
@@ -5581,575 +5022,791 @@ describe('ConverterStrategyBaseLibTest', () => {
     });
   });
 
-  describe("_swapToGetAmount", () => {
-    let snapshot: string;
-    beforeEach(async function() {
-      snapshot = await TimeUtils.snapshot();
-    });
-    afterEach(async function() {
-      await TimeUtils.rollback(snapshot);
-    });
-
-    interface ISwapToGetAmountParams {
-      tokens: MockToken[];
-      targetAmount: string;
-      receivedTargetAmount: string;
-      amounts: string[];
-      prices: string[];
-      overswap: number;
-      indexTargetAsset: number;
-      indexTokenIn: number;
-      liquidations: ILiquidationParams[];
-      underlying: MockToken;
-      liquidationThresholds?: string[];
-    }
-    interface ISwapToGetAmountResults {
-      amountSpent: BigNumber;
-      amountReceived: BigNumber;
-    }
-    async function makeSwapToGetAmountTest(p: ISwapToGetAmountParams) : Promise<ISwapToGetAmountResults> {
-      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
-      const decimals: number[] = [];
-      for (let i = 0; i < p.tokens.length; ++i) {
-        const d = await p.tokens[i].decimals()
-        decimals.push(d);
-        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
-      }
-
-      const converter = await MockHelper.createMockTetuConverter(signer);
-      for (const liquidation of p.liquidations) {
-        await setupMockedLiquidation(liquidator, liquidation);
-        await setupIsConversionValid(converter, liquidation, true);
-      }
-
-      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
-        ? await Promise.all(p.liquidationThresholds.map(
-          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
-        ))
-        : p.tokens.map(x => BigNumber.from(0));
-
-      const params = {
-        targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
-        tokens: p.tokens.map(x => x.address),
-        indexTargetAsset: p.indexTargetAsset,
-        underlying: p.underlying.address,
-        amounts: p.amounts.map((x, index) => parseUnits(x, decimals[index])),
-        converter: converter.address,
-        liquidator: liquidator.address,
-        liquidationThresholds,
-        overswap: p.overswap
-      };
-      const receivedTargetAmount = parseUnits(p.receivedTargetAmount, decimals[p.indexTargetAsset]);
-      const r = await facade.callStatic.swapToGetAmountAccess(
-        receivedTargetAmount,
-        params,
-        p.prices.map(x => parseUnits(x, 18)),
-        decimals.map(x => parseUnits("1", x)),
-        p.indexTokenIn
-      );
-      await facade.swapToGetAmountAccess(
-        receivedTargetAmount,
-        params,
-        p.prices.map(x => parseUnits(x, 18)),
-        decimals.map(x => parseUnits("1", x)),
-        p.indexTokenIn
-      );
-      return {
-        amountReceived: r.amountReceived,
-        amountSpent: r.amountSpent
-      }
-    }
-    describe("overswap == 0", () => {
-      describe("liquidationThresholdForTargetAsset < amountOut", () => {
-        it("tetu=>usdt, should return expected values", async () => {
-          const r = await makeSwapToGetAmountTest({
-            tokens: [usdc, usdt, tetu],
-            prices: ["1", "1", "0.5"],
-            overswap: 0,
-            amounts: ["1234", "0", "1000"], // no USDT on balance, but we have some USDC and TETU
-            underlying: usdc,
-            targetAmount: "117", // we need to get 117 USDT
-            indexTargetAsset: 1,
-            indexTokenIn: 2,
-            receivedTargetAmount: "17", // assume that we already received 100 USDT
-            liquidations: [{
-              amountIn: "200", // we need 200 tetu to get 100 USDT
-              amountOut: "99", // assume that we lost 1 USDT on conversion
-              tokenIn: tetu,
-              tokenOut: usdt
-            }]
-          });
-
-          const ret = [
-            +formatUnits(r.amountSpent, 18),
-            +formatUnits(r.amountReceived, 6),
-            +formatUnits(await usdt.balanceOf(facade.address), 6),
-            +formatUnits(await tetu.balanceOf(facade.address), 18),
-          ].join();
-
-          const expected = [
-            +formatUnits(parseUnits("200", 18), 18),
-            +formatUnits(parseUnits("99", 6), 6),
-            +formatUnits(parseUnits("99", 6), 6),
-            +formatUnits(parseUnits("800", 18), 18),
-          ].join();
-
-          expect(ret).eq(expected);
-        });
-      });
-    });
-    describe("liquidationThresholdForTargetAsset > amountOut", () => {
-      it("tetu=>usdt, should return zero values", async () => {
-        const r = await makeSwapToGetAmountTest({
-          tokens: [usdc, usdt, tetu],
-          prices: ["1", "1", "0.5"],
-          overswap: 0,
-          liquidationThresholds: ["0", "0", "201"], // (!) the threshold 201 exceeds amountIn = 200
-          amounts: ["1234", "0", "1000"], // no USDT on balance, but we have some USDC and TETU
-          underlying: usdc,
-          targetAmount: "117", // we need to get 117 USDT
-          indexTargetAsset: 1,
-          indexTokenIn: 2,
-          receivedTargetAmount: "17", // assume that we already received 100 USDT
-          liquidations: [{
-            amountIn: "200", // we need 200 tetu to get 100 USDT
-            amountOut: "99", // assume that we lost 1 USDT on conversion
-            tokenIn: tetu,
-            tokenOut: usdt
-          }]
-        });
-
-        const ret = [
-          +formatUnits(r.amountSpent, 18),
-          +formatUnits(r.amountReceived, 6),
-          +formatUnits(await usdt.balanceOf(facade.address), 6),
-          +formatUnits(await tetu.balanceOf(facade.address), 18),
-        ].join();
-
-        const expected = [
-          +formatUnits(parseUnits("0", 18), 18),
-          +formatUnits(parseUnits("0", 6), 6),
-          +formatUnits(parseUnits("0", 6), 6),
-          +formatUnits(parseUnits("1000", 18), 18),
-        ].join();
-
-        expect(ret).eq(expected);
-      });
-    });
-    describe("overswap != 0", () => {
-      it("tetu=>usdt, should return expected values", async () => {
-        const r = await makeSwapToGetAmountTest({
-          tokens: [usdc, usdt, tetu],
-          prices: ["1", "1", "0.5"],
-          overswap: 50_000, // (!) we are going to swap twice more than it's necessary according calculations by prices
-          amounts: ["1234", "0", "1000"], // no USDT on balance, but we have some USDC and TETU
-          underlying: usdc,
-          targetAmount: "117", // we need to get 117 USDT
-          indexTargetAsset: 1,
-          indexTokenIn: 2,
-          receivedTargetAmount: "17", // assume that we already received 100 USDT
-          liquidations: [{
-            amountIn: "300", // we need 200 tetu to get 100 USDT
-            amountOut: "198",// assume that we lost some USDT on conversion
-            tokenIn: tetu,
-            tokenOut: usdt
-          }]
-        });
-
-        const ret = [
-          +formatUnits(r.amountSpent, 18),
-          +formatUnits(r.amountReceived, 6),
-          +formatUnits(await usdt.balanceOf(facade.address), 6),
-          +formatUnits(await tetu.balanceOf(facade.address), 18),
-        ].join();
-
-        const expected = [
-          +formatUnits(parseUnits("300", 18), 18),
-          +formatUnits(parseUnits("198", 6), 6),
-          +formatUnits(parseUnits("198", 6), 6),
-          +formatUnits(parseUnits("700", 18), 18),
-        ].join();
-
-        expect(ret).eq(expected);
-      });
-    });
-    describe("there is not enough amount", () => {
-      it("tetu=>usdt, should return expected values", async () => {
-        const r = await makeSwapToGetAmountTest({
-          tokens: [usdc, usdt, tetu],
-          prices: ["1", "1", "0.5"],
-          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-          amounts: ["1234", "0", "200"], // (!) we need to swap 300 tetu, but we have only 200 tetu
-          underlying: usdc,
-          targetAmount: "117", // we need to get 117 USDT
-          indexTargetAsset: 1,
-          indexTokenIn: 2,
-          receivedTargetAmount: "17", // assume that we already received 100 USDT
-          liquidations: [{
-            amountIn: "200", // we need 200 tetu to get 100 USDT
-            amountOut: "99", // assume that we lost some USDT on conversion
-            tokenIn: tetu,
-            tokenOut: usdt
-          }]
-        });
-
-        const ret = [
-          +formatUnits(r.amountSpent, 18),
-          +formatUnits(r.amountReceived, 6),
-          +formatUnits(await usdt.balanceOf(facade.address), 6),
-          +formatUnits(await tetu.balanceOf(facade.address), 18),
-        ].join();
-
-        const expected = [
-          +formatUnits(parseUnits("200", 18), 18),
-          +formatUnits(parseUnits("99", 6), 6),
-          +formatUnits(parseUnits("99", 6), 6),
-          +formatUnits(parseUnits("0", 18), 18),
-        ].join();
-
-        expect(ret).eq(expected);
-      });
-    });
-  });
-
-  describe("internal _swapToGivenAmount", () => {
-    let snapshot: string;
-    beforeEach(async function() {
-      snapshot = await TimeUtils.snapshot();
-    });
-    afterEach(async function() {
-      await TimeUtils.rollback(snapshot);
-    });
-
-    interface IInternalSwapToGivenAmountParams {
-      targetAmount: string;
-      tokens: MockToken[];
-      indexTargetAsset: number;
-      underlying: MockToken;
-      liquidationThresholds?: string[];
-      overswap: number;
-
-      amounts: string[];
-      prices: string[];
-      liquidations: ILiquidationParams[];
-    }
-    interface IInternalSwapToGivenAmountResults {
-      spentAmounts: BigNumber[];
-      receivedAmounts: BigNumber[];
+  describe("makeRequestedAmount", () => {
+    interface IMakeRequestedAmountResults {
+      expectedAmountMainAsset: number;
       gasUsed: BigNumber;
+      balances: number[];
     }
-    async function makeInternalSwapToGivenAmountTest(
-      p: IInternalSwapToGivenAmountParams
-    ) : Promise<IInternalSwapToGivenAmountResults> {
-      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
+
+    interface IMakeRequestedAmountParams {
+      requestedAmount: string;
+      tokens: MockToken[];
+      indexAsset: number;
+      balances: string[];
+      prices: string[];
+      liquidationThresholds: string[];
+      liquidations: ILiquidationParams[];
+      quoteRepays: IQuoteRepayParams[];
+      repays: IRepayParams[];
+      isConversionValid?: boolean;
+    }
+
+    async function makeRequestedAmountTest(
+      p: IMakeRequestedAmountParams
+    ): Promise<IMakeRequestedAmountResults> {
+      // set up balances
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
         const d = await p.tokens[i].decimals()
         decimals.push(d);
-        await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], d));
+
+        // set up current balances
+        await p.tokens[i].mint(facade.address, parseUnits(p.balances[i], d));
+        console.log("mint", i, p.balances[i]);
+
+        // set up liquidation threshold for token
+        await facade.setLiquidationThreshold(p.tokens[i].address, parseUnits(p.liquidationThresholds[i], d));
       }
 
-      // set up TetuConverter
+      // set up price oracle
       const converter = await MockHelper.createMockTetuConverter(signer);
-      const priceOracle = (await DeployerUtils.deployContract(
+      const priceOracle = await MockHelper.createPriceOracle(
         signer,
-        'PriceOracleMock',
         p.tokens.map(x => x.address),
-        p.prices.map(x => parseUnits(x, 18))
-      )) as PriceOracleMock;
-      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
-      await converter.setController(tetuConverterController.address);
+        p.prices.map(price => parseUnits(price, 18))
+      );
+      const controller = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(controller.address);
 
-      // set up liquidator
+
+      // set up repay and quoteRepay in converter
+      for (const repay of p.repays) {
+        await setupMockedRepay(converter, facade.address, repay);
+      }
+      for (const quoteRepay of p.quoteRepays) {
+        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
+      }
+
+      // set up expected liquidations
+      const liquidator = await MockHelper.createMockTetuLiquidatorSingleCall(signer);
       for (const liquidation of p.liquidations) {
         await setupMockedLiquidation(liquidator, liquidation);
-        await setupIsConversionValid(converter, liquidation, true);
+        const isConversionValid = p.isConversionValid === undefined ? true : p.isConversionValid;
+        await setupIsConversionValid(converter, liquidation, isConversionValid)
       }
 
-      const liquidationThresholds: BigNumber[] = p.liquidationThresholds
-        ? await Promise.all(p.liquidationThresholds.map(
-          async (x, index) => parseUnits(x, await p.tokens[index].decimals()),
-        ))
-        : p.tokens.map(x => BigNumber.from(0));
+      // make test
+      const ret = await facade.callStatic._makeRequestedAmountAccess(
+        p.tokens.map(x => x.address),
+        p.indexAsset,
+        converter.address,
+        liquidator.address,
+        p.requestedAmount === ""
+          ? Misc.MAX_UINT
+          : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+      );
 
-      const r = await facade.callStatic._swapToGivenAmountAccess({
-        targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
-        tokens: p.tokens.map(x => x.address),
-        indexTargetAsset: p.indexTargetAsset,
-        underlying: p.underlying.address,
-        amounts: p.amounts.map((x, index) => parseUnits(x, decimals[index])),
-        converter: converter.address,
-        liquidator: liquidator.address,
-        liquidationThresholds,
-        overswap: p.overswap
-      });
-      console.log("r", r);
-      const tx = await facade._swapToGivenAmountAccess({
-        targetAmount: parseUnits(p.targetAmount, decimals[p.indexTargetAsset]),
-        tokens: p.tokens.map(x => x.address),
-        indexTargetAsset: p.indexTargetAsset,
-        underlying: p.underlying.address,
-        amounts: p.amounts.map((x, index) => parseUnits(x, decimals[index])),
-        converter: converter.address,
-        liquidator: liquidator.address,
-        liquidationThresholds,
-        overswap: p.overswap
-      });
+      const tx = await facade._makeRequestedAmountAccess(
+        p.tokens.map(x => x.address),
+        p.indexAsset,
+        converter.address,
+        liquidator.address,
+        p.requestedAmount === ""
+          ? Misc.MAX_UINT
+          : parseUnits(p.requestedAmount, decimals[p.indexAsset]),
+      );
       const gasUsed = (await tx.wait()).gasUsed;
       return {
-        spentAmounts: r.spentAmounts,
-        receivedAmounts: r.receivedAmounts,
-        gasUsed
+        expectedAmountMainAsset: +formatUnits(ret, decimals[p.indexAsset]),
+        gasUsed,
+        balances: await Promise.all(
+          p.tokens.map(
+            async (token, index) => +formatUnits(await token.balanceOf(facade.address), decimals[index])
+          )
+        )
       }
     }
-    describe("Two assets", () => {
-      describe("Target asset is underlying", () => {
-        it("should return expected values", async () => {
-          const r = await makeInternalSwapToGivenAmountTest({
-            targetAmount: "100", // we need to get 100 USDC
-            tokens: [usdc, tetu],
-            indexTargetAsset: 0, // USDC
-            underlying: usdc,
-            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
 
-            amounts: ["0", "1000"],
-            prices: ["1", "0.5"],
-            liquidations: [{
-              amountIn: "300",// we need to converter 200 tetu + overswap 50% = 300 tetu
-              amountOut: "127",
-              tokenIn: tetu,
-              tokenOut: usdc
-            }]
+    describe("Good paths", () => {
+      describe("two assets, same prices", () => {
+        describe("1. All amount is on balance, no debts", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
 
-          const ret = [
-            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
-          ].join("\n");
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "5000", // usdc; it should include current balance
+              tokens: [usdc, dai],
+              indexAsset: 0,
+              balances: ["2500", "0"], // usdc, dai
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [],
+              quoteRepays: [],
+              repays: [],
+            });
+          }
 
-          const expected = [
-            [
-              parseUnits("0", 6),
-              parseUnits("300", 18)
-            ].map(x => BalanceUtils.toString(x)).join(),
-            [
-              parseUnits("127", 6),
-              parseUnits("0", 18)
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join("\n");
-
-          expect(ret).eq(expected);
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(2500 + 0);
+          });
+          it("should provide requested amount on balance", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([2500, 0].join());
+          });
         });
-      });
-      describe("Target asset is not underlying", () => {
-        it("should return expected values", async () => {
-          const r = await makeInternalSwapToGivenAmountTest({
-            targetAmount: "200", // we need to get 200 TETU
-            tokens: [usdc, tetu],
-            indexTargetAsset: 1, // TETU
-            underlying: usdc,
-            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-            amounts: ["1000", "0"],
-            prices: ["1", "0.5"],
-            liquidations: [{
-              amountIn: "150", // we need to converter 100 usdc + overswap 50% = 150 usdc
-              amountOut: "210",
-              tokenIn: usdc,
-              tokenOut: tetu
-            }]
+        describe("2. Repay debt (usdt=>usdc), swap (usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
 
-          const ret = [
-            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
-          ].join("\n");
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "3000", // usdc; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["1000", "1000"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [{amountIn: "950", amountOut: "950", tokenIn: usdt, tokenOut: usdc}],
+              quoteRepays: [{  // this debt is not used
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "50",
+                collateralAmountOut: "100"
+              }],
+              repays: [{  // this debt is not used
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "50", // usdt
+                collateralAmountOut: "100", // usdc
+                totalDebtAmountOut: "50",
+                totalCollateralAmountOut: "100"
+              }],
+            });
+          }
 
-          const expected = [
-            [
-              parseUnits("150", 6),
-              parseUnits("0", 18)
-            ].map(x => BalanceUtils.toString(x)).join(),
-            [
-              parseUnits("0", 6),
-              parseUnits("210", 18)
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join("\n");
-
-          expect(ret).eq(expected);
+          it("should return expected expectedAmountMainAsset", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(1000 + 1050); // final balance
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([2050, 0].join());
+          });
         });
-      });
-    });
-    describe("Three assets", () => {
-      describe("Not-underlying is enough", () => {
-        it("should convert not-underlying (weth) only", async () => {
-          const r = await makeInternalSwapToGivenAmountTest({
-            targetAmount: "200", // we need to get 200 TETU
-            tokens: [usdc, tetu, weth],
-            indexTargetAsset: 1, // TETU
-            underlying: usdc,
-            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-            amounts: ["1000", "0", "1000"],
-            prices: ["1", "0.5", "2"],
-            liquidations: [{
-              amountIn: "75", // we need to converter 50 weth + overswap 50% = 75 weth
-              amountOut: "250",
-              tokenIn: weth,
-              tokenOut: tetu
-            }]
+        describe("3. Swap(usdc=>usdt), repay(usdt=>usdc), ", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
 
-          const ret = [
-            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
-          ].join("\n");
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "16000", // usdc, we need to get as much as possible; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["6000", "999"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [
+                {amountIn: "6000", amountOut: "6007", tokenIn: usdc, tokenOut: usdt},
+              ],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "7006", // 60007 + 999
+                collateralAmountOut: "10080"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "7006", // usdt
+                collateralAmountOut: "10081", // usdc
+                totalDebtAmountOut: "400000",
+                totalCollateralAmountOut: "800000"
+              }],
+            });
+          }
 
-          const expected = [
-            [
-              parseUnits("0", 6),
-              parseUnits("0", 18),
-              parseUnits("75", 18),
-            ].map(x => BalanceUtils.toString(x)).join(),
-            [
-              parseUnits("0", 6),
-              parseUnits("250", 18),
-              parseUnits("0", 18)
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join("\n");
-
-          expect(ret).eq(expected);
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(10080);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([10081, 0].join()); // 10080 - 6000 + 6000
+          });
         });
-      });
-      describe("Not-underlying is NOT enough", () => {
-        it("should convert not-underlying and underlying", async () => {
-          const r = await makeInternalSwapToGivenAmountTest({
-            targetAmount: "2000", // tetu
-            tokens: [usdc, tetu, weth],
-            indexTargetAsset: 1, // TETU
-            underlying: usdc,
-            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-            amounts: ["1400", "0", "50"],
-            prices: ["1", "0.5", "2"],
-            liquidations: [
-              // in total, we need to convert 2000 tetu == $1000 + 50% of overswap = $1500
-              // $1500 = 750 weth, but we have only 50 weth
-              // we make following conversion: 50 weth => tetu
-              // After the conversion we have 200 tetu on balance and need 1800 tetu more
-              // we need to make one more conversion: 1800 tetu => $900 + 50% of overswap = 1350 usdc
-              {
-                amountIn: "50",
-                amountOut: "200",
-                tokenIn: weth,
-                tokenOut: tetu
-              },
-              {
-                amountIn: "1350",
-                amountOut: "2700",
-                tokenIn: usdc,
-                tokenOut: tetu
-              },
-            ]
+        describe("4. Swap(usdc=>usdt), repay(usdt=>usdc),", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
 
-          const ret = [
-            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
-          ].join("\n");
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "70000", // usdc, we need to get as much as possible; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["60000", "999"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [
+                {amountIn: "10100", amountOut: "10200", tokenIn: usdc, tokenOut: usdt},
+              ],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "11199", // 10200 - 999
+                collateralAmountOut: "22000"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "11199", // usdt
+                collateralAmountOut: "22001", // usdc
+                totalDebtAmountOut: "400000",
+                totalCollateralAmountOut: "800000"
+              }],
+            });
+          }
 
-          const expected = [
-            [
-              parseUnits("1350", 6),
-              parseUnits("0", 18),
-              parseUnits("50", 18),
-            ].map(x => BalanceUtils.toString(x)).join(),
-            [
-              parseUnits("0", 6),
-              parseUnits("2900", 18),
-              parseUnits("0", 18)
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join("\n");
-
-          expect(ret).eq(expected);
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(71900);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([71901, 0].join()); // 60000 - 10100 + 22001
+          });
         });
-      });
-      describe("Not-underlying and underlying is NOT enough", () => {
-        it("should convert not-underlying and underlying and return as much as possible", async () => {
-          const r = await makeInternalSwapToGivenAmountTest({
-            targetAmount: "2000", // tetu
-            tokens: [usdc, tetu, weth],
-            indexTargetAsset: 1, // TETU
-            underlying: usdc,
-            overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
-
-            amounts: ["150", "0", "50"],
-            prices: ["1", "0.5", "2"],
-            liquidations: [
-              // in total, we need to convert 2000 tetu == $1000 + 50% of overswap = $1500
-              // $1500 = 750 weth, but we have only 50 weth
-              // we make following conversion: 50 weth => tetu
-              // After the conversion we have 200 tetu on balance and need 1800 tetu more
-              // we need to make one more conversion: 1800 tetu => $900 + 50% of overswap = 1350 usdc
-              // but we have only 150 usdc...
-              {
-                amountIn: "50",
-                amountOut: "200",
-                tokenIn: weth,
-                tokenOut: tetu
-              },
-              {
-                amountIn: "150",
-                amountOut: "300",
-                tokenIn: usdc,
-                tokenOut: tetu
-              },
-            ]
+        describe("5. Swap(usdc=>usdt)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
           });
 
-          const ret = [
-            r.spentAmounts.map(x => BalanceUtils.toString(x)).join(),
-            r.receivedAmounts.map(x => BalanceUtils.toString(x)).join()
-          ].join("\n");
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "3004", // usdc; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["1004", "1002"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [{amountIn: "1002", amountOut: "1003", tokenIn: usdt, tokenOut: usdc}],
+              quoteRepays: [],
+              repays: [],
+            });
+          }
 
-          const expected = [
-            [
-              parseUnits("150", 6),
-              parseUnits("0", 18),
-              parseUnits("50", 18),
-            ].map(x => BalanceUtils.toString(x)).join(),
-            [
-              parseUnits("0", 6),
-              parseUnits("500", 18),
-              parseUnits("0", 18)
-            ].map(x => BalanceUtils.toString(x)).join(),
-          ].join("\n");
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(1004 + 1002);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([1004 + 1003, 0].join());
+          });
+        });
+        describe("6. Swap(usdc=>usdt)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
-          expect(ret).eq(expected);
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "3000", // usdc; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["1000", "103"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [{amountIn: "103", amountOut: "120", tokenIn: usdt, tokenOut: usdc}],
+              quoteRepays: [],
+              repays: [],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            // 1000 (initial balance) + 103 (103 is converted directly by prices to 103)
+            expect(r.expectedAmountMainAsset).eq(1000 + 103);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([1000 + 120, 0].join());
+          });
+        });
+        describe("7. Swap(usdc=>usdt), repay(usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "11001", // usdc, we need to get as much as possible; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["3001", "2000"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [
+                {amountIn: "3001", amountOut: "4000", tokenIn: usdc, tokenOut: usdt},
+              ],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "6000",
+                collateralAmountOut: "12000"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "6000", // usdt
+                collateralAmountOut: "12000", // usdc
+                totalDebtAmountOut: "400000",
+                totalCollateralAmountOut: "800000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(12000);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([3001 - 3001 + 12000, 0].join());
+          });
+        });
+        describe("8. Swap(usdc=>usdt), repay(usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "17000", // usdc, we need to get as much as possible; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["3000", "2000"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [
+                {amountIn: "3000", amountOut: "4000", tokenIn: usdc, tokenOut: usdt},
+              ],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "6000", // 4041 + 999
+                collateralAmountOut: "10000"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "6000", // usdt
+                collateralAmountOut: "10000", // usdc
+                totalDebtAmountOut: "6000",
+                totalCollateralAmountOut: "10000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(10000);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([10000, 0].join()); // 3000 - 3000 + 10000
+          });
+        });
+        describe("9. Repay(usdt=>usdc), swap(usdt=>usdc), ", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "200100", // usdc; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["100", "8000"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [
+                {amountIn: "7000", amountOut: "7001", tokenIn: usdt, tokenOut: usdc},
+              ],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "1000",
+                collateralAmountOut: "2000"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "1000", // usdt
+                collateralAmountOut: "2000", // usdc
+                totalDebtAmountOut: "1000",
+                totalCollateralAmountOut: "2000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(9100);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([9101, 0].join());
+          });
+        });
+        describe("10. Swap(usdc=>usdt), swap(usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "201000", // usdc; it should include current balance
+              tokens: [usdc, usdt],
+              indexAsset: 0,
+              balances: ["1000", "1500"], // usdc, usdt
+              prices: ["1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0"],
+              liquidations: [
+                // 500 + 1%
+                {amountIn: "505", amountOut: "500", tokenIn: usdc, tokenOut: usdt},
+              ],
+              quoteRepays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "2000",
+                collateralAmountOut: "4000"
+              }],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "2000", // usdt
+                collateralAmountOut: "4000", // usdc
+                totalDebtAmountOut: "2000",
+                totalCollateralAmountOut: "4000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(1000 - 505 + 4000);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([1000 - 505 + 4000, 0].join());
+          });
         });
       });
-    });
-    describe("Gas estimation @skip-on-coverage", () => {
-      it("should return expected values", async () => {
-        const r = await makeInternalSwapToGivenAmountTest({
-          targetAmount: "200", // we need to get 200 TETU
-          tokens: [usdc, tetu],
-          indexTargetAsset: 1, // TETU
-          underlying: usdc,
-          overswap: 50_000, // we are going to swap twice more than it's necessary according calculations by prices
+      describe("three assets, same prices", () => {
+        describe("swap(usdc=>dai,usdt), repay(dai,usdt=>usdc), swap(dai,usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
-          amounts: ["1000", "0"],
-          prices: ["1", "0.5"],
-          liquidations: [{
-            amountIn: "150", // we need to converter 100 usdc + overswap 50% = 150 usdc
-            amountOut: "210",
-            tokenIn: usdc,
-            tokenOut: tetu
-          }]
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "116000", // usdc; it should include current balance
+              tokens: [usdc, dai, usdt],
+              indexAsset: 0,
+              balances: ["6000", "2000", "4000"], // usdc, dai, usdt
+              prices: ["1", "1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0", "0"],
+              liquidations: [
+                {amountIn: "1010", amountOut: "1010", tokenIn: usdc, tokenOut: dai},
+                {amountIn: "3030", amountOut: "3030", tokenIn: usdc, tokenOut: usdt},
+                {amountIn: "10", amountOut: "9", tokenIn: dai, tokenOut: usdc},
+                {amountIn: "30", amountOut: "29", tokenIn: usdt, tokenOut: usdc},
+              ],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "3000", collateralAmountOut: "4000"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "7000", collateralAmountOut: "9000"},
+              ],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "3000", // dai
+                collateralAmountOut: "4000", // usdc
+                totalDebtAmountOut: "3000",
+                totalCollateralAmountOut: "4000"
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "7000", // usdt
+                collateralAmountOut: "9000", // usdc
+                totalDebtAmountOut: "7000",
+                totalCollateralAmountOut: "9000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(15000);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([15038-40, 0, 0].join());
+          });
         });
+        describe("repay(usdc=>dai,usdt), swap(dai,usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
 
-        controlGasLimitsEx(r.gasUsed, GET_INTERNAL_SWAP_TO_GIVEN_AMOUNT, (u, t) => {
-          expect(u).to.be.below(t + 1);
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "203000", // usdc; it should include current balance
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              balances: ["3000", "97", "5000"], // dai, usdc, usdt
+              prices: ["1", "1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0", "0"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "1000", collateralAmountOut: "1900"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "2000", collateralAmountOut: "2900"}
+              ],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "1000", // dai
+                collateralAmountOut: "1900", // usdc
+                totalDebtAmountOut: "1000",
+                totalCollateralAmountOut: "1900"
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "2000", // usdt
+                collateralAmountOut: "2900", // usdc
+                totalDebtAmountOut: "2000",
+                totalCollateralAmountOut: "2900"
+              }],
+              liquidations: [
+                {amountIn: "3000", amountOut: "3001", tokenIn: usdt, tokenOut: usdc}, // balance - totalDebtAmountOut
+                {amountIn: "2000", amountOut: "2001", tokenIn: dai, tokenOut: usdc},  // balance - totalDebtAmountOut
+              ],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(9800 + 97);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([0, 9899, 0].join()); // 97 + 2900 + 1900 + 3001 + 2001
+          });
+        });
+      });
+      describe("three assets, different prices", () => {
+        describe("swap(usdc=>dai,usdt), repay(dai,usdt=>usdc), swap(dai,usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "116000", // usdc; it should include current balance
+              tokens: [usdc, dai, usdt],
+              indexAsset: 0,
+              balances: ["6000", "20000", "400"], // usdc, dai, usdt
+              prices: ["1", "0.1", "10"], // for simplicity
+              liquidationThresholds: ["0", "0", "0"],
+              liquidations: [
+                {amountIn: "1010", amountOut: "10100", tokenIn: usdc, tokenOut: dai}, // + 1%
+                {amountIn: "3030", amountOut: "303", tokenIn: usdc, tokenOut: usdt}, // +
+                {amountIn: "100", amountOut: "9", tokenIn: dai, tokenOut: usdc},
+                {amountIn: "3", amountOut: "29", tokenIn: usdt, tokenOut: usdc},
+              ],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "30000", collateralAmountOut: "4000"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "700", collateralAmountOut: "9000"},
+              ],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "30000", // dai
+                collateralAmountOut: "4000", // usdc
+                totalDebtAmountOut: "30000",
+                totalCollateralAmountOut: "4000"
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "700", // usdt
+                collateralAmountOut: "9000", // usdc
+                totalDebtAmountOut: "700",
+                totalCollateralAmountOut: "9000"
+              }],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(9000 + 6000);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([15038-40, 0, 0].join());
+          });
+        });
+        describe("repay(dai,usdt=>usdc), swap(dai,usdt=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "203000", // usdc; it should include current balance
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              balances: ["30000", "97", "500"], // dai, usdc, usdt
+              prices: ["0.1", "1", "10"],
+              liquidationThresholds: ["0", "0", "0"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "10000", collateralAmountOut: "1900"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "200", collateralAmountOut: "2900"}
+              ],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "10000", // dai
+                collateralAmountOut: "1900", // usdc
+                totalDebtAmountOut: "10000",
+                totalCollateralAmountOut: "1900"
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "200", // usdt
+                collateralAmountOut: "2900", // usdc
+                totalDebtAmountOut: "200",
+                totalCollateralAmountOut: "2900"
+              }],
+              liquidations: [
+                {amountIn: "300", amountOut: "3001", tokenIn: usdt, tokenOut: usdc}, // balance - totalDebtAmountOut
+                {amountIn: "20000", amountOut: "2001", tokenIn: dai, tokenOut: usdc},  // balance - totalDebtAmountOut
+              ],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(9800 + 97); // 2900*200/500 + 1900*100/300 + 3000 + 2000, see fix SCB-779
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([0, 9899, 0].join()); // 97 + 2900 + 1900 + 3001 + 2001
+          });
+        });
+      });
+      describe("requestAmounts == max int", () => {
+        describe("repay(dai, usdt=>usdc), swap(dai,usd=>usdc)", () => {
+          let snapshot: string;
+          before(async function () {
+            snapshot = await TimeUtils.snapshot();
+          });
+          after(async function () {
+            await TimeUtils.rollback(snapshot);
+          });
+
+          async function makeRequestedAmountFixture(): Promise<IMakeRequestedAmountResults> {
+            return makeRequestedAmountTest({
+              requestedAmount: "", // Misc.MAX_UINT, // usdc
+              tokens: [dai, usdc, usdt],
+              indexAsset: 1,
+              balances: ["3000", "97", "5000"], // dai, usdc, usdt
+              prices: ["1", "1", "1"], // for simplicity
+              liquidationThresholds: ["0", "0", "0"],
+              quoteRepays: [
+                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "1000", collateralAmountOut: "1900"},
+                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "2000", collateralAmountOut: "2900"}
+              ],
+              repays: [{
+                collateralAsset: usdc,
+                borrowAsset: dai,
+                amountRepay: "1000", // dai
+                collateralAmountOut: "1900", // usdc
+                totalDebtAmountOut: "1000",
+                totalCollateralAmountOut: "1900"
+              }, {
+                collateralAsset: usdc,
+                borrowAsset: usdt,
+                amountRepay: "2000", // usdt
+                collateralAmountOut: "2900", // usdc
+                totalDebtAmountOut: "2000",
+                totalCollateralAmountOut: "2900"
+              }],
+              liquidations: [
+                {amountIn: "3000", amountOut: "3001", tokenIn: usdt, tokenOut: usdc}, // balance - totalDebtAmountOut
+                {amountIn: "2000", amountOut: "2001", tokenIn: dai, tokenOut: usdc},  // balance - totalDebtAmountOut
+              ],
+            });
+          }
+
+          it("should return expected amount", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.expectedAmountMainAsset).eq(9800 + 97);
+          });
+          it("should set expected balances", async () => {
+            const r = await loadFixture(makeRequestedAmountFixture);
+            expect(r.balances.join()).eq([0, 9899, 0].join()); // 97 + 2900 + 1900 + 3001 + 2001
+          });
         });
       });
     });

@@ -1,11 +1,7 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
-  AlgebraLib,
-  ControllerV2__factory,
   ConverterStrategyBase__factory,
-  IRebalancingV2Strategy, KyberLib,
-  StrategyBaseV2__factory,
-  UniswapV3Lib
+  IRebalancingV2Strategy, StrategyBaseV2__factory
 } from "../../../typechain";
 import {IDefaultState, PackedData} from "../utils/PackedData";
 import {BigNumber, BytesLike} from "ethers";
@@ -15,30 +11,29 @@ import {defaultAbiCoder, formatUnits, parseUnits} from "ethers/lib/utils";
 import {IPriceChanges, UniversalUtils} from "./UniversalUtils";
 import {TokenUtils} from "../../../scripts/utils/TokenUtils";
 import {IERC20Metadata__factory} from "../../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
-import {getConverterAddress, Misc} from "../../../scripts/utils/Misc";
-import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
+import {Misc} from "../../../scripts/utils/Misc";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {IController__factory} from "../../../typechain/factories/@tetu_io/tetu-converter/contracts/interfaces";
 import {AggregatorUtils} from "../utils/AggregatorUtils";
 import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
-import {depositToVault, printVaultState} from "../../StrategyTestUtils";
+import {depositToVault, printVaultState} from "../universalTestUtils/StrategyTestUtils";
 import {CaptureEvents, IEventsSet} from "./CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;
   movePricesUp: boolean;
+  swapAmountRatio: number;
+  amountToDepositBySigner2?: string; // default 0
+  amountToDepositBySigner?: string; // default 0
 }
 
 export interface IListStates {
   states: IStateNum[];
 }
 
-/**
- * Utils to set up "current state of pair strategy" in tests
- */
+/** Utils to set up "current state of pair strategy" in tests */
 export class PairBasedStrategyPrepareStateUtils {
 
   /** Set up "neeRebalance = true" */
@@ -136,45 +131,6 @@ export class PairBasedStrategyPrepareStateUtils {
       state.profitHolder,
       parseUnits('100', await IERC20Metadata__factory.connect(state.tokenB, signer).decimals())
     );
-  }
-
-  /**
-   * Deploy new implementation of TetuConverter-contract and upgrade proxy
-   */
-  static async injectTetuConverter(signer: SignerWithAddress) {
-    const core = await DeployerUtilsLocal.getCoreAddresses();
-    const tetuConverter = getConverterAddress();
-
-    const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
-    const controller = ControllerV2__factory.connect(core.controller, signer);
-    const governance = await controller.governance();
-    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-
-    await controllerAsGov.announceProxyUpgrade([tetuConverter], [converterLogic.address]);
-    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([tetuConverter]);
-  }
-
-  /**
-   * Deploy new implementation of the given strategy and upgrade proxy
-   */
-  static async injectStrategy(
-    signer: SignerWithAddress,
-    strategyProxy: string,
-    contractName: string
-  ) {
-    const strategyLogic = await DeployerUtils.deployContract(signer, contractName);
-    const controller = ControllerV2__factory.connect(
-      await ConverterStrategyBase__factory.connect(strategyProxy, signer).controller(),
-      signer
-    );
-    const governance = await controller.governance();
-    const controllerAsGov = controller.connect(await Misc.impersonate(governance));
-
-    await controllerAsGov.removeProxyAnnounce(strategyProxy);
-    await controllerAsGov.announceProxyUpgrade([strategyProxy], [strategyLogic.address]);
-    await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
-    await controllerAsGov.upgradeProxy([strategyProxy]);
   }
 
   /**
@@ -333,8 +289,7 @@ export class PairBasedStrategyPrepareStateUtils {
       p: IPrepareOverCollateralParams,
       pathOut: string,
       signer: SignerWithAddress,
-      signer2: SignerWithAddress,
-      swapAmountRatio: number
+      signer2: SignerWithAddress
   ) : Promise<IListStates> {
   const states: IStateNum[] = [];
 
@@ -343,12 +298,16 @@ export class PairBasedStrategyPrepareStateUtils {
 
   console.log('deposit...');
   await b.vault.setDoHardWorkOnInvest(false);
-  await TokenUtils.getToken(b.asset, signer2.address, parseUnits('1000', 6));
-  await b.vault.connect(signer2).deposit(parseUnits('1000', 6), signer2.address, { gasLimit: 19_000_000 });
+  if (p.amountToDepositBySigner2) {
+    await TokenUtils.getToken(b.asset, signer2.address, parseUnits(p.amountToDepositBySigner2, 6));
+    await b.vault.connect(signer2).deposit(parseUnits(p.amountToDepositBySigner2, 6), signer2.address, {gasLimit: 19_000_000});
+  }
 
-  const depositAmount1 = parseUnits('10000', b.assetDecimals);
-  await TokenUtils.getToken(b.asset, signer.address, depositAmount1);
-  await depositToVault(b.vault, signer, depositAmount1, b.assetDecimals, b.assetCtr, b.insurance);
+  if (p.amountToDepositBySigner) {
+    const depositAmount1 = parseUnits(p.amountToDepositBySigner, b.assetDecimals);
+    await TokenUtils.getToken(b.asset, signer.address, depositAmount1);
+    await depositToVault(b.vault, signer, depositAmount1, b.assetDecimals, b.assetCtr, b.insurance);
+  }
   states.push(await StateUtilsNum.getStatePair(signer2, signer, b.strategy, b.vault, `init`));
   await StateUtilsNum.saveListStatesToCSVColumns(pathOut, states, b.stateParams, true);
 
@@ -368,7 +327,7 @@ export class PairBasedStrategyPrepareStateUtils {
           state.tokenA,
           state.tokenB,
           p.movePricesUp,
-          swapAmountRatio
+          p.swapAmountRatio
       );
       upperTick = state.upperTick;
     }
@@ -403,7 +362,7 @@ export class PairBasedStrategyPrepareStateUtils {
 
   static async movePriceBySteps(
     signer: SignerWithAddress,
-    b: IBuilderResults,
+    b: IStrategyBasicInfo,
     movePricesUpDown: boolean,
     state: IDefaultState,
     totalSwapAmount: BigNumber,
@@ -414,7 +373,7 @@ export class PairBasedStrategyPrepareStateUtils {
     const countSteps = countIterations ?? 1;
     const totalAmountToSwap = movePricesUpDown
       ? totalSwapAmount
-      : totalSwapAmountForDown || totalSwapAmount;
+      : (totalSwapAmountForDown || totalSwapAmount);
 
     for (let i = 0; i < countSteps; ++i) {
       const swapAmount = totalAmountToSwap.div(countSteps ?? 5);
@@ -432,6 +391,7 @@ export class PairBasedStrategyPrepareStateUtils {
     }
   }
 
+  /** Add given amount to insurance */
   static async prepareInsurance(b: IBuilderResults, amount: string = "1000") {
     const decimals = await IERC20Metadata__factory.connect(b.asset, b.vault.signer).decimals();
     await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits(amount, decimals));

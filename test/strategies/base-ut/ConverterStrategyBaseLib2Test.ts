@@ -29,6 +29,7 @@ import {
   FixPriceChangesEventObject, NotEnoughInsuranceEventObject,
   UncoveredLossEventObject
 } from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
+import {Misc} from "../../../scripts/utils/Misc";
 import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
 
 /**
@@ -610,17 +611,18 @@ describe('ConverterStrategyBaseLibTest2', () => {
     interface IGetLiquidityAmountParams {
       tokens: MockToken[];
       indexAsset: number;
+      indexUnderlying?: number;
+
       targetAmount: string;
       investedAssets: string;
       depositorLiquidity: string;
 
       balances: string[];
-      quoteRepays: IQuoteRepayParams[];
+      prices?: string[];
     }
 
     interface IGetLiquidityAmountResults {
       resultAmount: number;
-      amountsToConvertOut: string[];
     }
 
     async function getLiquidityAmount(p: IGetLiquidityAmountParams): Promise<IGetLiquidityAmountResults> {
@@ -631,127 +633,329 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
       // set up TetuConverter
       const converter = await MockHelper.createMockTetuConverter(signer);
+      const prices = p.prices ?? p.tokens.map(x => "1");
+      const priceOracle = await MockHelper.createPriceOracle(
+        signer,
+        p.tokens.map(x => x.address),
+        await Promise.all(p.tokens.map(
+          async (x, index) => parseUnits(prices[index], 18)
+        ))
+      );
+      const tetuConverterController = await MockHelper.createMockTetuConverterController(signer, priceOracle.address);
+      await converter.setController(tetuConverterController.address);
 
       // set up quote repay
-      for (const quoteRepay of p.quoteRepays) {
-        await setupMockedQuoteRepay(converter, facade.address, quoteRepay);
-      }
-      const ret = await facade.callStatic.getLiquidityAmount(
-        parseUnits(p.targetAmount, await p.tokens[p.indexAsset].decimals()),
-        ethers.Wallet.createRandom().address,
+      const resultAmount = await facade.getLiquidityAmount(
+        p.targetAmount === "all"
+          ? Misc.MAX_UINT
+          : parseUnits(p.targetAmount, await p.tokens[p.indexAsset].decimals()),
         p.tokens.map(x => x.address),
         p.indexAsset,
         converter.address,
-        parseUnits(p.investedAssets, await p.tokens[p.indexAsset].decimals()),
+        parseUnits(p.investedAssets, await p.tokens[p.indexUnderlying ?? p.indexAsset].decimals()),
         parseUnits(p.depositorLiquidity, DECIMALS_LIQUIDITY),
+        p.indexUnderlying ?? p.indexAsset
       );
 
       return {
-        amountsToConvertOut: await Promise.all(ret.amountsToConvertOut.map(
-          async (x, index) => (+formatUnits(x, await p.tokens[index].decimals())).toString()
-        )),
-        resultAmount: +formatUnits(ret.resultAmount, DECIMALS_LIQUIDITY)
+        resultAmount: +formatUnits(resultAmount, DECIMALS_LIQUIDITY)
       }
     }
 
     describe('Good paths', () => {
-      describe('partial', () => {
-        describe('zero balances', () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
+      describe('asset is underlying', () => {
+        describe('partial', () => {
+          describe('zero balances', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
-          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
-            return getLiquidityAmount({
-              tokens: [dai, usdc, usdt],
-              indexAsset: 1,
-              targetAmount: "5",
-              investedAssets: "500",
-              depositorLiquidity: "7",
-              balances: ["0", "0", "0"],
-              quoteRepays: []
-            })
-          }
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                targetAmount: "5",
+                investedAssets: "500",
+                depositorLiquidity: "7",
+                balances: ["0", "0", "0"],
+              });
+            }
 
-          it('should return expected resultAmount', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.resultAmount).eq(7 * 101 / 100 * 5 / 500);
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7 * 101 / 100 * 5 / 500);
+            });
           });
-          it('should return zero amounts to convert', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.amountsToConvertOut.join()).eq([0, 0, 0].join());
+          describe('amount of first asset is enough to get the required amount', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                targetAmount: "5",
+                investedAssets: "500",
+                depositorLiquidity: "7",
+                balances: ["17", "27", "37"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(0);
+            });
+          });
+          describe('sum amount of two assets is enough to get the required amount', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                targetAmount: "9",
+                investedAssets: "500",
+                depositorLiquidity: "7",
+                balances: ["7", "0", "14"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(0);
+            });
+          });
+          describe('amount of two assets is NOT enough to get the required amount', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                targetAmount: "19",
+                investedAssets: "500",
+                depositorLiquidity: "7",
+                balances: ["7", "2700", "2"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7 * 101 / 100 * (19 - 9) / (500 - 9));
+            });
           });
         });
-        describe('amount of first asset is enough to get the required amount', () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
+        describe('all', () => {
+          describe('zero balances', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
-          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
-            return getLiquidityAmount({
-              tokens: [dai, usdc, usdt],
-              indexAsset: 1,
-              targetAmount: "5",
-              investedAssets: "500",
-              depositorLiquidity: "7",
-              balances: ["17", "27", "37"],
-              quoteRepays: [
-                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
-                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "27", collateralAmountOut: "14"},
-              ]
-            })
-          }
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                targetAmount: "all", // all
+                investedAssets: "500",
+                depositorLiquidity: "7777",
+                balances: ["0", "0", "0"],
+              })
+            }
 
-          it('should return expected resultAmount', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.resultAmount).eq(0);
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7777);
+            });
           });
-          it('should return zero amounts to convert', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.amountsToConvertOut.join()).eq([17, 0, 0].join());
+          describe('balances are not zero', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                targetAmount: "all",
+                investedAssets: "500",
+                depositorLiquidity: "7777",
+                balances: ["17", "27", "37"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7777);
+            });
           });
         });
-        describe('amount of two assets is enough to get the required amount', () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
+      });
+      describe('asset is not underlying', () => {
+        describe('partial', () => {
+          describe('zero balances', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
 
-          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
-            return getLiquidityAmount({
-              tokens: [dai, usdc, usdt],
-              indexAsset: 1,
-              targetAmount: "9",
-              investedAssets: "500",
-              depositorLiquidity: "7",
-              balances: ["17", "27", "37"],
-              quoteRepays: [
-                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
-                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "37", collateralAmountOut: "14"},
-              ]
-            })
-          }
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 0,
+                indexUnderlying: 1,
+                targetAmount: "5",
+                investedAssets: "500",
+                depositorLiquidity: "7",
+                balances: ["0", "0", "0"],
+              });
+            }
 
-          it('should return expected resultAmount', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.resultAmount).eq(0);
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7 * 101 / 100 * 5 / 500);
+            });
           });
-          it('should return zero amounts to convert', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
+          describe('sum amount of two assets is enough to get the required amount', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 0,
+                indexUnderlying: 1,
+                targetAmount: "9",
+                investedAssets: "500",
+                depositorLiquidity: "7",
+                balances: ["0", "7", "14"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(0);
+            });
+          });
+          describe('amount of two assets is NOT enough to get the required amount', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 2,
+                indexUnderlying: 1,
+                targetAmount: "19",
+                investedAssets: "500",
+                depositorLiquidity: "7",
+                balances: ["2", "7", "2700"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7 * 101 / 100 * (19 - 9) / (500 - 9));
+            });
           });
         });
+        describe('all', () => {
+          describe('zero balances', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 1,
+                indexUnderlying: 2,
+                targetAmount: "all", // all
+                investedAssets: "500",
+                depositorLiquidity: "7777",
+                balances: ["0", "0", "0"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7777);
+            });
+          });
+          describe('balances are not zero', () => {
+            let snapshot: string;
+            before(async function () {
+              snapshot = await TimeUtils.snapshot();
+            });
+            after(async function () {
+              await TimeUtils.rollback(snapshot);
+            });
+
+            async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
+              return getLiquidityAmount({
+                tokens: [dai, usdc, usdt],
+                indexAsset: 0,
+                indexUnderlying: 2,
+                targetAmount: "all",
+                investedAssets: "500",
+                depositorLiquidity: "7777",
+                balances: ["17000", "27", "37"],
+              })
+            }
+
+            it('should return expected resultAmount', async () => {
+              const results = await loadFixture(getLiquidityAmountTest);
+              expect(results.resultAmount).eq(7777);
+            });
+          });
+        });
+      });
+      describe('prices are different', () => {
         describe('amount of two assets is NOT enough to get the required amount', () => {
           let snapshot: string;
           before(async function () {
@@ -764,97 +968,26 @@ describe('ConverterStrategyBaseLibTest2', () => {
           async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
             return getLiquidityAmount({
               tokens: [dai, usdc, usdt],
-              indexAsset: 1,
-              targetAmount: "19",
-              investedAssets: "500",
+              indexAsset: 0,
+              indexUnderlying: 2, // usdt
+              targetAmount: "9", // == 9 dai == 18 usdt
+              investedAssets: "20", // == 20 usdt
               depositorLiquidity: "7",
-              balances: ["17", "27", "37"],
-              quoteRepays: [
-                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"}, // 2 + 7 < 19
-                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "37", collateralAmountOut: "2"},
-              ]
+              balances: ["8", "4", "12"], // 8 dai, 1 dai, 6 dai
+              prices: ["2", "0.5", "1"]
             })
           }
 
           it('should return expected resultAmount', async () => {
             const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.resultAmount).eq(7 * 101 / 100 * (19 - 9) / (500 - 9));
-          });
-          it('should return zero amounts to convert', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
-          });
-        });
-      });
-      describe('all', () => {
-        describe('zero balances', () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
-            return getLiquidityAmount({
-              tokens: [dai, usdc, usdt],
-              indexAsset: 1,
-              targetAmount: "0", // all
-              investedAssets: "500",
-              depositorLiquidity: "7777",
-              balances: ["0", "0", "0"],
-              quoteRepays: []
-            })
-          }
-
-          it('should return expected resultAmount', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.resultAmount).eq(7777);
-          });
-          it('should return zero amounts to convert', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.amountsToConvertOut.join()).eq([0, 0, 0].join());
-          });
-        });
-        describe('balances are not zero', () => {
-          let snapshot: string;
-          before(async function () {
-            snapshot = await TimeUtils.snapshot();
-          });
-          after(async function () {
-            await TimeUtils.rollback(snapshot);
-          });
-
-          async function getLiquidityAmountTest(): Promise<IGetLiquidityAmountResults> {
-            return getLiquidityAmount({
-              tokens: [dai, usdc, usdt],
-              indexAsset: 1,
-              targetAmount: "0",
-              investedAssets: "500",
-              depositorLiquidity: "7777",
-              balances: ["17", "27", "37"],
-              quoteRepays: [
-                {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
-                {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "27", collateralAmountOut: "14"},
-              ]
-            })
-          }
-
-          it('should return expected resultAmount', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.resultAmount).eq(7777);
-          });
-          it('should return zero amounts to convert', async () => {
-            const results = await loadFixture(getLiquidityAmountTest);
-            expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
+            expect(results.resultAmount).approximately(7 * 101 / 100 * (9*2 - 7*2) / (20 - 7*2), 1e18);
           });
         });
       });
     });
 
     describe("Bad paths", () => {
-      describe('targetAmount > investedAmount, investedAmount == sum(collaterals)', () => {
+      describe('targetAmount > investedAmount, investedAmount == sum(balances)', () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();
@@ -870,21 +1003,13 @@ describe('ConverterStrategyBaseLibTest2', () => {
             targetAmount: "500",
             investedAssets: "21",
             depositorLiquidity: "777",
-            balances: ["17", "27", "37"],
-            quoteRepays: [
-              {collateralAsset: usdc, borrowAsset: dai, amountRepay: "17", collateralAmountOut: "7"},
-              {collateralAsset: usdc, borrowAsset: usdt, amountRepay: "37", collateralAmountOut: "14"},
-            ]
+            balances: ["7", "27000", "14"],
           })
         }
 
         it('should return expected resultAmount', async () => {
           const results = await loadFixture(getLiquidityAmountTest);
           expect(results.resultAmount).eq(777);
-        });
-        it('should return zero amounts to convert', async () => {
-          const results = await loadFixture(getLiquidityAmountTest);
-          expect(results.amountsToConvertOut.join()).eq([17, 0, 37].join());
         });
       });
     })
@@ -899,7 +1024,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       await TimeUtils.rollback(snapshot);
     });
     it("should be equal to the value from StrategySplitterV2", async () => {
-      const splitter = await DeployerUtils.deployContract(signer,"StrategySplitterV2") as StrategySplitterV2;
+      const splitter = await DeployerUtils.deployContract(signer, "StrategySplitterV2") as StrategySplitterV2;
       const toleranceInStrategySplitterV2 = (await splitter.HARDWORK_LOSS_TOLERANCE()).toNumber();
       const toleranceInLib = (await facade.getHardworkLossToleranceValue()).toNumber();
       expect(toleranceInStrategySplitterV2).eq(toleranceInLib);
@@ -933,16 +1058,19 @@ describe('ConverterStrategyBaseLibTest2', () => {
       investedAssetsAfter: string;
       expectedLossAmount: string;
     }
+
     interface IUncoveredLossEvent {
       emittedLossToCover: number;
       emittedLossUncovered: number;
       emittedInvestedAssetsBefore: number;
       emittedInvestedAssetsAfter: number;
     }
+
     interface IFixPriceChanges {
       emittedInvestedAssetsBefore: number;
       emittedInvestedAssetsAfter: number;
     }
+
     interface ICoverLossAfterPriceChangingResults {
       earned: number;
       vaultBalance: number;
@@ -967,10 +1095,10 @@ describe('ConverterStrategyBaseLibTest2', () => {
       await p.asset.mint(facade.address, parseUnits(p.strategyBalance, assetDecimals));
 
       const earned = await facade.callStatic.coverLossAfterPriceChanging(
-          parseUnits(p.investedAssetsBefore, assetDecimals),
-          parseUnits(p.investedAssetsAfter, assetDecimals),
-          p.asset.address,
-          splitter.address
+        parseUnits(p.investedAssetsBefore, assetDecimals),
+        parseUnits(p.investedAssetsAfter, assetDecimals),
+        p.asset.address,
+        splitter.address
       );
 
       const tx = await facade.coverLossAfterPriceChanging(
@@ -988,9 +1116,9 @@ describe('ConverterStrategyBaseLibTest2', () => {
       for (const event of (cr.events ?? [])) {
         if (event.topics[0].toLowerCase() === converterStrategyBaseLib2.getEventTopic('UncoveredLoss').toLowerCase()) {
           const log = (converterStrategyBaseLib2.decodeEventLog(
-              converterStrategyBaseLib2.getEvent('UncoveredLoss'),
-              event.data,
-              event.topics,
+            converterStrategyBaseLib2.getEvent('UncoveredLoss'),
+            event.data,
+            event.topics,
           ) as unknown) as UncoveredLossEventObject;
           uncoveredLoss = {
             emittedLossToCover: +formatUnits(log.lossCovered, assetDecimals),
@@ -1001,9 +1129,9 @@ describe('ConverterStrategyBaseLibTest2', () => {
         }
         if (event.topics[0].toLowerCase() === converterStrategyBaseLib2.getEventTopic('FixPriceChanges').toLowerCase()) {
           const log = (converterStrategyBaseLib2.decodeEventLog(
-              converterStrategyBaseLib2.getEvent('FixPriceChanges'),
-              event.data,
-              event.topics,
+            converterStrategyBaseLib2.getEvent('FixPriceChanges'),
+            event.data,
+            event.topics,
           ) as unknown) as FixPriceChangesEventObject;
           fixPriceChanges = {
             emittedInvestedAssetsAfter: +formatUnits(log.investedAssetsOut, assetDecimals),
@@ -1093,7 +1221,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
     });
   });
 
-  describe("sendToInsurance", () =>{
+  describe("sendToInsurance", () => {
     interface ISendToInsuranceParams {
       asset: MockToken;
       amount: string;
@@ -1101,6 +1229,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       insuranceBalance: string;
       strategyBalance: string;
     }
+
     interface ISendToInsuranceResults {
       sentAmount: number;
       unsentAmount: number;
@@ -1120,7 +1249,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
       await p.asset.mint(facade.address, parseUnits(p.strategyBalance, decimals));
 
-      const {sentAmount, unsentAmount}  = await facade.callStatic.sendToInsurance(
+      const {sentAmount, unsentAmount} = await facade.callStatic.sendToInsurance(
         p.asset.address,
         parseUnits(p.amount, decimals),
         splitter.address,
@@ -1145,14 +1274,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
       describe("Amount <= current balance", () => {
         describe("Amount <= max allowed value", () => {
           let snapshot: string;
-          before(async function() {
+          before(async function () {
             snapshot = await TimeUtils.snapshot();
           });
-          after(async function() {
+          after(async function () {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+          async function callSendToInsuranceTest(): Promise<ISendToInsuranceResults> {
             // max allowed value = 500 * 200_000 / 100_000 = 1000
             return callSendToInsurance({
               asset: usdc,
@@ -1162,13 +1291,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
               totalAssets: "200000"
             });
           }
+
           it("should send amount to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(999);
           });
           it("should reduce strategy balance on amount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
-            expect(ret.strategyBalance).eq(1000-999);
+            expect(ret.strategyBalance).eq(1000 - 999);
           });
           it("should return expected sentAmount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
@@ -1181,14 +1311,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
         });
         describe("Amount > max allowed value", () => {
           let snapshot: string;
-          before(async function() {
+          before(async function () {
             snapshot = await TimeUtils.snapshot();
           });
-          after(async function() {
+          after(async function () {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+          async function callSendToInsuranceTest(): Promise<ISendToInsuranceResults> {
             // max allowed value = 500 * 200_000 / 100_000 = 1000
             return callSendToInsurance({
               asset: usdc,
@@ -1198,13 +1328,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
               totalAssets: "200000"
             });
           }
+
           it("should send expected amount to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(1000);
           });
           it("should reduce strategy balance on expected amount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
-            expect(ret.strategyBalance).eq(2000-1000);
+            expect(ret.strategyBalance).eq(2000 - 1000);
           });
           it("should return expected sentAmount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
@@ -1217,14 +1348,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
         });
         describe("Current balance is zero", () => {
           let snapshot: string;
-          before(async function() {
+          before(async function () {
             snapshot = await TimeUtils.snapshot();
           });
-          after(async function() {
+          after(async function () {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+          async function callSendToInsuranceTest(): Promise<ISendToInsuranceResults> {
             // max allowed value = 500 * 200_000 / 100_000 = 1000
             return callSendToInsurance({
               asset: usdc,
@@ -1234,6 +1365,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
               totalAssets: "200000"
             });
           }
+
           it("should send nothing to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(0);
@@ -1255,14 +1387,14 @@ describe('ConverterStrategyBaseLibTest2', () => {
       describe("Amount > current balance", () => {
         describe("Amount <= max allowed value", () => {
           let snapshot: string;
-          before(async function() {
+          before(async function () {
             snapshot = await TimeUtils.snapshot();
           });
-          after(async function() {
+          after(async function () {
             await TimeUtils.rollback(snapshot);
           });
 
-          async function callSendToInsuranceTest() : Promise<ISendToInsuranceResults> {
+          async function callSendToInsuranceTest(): Promise<ISendToInsuranceResults> {
             // max allowed value = 500 * 200_000 / 100_000 = 1000
             return callSendToInsurance({
               asset: usdc,
@@ -1272,6 +1404,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
               totalAssets: "200000"
             });
           }
+
           it("should send amount to insurance", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
             expect(ret.insuranceBalance).eq(100);
@@ -1286,17 +1419,17 @@ describe('ConverterStrategyBaseLibTest2', () => {
           });
           it("should return expected unsentAmount", async () => {
             const ret = await loadFixture(callSendToInsuranceTest);
-            expect(ret.unsentAmount).eq(500-100);
+            expect(ret.unsentAmount).eq(500 - 100);
           });
         });
       });
     });
     describe("Bad paths", () => {
       let snapshot: string;
-      beforeEach(async function() {
+      beforeEach(async function () {
         snapshot = await TimeUtils.snapshot();
       });
-      afterEach(async function() {
+      afterEach(async function () {
         await TimeUtils.rollback(snapshot);
       });
 
@@ -1314,10 +1447,10 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
   describe("getTokenAmountsPair", () => {
     let snapshot: string;
-    beforeEach(async function() {
+    beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
     });
-    afterEach(async function() {
+    afterEach(async function () {
       await TimeUtils.rollback(snapshot);
     });
 
@@ -1327,10 +1460,12 @@ describe('ConverterStrategyBaseLibTest2', () => {
       tokens: MockToken[];
       liquidationThresholds: string[];
     }
+
     interface IGetTokenAmountsResults {
       loss: number;
       tokenAmounts: number[];
     }
+
     async function callGetTokenAmountsPair(p: IGetTokenAmountsPair): Promise<IGetTokenAmountsResults> {
       // set up TetuConverter with prices
       const converter = await MockHelper.createMockTetuConverter(signer);
@@ -1424,9 +1559,11 @@ describe('ConverterStrategyBaseLibTest2', () => {
       lossToCover: string;
       earned: string;
     }
+
     interface INotEnoughInsurance {
       emittedLossUncovered: number;
     }
+
     interface ICoverLossResults {
       vaultBalance: number;
       insuranceBalance: number;
@@ -1543,20 +1680,189 @@ describe('ConverterStrategyBaseLibTest2', () => {
     });
   });
 
+  describe("sendProfitGetAssetBalance", () => {
+    interface ISendProfitGetAssetBalanceParams {
+      theAsset: MockToken;
+      balanceTheAsset: string;
+      investedAssets: string;
+      earnedByPrices: string;
+
+      underlying?: {
+        balance: string;
+        token: MockToken;
+      }
+    }
+    interface ISendProfitGetAssetBalanceResults {
+      insuranceBalance: number;
+      balanceTheAsset: number;
+      balanceUnderlying: number;
+      balanceTheAssetOut: number;
+    }
+    async function callSendProfitGetAssetBalance(p: ISendProfitGetAssetBalanceParams): Promise<ISendProfitGetAssetBalanceResults> {
+      const decimalsTheAsset = await p.theAsset.decimals();
+      const underlyingToken = p.underlying ? p.underlying.token : p.theAsset;
+      const decimalsUnderlying = await underlyingToken.decimals();
+      await p.theAsset.mint(facade.address, parseUnits(p.balanceTheAsset, decimalsTheAsset));
+
+      if (p.underlying) {
+        await p.underlying.token.mint(facade.address, parseUnits(p.underlying.balance, decimalsUnderlying));
+      }
+
+      const splitter = await MockHelper.createMockSplitter(signer);
+      const vault = await MockHelper.createMockVault(signer);
+      await splitter.setAsset(underlyingToken.address);
+      await splitter.setVault(vault.address);
+      const insurance = ethers.Wallet.createRandom().address;
+
+      await vault.setInsurance(insurance);
+
+      await facade.setBaseState(
+        underlyingToken.address,
+        splitter.address,
+        ethers.Wallet.createRandom().address,
+        0,
+        0,
+        0,
+        "strategy name",
+      );
+
+      const ret = await facade.callStatic.sendProfitGetAssetBalance(
+        p.theAsset.address,
+        parseUnits(p.balanceTheAsset, decimalsTheAsset),
+        parseUnits(p.investedAssets, decimalsUnderlying),
+        parseUnits(p.earnedByPrices, decimalsUnderlying)
+      );
+      await facade.sendProfitGetAssetBalance(
+        p.theAsset.address,
+        parseUnits(p.balanceTheAsset, decimalsTheAsset),
+        parseUnits(p.investedAssets, decimalsUnderlying),
+        parseUnits(p.earnedByPrices, decimalsUnderlying)
+      );
+
+      return {
+        insuranceBalance: +formatUnits(await underlyingToken.balanceOf(insurance), decimalsUnderlying),
+        balanceTheAsset: +formatUnits(await p.theAsset.balanceOf(facade.address), decimalsTheAsset),
+        balanceUnderlying: +formatUnits(await underlyingToken.balanceOf(facade.address), decimalsUnderlying),
+        balanceTheAssetOut: +formatUnits(ret, decimalsTheAsset)
+      }
+    }
+    describe("The asset is underlying", () => {
+      describe("earnedByPrices is 0", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function sendProfitGetAssetBalanceTest(): Promise<ISendProfitGetAssetBalanceResults> {
+          return callSendProfitGetAssetBalance({
+            theAsset: usdc,
+            balanceTheAsset: "1",
+            earnedByPrices: "0",
+            investedAssets: "100"
+          });
+        }
+
+        it("should return unchanged balanceTheAsset", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAssetOut).eq(1);
+        });
+        it("should not change underlying balance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAsset).eq(1);
+          expect(ret.balanceUnderlying).eq(1);
+        });
+      })
+
+      describe("earnedByPrices > 0", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function sendProfitGetAssetBalanceTest(): Promise<ISendProfitGetAssetBalanceResults> {
+          return callSendProfitGetAssetBalance({
+            theAsset: usdc,
+            balanceTheAsset: "5",
+            earnedByPrices: "2",
+            investedAssets: "1000000"
+          });
+        }
+
+        it("should return expected balanceTheAssetOut", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAssetOut).eq(3);
+        });
+        it("should send expected amount to insurance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.insuranceBalance).eq(2);
+        });
+        it("should return expected underlying balance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAsset).eq(3);
+          expect(ret.balanceUnderlying).eq(3);
+        });
+      })
+    });
+    describe("The asset is NOT underlying", () => {
+      describe("earnedByPrices > 0", () => {
+        let snapshot: string;
+        before(async function () {
+          snapshot = await TimeUtils.snapshot();
+        });
+        after(async function () {
+          await TimeUtils.rollback(snapshot);
+        });
+
+        async function sendProfitGetAssetBalanceTest(): Promise<ISendProfitGetAssetBalanceResults> {
+          return callSendProfitGetAssetBalance({
+            theAsset: weth,
+            underlying: {
+              token: usdc,
+              balance: "59",
+            },
+            balanceTheAsset: "5",
+            earnedByPrices: "2",
+            investedAssets: "1000000"
+          });
+        }
+
+        it("should return expected balanceTheAssetOut", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAssetOut).eq(5);
+        });
+        it("should send expected amount to insurance", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.insuranceBalance).eq(2);
+        });
+        it("should return expected balances", async () => {
+          const ret = await loadFixture(sendProfitGetAssetBalanceTest);
+          expect(ret.balanceTheAsset).eq(5);
+          expect(ret.balanceUnderlying).eq(57);
+        });
+      })
+    });
+  });
+
 
   describe('getExpectedWithdrawnAmounts', () => {
     let snapshot: string;
-    beforeEach(async function() {
+    beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
     });
-    afterEach(async function() {
+    afterEach(async function () {
       await TimeUtils.rollback(snapshot);
     });
 
     describe('Good paths', () => {
       describe('Two assets', () => {
-        describe('The asset is first in _depositorPoolAssets, USDC, DAI', async() => {
-          it('should return expected values, USDC is main', async() => {
+        describe('The asset is first in _depositorPoolAssets, USDC, DAI', async () => {
+          it('should return expected values, USDC is main', async () => {
             const ret = await facade.getExpectedWithdrawnAmounts(
               [
                 parseUnits('200000', 6), // usdc
@@ -1574,7 +1880,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
             expect(sret).eq(sexpected);
           });
-          it('should return expected values, DAI is main', async() => {
+          it('should return expected values, DAI is main', async () => {
             // DAI, USDC
             const ret = await facade.getExpectedWithdrawnAmounts(
               [
@@ -1594,8 +1900,8 @@ describe('ConverterStrategyBaseLibTest2', () => {
             expect(sret).eq(sexpected);
           });
         });
-        describe('The asset is second in _depositorPoolAssets', async() => {
-          it('should return expected values for USDC', async() => {
+        describe('The asset is second in _depositorPoolAssets', async () => {
+          it('should return expected values for USDC', async () => {
             const ret = await facade.getExpectedWithdrawnAmounts(
               [
                 parseUnits('100000', 18), // dai
@@ -1613,7 +1919,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
             expect(sret).eq(sexpected);
           });
-          it('should return expected values for DAI', async() => {
+          it('should return expected values for DAI', async () => {
             const priceOracle = (await DeployerUtils.deployContract(
               signer,
               'PriceOracleMock',
@@ -1641,7 +1947,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         });
       });
       describe('Three assets', () => {
-        it('should return expected values', async() => {
+        it('should return expected values', async () => {
           const ret = await facade.getExpectedWithdrawnAmounts(
             [
               parseUnits('200000', 6), // usdc
@@ -1664,7 +1970,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       });
     });
     describe('Bad paths', () => {
-      it('should return zero values if total supply is zero', async() => {
+      it('should return zero values if total supply is zero', async () => {
         const ret = await facade.getExpectedWithdrawnAmounts(
           [
             parseUnits('200000', 6), // usdc
@@ -1682,7 +1988,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         expect(sret).eq(sexpected);
       });
 
-      it('should use ratio 1 if liquidityAmount > totalSupply', async() => {
+      it('should use ratio 1 if liquidityAmount > totalSupply', async () => {
         const ret = await facade.getExpectedWithdrawnAmounts(
           [
             parseUnits('200000', 6),
@@ -1702,7 +2008,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       });
     });
     describe('Gas estimation @skip-on-coverage', () => {
-      it('should not exceed gas limits @skip-on-coverage', async() => {
+      it('should not exceed gas limits @skip-on-coverage', async () => {
         const gasUsed = await facade.estimateGas.getExpectedWithdrawnAmounts(
           [
             parseUnits('200000', 6),
@@ -1721,15 +2027,15 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
   describe('getAvailableBalances', () => {
     let snapshot: string;
-    beforeEach(async function() {
+    beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
     });
-    afterEach(async function() {
+    afterEach(async function () {
       await TimeUtils.rollback(snapshot);
     });
 
     describe('Good paths', () => {
-      it('should return expected values', async() => {
+      it('should return expected values', async () => {
         const assets = [dai, tetu, usdc, usdt];
         const balances: BigNumber[] = [];
         for (let i = 0; i < assets.length; ++i) {
@@ -1753,10 +2059,10 @@ describe('ConverterStrategyBaseLibTest2', () => {
 
   describe('calcInvestedAssets', () => {
     let snapshot: string;
-    beforeEach(async function() {
+    beforeEach(async function () {
       snapshot = await TimeUtils.snapshot();
     });
-    afterEach(async function() {
+    afterEach(async function () {
       await TimeUtils.rollback(snapshot);
     });
 
@@ -1840,7 +2146,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
     describe('Good paths', () => {
       describe('All amounts are located on the strategy balance only (liquidity is zero)', () => {
         describe('No debts', () => {
-          it('should return expected values', async() => {
+          it('should return expected values', async () => {
             const ret = (await makeCalcInvestedAssetsTest({
               tokens: [dai, usdc, usdt],
               indexAsset: 1,
@@ -2037,7 +2343,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         });
       });
       describe('All amounts are deposited to the pool', () => {
-        it('should return expected values', async() => {
+        it('should return expected values', async () => {
           const ret = (await makeCalcInvestedAssetsTest({
             tokens: [dai, usdc, usdt],
             indexAsset: 1,
@@ -2051,7 +2357,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         });
       });
       describe('Amount to repay < amount available in the pool+balance', () => {
-        it('should return expected values', async() => {
+        it('should return expected values', async () => {
           const ret = (await makeCalcInvestedAssetsTest({
             tokens: [dai, usdc, usdt],
             indexAsset: 1,
@@ -2074,7 +2380,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
         });
       });
       describe('Amount to repay >= amount available in the pool+balance', () => {
-        it('should return expected values', async() => {
+        it('should return expected values', async () => {
           const ret = (await makeCalcInvestedAssetsTest({
             tokens: [dai, usdc, usdt],
             indexAsset: 1,
@@ -2098,7 +2404,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       });
     });
     describe('Gas estimation @skip-on-coverage', () => {
-      it('should not exceed gas limits, no debts', async() => {
+      it('should not exceed gas limits, no debts', async () => {
         const r = await makeCalcInvestedAssetsTest({
           tokens: [dai, usdc, usdt],
           indexAsset: 1,
@@ -2110,7 +2416,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
           expect(u).to.be.below(t + 1);
         });
       });
-      it('should not exceed gas limits, debt exists', async() => {
+      it('should not exceed gas limits, debt exists', async () => {
         const r = await makeCalcInvestedAssetsTest({
           tokens: [dai, usdc, usdt],
           indexAsset: 1,
@@ -2138,15 +2444,17 @@ describe('ConverterStrategyBaseLibTest2', () => {
       amounts: string[];
       thresholds?: string[];
     }
+
     interface IFindZeroAmountResults {
       found: boolean;
     }
+
     async function callFindZeroAmount(p: IFindZeroAmountParams): Promise<IFindZeroAmountResults> {
       if (p.thresholds) {
         for (let i = 0; i < p.tokens.length; ++i) {
           await facade.setLiquidationThreshold(
-              p.tokens[i].address,
-              parseUnits(p.thresholds[i], await p.tokens[i].decimals())
+            p.tokens[i].address,
+            parseUnits(p.thresholds[i], await p.tokens[i].decimals())
           )
         }
       }

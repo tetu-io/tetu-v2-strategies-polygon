@@ -18,7 +18,8 @@ import { PackedData } from '../../../../test/baseUT/utils/PackedData';
 import { DeployerUtilsLocal } from '../../../utils/DeployerUtilsLocal';
 import {
   PairBasedStrategyPrepareStateUtils
-} from '../../../../test/baseUT/strategies/PairBasedStrategyPrepareStateUtils';
+} from "../../../../test/baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {InjectUtils} from "../../../../test/baseUT/strategies/InjectUtils";
 import { AggregatorUtils } from '../../../../test/baseUT/utils/AggregatorUtils';
 import { CaptureEvents } from '../../../../test/baseUT/strategies/CaptureEvents';
 import { ENTRY_TO_POOL_IS_ALLOWED } from '../../../../test/baseUT/AppConstants';
@@ -126,7 +127,7 @@ async function main() {
         signer
       );
 
-      await PairBasedStrategyPrepareStateUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
+      await InjectUtils.injectStrategy(signer, STRATEGY, "UniswapV3ConverterStrategy");
       // await PairBasedStrategyPrepareStateUtils.injectTetuConverter(signer);
 
       const aggregator = "0x1111111254EEB25477B68fb85Ed929f73A960582";

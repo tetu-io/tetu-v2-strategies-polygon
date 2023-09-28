@@ -1,34 +1,23 @@
 /* tslint:disable:no-trailing-whitespace */
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { config as dotEnvConfig } from 'dotenv';
 import { DeployInfo } from '../../../baseUT/utils/DeployInfo';
 import { StrategyTestUtils } from '../../../baseUT/utils/StrategyTestUtils';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
-import {
-  getConverterAddress,
-  getDForcePlatformAdapter, Misc,
-} from '../../../../scripts/utils/Misc';
+import {getConverterAddress, getDForcePlatformAdapter, } from '../../../../scripts/utils/Misc';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { ethers } from 'hardhat';
-import {
-  BalancerBoostedStrategy,
-  BalancerBoostedStrategy__factory,
-  ControllerV2__factory,
-  IERC20Metadata__factory,
-  IStrategyV2,
-  TetuVaultV2
-} from '../../../../typechain';
+import {BalancerBoostedStrategy, BalancerBoostedStrategy__factory, IERC20Metadata__factory, IStrategyV2, TetuVaultV2} from '../../../../typechain';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import {Signer} from "ethers";
 import {Provider} from "@ethersproject/providers";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {IState, IStateParams, StateUtils} from "../../../baseUT/universalTestUtils/StateUtils";
 import {IUniversalStrategyInputParams, universalStrategyTest} from "../../base/UniversalStrategyTest";
 import {PriceOracleImitatorUtils} from "../../../baseUT/converter/PriceOracleImitatorUtils";
-import {ICoreContractsWrapper} from "../../../CoreContractsWrapper";
-import {IToolsContractsWrapper} from "../../../ToolsContractsWrapper";
+import {ICoreContractsWrapper} from "../../../baseUT/universalTestUtils/CoreContractsWrapper";
+import {IToolsContractsWrapper} from "../../../baseUT/universalTestUtils/ToolsContractsWrapper";
 import {IVaultStrategyInfo} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {BalancerRewardsHardwork} from "./utils/BalancerRewardsHardwork";
 import {BalancerStrategyUtils} from "../../../baseUT/strategies/BalancerStrategyUtils";

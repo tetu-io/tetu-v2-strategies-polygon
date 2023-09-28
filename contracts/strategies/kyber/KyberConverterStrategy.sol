@@ -16,7 +16,7 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
 
   string public constant override NAME = "Kyber Converter Strategy";
   string public constant override PLATFORM = AppPlatforms.KYBER;
-  string public constant override STRATEGY_VERSION = "2.0.1";
+  string public constant override STRATEGY_VERSION = "2.0.2";
   //endregion ------------------------------------------------- Constants
 
   //region ------------------------------------------------- INIT
@@ -262,28 +262,36 @@ contract KyberConverterStrategy is KyberDepositor, ConverterStrategyBase, IRebal
   //region--------------------------------------------- INTERNAL LOGIC
 
   function _beforeDeposit(
-    ITetuConverter tetuConverter_,
+    ITetuConverter converter_,
     uint amount_,
-    address[] memory /*tokens_*/,
+    address[] memory tokens_,
     uint /*indexAsset_*/
   ) override internal virtual returns (
     uint[] memory tokenAmounts
   ) {
     require(!needRebalance(), KyberStrategyErrors.NEED_REBALANCE);
-    bytes memory entryData = KyberConverterStrategyLogicLib.getEntryData(
+    (uint prop0, uint prop1) = KyberConverterStrategyLogicLib.getEntryDataProportions(
       IPool(state.pair.pool),
       state.pair.lowerTick,
       state.pair.upperTick,
       state.pair.depositorSwapTokens
     );
-    return PairBasedStrategyLogicLib._beforeDeposit(
-      tetuConverter_,
+
+    // get token amounts for token A, token B
+    address tokenA = state.pair.tokenA;
+    tokenAmounts = PairBasedStrategyLogicLib._beforeDeposit(
+      converter_,
       amount_,
-      state.pair.tokenA,
+      tokenA,
       state.pair.tokenB,
-      entryData,
+      prop0 * 1e18 / (prop0 + prop1),
       liquidationThresholds
     );
+
+    // take into account a possibility that tokens_ can contain [B, A]
+    if (tokens_[0] != tokenA) {
+      (tokenAmounts[0], tokenAmounts[1]) = (tokenAmounts[1], tokenAmounts[0]);
+    }
   }
 
   /// @notice Claim rewards, do _processClaims() after claiming, calculate earned and lost amounts

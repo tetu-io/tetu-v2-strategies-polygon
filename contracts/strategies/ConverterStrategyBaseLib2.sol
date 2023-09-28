@@ -74,76 +74,66 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Calculate amount of liquidity that should be withdrawn from the pool to get {targetAmount_}
   ///               liquidityAmount = _depositorLiquidity() * {liquidityRatioOut} / 1e18
-  ///         User needs to withdraw {targetAmount_} in main asset.
-  ///         There are two kinds of available liquidity:
+  ///         User needs to withdraw {targetAmount_} in some asset.
+  ///         There are three kinds of available liquidity:
   ///         1) liquidity in the pool - {depositorLiquidity_}
   ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
-  ///         To withdraw {targetAmount_} we need
-  ///         1) Reconvert converted amounts back to main asset
-  ///         2) IF result amount is not necessary - withdraw some liquidity from the pool
-  ///            and also convert it to the main asset.
-  /// @dev This is a writable function with read-only behavior (because of the quote-call)
-  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy; 0 - withdraw all
-  /// @param strategy_ Address of the strategy
+  ///         3) Liquidity locked in the debts.
+  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy; type(uint).max - withdraw all
   /// @return resultAmount Amount of liquidity that should be withdrawn from the pool, cannot exceed depositorLiquidity
-  /// @return amountsToConvertOut Amounts of {tokens} that should be converted to the main asset
   function getLiquidityAmount(
     uint targetAmount_,
-    address strategy_,
     address[] memory tokens,
     uint indexAsset,
     ITetuConverter converter,
     uint investedAssets,
-    uint depositorLiquidity
-  ) external returns (
-    uint resultAmount,
-    uint[] memory amountsToConvertOut
+    uint depositorLiquidity,
+    uint indexUnderlying
+  ) external view returns (
+    uint resultAmount
   ) {
-    bool all = targetAmount_ == 0;
+    if (targetAmount_ != type(uint).max) {
+      // reduce targetAmount_ on the amounts of not-underlying assets available on the balance
+      uint len = tokens.length;
+      (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter), tokens, len);
+      for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+        // assume here that the targetAmount_ is already reduced on available balance of the target asset
+        if (indexAsset == i) continue;
 
-    uint len = tokens.length;
-    amountsToConvertOut = new uint[](len);
-    for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      if (i == indexAsset) continue;
+        uint tokenBalance = IERC20(tokens[i]).balanceOf(address(this));
+        if (tokenBalance != 0) {
+          uint tokenBalanceInAsset = tokenBalance * prices[i] * decs[indexAsset] / prices[indexAsset] / decs[i];
 
-      address token = tokens[i];
-      uint balance = IERC20(token).balanceOf(address(this));
-      if (balance != 0) {
-        // let's estimate collateral that we received back after repaying balance-amount
-        (uint expectedCollateral,) = converter.quoteRepay(strategy_, tokens[indexAsset], token, balance);
+          targetAmount_ = targetAmount_ > tokenBalanceInAsset
+            ? targetAmount_ - tokenBalanceInAsset
+            : 0;
 
-        if (all || targetAmount_ != 0) {
-          // We always repay WHOLE available balance-amount even if it gives us much more amount then we need.
-          // We cannot repay a part of it because converter doesn't allow to know
-          // what amount should be repaid to get given amount of collateral.
-          // And it's too dangerous to assume that we can calculate this amount
-          // by reducing balance-amount proportionally to expectedCollateral/targetAmount_
-          amountsToConvertOut[i] = balance;
+          uint tokenBalanceInUnderlying = indexUnderlying == indexAsset
+            ? tokenBalanceInAsset
+            : tokenBalance * prices[i] * decs[indexUnderlying] / prices[indexUnderlying] / decs[i];
+
+          investedAssets = investedAssets > tokenBalanceInUnderlying
+            ? investedAssets - tokenBalanceInUnderlying
+            : 0;
         }
+      }
 
-        targetAmount_ = targetAmount_ > expectedCollateral
-          ? targetAmount_ - expectedCollateral
-          : 0;
-
-        investedAssets = investedAssets > expectedCollateral
-          ? investedAssets - expectedCollateral
-          : 0;
+      if (indexAsset != indexUnderlying) {
+        // convert targetAmount_ to underlying
+        targetAmount_ =  targetAmount_ * prices[indexAsset] * decs[indexUnderlying] / prices[indexUnderlying] / decs[indexAsset];
       }
     }
 
-    uint liquidityRatioOut = all || investedAssets == 0
+    uint liquidityRatioOut = targetAmount_ == type(uint).max || investedAssets == 0
       ? 1e18
       : ((targetAmount_ == 0)
         ? 0
-        : 1e18
-        * 101 // add 1% on top...
-        * targetAmount_ / investedAssets // a part of amount that we are going to withdraw
-        / 100 // .. add 1% on top
+        : 1e18 * 101 * targetAmount_ / investedAssets / 100 // a part of amount that we are going to withdraw + 1% on top
       );
 
-    resultAmount = liquidityRatioOut != 0
-      ? Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity)
-      : 0;
+    resultAmount = liquidityRatioOut == 0
+      ? 0
+      : Math.min(liquidityRatioOut * depositorLiquidity / 1e18, depositorLiquidity);
   }
 
   /// @notice Claim rewards from tetuConverter, generate result list of all available rewards and airdrops
@@ -223,6 +213,13 @@ library ConverterStrategyBaseLib2 {
     uint sentAmount,
     uint unsentAmount
   ) {
+    return _sendToInsurance(asset, amount, splitter, totalAssets_, balance);
+  }
+
+  function _sendToInsurance(address asset, uint amount, address splitter, uint totalAssets_, uint balance) internal returns (
+    uint sentAmount,
+    uint unsentAmount
+  ) {
     uint amountToSend = Math.min(amount, balance);
     if (amountToSend != 0) {
       // max amount that can be send to insurance is limited by PRICE_CHANGE_PROFIT_TOLERANCE
@@ -280,6 +277,12 @@ library ConverterStrategyBaseLib2 {
 
   /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
   ///         If the loss were covered only partially, emit {NotEnoughInsurance}
+  function coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) external {
+    _coverLossAndCheckResults(splitter, earned, lossToCover);
+  }
+
+  /// @notice Call coverPossibleStrategyLoss, covered loss will be sent to vault.
+  ///         If the loss were covered only partially, emit {NotEnoughInsurance}
   function _coverLossAndCheckResults(address splitter, uint earned, uint lossToCover) internal {
     address asset = ISplitter(splitter).asset();
     address vault = ISplitter(splitter).vault();
@@ -304,6 +307,37 @@ library ConverterStrategyBaseLib2 {
     lossUncovered = loss > lossToCover
       ? loss - lossToCover
       : 0;
+  }
+
+  /// @notice Send ProfitToCover to insurance - code fragment of the requirePayAmountBack()
+  ///         moved here to reduce size of requirePayAmountBack()
+  /// @param theAsset_ The asset passed from Converter
+  /// @param balanceTheAsset_ Current balance of {theAsset_}
+  /// @param investedAssets_ Value of investedAssets after call fixPriceChange()
+  /// @param earnedByPrices_ ProfitToCover received from fixPriceChange()
+  /// @return balanceTheAssetOut Final balance of {theAsset_} (after sending profit-to-cover to the insurance)
+  function sendProfitGetAssetBalance(
+    address theAsset_,
+    uint balanceTheAsset_,
+    uint investedAssets_,
+    uint earnedByPrices_,
+    IStrategyV3.BaseState storage baseState_
+  ) external returns (
+    uint balanceTheAssetOut
+  ) {
+    balanceTheAssetOut = balanceTheAsset_;
+    if (earnedByPrices_ != 0) {
+      address underlying = baseState_.asset;
+      uint balanceUnderlying = theAsset_ == underlying
+        ? balanceTheAsset_
+        : AppLib.balance(underlying);
+
+      _sendToInsurance(underlying, earnedByPrices_, baseState_.splitter, investedAssets_ + balanceUnderlying, balanceUnderlying);
+
+      if (theAsset_ == underlying) {
+        balanceTheAssetOut = AppLib.balance(theAsset_);
+      }
+    }
   }
 //endregion -------------------------------------------- Cover loss, send profit to insurance
 

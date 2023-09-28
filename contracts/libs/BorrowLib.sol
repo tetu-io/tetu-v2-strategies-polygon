@@ -85,6 +85,15 @@ library BorrowLib {
     bytes entryData;
     uint alpha18;
   }
+
+  struct MakeBorrowToDepositLocal {
+    uint[] prices;
+    uint[] decs;
+    uint cost0;
+    uint cost1;
+    uint prop1;
+    bytes entryData;
+  }
   //endregion -------------------------------------------------- Data types
 
   //region -------------------------------------------------- External functions
@@ -108,7 +117,7 @@ library BorrowLib {
     // pool always have TWO assets, it's not allowed ot have only one asset
     // so, we assume that the proportions are in the range (0...1e18)
     require(prop0 != 0, AppErrors.ZERO_VALUE);
-    require(prop0 < 1e18, AppErrors.TOO_HIGH);
+    require(prop0 < SUM_PROPORTIONS, AppErrors.TOO_HIGH);
 
     RebalanceAssetsLocal memory v;
     v.asset0 = asset0;
@@ -126,7 +135,113 @@ library BorrowLib {
 
     _refreshRebalance(v, ConverterLiquidator(converter_, liquidator_), true);
   }
+
+  /// @notice Convert {amount_} of underlying to two amounts: A0 (underlying) and A1 (not-underlying)
+  ///         Result proportions of A0 and A1 should match to {prop0} : 1e18-{prop0}
+  ///         The function is able to make new borrowing and/or close exist debts.
+  /// @param amount_ Amount of underlying that is going to be deposited
+  ///                We assume here, that current balance >= the {amount_}
+  /// @param tokens_ [Underlying, not underlying]
+  /// @param thresholds_ Thresholds for the given {tokens_}. Debts with amount-to-repay < threshold are ignored.
+  /// @param prop0 Required proportion of underlying, > 0. Proportion of not-underlying is calculates as 1e18 - {prop0}
+  /// @return tokenAmounts Result amounts [A0 (underlying), A1 (not-underlying)]
+  function prepareToDeposit(
+    ITetuConverter converter_,
+    uint amount_,
+    address[2] memory tokens_,
+    uint[2] memory thresholds_,
+    uint prop0
+  ) external returns (
+    uint[] memory tokenAmounts
+  ) {
+    uint[2] memory amountsToDeposit;
+    uint[2] memory balances = [
+      AppLib.sub0(AppLib.balance(tokens_[0]), amount_), // We assume here, that current balance >= the {amount_}
+      AppLib.balance(tokens_[1])
+    ];
+
+    // we assume here, that either direct OR reverse debts (amount > threshold) are possible but not both at the same time
+    (uint debtReverse, ) = converter_.getDebtAmountCurrent(address(this), tokens_[1], tokens_[0], true);
+    if (debtReverse > thresholds_[0]) {
+      // case 1: reverse debt exists
+      // case 1.1: amount to deposit exceeds exist debt.
+      //    Close the debt completely and than make either new direct OR reverse debt
+      // case 1.2: amount to deposit is less than the exist debt.
+      //    Close the debt partially and make new reverse debt
+      uint amountToRepay = amount_ > debtReverse ? debtReverse : amount_;
+      ConverterStrategyBaseLib.closePosition(converter_, tokens_[1], tokens_[0], amountToRepay);
+      amountsToDeposit = [
+        AppLib.sub0(AppLib.balance(tokens_[0]), balances[0]),
+        AppLib.sub0(AppLib.balance(tokens_[1]), balances[1])
+      ];
+    } else {
+      // case 2: no debts OR direct debt exists
+      amountsToDeposit = [amount_, 0];
+    }
+
+    _makeBorrowToDeposit(converter_, amountsToDeposit, tokens_, thresholds_, prop0);
+
+    tokenAmounts = new uint[](2);
+    tokenAmounts[0] = AppLib.sub0(AppLib.balance(tokens_[0]), balances[0]);
+    tokenAmounts[1] = AppLib.sub0(AppLib.balance(tokens_[1]), balances[1]);
+  }
   //endregion -------------------------------------------------- External functions
+
+  //region -------------------------------------------------- Implementation of prepareToDeposit
+  /// @notice Make a direct or reverse borrow to make amounts_ fit to the given proportions.
+  /// If one of available amounts is zero, we just need to make a borrow using second amount as amountIn.
+  /// Otherwise, we need to calculate amountIn at first.
+  /// @dev The purpose is to get the amounts in proper proportions: A:B = prop0:prop1.
+  /// Suppose, amounts_[1] is not enough:
+  ///   [A1, B1] => [A2 + A3, B1], A2:B1 = prop0:prop1, A3 is amountIn for new borrow.
+  /// Suppose, amounts_[0] is not enough:
+  ///   [A1, B1] => [A1, B2 + B3], A1:B2 = prop0:prop1, B3 is amountIn for new borrow.
+  /// @param amounts_ Available amounts
+  /// @param tokens_ [Underlying, not underlying]
+  /// @param thresholds_ Thresholds for the given {tokens_}. Debts with amount-to-repay < threshold are ignored.
+  /// @param prop0 Required proportion of underlying, > 0. Proportion of not-underlying is calculates as 1e18 - {prop0}
+  function _makeBorrowToDeposit(
+    ITetuConverter converter_,
+    uint[2] memory amounts_,
+    address[2] memory tokens_,
+    uint[2] memory thresholds_,
+    uint prop0
+  ) internal {
+    MakeBorrowToDepositLocal memory v;
+
+    {
+      IPriceOracle priceOracle = AppLib._getPriceOracle(converter_);
+      address[] memory tokens = new address[](2);
+      tokens[0] = tokens_[0];
+      tokens[1] = tokens_[1];
+      (v.prices, v.decs) = AppLib._getPricesAndDecs(priceOracle, tokens, 2);
+    }
+
+    v.cost0 = amounts_[0] * v.prices[0] / v.decs[0];
+    v.cost1 = amounts_[1] * v.prices[1] / v.decs[1];
+    // we need: cost0/cost1 = prop0/prop1, and so cost0 * prop1 = cost1 * prop0
+    v.prop1 = SUM_PROPORTIONS - prop0;
+
+    if (v.cost0 * v.prop1 > v.cost1 * prop0) {
+      // we need to make direct borrow
+      uint cost0for1 = v.cost1 * prop0 / v.prop1; // a part of cost0 that is matched to cost1
+      uint amountIn = (v.cost0 - cost0for1) * v.decs[0] / v.prices[0];
+
+      AppLib.approveIfNeeded(tokens_[0], amountIn, address(converter_));
+      v.entryData = abi.encode(1, prop0, v.prop1); // ENTRY_KIND_EXACT_PROPORTION_1
+      ConverterStrategyBaseLib.openPosition(converter_, v.entryData, tokens_[0], tokens_[1], amountIn, thresholds_[0]);
+    } else if (v.cost0 * v.prop1 < v.cost1 * prop0) {
+      // we need to make reverse borrow
+      uint cost1for0 = v.cost0 * v.prop1 / prop0; // a part of cost1 that is matched to cost0
+      uint amountIn = (v.cost1 - cost1for0) * v.decs[1] / v.prices[1];
+
+      AppLib.approveIfNeeded(tokens_[1], amountIn, address(converter_));
+      v.entryData = abi.encode(1, v.prop1, prop0); // ENTRY_KIND_EXACT_PROPORTION_1
+      ConverterStrategyBaseLib.openPosition(converter_, v.entryData, tokens_[1], tokens_[0], amountIn, thresholds_[1]);
+    }
+  }
+
+  //endregion -------------------------------------------------- Implementation of prepareToDeposit
 
   //region -------------------------------------------------- Internal helper functions
 

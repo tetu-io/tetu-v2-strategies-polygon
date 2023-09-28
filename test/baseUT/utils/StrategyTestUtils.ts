@@ -14,7 +14,7 @@ import {Misc} from '../../../scripts/utils/Misc';
 import {DeployInfo} from './DeployInfo';
 import logSettings from '../../../log_settings';
 import {Logger} from 'tslog';
-import {PriceCalculatorUtils} from '../../PriceCalculatorUtils';
+import {PriceCalculatorUtils} from '../universalTestUtils/PriceCalculatorUtils';
 import {TokenUtils} from '../../../scripts/utils/TokenUtils';
 import {DeployerUtilsLocal} from '../../../scripts/utils/DeployerUtilsLocal';
 import {CoreAddresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/models/CoreAddresses";

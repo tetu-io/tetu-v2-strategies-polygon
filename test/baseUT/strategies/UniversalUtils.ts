@@ -60,7 +60,7 @@ export class UniversalUtils {
     amountA: BigNumber,
     swapHelper?: SwapHelper
   ) {
-    console.log("makePoolVolume.state", state);
+    console.log("makePoolVolume.state, amountA", state, amountA);
     const swapper = ISwapper__factory.connect(swapperAddress, signer);
     const swapAmount = amountA.div(2);
     let price;

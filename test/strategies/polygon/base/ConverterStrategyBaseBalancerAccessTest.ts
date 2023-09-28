@@ -28,16 +28,16 @@ import { CoreAddresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/models/Co
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
 import { ConverterUtils } from '../../../baseUT/utils/ConverterUtils';
-import { ICoreContractsWrapper } from '../../../CoreContractsWrapper';
-import { IToolsContractsWrapper } from '../../../ToolsContractsWrapper';
-import { VaultUtils } from '../../../VaultUtils';
+import { ICoreContractsWrapper } from '../../../baseUT/universalTestUtils/CoreContractsWrapper';
+import { IToolsContractsWrapper } from '../../../baseUT/universalTestUtils/ToolsContractsWrapper';
+import { VaultUtils } from '../../../baseUT/universalTestUtils/VaultUtils';
 import { UniversalTestUtils } from '../../../baseUT/utils/UniversalTestUtils';
 import { Signer } from 'ethers';
 import { Provider } from '@ethersproject/providers';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
 import { expect } from 'chai';
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
-import {StateUtils, IState, IPutInitialAmountsBalancesResults} from "../../../StateUtils";
+import {StateUtils, IState, IPutInitialAmountsBalancesResults} from "../../../baseUT/universalTestUtils/StateUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 
 /**

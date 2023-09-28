@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
@@ -12,7 +11,7 @@ import {Misc} from "../../../../scripts/utils/Misc";
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
-import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
@@ -97,8 +96,21 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
        * Fuse OFF by default, rebalance is not needed
        */
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {
+            kyberPid: KYBER_PID_DEFAULT_BLOCK,
+          }
+        );
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
+
+        if (await b.strategy.needRebalance()) {
+          console.log("==================== rebalance.0 =======================");
+          await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
+        }
+
         return b;
       }
 
@@ -129,12 +141,15 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
                 // i-th user deposits j-th amount
                 await IERC20__factory.connect(b.asset, user).approve(b.vault.address, Misc.MAX_UINT);
                 await TokenUtils.getToken(b.asset, user.address, amount);
+                console.log("==================== deposit.1 =======================");
                 await b.vault.connect(user).deposit(amount, user.address, {gasLimit: 19_000_000});
                 deposits[i] += +formatUnits(amount, 6);
 
+                console.log("==================== move prices.1 =======================");
                 await movePrices(b, i % 2 === 0, (i + 1) / 10);
 
                 if (await b.strategy.needRebalance()) {
+                  console.log("==================== rebalance.1 =======================");
                   await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
                 }
               }
@@ -145,15 +160,18 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
                 const amount = parseUnits(amounts[i], 6);
                 // j-th user withdraws i-th amount
                 const maxAmount = await b.vault.connect(user).maxWithdraw(user.address);
+                console.log("==================== withdraw =======================");
                 await b.vault.connect(user).withdraw(
                     maxAmount.lt(amount) ? maxAmount : amount,
                     user.address,
                     user.address,
                     {gasLimit: 19_000_000}
                 );
+                console.log("==================== move prices.2 =======================");
                 await movePrices(b, i % 2 === 0, (i + 1) / 10);
 
                 if (await b.strategy.needRebalance()) {
+                  console.log("==================== rebalance.2 =======================");
                   await b.strategy.rebalanceNoSwaps(true, {gasLimit: 19_000_000});
                 }
               }
@@ -164,11 +182,13 @@ describe('PairBasedStrategyMultipleActionsIntTest', function() {
               const user = users[i];
               const maxAmount = await b.vault.connect(user).maxWithdraw(user.address);
               if (maxAmount.gt(0)) {
+                console.log("==================== withdraw all =======================");
                 await b.vault.connect(user).withdrawAll({gasLimit: 19_000_000});
               }
 
               await movePrices(b, i % 2 === 0, (i + 1) / 10);
               if (await b.strategy.needRebalance()) {
+                console.log("==================== rebalance.3 =======================");
                 await b.strategy.rebalanceNoSwaps(true);
               }
 

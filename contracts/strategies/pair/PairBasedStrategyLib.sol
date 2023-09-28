@@ -126,13 +126,24 @@ library PairBasedStrategyLib {
     /// @notice Price thresholds [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
     /// @dev see PairBasedStrategyLib.FUSE_IDX_XXX
     uint[4] thresholds;
+
+    // Attention: this struct is IMMUTABLE, you are not allowed to add new fields here
+    // because this struct is used inside PairState. If you add new field, you will broke PairState.
   }
   //endregion ------------------------------------------------ Data types
 
   //region ------------------------------------------------ Events
   event FuseStatusChanged(uint fuseStatus);
   event NewFuseThresholds(uint[4] newFuseThresholds);
-  event SwapByAgg(uint amountToSwap, uint amountIn, uint amountOut, uint expectedAmountOut, address aggregator);
+  event SwapByAgg(
+    uint amountToSwap,
+    uint amountIn,
+    uint amountOut,
+    uint expectedAmountOut,
+    address aggregator,
+    address assetIn,
+    address assetOut
+  );
   //endregion ------------------------------------------------ Events
 
   //region ------------------------------------------------ External withdraw functions
@@ -161,7 +172,7 @@ library PairBasedStrategyLib {
     uint amountToSwap
   ){
     (uint[] memory prices,
-     uint[] memory decs
+      uint[] memory decs
     ) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(ITetuConverter(converterLiquidator_[0])), tokens, 2);
     IterationPlanLib.SwapRepayPlanParams memory p = IterationPlanLib.SwapRepayPlanParams({
       converter: ITetuConverter(converterLiquidator_[0]),
@@ -169,8 +180,8 @@ library PairBasedStrategyLib {
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
       propNotUnderlying18: propNotUnderlying18 == type(uint).max
-        ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
-        : propNotUnderlying18,
+      ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
+      : propNotUnderlying18,
       prices: prices,
       decs: decs,
       balanceAdditions: amountsFromPool,
@@ -216,7 +227,7 @@ library PairBasedStrategyLib {
     bool completed
   ){
     (uint[] memory prices,
-     uint[] memory decs
+      uint[] memory decs
     ) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(ITetuConverter(converterLiquidator_[0])), tokens, 2);
 
     IterationPlanLib.SwapRepayPlanParams memory p = IterationPlanLib.SwapRepayPlanParams({
@@ -225,8 +236,8 @@ library PairBasedStrategyLib {
       tokens: tokens,
       liquidationThresholds: liquidationThresholds,
       propNotUnderlying18: propNotUnderlying18 == type(uint).max
-        ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
-        : propNotUnderlying18,
+      ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
+      : propNotUnderlying18,
       prices: prices,
       decs: decs,
       balanceAdditions: new uint[](2), // 2 = tokens.length
@@ -343,11 +354,11 @@ library PairBasedStrategyLib {
       p.balanceAdditions,
       [
         p.usePoolProportions ? 1 : 0,
-        p.planKind,
-        p.propNotUnderlying18,
-        type(uint).max,
-        IDX_ASSET,
-        IDX_TOKEN
+      p.planKind,
+      p.propNotUnderlying18,
+      type(uint).max,
+      IDX_ASSET,
+      IDX_TOKEN
       ]
     );
     if (indexTokenToSwapPlus1 != 0) {
@@ -371,11 +382,11 @@ library PairBasedStrategyLib {
       p.balanceAdditions,
       [
         p.usePoolProportions ? 1 : 0,
-        p.planKind,
-        p.propNotUnderlying18,
-        type(uint).max,
-        IDX_ASSET,
-        IDX_TOKEN
+      p.planKind,
+      p.propNotUnderlying18,
+      type(uint).max,
+      IDX_ASSET,
+      IDX_TOKEN
       ]
     );
 
@@ -384,7 +395,7 @@ library PairBasedStrategyLib {
       p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY || p.planKind == IterationPlanLib.PLAN_SWAP_REPAY, // repay 1
       p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY, // swap 2
       p.planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY // repay 2
-    ];
+      ];
 
     if (idxToSwap1 != 0 && actions[IDX_SWAP_1]) {
       (, p.propNotUnderlying18) = _swap(p, aggParams, idxToSwap1 - 1, idxToSwap1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, amountToSwap);
@@ -415,7 +426,7 @@ library PairBasedStrategyLib {
           );
 
           if (borrowInsteadRepay) {
-            borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
+            _borrowToProportions(p, idxToRepay1 - 1, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, true);
 
           } else if (amountToRepay2 > p.liquidationThresholds[idxToRepay1 - 1]) {
             _secondRepay(p, idxToRepay1 - 1 == IDX_ASSET ? IDX_TOKEN : IDX_ASSET, idxToRepay1 - 1, amountToRepay2, type(uint).max);
@@ -474,7 +485,7 @@ library PairBasedStrategyLib {
         // more repays are required
         _secondRepay(p, indexCollateral, indexBorrow, amountToRepay - repaidAmount, needToRepay);
       } else {
-        borrowToProportions(p, indexBorrow, indexCollateral, false);
+        _borrowToProportions(p, indexBorrow, indexCollateral, false);
       }
     }
   }
@@ -500,7 +511,7 @@ library PairBasedStrategyLib {
   }
 
   /// @notice borrow borrow-asset under collateral-asset, result balances should match to propNotUnderlying18
-  function borrowToProportions(
+  function _borrowToProportions(
     IterationPlanLib.SwapRepayPlanParams memory p,
     uint indexCollateral,
     uint indexBorrow,
@@ -528,7 +539,7 @@ library PairBasedStrategyLib {
     // we are going to change direction of the borrow
     // let's ensure that there is no debt in opposite direction
     if (checkOppositDebtDoesntExist) {
-      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow],  p.tokens[indexCollateral], false);
+      (uint needToRepay,) = p.converter.getDebtAmountStored(address(this), p.tokens[indexBorrow], p.tokens[indexCollateral], false);
       require(needToRepay < AppLib.DUST_AMOUNT_TOKENS, AppErrors.OPPOSITE_DEBT_EXISTS);
     }
 
@@ -538,7 +549,7 @@ library PairBasedStrategyLib {
       assetB: p.tokens[indexBorrow],
       propA: indexCollateral == IDX_ASSET ? 1e18 - p.propNotUnderlying18 : p.propNotUnderlying18,
       propB: indexCollateral == IDX_ASSET ? p.propNotUnderlying18 : 1e18 - p.propNotUnderlying18,
-      // {assetA} to {assetB} ratio; {amountB} * {alpha} => {amountA}, decimals 18
+    // {assetA} to {assetB} ratio; {amountB} * {alpha} => {amountA}, decimals 18
       alpha18: 1e18 * p.prices[indexBorrow] * p.decs[indexCollateral] / p.prices[indexCollateral] / p.decs[indexBorrow],
       thresholdA: p.liquidationThresholds[indexCollateral],
       addonA: 0,
@@ -644,6 +655,7 @@ library PairBasedStrategyLib {
       uint balanceTokenOutBefore = AppLib.balance(p.tokens[indexOut]);
 
       if (aggParams.useLiquidator) {
+
         (spentAmountIn,) = ConverterStrategyBaseLib._liquidate(
           p.converter,
           ITetuLiquidator(aggregator),
@@ -679,7 +691,9 @@ library PairBasedStrategyLib {
         amountIn,
         AppLib.balance(p.tokens[indexOut]) - balanceTokenOutBefore,
         amountIn * p.prices[indexIn] * p.decs[indexOut] / p.prices[indexOut] / p.decs[indexIn],
-        aggregator
+        aggregator,
+        p.tokens[indexIn],
+        p.tokens[indexOut]
       );
     }
 
@@ -689,7 +703,7 @@ library PairBasedStrategyLib {
     // after swap() we need to re-read new values from the pool
       p.usePoolProportions
         ? IPoolProportionsProvider(address(this)).getPropNotUnderlying18()
-      : p.propNotUnderlying18
+        : p.propNotUnderlying18
     );
   }
   //endregion ------------------------------------------------ Internal helper functions
@@ -705,7 +719,7 @@ library PairBasedStrategyLib {
   }
 
   /// @notice Extract propNotUnderlying18 from {planEntryData} of the given {planKind}
-  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns(uint propNotUnderlying18) {
+  function _extractProp(uint planKind, bytes memory planEntryData) internal pure returns (uint propNotUnderlying18) {
     require(planKind == IterationPlanLib.PLAN_SWAP_REPAY
     || planKind == IterationPlanLib.PLAN_REPAY_SWAP_REPAY
     || planKind == IterationPlanLib.PLAN_SWAP_ONLY,

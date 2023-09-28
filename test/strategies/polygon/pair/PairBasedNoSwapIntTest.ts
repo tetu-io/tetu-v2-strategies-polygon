@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
@@ -14,7 +13,7 @@ import {BigNumber, BytesLike} from "ethers";
 import {AggregatorUtils} from "../../../baseUT/utils/AggregatorUtils";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {PackedData} from "../../../baseUT/utils/PackedData";
-import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
+import {IBuilderResults, KYBER_PID_DEFAULT_BLOCK} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {differenceInPercentsNumLessThan} from "../../../baseUT/utils/MathUtils";
@@ -33,6 +32,8 @@ import {
 import {CaptureEvents} from "../../../baseUT/strategies/CaptureEvents";
 import {MockAggregatorUtils} from "../../../baseUT/mocks/MockAggregatorUtils";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 /**
  * There are two kind of tests here:
@@ -189,11 +190,16 @@ describe('PairBasedNoSwapIntTest', function() {
       ? []
       : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
           b,
-          { countRebalances: p.countRebalances ?? 2, movePricesUp: p.movePricesUp},
+          {
+            countRebalances: p.countRebalances ?? 2,
+            movePricesUp: p.movePricesUp,
+            swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+            amountToDepositBySigner2: "100",
+            amountToDepositBySigner: "10000"
+          },
           pathOut,
           signer,
           signer2,
-          DEFAULT_SWAP_AMOUNT_RATIO
       )).states;
 
     const {states} = await makeFullWithdraw(
@@ -239,7 +245,16 @@ describe('PairBasedNoSwapIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
+
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV2(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
@@ -727,7 +742,12 @@ describe('PairBasedNoSwapIntTest', function() {
 
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");
@@ -839,7 +859,12 @@ describe('PairBasedNoSwapIntTest', function() {
       })
 
       async function prepareStrategy(useMockSwapper?: boolean): Promise<IBuilderResults> {
-        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2, undefined);
+        const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
         const converterStrategyBase = await ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const platformVoter = await DeployerUtilsLocal.impersonate(
           await IController__factory.connect(
@@ -999,7 +1024,16 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV2(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
+
+        return PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
       }
 
       describe(`${strategyInfo.name}`, () => {
@@ -1239,12 +1273,14 @@ describe('PairBasedNoSwapIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
                 b, {
                     movePricesUp: true,
-                    countRebalances: 2
+                    countRebalances: 2,
+                    swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
+                    amountToDepositBySigner2: "100",
+                    amountToDepositBySigner: "10000"
                   },
                   pathOut,
                   signer,
                   signer2,
-                  DEFAULT_SWAP_AMOUNT_RATIO
               );
               // prepare fuse
               await PairBasedStrategyPrepareStateUtils.prepareFuse(b, true);
@@ -1452,7 +1488,16 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        return PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV2(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
+
+        return PairStrategyFixtures.buildPairStrategyUsdcXXX(
+          strategyInfo.name,
+          signer,
+          signer2,
+          {kyberPid: KYBER_PID_DEFAULT_BLOCK}
+        );
       }
 
       describe(`${strategyInfo.name}-${strategyInfo.priceUp ? "up" : "down"}`, () => {

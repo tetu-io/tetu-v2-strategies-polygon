@@ -8,7 +8,6 @@ import {
   PriceOracleMock
 } from "../../../typechain";
 import {ethers} from "hardhat";
-import {DeployerUtilsLocal} from "../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../baseUT/helpers/MockHelper";
@@ -17,13 +16,12 @@ import {expect} from "chai";
 import {Misc} from "../../../scripts/utils/Misc";
 import {MaticAddresses} from "../../../scripts/addresses/MaticAddresses";
 import {PLAN_REPAY_SWAP_REPAY, PLAN_SWAP_ONLY, PLAN_SWAP_REPAY} from "../../baseUT/AppConstants";
-import { HardhatUtils, POLYGON_NETWORK_ID } from '../../baseUT/utils/HardhatUtils';
+import {HARDHAT_NETWORK_ID, HardhatUtils} from '../../baseUT/utils/HardhatUtils';
 
 describe('IterationPlanLibTest', () => {
   //region Variables
   let snapshotBefore: string;
   let snapshot: string;
-  let governance: SignerWithAddress;
   let signer: SignerWithAddress;
   let usdc: MockToken;
   let dai: MockToken;
@@ -40,10 +38,8 @@ describe('IterationPlanLibTest', () => {
 
   //region before, after
   before(async function () {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
+    await HardhatUtils.setupBeforeTest(HARDHAT_NETWORK_ID);
     [signer] = await ethers.getSigners();
-
-    governance = await DeployerUtilsLocal.getControllerGovernance(signer);
 
     snapshotBefore = await TimeUtils.snapshot();
     usdc = await DeployerUtils.deployMockToken(signer, 'USDC', 6);

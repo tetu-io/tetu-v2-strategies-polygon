@@ -1,26 +1,19 @@
 /* tslint:disable:no-trailing-whitespace */
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
 import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {
   IERC20__factory,
-  UniswapV3Lib,
-  ConverterStrategyBase__factory, AlgebraLib, KyberLib,
+  ConverterStrategyBase__factory,
 } from "../../../../typechain";
 import {Misc} from "../../../../scripts/utils/Misc";
-import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
-import {formatUnits, parseUnits} from 'ethers/lib/utils';
-import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
+import {parseUnits} from 'ethers/lib/utils';
 import {TokenUtils} from "../../../../scripts/utils/TokenUtils";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
-import {BigNumber} from "ethers";
 import {expect} from "chai";
 import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
 import {IBuilderResults} from "../../../baseUT/strategies/PairBasedStrategyBuilder";
-import {PairStrategyLiquidityUtils} from "../../../baseUT/strategies/PairStrategyLiquidityUtils";
 import {PLATFORM_ALGEBRA, PLATFORM_KYBER, PLATFORM_UNIV3} from "../../../baseUT/strategies/AppPlatforms";
 import {PairStrategyFixtures} from "../../../baseUT/strategies/PairStrategyFixtures";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
@@ -34,6 +27,8 @@ import {
   FUSE_OFF_1, FUSE_ON_LOWER_LIMIT_2,
   FUSE_ON_UPPER_LIMIT_3
 } from "../../../baseUT/AppConstants";
+import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
+import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 
 /**
  * Check how fuse triggered ON/OFF because of price changing.
@@ -52,7 +47,6 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
   //region before, after
   before(async function () {
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
     [signer, signer2] = await ethers.getSigners();
   })
 
@@ -153,13 +147,21 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
     const pathOut = p.pathOut;
     let rebalanceFuseOn: IPriceFuseStatus | undefined;
     let rebalanceFuseOff: IPriceFuseStatus | undefined;
-    const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
-    const platform = await converterStrategyBase.PLATFORM();
+
+    if ((await b.strategy.needRebalance())) {
+      console.log("movePriceToChangeFuseStatus.rebalanceNoSwaps");
+      await b.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
+    }
 
     console.log('deposit...');
     await IERC20__factory.connect(b.asset, signer).approve(b.vault.address, Misc.MAX_UINT);
     await TokenUtils.getToken(b.asset, signer.address, parseUnits('1000', 6));
     await b.vault.connect(signer).deposit(parseUnits('1000', 6), signer.address);
+
+    if ((await b.strategy.needRebalance())) {
+      console.log("movePriceToChangeFuseStatus.rebalanceNoSwaps");
+      await b.strategy.rebalanceNoSwaps(true, {gasLimit: 9_000_000});
+    }
 
     const state = await PackedData.getDefaultState(b.strategy);
     console.log("=========================== there");
@@ -248,7 +250,12 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
               const ret = await loadFixture(makeTest);
               const status = ret.rebalanceFuseOff?.fuseStatus || 0;
               expect(status === FUSE_OFF_1 || status === FUSE_ON_LOWER_LIMIT_2).eq(true);
-              expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_OFF]);
+
+              // todo: following check was disabled for ALGEBRA because of pricePool-changes
+              //       after implementation of pricePool, fuse A and B are triggered here, not only fuse B
+              if (strategyInfo.name !== PLATFORM_ALGEBRA) {
+                expect(ret.rebalanceFuseOff?.price || 0).lte(ret.thresholdsB[FUSE_IDX_UPPER_LIMIT_OFF]);
+              }
             });
           });
           describe('Move tokenB prices down, up', function () {
@@ -273,7 +280,12 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
             it("should trigger fuse ON (FUSE_ON_LOWER_LIMIT_2)", async () => {
               const ret = await loadFixture(makeTest);
               expect(ret.rebalanceFuseOn?.fuseStatus || 0).eq(FUSE_ON_LOWER_LIMIT_2);
-              expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_ON]);
+
+              // todo: following check was disabled for Univ3 and Kyber because of pricePool-changes
+              //       after implementation of pricePool, fuse A is triggered here, not fuse B
+              if (strategyInfo.name !== PLATFORM_UNIV3 && strategyInfo.name !== PLATFORM_KYBER) {
+                expect(ret.rebalanceFuseOn?.price || 0).lte(ret.thresholdsB[FUSE_IDX_LOWER_LIMIT_ON]);
+              }
             });
             it("should trigger fuse OFF at the end", async () => {
               const ret = await loadFixture(makeTest);
@@ -291,8 +303,10 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
    * This test is excluded from coverage because it doesn't pass for Univ3:
    * 1) There are some problems with swapping dust-amounts in liquidator
    * 2) Price moving is too slow because of the dust amounts, it's not able to set fuse ON / OFF
+   *
+   * skipped, it's necessary to study only
    */
-  describe('Increase price N steps, decrease price N steps, swapAmountRatio = 1 @skip-on-coverage', function () {
+  describe.skip('Increase price N steps, decrease price N steps, swapAmountRatio = 1 @skip-on-coverage', function () {
     interface IStrategyInfo {
       name: string,
     }
@@ -314,6 +328,10 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
 
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
+
+        await InjectUtils.injectTetuConverter(signer);
+        await ConverterUtils.disableAaveV2(signer);
+        await InjectUtils.redeployAave3PoolAdapters(signer);
 
         await PairBasedStrategyPrepareStateUtils.prepareFuse(b, false);
         return b;

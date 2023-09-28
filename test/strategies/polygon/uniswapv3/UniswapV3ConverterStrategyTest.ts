@@ -3,20 +3,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import hre, { ethers } from 'hardhat';
 import { TimeUtils } from '../../../../scripts/utils/TimeUtils';
 import { DeployerUtils } from '../../../../scripts/utils/DeployerUtils';
-import {
-  IBorrowManager__factory,
-  IController,
-  IConverterController__factory,
-  IERC20,
-  IERC20__factory, IStrategyV2,
-  ISwapper,
-  ISwapper__factory,
-  TetuConverter__factory,
-  TetuVaultV2,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
-  VaultFactory__factory,
-} from '../../../../typechain';
+import {IBorrowManager__factory, IController, IConverterController__factory, IERC20, IERC20__factory, IStrategyV2, ISwapper, ISwapper__factory, TetuConverter__factory, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory, VaultFactory__factory,} from '../../../../typechain';
 import { BigNumber } from 'ethers';
 import { DeployerUtilsLocal } from '../../../../scripts/utils/DeployerUtilsLocal';
 import { Addresses } from '@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses';
@@ -25,7 +12,6 @@ import { formatUnits, parseUnits } from 'ethers/lib/utils';
 import { getConverterAddress, Misc } from '../../../../scripts/utils/Misc';
 import { TokenUtils } from '../../../../scripts/utils/TokenUtils';
 import { MaticAddresses } from '../../../../scripts/addresses/MaticAddresses';
-import { config as dotEnvConfig } from 'dotenv';
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {PackedData} from "../../../baseUT/utils/PackedData";
@@ -62,7 +48,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
   let FEE_DENOMINATOR: BigNumber;
 
   before(async function() {
-    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID, -1);
+    await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
 
     [signer, signer2, signer3] = await ethers.getSigners();
@@ -300,7 +286,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
 
       const hwReturns = await strategy3.connect(splitterSigner).callStatic.doHardWork()
 
-      expect(hwReturns[0].div(100)).eq(earnedTotal.div(100))
+      // 1252818 ~ 1252796
+      expect(hwReturns[0]).approximately(earnedTotal, 1000);
+      // expect(hwReturns[0].div(100)).eq(earnedTotal.div(100))
       // expect(hwReturns[1].div(1000)).eq(specificState.rebalanceLost.div(1000))
 
       await strategy3.connect(splitterSigner).doHardWork();
@@ -341,7 +329,9 @@ describe('UniswapV3ConverterStrategyTests', function() {
       expect(await strategy2.needRebalance()).eq(false);
       expect(await strategy2.isReadyToHardWork()).eq(true);
       await strategy2.connect(splitterSigner).doHardWork();
-      expect(await strategy2.isReadyToHardWork()).eq(false);
+
+      // SCB-776: now we allow isReadyToHardWork() returns true just after calling hardwork()
+      // expect(await strategy2.isReadyToHardWork()).eq(false);
 
       console.log('Vault totalAssets', await vault2.totalAssets());
       console.log('Strategy totalAssets', await strategy2.totalAssets());

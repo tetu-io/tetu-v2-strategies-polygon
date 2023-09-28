@@ -1,12 +1,11 @@
 /* tslint:disable:no-trailing-whitespace */
-import {config as dotEnvConfig} from "dotenv";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {getConverterAddress, getDForcePlatformAdapter, Misc} from "../../../../scripts/utils/Misc";
-import {IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {IState, IStateParams, StateUtils} from "../../../baseUT/universalTestUtils/StateUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import hre, {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
@@ -71,7 +70,7 @@ describe('AlgebraConverterStrategyUniversalTest', async () => {
 
   before(async function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
-    await HardhatUtils.switchToMostCurrentBlock();
+    // await HardhatUtils.switchToMostCurrentBlock(); // there are no swaps in this test, we don't need current block
     await StrategyTestUtils.deployCoreAndInit(deployInfo);
 
     const [signer] = await ethers.getSigners();

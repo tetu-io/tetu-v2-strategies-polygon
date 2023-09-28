@@ -1,12 +1,8 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
-import {
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
-} from "../../../../typechain";
+import {UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory,} from "../../../../typechain";
 import {Web3FunctionHardhat} from "@gelatonetwork/web3-functions-sdk/hardhat-plugin";
 import {Web3FunctionResultV2, Web3FunctionUserArgs} from "@gelatonetwork/web3-functions-sdk";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';

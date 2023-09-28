@@ -1,23 +1,16 @@
 /* tslint:disable:no-trailing-whitespace */
-import {config as dotEnvConfig} from "dotenv";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {MaticAddresses} from "../../../../scripts/addresses/MaticAddresses";
 import {DeployInfo} from "../../../baseUT/utils/DeployInfo";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {getConverterAddress, getDForcePlatformAdapter, Misc} from "../../../../scripts/utils/Misc";
-import {IState, IStateParams, StateUtils} from "../../../StateUtils";
+import {IState, IStateParams, StateUtils} from "../../../baseUT/universalTestUtils/StateUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {ethers} from "hardhat";
 import {ConverterUtils} from "../../../baseUT/utils/ConverterUtils";
 import {IUniversalStrategyInputParams} from "../../base/UniversalStrategyTest";
-import {
-  IERC20Metadata__factory, IPairBasedDefaultStateProvider, IPairBasedDefaultStateProvider__factory,
-  IStrategyV2,
-  TetuVaultV2,
-  UniswapV3ConverterStrategy,
-  UniswapV3ConverterStrategy__factory,
-} from '../../../../typechain';
+import {IERC20Metadata__factory, IPairBasedDefaultStateProvider__factory, IStrategyV2, TetuVaultV2, UniswapV3ConverterStrategy, UniswapV3ConverterStrategy__factory,} from '../../../../typechain';
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
 import {BigNumber, Signer} from "ethers";

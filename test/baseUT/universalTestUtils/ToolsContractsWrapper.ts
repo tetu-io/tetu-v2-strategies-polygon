@@ -1,4 +1,4 @@
-import { ITetuConverter, ITetuLiquidator, Multicall } from '../typechain';
+import { ITetuConverter, ITetuLiquidator, Multicall } from '../../../typechain';
 
 
 export interface IToolsContractsWrapper {

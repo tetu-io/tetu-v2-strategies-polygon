@@ -48,6 +48,9 @@ library PairBasedStrategyLogicLib {
 
     /// @notice Timestamp of last call of rebalanceNoSwaps() or zero if withdrawByAggStep() was called last
     uint lastRebalanceNoSwap;
+
+    // Attention: this struct is IMMUTABLE, you are not allowed to add new fields here
+    // because this struct is used inside State structs. If you add new field, you will broke State (if it's not empty).
   }
 
   struct RebalanceNoSwapsLocal {
@@ -79,32 +82,32 @@ library PairBasedStrategyLogicLib {
 
   //region ------------------------------------------------------- Helpers
   /// @notice Prepare array of amounts ready to deposit, borrow missed amounts
+  /// @param amount_ Amount of tokenA
+  /// @param tokenA Underlying
+  /// @param tokenB Not-underlying
+  /// @param prop0 Required proportion of underlying, > 0. Proportion of not-underlying is calculates as 1e18 - {prop0}
+  /// @param liquidationThresholds Dust-thresholds for the tokens A and B
+  /// @return tokenAmounts Amounts of token A and B to be deposited, [A, B]
   function _beforeDeposit(
     ITetuConverter tetuConverter_,
     uint amount_,
     address tokenA,
     address tokenB,
-    bytes memory entryData,
+    uint prop0,
     mapping(address => uint) storage liquidationThresholds
   ) external returns (
     uint[] memory tokenAmounts
   ) {
-    tokenAmounts = new uint[](2);
-    uint spentCollateral;
-
-    AppLib.approveIfNeeded(tokenA, amount_, address(tetuConverter_));
-    (spentCollateral, tokenAmounts[1]) = ConverterStrategyBaseLib.openPosition(
+    return BorrowLib.prepareToDeposit(
       tetuConverter_,
-      entryData,
-      tokenA,
-      tokenB,
       amount_,
-      liquidationThresholds[tokenA] // amount_ is set in terms of collateral asset
+      [tokenA, tokenB],
+      [
+        AppLib._getLiquidationThreshold(liquidationThresholds[tokenA]),
+        AppLib._getLiquidationThreshold(liquidationThresholds[tokenB])
+      ],
+      prop0
     );
-
-    tokenAmounts[0] = amount_ > spentCollateral
-      ? amount_ - spentCollateral
-      : 0;
   }
 
   /// @notice Initialize {dest} in place. Underlying is always first in {dest.tokens}.
@@ -366,7 +369,7 @@ library PairBasedStrategyLogicLib {
   /// @notice Rebalance asset to proportions {propTokenA}:{1e18-propTokenA}, fix profitToCover
   /// @param propTokenA Proportion of {tokenA}, > 0. Proportion of {tokenB} is calculates as 1e18 - prop0
   /// @param liquidationThresholdsAB [liquidityThreshold of token A, liquidityThreshold of tokenB]
-  function rebalanceNoSwaps(
+  function _rebalanceNoSwaps(
     address[2] calldata converterLiquidator,
     PairBasedStrategyLogicLib.PairState storage pairState,
     uint profitToCover,

@@ -1,6 +1,5 @@
 /* tslint:disable:no-trailing-whitespace */
 import {expect} from 'chai';
-import {config as dotEnvConfig} from "dotenv";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import hre, {ethers} from "hardhat";
 import {DeployerUtilsLocal} from "../../../../scripts/utils/DeployerUtilsLocal";
@@ -8,7 +7,7 @@ import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
 import {
   AlgebraConverterStrategy,
-  AlgebraConverterStrategy__factory,
+  AlgebraConverterStrategy__factory, AlgebraLib,
   IERC20,
   IERC20__factory, IStrategyV2,
   TetuVaultV2, VaultFactory__factory,
@@ -27,6 +26,9 @@ import {UniversalUtils} from "../../../baseUT/strategies/UniversalUtils";
 import {StrategyTestUtils} from "../../../baseUT/utils/StrategyTestUtils";
 import {BigNumber} from "ethers";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
+import {PackedData} from "../../../baseUT/utils/PackedData";
+import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
+import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 
 describe('AlgebraConverterStrategyTest', function() {
 
@@ -40,7 +42,7 @@ describe('AlgebraConverterStrategyTest', function() {
   before(async function() {
     await HardhatUtils.setupBeforeTest(POLYGON_NETWORK_ID);
     snapshotBefore = await TimeUtils.snapshot();
-    await HardhatUtils.switchToMostCurrentBlock();
+    // await HardhatUtils.switchToMostCurrentBlock(); // there are no swaps in this test, we don't need current block
 
     [signer] = await ethers.getSigners();
     const gov = await DeployerUtilsLocal.getControllerGovernance(signer);
@@ -168,9 +170,26 @@ describe('AlgebraConverterStrategyTest', function() {
       console.log('after 1 day')
       await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
-      expect(await s.needRebalance()).eq(false)
+      expect(await s.needRebalance()).eq(false);
 
-      await UniswapV3StrategyUtils.movePriceUp(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('1100000', 6))
+      const state = await PackedData.getDefaultState(strategy);
+
+      await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
+          signer,
+          {
+            strategy: AlgebraConverterStrategy__factory.connect(strategy.address, signer),
+            swapper: MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER,
+            quoter: MaticAddresses.ALGEBRA_QUOTER,
+            lib: await DeployerUtils.deployContract(signer, "AlgebraLib") as AlgebraLib,
+            pool: MaticAddresses.ALGEBRA_USDC_USDT,
+            swapHelper: await MockHelper.createSwapperHelper(signer)
+          },
+          true,
+          state,
+          parseUnits('1100000', 6),
+          undefined,
+          5
+      );
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
@@ -200,7 +219,8 @@ describe('AlgebraConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
+      const state = await PackedData.getDefaultState(strategy);
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
 
       console.log('Hardwork')
       expect(await s.isReadyToHardWork()).eq(true)
@@ -215,7 +235,7 @@ describe('AlgebraConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6))
 
       console.log('withdraw')
       await vault.withdraw(parseUnits('500', 6), signer.address, signer.address)
@@ -224,7 +244,7 @@ describe('AlgebraConverterStrategyTest', function() {
       await TimeUtils.advanceBlocksOnTs(86400) // 1 day
 
       console.log('Make pool volume')
-      await UniswapV3StrategyUtils.makeVolume(signer, s.address, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
+      await UniversalUtils.makePoolVolume(signer, state, MaticAddresses.TETU_LIQUIDATOR_ALGEBRA_SWAPPER, parseUnits('10000', 6));
 
       console.log('withdrawAll')
       await vault.withdrawAll()

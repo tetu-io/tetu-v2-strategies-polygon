@@ -1,8 +1,5 @@
 import hre, {ethers} from "hardhat";
 import {BigNumber, BytesLike} from "ethers";
-import {defaultAbiCoder} from "ethers/lib/utils";
-import {ITetuLiquidator} from "../../../typechain";
-import { config as dotEnvConfig } from 'dotenv';
 import { EnvSetup } from '../../../scripts/utils/EnvSetup';
 
 /**
