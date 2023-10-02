@@ -1,12 +1,27 @@
 import {createClient} from "urql";
 import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {getApr} from "./uniswapV3Backtester/strategyBacktest";
+import {writeFileSyncRestoreFolder} from "../test/baseUT/utils/FileUtils";
+import fs, {writeFileSync} from "fs";
 
 const whitelistedVaultsForInvesting = ['tUSDC',]
 const SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/a17/tetu-v2'
 
 async function main() {
     console.log('Tetu V2 strategies profitability');
+
+    const pathOut = "./tmp/profitability.csv";
+    const headers = [
+        'Strategy',
+        'Date',
+        'Real APR',
+        'Claimed fees',
+        'Claimed rewards',
+        'Profit to cover',
+        'Loss covered by insurance',
+        'Loss covered by rewards',
+    ]
+    let rows: string[][] = []
 
     const client = createClient({
         url: SUBGRAPH,
@@ -164,6 +179,17 @@ async function main() {
                     }
                 }
 
+                rows.push(...dayHistories.map(day => [
+                    `${strategy.specificName} [${strategy.version}]`,
+                    day.day,
+                    '' + day.realApr,
+                    day.feesClaimed,
+                    day.rewardsClaimed,
+                    day.profitCovered,
+                    day.lossCoveredFromInsurance,
+                    day.lossCoveredFromRewards,
+                ]))
+
                 for (const day of dayHistories) {
                     console.log(`  ${day.day}. Real APR: ${day.realApr}%. Fees: ${day.feesClaimed}. Rewards: ${day.rewardsClaimed}. Profit to cover: ${day.profitCovered}. Loss insurance: ${day.lossCoveredFromInsurance}. Loss rewards: ${day.lossCoveredFromRewards}.`)
                 }
@@ -172,6 +198,12 @@ async function main() {
             }
             console.log('')
         }
+    }
+
+    fs.rmSync(pathOut, {force: true,})
+    writeFileSyncRestoreFolder(pathOut, headers.join(';') + '\n', { encoding: 'utf8', flag: 'a' })
+    for (const row of rows) {
+        writeFileSync(pathOut, row.join(';') + '\n', { encoding: 'utf8', flag: 'a' })
     }
 }
 
