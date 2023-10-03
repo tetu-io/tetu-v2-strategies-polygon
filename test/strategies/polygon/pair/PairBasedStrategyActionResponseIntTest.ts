@@ -198,7 +198,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             }
         );
 
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -404,7 +404,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               notUnderlying: strategyInfo.notUnderlyingToken
             }
         );
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -586,7 +586,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               notUnderlying: strategyInfo.notUnderlyingToken
             }
         );
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -1137,7 +1137,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
 
-          await InjectUtils.injectTetuConverter(signer);
+          // await InjectUtils.injectTetuConverter(signer);
           await ConverterUtils.disableAaveV2(signer);
           await ConverterUtils.disableDForce(signer);
           await InjectUtils.redeployAave3PoolAdapters(signer);
@@ -1398,7 +1398,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-down-user-prepare-strategy.csv`;
 
-          await InjectUtils.injectTetuConverter(signer);
+          // await InjectUtils.injectTetuConverter(signer);
           await ConverterUtils.disableAaveV2(signer);
           await ConverterUtils.disableDForce(signer);
           await InjectUtils.redeployAave3PoolAdapters(signer);
@@ -1745,7 +1745,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         );
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -1841,7 +1841,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             }
         );
 
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -2067,7 +2067,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             notUnderlying: strategyInfo.notUnderlyingToken
           }
         );
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
