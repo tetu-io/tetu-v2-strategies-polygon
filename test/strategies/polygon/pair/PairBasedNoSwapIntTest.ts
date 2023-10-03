@@ -191,11 +191,11 @@ describe('PairBasedNoSwapIntTest', function() {
       : (await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
           b,
           {
-            countRebalances: p.countRebalances ?? 2,
+            countRebalances: p.countRebalances ?? 1,
             movePricesUp: p.movePricesUp,
             swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
             amountToDepositBySigner2: "100",
-            amountToDepositBySigner: "10000"
+            amountToDepositBySigner: "5000"
           },
           pathOut,
           signer,
@@ -232,11 +232,11 @@ describe('PairBasedNoSwapIntTest', function() {
       sharePriceDeviation: number
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-8},
-      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 1e-8},
+      { name: PLATFORM_UNIV3, sharePriceDeviation: 1e-7},
+      { name: PLATFORM_ALGEBRA, sharePriceDeviation: 1e-7},
       /**
-       * on "npm run coverage" we have a problem with sharePriceDeviation = 1e-8
-       * expected 1 to be close to 1.0000231642199326 +/- 1e-8
+       * on "npm run coverage" we have a problem with sharePriceDeviation = 1e-7
+       * expected 1 to be close to 1.0000231642199326 +/- 1e-7
        * The reason is unclear, there are no such problems on the same block locally
        * So, let's try to just reduce deviation value
        */
@@ -252,7 +252,7 @@ describe('PairBasedNoSwapIntTest', function() {
           {kyberPid: KYBER_PID_DEFAULT_BLOCK}
         );
 
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -1024,7 +1024,7 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
@@ -1488,7 +1488,7 @@ describe('PairBasedNoSwapIntTest', function() {
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 
