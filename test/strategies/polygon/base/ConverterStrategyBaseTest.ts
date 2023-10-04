@@ -608,7 +608,6 @@ describe('ConverterStrategyBaseTest', () => {
   describe("_makeRequestedAmount", () => {
     interface IMakeRequestedAmountParams {
       requestedAmount: string;
-      investedAssets: string;
       tokens: MockToken[];
       indexTheAsset: number;
       indexUnderlying?: number;
@@ -625,6 +624,7 @@ describe('ConverterStrategyBaseTest', () => {
       /** assume decimal 18 */
       depositorLiquidity?: string;
 
+      quoteLiquidity?: string;
       /** sync with {tokens} */
       depositorQuoteExitAmounts?: string[];
     }
@@ -682,6 +682,7 @@ describe('ConverterStrategyBaseTest', () => {
 
       // set up pool
       const liquidity = parseUnits(p?.depositorLiquidity || "0", 18);
+      const quoteLiquidity = parseUnits(p?.quoteLiquidity || "0", 18);
       const depositorExitAmountsOut = await Promise.all(p.tokens.map(
         async (x, index) => parseUnits(
           p?.depositorQuoteExitAmounts
@@ -692,14 +693,13 @@ describe('ConverterStrategyBaseTest', () => {
       ));
       await ms.strategy.setDepositorLiquidity(liquidity);
       await ms.strategy.setDepositorExit(liquidity, depositorExitAmountsOut);
-      await ms.strategy.setDepositorQuoteExit(liquidity, depositorExitAmountsOut);
+      await ms.strategy.setDepositorQuoteExit(quoteLiquidity, depositorExitAmountsOut);
 
       // make test
       const ret = await ms.strategy.callStatic._makeRequestedAmountAccess(
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexTheAsset]),
-        p.investedAssets,
         {
           converter: ms.tetuConverter.address,
           theAsset: p.tokens[p.indexTheAsset].address,
@@ -714,7 +714,6 @@ describe('ConverterStrategyBaseTest', () => {
         p.requestedAmount === ""
           ? Misc.MAX_UINT
           : parseUnits(p.requestedAmount, decimals[p.indexTheAsset]),
-        p.investedAssets,
         {
           converter: ms.tetuConverter.address,
           theAsset: p.tokens[p.indexTheAsset].address,
@@ -751,7 +750,6 @@ describe('ConverterStrategyBaseTest', () => {
             return makeRequestedAmount({
               tokens: [usdc, usdt],
               indexTheAsset: 0,
-              investedAssets: "1",
               requestedAmount: "1",
               balances: ["1", "0"]
             });
@@ -779,7 +777,6 @@ describe('ConverterStrategyBaseTest', () => {
             return makeRequestedAmount({
               tokens: [usdc, usdt],
               indexTheAsset: 0,
-              investedAssets: "1",
               requestedAmount: "1",
               balances: ["1", "7"],
               liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "7", amountOut: "9"}],
@@ -809,7 +806,6 @@ describe('ConverterStrategyBaseTest', () => {
             return makeRequestedAmount({
               tokens: [usdc, usdt],
               indexTheAsset: 0,
-              investedAssets: "1",
               requestedAmount: "1",
               balances: ["1", "7"],
               quoteRepays: [{collateralAsset: usdc, borrowAsset: usdt, amountRepay: "7", collateralAmountOut: "10"}],
@@ -840,10 +836,10 @@ describe('ConverterStrategyBaseTest', () => {
               return makeRequestedAmount({
                 tokens: [usdc, usdt],
                 indexTheAsset: 0,
-                investedAssets: "1",
                 requestedAmount: "15",
                 balances: ["1", "0"],
                 depositorLiquidity: "1",
+                quoteLiquidity: "1",
                 depositorQuoteExitAmounts: ["5", "6"],
                 liquidations: [{tokenIn: usdt, tokenOut: usdc, amountIn: "6", amountOut: "7"}],
               });

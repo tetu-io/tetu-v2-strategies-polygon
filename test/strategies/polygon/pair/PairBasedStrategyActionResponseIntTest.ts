@@ -1877,7 +1877,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           const reader = await MockHelper.createPairBasedStrategyReader(signer);
 
           // Following amount is used as swapAmount for both tokens A and B...
-          const swapAssetValueForPriceMove = parseUnits('500000', 6);
+          const swapAssetValueForPriceMove = parseUnits('300000', 6);
           // ... but WMATIC has different decimals than USDC, so we should use different swapAmount in that case
           const swapAssetValueForPriceMoveDown = strategyInfo.name === PLATFORM_UNIV3
           && strategyInfo.notUnderlyingToken === MaticAddresses.WMATIC_TOKEN
@@ -2046,8 +2046,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
 
     const strategies: IStrategyInfo[] = [
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, movePricesUpBeforeWithdraw: true},
-      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
+      {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
       {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN},
     ];
 
@@ -2089,7 +2089,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
         return b;
       }
 
-      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}:${strategyInfo.movePricesUpBeforeWithdraw ? "MovePricesUp" : ""}`, () => {
+      describe(`${strategyInfo.name}:${tokenName(strategyInfo.notUnderlyingToken)}${strategyInfo.movePricesUpBeforeWithdraw ? ":MovePricesUp" : ""}`, () => {
         let snapshot: string;
         before(async function () {
           snapshot = await TimeUtils.snapshot();

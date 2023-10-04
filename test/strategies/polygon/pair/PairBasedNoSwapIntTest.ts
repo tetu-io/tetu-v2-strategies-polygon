@@ -1018,8 +1018,8 @@ describe('PairBasedNoSwapIntTest', function() {
       name: string,
     }
     const strategies: IStrategyInfo[] = [
-      { name: PLATFORM_UNIV3, },
       { name: PLATFORM_ALGEBRA, },
+      { name: PLATFORM_UNIV3, },
       { name: PLATFORM_KYBER, }
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
@@ -1273,10 +1273,10 @@ describe('PairBasedNoSwapIntTest', function() {
               await PairBasedStrategyPrepareStateUtils.prepareTwistedDebts(
                 b, {
                     movePricesUp: true,
-                    countRebalances: 2,
+                    countRebalances: 1,
                     swapAmountRatio: DEFAULT_SWAP_AMOUNT_RATIO,
                     amountToDepositBySigner2: "100",
-                    amountToDepositBySigner: "10000"
+                    amountToDepositBySigner: "2000"
                   },
                   pathOut,
                   signer,
@@ -1481,10 +1481,10 @@ describe('PairBasedNoSwapIntTest', function() {
       depositAmount: string
     }
     const strategies: IStrategyInfo[] = [
+      { name: PLATFORM_KYBER, priceUp: false, countCycles: 2, depositAmount: "1000" },
       { name: PLATFORM_UNIV3, priceUp: true, countCycles: 3, depositAmount: "100000" },
       { name: PLATFORM_UNIV3, priceUp: false, countCycles: 3, depositAmount: "100000" },
       { name: PLATFORM_ALGEBRA, priceUp: false, countCycles: 2, depositAmount: "1000" },
-      { name: PLATFORM_KYBER, priceUp: false, countCycles: 2, depositAmount: "1000" }
     ];
     strategies.forEach(function (strategyInfo: IStrategyInfo) {
       async function prepareStrategy(): Promise<IBuilderResults> {
@@ -1532,7 +1532,7 @@ describe('PairBasedNoSwapIntTest', function() {
 
           for (let i = 0; i < strategyInfo.countCycles; ++i) {
             // generate some rewards
-            await UniversalUtils.makePoolVolume(signer, defaultState, b.swapper, parseUnits('600000', 6));
+            await UniversalUtils.makePoolVolume(signer, defaultState, b.swapper, parseUnits('300000', 6));
             await TimeUtils.advanceNBlocks(1000);
 
             if (strategyInfo.priceUp) {
@@ -1540,7 +1540,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 signer,
                 defaultState,
                 b.swapper,
-                parseUnits('600000', 6),
+                parseUnits('300000', 6),
                 100001
               );
             } else {
@@ -1548,7 +1548,7 @@ describe('PairBasedNoSwapIntTest', function() {
                 signer,
                 defaultState,
                 b.swapper,
-                parseUnits('600000', 6),
+                parseUnits('300000', 6),
                 100001
               );
             }
