@@ -88,12 +88,6 @@ describe('KyberConverterStrategyTest', function() {
             parseUnits('1.003'),
             parseUnits('1.002')
           ],
-          [
-            parseUnits('0.997'),
-            parseUnits('0.998'),
-            parseUnits('1.003'),
-            parseUnits('1.002')
-          ]
         );
 
         return _strategy as unknown as IStrategyV2;

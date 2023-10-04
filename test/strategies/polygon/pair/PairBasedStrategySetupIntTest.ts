@@ -198,7 +198,7 @@ describe('PairBasedStrategySetupIntTest', () => {
         await s.setFuseStatus(fuse.index, fuse.status);
       }
       const state = await PackedData.getDefaultState(strategy as unknown as IPairBasedDefaultStateProvider);
-      return {status: [state.fuseStatusTokenA, state.fuseStatusTokenB]}
+      return {status: [state.fuseStatus, state.fuseStatusTokenB]}
     }
 
     describe("Univ3", () => {
@@ -290,7 +290,7 @@ describe('PairBasedStrategySetupIntTest', () => {
       await s.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
       const state = await PackedData.getDefaultState(strategy as unknown as IPairBasedDefaultStateProvider);
       return {
-        thresholdsA: state.fuseThresholdsA,
+        thresholdsA: state.fuseThresholds,
         thresholdsB: state.fuseThresholdsB
       }
     }

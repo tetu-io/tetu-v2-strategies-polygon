@@ -78,7 +78,6 @@ describe('AlgebraConverterStrategy reduce debt by agg test', function() {
             endTime: 4104559500
           },
           [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;

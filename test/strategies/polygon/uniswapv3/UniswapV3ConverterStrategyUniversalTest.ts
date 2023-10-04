@@ -170,7 +170,7 @@ describe('UniswapV3ConverterStrategyUniversalTest', async () => {
       strategyName,
       async(strategyProxy: string, signerOrProvider: Signer | Provider, splitterAddress: string) => {
         const strategy = UniswapV3ConverterStrategy__factory.connect(strategyProxy, signer);
-        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1], t[2], t[3], [0, 0, Misc.MAX_UINT, 0], [0, 0, Misc.MAX_UINT, 0]);
+        await strategy.init(core.controller, splitterAddress, tetuConverterAddress, t[1], t[2], t[3], [0, 0, Misc.MAX_UINT, 0]);
         const mainAssetSymbol = await IERC20Metadata__factory.connect(asset, signer).symbol()
         statesParams[t[1]] = {
           mainAssetSymbol,

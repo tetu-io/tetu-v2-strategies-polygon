@@ -215,7 +215,6 @@ export class PairBasedStrategyBuilder {
           0,
           0,
           [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;
@@ -262,7 +261,6 @@ export class PairBasedStrategyBuilder {
                 startTime: 1663631794,
                 endTime: 4104559500
               },
-              [0, 0, Misc.MAX_UINT, 0],
               [0, 0, Misc.MAX_UINT, 0],
           );
 
@@ -312,7 +310,6 @@ export class PairBasedStrategyBuilder {
               0,
               true,
               pId,
-              [0, 0, Misc.MAX_UINT, 0],
               [0, 0, Misc.MAX_UINT, 0],
           );
 

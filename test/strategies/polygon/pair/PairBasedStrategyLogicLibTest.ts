@@ -93,7 +93,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
       fuseAB: {
         status: number;
         thresholds: string[];
-      }[];
+      };
 
       pool?: string;
       isStablePool?: boolean;
@@ -103,15 +103,15 @@ describe('PairBasedStrategyLogicLibTest', () => {
     }
     interface INeedStrategyRebalanceParams {
       state: IUniv3State;
-      pricesAB: string[];
+      pricesAB: string;
       poolNeedsRebalance: boolean;
       /** Price of the token A in the pool, decimals 18. pricesAB[0] by default */
       poolPriceA?: string;
     }
     interface INeedStrategyRebalanceResults {
       needRebalance: boolean;
-      fuseStatusChangedAB: [boolean, boolean];
-      fuseStatusAB: [number, number];
+      fuseStatusChangedAB: boolean;
+      fuseStatusAB: number;
     }
     async function callNeedStrategyRebalance(p: INeedStrategyRebalanceParams): Promise<INeedStrategyRebalanceResults> {
       const tick = p.poolNeedsRebalance ? 9 : 11;
@@ -133,26 +133,15 @@ describe('PairBasedStrategyLogicLibTest', () => {
         p.state.depositorSwapTokens || false,
         p.state.totalLiquidity || 0,
         p.state.strategyProfitHolder || ethers.Wallet.createRandom().address,
-        [
           {
-            status: p.state.fuseAB[0].status,
+            status: p.state.fuseAB.status,
             thresholds: [
-              parseUnits(p.state.fuseAB[0].thresholds[0], 18),
-              parseUnits(p.state.fuseAB[0].thresholds[1], 18),
-              parseUnits(p.state.fuseAB[0].thresholds[2], 18),
-              parseUnits(p.state.fuseAB[0].thresholds[3], 18),
+              parseUnits(p.state.fuseAB.thresholds[0], 18),
+              parseUnits(p.state.fuseAB.thresholds[1], 18),
+              parseUnits(p.state.fuseAB.thresholds[2], 18),
+              parseUnits(p.state.fuseAB.thresholds[3], 18),
             ]
           },
-          {
-            status: p.state.fuseAB[1].status,
-            thresholds: [
-              parseUnits(p.state.fuseAB[1].thresholds[0], 18),
-              parseUnits(p.state.fuseAB[1].thresholds[1], 18),
-              parseUnits(p.state.fuseAB[1].thresholds[2], 18),
-              parseUnits(p.state.fuseAB[1].thresholds[3], 18),
-            ]
-          },
-        ],
         0,
         0
       );
@@ -177,15 +166,10 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  // {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
               },
-              pricesAB: [
-                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
-                "1.0" // price is ok
-              ]
+              pricesAB: "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
             });
 
             expect(ret.needRebalance).eq(true);
@@ -196,15 +180,10 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  // {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "1.0", // price is ok
-                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
-              ]
+              pricesAB: "1.0", // price is ok
             });
 
             expect(ret.needRebalance).eq(true);
@@ -217,15 +196,10 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                  // {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
               },
-              pricesAB: [
-                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
-                "1.0" // price is ok
-              ]
+              pricesAB: "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
             });
 
             expect(ret.needRebalance).eq(false);
@@ -236,15 +210,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "1.0", // price is ok
-                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
-              ]
+              pricesAB: "1.0", // price is ok
             });
 
             expect(ret.needRebalance).eq(false);
@@ -259,15 +227,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
-                "1.0" // price is ok
-              ]
+              pricesAB: "0.49", // (!) price is less than 0.5, fuse is triggerred ON
             });
 
             expect(ret.needRebalance).eq(true);
@@ -278,15 +240,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "1.0", // price is ok
-                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
-              ]
+              pricesAB: "1.0", // price is ok
             });
 
             expect(ret.needRebalance).eq(true);
@@ -299,15 +255,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "0.51", // price is still ok
-                "0.51" // price is ok
-              ]
+              pricesAB: "0.51", // price is still ok
             });
 
             expect(ret.needRebalance).eq(true);
@@ -324,15 +274,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
-                "1.0" // price is ok
-              ]
+              pricesAB: "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
             });
 
             expect(ret.needRebalance).eq(true);
@@ -343,15 +287,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "1.0", // price is ok
-                "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
-              ]
+              pricesAB: "1.0", // price is ok
             });
 
             expect(ret.needRebalance).eq(true);
@@ -364,15 +302,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
-                "1.0" // price is ok
-              ]
+              pricesAB: "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
             });
 
             expect(ret.needRebalance).eq(false);
@@ -383,15 +315,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "1.0", // price is ok
-                "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
-              ]
+              pricesAB: "1.0", // price is ok
             });
 
             expect(ret.needRebalance).eq(false);
@@ -406,15 +332,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
-                "1.0" // price is ok
-              ]
+              pricesAB: "0.49", // (!) price is less than 0.5, fuse is triggerred ON
             });
 
             expect(ret.needRebalance).eq(true);
@@ -425,15 +345,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "1.0", // price is ok
-                "0.49", // (!) price is less than 0.5, fuse is triggerred ON
-              ]
+              pricesAB: "1.0", // price is ok
             });
 
             expect(ret.needRebalance).eq(true);
@@ -446,15 +360,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
-                fuseAB: [
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
-                ]
+                fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
-              pricesAB: [
-                "0.51", // price is still ok
-                "0.51" // price is ok
-              ]
+              pricesAB: "0.51", // price is still ok
             });
 
             expect(ret.needRebalance).eq(false);
@@ -475,9 +383,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
     interface IUpdateFuseStatusParams {
       isStablePool: boolean;
-      initialFuseStatusAB: number[],
-      fuseStatusChangedAB: boolean[],
-      fuseStatusAB: number[];
+      initialFuseStatusAB: number,
+      fuseStatusChangedAB: boolean,
+      fuseStatusAB: number;
       withdrawDone: number;
     }
 
@@ -495,20 +403,17 @@ describe('PairBasedStrategyLogicLibTest', () => {
         true,
         0,
         ethers.Wallet.createRandom().address,
-        [{
-          status: p.initialFuseStatusAB[0],
-          thresholds: [0, 0, 0, 0]
-        }, {
-          status: p.initialFuseStatusAB[1],
-          thresholds: [0, 0, 0, 0]
-        }],
+          {
+            status: p.initialFuseStatusAB,
+            thresholds: [0, 0, 0, 0]
+          },
         p.withdrawDone,
         0
       );
 
       await facade.updateFuseStatus(
-        [p.fuseStatusChangedAB[0], p.fuseStatusChangedAB[1]],
-        [p.fuseStatusAB[0], p.fuseStatusAB[1]],
+          p.fuseStatusChangedAB,
+          p.fuseStatusAB,
       )
 
       const pairStateData = await facade.getPairState();
@@ -520,9 +425,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
     it("should change both fuse status, stable pool", async () => {
       const ret = await callUpdateFuseStatus({
-        initialFuseStatusAB: [1, 1],
-        fuseStatusChangedAB: [true, true],
-        fuseStatusAB: [2, 2],
+        initialFuseStatusAB: 1,
+        fuseStatusChangedAB: true,
+        fuseStatusAB: 2,
         isStablePool: true,
         withdrawDone: 1
       });
@@ -532,21 +437,21 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
     it("should change both fuse status, not stable pool", async () => {
       const ret = await callUpdateFuseStatus({
-        initialFuseStatusAB: [1, 1],
-        fuseStatusChangedAB: [true, true],
-        fuseStatusAB: [2, 2],
+        initialFuseStatusAB: 1,
+        fuseStatusChangedAB: true,
+        fuseStatusAB: 2,
         isStablePool: false,
         withdrawDone: 1
       });
-      expect(ret.fuseStatusAB.join()).eq([2, 2].join());
+      expect(ret.fuseStatusAB).eq(2);
       expect(ret.withdrawDone).eq(0);
     });
 
     it("should change both fuse A only", async () => {
       const ret = await callUpdateFuseStatus({
-        initialFuseStatusAB: [1, 1],
-        fuseStatusChangedAB: [true, false],
-        fuseStatusAB: [2, 2],
+        initialFuseStatusAB: 1,
+        fuseStatusChangedAB: true,
+        fuseStatusAB: 2,
         isStablePool: true,
         withdrawDone: 1
       });
@@ -556,9 +461,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
     it("should change both fuse B only", async () => {
       const ret = await callUpdateFuseStatus({
-        initialFuseStatusAB: [1, 1],
-        fuseStatusChangedAB: [false, true],
-        fuseStatusAB: [2, 2],
+        initialFuseStatusAB: 1,
+        fuseStatusChangedAB: false,
+        fuseStatusAB: 2,
         isStablePool: true,
         withdrawDone: 1
       });
@@ -568,9 +473,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
     it("should not change any fuse status", async () => {
       const ret = await callUpdateFuseStatus({
-        initialFuseStatusAB: [1, 1],
-        fuseStatusChangedAB: [false, false],
-        fuseStatusAB: [2, 2],
+        initialFuseStatusAB: 1,
+        fuseStatusChangedAB: false,
+        fuseStatusAB: 2,
         isStablePool: false,
         withdrawDone: 1
       });
@@ -592,8 +497,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
       rebalanceTickRange: number;
 
       isStablePool: boolean;
-      fuseThresholdsA: number[];
-      fuseThresholdsB: number[];
+      fuseThresholds: number[];
+      // fuseThresholdsB: number[];
     }
     interface ISetValuesResults {
       init: ISetValuesParams;
@@ -623,8 +528,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         [p.pool, p.asset, p.token0, p.token1],
         [p.tickSpacing, p.lowerTick, p.upperTick, p.rebalanceTickRange],
         p.isStablePool,
-        [p.fuseThresholdsA[0], p.fuseThresholdsA[1], p.fuseThresholdsA[2], p.fuseThresholdsA[3]],
-        [p.fuseThresholdsB[0], p.fuseThresholdsB[1], p.fuseThresholdsB[2], p.fuseThresholdsB[3]],
+        [p.fuseThresholds[0], p.fuseThresholds[1], p.fuseThresholds[2], p.fuseThresholds[3]],
       );
 
       const pairStateData = await facade.getPairState();
@@ -685,8 +589,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
             asset,
 
-            fuseThresholdsA: [11, 12, 14, 13],
-            fuseThresholdsB: [21, 22, 24, 23]
+            fuseThresholds: [11, 12, 14, 13],
           });
         }
 
@@ -747,8 +650,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
             asset,
 
-            fuseThresholdsA: [11, 12, 14, 13], // (!) not used in NOT stable pool
-            fuseThresholdsB: [21, 22, 24, 23] // (!) not used in NOT stable pool
+            fuseThresholds: [11, 12, 14, 13], // (!) not used in NOT stable pool
           });
         }
 
@@ -810,8 +712,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
             asset,
 
-            fuseThresholdsA: [11, 12, 14, 13],
-            fuseThresholdsB: [21, 22, 24, 23]
+            fuseThresholds: [11, 12, 14, 13],
           });
         }
 
@@ -872,8 +773,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
           upperTick: 3,
           rebalanceTickRange: 4,
 
-          fuseThresholdsA: [11, 12, 14, 13],
-          fuseThresholdsB: [21, 22, 24, 23]
+          fuseThresholds: [11, 12, 14, 13],
         })).revertedWith("PBS-5 Incorrect asset"); // INCORRECT_ASSET
       });
     });
@@ -1304,26 +1204,15 @@ describe('PairBasedStrategyLogicLibTest', () => {
         p.state.depositorSwapTokens,
         p.state.totalLiquidity,
         p.state.profitHolder,
-        [
           {
-            status: p.state.fuseStatusTokenA,
+            status: p.state.fuseStatus,
             thresholds: [
-              parseUnits(p.state.fuseThresholdsA[0].toString(), 18),
-              parseUnits(p.state.fuseThresholdsA[1].toString(), 18),
-              parseUnits(p.state.fuseThresholdsA[2].toString(), 18),
-              parseUnits(p.state.fuseThresholdsA[3].toString(), 18)
+              parseUnits(p.state.fuseThresholds[0].toString(), 18),
+              parseUnits(p.state.fuseThresholds[1].toString(), 18),
+              parseUnits(p.state.fuseThresholds[2].toString(), 18),
+              parseUnits(p.state.fuseThresholds[3].toString(), 18)
             ]
           },
-          {
-            status: p.state.fuseStatusTokenB,
-            thresholds: [
-              parseUnits(p.state.fuseThresholdsB[0].toString(), 18),
-              parseUnits(p.state.fuseThresholdsB[1].toString(), 18),
-              parseUnits(p.state.fuseThresholdsB[2].toString(), 18),
-              parseUnits(p.state.fuseThresholdsB[3].toString(), 18)
-            ]
-          },
-        ],
         p.state.withdrawDone,
         p.state.lastRebalanceNoSwap
       );
@@ -1357,12 +1246,10 @@ describe('PairBasedStrategyLogicLibTest', () => {
             rebalanceTickRange: 4,
 
             totalLiquidity: Misc.ONE18,
-            fuseStatusTokenA: 2,
-            fuseStatusTokenB: 3,
+            fuseStatus: 2,
             withdrawDone: 1000,
 
-            fuseThresholdsA: [11, 12, 14, 13],
-            fuseThresholdsB: [21, 22, 24, 23],
+            fuseThresholds: [11, 12, 14, 13],
 
             isStablePool: true,
             depositorSwapTokens: false,
@@ -1393,17 +1280,17 @@ describe('PairBasedStrategyLogicLibTest', () => {
           Misc.ONE18, tetu.address, 1000
         ].join());
       });
-      it("should return fuse status", async () => {
-        const ret = await loadFixture(getDefaultStateTest);
-        expect([ret.state.fuseStatusTokenA, ret.state.fuseStatusTokenB].join()).eq([2, 3].join());
+      it.skip("should return fuse status", async () => {
+        // const ret = await loadFixture(getDefaultStateTest);
+        // expect([ret.state.fuseStatus, ret.state.fuseStatusTokenB].join()).eq([2, 3].join());
       });
       it("should return fuse A thresholds", async () => {
         const ret = await loadFixture(getDefaultStateTest);
-        expect(ret.state.fuseThresholdsA.join()).eq([11, 12, 14, 13].join());
+        expect(ret.state.fuseThresholds.join()).eq([11, 12, 14, 13].join());
       });
-      it("should return fuse B thresholds", async () => {
-        const ret = await loadFixture(getDefaultStateTest);
-        expect(ret.state.fuseThresholdsB.join()).eq([21, 22, 24, 23].join());
+      it.skip("should return fuse B thresholds", async () => {
+        // const ret = await loadFixture(getDefaultStateTest);
+        // expect(ret.state.fuseThresholdsB.join()).eq([21, 22, 24, 23].join());
       });
     });
     describe("isStablePool false, depositorSwapTokens true", () => {
@@ -1430,12 +1317,10 @@ describe('PairBasedStrategyLogicLibTest', () => {
             rebalanceTickRange: 4,
 
             totalLiquidity: Misc.ONE18,
-            fuseStatusTokenA: 2,
-            fuseStatusTokenB: 3,
+            fuseStatus: 2,
             withdrawDone: 1000,
 
-            fuseThresholdsA: [11, 12, 14, 13],
-            fuseThresholdsB: [21, 22, 24, 23],
+            fuseThresholds: [11, 12, 14, 13],
 
             isStablePool: false,
             depositorSwapTokens: true,

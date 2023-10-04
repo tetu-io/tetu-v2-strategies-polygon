@@ -21,16 +21,11 @@ const IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE = 3;
 
 const IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
 const IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
-const IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B = 2;
 const IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE = 3;
 const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 = 4;
 const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_1 = 5;
 const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_2 = 6;
 const IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_3 = 7;
-const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 = 8;
-const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
-const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
-const IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
 const IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP = 12;
 
 const IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL = 0;
@@ -75,12 +70,10 @@ export interface IDefaultState {
   rebalanceTickRange: number;
 
   totalLiquidity: BigNumber;
-  fuseStatusTokenA: number;
-  fuseStatusTokenB: number;
+  fuseStatus: number;
   withdrawDone: number;
 
-  fuseThresholdsA: number[];
-  fuseThresholdsB: number[];
+  fuseThresholds: number[];
 
   isStablePool: boolean;
   depositorSwapTokens: boolean;
@@ -131,20 +124,13 @@ export class PackedData {
 
       totalLiquidity: ret.nums[IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY],
 
-      fuseStatusTokenA: ret.nums[IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A].toNumber(),
-      fuseStatusTokenB: ret.nums[IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B].toNumber(),
+      fuseStatus: ret.nums[IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A].toNumber(),
       withdrawDone: ret.nums[IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE].toNumber(),
-      fuseThresholdsA: [
+      fuseThresholds: [
         +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0], 18),
         +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_1], 18),
         +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_2], 18),
         +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_3], 18),
-      ],
-      fuseThresholdsB: [
-        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0], 18),
-        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1], 18),
-        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2], 18),
-        +formatUnits(ret.nums[IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3], 18),
       ],
       lastRebalanceNoSwap: ret.nums[IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP].toNumber(),
 

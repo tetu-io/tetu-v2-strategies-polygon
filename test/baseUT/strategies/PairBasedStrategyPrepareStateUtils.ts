@@ -96,21 +96,25 @@ export class PairBasedStrategyPrepareStateUtils {
     // lib.getPrice gives incorrect value of the price of token A (i.e. 1.001734 instead of 1.0)
     // so, let's use prices from the oracle
 
-    const pricesAB = await b.facadeLib2.getOracleAssetsPrices(b.converter.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
-    const priceA = +formatUnits(pricesAB[0], 18).toString();
-    const priceB = +formatUnits(pricesAB[1], 18).toString();
-    console.log("priceA, priceB", priceA, priceB);
+    const pricesAB = await b.facadeLib2.getOracleAssetsPrice(b.converter.address, MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN);
+    const priceAB = +formatUnits(pricesAB, 18).toString();
+    console.log("priceAB", priceAB);
 
-    const ttA = [priceA - 0.0008, priceA - 0.0006, priceA + 0.0008, priceA + 0.0006].map(x => parseUnits(x.toString(), 18));
-    const ttB = [
+    const ttA = [
+      priceAB - 0.0002, //0.0008,
+      priceAB - 0.0001, //0.0006,
+      priceAB + (triggerOn ? -0.0001 : 0.0004), //0.0008,
+      priceAB + (triggerOn ? -0.0002 : 0.0002), //0.0006,
+    ].map(x => parseUnits(x.toString(), 18));
+    /*const ttB = [
       priceB - 0.0008,
       priceB - 0.0006,
       priceB + (triggerOn ? -0.0001 : 0.0004), // (!) fuse ON/OFF
       priceB + (triggerOn ? -0.0002 : 0.0002),
-    ].map(x => parseUnits(x.toString(), 18));
+    ].map(x => parseUnits(x.toString(), 18));*/
 
-    await b.strategy.setFuseThresholds(0, [ttA[0], ttA[1], ttA[2], ttA[3]]);
-    await b.strategy.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
+    await b.strategy.setFuseThresholds([ttA[0], ttA[1], ttA[2], ttA[3]]);
+    // await b.strategy.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
   }
 
   /** Put addition amounts of tokenA and tokenB to balance of the profit holder */

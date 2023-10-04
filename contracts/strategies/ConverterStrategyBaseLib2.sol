@@ -178,14 +178,14 @@ library ConverterStrategyBaseLib2 {
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokensOut, amountsOut);
   }
 
-  /// @notice Get prices of {tokenA} and {tokenB}
-  function getOracleAssetsPrices(ITetuConverter converter, address tokenA, address tokenB) external view returns (
-    uint priceA,
-    uint priceB
+  /// @notice Get price of {tokenB} in term of {tokenA} with 18 decimals
+  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (
+    uint price
   ) {
     IPriceOracle oracle = AppLib._getPriceOracle(converter);
-    priceA = oracle.getAssetPrice(tokenA);
-    priceB = oracle.getAssetPrice(tokenB);
+    uint priceA = oracle.getAssetPrice(tokenA);
+    uint priceB = oracle.getAssetPrice(tokenB);
+    price = priceA > 0 ? 1e18 * priceB / priceA : type(uint).max;
   }
 
   function getAssetPriceFromConverter(ITetuConverter converter, address token) external view returns (uint) {

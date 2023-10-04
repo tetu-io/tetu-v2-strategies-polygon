@@ -83,7 +83,6 @@ describe('UniswapV3ConverterStrategyDegradationTest @skip-on-coverage', function
           0,
           0,
           [0, 0, Misc.MAX_UINT, 0],
-          [0, 0, Misc.MAX_UINT, 0],
         );
 
         return _strategy as unknown as IStrategyV2;

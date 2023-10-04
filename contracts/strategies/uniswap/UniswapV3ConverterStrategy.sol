@@ -33,8 +33,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   /// @param pool_ The address of the pool.
   /// @param tickRange_ The tick range for the liquidity position.
   /// @param rebalanceTickRange_ The tick range for rebalancing.
-  /// @param fuseThresholdsA Price thresholds for token A [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
-  /// @param fuseThresholdsB Price thresholds for token B [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
+  /// @param fuseThresholds Price thresholds for tokens [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
   function init(
     address controller_,
     address splitter_,
@@ -42,8 +41,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
     address pool_,
     int24 tickRange_,
     int24 rebalanceTickRange_,
-    uint[4] calldata fuseThresholdsA,
-    uint[4] calldata fuseThresholdsB
+    uint[4] calldata fuseThresholds
   ) external initializer {
     __ConverterStrategyBase_init(controller_, splitter_, converter_);
     UniswapV3ConverterStrategyLogicLib.initStrategyState(
@@ -53,8 +51,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
       tickRange_,
       rebalanceTickRange_,
       ISplitter(splitter_).asset(),
-      fuseThresholdsA,
-      fuseThresholdsB
+      fuseThresholds
     );
 
     // setup specific name for UI
@@ -66,10 +63,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
 
   /// @notice Manually set status of the fuse
   /// @param status See PairBasedStrategyLib.FuseStatus enum for possible values
-  /// @param index01 0 - token A, 1 - token B
-  function setFuseStatus(uint index01, uint status) external {
+  function setFuseStatus(uint status) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB[index01], PairBasedStrategyLib.FuseStatus(status));
+    PairBasedStrategyLib.setFuseStatus(state.pair.fuseAB, PairBasedStrategyLib.FuseStatus(status));
   }
 
   /// @notice Set thresholds for the fuse: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
@@ -78,10 +74,9 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   ///         Price falls below 0.9 - fuse is ON. Price rises back up to 0.92 - fuse is OFF.
   ///         Price raises more and reaches 1.1 - fuse is ON again. Price falls back and reaches 1.08 - fuse OFF again.
   /// @param values Price thresholds: [LOWER_LIMIT_ON, LOWER_LIMIT_OFF, UPPER_LIMIT_ON, UPPER_LIMIT_OFF]
-  /// @param index01 0 - token A, 1 - token B
-  function setFuseThresholds(uint index01, uint[4] memory values) external {
+  function setFuseThresholds(uint[4] memory values) external {
     StrategyLib2.onlyOperators(controller());
-    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB[index01], values);
+    PairBasedStrategyLib.setFuseThresholds(state.pair.fuseAB, values);
   }
 
   /// @dev Set a dedicated contract for rewards for properly counting.
@@ -333,8 +328,7 @@ contract UniswapV3ConverterStrategy is UniswapV3Depositor, ConverterStrategyBase
   }
 
   function _isFuseTriggeredOn() internal view returns (bool) {
-    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[0].status)
-        || PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB[1].status);
+    return PairBasedStrategyLib.isFuseTriggeredOn(state.pair.fuseAB.status);
   }
   //endregion--------------------------------------- INTERNAL LOGIC
 }
