@@ -843,5 +843,79 @@ describe("ConverterStrategyBaseInt", () => {
       }
     });
   });
+
+  describe("Study sendTokensToForwarder: send real tokens to real forwarders @skip-on-coverage", () => {
+    let snapshot: string;
+    before(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    after(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    interface ISendTokensToForwarderResults {
+      balanceBefore: number[];
+      balanceAfter: number[];
+    }
+
+    interface ISendTokensToForwarderParams {
+      tokens: string[];
+      holders: string[];
+      amounts: string[];
+    }
+
+    async function makeSendTokensToForwarderTest(p: ISendTokensToForwarderParams): Promise<ISendTokensToForwarderResults> {
+      const cc = await prepareBalancerConverterStrategyUsdcTUsd();
+      // const vault = ethers.Wallet.createRandom().address;
+      const facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
+      // const controller = await MockHelper.createMockController(signer);
+      // await controller.setForwarder(core.forwarder);
+      // const splitter = await MockHelper.createMockSplitter(signer);
+      // await splitter.setVault(vault);
+
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        decimals.push(await IERC20Metadata__factory.connect(p.tokens[i], signer).decimals());
+        await BalanceUtils.getAmountFromHolder(
+          p.tokens[i],
+          p.holders[i],
+          facade.address,
+          parseUnits(p.amounts[i], decimals[i])
+        )
+      }
+
+      const balanceBefore = await Promise.all(p.tokens.map(
+        async (x, index) => IERC20Metadata__factory.connect(x, signer).balanceOf(facade.address)
+      ));
+
+
+      await facade.sendTokensToForwarder(
+        await cc.vault.controller(),
+        cc.splitter.address,
+        p.tokens,
+        p.amounts.map((amount, index) => parseUnits(amount, decimals[index]))
+      );
+
+      return {
+        balanceBefore: await Promise.all(balanceBefore.map(async (x, index) => +formatUnits(x, decimals[index]))),
+        balanceAfter: await Promise.all(p.tokens.map(
+          async (x, index) => +formatUnits(
+            await IERC20Metadata__factory.connect(x, signer).balanceOf(facade.address),
+            decimals[index]
+          )
+        ))
+      }
+    }
+
+    it("forwarder should receive expected tokens", async () => {
+      const r = await makeSendTokensToForwarderTest({
+        tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
+        holders: [MaticHolders.HOLDER_USDC, MaticHolders.HOLDER_USDT],
+        amounts: ["0.000001", "0.000002"],
+      });
+      expect(r.balanceBefore.join()).eq([0.000001, 0.000002].join());
+      expect(r.balanceAfter.join()).eq([0, 0].join());
+    });
+  });
 //endregion Unit tests
 });
