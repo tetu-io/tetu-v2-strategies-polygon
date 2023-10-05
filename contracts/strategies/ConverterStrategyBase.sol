@@ -251,22 +251,19 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
   /// @param amount_ Required amount of {v.asset}. Use type(uint).max to withdraw all
   /// @return expectedTotalAssetAmount Expected amount of {v.asset} that should be received on the balance
   ///                                  Expected total amount of given asset after all withdraws, conversions, swaps and repays
-  function _makeRequestedAmount(
-    uint amount_,
-    uint investedAssets_,
-    WithdrawUniversalLocal memory v
-  ) internal virtual returns ( // it's virtual to simplify unit testing
+  function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal virtual returns ( // it's virtual to simplify unit testing
     uint expectedTotalAssetAmount
   ) {
     uint depositorLiquidity = _depositorLiquidity();
 
     // calculate how much liquidity we need to withdraw for getting at least requested amount of the {v.asset}
+    uint[] memory quoteAmounts = _depositorQuoteExit(depositorLiquidity);
     uint liquidityAmountToWithdraw = ConverterStrategyBaseLib2.getLiquidityAmount(
       amount_,
       v.tokens,
       v.indexTheAsset,
       v.converter,
-      investedAssets_,
+      quoteAmounts,
       depositorLiquidity,
       v.indexUnderlying
     );
@@ -356,7 +353,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
 
       // get at least requested amount of the underlying on the balance
       assetPrice = ConverterStrategyBaseLib2.getAssetPriceFromConverter(v.converter, v.theAsset);
-      expectedWithdrewUSD = _makeRequestedAmount(amount, investedAssets_, v) * assetPrice / 1e18;
+      expectedWithdrewUSD = _makeRequestedAmount(amount, v) * assetPrice / 1e18;
 
       uint balanceAfterWithdraw = AppLib.balance(v.theAsset);
 
@@ -608,7 +605,7 @@ abstract contract ConverterStrategyBase is IConverterStrategyBase, ITetuConverte
       } else {
         uint amountTwoGaps = amount_ * (DENOMINATOR + 2 * GAP_WITHDRAW) / DENOMINATOR;
         // get at least requested amount of {theAsset_} on the balance
-        _makeRequestedAmount(amountTwoGaps - v.balanceBefore, _investedAssets, v);
+        _makeRequestedAmount(amountTwoGaps - v.balanceBefore, v);
 
         uint balanceAfter = AppLib.balance(theAsset_);
         amountOut = balanceAfter > amountPlusGap

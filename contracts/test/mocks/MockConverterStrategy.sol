@@ -370,11 +370,7 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     });
   }
 
-  function _makeRequestedAmount(
-    uint amount_,
-    uint investedAssets_,
-    WithdrawUniversalLocal memory v
-  ) internal override returns (
+  function _makeRequestedAmount(uint amount_, WithdrawUniversalLocal memory v) internal override returns (
     uint expectedTotalAssetAmount
   ) {
     if (_makeRequestedAmountParams.useMockedValues) {
@@ -385,18 +381,14 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
       }
       return _makeRequestedAmountParams.expectedTotalAssetAmountOut;
     } else {
-      return super._makeRequestedAmount(amount_, investedAssets_, v);
+      return super._makeRequestedAmount(amount_, v);
     }
   }
 
-  function _makeRequestedAmountAccess(
-    uint amount_,
-    uint investedAssets_,
-    WithdrawUniversalLocal memory v
-  ) external returns (
+  function _makeRequestedAmountAccess(uint amount_, WithdrawUniversalLocal memory v) external returns (
     uint expectedTotalAssetAmount
   ) {
-    return _makeRequestedAmount(amount_, investedAssets_, v);
+    return _makeRequestedAmount(amount_, v);
   }
   //endregion ----------------------------------------------------- makeRequestedAmount
 

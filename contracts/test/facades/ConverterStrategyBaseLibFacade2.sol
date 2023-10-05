@@ -29,7 +29,7 @@ contract ConverterStrategyBaseLibFacade2 {
     address[] memory tokens,
     uint indexAsset,
     ITetuConverter converter,
-    uint investedAssets,
+    uint[] memory assetsInPool,
     uint depositorLiquidity,
     uint indexUnderlying
   ) external view returns (
@@ -40,7 +40,7 @@ contract ConverterStrategyBaseLibFacade2 {
       tokens,
       indexAsset,
       converter,
-      investedAssets,
+      assetsInPool,
       depositorLiquidity,
       indexUnderlying
     );
