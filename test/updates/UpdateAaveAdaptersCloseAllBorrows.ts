@@ -264,7 +264,7 @@ describe("UpdateAaveAdaptersCloseAllBorrows", () => {
       const config = await poolAdapter.getConfig();
       const status = await poolAdapter.getStatus();
       const platformAdapter = await borrowManager.converterToPlatformAdapter(config.originConverter);
-      console.log("Pool adapter user, platform adapter", config.user, platformAdapter, config);
+      console.log("Pool adapter user, platform adapter", config.user, platformAdapter, config, status);
     }
   }
 
@@ -301,6 +301,8 @@ describe("UpdateAaveAdaptersCloseAllBorrows", () => {
     // withdraw all from old-strategy
     const infoStrategiesOld = await withdrawAllFromOldVault(debtMonitor);
     console.log("infoStrategiesOld", infoStrategiesOld);
+
+    await getPlatformsAdapterInfo("after withdraw old", borrowManagerAsGov, debtMonitor);
 
     // withdraw all from all NSR-strategies
     await printAvgAprsForNsrVault();
