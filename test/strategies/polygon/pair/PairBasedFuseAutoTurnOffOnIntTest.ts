@@ -318,7 +318,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
       async function prepareStrategy(): Promise<IBuilderResults> {
         const b = await PairStrategyFixtures.buildPairStrategyUsdcXXX(strategyInfo.name, signer, signer2);
 
-        await InjectUtils.injectTetuConverter(signer);
+        // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
 

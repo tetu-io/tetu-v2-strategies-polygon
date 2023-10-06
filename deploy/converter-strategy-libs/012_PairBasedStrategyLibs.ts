@@ -9,7 +9,7 @@ const func: DeployFunction = async function(hre: HardhatRuntimeEnvironment) {
     IterationPlanLib: (await deployments.get('IterationPlanLib')).address,
   });
   await hardhatDeploy(hre, 'PairBasedStrategyLogicLib', true, {
-    ConverterStrategyBaseLib: (await deployments.get('ConverterStrategyBaseLib')).address,
+    BorrowLib: (await deployments.get('BorrowLib')).address,
     ConverterStrategyBaseLib2: (await deployments.get('ConverterStrategyBaseLib2')).address,
     PairBasedStrategyLib: (await deployments.get('PairBasedStrategyLib')).address,
     StrategyLib2: (await deployments.get('StrategyLib2')).address,

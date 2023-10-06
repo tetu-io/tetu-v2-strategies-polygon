@@ -194,7 +194,7 @@ describe('KyberConverterStrategyTest', function() {
       await PairBasedStrategyPrepareStateUtils.movePriceBySteps(
         signer,
         {
-          strategy: AlgebraConverterStrategy__factory.connect(strategy.address, signer),
+          strategy: KyberConverterStrategy__factory.connect(strategy.address, signer),
           swapper: MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER,
           quoter: MaticAddresses.KYBER_ELASTIC_QUOTER_V2,
           lib: await DeployerUtils.deployContract(signer, "KyberLib") as KyberLib,
@@ -203,7 +203,7 @@ describe('KyberConverterStrategyTest', function() {
         },
         true,
         state,
-        parseUnits('100000', 6),
+        parseUnits('120000', 6),
         undefined,
         5
       );
@@ -264,7 +264,7 @@ describe('KyberConverterStrategyTest', function() {
 
       expect(await s.needRebalance()).eq(false)
 
-      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('100000', 6));
+      await UniversalUtils.movePoolPriceUp(signer, state, MaticAddresses.TETU_LIQUIDATOR_KYBER_SWAPPER, parseUnits('120000', 6));
 
       console.log('Rebalance')
       expect(await s.needRebalance()).eq(true)
