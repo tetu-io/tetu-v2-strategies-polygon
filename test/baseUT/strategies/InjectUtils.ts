@@ -23,20 +23,20 @@ export class InjectUtils {
   static async injectTetuConverter(signer: SignerWithAddress) {
     const core = await DeployerUtilsLocal.getCoreAddresses();
     const tetuConverter = getConverterAddress();
-    const debtMonitor = await ConverterController__factory.connect(
-      await TetuConverter__factory.connect(tetuConverter, signer).controller(),
-      signer
-    ).debtMonitor();
+    const converterController = await TetuConverter__factory.connect(tetuConverter, signer).controller();
+    const debtMonitor = await ConverterController__factory.connect(converterController, signer).debtMonitor();
+    const borrowManager = await ConverterController__factory.connect(converterController, signer).borrowManager();
 
     const converterLogic = await DeployerUtils.deployContract(signer, "TetuConverter");
     const debtMonitorLogic = await DeployerUtils.deployContract(signer, "DebtMonitor");
+    const borrowManagerLogic = await DeployerUtils.deployContract(signer, "BorrowManager");
     const controller = ControllerV2__factory.connect(core.controller, signer);
     const governance = await controller.governance();
     const controllerAsGov = controller.connect(await Misc.impersonate(governance));
 
     await controllerAsGov.announceProxyUpgrade(
-      [tetuConverter, debtMonitor],
-      [converterLogic.address, debtMonitorLogic.address]
+      [tetuConverter, debtMonitor, borrowManager],
+      [converterLogic.address, debtMonitorLogic.address, borrowManagerLogic.address]
     );
     await TimeUtils.advanceBlocksOnTs(60 * 60 * 18);
     await controllerAsGov.upgradeProxy([tetuConverter, debtMonitor]);

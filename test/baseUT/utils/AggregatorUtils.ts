@@ -91,6 +91,7 @@ export class AggregatorUtils {
       allowPartialFill: false,
       protocols: 'POLYGON_CURVE', // 'POLYGON_BALANCER_V2',
     };
+    console.log("params", params);
 
     const swapTransaction = await AggregatorUtils.buildTxForSwap(JSON.stringify(params));
     console.log('Transaction for swap: ', swapTransaction);

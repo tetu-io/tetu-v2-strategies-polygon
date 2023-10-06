@@ -79,23 +79,37 @@ library ConverterStrategyBaseLib2 {
   ///         1) liquidity in the pool - {depositorLiquidity_}
   ///         2) Converted amounts on balance of the strategy - {baseAmounts_}
   ///         3) Liquidity locked in the debts.
-  /// @param targetAmount_ Required amount of main asset to be withdrawn from the strategy; type(uint).max - withdraw all
+  /// @param targetAmount Required amount of main asset to be withdrawn from the strategy; type(uint).max - withdraw all
+  /// @param quoteAmounts Results of _depositorQuoteExit(depositorLiquidity)
   /// @return resultAmount Amount of liquidity that should be withdrawn from the pool, cannot exceed depositorLiquidity
   function getLiquidityAmount(
-    uint targetAmount_,
+    uint targetAmount,
     address[] memory tokens,
     uint indexAsset,
     ITetuConverter converter,
-    uint investedAssets,
+    uint[] memory quoteAmounts,
     uint depositorLiquidity,
     uint indexUnderlying
   ) external view returns (
     uint resultAmount
   ) {
-    if (targetAmount_ != type(uint).max) {
+    // total amount of assetsInPool recalculated to the underlying
+    // we need to calculate this value in the case of partial withdraw only
+    // so we assume below that it is equal to 0 if full withdraw is required
+    uint totalUnderlying;
+
+    if (targetAmount != type(uint).max) {
       // reduce targetAmount_ on the amounts of not-underlying assets available on the balance
       uint len = tokens.length;
       (uint[] memory prices, uint[] memory decs) = AppLib._getPricesAndDecs(AppLib._getPriceOracle(converter), tokens, len);
+
+      // calculate total amount of assets invested to the pool
+      for (uint i; i < tokens.length; i = AppLib.uncheckedInc(i)) {
+        totalUnderlying += (indexAsset == i)
+          ? quoteAmounts[i]
+          : quoteAmounts[i] * prices[i] * decs[indexUnderlying] / prices[indexUnderlying] / decs[i];
+      }
+
       for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
         // assume here that the targetAmount_ is already reduced on available balance of the target asset
         if (indexAsset == i) continue;
@@ -104,31 +118,31 @@ library ConverterStrategyBaseLib2 {
         if (tokenBalance != 0) {
           uint tokenBalanceInAsset = tokenBalance * prices[i] * decs[indexAsset] / prices[indexAsset] / decs[i];
 
-          targetAmount_ = targetAmount_ > tokenBalanceInAsset
-            ? targetAmount_ - tokenBalanceInAsset
+          targetAmount = targetAmount > tokenBalanceInAsset
+            ? targetAmount - tokenBalanceInAsset
             : 0;
 
           uint tokenBalanceInUnderlying = indexUnderlying == indexAsset
             ? tokenBalanceInAsset
             : tokenBalance * prices[i] * decs[indexUnderlying] / prices[indexUnderlying] / decs[i];
 
-          investedAssets = investedAssets > tokenBalanceInUnderlying
-            ? investedAssets - tokenBalanceInUnderlying
+          totalUnderlying = totalUnderlying > tokenBalanceInUnderlying
+            ? totalUnderlying - tokenBalanceInUnderlying
             : 0;
         }
       }
 
       if (indexAsset != indexUnderlying) {
         // convert targetAmount_ to underlying
-        targetAmount_ =  targetAmount_ * prices[indexAsset] * decs[indexUnderlying] / prices[indexUnderlying] / decs[indexAsset];
+        targetAmount =  targetAmount * prices[indexAsset] * decs[indexUnderlying] / prices[indexUnderlying] / decs[indexAsset];
       }
     }
 
-    uint liquidityRatioOut = targetAmount_ == type(uint).max || investedAssets == 0
+    uint liquidityRatioOut = totalUnderlying == 0
       ? 1e18
-      : ((targetAmount_ == 0)
+      : ((targetAmount == 0)
         ? 0
-        : 1e18 * 101 * targetAmount_ / investedAssets / 100 // a part of amount that we are going to withdraw + 1% on top
+        : 1e18 * 101 * targetAmount / totalUnderlying / 100 // a part of amount that we are going to withdraw + 1% on top
       );
 
     resultAmount = liquidityRatioOut == 0

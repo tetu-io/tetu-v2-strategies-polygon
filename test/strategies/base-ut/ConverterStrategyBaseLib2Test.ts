@@ -3,12 +3,7 @@ import {ethers} from 'hardhat';
 import {TimeUtils} from '../../../scripts/utils/TimeUtils';
 import {DeployerUtils} from '../../../scripts/utils/DeployerUtils';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
-import {
-  ConverterStrategyBaseLib2__factory,
-  ConverterStrategyBaseLibFacade2,
-  MockToken,
-  PriceOracleMock, StrategySplitterV2, UniswapV3ConverterStrategyLogicLib__factory
-} from '../../../typechain';
+import {ConverterStrategyBaseLib2__factory, ConverterStrategyBaseLibFacade2, MockToken, PriceOracleMock, StrategySplitterV2} from '../../../typechain';
 import {expect} from 'chai';
 import {MockHelper} from '../../baseUT/helpers/MockHelper';
 import {IQuoteRepayParams, ITokenAmountNum} from "../../baseUT/mocks/TestDataTypes";
@@ -25,10 +20,7 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
-import {
-  FixPriceChangesEventObject, NotEnoughInsuranceEventObject,
-  UncoveredLossEventObject
-} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
+import {FixPriceChangesEventObject, UncoveredLossEventObject, NotEnoughInsuranceEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {Misc} from "../../../scripts/utils/Misc";
 import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
 
@@ -614,7 +606,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
       indexUnderlying?: number;
 
       targetAmount: string;
-      investedAssets: string;
+      assetsInPool: string[];
       depositorLiquidity: string;
 
       balances: string[];
@@ -652,7 +644,9 @@ describe('ConverterStrategyBaseLibTest2', () => {
         p.tokens.map(x => x.address),
         p.indexAsset,
         converter.address,
-        parseUnits(p.investedAssets, await p.tokens[p.indexUnderlying ?? p.indexAsset].decimals()),
+        await Promise.all(p.assetsInPool.map(
+          async (x, index) => parseUnits(x, await p.tokens[index].decimals())
+        )),
         parseUnits(p.depositorLiquidity, DECIMALS_LIQUIDITY),
         p.indexUnderlying ?? p.indexAsset
       );
@@ -679,7 +673,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
                 targetAmount: "5",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7",
                 balances: ["0", "0", "0"],
               });
@@ -704,7 +698,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
                 targetAmount: "5",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7",
                 balances: ["17", "27", "37"],
               })
@@ -729,7 +723,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
                 targetAmount: "9",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7",
                 balances: ["7", "0", "14"],
               })
@@ -754,7 +748,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
                 targetAmount: "19",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7",
                 balances: ["7", "2700", "2"],
               })
@@ -781,7 +775,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
                 targetAmount: "all", // all
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7777",
                 balances: ["0", "0", "0"],
               })
@@ -806,7 +800,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 tokens: [dai, usdc, usdt],
                 indexAsset: 1,
                 targetAmount: "all",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7777",
                 balances: ["17", "27", "37"],
               })
@@ -836,7 +830,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 indexAsset: 0,
                 indexUnderlying: 1,
                 targetAmount: "5",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7",
                 balances: ["0", "0", "0"],
               });
@@ -862,7 +856,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 indexAsset: 0,
                 indexUnderlying: 1,
                 targetAmount: "9",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7",
                 balances: ["0", "7", "14"],
               })
@@ -888,7 +882,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 indexAsset: 2,
                 indexUnderlying: 1,
                 targetAmount: "19",
-                investedAssets: "500",
+                assetsInPool: ["0", "500", "0"],
                 depositorLiquidity: "7",
                 balances: ["2", "7", "2700"],
               })
@@ -916,7 +910,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 indexAsset: 1,
                 indexUnderlying: 2,
                 targetAmount: "all", // all
-                investedAssets: "500",
+                assetsInPool: ["0", "0", "500"],
                 depositorLiquidity: "7777",
                 balances: ["0", "0", "0"],
               })
@@ -942,7 +936,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
                 indexAsset: 0,
                 indexUnderlying: 2,
                 targetAmount: "all",
-                investedAssets: "500",
+                assetsInPool: ["0", "0", "500"],
                 depositorLiquidity: "7777",
                 balances: ["17000", "27", "37"],
               })
@@ -971,7 +965,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
               indexAsset: 0,
               indexUnderlying: 2, // usdt
               targetAmount: "9", // == 9 dai == 18 usdt
-              investedAssets: "20", // == 20 usdt
+              assetsInPool: ["2.5", "10", "10"], // == 20 usdt
               depositorLiquidity: "7",
               balances: ["8", "4", "12"], // 8 dai, 1 dai, 6 dai
               prices: ["2", "0.5", "1"]
@@ -1001,7 +995,7 @@ describe('ConverterStrategyBaseLibTest2', () => {
             tokens: [dai, usdc, usdt],
             indexAsset: 1,
             targetAmount: "500",
-            investedAssets: "21",
+            assetsInPool: ["0", "21", "0"],
             depositorLiquidity: "777",
             balances: ["7", "27000", "14"],
           })

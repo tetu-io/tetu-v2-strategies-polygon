@@ -16,14 +16,12 @@ import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {
   IConverterController__factory,
   IERC20Metadata__factory, IPoolAdapter__factory,
-  ITetuConverter__factory,
-  MockToken
+  ITetuConverter__factory
 } from "../../../../typechain";
 import {depositToVault} from "../../../baseUT/universalTestUtils/StrategyTestUtils";
 import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
@@ -181,11 +179,17 @@ describe("ConverterStrategyBaseInt", () => {
           const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
           console.log("emergencyExit");
-          await cc.strategy.connect(signer).emergencyExit();
+          await cc.strategy.connect(signer).emergencyExit({gasLimit: 19_000_000});
           const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
-          console.log("afterDeposit", beforeExit);
-          console.log("afterExit", afterExit);
+          // console.log("beforeExit", beforeExit);
+          // console.log("afterExit", afterExit);
+          StateUtilsNum.saveListStatesToCSVColumns(
+            './tmp/_emergencyExitFromPool_univ3_001.csv',
+            [beforeExit, afterExit],
+            { mainAssetSymbol: "USDC"},
+            true
+          );
 
           return {beforeExit, afterExit};
         }
@@ -469,7 +473,7 @@ describe("ConverterStrategyBaseInt", () => {
       await cc.vault.setDoHardWorkOnInvest(false);
 
       // possibility to view debug messages of converter
-      await InjectUtils.injectTetuConverter(signer);
+      // await InjectUtils.injectTetuConverter(signer);
 
       // make deposits
       await TokenUtils.getToken(cc.asset, signer2.address, BigNumber.from(10000));
@@ -841,6 +845,80 @@ describe("ConverterStrategyBaseInt", () => {
           });
         });
       }
+    });
+  });
+
+  describe("Study sendTokensToForwarder: send real tokens to real forwarders @skip-on-coverage", () => {
+    let snapshot: string;
+    before(async function () {
+      snapshot = await TimeUtils.snapshot();
+    });
+    after(async function () {
+      await TimeUtils.rollback(snapshot);
+    });
+
+    interface ISendTokensToForwarderResults {
+      balanceBefore: number[];
+      balanceAfter: number[];
+    }
+
+    interface ISendTokensToForwarderParams {
+      tokens: string[];
+      holders: string[];
+      amounts: string[];
+    }
+
+    async function makeSendTokensToForwarderTest(p: ISendTokensToForwarderParams): Promise<ISendTokensToForwarderResults> {
+      const cc = await prepareBalancerConverterStrategyUsdcTUsd();
+      // const vault = ethers.Wallet.createRandom().address;
+      const facade = await MockHelper.createConverterStrategyBaseLibFacade(signer);
+      // const controller = await MockHelper.createMockController(signer);
+      // await controller.setForwarder(core.forwarder);
+      // const splitter = await MockHelper.createMockSplitter(signer);
+      // await splitter.setVault(vault);
+
+      const decimals: number[] = [];
+      for (let i = 0; i < p.tokens.length; ++i) {
+        decimals.push(await IERC20Metadata__factory.connect(p.tokens[i], signer).decimals());
+        await BalanceUtils.getAmountFromHolder(
+          p.tokens[i],
+          p.holders[i],
+          facade.address,
+          parseUnits(p.amounts[i], decimals[i])
+        )
+      }
+
+      const balanceBefore = await Promise.all(p.tokens.map(
+        async (x, index) => IERC20Metadata__factory.connect(x, signer).balanceOf(facade.address)
+      ));
+
+
+      await facade.sendTokensToForwarder(
+        await cc.vault.controller(),
+        cc.splitter.address,
+        p.tokens,
+        p.amounts.map((amount, index) => parseUnits(amount, decimals[index]))
+      );
+
+      return {
+        balanceBefore: await Promise.all(balanceBefore.map(async (x, index) => +formatUnits(x, decimals[index]))),
+        balanceAfter: await Promise.all(p.tokens.map(
+          async (x, index) => +formatUnits(
+            await IERC20Metadata__factory.connect(x, signer).balanceOf(facade.address),
+            decimals[index]
+          )
+        ))
+      }
+    }
+
+    it("forwarder should receive expected tokens", async () => {
+      const r = await makeSendTokensToForwarderTest({
+        tokens: [MaticAddresses.USDC_TOKEN, MaticAddresses.USDT_TOKEN],
+        holders: [MaticHolders.HOLDER_USDC, MaticHolders.HOLDER_USDT],
+        amounts: ["0.000001", "0.000002"],
+      });
+      expect(r.balanceBefore.join()).eq([0.000001, 0.000002].join());
+      expect(r.balanceAfter.join()).eq([0, 0].join());
     });
   });
 //endregion Unit tests

@@ -3,7 +3,7 @@ import {DeployerUtils} from "../../../scripts/utils/DeployerUtils";
 import {
   Aave3PlatformAdapter,
   Aave3PoolAdapter,
-  Aave3PoolAdapterEMode,
+  Aave3PoolAdapterEMode, AaveTwoPlatformAdapter, AaveTwoPoolAdapter,
   IConverterController__factory
 } from "../../../typechain";
 
@@ -15,7 +15,7 @@ export class CustomConverterDeployHelper {
 //region AAVE.v3
   public static async createAave3PlatformAdapter(
     signer: SignerWithAddress,
-    controller: string,
+    converterController: string,
     poolAave: string,
     templateAdapterNormal: string,
     templateAdapterEMode: string,
@@ -24,8 +24,8 @@ export class CustomConverterDeployHelper {
     return (await DeployerUtils.deployContract(
       signer,
       "Aave3PlatformAdapter",
-      controller,
-      borrowManager || await IConverterController__factory.connect(controller, signer).borrowManager(),
+      converterController,
+      borrowManager || await IConverterController__factory.connect(converterController, signer).borrowManager(),
       poolAave,
       templateAdapterNormal,
       templateAdapterEMode
@@ -40,28 +40,28 @@ export class CustomConverterDeployHelper {
   }
 //endregion AAVE.v2
 
-// //region AAVE.TWO
-//   public static async createAaveTwoPlatformAdapter(
-//     signer: SignerWithAddress,
-//     controller: string,
-//     poolAave: string,
-//     templateAdapterNormal: string,
-//     borrowManager?: string,
-//   ) : Promise<AaveTwoPlatformAdapter> {
-//     return (await DeployerUtils.deployContract(
-//       signer,
-//       "AaveTwoPlatformAdapter",
-//       controller,
-//       borrowManager || await IConverterController__factory.connect(controller, signer).borrowManager(),
-//       poolAave,
-//       templateAdapterNormal,
-//     )) as AaveTwoPlatformAdapter;
-//   }
-//
-//   public static async createAaveTwoPoolAdapter(signer: SignerWithAddress) : Promise<AaveTwoPoolAdapter> {
-//     return (await DeployerUtils.deployContract(signer, "AaveTwoPoolAdapter")) as AaveTwoPoolAdapter;
-//   }
-// //endregion AAVE.TWO
+//region AAVE.TWO
+  public static async createAaveTwoPlatformAdapter(
+    signer: SignerWithAddress,
+    converterController: string,
+    poolAave: string,
+    templateAdapterNormal: string,
+    borrowManager?: string,
+  ) : Promise<AaveTwoPlatformAdapter> {
+    return (await DeployerUtils.deployContract(
+      signer,
+      "AaveTwoPlatformAdapter",
+      converterController,
+      borrowManager || await IConverterController__factory.connect(converterController, signer).borrowManager(),
+      poolAave,
+      templateAdapterNormal,
+    )) as AaveTwoPlatformAdapter;
+  }
+
+  public static async createAaveTwoPoolAdapter(signer: SignerWithAddress) : Promise<AaveTwoPoolAdapter> {
+    return (await DeployerUtils.deployContract(signer, "AaveTwoPoolAdapter")) as AaveTwoPoolAdapter;
+  }
+//endregion AAVE.TWO
 //
 // //region dForce
 //   public static async createDForcePlatformAdapter(

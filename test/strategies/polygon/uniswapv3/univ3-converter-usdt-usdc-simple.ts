@@ -219,6 +219,9 @@ describe('univ3-converter-usdt-usdc-simple', function() {
     const states = [];
     const strategyBase = StrategyBaseV2__factory.connect(strategy.address, signer);
 
+    const operator = await UniversalTestUtils.getAnOperator(strategy.address, signer);
+    await strategy.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits('0.001', 6));
+
     // await strategy.setFuseThreshold(parseUnits('1'));
 
     await vault.setDoHardWorkOnInvest(false);
