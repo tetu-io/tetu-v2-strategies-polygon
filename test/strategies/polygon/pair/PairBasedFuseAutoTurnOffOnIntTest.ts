@@ -124,9 +124,7 @@ describe('PairBasedFuseAutoTurnOffOnIntTest', function () {
           if (stateAfterRebalance.fuseStatus !== currentFuse) {
             return {
               fuseStatus: stateAfterRebalance.fuseStatus || 0,
-              price: state.depositorSwapTokens
-                  ? stateAfterRebalance.converterDirect.borrowAssetsPrices[0] / stateAfterRebalance.converterDirect.borrowAssetsPrices[1]
-                  : stateAfterRebalance.converterDirect.borrowAssetsPrices[1] / stateAfterRebalance.converterDirect.borrowAssetsPrices[0]
+              price: stateAfterRebalance.converterDirect.borrowAssetsPrices[1] / stateAfterRebalance.converterDirect.borrowAssetsPrices[0]
             };
           }
         }

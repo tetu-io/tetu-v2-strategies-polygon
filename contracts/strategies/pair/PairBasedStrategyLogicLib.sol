@@ -406,11 +406,10 @@ library PairBasedStrategyLogicLib {
     PairBasedStrategyLib.FuseStatus fuseStatusAB
   ) {
     if (pairState.isStablePool) {
-      bool depositorSwapTokens = pairState.depositorSwapTokens;
       uint price = ConverterStrategyBaseLib2.getOracleAssetsPrice(
         converter_,
-        depositorSwapTokens ? pairState.tokenB : pairState.tokenA,
-        depositorSwapTokens ? pairState.tokenA : pairState.tokenB
+        pairState.tokenA,
+        pairState.tokenB
       );
       (fuseStatusChangedAB, fuseStatusAB) = PairBasedStrategyLib.needChangeFuseStatus(pairState.fuseAB, price, poolPrice);
       needRebalance = fuseStatusChangedAB

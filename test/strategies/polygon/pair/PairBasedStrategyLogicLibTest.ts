@@ -105,7 +105,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
       state: IUniv3State;
       pricesAB: string;
       poolNeedsRebalance: boolean;
-      /** Price of the token A in the pool, decimals 18. pricesAB[0] by default */
+      /** Price of the token A in the pool, decimals 18. pricesAB by default */
       poolPriceA?: string;
     }
     interface INeedStrategyRebalanceResults {
@@ -122,7 +122,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
       await priceOracleMock.changePrices(
         [p.state.tokenA.address, p.state.tokenB.address],
-        [parseUnits(p.pricesAB[0], 18), parseUnits(p.pricesAB[1], 18)]
+        [parseUnits('1', 18), parseUnits(p.pricesAB, 18), ]
       );
 
       await facade.setPairState(
@@ -148,8 +148,9 @@ describe('PairBasedStrategyLogicLibTest', () => {
       const ret = await facade.needStrategyRebalance(
         converter.address,
         tick,
-        parseUnits(p?.poolPriceA || p.pricesAB[0], 18)
+        parseUnits(p?.poolPriceA || p.pricesAB, 18)
       );
+      console.log(ret);
       return {
         needRebalance: ret.needRebalance,
         fuseStatusAB: ret.fuseStatusAB,
@@ -206,7 +207,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
           });
           it("should return false, fuse B", async () => {
             const ret = await callNeedStrategyRebalance({
-              poolNeedsRebalance: true,
+              poolNeedsRebalance: false,
               state: {
                 tokenA: usdc,
                 tokenB: usdt,
@@ -292,7 +293,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
               pricesAB: "1.0", // price is ok
             });
 
-            expect(ret.needRebalance).eq(true);
+            expect(ret.needRebalance).eq(false);
           });
         });
         describe("fuse doesn't change its status, it's still triggered ON", () => {
@@ -339,7 +340,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
             expect(ret.needRebalance).eq(true);
           });
-          it("should return true, fuse B", async () => {
+          it("should return false, fuse B", async () => {
             const ret = await callNeedStrategyRebalance({
               poolNeedsRebalance: false,
               state: {
@@ -350,7 +351,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
               pricesAB: "1.0", // price is ok
             });
 
-            expect(ret.needRebalance).eq(true);
+            expect(ret.needRebalance).eq(false);
           });
         });
         describe("fuse doesn't change its status, it's still triggered OFF", () => {
@@ -390,7 +391,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
     }
 
     interface IUpdateFuseStatusResults {
-      fuseStatusAB: number[];
+      fuseStatusAB: number;
       withdrawDone: number;
     }
 
@@ -418,7 +419,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
       const pairStateData = await facade.getPairState();
       return {
-        fuseStatusAB: [pairStateData.fuseParams[0].toNumber(), pairStateData.fuseParams[5].toNumber()],
+        fuseStatusAB: pairStateData.fuseParams[0].toNumber(),/* pairStateData.fuseParams[5].toNumber()]*/
         withdrawDone: pairStateData.withdrawDone.toNumber()
       }
     }
@@ -431,7 +432,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         isStablePool: true,
         withdrawDone: 1
       });
-      expect(ret.fuseStatusAB.join()).eq([2, 2].join());
+      expect(ret.fuseStatusAB).eq(2);
       expect(ret.withdrawDone).eq(0);
     });
 
@@ -455,7 +456,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         isStablePool: true,
         withdrawDone: 1
       });
-      expect(ret.fuseStatusAB.join()).eq([2, 1].join());
+      expect(ret.fuseStatusAB).eq(2);
       expect(ret.withdrawDone).eq(0);
     });
 
@@ -467,8 +468,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
         isStablePool: true,
         withdrawDone: 1
       });
-      expect(ret.fuseStatusAB.join()).eq([1, 2].join());
-      expect(ret.withdrawDone).eq(0);
+      expect(ret.fuseStatusAB).eq(1);
+      expect(ret.withdrawDone).eq(1);
     });
 
     it("should not change any fuse status", async () => {
@@ -479,7 +480,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
         isStablePool: false,
         withdrawDone: 1
       });
-      expect(ret.fuseStatusAB.join()).eq([1, 1].join());
+      expect(ret.fuseStatusAB).eq(1);
       expect(ret.withdrawDone).eq(1);
     });
   });
@@ -518,8 +519,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
       totalLiquidity: BigNumber;
       strategyProfitHolder: string;
 
-      fuseA: PairBasedStrategyLib.FuseStateParamsStruct;
-      fuseB: PairBasedStrategyLib.FuseStateParamsStruct;
+      fuseAB: PairBasedStrategyLib.FuseStateParamsStruct;
+      // fuseB: PairBasedStrategyLib.FuseStateParamsStruct;
 
       withdrawDone: number;
     }
@@ -550,14 +551,14 @@ describe('PairBasedStrategyLogicLibTest', () => {
         totalLiquidity: pairStateData.totalLiquidity,
         strategyProfitHolder: pairStateData.strategyProfitHolder,
 
-        fuseA: {
+        fuseAB: {
           status: pairStateData.fuseParams[0],
           thresholds: [pairStateData.fuseParams[1], pairStateData.fuseParams[2], pairStateData.fuseParams[3], pairStateData.fuseParams[4]]
         },
-        fuseB: {
+        /*fuseB: {
           status: pairStateData.fuseParams[5],
           thresholds: [pairStateData.fuseParams[6], pairStateData.fuseParams[7], pairStateData.fuseParams[8], pairStateData.fuseParams[9]]
-        },
+        },*/
 
         withdrawDone: pairStateData.withdrawDone.toNumber()
       }
@@ -614,15 +615,11 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
         it("should return fuse status", async () => {
           const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect([ret.fuseA.status, ret.fuseB.status].join()).eq([FUSE_OFF_1, FUSE_OFF_1].join());
+          expect(ret.fuseAB.status).eq(FUSE_OFF_1);
         });
         it("should return fuse A thresholds", async () => {
           const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect(ret.fuseA.thresholds.join()).eq([11, 12, 14, 13].join());
-        });
-        it("should return fuse B thresholds", async () => {
-          const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect(ret.fuseB.thresholds.join()).eq([21, 22, 24, 23].join());
+          expect(ret.fuseAB.thresholds.join()).eq([11, 12, 14, 13].join());
         });
       });
       describe("not stable pool, not swapped tokens", () => {
@@ -673,19 +670,10 @@ describe('PairBasedStrategyLogicLibTest', () => {
           const ret = await loadFixture(setInitialDepositorValuesTest);
           expect([ret.totalLiquidity.toString(), ret.strategyProfitHolder.toString(), ret.withdrawDone.toString()].join()).eq(["0", Misc.ZERO_ADDRESS, "0"].join());
         });
-        it("should return fuse status", async () => {
-          const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect([ret.fuseA.status, ret.fuseB.status].join()).eq([FUSE_DISABLED_0, FUSE_DISABLED_0].join());
-        });
         it("should return fuse A thresholds", async () => {
           const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect(ret.fuseA.thresholds.join()).eq([0, 0, 0, 0].join());
+          expect(ret.fuseAB.thresholds.join()).eq([0, 0, 0, 0].join());
         });
-        it("should return fuse B thresholds", async () => {
-          const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect(ret.fuseB.thresholds.join()).eq([0, 0, 0, 0].join());
-        });
-
       });
       describe("swapped tokens", () => {
         let snapshot: string;
@@ -737,15 +725,11 @@ describe('PairBasedStrategyLogicLibTest', () => {
         });
         it("should return fuse status", async () => {
           const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect([ret.fuseA.status, ret.fuseB.status].join()).eq([FUSE_OFF_1, FUSE_OFF_1].join());
+          expect(ret.fuseAB.status).eq(FUSE_OFF_1);
         });
         it("should return fuse A thresholds", async () => {
           const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect(ret.fuseA.thresholds.join()).eq([11, 12, 14, 13].join());
-        });
-        it("should return fuse B thresholds", async () => {
-          const ret = await loadFixture(setInitialDepositorValuesTest);
-          expect(ret.fuseB.thresholds.join()).eq([21, 22, 24, 23].join());
+          expect(ret.fuseAB.thresholds.join()).eq([11, 12, 14, 13].join());
         });
       });
     });

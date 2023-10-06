@@ -101,20 +101,13 @@ export class PairBasedStrategyPrepareStateUtils {
     console.log("priceAB", priceAB);
 
     const ttA = [
-      priceAB - 0.0002, //0.0008,
-      priceAB - 0.0001, //0.0006,
-      priceAB + (triggerOn ? -0.0001 : 0.0004), //0.0008,
-      priceAB + (triggerOn ? -0.0002 : 0.0002), //0.0006,
+      priceAB - 0.0008,
+      priceAB - 0.0006,
+      priceAB + (triggerOn ? -0.0001 : 0.0008),
+      priceAB + (triggerOn ? -0.0002 : 0.0006),
     ].map(x => parseUnits(x.toString(), 18));
-    /*const ttB = [
-      priceB - 0.0008,
-      priceB - 0.0006,
-      priceB + (triggerOn ? -0.0001 : 0.0004), // (!) fuse ON/OFF
-      priceB + (triggerOn ? -0.0002 : 0.0002),
-    ].map(x => parseUnits(x.toString(), 18));*/
 
     await b.strategy.setFuseThresholds([ttA[0], ttA[1], ttA[2], ttA[3]]);
-    // await b.strategy.setFuseThresholds(1, [ttB[0], ttB[1], ttB[2], ttB[3]]);
   }
 
   /** Put addition amounts of tokenA and tokenB to balance of the profit holder */
