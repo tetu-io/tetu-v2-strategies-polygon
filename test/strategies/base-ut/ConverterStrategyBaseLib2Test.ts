@@ -3,12 +3,7 @@ import {ethers} from 'hardhat';
 import {TimeUtils} from '../../../scripts/utils/TimeUtils';
 import {DeployerUtils} from '../../../scripts/utils/DeployerUtils';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
-import {
-  ConverterStrategyBaseLib2__factory,
-  ConverterStrategyBaseLibFacade2,
-  MockToken,
-  PriceOracleMock, StrategySplitterV2, UniswapV3ConverterStrategyLogicLib__factory
-} from '../../../typechain';
+import {ConverterStrategyBaseLib2__factory, ConverterStrategyBaseLibFacade2, MockToken, PriceOracleMock, StrategySplitterV2} from '../../../typechain';
 import {expect} from 'chai';
 import {MockHelper} from '../../baseUT/helpers/MockHelper';
 import {IQuoteRepayParams, ITokenAmountNum} from "../../baseUT/mocks/TestDataTypes";
@@ -25,10 +20,7 @@ import {
   GET_EXPECTED_WITHDRAW_AMOUNT_ASSETS
 } from "../../baseUT/GasLimits";
 import {BigNumber} from "ethers";
-import {
-  FixPriceChangesEventObject, NotEnoughInsuranceEventObject,
-  UncoveredLossEventObject
-} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
+import {FixPriceChangesEventObject, UncoveredLossEventObject, NotEnoughInsuranceEventObject} from "../../../typechain/contracts/strategies/ConverterStrategyBaseLib2";
 import {Misc} from "../../../scripts/utils/Misc";
 import { HARDHAT_NETWORK_ID, HardhatUtils } from '../../baseUT/utils/HardhatUtils';
 

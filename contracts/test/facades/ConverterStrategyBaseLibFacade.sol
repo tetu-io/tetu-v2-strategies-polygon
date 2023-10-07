@@ -169,9 +169,13 @@ contract ConverterStrategyBaseLibFacade {
     address controller_,
     address splitter_,
     address[] memory tokens_,
-    uint[] memory amounts_
-  ) external {
-    return ConverterStrategyBaseLib._sendTokensToForwarder(controller_, splitter_, tokens_, amounts_);
+    uint[] memory amounts_,
+    uint[] memory thresholds_
+  ) external returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
+    return ConverterStrategyBaseLib._sendTokensToForwarder(controller_, splitter_, tokens_, amounts_, thresholds_);
   }
 
   function recycle(
@@ -180,6 +184,7 @@ contract ConverterStrategyBaseLibFacade {
     uint compoundRatio,
     address[] memory tokens,
     ITetuLiquidator liquidator,
+    uint[] memory thresholds,
     address[] memory rewardTokens,
     uint[] memory rewardAmounts,
     uint performanceFee
@@ -193,7 +198,7 @@ contract ConverterStrategyBaseLibFacade {
       compoundRatio,
       tokens,
       liquidator,
-      liquidationThresholds,
+      thresholds,
       rewardTokens,
       rewardAmounts,
       performanceFee

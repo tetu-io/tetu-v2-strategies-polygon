@@ -1497,18 +1497,22 @@ describe('ConverterStrategyBaseLibTest', () => {
       await TimeUtils.rollback(snapshot);
     });
 
+    interface ISendTokensToForwarderParams {
+      tokens: MockToken[];
+      amounts: string[];
+      vault: string;
+      thresholds?: string[];
+    }
+
     interface ISendTokensToForwarderResults {
+      tokensOut: string[];
+      amountsOut: number[];
+
       allowanceForForwarder: number[];
       tokensToForwarder: string[];
       amountsToForwarder: number[];
       splitterToForwarder: string;
       isDistributeToForwarder: boolean;
-    }
-
-    interface ISendTokensToForwarderParams {
-      tokens: MockToken[];
-      amounts: string[];
-      vault: string;
     }
 
     async function makeSendTokensToForwarderTest(p: ISendTokensToForwarderParams): Promise<ISendTokensToForwarderResults> {
@@ -1517,6 +1521,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       await controller.setForwarder(forwarder.address);
       const splitter = await MockHelper.createMockSplitter(signer);
       await splitter.setVault(p.vault);
+      const thresholds = p.thresholds ?? p.tokens.map(x => "0");
 
       const decimals: number[] = [];
       for (let i = 0; i < p.tokens.length; ++i) {
@@ -1524,15 +1529,34 @@ describe('ConverterStrategyBaseLibTest', () => {
         await p.tokens[i].mint(facade.address, parseUnits(p.amounts[i], decimals[i]));
       }
 
+      const ret = await facade.callStatic.sendTokensToForwarder(
+        controller.address,
+        splitter.address,
+        p.tokens.map(x => x.address),
+        p.amounts.map((amount, index) => parseUnits(amount, decimals[index])),
+        thresholds.map((threshold, index) => parseUnits(threshold, decimals[index])),
+      );
+
       await facade.sendTokensToForwarder(
         controller.address,
         splitter.address,
         p.tokens.map(x => x.address),
-        p.amounts.map((amount, index) => parseUnits(amount, decimals[index]))
+        p.amounts.map((amount, index) => parseUnits(amount, decimals[index])),
+        thresholds.map((threshold, index) => parseUnits(threshold, decimals[index])),
       );
 
       const r = await forwarder.getLastRegisterIncomeResults();
       return {
+        tokensOut: ret.tokensOut,
+        amountsOut: await Promise.all(
+          ret.amountsOut.map(
+            async (amount, index) => +formatUnits(
+              amount,
+              await IERC20Metadata__factory.connect(ret.tokensOut[index], signer).decimals()
+            )
+          )
+        ),
+
         amountsToForwarder: await Promise.all(
           r.amounts.map(
             async (amount, index) => +formatUnits(
@@ -1585,6 +1609,18 @@ describe('ConverterStrategyBaseLibTest', () => {
         const r = await loadFixture(makeSendTokensToForwarderFixture);
         expect(r.isDistributeToForwarder).eq(true);
       });
+      it("should return expected tokens", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.tokensToForwarder.join()).eq([usdc.address, usdt.address, dai.address, tetu.address].join());
+      });
+      it("should return expected tokensOut", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.tokensOut.join()).eq([usdc.address, usdt.address, dai.address, tetu.address].join());
+      });
+      it("should return expected amountsOut", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.amountsOut.join()).eq([100, 1, 5000, 5].join());
+      });
     });
     describe("zero case", () => {
       const VAULT = ethers.Wallet.createRandom().address;
@@ -1614,6 +1650,43 @@ describe('ConverterStrategyBaseLibTest', () => {
         expect(gt.join()).eq([true, true].join());
       });
     });
+    describe("not zero thresholds", () => {
+      const VAULT = ethers.Wallet.createRandom().address;
+
+      async function makeSendTokensToForwarderFixture(): Promise<ISendTokensToForwarderResults> {
+        return makeSendTokensToForwarderTest({
+          tokens: [usdc, usdt, dai, tetu],
+          amounts: ["100", "1", "5000", "5"],
+          vault: VAULT,
+          thresholds: ["101", "0.5", "4999", "6"]
+        });
+      }
+
+      it("forwarder should receive expected tokens", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.tokensToForwarder.join()).eq([usdt.address, dai.address].join());
+      });
+      it("forwarder should receive expected amounts", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.amountsToForwarder.join()).eq([1, 5000].join());
+      });
+      it("forwarder should receive expected allowance", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        const gt: boolean[] = [];
+        for (let i = 0; i < r.tokensToForwarder.length; ++i) {
+          gt.push(r.allowanceForForwarder[i] >= r.amountsToForwarder[i]);
+        }
+        expect(gt.join()).eq([true, true].join());
+      });
+      it("should return expected tokensOut", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.tokensOut.join()).eq([usdt.address, dai.address].join());
+      });
+      it("should return expected amountsOut", async () => {
+        const r = await loadFixture(makeSendTokensToForwarderFixture);
+        expect(r.amountsOut.join()).eq([1, 5000].join());
+      });
+    });
   });
 
   describe('recycle', () => {
@@ -1624,7 +1697,7 @@ describe('ConverterStrategyBaseLibTest', () => {
       assetIndex: number;
 
       liquidations: ILiquidationParams[];
-      thresholds: ITokenAmountNum[];
+      thresholds?: ITokenAmountNum[];
       initialBalances: ITokenAmountNum[];
 
       rewardTokens: MockToken[];
@@ -1647,6 +1720,24 @@ describe('ConverterStrategyBaseLibTest', () => {
     }
 
     async function makeRecycle(p: IRecycleTestParams): Promise<IRecycleTestResults> {
+      // read decimals
+      const decimals: number[] = [];
+      for (let i = 0; i < p.rewardTokens.length; ++i) {
+        decimals.push(await p.rewardTokens[i].decimals());
+      }
+
+      // set up thresholds
+      const thresholds = p.rewardTokens.map(x => "0");
+      if (p.thresholds) {
+        for (const thresholdInfo of p.thresholds) {
+          for (let i = 0; i < p.rewardTokens.length; ++i) {
+            if (p.rewardTokens[i] === thresholdInfo.token) {
+              thresholds[i] = thresholdInfo.amount;
+            }
+          }
+        }
+      }
+
       // set up initial balances
       for (const b of p.initialBalances) {
         await b.token.mint(facade.address, parseUnits(b.amount, await b.token.decimals()));
@@ -1676,14 +1767,6 @@ describe('ConverterStrategyBaseLibTest', () => {
         }
       }
 
-      // set up thresholds
-      for (const threshold of p.thresholds) {
-        await facade.setLiquidationThreshold(
-          threshold.token.address,
-          parseUnits(threshold.amount, await threshold.token.decimals())
-        );
-      }
-
       // make test
       const {amountsToForward, amountToPerformanceAndInsurance} = await facade.callStatic.recycle(
         converter.address,
@@ -1691,10 +1774,9 @@ describe('ConverterStrategyBaseLibTest', () => {
         p.compoundRatio,
         p.tokens.map(x => x.address),
         liquidator.address,
+        thresholds.map((x, index) => parseUnits(x, decimals[index])),
         p.rewardTokens.map(x => x.address),
-        await Promise.all(p.rewardAmounts.map(
-          async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
-        )),
+        await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimals[index])),
         p.performanceFee
       );
       console.log(amountsToForward, amountToPerformanceAndInsurance);
@@ -1705,10 +1787,9 @@ describe('ConverterStrategyBaseLibTest', () => {
         p.compoundRatio,
         p.tokens.map(x => x.address),
         liquidator.address,
+        thresholds.map((x, index) => parseUnits(x, decimals[index])),
         p.rewardTokens.map(x => x.address),
-        await Promise.all(p.rewardAmounts.map(
-          async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
-        )),
+        await p.rewardAmounts.map((amount, index) => parseUnits(amount, decimals[index])),
         p.performanceFee
       );
       const gasUsed = (await tx.wait()).gasUsed;
@@ -1746,7 +1827,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc],
                 rewardAmounts: ["100"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdt, amount: "1"},
                   {token: usdc, amount: "102"},
@@ -1786,7 +1866,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [dai],
                 rewardAmounts: ["100"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdt, amount: "1"},
                   {token: usdc, amount: "2"},
@@ -1826,7 +1905,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [tetu],
                 rewardAmounts: ["100"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdt, amount: "1"},
                   {token: usdc, amount: "2"},
@@ -1869,7 +1947,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc, usdt, weth, dai, tetu],
                 rewardAmounts: ["100", "200", "300", "400", "500"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdc, amount: "10100"},
                   {token: usdt, amount: "20200"},
@@ -1914,7 +1991,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc, usdt, weth, dai, tetu],
                 rewardAmounts: ["100", "200", "300", "400", "500"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdc, amount: "10100"},
                   {token: usdt, amount: "20200"},
@@ -1956,7 +2032,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc, usdt, weth, dai, tetu],
                 rewardAmounts: ["100", "200", "300", "400", "500"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdc, amount: "10100"},
                   {token: usdt, amount: "20200"},
@@ -2005,7 +2080,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc],
                 rewardAmounts: ["200"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdt, amount: "1"},
                   {token: usdc, amount: "202"},
@@ -2049,7 +2123,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [dai],
                 rewardAmounts: ["100"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdt, amount: "1"},
                   {token: usdc, amount: "2"},
@@ -2093,7 +2166,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [tetu],
                 rewardAmounts: ["100"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdt, amount: "1"},
                   {token: usdc, amount: "2"},
@@ -2143,7 +2215,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc, usdt, weth, dai, tetu],
                 rewardAmounts: ["100", "200", "300", "400", "500"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdc, amount: "10100"},
                   {token: usdt, amount: "20200"},
@@ -2194,7 +2265,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc, usdt, weth, dai, tetu],
                 rewardAmounts: ["100", "200", "300", "400", "500"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdc, amount: "10100"},
                   {token: usdt, amount: "20200"},
@@ -2245,7 +2315,6 @@ describe('ConverterStrategyBaseLibTest', () => {
                 tokens: [usdt, usdc, dai],
                 rewardTokens: [usdc, usdt, weth, dai, tetu],
                 rewardAmounts: ["100", "200", "300", "400", "500"],
-                thresholds: [],
                 initialBalances: [
                   {token: usdc, amount: "10100"},
                   {token: usdt, amount: "20200"},
@@ -2299,7 +2368,6 @@ describe('ConverterStrategyBaseLibTest', () => {
               tokens: [usdt, usdc, dai],
               rewardTokens: [dai],
               rewardAmounts: ["100"],
-              thresholds: [],
               initialBalances: [
                 {token: usdt, amount: "1"},
                 {token: usdc, amount: "2"},
@@ -2332,7 +2400,6 @@ describe('ConverterStrategyBaseLibTest', () => {
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu],
               rewardAmounts: ["100"],
-              thresholds: [],
               initialBalances: [
                 {token: usdt, amount: "1"},
                 {token: usdc, amount: "2"},
@@ -2738,7 +2805,6 @@ describe('ConverterStrategyBaseLibTest', () => {
               tokens: [usdt, usdc, dai],
               rewardTokens: [tetu, usdc],
               rewardAmounts: ["6"], // (!) wrong lengths
-              thresholds: [],
               initialBalances: [],
               compoundRatio: 30_000,
               liquidations: [],
