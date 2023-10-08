@@ -41,7 +41,7 @@ library PairBasedStrategyLogicLib {
 
     /// @notice Fuse for tokens
     PairBasedStrategyLib.FuseStateParams fuseAB;
-    uint[5] deprecated;
+
     /// @notice 1 means that the fuse was triggered ON and then all debts were closed
     ///         and assets were converter to underlying using withdrawStepByAgg.
     ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
@@ -51,7 +51,7 @@ library PairBasedStrategyLogicLib {
     uint lastRebalanceNoSwap;
 
     /// @notice reserve space for future needs
-    uint[10] __gap;
+    uint[50 - 17] __gap;
   }
 
   struct RebalanceNoSwapsLocal {
