@@ -29,6 +29,9 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   /// @dev State variable to store the current state of the whole strategy
   AlgebraConverterStrategyLogicLib.State internal state;
 
+  /// @dev reserve space for future needs
+  uint[100 - 65] private __gap;
+
   /////////////////////////////////////////////////////////////////////
   ///                       View
   /////////////////////////////////////////////////////////////////////
@@ -123,10 +126,4 @@ abstract contract AlgebraDepositor is DepositorBase, Initializable {
   ) {
     return AlgebraConverterStrategyLogicLib.claimRewards(state);
   }
-
-  /// @dev This empty reserved space is put in place to allow future versions to add new
-  /// variables without shifting down storage in the inheritance chain.
-  /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[50 - 1] private __gap; // 50 - count of variables
-
 }

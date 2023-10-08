@@ -44,7 +44,7 @@ library UniswapV3ConverterStrategyLogicLib {
     PairBasedStrategyLogicLib.PairState pair;
     // additional (specific) state
 
-    /// @notice reserve space for future needs
+    /// @dev reserve space for future needs
     uint[10] __gap;
   }
 
