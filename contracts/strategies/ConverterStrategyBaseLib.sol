@@ -143,6 +143,7 @@ library ConverterStrategyBaseLib {
     uint toPerf;
     uint toInsurance;
     uint[] amountsToForward;
+    uint[] thresholds;
   }
 //endregion--------------------------------------------------- Data types
 
@@ -655,13 +656,15 @@ library ConverterStrategyBaseLib {
     v.asset = baseState.asset;
     v.compoundRatio = baseState.compoundRatio;
     v.performanceFee = baseState.performanceFee;
+    v.thresholds = _getLiquidationThresholds(liquidationThresholds, rewardTokens_, rewardTokens_.length);
+
     (v.amountsToForward, v.amountPerf) = _recycle(
       converter,
       v.asset,
       v.compoundRatio,
       tokens,
       AppLib._getLiquidator(controller),
-      liquidationThresholds,
+      v.thresholds,
       rewardTokens_,
       rewardAmounts_,
       v.performanceFee
@@ -678,7 +681,8 @@ library ConverterStrategyBaseLib {
       baseState.performanceFeeRatio
     );
 
-    _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward);
+    // override rewardTokens_, v.amountsToForward by the values actually sent to the forwarder
+    (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward, v.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
     return v.amountsToForward;
@@ -707,20 +711,33 @@ library ConverterStrategyBaseLib {
     }
   }
 
+  /// @notice Send {amounts_} to forwarder, skip amounts < thresholds (see SCB-812)
+  /// @return tokensOut Tokens sent to the forwarder
+  /// @return amountsOut Amounts sent to the forwarder
   function _sendTokensToForwarder(
     address controller_,
     address splitter_,
     address[] memory tokens_,
-    uint[] memory amounts_
-  ) internal {
+    uint[] memory amounts_,
+    uint[] memory thresholds_
+  ) internal returns (
+    address[] memory tokensOut,
+    uint[] memory amountsOut
+  ) {
     uint len = tokens_.length;
     IForwarder forwarder = IForwarder(IController(controller_).forwarder());
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
-      AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
+      if (thresholds_[i] > amounts_[i]) {
+        amounts_[i] = 0; // it will be excluded in filterZeroAmounts() below
+      } else {
+        AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
+      }
     }
 
-    (tokens_, amounts_) = TokenAmountsLib.filterZeroAmounts(tokens_, amounts_);
-    forwarder.registerIncome(tokens_, amounts_, ISplitter(splitter_).vault(), true);
+    (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokens_, amounts_);
+    if (tokensOut.length != 0) {
+      forwarder.registerIncome(tokensOut, amountsOut, ISplitter(splitter_).vault(), true);
+    }
   }
 
   /// @notice Recycle the amounts: split each amount on tree parts: performance+insurance (P), forwarder (F), compound (C)
@@ -738,7 +755,7 @@ library ConverterStrategyBaseLib {
   /// @param tokens tokens received from {_depositorPoolAssets}
   /// @param rewardTokens Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts Amounts of {rewardTokens_}; we assume, there are no zero amounts here
-  /// @param liquidationThresholds Liquidation thresholds for rewards tokens
+  /// @param thresholds Liquidation thresholds for rewards tokens
   /// @param performanceFee Performance fee in the range [0...FEE_DENOMINATOR]
   /// @return amountsToForward Amounts of {rewardTokens} to be sent to forwarder, zero amounts are allowed here
   /// @return amountToPerformanceAndInsurance Amount of underlying to be sent to performance receiver and insurance
@@ -748,7 +765,7 @@ library ConverterStrategyBaseLib {
     uint compoundRatio,
     address[] memory tokens,
     ITetuLiquidator liquidator,
-    mapping(address => uint) storage liquidationThresholds,
+    uint[] memory thresholds,
     address[] memory rewardTokens,
     uint[] memory rewardAmounts,
     uint performanceFee
@@ -786,7 +803,7 @@ library ConverterStrategyBaseLib {
               asset,
               p.amountP,
               _REWARD_LIQUIDATION_SLIPPAGE,
-              AppLib._getLiquidationThreshold(liquidationThresholds[p.rewardToken]),
+              thresholds[i],
               false // use conversion validation for these rewards
             );
             amountToPerformanceAndInsurance += p.receivedAmountOut;
@@ -803,7 +820,7 @@ library ConverterStrategyBaseLib {
             asset,
             p.amountCP,
             _REWARD_LIQUIDATION_SLIPPAGE,
-            AppLib._getLiquidationThreshold(liquidationThresholds[p.rewardToken]),
+            thresholds[i],
             true // skip conversion validation for rewards because we can have arbitrary assets here
           );
           amountToPerformanceAndInsurance += p.receivedAmountOut * (rewardAmounts[i] - p.amountFC) / p.amountCP;

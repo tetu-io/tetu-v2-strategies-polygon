@@ -16,5 +16,8 @@ interface IConverterStrategyBase {
     ///         decimals = {DENOMINATOR}
     /// @dev We need this threshold to avoid numerous conversions of small amounts
     uint reinvestThresholdPercent;
+
+    /// @notice reserve space for future needs
+    uint[50] __gap;
   }
 }

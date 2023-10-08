@@ -122,8 +122,8 @@ library PairBasedStrategyLib {
     /// @dev see PairBasedStrategyLib.FUSE_IDX_XXX
     uint[4] thresholds;
 
-    // Attention: this struct is IMMUTABLE, you are not allowed to add new fields here
-    // because this struct is used inside PairState. If you add new field, you will broke PairState.
+    /// @notice reserve space for future needs
+    uint[4] __gap;
   }
   //endregion ------------------------------------------------ Data types
 

@@ -44,6 +44,9 @@ library AlgebraConverterStrategyLogicLib {
     address bonusRewardToken;
     uint256 startTime;
     uint256 endTime;
+
+    /// @notice reserve space for future needs
+    uint[10] __gap;
   }
 
   struct RebalanceLocal {

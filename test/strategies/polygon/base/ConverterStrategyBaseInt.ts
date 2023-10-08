@@ -16,14 +16,12 @@ import {formatUnits, parseUnits} from "ethers/lib/utils";
 import {
   IConverterController__factory,
   IERC20Metadata__factory, IPoolAdapter__factory,
-  ITetuConverter__factory,
-  MockToken
+  ITetuConverter__factory
 } from "../../../../typechain";
 import {depositToVault} from "../../../baseUT/universalTestUtils/StrategyTestUtils";
 import {expect} from "chai";
 import {IStateNum, StateUtilsNum} from "../../../baseUT/utils/StateUtilsNum";
 import {UniversalTestUtils} from "../../../baseUT/utils/UniversalTestUtils";
-import {PairBasedStrategyPrepareStateUtils} from "../../../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
 import {InjectUtils} from "../../../baseUT/strategies/InjectUtils";
 import { HardhatUtils, POLYGON_NETWORK_ID } from '../../../baseUT/utils/HardhatUtils';
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
@@ -181,11 +179,17 @@ describe("ConverterStrategyBaseInt", () => {
           const beforeExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
           console.log("emergencyExit");
-          await cc.strategy.connect(signer).emergencyExit();
+          await cc.strategy.connect(signer).emergencyExit({gasLimit: 19_000_000});
           const afterExit = await StateUtilsNum.getState(signer, signer2, cc.strategy, cc.vault, "");
 
-          console.log("afterDeposit", beforeExit);
-          console.log("afterExit", afterExit);
+          // console.log("beforeExit", beforeExit);
+          // console.log("afterExit", afterExit);
+          StateUtilsNum.saveListStatesToCSVColumns(
+            './tmp/_emergencyExitFromPool_univ3_001.csv',
+            [beforeExit, afterExit],
+            { mainAssetSymbol: "USDC"},
+            true
+          );
 
           return {beforeExit, afterExit};
         }

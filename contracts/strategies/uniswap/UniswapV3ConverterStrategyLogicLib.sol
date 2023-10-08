@@ -43,6 +43,9 @@ library UniswapV3ConverterStrategyLogicLib {
   struct State {
     PairBasedStrategyLogicLib.PairState pair;
     // additional (specific) state
+
+    /// @notice reserve space for future needs
+    uint[10] __gap;
   }
 
   struct RebalanceLocal {
