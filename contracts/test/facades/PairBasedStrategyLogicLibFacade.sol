@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import "../../strategies/pair/PairBasedStrategyLogicLib.sol";
+import "../../strategies/pair/PairBasedStrategyLib.sol";
 
 contract PairBasedStrategyLogicLibFacade {
   mapping(address => uint) public liquidationThresholds;
@@ -21,7 +22,8 @@ contract PairBasedStrategyLogicLibFacade {
     bool depositorSwapTokens,
     uint128 totalLiquidity,
     address strategyProfitHolder,
-    PairBasedStrategyLib.FuseStateParams memory fuseAB,
+    PairBasedStrategyLib.FuseStatus status_,
+    uint[4] memory thresholds_,
     uint withdrawDone,
     uint lastRebalanceNoSwap
   ) external {
@@ -39,7 +41,8 @@ contract PairBasedStrategyLogicLibFacade {
     pairState.depositorSwapTokens = depositorSwapTokens;
     pairState.totalLiquidity = totalLiquidity;
     pairState.strategyProfitHolder = strategyProfitHolder;
-    pairState.fuseAB = fuseAB;
+    pairState.fuseAB.status = status_;
+    pairState.fuseAB.thresholds = thresholds_;
 
     pairState.withdrawDone = withdrawDone;
     pairState.lastRebalanceNoSwap = lastRebalanceNoSwap;

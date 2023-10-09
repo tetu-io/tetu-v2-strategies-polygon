@@ -12,14 +12,12 @@ import {TimeUtils} from "../../../../scripts/utils/TimeUtils";
 import {DeployerUtils} from "../../../../scripts/utils/DeployerUtils";
 import {MockHelper} from "../../../baseUT/helpers/MockHelper";
 import {BigNumber} from "ethers";
-import {PairBasedStrategyLib} from "../../../../typechain/contracts/test/facades/PairBasedStrategyLogicLibFacade";
 import {loadFixture} from "@nomicfoundation/hardhat-network-helpers";
 import {Misc} from "../../../../scripts/utils/Misc";
 import {IBorrowParamsNum, IRepayParams} from "../../../baseUT/mocks/TestDataTypes";
 import {setupMockedBorrowEntryKind1, setupMockedRepay} from "../../../baseUT/mocks/MockRepayUtils";
 import {IDefaultState, PackedData} from "../../../baseUT/utils/PackedData";
 import {
-  FUSE_DISABLED_0,
   FUSE_OFF_1,
   FUSE_ON_LOWER_LIMIT_2,
   PLAN_REPAY_SWAP_REPAY,
@@ -101,6 +99,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
       totalLiquidity?: number;
       strategyProfitHolder?: string;
     }
+
     interface INeedStrategyRebalanceParams {
       state: IUniv3State;
       pricesAB: string;
@@ -108,11 +107,13 @@ describe('PairBasedStrategyLogicLibTest', () => {
       /** Price of the token A in the pool, decimals 18. pricesAB by default */
       poolPriceA?: string;
     }
+
     interface INeedStrategyRebalanceResults {
       needRebalance: boolean;
       fuseStatusChangedAB: boolean;
       fuseStatusAB: number;
     }
+
     async function callNeedStrategyRebalance(p: INeedStrategyRebalanceParams): Promise<INeedStrategyRebalanceResults> {
       const tick = p.poolNeedsRebalance ? 9 : 11;
       const tickSpacing = 10;
@@ -122,7 +123,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
       await priceOracleMock.changePrices(
         [p.state.tokenA.address, p.state.tokenB.address],
-        [parseUnits('1', 18), parseUnits(p.pricesAB, 18), ]
+        [parseUnits('1', 18), parseUnits(p.pricesAB, 18),]
       );
 
       await facade.setPairState(
@@ -133,15 +134,13 @@ describe('PairBasedStrategyLogicLibTest', () => {
         p.state.depositorSwapTokens || false,
         p.state.totalLiquidity || 0,
         p.state.strategyProfitHolder || ethers.Wallet.createRandom().address,
-          {
-            status: p.state.fuseAB.status,
-            thresholds: [
-              parseUnits(p.state.fuseAB.thresholds[0], 18),
-              parseUnits(p.state.fuseAB.thresholds[1], 18),
-              parseUnits(p.state.fuseAB.thresholds[2], 18),
-              parseUnits(p.state.fuseAB.thresholds[3], 18),
-            ]
-          },
+        p.state.fuseAB.status,
+        [
+          parseUnits(p.state.fuseAB.thresholds[0], 18),
+          parseUnits(p.state.fuseAB.thresholds[1], 18),
+          parseUnits(p.state.fuseAB.thresholds[2], 18),
+          parseUnits(p.state.fuseAB.thresholds[3], 18),
+        ],
         0,
         0
       );
@@ -168,7 +167,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
                 tokenA: usdc,
                 tokenB: usdt,
                 fuseAB: {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  // {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                // {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
               },
               pricesAB: "0.8", // (!) price exceeds 0.7, fuse is triggerred OFF
             });
@@ -182,7 +181,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
                 tokenA: usdc,
                 tokenB: usdt,
                 fuseAB: {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  // {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
+                // {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
               },
               pricesAB: "1.0", // price is ok
             });
@@ -198,7 +197,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
                 tokenA: usdc,
                 tokenB: usdt,
                 fuseAB: {status: FUSE_ON_LOWER_LIMIT_2, thresholds: ["0.5", "0.7", "1.5", "1.3"]},
-                  // {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
+                // {status: FUSE_OFF_1, thresholds: ["0.5", "0.7", "1.5", "1.3"]}
               },
               pricesAB: "0.69", // (!) price is less than 0.7, fuse is still triggerred ON
             });
@@ -404,17 +403,16 @@ describe('PairBasedStrategyLogicLibTest', () => {
         true,
         0,
         ethers.Wallet.createRandom().address,
-          {
-            status: p.initialFuseStatusAB,
-            thresholds: [0, 0, 0, 0]
-          },
+        p.initialFuseStatusAB,
+        [0, 0, 0, 0],
         p.withdrawDone,
         0
-      );
+    )
+      ;
 
       await facade.updateFuseStatus(
-          p.fuseStatusChangedAB,
-          p.fuseStatusAB,
+        p.fuseStatusChangedAB,
+        p.fuseStatusAB,
       )
 
       const pairStateData = await facade.getPairState();
@@ -501,6 +499,7 @@ describe('PairBasedStrategyLogicLibTest', () => {
       fuseThresholds: number[];
       // fuseThresholdsB: number[];
     }
+
     interface ISetValuesResults {
       init: ISetValuesParams;
 
@@ -519,11 +518,15 @@ describe('PairBasedStrategyLogicLibTest', () => {
       totalLiquidity: BigNumber;
       strategyProfitHolder: string;
 
-      fuseAB: PairBasedStrategyLib.FuseStateParamsStruct;
+      fuseAB: {
+        status: BigNumber,
+        thresholds: BigNumber[]
+      },
       // fuseB: PairBasedStrategyLib.FuseStateParamsStruct;
 
       withdrawDone: number;
     }
+
     async function callSetInitialDepositorValues(p: ISetValuesParams): Promise<ISetValuesResults> {
       await facade.setInitialDepositorValues(
         [p.pool, p.asset, p.token0, p.token1],
@@ -545,8 +548,8 @@ describe('PairBasedStrategyLogicLibTest', () => {
 
         tickSpacing: pairStateData.tickParams[0],
         lowerTick: pairStateData.tickParams[1],
-        upperTick:  pairStateData.tickParams[2],
-        rebalanceTickRange:  pairStateData.tickParams[3],
+        upperTick: pairStateData.tickParams[2],
+        rebalanceTickRange: pairStateData.tickParams[3],
 
         totalLiquidity: pairStateData.totalLiquidity,
         strategyProfitHolder: pairStateData.strategyProfitHolder,
@@ -555,10 +558,6 @@ describe('PairBasedStrategyLogicLibTest', () => {
           status: pairStateData.fuseParams[0],
           thresholds: [pairStateData.fuseParams[1], pairStateData.fuseParams[2], pairStateData.fuseParams[3], pairStateData.fuseParams[4]]
         },
-        /*fuseB: {
-          status: pairStateData.fuseParams[5],
-          thresholds: [pairStateData.fuseParams[6], pairStateData.fuseParams[7], pairStateData.fuseParams[8], pairStateData.fuseParams[9]]
-        },*/
 
         withdrawDone: pairStateData.withdrawDone.toNumber()
       }
@@ -1175,10 +1174,12 @@ describe('PairBasedStrategyLogicLibTest', () => {
     interface IGetDefaultState {
       state: IDefaultState;
     }
+
     interface IGetDefaultStateResults {
       init: IDefaultState;
       state: IDefaultState;
     }
+
     async function callGetDefaultState(p: IGetDefaultState): Promise<IGetDefaultStateResults> {
       await facade.setPairState(
         [p.state.tokenA, p.state.tokenB],
@@ -1188,15 +1189,13 @@ describe('PairBasedStrategyLogicLibTest', () => {
         p.state.depositorSwapTokens,
         p.state.totalLiquidity,
         p.state.profitHolder,
-          {
-            status: p.state.fuseStatus,
-            thresholds: [
-              parseUnits(p.state.fuseThresholds[0].toString(), 18),
-              parseUnits(p.state.fuseThresholds[1].toString(), 18),
-              parseUnits(p.state.fuseThresholds[2].toString(), 18),
-              parseUnits(p.state.fuseThresholds[3].toString(), 18)
-            ]
-          },
+        p.state.fuseStatus,
+        [
+          parseUnits(p.state.fuseThresholds[0].toString(), 18),
+          parseUnits(p.state.fuseThresholds[1].toString(), 18),
+          parseUnits(p.state.fuseThresholds[2].toString(), 18),
+          parseUnits(p.state.fuseThresholds[3].toString(), 18)
+        ],
         p.state.withdrawDone,
         p.state.lastRebalanceNoSwap
       );

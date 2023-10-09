@@ -56,11 +56,16 @@ library PairBasedStrategyLib {
 
   uint public constant IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
   uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS = 1;
+  uint public constant IDX_NUMS_DEFAULT_STATE_RESERVED_0 = 2;
   uint public constant IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE = 3;
   uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_0 = 4;
   uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_1 = 5;
   uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_2 = 6;
   uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_3 = 7;
+  uint public constant IDX_NUMS_DEFAULT_STATE_RESERVED_1 = 8;
+  uint public constant IDX_NUMS_DEFAULT_STATE_RESERVED_2 = 9;
+  uint public constant IDX_NUMS_DEFAULT_STATE_RESERVED_3 = 10;
+  uint public constant IDX_NUMS_DEFAULT_STATE_RESERVED_4 = 11;
   uint public constant IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP = 12;
 
   uint public constant IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL = 0;

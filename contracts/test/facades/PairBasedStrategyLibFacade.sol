@@ -137,11 +137,15 @@ contract PairBasedStrategyLibFacade is IPoolProportionsProvider {
     PairBasedStrategyLib.setFuseThresholds(_fuse, values);
   }
 
-  function needChangeFuseStatus(PairBasedStrategyLib.FuseStateParams memory fuse_, uint price, uint poolPrice) external pure returns (
+  function needChangeFuseStatus(PairBasedStrategyLib.FuseStatus status_, uint[4] memory thresholds_, uint price, uint poolPrice) external pure returns (
     bool needToChange,
     PairBasedStrategyLib.FuseStatus status
   ) {
-    return PairBasedStrategyLib.needChangeFuseStatus(fuse_, price, poolPrice);
+    PairBasedStrategyLib.FuseStateParams memory fuse;
+    fuse.status = status_;
+    fuse.thresholds = thresholds_;
+
+    return PairBasedStrategyLib.needChangeFuseStatus(fuse, price, poolPrice);
   }
   //endregion ------------------------------------------------ Fuse functions
 }

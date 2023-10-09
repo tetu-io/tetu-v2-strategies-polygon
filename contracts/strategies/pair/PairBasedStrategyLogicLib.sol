@@ -215,7 +215,7 @@ library PairBasedStrategyLogicLib {
   /// @notice Returns the current state of the contract
   /// @return addr [tokenA, tokenB, pool, profitHolder]
   /// @return tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
-  /// @return nums [totalLiquidity, fuse-status-tokenA, fuse-status-tokenB, withdrawDone, 4 thresholds of token A, 4 thresholds of token B, lastRebalanceNoSwap]
+  /// @return nums [totalLiquidity, fuse-status-tokenA, withdrawDone, 4 thresholds of token A, lastRebalanceNoSwap, 5 reserved values]
   /// @return boolValues [isStablePool, depositorSwapTokens]
   function getDefaultState(PairBasedStrategyLogicLib.PairState storage pairState) external view returns (
     address[] memory addr,
