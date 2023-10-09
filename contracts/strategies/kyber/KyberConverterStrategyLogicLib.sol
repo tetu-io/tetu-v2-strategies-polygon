@@ -41,6 +41,9 @@ library KyberConverterStrategyLogicLib {
     // farming
     uint pId;
     bool staked;
+
+    /// @notice reserve space for future needs
+    uint[10] __gap;
   }
 
   struct RebalanceLocal {
