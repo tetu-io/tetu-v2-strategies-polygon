@@ -107,18 +107,18 @@ async function main() {
   // console.log(fuseBUpperOn)
   // console.log(fuseBUpperOff)
 
-  await strategy.connect(operator).setFuseThresholds(0, [
+  await strategy.connect(operator).setFuseThresholds([
     parseUnits('0.99'),
     parseUnits('0.994'),
     parseUnits('1.01'),
     parseUnits('1.006')
   ])
-  await strategy.connect(operator).setFuseThresholds(1, [
+  /*await strategy.connect(operator).setFuseThresholds(1, [
     parseUnits('0.99'),
     parseUnits('0.994'),
     fuseBUpperOn,
     fuseBUpperOff
-  ])
+  ])*/
 
   console.log('deposit...');
   await asset.approve(vault.address, Misc.MAX_UINT);

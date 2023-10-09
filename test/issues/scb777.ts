@@ -1,5 +1,12 @@
 import {PairBasedStrategyPrepareStateUtils} from "../baseUT/strategies/PairBasedStrategyPrepareStateUtils";
-import {ConverterStrategyBase__factory, IRebalancingV2Strategy__factory, StrategySplitterV2__factory, TetuVaultV2__factory, UniswapV3ConverterStrategy__factory} from "../../typechain";
+import {
+  ConverterStrategyBase__factory,
+  IRebalancingV2Strategy__factory,
+  ISplitter__factory,
+  StrategySplitterV2__factory,
+  TetuVaultV2__factory,
+  UniswapV3ConverterStrategy__factory
+} from "../../typechain";
 import {DeployerUtilsLocal} from "../../scripts/utils/DeployerUtilsLocal";
 import {MaticAddresses} from "../../scripts/addresses/MaticAddresses";
 import {TimeUtils} from "../../scripts/utils/TimeUtils";
