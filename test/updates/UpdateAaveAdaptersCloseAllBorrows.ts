@@ -10,9 +10,9 @@ import {
   BorrowManager__factory, ConverterController,
   ConverterController__factory,
   ConverterStrategyBase__factory, DebtMonitor,
-  DebtMonitor__factory,
+  DebtMonitor__factory, IERC20Metadata__factory,
   IPoolAdapter__factory, IRebalancingV2Strategy__factory,
-  StrategySplitterV2__factory,
+  StrategySplitterV2__factory, TetuConverter,
   TetuConverter__factory,
   TetuVaultV2__factory
 } from "../../typechain";
@@ -141,6 +141,9 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
       const countPositionsBeforeWithdraw = (await debtMonitor.getPositionsForUser(strategy)).length;
       const avgApr = await splitter.averageApr(strategy);
 
+      console.log("vault.balance.before", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(vault.address));
+      console.log("splitter.balance.before", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(splitter.address));
+      console.log("strategy.balance.before", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(converterStrategyBase.address));
       console.log("continueInvesting");
       await splitter.continueInvesting(strategy, 1);
       console.log("doHardWork");
@@ -152,6 +155,9 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
       console.log("investedAssets", await converterStrategyBase.investedAssets());
       await converterStrategyBase.emergencyExit();
       console.log("investedAssets after emergencyExit1", await converterStrategyBase.investedAssets());
+      console.log("vault.balance.after", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(vault.address));
+      console.log("splitter.balance.after", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(splitter.address));
+      console.log("strategy.balance.after", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(converterStrategyBase.address));
 
       await getPlatformsAdapterInfoForStrategy("after emergency exit", strategy, debtMonitor);
 
@@ -164,6 +170,8 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
         countPositionsAfterWithdraw
       }
       dest.push(strategyInfo);
+
+      console.log("strategy balance", await IERC20Metadata__factory.connect(MaticAddresses.USDC_TOKEN, signer).balanceOf(strategy));
     }
 
     return dest;
@@ -203,16 +211,19 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
       };
       await saver("b");
 
-      await makeFullWithdraw(IRebalancingV2Strategy__factory.connect(strategy, operator), {
-        entryToPool: ENTRY_TO_POOL_DISABLED,
-        aggregator: MaticAddresses.TETU_LIQUIDATOR, //  MaticAddresses.AGG_ONEINCH_V5,
-        planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
-        saveStates: saver,
-        maxAmountToSwap: "30000",
-        isCompleted: async (completed: boolean) => {
-          return completed;
+      await makeFullWithdraw(
+        IRebalancingV2Strategy__factory.connect(strategy, operator),
+        {
+          entryToPool: ENTRY_TO_POOL_DISABLED,
+          aggregator: MaticAddresses.TETU_LIQUIDATOR, //  MaticAddresses.AGG_ONEINCH_V5,
+          planEntryDataGetter: async () => defaultAbiCoder.encode(["uint256", "uint256"], [PLAN_SWAP_REPAY, 0]),
+          saveStates: saver,
+          maxAmountToSwap: "30000",
+          isCompleted: async (completed: boolean) => {
+            return completed;
+          }
         }
-      });
+      );
 
       const countPositionsAfterWithdraw = (await debtMonitor.getPositionsForUser(strategy)).length;
       const strategyInfo: IStrategyInfo = {
@@ -276,7 +287,10 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
       const config = await poolAdapter.getConfig();
       const status = await poolAdapter.getStatus();
       const platformAdapter = await borrowManager.converterToPlatformAdapter(config.originConverter);
-      console.log("Pool adapter user, platform adapter", config.user, platformAdapter, config, status);
+      console.log("getPlatformsAdapterInfo.poolAdapter", poolAdapter.address);
+      console.log("getPlatformsAdapterInfo.platformAdapter", platformAdapter);
+      console.log("getPlatformsAdapterInfo.user", config.user);
+      console.log("getPlatformsAdapterInfo.status", status);
     }
   }
 
@@ -288,6 +302,25 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
       const status = await poolAdapter.getStatus();
       console.log("Pool adapter user", title, config.user, config, status);
     }
+  }
+
+  async function tryToCloseBorrow(poolAdapter: string, tetuConverterAsGov: TetuConverter) {
+    const vault = TetuVaultV2__factory.connect(VAULT_OLD, signer);
+    const splitter = await StrategySplitterV2__factory.connect(await vault.splitter(), signer);
+
+    const pa = await IPoolAdapter__factory.connect(poolAdapter, signer);
+    const config = await pa.getConfig();
+    console.log("status", await pa.getStatus());
+    console.log("config", config);
+
+    const converterStrategyBase = ConverterStrategyBase__factory.connect(config.user, signer);
+    console.log("vault.balance.0", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(vault.address));
+    console.log("splitter.balance.0", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(splitter.address));
+    console.log("strategy.balance.0", await converterStrategyBase.asset(), await IERC20Metadata__factory.connect(await converterStrategyBase.asset(), signer).balanceOf(converterStrategyBase.address));
+
+    await tetuConverterAsGov.repayTheBorrow(poolAdapter, false);
+    console.log("status", await pa.getStatus());
+    console.log("config", await pa.getConfig());
   }
 //endregion Utils
 
@@ -302,6 +335,7 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
     const converterGovernance = await Misc.impersonate(governanceAddress);
     const borrowManagerAsGov = BorrowManager__factory.connect(borrowManagerAddress, converterGovernance);
     const debtMonitor = DebtMonitor__factory.connect(debtMonitorAddress, converterGovernance);
+    const tetuConverterAsGov = TetuConverter__factory.connect(tetuConverter, converterGovernance);
 
     // freeze current version of AAVE3 and AAVE2 pool adapters
     const aave3PlatformAdapterAddress = await getAaveThreePlatformAdapter(signer);
@@ -311,6 +345,9 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
     await getPlatformsAdapterInfo("initial", borrowManagerAsGov, debtMonitor);
 
     // withdraw all from old-strategy
+    await tryToCloseBorrow("0xDbB0a8F194e9D9AB8b6bf53a1083364F5c8de1ff", tetuConverterAsGov);
+    console.log("tryToCloseBorrow.done");
+
     const infoStrategiesOld = await withdrawAllFromOldVault(debtMonitor);
     console.log("infoStrategiesOld", infoStrategiesOld);
 
@@ -321,11 +358,14 @@ describe("UpdateAaveAdaptersCloseAllBorrows @skip-on-coverage", () => {
     const infoStrategiesNsr = await withdrawAllFromNsrVault();
     console.log("infoStrategiesNsr", infoStrategiesNsr);
 
+
     await getPlatformsAdapterInfo("after withdraw", borrowManagerAsGov, debtMonitor);
 
     // unregister all asset pairs for AAVE3 pool adapter
     const pairsAave3 = await unregisterPlatformAdapter(borrowManagerAsGov, aave3PlatformAdapterAddress);
     const pairsAaveTwo = await unregisterPlatformAdapter(borrowManagerAsGov, aaveTwoPlatformAdapterAddress);
+    console.log("pairsAave3", pairsAave3);
+    console.log("pairsAaveTwo", pairsAaveTwo);
 
     await ConverterUtils.disablePlatformAdapter(signer, aave3PlatformAdapterAddress);
     await ConverterUtils.disablePlatformAdapter(signer, aaveTwoPlatformAdapterAddress);

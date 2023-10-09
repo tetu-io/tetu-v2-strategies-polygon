@@ -253,8 +253,8 @@ describe('PairBasedNoSwapIntTest', function() {
         );
 
         // await InjectUtils.injectTetuConverter(signer);
-        await ConverterUtils.disableAaveV2(signer);
-        await InjectUtils.redeployAave3PoolAdapters(signer);
+        await ConverterUtils.disableAaveV3(signer);
+        await InjectUtils.redeployAaveTwoPoolAdapters(signer);
 
         // provide $1000 of insurance to compensate possible price decreasing
         await PairBasedStrategyPrepareStateUtils.prepareInsurance(b, "1000");

@@ -8,6 +8,8 @@ import {MaticAddresses} from "../addresses/MaticAddresses";
 import {AggregatorUtils} from "../../test/baseUT/utils/AggregatorUtils";
 import {IERC20Metadata__factory} from "../../typechain/factories/@tetu_io/tetu-liquidator/contracts/interfaces";
 import {PLAN_SWAP_REPAY} from "../../test/baseUT/AppConstants";
+import {RunHelper} from "./RunHelper";
+import {ethers} from "hardhat";
 
 export interface IMakeFullWithdraw {
   entryToPool: number;
@@ -82,19 +84,23 @@ export async function makeFullWithdraw(strategyAsOperator: IRebalancingV2Strateg
       p.entryToPool,
       {gasLimit: 9_000_000}
     );
-    const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
-      strategyAsOperator,
-      tokenToSwap,
-      aggregator,
-      amountToSwap,
-      swapData,
-      planEntryData,
-      p.entryToPool,
+    await RunHelper.runAndWait(
+      () => strategyAsOperator.withdrawByAggStep(tokenToSwap, aggregator, amountToSwap, swapData, planEntryData, p.entryToPool)
     );
-    console.log(`makeFullWithdraw.withdrawByAggStep.FINISH --------------------------------`);
+
+    // const eventsSet = await CaptureEvents.makeWithdrawByAggStep(
+    //   strategyAsOperator,
+    //   tokenToSwap,
+    //   aggregator,
+    //   amountToSwap,
+    //   swapData,
+    //   planEntryData,
+    //   p.entryToPool,
+    // );
+    // console.log(`makeFullWithdraw.withdrawByAggStep.FINISH --------------------------------`);
 
     if (p.saveStates) {
-      await p?.saveStates(`w${step++}`, eventsSet);
+      await p?.saveStates(`w${step++}`);
     }
 
     if (p?.singleIteration) break;
