@@ -9,7 +9,6 @@ import {
   ControllerV2__factory, IERC20__factory, IStrategyV2,
 } from "../../typechain";
 import {DeployerUtilsLocal} from "../utils/DeployerUtilsLocal";
-import {UniswapV3StrategyUtils} from "../../test/UniswapV3StrategyUtils";
 import {MaticAddresses} from "../addresses/MaticAddresses";
 import {parseUnits} from "ethers/lib/utils";
 import {Addresses} from "@tetu_io/tetu-contracts-v2/dist/scripts/addresses/addresses";
