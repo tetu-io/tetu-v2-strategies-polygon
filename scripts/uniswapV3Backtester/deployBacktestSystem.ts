@@ -534,7 +534,6 @@ export async function deployAndInitVaultAndUniswapV3Strategy<T>(
     range,
     rebalanceRange,
     [0, 0, Misc.MAX_UINT, 0],
-    [0, 0, Misc.MAX_UINT, 0],
   );
 
   await splitter.addStrategies([strategy.address], [0]);

@@ -1,3 +1,4 @@
+/*
 import {ContractReceipt} from "ethers";
 import {IFixPricesChangesEventInfo, IGetStateParams} from "./StateUtilsNum";
 import {ConverterStrategyBaseLib__factory} from "../../../typechain";
@@ -28,4 +29,4 @@ export class FixPriceChangesEvents {
 
     return {fixChangePrices: fixChangePricesEventInfo};
   }
-}
+}*/

@@ -37,7 +37,7 @@ export async function strategyBacktest(
   allowedLockedPercent: number = 25,
   forceRebalanceDebtLockedPercent: number = 70,
   rebalanceDebtDelay: number = 3600,
-  rebalanceDebtSwapPool: UniswapV3Pool|undefined
+  rebalanceDebtSwapPool: UniswapV3Pool|undefined = undefined
 ): Promise<IBacktestResult> {
   const state = await strategy.getDefaultState();
   const startTimestampLocal = Math.floor(Date.now() / 1000);
