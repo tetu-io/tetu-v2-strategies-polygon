@@ -184,11 +184,10 @@ contract ConverterStrategyBaseLibFacade2 {
     return ConverterStrategyBaseLib2.getTokenAmountsPair(converter, totalAssets, tokenA, tokenB, liquidationThresholdsAB);
   }
 
-  function getOracleAssetsPrices(ITetuConverter converter, address tokenA, address tokenB) external view returns (
-    uint priceA,
-    uint priceB
+  function getOracleAssetsPrice(ITetuConverter converter, address tokenA, address tokenB) external view returns (
+    uint price
   ) {
-    return ConverterStrategyBaseLib2.getOracleAssetsPrices(converter, tokenA, tokenB);
+    return ConverterStrategyBaseLib2.getOracleAssetsPrice(converter, tokenA, tokenB);
   }
 
   function coverLossAfterPriceChanging(

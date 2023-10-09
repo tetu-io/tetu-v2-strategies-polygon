@@ -55,17 +55,12 @@ library PairBasedStrategyLib {
   uint public constant IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE = 3;
 
   uint public constant IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY = 0;
-  uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A = 1;
-  uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B = 2;
+  uint public constant IDX_NUMS_DEFAULT_STATE_FUSE_STATUS = 1;
   uint public constant IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE = 3;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 = 4;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_1 = 5;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_2 = 6;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_3 = 7;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 = 8;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_1 = 9;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_2 = 10;
-  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_3 = 11;
+  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_0 = 4;
+  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_1 = 5;
+  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_2 = 6;
+  uint public constant IDX_NUMS_DEFAULT_STATE_THRESHOLD_3 = 7;
   uint public constant IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP = 12;
 
   uint public constant IDX_BOOL_VALUES_DEFAULT_STATE_IS_STABLE_POOL = 0;

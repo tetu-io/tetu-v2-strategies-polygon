@@ -30,6 +30,9 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   /// @dev State variable to store the current state of the whole strategy
   UniswapV3ConverterStrategyLogicLib.State internal state;
 
+  /// @dev reserve space for future needs
+  uint[100 - 60] private __gap;
+
   /////////////////////////////////////////////////////////////////////
   ///                       View
   /////////////////////////////////////////////////////////////////////
@@ -151,9 +154,4 @@ abstract contract UniswapV3Depositor is IUniswapV3MintCallback, DepositorBase, I
   ) {
     (tokensOut, amountsOut, balancesBefore) = UniswapV3ConverterStrategyLogicLib.claimRewards(state.pair);
   }
-
-  /// @dev This empty reserved space is put in place to allow future versions to add new
-  /// variables without shifting down storage in the inheritance chain.
-  /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-  uint[50 - 10] private __gap; // 50 - count of variables
 }

@@ -39,8 +39,9 @@ library PairBasedStrategyLogicLib {
     int24 rebalanceTickRange;
     uint128 totalLiquidity;
 
-    /// @notice Fuse for token A and token B
-    PairBasedStrategyLib.FuseStateParams[2] fuseAB;
+    /// @notice Fuse for tokens
+    PairBasedStrategyLib.FuseStateParams fuseAB;
+
     /// @notice 1 means that the fuse was triggered ON and then all debts were closed
     ///         and assets were converter to underlying using withdrawStepByAgg.
     ///         This flag is automatically cleared to 0 if fuse is triggered OFF.
@@ -50,7 +51,7 @@ library PairBasedStrategyLogicLib {
     uint lastRebalanceNoSwap;
 
     /// @notice reserve space for future needs
-    uint[10] __gap;
+    uint[50 - 17] __gap;
   }
 
   struct RebalanceNoSwapsLocal {
@@ -152,15 +153,13 @@ library PairBasedStrategyLogicLib {
   /// @param addr [pool, asset, pool.token0(), pool.token1()]
   ///        asset: Underlying asset of the depositor.
   /// @param tickData [tickSpacing, lowerTick, upperTick, rebalanceTickRange]
-  /// @param fuseThresholdsA Fuse thresholds for token A (stable pool only)
-  /// @param fuseThresholdsB Fuse thresholds for token B (stable pool only)
+  /// @param fuseThresholds Fuse thresholds for tokens (stable pool only)
   function setInitialDepositorValues(
     PairState storage pairState,
     address[4] calldata addr,
     int24[4] calldata tickData,
     bool isStablePool_,
-    uint[4] calldata fuseThresholdsA,
-    uint[4] calldata fuseThresholdsB
+    uint[4] calldata fuseThresholds
   ) external {
     pairState.pool = addr[0];
     address asset = addr[1];
@@ -186,10 +185,8 @@ library PairBasedStrategyLogicLib {
     if (isStablePool_) {
       /// for stable pools fuse can be enabled
       pairState.isStablePool = true;
-      PairBasedStrategyLib.setFuseStatus(pairState.fuseAB[0], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
-      PairBasedStrategyLib.setFuseThresholds(pairState.fuseAB[0], fuseThresholdsA);
-      PairBasedStrategyLib.setFuseStatus(pairState.fuseAB[1], PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
-      PairBasedStrategyLib.setFuseThresholds(pairState.fuseAB[1], fuseThresholdsB);
+      PairBasedStrategyLib.setFuseStatus(pairState.fuseAB, PairBasedStrategyLib.FuseStatus.FUSE_OFF_1);
+      PairBasedStrategyLib.setFuseThresholds(pairState.fuseAB, fuseThresholds);
     }
 
     // totalLiquidity is 0, no need to initialize
@@ -198,15 +195,13 @@ library PairBasedStrategyLogicLib {
 
   function updateFuseStatus(
     PairBasedStrategyLogicLib.PairState storage pairState,
-    bool[2] calldata fuseStatusChangedAB,
-    PairBasedStrategyLib.FuseStatus[2] calldata fuseStatusAB
+    bool fuseStatusChangedAB,
+    PairBasedStrategyLib.FuseStatus fuseStatusAB
   ) external {
     bool updated;
-    for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
-      if (fuseStatusChangedAB[i]) {
-        PairBasedStrategyLib.setFuseStatus(pairState.fuseAB[i], fuseStatusAB[i]);
-        updated = true;
-      }
+    if (fuseStatusChangedAB) {
+      PairBasedStrategyLib.setFuseStatus(pairState.fuseAB, fuseStatusAB);
+      updated = true;
     }
 
     if (updated) {
@@ -244,12 +239,10 @@ library PairBasedStrategyLogicLib {
     tickData[PairBasedStrategyLib.IDX_TICK_DEFAULT_STATE_REBALANCE_TICK_RANGE] = pairState.rebalanceTickRange;
 
     nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_TOTAL_LIQUIDITY] = uint(pairState.totalLiquidity);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_A] = uint(pairState.fuseAB[0].status);
-    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS_B] = uint(pairState.fuseAB[1].status);
+    nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_FUSE_STATUS] = uint(pairState.fuseAB.status);
     nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_WITHDRAW_DONE] = pairState.withdrawDone;
     for (uint i = 0; i < 4; ++i) {
-      nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_A_0 + i] = pairState.fuseAB[0].thresholds[i];
-      nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_B_0 + i] = pairState.fuseAB[1].thresholds[i];
+      nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_THRESHOLD_0 + i] = pairState.fuseAB.thresholds[i];
     }
     nums[PairBasedStrategyLib.IDX_NUMS_DEFAULT_STATE_LAST_REBALANCE_NO_SWAP] = pairState.lastRebalanceNoSwap;
 
@@ -409,20 +402,19 @@ library PairBasedStrategyLogicLib {
     uint poolPrice
   ) external view returns (
     bool needRebalance,
-    bool[2] memory fuseStatusChangedAB,
-    PairBasedStrategyLib.FuseStatus[2] memory fuseStatusAB
+    bool fuseStatusChangedAB,
+    PairBasedStrategyLib.FuseStatus fuseStatusAB
   ) {
     if (pairState.isStablePool) {
-      uint[2] memory prices;
-      (prices[0], prices[1]) = ConverterStrategyBaseLib2.getOracleAssetsPrices(converter_, pairState.tokenA, pairState.tokenB);
-      for (uint i = 0; i < 2; i = AppLib.uncheckedInc(i)) {
-        (fuseStatusChangedAB[i], fuseStatusAB[i]) = PairBasedStrategyLib.needChangeFuseStatus(pairState.fuseAB[i], prices[i], poolPrice);
-      }
-      needRebalance = fuseStatusChangedAB[0]
-        || fuseStatusChangedAB[1]
+      uint price = ConverterStrategyBaseLib2.getOracleAssetsPrice(
+        converter_,
+        pairState.tokenA,
+        pairState.tokenB
+      );
+      (fuseStatusChangedAB, fuseStatusAB) = PairBasedStrategyLib.needChangeFuseStatus(pairState.fuseAB, price, poolPrice);
+      needRebalance = fuseStatusChangedAB
         || (
-          !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusAB[0])
-          && !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusAB[1])
+          !PairBasedStrategyLib.isFuseTriggeredOn(fuseStatusAB)
           && _needPoolRebalance(pairState, tick)
         );
     } else {

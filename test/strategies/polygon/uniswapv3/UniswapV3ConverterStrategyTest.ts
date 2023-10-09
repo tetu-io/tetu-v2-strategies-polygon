@@ -97,8 +97,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
         poolAddress,
         range,
         rebalanceRange,
-        [0, 0, Misc.MAX_UINT, 0],
-        [0, 0, Misc.MAX_UINT, 0],
+        [0, 0, Misc.MAX_UINT, 0]
       );
 
       return _strategy as unknown as IStrategyV2;
@@ -137,8 +136,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
         poolAddress,
         range,
         rebalanceRange,
-        [0, 0, Misc.MAX_UINT, 0],
-        [0, 0, Misc.MAX_UINT, 0],
+        [0, 0, Misc.MAX_UINT, 0]
       );
 
       return _strategy as unknown as IStrategyV2;
@@ -176,8 +174,7 @@ describe('UniswapV3ConverterStrategyTests', function() {
         poolAddress,
         range,
         rebalanceRange,
-        [0, 0, Misc.MAX_UINT, 0],
-        [0, 0, Misc.MAX_UINT, 0],
+        [0, 0, Misc.MAX_UINT, 0]
       );
 
       return _strategy as unknown as IStrategyV2;
