@@ -178,7 +178,7 @@ contract ConverterStrategyBaseLibFacade {
     return ConverterStrategyBaseLib._sendTokensToForwarder(controller_, splitter_, tokens_, amounts_, thresholds_);
   }
 
-  function recycle(
+  function _recycle(
     ITetuConverter converter_,
     address asset,
     uint compoundRatio,

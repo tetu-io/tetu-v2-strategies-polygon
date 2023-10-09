@@ -1,5 +1,6 @@
 import {IBuilderResults, IStrategyBasicInfo} from "./PairBasedStrategyBuilder";
 import {
+  ConverterStrategyBase,
   ConverterStrategyBase__factory,
   IRebalancingV2Strategy, StrategyBaseV2__factory
 } from "../../../typechain";
@@ -20,6 +21,7 @@ import {IStateNum, StateUtilsNum} from "../utils/StateUtilsNum";
 import {depositToVault, printVaultState} from "../universalTestUtils/StrategyTestUtils";
 import {CaptureEvents, IEventsSet} from "./CaptureEvents";
 import {ENTRY_TO_POOL_IS_ALLOWED, PLAN_REPAY_SWAP_REPAY} from "../AppConstants";
+import {UniversalTestUtils} from "../utils/UniversalTestUtils";
 
 export interface IPrepareOverCollateralParams {
   countRebalances: number;
@@ -392,5 +394,13 @@ export class PairBasedStrategyPrepareStateUtils {
   static async prepareInsurance(b: IBuilderResults, amount: string = "1000") {
     const decimals = await IERC20Metadata__factory.connect(b.asset, b.vault.signer).decimals();
     await TokenUtils.getToken(b.asset, await b.vault.insurance(), parseUnits(amount, decimals));
+  }
+
+  static async prepareLiquidationThresholds(signer: SignerWithAddress, strategy: string, value: string = "0.001") {
+    const operator = await UniversalTestUtils.getAnOperator(strategy, signer);
+    const converterStrategyBase = await ConverterStrategyBase__factory.connect(strategy, signer);
+    await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDT_TOKEN, parseUnits(value, 6));
+    await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.USDC_TOKEN, parseUnits(value, 6));
+    await converterStrategyBase.connect(operator).setLiquidationThreshold(MaticAddresses.DAI_TOKEN, parseUnits(value, 18));
   }
 }

@@ -1745,7 +1745,7 @@ describe('ConverterStrategyBaseTest', () => {
     });
   });
 
-  describe('_recycle', () => {
+  describe('recycle', () => {
     interface IRecycleTestParams {
       asset: MockToken;
       compoundRate: number;
@@ -1771,7 +1771,6 @@ describe('ConverterStrategyBaseTest', () => {
       forwarderTokens: string[];
       forwarderAmounts: number[];
 
-      amountsToForward: number[];
       performanceAmounts: number;
       insuranceAmounts: number;
 
@@ -1805,13 +1804,7 @@ describe('ConverterStrategyBaseTest', () => {
         );
       }
 
-      const amountsToForward: BigNumber[] = await ms.strategy.callStatic._recycleAccess(
-        p.rewardTokens.map(x => x.address),
-        await Promise.all(p.rewardAmounts.map(
-          async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
-        ))
-      );
-      const tx = await ms.strategy._recycleAccess(
+      const tx = await ms.strategy.recycleAccess(
         p.rewardTokens.map(x => x.address),
         await Promise.all(p.rewardAmounts.map(
           async (amount, index) => parseUnits(amount, await p.rewardTokens[index].decimals())
@@ -1824,12 +1817,9 @@ describe('ConverterStrategyBaseTest', () => {
       return {
         gasUsed,
         forwarderAmounts: await Promise.all(retForwarder.amounts.map(
-          async (amount, index) => +formatUnits(amount, await p.rewardTokens[index].decimals())
+          async (amount, index) => +formatUnits(amount, await IERC20Metadata__factory.connect(retForwarder.tokens[index], signer).decimals())
         )),
         forwarderTokens: retForwarder.tokens,
-        amountsToForward: await Promise.all(amountsToForward.map(
-          async (amount, index) => +formatUnits(amount, await p.rewardTokens[index].decimals())
-        )),
         performanceAmounts: +formatUnits(await p.asset.balanceOf(p.performanceReceiver), await p.asset.decimals()),
         insuranceAmounts: +formatUnits(await p.asset.balanceOf(await ms.vault.insurance()), await p.asset.decimals()),
         finalRewardTokenBalances: await Promise.all(p.rewardTokens.map(
@@ -1871,7 +1861,7 @@ describe('ConverterStrategyBaseTest', () => {
 
         it('should return expected forwarderAmounts', async() => {
           const r = await loadFixture(makeRecycleTest);
-          expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+          expect(r.forwarderAmounts.join()).to.equal([18, 36, 72].join());
         });
         it('should return expected performanceAmounts', async() => {
           const r = await loadFixture(makeRecycleTest);
@@ -1919,7 +1909,7 @@ describe('ConverterStrategyBaseTest', () => {
 
         it('should return expected forwarderAmounts', async() => {
           const r = await loadFixture(makeRecycleTest);
-          expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+          expect(r.forwarderAmounts.join()).to.equal([18, 36, 72].join());
         });
         it('should return expected performanceAmounts', async() => {
           const r = await loadFixture(makeRecycleTest);
@@ -1984,10 +1974,11 @@ describe('ConverterStrategyBaseTest', () => {
            *        34 * 360*0.8 / 328 = 29.85 => to compound
            *        34 * 360*0.8 / 328 = 3.31 => to performance
            *    but threshold 329 > 328, so bal is NOT CONVERTER in this test
+           *    also, 329 > 72, so bal is not sent to the forwarder
            */
           it('should return expected forwarderAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+            expect(r.forwarderAmounts.join()).to.equal([18, 36].join());
           });
           it('should return expected performanceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
@@ -1999,7 +1990,7 @@ describe('ConverterStrategyBaseTest', () => {
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 180-36, 400-72].join()); // 200 - 20
+            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 180-36, 400].join()); // 200 - 20
           });
         });
         describe('dai', () => {
@@ -2034,7 +2025,7 @@ describe('ConverterStrategyBaseTest', () => {
 
           it('should return expected forwarderAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+            expect(r.forwarderAmounts.join()).to.equal([18, 36, 72].join());
           });
           it('should return expected performanceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
@@ -2081,7 +2072,8 @@ describe('ConverterStrategyBaseTest', () => {
 
           it('should return expected forwarderAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.amountsToForward.join()).to.equal([18, 36, 72].join());
+            // threshold 500 > 36, so 36 usdc is not sent to the forwarder here
+            expect(r.forwarderAmounts.join()).to.equal([18, 72].join());
           });
           it('should return expected performanceAmounts', async() => {
             const r = await loadFixture(makeRecycleTest);
@@ -2093,7 +2085,7 @@ describe('ConverterStrategyBaseTest', () => {
           });
           it('should return expected final balances', async() => {
             const r = await loadFixture(makeRecycleTest);
-            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 209.853659-36, 72-72].join()); // 180+288*34/328, 400*0.9*0.2
+            expect(r.finalRewardTokenBalances.join()).to.equal([90-18, 209.853659, 72-72].join()); // 180+288*34/328, 400*0.9*0.2
           });
         });
       });

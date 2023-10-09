@@ -15,6 +15,7 @@ import "../libs/AppLib.sol";
 import "../libs/TokenAmountsLib.sol";
 import "../libs/ConverterEntryKinds.sol";
 import "../libs/IterationPlanLib.sol";
+import "hardhat/console.sol";
 
 library ConverterStrategyBaseLib {
   using SafeERC20 for IERC20;
@@ -642,7 +643,6 @@ library ConverterStrategyBaseLib {
   /// @dev {_recycle} is implemented as separate (inline) function to simplify unit testing
   /// @param rewardTokens_ Full list of reward tokens received from tetuConverter and depositor
   /// @param rewardAmounts_ Amounts of {rewardTokens_}; we assume, there are no zero amounts here
-  /// @return Amounts sent to the forwarder
   function recycle(
     IStrategyV3.BaseState storage baseState,
     ITetuConverter converter,
@@ -651,7 +651,7 @@ library ConverterStrategyBaseLib {
     mapping(address => uint) storage liquidationThresholds,
     address[] memory rewardTokens_,
     uint[] memory rewardAmounts_
-  ) external returns (uint[] memory) {
+  ) external {
     RecycleLocal memory v;
     v.asset = baseState.asset;
     v.compoundRatio = baseState.compoundRatio;
@@ -685,7 +685,6 @@ library ConverterStrategyBaseLib {
     (rewardTokens_, v.amountsToForward) = _sendTokensToForwarder(controller, splitter, rewardTokens_, v.amountsToForward, v.thresholds);
 
     emit Recycle(rewardTokens_, v.amountsToForward, v.toPerf, v.toInsurance);
-    return v.amountsToForward;
   }
 
   /// @notice Send {amount_} of {asset_} to {receiver_} and insurance
@@ -727,16 +726,21 @@ library ConverterStrategyBaseLib {
     uint len = tokens_.length;
     IForwarder forwarder = IForwarder(IController(controller_).forwarder());
     for (uint i; i < len; i = AppLib.uncheckedInc(i)) {
+      console.log("_sendTokensToForwarder.i", i);
+      console.log("_sendTokensToForwarder.thresholds_[i]", thresholds_[i]);
+      console.log("_sendTokensToForwarder.amounts_[i]", amounts_[i]);
       if (thresholds_[i] > amounts_[i]) {
         amounts_[i] = 0; // it will be excluded in filterZeroAmounts() below
       } else {
         AppLib.approveIfNeeded(tokens_[i], amounts_[i], address(forwarder));
       }
+      console.log("_sendTokensToForwarder.amounts_[i]", amounts_[i]);
     }
 
     (tokensOut, amountsOut) = TokenAmountsLib.filterZeroAmounts(tokens_, amounts_);
     if (tokensOut.length != 0) {
       forwarder.registerIncome(tokensOut, amountsOut, ISplitter(splitter_).vault(), true);
+      console.log("_sendTokensToForwarder.tokensOut.tokensOut", tokensOut.length);
     }
   }
 

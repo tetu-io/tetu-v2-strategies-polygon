@@ -409,10 +409,8 @@ contract MockConverterStrategy is ConverterStrategyBase, MockDepositor {
     return ConverterStrategyBaseLib2.claimConverterRewards(tetuConverter_, tokens_, rewardTokens_, rewardAmounts_, new uint[](0));
   }
 
-  function _recycleAccess(address[] memory tokens, uint[] memory amounts) external returns (
-    uint[] memory amountsToForward
-  ) {
-    return ConverterStrategyBaseLib.recycle(
+  function recycleAccess(address[] memory tokens, uint[] memory amounts) external {
+    ConverterStrategyBaseLib.recycle(
       baseState,
       _csbs.converter,
       _depositorPoolAssets(),

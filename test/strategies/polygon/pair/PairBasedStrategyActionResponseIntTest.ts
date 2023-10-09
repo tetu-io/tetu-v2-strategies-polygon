@@ -198,6 +198,8 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             }
         );
 
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
+
         // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
@@ -404,6 +406,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               notUnderlying: strategyInfo.notUnderlyingToken
             }
         );
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
         // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
@@ -586,6 +589,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               notUnderlying: strategyInfo.notUnderlyingToken
             }
         );
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
         // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
@@ -826,6 +830,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               kyberPid: KYBER_PID_DEFAULT_BLOCK,
             }
           );
+          await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
           states.push(await StateUtilsNum.getState(signer, signer, converterStrategyBase, b.vault, `init`));
@@ -937,6 +942,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
           signer2,
           {kyberPid: KYBER_PID_DEFAULT_BLOCK}
         );
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
         const states: IStateNum[] = [];
         const pathOut = "./tmp/large-user-prepare-strategy.csv";
@@ -1133,6 +1139,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             signer2,
             {kyberPid: KYBER_PID_DEFAULT_BLOCK}
           );
+          await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const states: IStateNum[] = [];
           const pathOut = `./tmp/${strategyInfo.name}-folded-debts-up-user-prepare-strategy.csv`;
@@ -1393,6 +1400,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             signer2,
             {kyberPid: KYBER_PID_DEFAULT_BLOCK}
           );
+          await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
           const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
           const platform = await converterStrategyBase.PLATFORM();
           const states: IStateNum[] = [];
@@ -1655,6 +1663,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             notUnderlying: strategyInfo.notUnderlyingToken
           }
         );
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
 
         console.log('deposit...');
 
@@ -1743,6 +1752,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             kyberPid: KYBER_PID_DEFAULT_BLOCK,
           }
         );
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
         const converterStrategyBase = ConverterStrategyBase__factory.connect(b.strategy.address, signer);
 
         // await InjectUtils.injectTetuConverter(signer);
@@ -1814,11 +1824,12 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
     }
 
     const strategies: IStrategyInfo[] = [
+      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
+
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 10_000},
       // {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 100_000},
 
-      {name: PLATFORM_ALGEBRA, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0},
       // {name: PLATFORM_KYBER, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 0}, // todo movePriceBySteps cannot change prices
 
       {name: PLATFORM_UNIV3, notUnderlyingToken: MaticAddresses.USDT_TOKEN, compoundRatio: 50_000},
@@ -1839,6 +1850,11 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
               kyberPid: KYBER_PID_DEFAULT_BLOCK,
               notUnderlying: strategyInfo.notUnderlyingToken
             }
+        );
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(
+          signer,
+          b.strategy.address,
+          "0.00001" // we need very small amout to avoid increasing of share price on hardwork
         );
 
         // await InjectUtils.injectTetuConverter(signer);
@@ -2067,6 +2083,7 @@ describe('PairBasedStrategyActionResponseIntTest', function() {
             notUnderlying: strategyInfo.notUnderlyingToken
           }
         );
+        await PairBasedStrategyPrepareStateUtils.prepareLiquidationThresholds(signer, b.strategy.address);
         // await InjectUtils.injectTetuConverter(signer);
         await ConverterUtils.disableAaveV2(signer);
         await InjectUtils.redeployAave3PoolAdapters(signer);
